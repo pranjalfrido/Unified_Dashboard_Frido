@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { IC, PAGE_BACKGROUND, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
+import { IC, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
 import InventoryHealthPage from './inventory/InventoryHealthPage.jsx'
+import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
+import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
 
@@ -407,6 +409,12 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       invSalesOpts: sales.data?.filterOptions || null,
       invSalesAsOf: sales.data?.asOf || null,
       invSalesLastSales: sales.data?.lastSalesDateConsidered || null,
+      invActiveTab: tab,
+      invFilterCount: Object.values((tab === 'sales' ? salesFilters : healthFilters) || {})
+        .reduce((a, v) => a + (Array.isArray(v) ? v.length : v ? 1 : 0), 0),
+      invFilterPanel: tab === 'health'
+        ? (invData ? <HealthFilterSidebar data={invData} filters={healthFilters} setFilters={setHealthFilters} open popover /> : null)
+        : (sales.data ? <SalesFilterSidebar data={sales.data} filters={salesFilters} setFilters={setSalesFilters} open popover /> : null),
     }
     if (tab === 'sales') {
       onTopbarDateControl({
@@ -639,7 +647,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   }, [inv.data, healthFilters])
 
   return (
-    <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: IC.page, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
       {/* Mobile-only tab bar — the desktop tab switcher lives inside the FilterSidebar. On
           mobile the sidebar is hidden, so we surface the same tabs as a horizontal scroll row. */}
       <div className="inv-mobile-subtabs" style={{

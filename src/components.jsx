@@ -409,11 +409,32 @@ export function MultiLineChart({ dailyArr, channels }) {
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
         <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v} width={40} />
         <Tooltip content={<ChartTooltip />} />
-        <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+        <Legend {...chartLegendProps({ fontSize: 10, iconSize: 8 })} />
         {channels.map(ch => <Line key={ch} type="monotone" dataKey={ch} stroke={C.ch[ch]} strokeWidth={2} dot={false} />)}
       </LineChart>
     </ResponsiveContainer>
   )
+}
+
+// ── Shared chart legend ─────────────────────────────────────────────────────
+// Recharts only reserves vertical space for a horizontal bottom legend when
+// `height` is set. Without it the legend is absolutely positioned and is drawn
+// over whatever already occupies that band — which is why legends across the app
+// were landing on top of the x-axis tick labels.
+//
+// `height` here is the fix; the rest keeps one set of legend props so every chart
+// agrees on size, colour and placement. The label colour reads the theme token,
+// so legends follow a theme switch instead of being pinned to one palette.
+export function chartLegendProps({ fontSize = 11, height = 26, iconSize = 10 } = {}) {
+  return {
+    layout: 'horizontal',
+    verticalAlign: 'bottom',
+    align: 'center',
+    height,
+    iconSize,
+    wrapperStyle: { fontSize, paddingTop: 4 },
+    formatter: v => <span style={{ color: C.t1 }}>{v}</span>,
+  }
 }
 
 export const GROUP_OPTS = [
@@ -525,7 +546,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
               })}
             </div>
           ) : null} />
-          {!isMob && <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+          {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
           {showNet && <Area yAxisId="rev" type="monotone" dataKey="_net" name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />}
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
@@ -536,7 +557,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
       {isMob && (
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
           {[{ name: 'Gross Revenue', color: grossColor }, ...(showNet ? [{ name: 'Net Revenue', color: '#B8960C' }] : []), ...(showCogs ? [{ name: 'COGS', color: '#F59E0B' }] : []), ...(showSnd ? [{ name: 'SnD', color: '#92720A' }] : [])].map(it => (
-            <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+            <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
             </span>
           ))}
@@ -777,7 +798,7 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
                     {metricCells(r)}
                   </tr>
                   {isOpen && variants.map((v, vi) => (
-                    <tr key={v.sku} style={{ background: '#FAFAF7', borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
+                    <tr key={v.sku} style={{ background: C.hov, borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                       {labelCols.map((c, ci) => (
                         <td key={c.key} style={{ padding: '8px 12px', color: C.t3, fontFamily: ci === labelCols.length - 1 ? 'var(--mono)' : 'inherit', fontSize: 11, paddingLeft: ci === labelCols.length - 1 ? 22 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ci === labelCols.length - 1 ? v.sku : ''}>
                           {ci === labelCols.length - 1 ? `↳ ${v.sku}` : ''}

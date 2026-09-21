@@ -11,7 +11,8 @@ import { useSortableTable } from '../components.jsx'
 // COGS/SnD/Marketing are — a store simply not yet onboarded into a given cost sheet defaults to
 // 0 for that line rather than blocking EBITDA (confirmed 2026-08-20: those sheets are still being
 // filled in store-by-store, so blocking would leave EBITDA permanently blank for most stores).
-const noCostCell = <span style={{ color: C.t3 }}>—</span>
+// A JSX element built at module scope would freeze C.t3; a getter rebuilds it per read.
+const CELL = { get noCost(){ return <span style={{ color: C.t3 }}>—</span> } }
 const MIN_REV_FOR_RATIOS = 100
 const pctOf = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : null
 
@@ -120,13 +121,13 @@ export default function StorePnLTable({ rows = [] }) {
                   <td style={tdStyle}>{fmt(r.gross)}</td>
                   <td style={tdStyle}>{r.units.toLocaleString('en-IN')}</td>
                   <td style={tdStyle}>{fmt(r.netRev)}</td>
-                  <td style={tdStyle}>{r.cogs != null ? fmt(r.cogs) : noCostCell}</td>
-                  <td style={tdStyle}>{gmPct != null ? `${gmPct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{sndPct != null ? `${sndPct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{cm1Pct != null ? `${cm1Pct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{spendPct != null ? `${spendPct.toFixed(2)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{r.cm2 != null ? fmt(r.cm2) : noCostCell}</td>
-                  <td style={tdStyle}>{cm2Pct != null ? `${cm2Pct.toFixed(1)}%` : noCostCell}</td>
+                  <td style={tdStyle}>{r.cogs != null ? fmt(r.cogs) : CELL.noCost}</td>
+                  <td style={tdStyle}>{gmPct != null ? `${gmPct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{sndPct != null ? `${sndPct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{cm1Pct != null ? `${cm1Pct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{spendPct != null ? `${spendPct.toFixed(2)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{r.cm2 != null ? fmt(r.cm2) : CELL.noCost}</td>
+                  <td style={tdStyle}>{cm2Pct != null ? `${cm2Pct.toFixed(1)}%` : CELL.noCost}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.rent)}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.utilities)}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.employeeCost)}</td>
@@ -135,9 +136,9 @@ export default function StorePnLTable({ rows = [] }) {
                   <td style={tdStyle}>{fmt(r.fixedCosts.volumetricRent)}</td>
                   <td style={tdStyle}>{fmt(r.totalFixedCosts)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>
-                    {r.ebitda != null ? fmt(r.ebitda) : noCostCell}
+                    {r.ebitda != null ? fmt(r.ebitda) : CELL.noCost}
                   </td>
-                  <td style={tdStyle}>{ebitdaPct != null ? `${ebitdaPct.toFixed(1)}%` : noCostCell}</td>
+                  <td style={tdStyle}>{ebitdaPct != null ? `${ebitdaPct.toFixed(1)}%` : CELL.noCost}</td>
                 </tr>
               )
             })}
@@ -148,13 +149,13 @@ export default function StorePnLTable({ rows = [] }) {
               <td style={totalTdStyle}>{fmt(tot.gross)}</td>
               <td style={totalTdStyle}>{tot.units.toLocaleString('en-IN')}</td>
               <td style={totalTdStyle}>{fmt(tot.netRev)}</td>
-              <td style={totalTdStyle}>{tot.anyCogs ? fmt(tot.cogs) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyGm ? `${pctOf(tot.gm, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anySnd ? `${pctOf(tot.snd, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCm1 ? `${pctOf(tot.cm1, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCogs ? fmt(tot.cogs) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyGm ? `${pctOf(tot.gm, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anySnd ? `${pctOf(tot.snd, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyCm1 ? `${pctOf(tot.cm1, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
               <td style={totalTdStyle}>{`${pctOf(tot.spend, tot.netRev)?.toFixed(2) ?? '0.00'}%`}</td>
-              <td style={totalTdStyle}>{tot.anyCm2 ? fmt(tot.cm2) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCm2 ? `${pctOf(tot.cm2, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCm2 ? fmt(tot.cm2) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyCm2 ? `${pctOf(tot.cm2, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
               <td style={totalTdStyle}>{fmt(tot.rent)}</td>
               <td style={totalTdStyle}>{fmt(tot.utilities)}</td>
               <td style={totalTdStyle}>{fmt(tot.employeeCost)}</td>
@@ -162,8 +163,8 @@ export default function StorePnLTable({ rows = [] }) {
               <td style={totalTdStyle}>{fmt(tot.software)}</td>
               <td style={totalTdStyle}>{fmt(tot.volumetricRent)}</td>
               <td style={totalTdStyle}>{fmt(tot.totalFixedCosts)}</td>
-              <td style={{ ...totalTdStyle, fontWeight: 700 }}>{tot.anyEbitda ? fmt(tot.ebitda) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={{ ...totalTdStyle, fontWeight: 700 }}>{tot.anyEbitda ? fmt(tot.ebitda) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
             </tr>
           </tfoot>
         </table>

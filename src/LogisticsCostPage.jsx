@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
 import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import LoadingOverlay from './LoadingOverlay.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell,
-} from './components.jsx'
+  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, chartLegendProps } from './components.jsx'
 
 // Page-local palette. Identical to the shared one except for `t3`, the secondary grey used
 // by card titles, sub-lines, section notes and slicer labels.
@@ -34,15 +34,28 @@ const ZONES = ['A', 'B', 'C', 'D', 'E']
 // blue ramp (light→dark) rather than categorical hues: colouring an ordered scale
 // with unrelated hues throws away the ordering the reader needs. Validated with
 // --ordinal: monotone lightness, all adjacent ΔL ≥ 0.06, light end clears the surface.
-const ORDINAL_BLUE = ['#D3D3F7', '#AEAEEF', '#8484E3', '#5B5BD6', '#3A3A9E']
+// Ordinal weight bands: the theme's sequential ramp, reversed so the light end leads
+// (light = low band). Read through a getter so it follows a theme switch.
+const ORD = { get BLUE(){ return [...C.ramp].reverse() } }
 
-// Shipment mode — categorical, drawn from the theme's series palette.
-const SERIES = { blue: '#5B5BD6', orange: '#F2724F', aqua: '#2BB3A3', yellow: '#F0B429' }
+// Shipment mode — categorical, drawn from the theme's series palette. The lead hue is
+// the theme accent; the rest are fixed so they stay distinguishable beside either accent.
+const SERIES_BASE = { orange: '#F2724F', aqua: '#2BB3A3', yellow: '#F0B429' }
+const SER = {
+  get blue(){ return C.acc },
+  get orange(){ return SERIES_BASE.orange },
+  get aqua(){ return SERIES_BASE.aqua },
+  get yellow(){ return SERIES_BASE.yellow },
+}
 // Forward / Reverse / RTO are distinct states, not a scale, so they take distinct hues.
-const MODE_COLOR = { Forward: '#5B5BD6', Reverse: '#F2724F', RTO: '#2BB3A3' }
+const MODE = {
+  get Forward(){ return C.acc },
+  get Reverse(){ return SERIES_BASE.orange },
+  get RTO(){ return SERIES_BASE.aqua },
+}
 
 // Courier trend lines — one hue per courier, so a categorical set rather than a ramp.
-const DRIFT_COLORS = ['#5B5BD6', '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9']
+const DRIFT = { get colors(){ return [C.acc, '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9'] } }
 
 // Chart chrome — recessive hairlines, muted axis ink.
 const VIZ = {
@@ -54,7 +67,7 @@ const VIZ = {
 
 const zoneColor = (zone, ordered) => {
   const i = ordered.indexOf(zone)
-  return i === -1 ? VIZ.muted : ORDINAL_BLUE[Math.min(i, ORDINAL_BLUE.length - 1)]
+  return i === -1 ? VIZ.muted : ORD.BLUE[Math.min(i, ORD.BLUE.length - 1)]
 }
 
 // Weight slabs mirror how courier rate cards actually step, so a slab filter answers
@@ -925,7 +938,7 @@ function ShareBar({ pct, children }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
       <span style={{ fontVariantNumeric: 'tabular-nums' }}>{children}</span>
       <span aria-hidden="true" style={{ width: 46, height: 5, borderRadius: 3, background: C.bg, flexShrink: 0, overflow: 'hidden' }}>
-        <span style={{ display: 'block', width: w + '%', height: '100%', borderRadius: 3, background: SERIES.blue }} />
+        <span style={{ display: 'block', width: w + '%', height: '100%', borderRadius: 3, background: SER.blue }} />
       </span>
     </div>
   )
@@ -1464,7 +1477,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const courier = r.key.split('|')[0]
       spend[courier] = (spend[courier] || 0) + (Number(r.n) || 0)
     }
-    return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT_COLORS.length)
+    return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT.colors.length)
   }, [agg])
 
   const driftSeries = useMemo(() => {
@@ -2744,15 +2757,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           <span style={{ color: C.acm, fontWeight: 700, fontSize: 12 }}>■</span> {fmt(r.total)}
                         </div>
                         <div style={{ fontSize: 11, color: C.t2, marginTop: 4 }}>
-                          <span style={{ color: SERIES.blue, fontWeight: 700 }}>■</span> {fmt(r.b2c)} parcel
+                          <span style={{ color: SER.blue, fontWeight: 700 }}>■</span> {fmt(r.b2c)} parcel
                         </div>
                         <div style={{ fontSize: 11, color: C.t2 }}>
-                          <span style={{ color: SERIES.orange, fontWeight: 700 }}>■</span> {fmt(r.b2b)} freight
+                          <span style={{ color: SER.orange, fontWeight: 700 }}>■</span> {fmt(r.b2b)} freight
                         </div>
                       </div>
                     )
                   }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
                 {/* Total as a bar, the two streams as lines on top. The bar carries the
                     magnitude — how much was spent in the period — and the lines carry the
                     trends that compose it.
@@ -2871,15 +2884,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <AreaChart data={b2bVarMonthRows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="ftlHero" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={SERIES.blue} stopOpacity={0.22} />
-                      <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0} />
+                      <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   {/* Hidden axis bound to month: without it Recharts labels the tooltip by
                       array index and the hover reads "1" instead of "Apr 2026". */}
                   <XAxis dataKey="month" hide />
                   <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Area type="monotone" dataKey="billed" name="Freight" stroke={SERIES.blue}
+                  <Area type="monotone" dataKey="billed" name="Freight" stroke={SER.blue}
                     strokeWidth={2} fill="url(#ftlHero)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -2935,8 +2948,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <AreaChart data={b2bVarMonthRows} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
                 <defs>
                   <linearGradient id="ftlTrend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SERIES.blue} stopOpacity={0.28} />
-                    <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0.02} />
+                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.28} />
+                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
@@ -2965,10 +2978,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   }} />
                 {/* Stroke in the deeper accent: a 2px #FFD600 line is 1.38:1 on white and
                     would effectively disappear, while the fill below it can stay light. */}
-                <Area type="monotone" dataKey="billed" name="Freight billed" stroke={SERIES.blue}
+                <Area type="monotone" dataKey="billed" name="Freight billed" stroke={SER.blue}
                   strokeWidth={2.5} fill="url(#ftlTrend)"
-                  dot={{ r: 3.5, fill: SERIES.blue, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: SERIES.blue, stroke: C.card, strokeWidth: 2 }} />
+                  dot={{ r: 3.5, fill: SER.blue, strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: SER.blue, stroke: C.card, strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -2991,12 +3004,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
                     tickFormatter={v => fmt(v)} />
                   <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Legend wrapperStyle={{ fontSize: 10.5 }} />
+                  <Legend {...chartLegendProps({ fontSize: 10.5 })} />
                   {/* Colour follows the CARRIER, taken from a fixed order by total spend, so a
                       transporter keeps its colour even as the series count changes. */}
                   {b2bTransKeys.map((k, idx) => (
                     <Line key={k} type="monotone" dataKey={k} name={k}
-                      stroke={DRIFT_COLORS[idx % DRIFT_COLORS.length]} strokeWidth={2}
+                      stroke={DRIFT.colors[idx % DRIFT.colors.length]} strokeWidth={2}
                       dot={{ r: 3 }} connectNulls={false} />
                   ))}
                 </LineChart>
@@ -3055,7 +3068,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="cost" name="Freight spend" fill={SERIES.blue}
+                  <Bar dataKey="cost" name="Freight spend" fill={SER.blue}
                     radius={[4, 4, 0, 0]} maxBarSize={38} />
                 </BarChart>
               </ResponsiveContainer>
@@ -3085,7 +3098,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SERIES.orange}
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.orange}
                     radius={[0, 4, 4, 0]} maxBarSize={16}>
                     <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
                       style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />
@@ -3168,7 +3181,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     stroke={VIZ.surface} strokeWidth={2} label={false} labelLine={false}>
                     {/* Fixed order by spend, so a type keeps its colour as the filter changes. */}
                     {b2bTypeRows.map((r, i) => (
-                      <Cell key={r.key} fill={[SERIES.blue, SERIES.orange, SERIES.aqua][i % 3]} />
+                      <Cell key={r.key} fill={[SER.blue, SER.orange, SER.aqua][i % 3]} />
                     ))}
                   </Pie>
                 </PieChart>
@@ -3179,7 +3192,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', justifyContent: 'center', marginTop: 2, marginBottom: 8 }}>
               {b2bTypeRows.map((r, i) => (
                 <span key={r.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: [SERIES.blue, SERIES.orange, SERIES.aqua][i % 3], flexShrink: 0 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: [SER.blue, SER.orange, SER.aqua][i % 3], flexShrink: 0 }} />
                   {r.key} <strong style={{ color: C.t1 }}>{r.share.toFixed(1)}%</strong>
                 </span>
               ))}
@@ -3239,10 +3252,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       {[0, 1, 2, 3].map(i => (
                         <Bar key={i} dataKey={r => r.carriers[i]?.median ?? null}
                           name={i === 0 ? 'Cheapest' : i === 1 ? '2nd' : i === 2 ? '3rd' : '4th'}
-                          fill={i === 0 ? SERIES.aqua : i === 1 ? SERIES.blue : i === 2 ? SERIES.orange : SERIES.yellow}
+                          fill={i === 0 ? SER.aqua : i === 1 ? SER.blue : i === 2 ? SER.orange : SER.yellow}
                           radius={[3, 3, 0, 0]} maxBarSize={22} />
                       ))}
-                      <Legend wrapperStyle={{ fontSize: 10.5 }} />
+                      <Legend {...chartLegendProps({ fontSize: 10.5 })} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -3321,7 +3334,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             }).join(' ')
             const last2 = pts.slice(-2)
             const isUp = last2.length === 2 ? last2[1] >= last2[0] : null
-            const lineColor = isUp === null ? '#5B5BD6' : m.invertColor ? (isUp ? '#E53935' : '#5B5BD6') : (isUp ? '#5B5BD6' : '#E53935')
+            const lineColor = isUp === null ? C.acc : m.invertColor ? (isUp ? '#E53935' : C.acc) : (isUp ? C.acc : '#E53935')
             return (
               <div key={m.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{m.label}</div>
@@ -3350,12 +3363,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <AreaChart data={monthSeries} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="lcHero" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SERIES.blue} stopOpacity={0.22} />
-                    <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0} />
+                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" hide />
-                <Area type="monotone" dataKey="cost" name="Freight cost" stroke={SERIES.blue}
+                <Area type="monotone" dataKey="cost" name="Freight cost" stroke={SER.blue}
                   strokeWidth={2} fill="url(#lcHero)" dot={false} />
                 <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
               </AreaChart>
@@ -3465,7 +3478,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     </div>
                   )
                 }} />
-              <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11.5, paddingTop: 0, bottom: isMobile ? 8 : 0 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
+              <Legend {...chartLegendProps({ fontSize: 11.5 })} />
               <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
                 fill={C.acc} fillOpacity={0.85} radius={[4, 4, 0, 0]} maxBarSize={64} />
               <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
@@ -3808,7 +3821,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       onClick={d => d?.mode && toggleIn('modes', d.mode)}
                       style={{ cursor: 'pointer' }} label={false} labelLine={false}>
                       {modeRows.map(r => (
-                        <Cell key={r.mode} fill={MODE_COLOR[r.mode] || VIZ.muted}
+                        <Cell key={r.mode} fill={MODE[r.mode] || VIZ.muted}
                           opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
                       ))}
                     </Pie>
@@ -3818,7 +3831,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginLeft: 'auto' }}>
                 {modeRows.map(r => (
                   <div key={r.mode} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: MODE_COLOR[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: MODE[r.mode] || VIZ.muted, flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, lineHeight: 1.2 }}>{r.mode} <span style={{ fontWeight: 400, color: C.t3 }}>{r.share.toFixed(1)}%</span></div>
                       <div style={{ fontSize: 11, color: C.t3 }}>{fmt(r.cost)}</div>
@@ -3838,7 +3851,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: 2, background: MODE_COLOR[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                            <span style={{ width: 9, height: 9, borderRadius: 2, background: MODE[r.mode] || VIZ.muted, flexShrink: 0 }} />
                             <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{r.mode}</span>
                           </div>
                           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
@@ -3867,7 +3880,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     labelLine={{ stroke: VIZ.axis, strokeWidth: 1 }}
                   >
                     {modeRows.map(r => (
-                      <Cell key={r.mode} fill={MODE_COLOR[r.mode] || VIZ.muted}
+                      <Cell key={r.mode} fill={MODE[r.mode] || VIZ.muted}
                         opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
                     ))}
                   </Pie>
@@ -3943,12 +3956,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 6 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SERIES.blue, flexShrink: 0 }} />
+                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SER.blue, flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>₹{r.avgCost.toFixed(2)}</span>
                           <span style={{ fontSize: 11, color: C.t3 }}>per shipment</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 3 }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SERIES.orange, flexShrink: 0 }} />
+                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SER.orange, flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>₹{r.cpk != null ? r.cpk.toFixed(2) : '—'}</span>
                           <span style={{ fontSize: 11, color: C.t3 }}>per kg</span>
                         </div>
@@ -3958,9 +3971,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       </div>
                     )
                   }} />
-                <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
-                <Bar dataKey="avgCost" name="Avg ₹ / shipment" fill={SERIES.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                <Bar dataKey="cpk" name="Cost / kg" fill={SERIES.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                <Bar dataKey="avgCost" name="Avg ₹ / shipment" fill={SER.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar dataKey="cpk" name="Cost / kg" fill={SER.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -4031,10 +4044,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   tickFormatter={v => '₹' + v.toFixed(0)} />
                 <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
                   content={<ChartTooltip formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="plainline" formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} iconType="plainline" />
                 {driftCouriers.map((c, i) => (
                   <Line key={c} type="monotone" dataKey={c} name={c}
-                    stroke={DRIFT_COLORS[i % DRIFT_COLORS.length]} strokeWidth={2}
+                    stroke={DRIFT.colors[i % DRIFT.colors.length]} strokeWidth={2}
                     dot={{ r: 2.5 }} connectNulls />
                 ))}
               </ComposedChart>
@@ -4135,13 +4148,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           </div>
                         )
                       }} />
-                    <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} />
-                    <Bar yAxisId="spend" dataKey="spend" name="Total spend" fill={SERIES.blue}
+                    <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                    <Bar yAxisId="spend" dataKey="spend" name="Total spend" fill={SER.blue}
                       fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={38} />
                     <Line yAxisId="pct" type="monotone" dataKey="claimPct" name="Claim % of spend"
-                      stroke={SERIES.orange} strokeWidth={2.5}
-                      dot={{ r: 3.5, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 2 }}
-                      activeDot={{ r: 6, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 2 }} />
+                      stroke={SER.orange} strokeWidth={2.5}
+                      dot={{ r: 3.5, fill: SER.orange, stroke: VIZ.surface, strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: SER.orange, stroke: VIZ.surface, strokeWidth: 2 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -4401,7 +4414,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   <Bar dataKey="avgCost" name="Avg ₹ / shipment" radius={[0, 4, 4, 0]} maxBarSize={26}>
                     {activeCell.rows.map((r, i) => (
                       // Cheapest in the cell is highlighted; the rest recede.
-                      <Cell key={r.courier} fill={i === 0 ? SERIES.aqua : SERIES.blue} fillOpacity={i === 0 ? 1 : 0.55} />
+                      <Cell key={r.courier} fill={i === 0 ? SER.aqua : SER.blue} fillOpacity={i === 0 ? 1 : 0.55} />
                     ))}
                     <LabelList dataKey="avgCost" position="right" offset={8} fontSize={10.5}
                       fontWeight={700} fill={C.t2} formatter={v => '₹' + num(v).toFixed(0)} />
@@ -4477,12 +4490,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }
 
   return (
-    <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {loading && (
-        <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-        </div>
-      )}
+    <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading costs" />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {!isMobile && scope !== 'all' && sidebar}
 
@@ -4495,7 +4504,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           </button>
         )}
 
-        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 20px 40px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 24px 40px 14px' }}>
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>

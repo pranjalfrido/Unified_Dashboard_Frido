@@ -402,9 +402,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     // they're currently displayed in.
                     const sk = { ...sk_, _costed: costed, _cogs: skCogs, _gm: skGm, _snd: skSnd, _cm1: skCm1 }
                     return (
-                      <tr key={sk.sku} style={{ cursor: 'default', background: '#FAFAF7', transition: 'box-shadow .12s, background .12s' }}
+                      <tr key={sk.sku} style={{ cursor: 'default', background: C.hov, transition: 'box-shadow .12s, background .12s' }}
                         onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
+                        onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}

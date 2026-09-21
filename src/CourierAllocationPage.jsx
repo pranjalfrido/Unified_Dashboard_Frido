@@ -8,8 +8,13 @@ const C = { ...BASE_C, t3: '#75747F' }
 
 // Semantic only — gain / loss. Deliberately NOT courier brand hues: the question on this page
 // is "which way does volume move", so green-up / red-down has to read instantly.
-const GAIN = C.green.tx
-const LOSS = C.red.tx
+// T.GAIN/T.LOSS and the shared cell styles are defined with getters so they re-read the
+// theme tokens on every access, instead of freezing C.* at module-import time.
+const T = {
+  get GAIN(){ return C.green.tx },
+  get LOSS(){ return C.red.tx },
+}
+
 
 const PAYS = [{ key: 'Prepaid', label: 'Prepaid' }, { key: 'COD', label: 'COD' }]
 const DEFAULT_W = { cost: 60, rto: 25, speed: 15 }
@@ -227,7 +232,7 @@ export default function CourierAllocationPage({ onBack }) {
   }
 
   if (loading) return <Shell onBack={onBack}><LoadingPanel lookback={lookback} /></Shell>
-  if (err) return <Shell onBack={onBack}><div style={{ padding: 40, textAlign: 'center', color: LOSS }}>Could not load: {err}</div></Shell>
+  if (err) return <Shell onBack={onBack}><div style={{ padding: 40, textAlign: 'center', color: T.LOSS }}>Could not load: {err}</div></Shell>
   if (!data) return <Shell onBack={onBack}><div style={{ padding: 40 }} /></Shell>
 
   const losers = net.filter(c => c.net < 0).sort((a, b) => a.net - b.net)
@@ -271,9 +276,9 @@ export default function CourierAllocationPage({ onBack }) {
         {net.length > 0 ? (
           <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 400, color: C.t1, lineHeight: 1.5, maxWidth: 780 }}>
             Shift <b>{fmtN(Math.round(Math.abs(losers.reduce((a, c) => a + c.net, 0))))}</b> shipments off{' '}
-            <b style={{ color: LOSS }}>{losers.slice(0, 2).map(c => c.courier).join(' and ')}</b>
+            <b style={{ color: T.LOSS }}>{losers.slice(0, 2).map(c => c.courier).join(' and ')}</b>
             {losers.length > 2 ? ` (and ${losers.length - 2} more)` : ''} onto{' '}
-            <b style={{ color: GAIN }}>{gainers.map(c => c.courier).join(' and ')}</b> — worth{' '}
+            <b style={{ color: T.GAIN }}>{gainers.map(c => c.courier).join(' and ')}</b> — worth{' '}
             <b>{fmt(Math.round(totalSaving))}</b> a month.
           </div>
         ) : (
@@ -283,9 +288,9 @@ export default function CourierAllocationPage({ onBack }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginTop: 14 }}>
-          <Stat label="Saving / month" value={fmt(Math.round(totalSaving))} accent={totalSaving > 0 ? GAIN : C.t1} />
+          <Stat label="Saving / month" value={fmt(Math.round(totalSaving))} accent={totalSaving > 0 ? T.GAIN : C.t1} />
           <Stat label={`${pay} RTO`} value={`${(pay === 'COD' ? data.health.codRtoPct : data.health.prepaidRtoPct)?.toFixed(2)}%`}
-            accent={pay === 'COD' ? LOSS : GAIN} />
+            accent={pay === 'COD' ? T.LOSS : T.GAIN} />
           <Stat label="Shipments analysed" value={fmtN(data.health.perfShipments)} />
           <Stat label="Zoned" value={data.zoneCoverage?.pct != null ? `${data.zoneCoverage.pct.toFixed(1)}%` : '—'} />
         </div>
@@ -312,11 +317,11 @@ export default function CourierAllocationPage({ onBack }) {
             </colgroup>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                <th style={{ ...thStyle, textAlign: 'left' }}>Weight</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Shipments</th>
-                <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 16 }}>Current mix → recommended</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Landed ₹</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Saving/mo</th>
+                <th style={{ ...thStyleBase, color: C.t3, textAlign: 'left' }}>Weight</th>
+                <th style={{ ...thStyleBase, color: C.t3, textAlign: 'right' }}>Shipments</th>
+                <th style={{ ...thStyleBase, color: C.t3, textAlign: 'left', paddingLeft: 16 }}>Current mix → recommended</th>
+                <th style={{ ...thStyleBase, color: C.t3, textAlign: 'right' }}>Landed ₹</th>
+                <th style={{ ...thStyleBase, color: C.t3, textAlign: 'right' }}>Saving/mo</th>
               </tr>
             </thead>
             <tbody>
@@ -329,16 +334,16 @@ export default function CourierAllocationPage({ onBack }) {
                   <Fragment2 key={b.key}>
                     <tr onClick={() => setOpenBand(open ? null : b.key)}
                       style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer', background: open ? C.bg : 'transparent' }}>
-                      <td style={{ ...tdStyle, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      <td style={{ ...tdStyleBase, color: C.t1, fontWeight: 700, whiteSpace: 'nowrap' }}>
                         <span style={{ color: C.t3, marginRight: 6, fontSize: 9 }}>{open ? '▼' : '▶'}</span>
                         {b.label}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', padding: '6px 9px' }}>
+                      <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right', padding: '6px 9px' }}>
                         <GhostBar value={b.shipments} of={maxBandShip}>{fmtN(b.shipments)}</GhostBar>
                       </td>
                       {/* whiteSpace normal: tdStyle sets nowrap for numeric columns, but under
                           tableLayout:fixed that would clip a long chip list instead of wrapping. */}
-                      <td style={{ ...tdStyle, paddingLeft: 16, whiteSpace: 'normal' }}>
+                      <td style={{ ...tdStyleBase, color: C.t1, paddingLeft: 16, whiteSpace: 'normal' }}>
                         {movers.length === 0
                           ? <span style={{ color: C.t3 }}>keep {b.best || 'current mix'}</span>
                           : (
@@ -349,13 +354,13 @@ export default function CourierAllocationPage({ onBack }) {
                             </span>
                           )}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {b.currentLanded != null ? `₹${b.currentLanded.toFixed(0)}` : '—'}
                         {b.plannedLanded != null && b.plannedLanded < b.currentLanded - 0.5 && (
-                          <> → <b style={{ color: GAIN }}>₹{b.plannedLanded.toFixed(0)}</b></>
+                          <> → <b style={{ color: T.GAIN }}>₹{b.plannedLanded.toFixed(0)}</b></>
                         )}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: b.saving > 0 ? GAIN : C.t3 }}>
+                      <td style={{ ...tdStyleBase, textAlign: 'right', fontWeight: 700, color: b.saving > 0 ? T.GAIN : C.t3 }}>
                         {b.saving > 0 ? fmt(Math.round(b.saving)) : '—'}
                       </td>
                     </tr>
@@ -372,13 +377,13 @@ export default function CourierAllocationPage({ onBack }) {
             </tbody>
             <tfoot>
               <tr style={{ borderTop: `2px solid ${C.border2}` }}>
-                <td style={{ ...tdStyle, fontWeight: 800 }}>All weights</td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800 }}>
+                <td style={{ ...tdStyleBase, color: C.t1, fontWeight: 800 }}>All weights</td>
+                <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right', fontWeight: 800 }}>
                   {fmtN(bands.reduce((a, b) => a + b.shipments, 0))}
                 </td>
                 <td />
                 <td />
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: GAIN }}>
+                <td style={{ ...tdStyleBase, textAlign: 'right', fontWeight: 800, color: T.GAIN }}>
                   {fmt(Math.round(totalSaving))}
                 </td>
               </tr>
@@ -427,7 +432,7 @@ function Chip({ c, dir }) {
       borderRadius: 999, padding: '3px 9px', fontSize: 11,
     }}>
       <b style={{ color: C.t1, fontWeight: 600 }}>{c.courier}</b>
-      <span style={{ color: out ? LOSS : GAIN, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ color: out ? T.LOSS : T.GAIN, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
         {out ? '−' : '+'}{fmtN(Math.round(Math.abs(c.delta)))}
       </span>
     </span>
@@ -444,27 +449,27 @@ function BandDetail({ b }) {
         <thead>
           <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
             {['Courier', 'Shipments', 'Now', 'Recommended', 'Change', 'Landed ₹', 'RTO %', 'Transit'].map((h, i) => (
-              <th key={h} style={{ ...thStyle, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
+              <th key={h} style={{ ...thStyleBase, color: C.t3, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {b.couriers.map(c => (
             <tr key={c.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
-              <td style={{ ...tdStyle, fontWeight: 600 }}>{c.courier}</td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtN(c.shipments)}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', padding: '6px 9px' }}>
+              <td style={{ ...tdStyleBase, color: C.t1, fontWeight: 600 }}>{c.courier}</td>
+              <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right' }}>{fmtN(c.shipments)}</td>
+              <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right', padding: '6px 9px' }}>
                 <GhostBar value={c.share} of={100} fill={C.border2}>{c.share.toFixed(1)}%</GhostBar>
               </td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, padding: '6px 9px' }}>
+              <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right', fontWeight: 600, padding: '6px 9px' }}>
                 <GhostBar value={c.plannedShare} of={100} fill={C.acs}>{c.plannedShare.toFixed(1)}%</GhostBar>
               </td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: c.delta > 0 ? GAIN : c.delta < 0 ? LOSS : C.t3 }}>
+              <td style={{ ...tdStyleBase, textAlign: 'right', fontWeight: 700, color: c.delta > 0 ? T.GAIN : c.delta < 0 ? T.LOSS : C.t3 }}>
                 {Math.abs(c.delta) < 1 ? '—' : `${c.delta > 0 ? '+' : '−'}${fmtN(Math.round(Math.abs(c.delta)))}`}
               </td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}>{c.landedCost != null ? `₹${c.landedCost.toFixed(2)}` : '—'}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', color: c.rtoPct > 15 ? LOSS : C.t1 }}>{c.rtoPct != null ? c.rtoPct.toFixed(2) : '—'}</td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}>{c.transitDays != null ? `${c.transitDays.toFixed(1)}d` : '—'}</td>
+              <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right' }}>{c.landedCost != null ? `₹${c.landedCost.toFixed(2)}` : '—'}</td>
+              <td style={{ ...tdStyleBase, textAlign: 'right', color: c.rtoPct > 15 ? T.LOSS : C.t1 }}>{c.rtoPct != null ? c.rtoPct.toFixed(2) : '—'}</td>
+              <td style={{ ...tdStyleBase, color: C.t1, textAlign: 'right' }}>{c.transitDays != null ? `${c.transitDays.toFixed(1)}d` : '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -527,14 +532,14 @@ function ZoneTable({ zones, pay, coverage, metric, setMetric }) {
           </colgroup>
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-              <th style={{ ...thStyle, textAlign: 'left' }}>Courier</th>
-              {ZONE_ORDER.map(z => <th key={z} style={{ ...thStyle, textAlign: 'right' }}>{ZONE_LABEL[z]}</th>)}
+              <th style={{ ...thStyleBase, color: C.t3, textAlign: 'left' }}>Courier</th>
+              {ZONE_ORDER.map(z => <th key={z} style={{ ...thStyleBase, color: C.t3, textAlign: 'right' }}>{ZONE_LABEL[z]}</th>)}
             </tr>
           </thead>
           <tbody>
             {couriers.map(c => (
               <tr key={c} style={{ borderBottom: `1px solid ${C.border}` }}>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{c}</td>
+                <td style={{ ...tdStyleBase, color: C.t1, fontWeight: 600 }}>{c}</td>
                 {ZONE_ORDER.map(z => {
                   const e = at(c, z)
                   const v = e?.[metric]
@@ -542,9 +547,9 @@ function ZoneTable({ zones, pay, coverage, metric, setMetric }) {
                   const isBest = best[z] === c && !thin
                   return (
                     <td key={z} style={{
-                      ...tdStyle, textAlign: 'right',
+                      ...tdStyleBase, textAlign: 'right',
                       background: isBest ? C.green.bg : 'transparent',
-                      color: thin ? C.t3 : isBest ? GAIN : C.t1,
+                      color: thin ? C.t3 : isBest ? T.GAIN : C.t1,
                       fontWeight: isBest ? 800 : 400, opacity: thin ? 0.55 : 1,
                     }} title={e ? `${fmtN(e.shipments)} shipments${thin ? ` — under ${ZONE_MIN}, not ranked` : ''}` : 'no shipments'}>
                       {v == null ? '·' : (isBest ? '✓ ' : '') + M.fmt(v)}
@@ -684,8 +689,9 @@ function MethodNote({ data }) {
   )
 }
 
-const thStyle = { padding: '9px 10px', fontSize: 10.5, fontWeight: 600, letterSpacing: '.02em', color: C.t3, whiteSpace: 'nowrap' }
-const tdStyle = { padding: '10px 10px', color: C.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
+const thStyleBase = { padding: '9px 10px', fontSize: 10.5, fontWeight: 600, letterSpacing: '.02em', whiteSpace: 'nowrap' }
+const tdStyleBase = { padding: '10px 10px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
+
 const btnStyle = {
   background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
   padding: '6px 11px', fontFamily: 'var(--font)', fontSize: 11.5, fontWeight: 700,

@@ -25,7 +25,7 @@ const SLICER_HEIGHT = 32
 const SIDEBAR_WIDTH = 220
 
 // ── Left filter sidebar — same pattern as the other two tabs, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, sidebarTop, popover}) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'facility', 'vendor'].some(k => filters[k]?.length)
@@ -34,16 +34,16 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   // instead of a live getBoundingClientRect() measurement (see InventoryHealthPage.jsx's
   // FilterSidebar for the full writeup on why the measured approach could drift).
   return (
-    <div style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
       overflow: 'hidden', flexShrink: 0,
       // Width-reserver only: its child is position:fixed. Deliberately transparent so the
       // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(open ? {
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
           position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)', zIndex: 50,
           height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
           borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
@@ -232,14 +232,14 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
         boxShadow: '3px 0 6px -2px rgba(26,28,35,.10)',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
         position: 'fixed', top: 'calc(var(--nav) + 24px)',
-        left: sidebarOpen ? `calc(var(--sb) + 18px + ${SIDEBAR_WIDTH}px - 1px)` : 'calc(var(--sb) + 18px - 1px)',
+        left: sidebarOpen ? `calc(var(--sb) + 10px + ${SIDEBAR_WIDTH}px)` : 'calc(var(--sb) + 10px)',
         zIndex: 30, transition: 'left .2s ease, box-shadow .18s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 24, paddingRight: 24 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>

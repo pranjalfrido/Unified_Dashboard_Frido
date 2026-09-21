@@ -750,7 +750,7 @@ export default function LogisticsLedgerPage() {
             )}
             {filtered.map((r) => (
               <tr key={r._uid} style={{ borderBottom: `1px solid #F0ECE3` }}
-                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = '#FAFAF7')}
+                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = C.hov)}
                 onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = C.card)}>
                 {fmt.fields.map((f, i) => {
                   const isTotal = f.key === fmt.totalField;

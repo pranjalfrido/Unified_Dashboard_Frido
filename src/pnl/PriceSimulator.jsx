@@ -680,7 +680,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
                 <button onClick={() => handlePickModeChange(m.id)}
                   style={{
                     fontSize: 12, fontWeight: pickMode === m.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', outline: 'none',
-                    background: pickMode === m.id ? C.acs : 'transparent', color: pickMode === m.id ? '#3F3D33' : C.t2,
+                    background: pickMode === m.id ? C.acs : 'transparent', color: pickMode === m.id ? C.t1 : C.t2,
                     cursor: 'pointer',
                   }}>{m.label}</button>
               </div>

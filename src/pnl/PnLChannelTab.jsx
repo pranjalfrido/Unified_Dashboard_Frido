@@ -49,7 +49,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
     </div>
   )
 }
-import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from '../components.jsx'
+import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, chartLegendProps } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
@@ -250,7 +250,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
               ))}
             </div>
           ) : null} />
-          {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
           {selectedMetrics.map(m => m.isArea ? (
             <Area key={m.key} yAxisId={m.axis} type="monotone" dataKey={m.key} name={m.label}
               stroke={m.color || grossColor} fill={`url(#${m.key === 'rev' ? gradId : gradId + '_net'})`}

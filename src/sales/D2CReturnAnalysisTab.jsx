@@ -3,8 +3,7 @@ import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import {
   Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar,
-} from '../components.jsx'
+  PieChart, Pie, Cell, BarChart, Bar, chartLegendProps } from '../components.jsx'
 
 // Stat tile per the dataviz skill's contract: label (sentence case, no colon) · value (semibold,
 // proportional figures — never tabular-nums on a standalone number) · delta (signed, colored by
@@ -91,7 +90,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
                 ))}
               </div>
             ) : null} />
-            <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+            <Legend {...chartLegendProps({ fontSize: 11 })} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue" stroke={C.acm} fill="url(#raRevGrad)" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="totalReturnPct" name="Return % (Overall)" stroke="#E24B4A" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
@@ -143,7 +142,8 @@ function TopReturnedProductsCard({ topProducts, paymentTypeOpts, paymentType, se
   )
 }
 
-const REASON_COLORS = [C.acc, C.acm, C.acd, '#D9BE7A', '#8C6A3F', C.acs, '#4A3A1E', '#B89A6B']
+// Getter, not a plain array: a module-level array would freeze the accent at import.
+const PALETTE = { get reason(){ return [C.acc, C.acm, C.acd, '#D9BE7A', '#8C6A3F', C.acs, '#4A3A1E', '#B89A6B'] } }
 
 // Payment Type-wise Return Breakdown, transposed — payment types (Prepaid/COD/PPCOD) run across
 // as columns, metrics (Revenue/Cancel%/RTO%/CIR%/Exchange%/Total Return%) run down as rows. Only
@@ -282,7 +282,7 @@ function CancelBucketChart({ cancelByBucket }) {
   return (
     <Card title="Cancellation · Days Since Order" action={
       <div ref={dropRef} style={{ position: 'relative', flexShrink: 0 }}>
-        <div onClick={() => { setPending(null); setDropOpen(v => !v) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 120, background: selectedSubCats.length > 0 ? '#FFF9CC' : undefined, borderColor: selectedSubCats.length > 0 ? C.acm : undefined }}>
+        <div onClick={() => { setPending(null); setDropOpen(v => !v) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 120, background: selectedSubCats.length > 0 ? C.acl : undefined, borderColor: selectedSubCats.length > 0 ? C.acm : undefined }}>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{triggerLabel}</span>
           <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
         </div>
@@ -406,7 +406,7 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
                     <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.revenueImpact)}</td>
                   </tr>
                   {isOpen && subs.map((s, si) => (
-                    <tr key={s.subReason} style={{ background: '#FAFAF7', borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
+                    <tr key={s.subReason} style={{ background: C.hov, borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                       <td style={{ padding: '4px 5px', color: C.t3, fontSize: 11, paddingLeft: 22 }}>↳ {s.subReason}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{fmtN(s.count)}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalCount ? (s.count / totalCount * 100).toFixed(1) : 0}%</td>

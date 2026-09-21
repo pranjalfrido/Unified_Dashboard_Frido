@@ -349,7 +349,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                       <button onClick={() => setGstPct(g)}
                         style={{
                           fontSize: 12, fontWeight: gstPct === g ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', outline: 'none',
-                          background: gstPct === g ? C.acs : 'transparent', color: gstPct === g ? '#3F3D33' : C.t3, cursor: 'pointer',
+                          background: gstPct === g ? C.acs : 'transparent', color: gstPct === g ? C.t1 : C.t3, cursor: 'pointer',
                         }}>{g}%</button>
                     </div>
                   ))}

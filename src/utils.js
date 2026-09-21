@@ -1,44 +1,67 @@
-// Theme tokens, mirrored from the CSS custom properties in index.css — the two must stay in
-// step, since chrome reads var(--x) while components read C.x.
+// Theme colours, read live from the CSS custom properties in index.css.
 //
-// Cool-neutral ground with an indigo accent. Three things carry the look:
-//   1. #EEF0F5 page ground, so a white card reads as lifted rather than outlined
-//   2. shadow (sh1/sh2/sh3) separates cards; borders are used sparingly
-//   3. indigo accent, with greys cooled to match
+// index.css is the single source of truth: it defines one token block per theme
+// and the active one is selected by <html data-theme>. Every property below is a
+// GETTER, so C.acc re-resolves on each read and follows a theme switch without
+// any call site changing. The fallbacks are the gold (default) values, used only
+// before first paint or in a non-browser context.
 //
-// Semantic colors (green/red/amber/blue) and channel colors below are DATA ENCODINGS, not
-// decoration — a reader maps them to a meaning, so their hues are unchanged. Only their
-// tints moved, to sit correctly on the cooler ground.
+// Semantic colours (green/red/amber/blue) and the channel/courier colours are
+// DATA ENCODINGS, not decoration - a reader maps them to a meaning - so they are
+// identical across themes and several are kept as plain static values.
+import { cssVar } from './theme.js'
+
+const tok = (name, fallback) => cssVar(name, fallback)
+
 export const C = {
-  acc: '#5B5BD6', acl: '#EEEEFB', acm: '#4A4AC4', acd: '#3A3A9E', acs: '#C7C7F2',
-  // One step down from acl. Table headers and total rows sit on this so they read as
-  // chrome against the near-white body, without going dark enough to need light text.
-  ach: '#E0E0F7',
-  bg: '#EEF0F5', card: '#fff', hov: '#F3F4F9', border: '#E8EAF0', border2: '#D3D7E2',
-  t1: '#1A1C23', t2: '#4A4E5C', t3: '#767B8A',
+  get acc(){ return tok("--acc","#D89A1A") },
+  get acl(){ return tok("--acl","#F7EBD2") },
+  get acm(){ return tok("--acm","#B87D14") },
+  get acd(){ return tok("--acd","#7A5410") },
+  get acs(){ return tok("--acs","#EFCE85") },
+  // One step down from acl. Table headers and total rows sit on this so they read
+  // as chrome against the near-white body, without needing light text.
+  get ach(){ return tok("--ach","#F0DFB8") },
+  // Text/icons drawn ON the accent fill. Flips with the theme: the gold accent is
+  // light and carries dark text, the indigo accent is dark and needs light text.
+  get onAcc(){ return tok("--on-acc","#3A2A08") },
+  get bg(){ return tok("--bg","#F2F1EF") },
+  get card(){ return tok("--card","#fff") },
+  get hov(){ return tok("--hov","#FAF8F3") },
+  get border(){ return tok("--b1","#E8E6DC") },
+  get border2(){ return tok("--b2","#D6D0B0") },
+  get t1(){ return tok("--t1","#3F3D33") },
+  get t2(){ return tok("--t2","#504F68") },
+  get t3(){ return tok("--t3","#94939F") },
   // Elevation, matching --sh1/2/3. Use these instead of a border to separate a card.
-  sh1: '0 1px 2px rgba(26,28,35,.04),0 1px 3px rgba(26,28,35,.05)',
-  sh2: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
-  sh3: '0 4px 8px rgba(26,28,35,.05),0 12px 28px rgba(26,28,35,.08)',
+  get sh1(){ return tok("--sh1","0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05)") },
+  get sh2(){ return tok("--sh2","0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06)") },
+  get sh3(){ return tok("--sh3","0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08)") },
   r: { sm: 8, md: 12, lg: 16, xl: 20 },
-  // Display face for KPI values and titles; Inter still carries tables.
-  display: "'Plus Jakarta Sans','Inter',sans-serif",
-  // Chart series palette as a SET — violet/coral/blue/amber/teal, cool-leaning for the
-  // new ground. Separate from `ch` below: those are per-marketplace brand colours a
-  // reader maps to a specific channel, so they stay fixed.
-  series: ['#5B5BD6', '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9', '#5C6B84'],
-  // Sequential indigo ramp for parts-of-a-whole (donuts, stacked shares) where the slices are
-  // ordered by size and the eye should read rank, not category. Steps are spaced on lightness
-  // so neighbouring slices stay distinguishable in greyscale and for CVD viewers.
-  ramp: ['#3A3A9E', '#4A4AC4', '#5B5BD6', '#8484E3', '#AEAEEF', '#D3D3F7'],
-  green: { bg: '#E8F6E9', tx: '#1B7F3B', bd: '#8FD69C' },
-  red:   { bg: '#FDEAEA', tx: '#B4232A', bd: '#F2A0A0' },
-  amber: { bg: '#FEF4E2', tx: '#96590A', bd: '#F5C978' },
-  blue:  { bg: '#E8F0FE', tx: '#1A4FA0', bd: '#8AB8F0' },
+  get display(){ return tok("--display","Arial,Helvetica,sans-serif") },
+  // Chart series palette as a SET. The accent leads, so it tracks the theme; the
+  // rest are fixed hues chosen to stay distinguishable beside either accent.
+  get series(){ return [this.acc, "#F2724F", "#3D9BE9", "#F0B429", "#2BB3A3", "#B06AD9", "#5C6B84"] },
+  // Sequential ramp for parts-of-a-whole (donuts, stacked shares) where slices are
+  // ordered by size and the eye should read rank, not category. Built from the
+  // theme accent so it recolours on switch; steps are spaced on lightness so
+  // neighbouring slices stay distinguishable in greyscale and for CVD viewers.
+  get ramp(){
+    const v = tok("--ramp", "").split(",").map(x => x.trim()).filter(Boolean)
+    // Never hand a chart an empty palette: fall back to the gold ramp if the token
+    // is missing (non-browser render, or before the stylesheet has resolved).
+    return v.length ? v : ["#7A5410", "#A06E14", "#C68A18", "#D89A1A", "#E3B95E", "#EFCE85"]
+  },
+  get green(){ return { bg: tok("--G","#E6F4E0"), tx: tok("--Gt","#286010"), bd: tok("--Gb","#9DD470") } },
+  get red(){   return { bg: tok("--R","#FDE8E8"), tx: tok("--Rt","#7A1A1A"), bd: tok("--Rb","#F09898") } },
+  get amber(){ return { bg: tok("--A","#FEF2DC"), tx: tok("--At","#7A4000"), bd: tok("--Ab","#F5C460") } },
+  get blue(){  return { bg: tok("--B","#E1EFFD"), tx: tok("--Bt","#184078"), bd: tok("--Bb","#7AB4EE") } },
+  // Per-marketplace brand colours. Fixed in every theme: a reader maps these to a
+  // specific channel, and the brands own the hues.
   ch: {
-    Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
-    Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',
-    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71', offline_sales: '#6B7280', EBO: '#8B5E3C'
+    Shopify: "#FFD600", "Shopify International": "#B8A000", Amazon: "#E8930A", Flipkart: "#2E74CC",
+    Blinkit: "#0D9E68", CRED: "#CC4078", Instamart: "#4AB89A",
+    Zepto: "#858380", Myntra: "#E87858", Firstcry: "#9B56B6", Pharmeasy: "#2ECC71", offline_sales: "#6B7280", EBO: "#8B5E3C"
   }
 }
 

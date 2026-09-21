@@ -7,43 +7,59 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 button,select,input{touch-action:manipulation}
 
-:root{
-  /* ── Theme: cool-neutral ground, borderless cards, indigo accent ──────────
-     Reworked from the original warm-beige/gold palette. Three things carry the
-     new look, in order of how much they do:
-       1. a cool grey-blue page ground, so white cards read as lifted
-       2. shadow replaces border as the thing that separates a card
-       3. indigo accent, and correspondingly cool greys
+/* ── Theme tokens ───────────────────────────────────────────────
+   Colour lives per-theme; everything structural (elevation, radii, type,
+   sizing) is shared and defined once below. Switching themes sets
+   data-theme on <html>, so every var(--x) re-resolves with no reload.
 
-     Semantic colours (G/R/A/B/P) and channel colours are data encodings, not
-     decoration, so their hues are unchanged - only their tints are cooled
-     slightly to sit on the new ground. */
+   Semantic colours (G/R/A/B/P) and channel/courier colours are data
+   encodings, not decoration, so they do not change between themes.
+
+   Gold — the original warm-beige ground with a gold accent. Default. */
+:root,
+:root[data-theme="gold"]{
+  --bg:#F2F1EF;--card:#fff;--hov:#FAF8F3;
+  --b1:#E8E6DC;--b2:#D6D0B0;
+  --t1:#3F3D33;--t2:#504F68;--t3:#94939F;--tg:#565A66;
+  --acc:#D89A1A;--acl:#F7EBD2;--acm:#B87D14;--acd:#7A5410;--acs:#EFCE85;--ach:#F0DFB8;
+  --on-acc:#3A2A08;
+  --ramp:#7A5410,#A06E14,#C68A18,#D89A1A,#E3B95E,#EFCE85;
+  --G:#E6F4E0;--Gt:#286010;--Gb:#9DD470;
+  --R:#FDE8E8;--Rt:#7A1A1A;--Rb:#F09898;
+  --A:#FEF2DC;--At:#7A4000;--Ab:#F5C460;
+  --B:#E1EFFD;--Bt:#184078;--Bb:#7AB4EE;
+  --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
+}
+
+/* Indigo — cool grey-blue ground, indigo accent. */
+:root[data-theme="indigo"]{
   --bg:#EEF0F5;--card:#fff;--hov:#F3F4F9;
   --b1:#E8EAF0;--b2:#D3D7E2;
   --t1:#1A1C23;--t2:#4A4E5C;--t3:#767B8A;--tg:#565A66;
-  --acc:#5B5BD6;--acl:#EEEEFB;--acm:#4A4AC4;--acd:#3A3A9E;
-  /* Elevation. The reference separates cards with shadow, not outline, so these
-     replace most 1px borders. Kept soft and cool-tinted to match the ground. */
-  --sh1:0 1px 2px rgba(26,28,35,.04),0 1px 3px rgba(26,28,35,.05);
-  --sh2:0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06);
-  --sh3:0 4px 8px rgba(26,28,35,.05),0 12px 28px rgba(26,28,35,.08);
-  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;
+  --acc:#5B5BD6;--acl:#EEEEFB;--acm:#4A4AC4;--acd:#3A3A9E;--acs:#C7C7F2;--ach:#E0E0F7;
+  --on-acc:#FFFFFF;
+  --ramp:#3A3A9E,#4A4AC4,#5B5BD6,#8484E3,#AEAEEF,#D3D3F7;
   --G:#E8F6E9;--Gt:#1B7F3B;--Gb:#8FD69C;
   --R:#FDEAEA;--Rt:#B4232A;--Rb:#F2A0A0;
   --A:#FEF4E2;--At:#96590A;--Ab:#F5C978;
   --B:#E8F0FE;--Bt:#1A4FA0;--Bb:#8AB8F0;
   --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
+}
+
+/* Shared, theme-independent: elevation, radii, type, layout sizing. */
+:root{
+  --sh1:0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05);
+  --sh2:0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06);
+  --sh3:0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;
   --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
-  /* Display face carries KPI values and titles. Inter still sets UI text and tables,
-     whose column widths were tuned around its metrics. */
   --display:'Plus Jakarta Sans','Inter',sans-serif;
-  /* Figures face - same family as --mono, kept as its own token so the numbers can be
-     retargeted later without touching every call site. */
   --num:'JetBrains Mono',monospace;
   --sb:72px; /* sidebar width desktop */
   --nav:46px; /* topnav height */
   --bot:60px; /* bottom nav height mobile */
 }
+
 
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
@@ -54,52 +70,32 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:100vh;overflow:hidden;background:var(--bg)}
-.app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
 
 /* ── Sidebar (desktop) ─────────────────────── */
-/* ── Floating nav rail ──────────────────────────────────────────────────
-   The logo tile and the nav rail are two separate floating cards in one
-   column, so both sit off the page edge with the ground visible around
-   them. sb-shell owns the outer margin and the gap between the two.     */
-.sb-shell{
-  display:flex;flex-direction:column;align-items:center;
-  padding:10px 8px 12px 10px;gap:8px;flex-shrink:0;z-index:40;
-  min-height:0;
-}
-.sb-logo{
-  display:flex;align-items:center;justify-content:center;
-  width:var(--sb);height:var(--nav);flex-shrink:0;
-  background:var(--card);border-radius:16px;box-shadow:var(--sh2);
-  transition:box-shadow .18s ease, transform .18s ease;
-}
-.sb-logo:hover{ transform:translateY(-1px); box-shadow:var(--sh3) }
 .sidebar{
-  width:var(--sb);background:var(--card);border-right:none;
-  border-radius:16px;box-shadow:var(--sh2);
+  width:var(--sb);background:var(--card);border-right:1px solid var(--b1);
   display:flex;flex-direction:column;align-items:center;
-  padding:10px 0;flex:1;min-height:0;overflow:visible;gap:0;
+  padding:12px 0;flex-shrink:0;z-index:40;gap:0;
 }
 .sidebar::-webkit-scrollbar{width:0}
 .sb-item{
-  width:56px;border-radius:12px;display:flex;flex-direction:column;
+  width:60px;border-radius:10px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;cursor:pointer;
-  padding:7px 4px 6px;gap:3px;transition:all .15s ease;color:var(--t3);
+  padding:7px 4px 6px;gap:3px;transition:all .13s;color:var(--t3);
 }
 .sb-item:hover{background:var(--hov);color:var(--t1)}
 /* Active is now a filled bubble rather than an edge bar - an edge marker has
    nothing to sit against once the rail is detached from the page edge.    */
-.sb-item.active{
-  background:var(--acl);color:var(--acd);
-  box-shadow:0 1px 3px rgba(91,91,214,.18);
-}
+.sb-item.active{background:transparent;color:var(--t1);box-shadow:-3px 0 0 0 var(--acc);}
 .sb-item .sb-icon{font-size:18px;line-height:1}
 .sb-item .sb-icon svg{color:currentColor}
-.sb-item.active .sb-icon svg{color:var(--acd)}
+.sb-item.active .sb-icon svg{color:var(--t1)}
 .sb-item .sb-label{font-size:9.5px;font-weight:500;line-height:1;letter-spacing:.02em}
-.sb-item.active .sb-label{font-weight:700;color:var(--acd)}
+.sb-item.active .sb-label{font-weight:700;color:var(--t1)}
 .sb-item.dim{opacity:.3;cursor:default;pointer-events:none}
-.sb-div{width:24px;height:1px;background:var(--b1);margin:3px 0;opacity:.55}
-.sb-sep{width:24px;height:1px;background:var(--b1);border:none;margin:3px auto;padding:0;flex-shrink:0;display:block;opacity:.55}
+.sb-div{width:36px;height:1px;background:var(--b1);margin:5px 0}
+.sb-sep{width:36px;height:1px;background:var(--b1);border:none;margin:5px auto;padding:0;flex-shrink:0;display:block}
 
 /* ── Bottom nav (mobile) ───────────────────── */
 .bottom-nav{
@@ -119,13 +115,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* Plain white card, matching the sidebar rail and the cards below. Everything inside
    returns to the dark text tokens - there is no coloured ground to contrast against. */
 .topnav{
-  height:var(--nav);
-  background:var(--card);
-  border-bottom:none;
-  box-shadow:0 2px 8px rgba(26,28,35,.06);
-  border-radius:16px;
-  margin:10px 24px 0 24px;
-  display:flex;align-items:center;padding:0 18px;gap:8px;flex-shrink:0;overflow:visible;position:relative;z-index:100;
+  height:var(--nav);background:var(--card);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;overflow:visible;position:relative;z-index:100;
 }
 /* Only when a tab row follows does the bar square its bottom edge and the pair become
    one card. Pages without tabs keep a fully rounded floating bar.                     */
@@ -153,7 +144,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    that clearance is what keeps the card hover glow from being clipped by this
    container's overflow-x:hidden. The top edge needs less because the glow of the
    first row reads against the filter bar's own background, not a hard boundary. */
-.page-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 24px 24px}
+.page-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px}
 /* clip-path:none is not enough - the scroll container clips regardless. The side and
    bottom padding above is what actually gives the card hover glow room to render. */
 .page-scroll::-webkit-scrollbar{width:4px}
@@ -239,12 +230,6 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:7px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px}
 .spbar{height:22px;border-radius:8px;overflow:hidden;display:flex}
 .hero-grad{background:linear-gradient(135deg,var(--acl) 0%,var(--card) 60%);border:1px solid var(--border)}
-@keyframes progress{from{width:0}to{width:85%}}
-.progress-bar{
-  animation:progress 1.8s ease-out forwards;
-  border-radius:999px;
-  box-shadow:0 0 8px 0 rgba(91,91,214,.45);
-}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .spin{animation:spin 1s linear infinite}
@@ -252,7 +237,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* ── Sales tabs ────────────────────────────── */
 /* Sits flush under the gradient bar and carries the rounded bottom corners, so the two
    read as a single floating card rather than two stacked strips.                    */
-.sales-tabs{height:44px;background:var(--card);border-bottom:none;border-radius:16px;margin:8px 24px 0 24px;box-shadow:0 2px 8px rgba(26,28,35,.06);display:flex;align-items:stretch;padding:0 6px;gap:0;flex-shrink:0;position:relative;z-index:20}
+.sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:stretch;padding:0 6px;gap:0;flex-shrink:0;position:sticky;top:0;z-index:20}
 .stab{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border:none;white-space:nowrap;background:none;font-family:var(--font);transition:color .15s ease;position:relative;padding:0 4px;outline:none;border-radius:6px 6px 0 0}
 .stab+.stab::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:1px;height:14px;background:var(--b2);transition:opacity .15s ease}
 .stab:hover{color:var(--t1);background:var(--hov)}
@@ -288,7 +273,6 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 @media (max-width: 768px) {
   :root{ --sb:0px; }
 
-  .sb-shell{ display:none }
   .sidebar{ display:none }
   .bottom-nav{ display:block }
   .bn-label{ display:none !important }
@@ -579,7 +563,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    :hover only, so keyboard focus styling stays whatever the theme sets. */
 .ov-drill { transition: background .12s ease, box-shadow .12s ease; }
 .ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
-.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #5B5BD6); }
+.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #D89A1A); }
 
 /* Refresh indicator on the Logistics Cost scope bar. A pulsing dot reads as activity at a
    glance and takes less width than the word alone, which matters in a right-aligned cluster
@@ -639,19 +623,14 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .g-kpi3, .g-kpi4, .g-kpi5, .g-kpi7{ gap:14px }
 .g-kpi8, .g-kpi9{ gap:12px }
 
-/* Arial throughout - words, figures and chart text. Redefining the font tokens
-   on :root catches every rule and inline style written as var(--font) /
-   var(--mono) / var(--num); the blanket rule below catches inline fontFamily
-   values that name a family directly.                                       */
 :root{
   --card-pad:20px 22px;
-  --font:Arial,Helvetica,sans-serif;
-  --mono:Arial,Helvetica,sans-serif;
-  --num:Arial,Helvetica,sans-serif;
-  --display:Arial,Helvetica,sans-serif;
 }
-body, body *, svg text, svg tspan{
-  font-family:Arial,Helvetica,sans-serif !important;
+
+/* SVG <text> does not inherit the document font, so chart labels fall back to the
+   browser default (Times) unless the family is named for them explicitly. */
+svg text, svg tspan{
+  font-family:var(--font);
 }
 
 /* .card kept a hairline border and a 13px radius; drop it onto the shadow so it
@@ -663,22 +642,19 @@ body, body *, svg text, svg tspan{
   padding:20px 22px;
 }
 
-/* KPI values. Arial has no 500 weight and no tabular figures, so the weight is
-   400 and the tracking is left alone - the old -.025em was tuned for a display
-   face and reads cramped here.                                               */
 .kpi-value{
   font-family:var(--num);
   font-size:26px;
-  font-weight:400;
-  letter-spacing:0;
+  font-weight:700;
+  letter-spacing:-.02em;
 }
 .kpi-delta, .num{ font-family:var(--num) }
 .kpi-label{
-  font-size:11.5px;
-  font-weight:600;
-  letter-spacing:0;
-  text-transform:none;
-  color:var(--t2);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--tg);
 }
 
 /* Chart chrome: softer grid, no axis spine, floating tooltip. SVG <text> does
@@ -698,6 +674,17 @@ body, body *, svg text, svg tspan{
    lift reads as a jump. Scale both down.                                              */
 .sb-toggle{ box-shadow:2px 1px 4px rgba(26,28,35,.06); transition:box-shadow .18s ease, color .18s ease }
 .sb-toggle:hover{ box-shadow:2px 1px 8px rgba(91,91,214,.22); color:var(--acc) }
+
+/* Return Analysis toggle in the D2C filter bar. Inline styles set its resting and
+   active states; this supplies the hover, which they cannot express. !important
+   is required to beat those inline background / border values.                  */
+.d2c-return-link{ transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease }
+.d2c-return-link:hover{
+  background:var(--acl) !important;
+  border:1px solid var(--acs) !important;
+  color:var(--acd) !important;
+  box-shadow:0 0 8px 1px rgba(91,91,214,.18);
+}
 
 /* ── Card hover glow (app-wide) ───────────────────────────────────────────
    A soft halo spreading from the card's edges, replacing the old top accent
@@ -724,4 +711,61 @@ body, body *, svg text, svg tspan{
 @media (prefers-reduced-motion:reduce){
   .card-hoverable:hover,
   .kpi-card:hover{ transform:none }
+}
+
+/* Theme picker menu rows. Hover only lifts a row that is not already selected,
+   so the selected row's accent tint is never replaced by the neutral hover fill. */
+.theme-opt{ transition:background .12s ease }
+.theme-opt:hover{ background:var(--hov) }
+.theme-opt[aria-checked="true"]:hover{ background:var(--acl) }
+.theme-opt:focus-visible{ outline:2px solid var(--acm); outline-offset:-2px }
+
+/* ── Loading overlay ────────────────────────────────────────────────────────
+   Covers the content area only: the sidebar and top bar stay sharp and usable,
+   so navigation and filters keep working while a query runs. The veil is
+   absolutely positioned, so its parent must be a positioning context.        */
+.load-veil{
+  position:absolute;inset:0;z-index:300;
+  display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter:blur(7px) saturate(.9);
+  -webkit-backdrop-filter:blur(7px) saturate(.9);
+  animation:veil-in .18s ease-out;
+}
+/* Fades out on the way from 100% to unmount, so the ring is not cut off mid-count. */
+.load-veil.is-done{ animation:veil-out .42s ease-in forwards }
+@keyframes veil-in{ from{opacity:0} to{opacity:1} }
+@keyframes veil-out{ from{opacity:1} to{opacity:0} }
+
+.load-card{
+  position:relative;
+  display:flex;flex-direction:column;align-items:center;
+  padding:20px 22px 16px;
+  background:var(--card);border-radius:var(--r-lg);
+  box-shadow:var(--sh3);
+}
+/* Label and figure share a baseline under the mark. The number is tabular so the
+   card does not jog sideways as the digits change. */
+.load-meta{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:18px;width:100%;margin-top:14px;
+}
+.load-label{
+  font-size:11px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--t3);
+}
+.load-pct{
+  font-family:var(--num);font-size:19px;font-weight:700;color:var(--t1);
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1;
+}
+
+
+/* Backdrop-filter is unsupported in a few engines; without it the veil would be a
+   flat wash with no blur, so lean on opacity there instead. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .load-veil{ background:color-mix(in srgb, var(--bg) 88%, transparent) }
+}
+@media (prefers-reduced-motion:reduce){
+  .load-veil,.load-veil.is-done{ animation:none }
+  .load-veil.is-done{ opacity:0 }
 }

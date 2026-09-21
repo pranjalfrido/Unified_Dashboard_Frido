@@ -1,12 +1,15 @@
-﻿import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+﻿import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, Component } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
-import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
+import LoadingOverlay from './LoadingOverlay.jsx'
+import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache } from './theme.js'
 import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
@@ -853,12 +856,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {loading && (
-        <div style={{ height: 3, background: C.acl, flexShrink: 0, margin: '0 24px', borderRadius: 999, overflow: 'hidden' }}>
-          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading logistics" />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* ── Filter Sidebar: overlay drawer on mobile, inline panel on desktop ── */}
@@ -1499,10 +1498,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           const mVolPct = +((m.total/totalAll)*100).toFixed(2)
                           const mRtoColor = _rtoPct > avgRtoPct ? C.red.tx : C.t1
                           return (
-                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition: 'box-shadow .12s, background .12s' }}
+                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:C.hov, transition: 'box-shadow .12s, background .12s' }}
                               onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.acl; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
-                              onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF8'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FAFAF8'; td.style.boxShadow = 'none' }) }}>
-                              <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1, transition: 'box-shadow .12s, background .12s' }}>{m.month_label}</td>
+                              onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.hov; td.style.boxShadow = 'none' }) }}>
+                              <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:C.hov, zIndex:1, transition: 'box-shadow .12s, background .12s' }}>{m.month_label}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
@@ -2294,7 +2293,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <Bar yAxisId="qty" dataKey="total" name="Shipments" fill={C.acc} fillOpacity={0.85} radius={[3,3,0,0]} barSize={40} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke={C.blue.tx} strokeWidth={2} dot={{ r: 3, fill: C.blue.tx }} />
-                    {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                    {!isMobile && <Legend {...chartLegendProps({ fontSize: 10 })} />}
                   </ComposedChart>
                 </ResponsiveContainer>
                 </div>
@@ -2665,9 +2664,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { label: 'Avg Refund ₹', value: rk.avg_refund_amount ? '₹'+(rk.avg_refund_amount).toLocaleString('en-IN') : '—', sub: `Total: ₹${((rk.total_refunded||0)/100000).toFixed(1)}L`, color: '#7c3aed', bg: '#F5F3FF', border: '#DDD6FE' },
                 ].map(m => (
                   <div key={m.label} style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 14, padding: '16px 18px' }}>
-                    <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
+                    <div style={{ fontSize: 9.5, color: C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: m.color, letterSpacing: '-0.5px', marginBottom: 4 }}>{m.value}</div>
-                    <div style={{ fontSize: 10, color: '#94939F' }}>{m.sub}</div>
+                    <div style={{ fontSize: 10, color: C.t3 }}>{m.sub}</div>
                   </div>
                 ))}
               </div>
@@ -2694,7 +2693,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <div title={r.reason} style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'default' }}>{r.reason}</div>
                         <div style={{ flex: 1, height: 22, borderRadius: 4, background: C.border, overflow: 'hidden', position: 'relative' }}>
                           <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
-                            {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: '#13121A' }}>{r.pct}%</span>}
+                            {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: C.onAcc }}>{r.pct}%</span>}
                           </div>
                           {parseFloat(barW) <= 15 && <span style={{ position: 'absolute', left: barW+'%', top: '50%', transform: 'translateY(-50%)', marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.t1 }}>{r.pct}%</span>}
                         </div>
@@ -2726,7 +2725,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: C.t3 }} />
                       <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
                       <Tooltip formatter={(v, n) => n.includes('%') ? [v.toFixed(1)+'%', n] : [v.toLocaleString('en-IN'), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Line yAxisId="vol" type="monotone" dataKey="returns" name="Returns" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 2.5, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="vol" type="monotone" dataKey="exchanges" name="Exchanges" stroke={C.acm} strokeWidth={2.5} dot={{ r: 2.5, fill: C.acm, strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a', strokeWidth: 0 }} strokeDasharray="4 3" />
@@ -2778,7 +2777,97 @@ const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeW
   </svg>
 )
 
-function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
+// ── Theme picker ────────────────────────────────────────────────────────────
+// Sits in the sidebar rail just above the profile icon. The menu renders through
+// a portal so the sidebar's own bounds cannot clip it, and is positioned from the
+// trigger's measured rect (the rail is narrow, so the menu opens to its right).
+function ThemePicker({ theme, setTheme }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return
+    const r = btnRef.current.getBoundingClientRect()
+    // Anchor the menu's bottom near the trigger, clamped to stay on screen.
+    const MENU_H = 34 + THEMES.length * 46
+    setPos({ top: Math.max(8, Math.min(r.bottom - MENU_H, window.innerHeight - MENU_H - 8)), left: r.right + 10 })
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = e => {
+      if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  const active = THEMES.find(t => t.id === theme) || THEMES[0]
+
+  return (
+    <>
+      <div ref={btnRef} onClick={() => setOpen(o => !o)}
+        className={`sb-item${open ? ' active' : ''}`}
+        title={`Theme: ${active.label}`}
+        style={{ position: 'relative' }}>
+        <span className="sb-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Swatch ring of the active theme — reads as "colour" at rail size far
+              better than a generic palette glyph. */}
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%',
+            background: `conic-gradient(${active.swatch[1]} 0 33%, ${active.swatch[2]} 0 66%, ${active.swatch[0]} 0 100%)`,
+            boxShadow: `inset 0 0 0 1.5px ${C.card}, 0 0 0 1px ${C.border2}`,
+          }} />
+        </span>
+        <span className="sb-label">Theme</span>
+      </div>
+
+      {open && createPortal(
+        <div ref={menuRef} role="menu" aria-label="Colour theme"
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+            background: C.card, borderRadius: 14, boxShadow: C.sh3,
+            border: `1px solid ${C.border}`, padding: 6, minWidth: 190,
+          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t3, padding: '6px 10px 8px' }}>
+            Colour theme
+          </div>
+          {THEMES.map(t => {
+            const on = t.id === theme
+            return (
+              <div key={t.id} role="menuitemradio" aria-checked={on} tabIndex={0}
+                onClick={() => { setTheme(t.id); setOpen(false) }}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTheme(t.id); setOpen(false) } }}
+                className="theme-opt"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                  borderRadius: 10, cursor: 'pointer',
+                  background: on ? C.acl : 'transparent',
+                }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  background: `conic-gradient(${t.swatch[1]} 0 33%, ${t.swatch[2]} 0 66%, ${t.swatch[0]} 0 100%)`,
+                  boxShadow: `inset 0 0 0 2px ${C.card}, 0 0 0 1px ${on ? C.acm : C.border2}`,
+                }} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 12, fontWeight: on ? 700 : 500, color: on ? C.acd : C.t1, lineHeight: 1.3 }}>{t.label}</span>
+                  <span style={{ display: 'block', fontSize: 10.5, color: C.t3, lineHeight: 1.3 }}>{t.hint}</span>
+                </span>
+                {on && <span style={{ marginLeft: 'auto', color: C.acm, fontSize: 13, lineHeight: 1 }}>✓</span>}
+              </div>
+            )
+          })}
+        </div>, document.body)}
+    </>
+  )
+}
+
+function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme, setTheme }) {
   const [invHover, setInvHover] = useState(false)
   const [logHover, setLogHover] = useState(false)
   const hoverTimerRef = useRef(null)
@@ -2806,20 +2895,23 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
   ]
   return (
-    <div className="sb-shell">
+    <nav className="sidebar">
       {/* Logo doubles as a Home/Overview shortcut — standard pattern (click the brand mark to
           return to the main dashboard), gated by the same overview-permission check used for the
           Overview nav item itself, so a user without Overview access can't jump there via the logo.
-          It sits outside <nav> so it can float as its own tile above the rail. */}
+          The mark is tinted per theme, so the artwork follows the active palette. */}
       <div
-        className="sb-logo"
         onClick={() => { if (!allowedTabs || allowedTabs.includes('overview')) setPage('overview') }}
         title={(!allowedTabs || allowedTabs.includes('overview')) ? 'Go to Overview' : undefined}
-        style={{ cursor: (!allowedTabs || allowedTabs.includes('overview')) ? 'pointer' : 'default' }}
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, marginTop: -6,
+          cursor: (!allowedTabs || allowedTabs.includes('overview')) ? 'pointer' : 'default',
+        }}
       >
-        <img src="/frido-navigator-icon-themed.png" alt="Frido Navigator" style={{ width: 38, height: 38, objectFit: 'contain' }} />
+        <img src={theme === 'indigo' ? '/frido-navigator-icon-themed.png' : '/frido-navigator-icon-light-theme (2).png'}
+          alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
-    <nav className="sidebar">
+      <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
           const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
@@ -2932,6 +3024,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
+        <ThemePicker theme={theme} setTheme={setTheme} />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
           {profile?.avatar_url
@@ -2942,7 +3035,6 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         </div>
       </div>
     </nav>
-    </div>
   )
 }
 
@@ -3113,7 +3205,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
               }}
               onMouseEnter={() => selecting === 'end' && setHover(ds)}
               onMouseLeave={() => setHover(null)}
-              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? T.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? T.acc : T.t1, border: isToday && !sel ? `1px solid ${T.acc}` : '1px solid transparent' }}>
+              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? T.acc : inR ? T.acl : 'transparent', color: sel ? T.onAcc : isToday ? T.acc : T.t1, border: isToday && !sel ? `1px solid ${T.acc}` : '1px solid transparent' }}>
                 {day.getDate()}
               </div>
             )
@@ -3221,7 +3313,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${T.border}`, marginTop: 'auto' }}>
         <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${T.border2}`, background: 'transparent', color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
-        <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
+        <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: T.onAcc, cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
       </div>
     </div>
   )
@@ -5006,7 +5098,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
+                  <Legend {...chartLegendProps({ fontSize: 11 })} />
                   <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
                 </ComposedChart>
@@ -5441,7 +5533,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? C.acl : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -5551,7 +5643,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? C.acl : undefined, borderColor: hasValue ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -6031,7 +6123,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     const scOpen = isScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6190,7 +6282,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     const scOpen = amIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6758,7 +6850,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                     const srPrev = subCatPrevMap[`${row.cat}::${sr.sc}`] || 0
                     return (
                       <Fragment key={sr.sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6911,7 +7003,7 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                     const scOpen = vcIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6987,7 +7079,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
               <Pie data={data} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={2}>
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: C.t1, fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -7562,7 +7654,7 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
               <Pie data={data} cx="50%" cy="50%" innerRadius={38} outerRadius={60} dataKey="value" paddingAngle={2} stroke="none">
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {fmt(payload[0].value)}</div> : null} />
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: C.t1, fontWeight: 600 }}>{payload[0].name} : {fmt(payload[0].value)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minHeight: 0, justifyContent: 'flex-start' }}>
@@ -8292,7 +8384,7 @@ function ShopifyTab({ data, filters, setFilters }) {
               </div>
               <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                 {[{ name: 'Gross Revenue', color: '#E0B800' }, { name: 'Net Revenue', color: '#0D9E68' }, { name: 'Return %', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }].map(it => (
-                  <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                  <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                     <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                   </span>
                 ))}
@@ -9188,7 +9280,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                           ))}
                         </div>
                       ) : null} />
-                      {!isMob && <Legend verticalAlign="bottom" align="left" layout="horizontal" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                      {!isMob && <Legend {...chartLegendProps({ fontSize: 10 })} />}
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke={C.acm} fill="url(#amzTrendGrossGrad)" strokeWidth={2} dot={false} />
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="url(#amzTrendNetGrad)" strokeWidth={2} dot={false} />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
@@ -9199,7 +9291,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   {isMob && (
                     <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                       {[{name: dk.totalName, color:C.acm}, ...(isRev ? [{name: dk.subName, color:'#0D9E68'}] : []), ...(channelView==='all' ? [{name:dk.aName,color:'#E8930A'},{name:dk.bName,color:'#2E74CC'}] : [])].map(it => (
-                        <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                        <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                           <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                         </span>
                       ))}
@@ -9567,7 +9659,7 @@ function FlipkartTab({ data }) {
                       </div>
                     )
                   }} />
-                  {!isMob && <Legend verticalAlign="bottom" align="left" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill={`${C.acm}22`} strokeWidth={2} dot={grouped.length <= 3} />
                     <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
@@ -9584,7 +9676,7 @@ function FlipkartTab({ data }) {
               {isMob && (
                 <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                   {[...(isRev ? [{name:'Gross Revenue',color:'#E8930A'},{name:'Net Revenue',color:'#0D9E68'}] : [{name: fkTrendMetric==='orders'?'Orders':'Units', color:'#E8930A'}]), {name:'Return %',color:'#E24B4A'}].map(it => (
-                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                     </span>
                   ))}
@@ -12118,7 +12210,7 @@ function CredTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#crTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#crTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12133,7 +12225,7 @@ function CredTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -12376,7 +12468,7 @@ function FirstcryTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#fcTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#fcTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12391,7 +12483,7 @@ function FirstcryTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -12617,7 +12709,7 @@ function MyntraTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill={`${C.acm}22`} strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12632,7 +12724,7 @@ function MyntraTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -13014,7 +13106,7 @@ function OfflineTab({ data, sub, setSub }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="rev" name="Gross Revenue" stroke={C.acm} fill="url(#offTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="url(#offTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -13029,7 +13121,7 @@ function OfflineTab({ data, sub, setSub }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -13272,7 +13364,7 @@ function LaunchDropdown({ value, onChange }) {
   }, [])
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? '#FFF9CC' : undefined, borderColor: selected ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? C.acl : undefined, borderColor: selected ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{selected ? selected.label : 'All Product Launch'}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -13281,7 +13373,7 @@ function LaunchDropdown({ value, onChange }) {
           {selected && <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '9px 14px', fontSize: 12, color: C.t3, cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}>All Product Launch</div>}
           {LAUNCH_OPTS.map(opt => (
             <div key={opt.id} onClick={() => { onChange(opt.id); setOpen(false) }}
-              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? '#FFF9CC' : 'transparent', color: C.t1 }}>
+              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? C.acl : 'transparent', color: C.t1 }}>
               {opt.label}
             </div>
           ))}
@@ -13306,7 +13398,7 @@ function FilterIconPopover({ children, activeCount }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0, marginLeft: 'auto' }}>
-      <button onClick={() => setOpen(o => !o)} title="Filters" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? C.acm : C.border}`, background: activeCount > 0 ? '#FFF9CC' : C.card, color: C.t1, cursor: 'pointer' }}>
+      <button onClick={() => setOpen(o => !o)} title="Filters" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? C.acm : C.border}`, background: activeCount > 0 ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
         Filters
         {activeCount > 0 && <span style={{ background: C.acm, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{activeCount}</span>}
@@ -14297,7 +14389,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
                 return (
                   <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #F0EADC', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: C.t1, textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -14313,12 +14405,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <ResponsiveContainer width="100%" height={280}>
                         {ovChartView === 'revenue' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
+                            <CartesianGrid stroke={C.border} />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                             <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
                             <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acc} maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
@@ -14326,24 +14418,24 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
+                            <CartesianGrid stroke={C.border} />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                             <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} />
                             <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
                             <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill={C.acc} maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
+                            <CartesianGrid stroke={C.border} />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                             <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
                             <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke={C.acc} strokeWidth={2} dot={false} />
                             <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} strokeDasharray="4 3" />
@@ -14645,7 +14737,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
                       <Line yAxisId="sales" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
@@ -14665,7 +14757,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
                       <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
                       <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]} />
                     </BarChart>
@@ -14683,7 +14775,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
                       <Line yAxisId="roas" dataKey="roas" stroke="#8A8478" strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
@@ -14756,7 +14848,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                     <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                    <Legend {...chartLegendProps({ fontSize: 10 })} />
                     <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
                     <Line yAxisId="spend" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
@@ -14780,7 +14872,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
                       <Line yAxisId="cac" dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
@@ -14813,7 +14905,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                           <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                          <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                          <Legend {...chartLegendProps({ fontSize: 10 })} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
                           <Line dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
@@ -15421,7 +15513,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === '% of Repeaters' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="pct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="% of Repeaters" />
                           </ComposedChart>
@@ -15446,7 +15538,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => v === '1' ? '1st time' : v === '2' ? '2nd time' : v === '3' ? '3rd time' : v === '6+' ? '6th+ time' : `${v}th time`} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellowDeep} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="cumPct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Cumulative %" />
                           </ComposedChart>
@@ -15474,7 +15566,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="aov" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => `${v} time`} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="cust" type="monotone" dataKey="customers" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Customers" strokeDasharray="4 3" />
                           </ComposedChart>
@@ -15792,7 +15884,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
                 {/* RFM Segments list */}
-                <RSCard title="RFM Segments" sub={`${rfmSorted.length} segments · sorted by revenue`} infoTooltip={<>Segments are assigned based on R + F + M scores:<br/><br/><table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><tbody><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≥4</td><td style={{padding:'2px 0'}}>Champions</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; F≥3</td><td>Loyal Customers</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≤2</td><td>Recent Users</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; M≥3</td><td>Potential Loyalists</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥3</td><td>Cannot Lose Them</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥2</td><td>Hibernating</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Monetary ≥ ₹5000</td><td>Others</td></tr><tr><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Everything else</td><td>Hibernating</td></tr></tbody></table></>}>
+                <RSCard title="RFM Segments" sub={`${rfmSorted.length} segments · sorted by revenue`} infoTooltip={<>Segments are assigned based on R + F + M scores:<br/><br/><table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><tbody><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≥4</td><td style={{padding:'2px 0'}}>Champions</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; F≥3</td><td>Loyal Customers</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≤2</td><td>Recent Users</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; M≥3</td><td>Potential Loyalists</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥3</td><td>Cannot Lose Them</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥2</td><td>Hibernating</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Monetary ≥ ₹5000</td><td>Others</td></tr><tr><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Everything else</td><td>Hibernating</td></tr></tbody></table></>}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {rfmSorted.map((seg, i) => {
                       const name = seg.segment || 'Unknown'
@@ -15968,7 +16060,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 const SM_RED_SOFT   = '#FAEEEC'
                 const SM_AMBER_SOFT = C.acl
                 const SM_AMBER_LINE = C.acs
-                const SM_BORDER     = '#F0EADC'
+                const SM_BORDER     = C.border
                 const SM_T1         = C.t1
                 const SM_T2         = C.t2
                 const SM_T3         = C.t3
@@ -16291,7 +16383,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           )
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 11 })} />
                       <Bar yAxisId="spend" dataKey="totalSpend" fill={SD.amber} name="Total Spend" maxBarSize={40} radius={[3,3,0,0]} />
                       <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={SD.blue} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />
                       <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
@@ -16318,7 +16410,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
                           <YAxis yAxisId="pct" orientation="right" hide />
                           <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %' || name === 'Repeat Customer %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
-                          <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                          <Legend {...chartLegendProps({ fontSize: 11 })} />
                           <Bar yAxisId="orders" dataKey="totalOrders" fill={SD.amberDeep} name="Total Orders" radius={[3,3,0,0]} />
                           <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
                           <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke="#E07000" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 3, fill: '#E07000' }} name="Avg Disc %" />
@@ -16433,7 +16525,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             return [`${v}%`, name]
                           }}
                         />
-                        <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif', paddingTop: 8, bottom: 0 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                        <Legend {...chartLegendProps({ fontSize: 10 })} />
                         <Bar yAxisId="orders" dataKey="totalOrders" name="Total Orders" fill={SD.amberDeep} radius={[3,3,0,0]} maxBarSize={36} />
                         <Line yAxisId="pct" type="monotone" dataKey="discountedOrderPct" name="% Orders Discounted" stroke="#E07000" strokeWidth={2} dot={{ r: 3, fill: '#E07000' }} />
                         <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" name="Avg Disc %" stroke="#2E74CC" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2E74CC' }} />
@@ -16582,6 +16674,18 @@ function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => a
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
+  // Colour theme. index.html already applied the stored value to <html> before
+  // first paint, so this only mirrors it into React state for the picker.
+  const [theme, setThemeState] = useState(readStoredTheme)
+  const setTheme = useCallback(id => {
+    const applied = applyTheme(id)
+    // Drop memoised token reads so C.*/IC.* resolve against the new theme.
+    invalidateTokenCache()
+    storeTheme(applied)
+    setThemeState(applied)
+  }, [])
+  useEffect(() => { applyTheme(theme); invalidateTokenCache() }, [theme])
+
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -17154,14 +17258,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
+      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        {(loading || inventoryDateControl?.loading) && (
-          <div style={{ height: 3, background: C.acl, flexShrink: 0, margin: '0 24px', borderRadius: 999, overflow: 'hidden' }}>
-            <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-          </div>
-        )}
+        <LoadingOverlay loading={loading || !!inventoryDateControl?.loading} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -17175,7 +17275,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: C.t1, marginBottom: 4 }}>Frido Intelligence Suite</div>
                 <div style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>Select a date range to load data</div>
-                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: '#13121A', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
+                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: C.onAcc, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
                   Load {filters.start} → {filters.end}
                 </button>
               </div>

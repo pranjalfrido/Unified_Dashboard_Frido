@@ -456,7 +456,7 @@ export default function CogsPage() {
             )}
             {filtered.map((r) => (
               <tr key={r._uid}
-                onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = '#FAFAF7')}
+                onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.hov)}
                 onMouseLeave={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.card)}>
                 {FIELDS.map((f, i) => (
                   <td key={f.key} style={{
