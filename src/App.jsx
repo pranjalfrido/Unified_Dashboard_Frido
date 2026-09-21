@@ -6463,12 +6463,12 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const isHigh = threshold != null && v > threshold
     return <span style={{ color: v <= 0 ? C.t3 : isHigh ? C.red.tx : 'inherit' }}>{v.toFixed(2)}%</span>
   }
-  // Units per day over the selected range. One decimal below 10 so low-volume rows
-  // do not all collapse to the same rounded integer; whole numbers above that.
+  // Units per day over the selected range, rounded to whole units. A row that sells
+  // at all rounds to at least 1 rather than 0, so a real seller never reads as none.
   const drrCell = units => {
     if (!drrDays || !units) return <span style={{ color: C.t3 }}>—</span>
     const v = units / drrDays
-    return <>{v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString('en-IN')}</>
+    return <>{Math.max(1, Math.round(v)).toLocaleString('en-IN')}</>
   }
   const vsPrevCell = (cur, prev, muted = false) => {
     if (!prev || Math.abs(prev) < 1) return <span style={{ color: C.t3 }}>—</span>
@@ -6545,7 +6545,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         Category: r.cat, Product: r.sc,
         'Gross Rev': Math.round(r.gross), 'Share %': tot.gross > 0 ? +(r.gross / tot.gross * 100).toFixed(1) : 0,
         'vs Prev %': r.prevGross > 0 ? +((r.gross - r.prevGross) / r.prevGross * 100).toFixed(1) : null,
-        Units: r.units, ...(showDrr ? { DRR: +(r.units / drrDays).toFixed(2) } : {}), ASP: Math.round(r.asp),
+        Units: r.units, ...(showDrr ? { DRR: r.units ? Math.max(1, Math.round(r.units / drrDays)) : 0 } : {}), ASP: Math.round(r.asp),
         'Net Rev': Math.round(r.net),
       }
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
@@ -6554,7 +6554,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         return {
           Category: r.cat, Product: `↳ ${sku}`,
           'Gross Rev': Math.round(sk.gross), 'Share %': tot.gross > 0 ? +(sk.gross / tot.gross * 100).toFixed(1) : 0,
-          Units: sk.units, ...(showDrr ? { DRR: +(sk.units / drrDays).toFixed(2) } : {}), ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
+          Units: sk.units, ...(showDrr ? { DRR: sk.units ? Math.max(1, Math.round(sk.units / drrDays)) : 0 } : {}), ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
           'Net Rev': Math.round(sk.net),
         }
       })
