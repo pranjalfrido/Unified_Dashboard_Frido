@@ -391,10 +391,10 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
             {sortedRows.map((r, i) => {
               const isOpen = expanded[r.reason]
               const subs = [...r.subReasons].sort((a, b) => b.count - a.count)
-              const rowZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={r.reason}>
-                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
+                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     <td style={{ padding: '5.5px 5px', color: C.t1 }}>
                       <span onClick={() => setExpanded(prev => ({ ...prev, [r.reason]: !prev[r.reason] }))} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
                         <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
@@ -406,7 +406,7 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
                     <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.revenueImpact)}</td>
                   </tr>
                   {isOpen && subs.map((s, si) => (
-                    <tr key={s.subReason} style={{ background: C.hov, borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
+                    <tr key={s.subReason} style={{ background: C.hov, borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                       <td style={{ padding: '4px 5px', color: C.t3, fontSize: 11, paddingLeft: 22 }}>↳ {s.subReason}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{fmtN(s.count)}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalCount ? (s.count / totalCount * 100).toFixed(1) : 0}%</td>

@@ -373,11 +373,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const scTotalGross = allSkus.reduce((s, sk) => s + sk.gross, 0)
               const hasSkus = allSkus.length > 0
-              const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                     onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     <td style={{ ...tdStyleL, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.cat}>{r.cat}</td>
                     <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden' }}>
@@ -403,7 +403,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     const sk = { ...sk_, _costed: costed, _cogs: skCogs, _gm: skGm, _snd: skSnd, _cm1: skCm1 }
                     return (
                       <tr key={sk.sku} style={{ cursor: 'default', background: C.hov, transition: 'box-shadow .12s, background .12s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                        onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                         onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
