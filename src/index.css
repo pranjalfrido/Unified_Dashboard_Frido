@@ -763,6 +763,31 @@ svg text, svg tspan{
 }
 
 
+/* Loader mark. The arc spins while its dash length breathes, so the ring keeps
+   moving during the long wait at the progress ceiling; the N pulses in step.
+   circumference at r=20.5 is ~128.8, so the dash pairs below sum to that.      */
+.nav-shimmer{
+  transform-origin:24px 24px;
+  animation:nav-rotate 2.4s linear infinite, nav-arclen 2.4s ease-in-out infinite;
+}
+@keyframes nav-rotate{ to{ transform:rotate(360deg) } }
+@keyframes nav-arclen{
+  0%,100%{ stroke-dasharray:16 112.8 }
+  50%    { stroke-dasharray:56 72.8 }
+}
+.nav-mark{
+  transform-origin:24px 24px;
+  animation:nav-breathe 2.4s ease-in-out infinite;
+}
+@keyframes nav-breathe{
+  0%,100%{ transform:scale(1);    opacity:.92 }
+  50%    { transform:scale(1.05); opacity:1   }
+}
+@media (prefers-reduced-motion:reduce){
+  .nav-shimmer{ animation:none; opacity:0 }
+  .nav-mark{ animation:none }
+}
+
 /* Backdrop-filter is unsupported in a few engines; without it the veil would be a
    flat wash with no blur, so lean on opacity there instead. */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){

@@ -60,121 +60,59 @@ function useLoadingProgress(active) {
 // Each takes the same `pct` and renders a different mark. They are pure
 // presentation: the progress hook above is the single source of the number.
 
-// Bar-chart build. Columns fill left to right in sequence against a faint track,
-// with uneven target heights so it reads as a chart rather than a meter. The last
-// column is the tallest, so completion lands on a peak.
-const BARS = [0.42, 0.66, 0.52, 0.86, 0.61, 0.94, 0.74, 1.0]
+// ── The mark ────────────────────────────────────────────────────────────────
+// The Navigator logo as the loader: a faint full ring as the track, a travelling
+// arc whose length breathes as it spins, and the N mark pulsing with it.
+//
+// Colours come from the theme tokens rather than the supplied literals, so the
+// same mark reads gold on the gold theme and indigo on indigo. The gradient id is
+// unique per instance: two overlays mounted at once (page plus shell) would
+// otherwise share one <defs> id and the second would take the first's stops.
+let gradSeq = 0
 
-function BarGlyph({ pct }) {
-  const W = 132, H = 58, GAP = 5
-  const bw = (W - GAP * (BARS.length - 1)) / BARS.length
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="lg-bar" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor={C.acm} />
-          <stop offset="100%" stopColor={C.acc} />
-        </linearGradient>
-      </defs>
-      {BARS.map((t, i) => {
-        const x = i * (bw + GAP)
-        const full = t * H
-        // Each column owns an equal slice of the run; within its slice it fills 0→1.
-        const share = 100 / BARS.length
-        const f = Math.max(0, Math.min(1, (pct - i * share) / share))
-        return (
-          <g key={i}>
-            <rect x={x} y={H - full} width={bw} height={full} rx={2.5} fill={C.acs} opacity={0.32} />
-            <rect
-              x={x} y={H - full} width={bw} height={full} rx={2.5} fill="url(#lg-bar)"
-              // scaleY from the baseline keeps this on the compositor; animating the
-              // height attribute would re-lay-out the shape on every tick.
-              style={{
-                transformOrigin: `${x + bw / 2}px ${H}px`,
-                transform: `scaleY(${f})`,
-                transition: 'transform .28s cubic-bezier(.4,0,.2,1)',
-              }}
-            />
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
+function NavigatorMark({ pct }) {
+  const [gid] = useState(() => `navRing${++gradSeq}`)
 
-// Sparkline draw-on. A trend line traces itself over a ghost of its own path, with
-// a dot riding the leading edge and a soft area filling in behind it.
-const SPARK = 'M2,38 L18,31 L34,35 L50,22 L66,27 L82,14 L98,18 L114,7 L130,10'
-const SPARK_AREA = SPARK + ' L130,46 L2,46 Z'
-
-function SparkGlyph({ pct }) {
-  const W = 132, H = 50
-  const ref = useRef(null)
-  const [tip, setTip] = useState(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    // getPointAtLength gives the exact tip position for any pct, so the dot tracks
-    // the drawn line rather than approximating it.
-    const p = el.getPointAtLength(el.getTotalLength() * (pct / 100))
-    setTip({ x: p.x, y: p.y })
-  }, [pct])
+  const R = 20.5
+  const CIRC = 2 * Math.PI * R
 
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
+    <svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true" style={{ display: 'block' }}>
       <defs>
-        <linearGradient id="lg-spark" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={C.acc} stopOpacity="0.26" />
-          <stop offset="100%" stopColor={C.acc} stopOpacity="0" />
+        <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="4" y1="4" x2="44" y2="44">
+          <stop offset="0" stopColor={C.acs} />
+          <stop offset="1" stopColor={C.acd} />
         </linearGradient>
-        <clipPath id="cp-spark">
-          {/* Reveals the area fill in step with the line. */}
-          <rect x="0" y="0" width={W * (pct / 100)} height={H} />
-        </clipPath>
       </defs>
-      {/* Where the line is heading — reads as the chart's own faint guide. */}
-      <path d={SPARK} fill="none" stroke={C.acs} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity={0.42} />
-      <path d={SPARK_AREA} fill="url(#lg-spark)" clipPath="url(#cp-spark)" />
-      {/* pathLength=100 normalises the path so the dash offset IS the percentage,
-          with no circumference or path-length math. */}
-      <path
-        ref={ref} d={SPARK} fill="none" stroke={C.acc} strokeWidth="2.25"
-        strokeLinecap="round" strokeLinejoin="round"
-        pathLength="100" strokeDasharray="100" strokeDashoffset={100 - pct}
+
+      {/* Track — always visible, so the ring reads as a whole even at 0%. */}
+      <circle cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.2" opacity="0.22" />
+
+      {/* Determinate progress: the arc the percentage actually fills. */}
+      <circle
+        cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" strokeLinecap="round"
+        strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - pct / 100)}
+        transform="rotate(-90 24 24)"
         style={{ transition: 'stroke-dashoffset .28s cubic-bezier(.4,0,.2,1)' }}
       />
-      {tip && (
-        <circle cx={tip.x} cy={tip.y} r="3.4" fill={C.acc} stroke={C.card} strokeWidth="1.8"
-          style={{ transition: 'cx .28s cubic-bezier(.4,0,.2,1), cy .28s cubic-bezier(.4,0,.2,1)' }} />
-      )}
+
+      {/* Travelling highlight over the top, so the mark still reads as alive while
+          the percentage sits at its ceiling waiting on the response. */}
+      <circle className="nav-shimmer" cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" strokeLinecap="round" />
+
+      <g className="nav-mark">
+        <path d="M15.5 33 L15.5 15 L32.5 30 L32.5 16.5" fill="none" stroke={C.t1} strokeWidth="5.4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M32.5 10 L28.3 17.8 L32.5 15.6 L36.7 17.8 Z" fill={C.acc} />
+      </g>
     </svg>
   )
 }
 
-// Ring — the previous glyph, kept so the two can be compared directly.
-function RingGlyph({ pct }) {
-  const R = 34, STROKE = 5
-  const circ = 2 * Math.PI * R
-  return (
-    <svg width={(R + STROKE) * 2} height={(R + STROKE) * 2} aria-hidden="true" style={{ display: 'block' }}>
-      <circle cx={R + STROKE} cy={R + STROKE} r={R} fill="none" stroke={C.acs} strokeWidth={STROKE} opacity={0.5} />
-      <circle
-        cx={R + STROKE} cy={R + STROKE} r={R} fill="none" stroke={C.acc} strokeWidth={STROKE}
-        strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)}
-        transform={`rotate(-90 ${R + STROKE} ${R + STROKE})`}
-        style={{ transition: 'stroke-dashoffset .22s ease-out' }}
-      />
-    </svg>
-  )
-}
 
-const GLYPHS = { bars: BarGlyph, spark: SparkGlyph, ring: RingGlyph }
 
-export default function LoadingOverlay({ loading, label = 'Loading', variant = 'bars' }) {
+export default function LoadingOverlay({ loading, label = 'Loading' }) {
   const { pct, visible } = useLoadingProgress(loading)
   if (!visible) return null
-  const Glyph = GLYPHS[variant] || BarGlyph
   const done = pct >= 100
 
   return (
@@ -185,7 +123,7 @@ export default function LoadingOverlay({ loading, label = 'Loading', variant = '
       aria-label={`${label}, ${pct} percent`}
     >
       <div className="load-card">
-        <Glyph pct={pct} />
+        <NavigatorMark pct={pct} />
         <div className="load-meta">
           <span className="load-label">{label}</span>
           <span className="load-pct">{pct}%</span>
