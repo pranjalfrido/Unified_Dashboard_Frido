@@ -25,6 +25,9 @@ export const C = {
   // Text/icons drawn ON the accent fill. Flips with the theme: the gold accent is
   // light and carries dark text, the indigo accent is dark and needs light text.
   get onAcc(){ return tok("--on-acc","#3A2A08") },
+  // Accent as raw "r,g,b" channels, for rgba() glows and tints that need an alpha.
+  // Mirrors --acc-rgb so a JS-built glow follows the theme like the CSS ones do.
+  get accRgb(){ return tok("--acc-rgb", "216,154,26") },
   get bg(){ return tok("--bg","#F2F1EF") },
   get card(){ return tok("--card","#fff") },
   get hov(){ return tok("--hov","#FAF8F3") },

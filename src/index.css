@@ -23,6 +23,8 @@ button,select,input{touch-action:manipulation}
   --t1:#3F3D33;--t2:#504F68;--t3:#94939F;--tg:#565A66;
   --acc:#D89A1A;--acl:#F7EBD2;--acm:#B87D14;--acd:#7A5410;--acs:#EFCE85;--ach:#F0DFB8;
   --on-acc:#3A2A08;
+  /* Accent as raw channels, for rgba() glows and tints that need an alpha. */
+  --acc-rgb:216,154,26;
   --ramp:#7A5410,#A06E14,#C68A18,#D89A1A,#E3B95E,#EFCE85;
   --G:#E6F4E0;--Gt:#286010;--Gb:#9DD470;
   --R:#FDE8E8;--Rt:#7A1A1A;--Rb:#F09898;
@@ -38,6 +40,7 @@ button,select,input{touch-action:manipulation}
   --t1:#1A1C23;--t2:#4A4E5C;--t3:#767B8A;--tg:#565A66;
   --acc:#5B5BD6;--acl:#EEEEFB;--acm:#4A4AC4;--acd:#3A3A9E;--acs:#C7C7F2;--ach:#E0E0F7;
   --on-acc:#FFFFFF;
+  --acc-rgb:91,91,214;
   --ramp:#3A3A9E,#4A4AC4,#5B5BD6,#8484E3,#AEAEEF,#D3D3F7;
   --G:#E8F6E9;--Gt:#1B7F3B;--Gb:#8FD69C;
   --R:#FDEAEA;--Rt:#B4232A;--Rb:#F2A0A0;
@@ -170,13 +173,13 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .card-hoverable{box-shadow:inset 0 3px 0 0 transparent}
 
 .row-hoverable tbody tr{transition:background-color .1s}
-.row-hoverable tbody tr:hover{background-color:rgba(91,91,214,.055)!important}
+.row-hoverable tbody tr:hover{background-color:rgba(var(--acc-rgb),.055)!important}
 
 .channel-card-hover{transition:transform .15s ease,box-shadow .15s ease}
 .channel-card-hover:hover{transform:translateY(-2px);box-shadow:var(--sh3)!important}
 
 .stat-tile-hover{transition:background-color .15s ease,box-shadow .15s ease;border-radius:10px}
-.stat-tile-hover:hover{background-color:rgba(91,91,214,.05);box-shadow:var(--sh1)}
+.stat-tile-hover:hover{background-color:rgba(var(--acc-rgb),.05);box-shadow:var(--sh1)}
 
 .info-dot-tip{opacity:0;visibility:hidden}
 .info-dot-wrap:hover .info-dot-tip{opacity:1;visibility:visible}
@@ -243,7 +246,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .stab:hover{color:var(--t1);background:var(--hov)}
 .stab.active{color:var(--t1);font-weight:700}
 .stab.active:hover{background:none}
-.stab.active::after{content:'';position:absolute;left:12px;right:12px;bottom:6px;height:3px;border-radius:999px;background:linear-gradient(90deg,var(--acc),var(--acd) 55%,var(--acc));box-shadow:0 0 6px 0 rgba(91,91,214,.45);transform-origin:center;animation:tabIn .18s ease}
+.stab.active::after{content:'';position:absolute;left:12px;right:12px;bottom:6px;height:3px;border-radius:999px;background:linear-gradient(90deg,var(--acc),var(--acd) 55%,var(--acc));box-shadow:0 0 6px 0 rgba(var(--acc-rgb),.45);transform-origin:center;animation:tabIn .18s ease}
 .stab.active+.stab::before,.stab+.stab.active::before{opacity:0}
 @keyframes tabIn{from{transform:scaleX(.4);opacity:.4}to{transform:scaleX(1);opacity:1}}
 
@@ -562,7 +565,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    fires per row on mouse-move — the scorecard and category tables share this class.
    :hover only, so keyboard focus styling stays whatever the theme sets. */
 .ov-drill { transition: background .12s ease, box-shadow .12s ease; }
-.ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
+.ov-drill:hover { background: var(--acl); }
 .ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #D89A1A); }
 
 /* Refresh indicator on the Logistics Cost scope bar. A pulsing dot reads as activity at a
@@ -673,7 +676,7 @@ svg text, svg tspan{
    an 18px sliver - the full card glow spreads wider than the control itself and the 2px
    lift reads as a jump. Scale both down.                                              */
 .sb-toggle{ box-shadow:2px 1px 4px rgba(26,28,35,.06); transition:box-shadow .18s ease, color .18s ease }
-.sb-toggle:hover{ box-shadow:2px 1px 8px rgba(91,91,214,.22); color:var(--acc) }
+.sb-toggle:hover{ box-shadow:2px 1px 8px rgba(var(--acc-rgb),.22); color:var(--acc) }
 
 /* Return Analysis toggle in the D2C filter bar. Inline styles set its resting and
    active states; this supplies the hover, which they cannot express. !important
@@ -683,7 +686,7 @@ svg text, svg tspan{
   background:var(--acl) !important;
   border:1px solid var(--acs) !important;
   color:var(--acd) !important;
-  box-shadow:0 0 8px 1px rgba(91,91,214,.18);
+  box-shadow:0 0 8px 1px rgba(var(--acc-rgb),.18);
 }
 
 /* ── Card hover glow (app-wide) ───────────────────────────────────────────
@@ -697,8 +700,8 @@ svg text, svg tspan{
 .card-hoverable:hover,
 .kpi-card:hover{
   box-shadow:
-    0 0 0 1px rgba(91,91,214,.13),
-    0 0 20px 4px rgba(91,91,214,.13),
+    0 0 0 1px rgba(var(--acc-rgb),.13),
+    0 0 20px 4px rgba(var(--acc-rgb),.13),
     0 2px 10px rgba(26,28,35,.05) !important;
 }
 /* Every card lifts. KPI tiles rise less than the big cards - they sit in tight

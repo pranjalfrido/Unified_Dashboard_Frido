@@ -4648,7 +4648,7 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
   <div className="card-hoverable" style={{
     gridColumn: `span ${span}`, background: tint || C.card, border: `1px solid ${tint ? 'transparent' : C.border}`, borderRadius: 14,
     padding: hero ? '20px 22px' : '14px 16px', boxShadow: hero
-      ? '0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(216,154,26,0.35)'
+      ? `0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(${C.accRgb},0.35)`
       : '0 1px 2px rgba(0,0,0,0.04), 0 6px 16px -8px rgba(0,0,0,0.08)',
     position: 'relative', overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style,
   }}>
@@ -15989,7 +15989,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           const emptyReason = isEmpty ? (emptyReasons[ri]?.[ci] || 'No customers fall into this recency + frequency combination.') : ''
                           return (
                             <div key={ci} className="rfm-grid-cell" style={{
-                              background: isEmpty ? RS.borderSoft : `rgba(201,162,79,${intensity})`,
+                              background: isEmpty ? RS.borderSoft : `rgba(${C.accRgb},${intensity})`,
                               border: `1px solid ${isEmpty ? RS.borderSoft : RS.amberLine}`,
                               borderRadius: 8,
                               padding: isEmpty ? 0 : '10px 12px',
