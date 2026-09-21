@@ -74,6 +74,25 @@ function NavigatorMark() {
 
 
 
+// Full-page variant for the boot screens (session/profile resolving), where there is
+// no rendered page behind to blur. Same mark, no veil, so the app only ever shows one
+// loading animation.
+export function LoadingScreen() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Loading"
+      style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg)',
+      }}
+    >
+      <NavigatorMark />
+    </div>
+  )
+}
+
 export default function LoadingOverlay({ loading, label = 'Loading' }) {
   const visible = useLoadingVisible(loading)
   if (!visible) return null

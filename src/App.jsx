@@ -8,7 +8,7 @@ import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAl
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
-import LoadingOverlay from './LoadingOverlay.jsx'
+import LoadingOverlay, { LoadingScreen } from './LoadingOverlay.jsx'
 import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache } from './theme.js'
 import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
@@ -273,26 +273,6 @@ function LSectionTitle({ title, collapsed, onToggle }) {
   )
 }
 
-function LogisticsSkeleton() {
-  const sk = (w, h, r = 8) => ({ width: w, height: h, borderRadius: r, background: C.border, animation: 'pulse 1.5s ease infinite', flexShrink: 0 })
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-        {[...Array(5)].map((_, i) => <div key={i} style={sk('100%', 88)} />)}
-      </div>
-      {/* Trend chart */}
-      <div style={sk('100%', 220)} />
-      {/* Two side-by-side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div style={sk('100%', 200)} />
-        <div style={sk('100%', 200)} />
-      </div>
-      {/* Table */}
-      <div style={sk('100%', 180)} />
-    </div>
-  )
-}
 
 // Mobile KPI card with mini sparkline — Option A style.
 // sparkData: array of numbers (e.g. daily totals). Yellow line + fill on mobile ads list.
@@ -421,7 +401,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [showSkeleton, setShowSkeleton] = useState(false)
   const [error, setError] = useState(null)
   const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
@@ -432,7 +411,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
-    const skTimer = setTimeout(() => setShowSkeleton(true), 400)
     try {
       // Try static file first — served from Vercel CDN in ~14ms
       // Payment-specific files (logistics-data-cod.json / logistics-data-prepaid.json)
@@ -498,7 +476,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       } catch {}
       setError(e.message)
     }
-    finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
+    finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
@@ -912,9 +890,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
 
       {error && !rawData && !staleData && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error} <button onClick={fetchLogistics} style={{ marginLeft: 8, fontSize: 11, cursor: 'pointer' }}>Retry</button></div>}
-      {showSkeleton && !rawData && !staleData && (
-        <LogisticsSkeleton />
-      )}
 
       {data && <>
 
@@ -13807,20 +13782,6 @@ function IntelPage({ data }) {
   )
 }
 
-// ── Skeleton ──────────────────────────────────────────────────
-function Skeleton() {
-  return (
-    <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="g-hero">
-        {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 130, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
-      </div>
-      <div style={{ height: 240, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />
-      <div className="g-3">
-        {[1, 2, 3].map(i => <div key={i} style={{ height: 200, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
-      </div>
-    </div>
-  )
-}
 
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
@@ -16626,7 +16587,7 @@ function AppInner() {
   }, [session])
 
   if (session === undefined) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+    <LoadingScreen />
   )
   if (session === 'recovery') return <ResetPasswordPage />
 
@@ -16643,7 +16604,7 @@ function AppInner() {
 
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+    <LoadingScreen />
   )
 
   const isAdmin = profile.is_admin === true
@@ -17326,7 +17287,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               </div>
             </div>
           )}
-          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'customer' && <Skeleton />}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} logisticsCostData={logisticsCostData} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
@@ -17334,7 +17294,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
-          {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
