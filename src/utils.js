@@ -362,6 +362,17 @@ function localDateStr(d) {
   return `${y}-${m}-${day}`
 }
 
+// Inclusive day count for a YYYY-MM-DD range, used as the divisor for daily run
+// rate. Inclusive because a single-day range is one day of selling, not zero, and
+// parsed as local midnight so a timezone offset cannot shift the count by one.
+export function daysInRange(start, end) {
+  if (!start || !end) return 0
+  const a = new Date(start + 'T00:00:00'), b = new Date(end + 'T00:00:00')
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0
+  const d = Math.floor((b - a) / 86400000) + 1
+  return d > 0 ? d : 0
+}
+
 export function getDefaultDates() {
   const end = new Date()
   end.setDate(end.getDate() - 1)

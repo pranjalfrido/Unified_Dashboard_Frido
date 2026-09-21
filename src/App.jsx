@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -6351,7 +6351,12 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd }) {
+  // Daily run rate divides by every day in the selected range, so each row uses the
+  // same divisor and rows stay comparable. Without a range the column is hidden
+  // rather than shown with a wrong or invented divisor.
+  const drrDays = daysInRange(rangeStart, rangeEnd)
+  const showDrr = drrDays > 0
   const isMob = useIsMobile()
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
@@ -6422,6 +6427,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const filteredRows = q ? allRows.filter(r => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || Object.keys(skuData?.[r.cat]?.[r.sc] || {}).some(sku => sku.toLowerCase().includes(q))) : allRows
   const getters = {
     cat: r => r.cat, sc: r => r.sc, gross: r => r.gross, units: r => r.units, asp: r => r.asp,
+    drr: r => r.units,
     prevGross: r => r.prevNet > 0 ? (r.net - r.prevNet) / r.prevNet : -Infinity,
     cancelPct: r => r.cancelPct, rtoPct: r => r.rtoPct, cirPct: r => r.cirPct, exchPct: r => r.exchPct, totalReturnPct: r => r.totalReturnPct, net: r => r.net,
   }
@@ -6457,6 +6463,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const isHigh = threshold != null && v > threshold
     return <span style={{ color: v <= 0 ? C.t3 : isHigh ? C.red.tx : 'inherit' }}>{v.toFixed(2)}%</span>
   }
+  // Units per day over the selected range. One decimal below 10 so low-volume rows
+  // do not all collapse to the same rounded integer; whole numbers above that.
+  const drrCell = units => {
+    if (!drrDays || !units) return <span style={{ color: C.t3 }}>—</span>
+    const v = units / drrDays
+    return <>{v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString('en-IN')}</>
+  }
   const vsPrevCell = (cur, prev, muted = false) => {
     if (!prev || Math.abs(prev) < 1) return <span style={{ color: C.t3 }}>—</span>
     const p = (cur - prev) / prev * 100
@@ -6488,6 +6501,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>,
       total: () => <td style={totalTdStyle}>{fmtN(tot.units)}</td> },
+    ...(showDrr ? [{ id: 'drr', label: 'DRR', sortKey: 'drr', width: 8,
+      row: r => <td style={tdStyle}>{drrCell(r.units)}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{drrCell(sk.units)}</td>,
+      total: () => <td style={totalTdStyle}>{drrCell(tot.units)}</td> }] : []),
     { id: 'asp', label: 'ASP', sortKey: 'asp', width: showReturnPct && detailedReturns ? 8 : 10,
       row: r => <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>,
@@ -6528,7 +6545,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         Category: r.cat, Product: r.sc,
         'Gross Rev': Math.round(r.gross), 'Share %': tot.gross > 0 ? +(r.gross / tot.gross * 100).toFixed(1) : 0,
         'vs Prev %': r.prevGross > 0 ? +((r.gross - r.prevGross) / r.prevGross * 100).toFixed(1) : null,
-        Units: r.units, ASP: Math.round(r.asp),
+        Units: r.units, ...(showDrr ? { DRR: +(r.units / drrDays).toFixed(2) } : {}), ASP: Math.round(r.asp),
         'Net Rev': Math.round(r.net),
       }
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
@@ -6537,7 +6554,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         return {
           Category: r.cat, Product: `↳ ${sku}`,
           'Gross Rev': Math.round(sk.gross), 'Share %': tot.gross > 0 ? +(sk.gross / tot.gross * 100).toFixed(1) : 0,
-          Units: sk.units, ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
+          Units: sk.units, ...(showDrr ? { DRR: +(sk.units / drrDays).toFixed(2) } : {}), ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
           'Net Rev': Math.round(sk.net),
         }
       })
@@ -7376,7 +7393,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         <div style={{ height: 340 }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
       {(() => {
         const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
         let cumS = 0
@@ -7964,7 +7981,7 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
   )
 }
 
-function ShopifyTab({ data, filters, setFilters }) {
+function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
@@ -8495,7 +8512,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             }
           })
         }
-        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -8888,7 +8905,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
-      <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -8921,7 +8938,7 @@ function AmazonChannelViewToggle({ channelView, setChannelView }) {
   )
 }
 
-function AmazonTab({ data, channelView, setChannelView }) {
+function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
@@ -9380,7 +9397,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const skuPrevMap = {}
             const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
             skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -9421,7 +9438,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
   )
 }
 
-function FlipkartTab({ data }) {
+function FlipkartTab({ data, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [fkTrendGroup, setFkTrendGroup] = useState('daily')
   const [fkTrendMetric, setFkTrendMetric] = useState('rev')
@@ -9747,7 +9764,7 @@ function FlipkartTab({ data }) {
           const parts = k.split('::')
           const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
         })
-        return <FlatCategoryProductMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -11477,7 +11494,7 @@ function AdsCredView({ data, filters = {} }) {
   )
 }
 
-function BlinkitTab({ data }) {
+function BlinkitTab({ data, rangeStart, rangeEnd }) {
   const bl = data.blinkit || {}
   const t = bl.totals || {}
   const nDays = t.days || 1
@@ -11619,7 +11636,7 @@ function BlinkitTab({ data }) {
       </div>
 
       {/* Category Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
 
       {/* Cities + States */}
       {(() => {
@@ -11652,7 +11669,7 @@ function BlinkitTab({ data }) {
   )
 }
 
-function InstaTab({ data }) {
+function InstaTab({ data, rangeStart, rangeEnd }) {
   const ins = data.instamart || {}
   const t = ins.totals || {}
   const nDays = t.days || 1
@@ -11791,7 +11808,7 @@ function InstaTab({ data }) {
         })()}
       </div>
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
@@ -11823,7 +11840,7 @@ function InstaTab({ data }) {
   )
 }
 
-function ZeptoTab({ data }) {
+function ZeptoTab({ data, rangeStart, rangeEnd }) {
   const zp = data.zepto || {}
   const t = zp.totals || {}
   const nDays = t.days || 1
@@ -11962,7 +11979,7 @@ function ZeptoTab({ data }) {
         })()}
       </div>
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
@@ -11994,7 +12011,7 @@ function ZeptoTab({ data }) {
   )
 }
 
-function CredTab({ data }) {
+function CredTab({ data, rangeStart, rangeEnd }) {
   const cr = data.cred || {}
   const t = cr.totals || {}
   const nDays = t.days || 1
@@ -12249,7 +12266,7 @@ function CredTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -12260,7 +12277,7 @@ function CredTab({ data }) {
   )
 }
 
-function FirstcryTab({ data }) {
+function FirstcryTab({ data, rangeStart, rangeEnd }) {
   const fc = data.firstcry || {}
   const t = fc.totals || {}
   const nDays = t.days || 1
@@ -12506,7 +12523,7 @@ function FirstcryTab({ data }) {
         )
       })()}
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -12516,7 +12533,7 @@ function FirstcryTab({ data }) {
   )
 }
 
-function MyntraTab({ data }) {
+function MyntraTab({ data, rangeStart, rangeEnd }) {
   const mn = data.myntra || {}
   const totals = mn.totals || {}
   const nDays = totals.days || data.nDays || 1
@@ -12755,7 +12772,7 @@ function MyntraTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -12783,7 +12800,7 @@ function OfflineSubToggle({ sub, setSub }) {
   )
 }
 
-function OfflineTab({ data, sub, setSub }) {
+function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
   const off = data.offline || {}
   const [catRevView, setCatRevView] = useState('category')
   const [selectedCat, setSelectedCat] = useState(null)
@@ -13145,7 +13162,7 @@ function OfflineTab({ data, sub, setSub }) {
       })()}
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch — offline distribution has no such concept, Credit Notes are tracked separately at the KPI level) */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13168,18 +13185,18 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap }) {
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd }) {
   if (channel === 'Shopify') return shopifyView === 'returns'
     ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
-    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
-  if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} />
-  if (channel === 'Flipkart') return <FlipkartTab data={data} />
-  if (channel === 'Blinkit') return <BlinkitTab data={data} />
-  if (channel === 'Instamart') return <InstaTab data={data} />
-  if (channel === 'Zepto') return <ZeptoTab data={data} />
-  if (channel === 'CRED') return <CredTab data={data} />
-  if (channel === 'Firstcry') return <FirstcryTab data={data} />
-  if (channel === 'Myntra') return <MyntraTab data={data} />
+    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Flipkart') return <FlipkartTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Blinkit') return <BlinkitTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Instamart') return <InstaTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Zepto') return <ZeptoTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'CRED') return <CredTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Firstcry') return <FirstcryTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Myntra') return <MyntraTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'International') return <InternationalPlaceholderTab />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
@@ -13519,18 +13536,18 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Content */}
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
+        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
-        {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
-        {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
-        {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
-        {activeTab === 'firstcry' && <ChannelTab data={filteredData} channel="Firstcry" />}
-        {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
-        {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
-        {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
-        {activeTab === 'international' && <ChannelTab data={filteredData} channel="International" />}
-        {activeTab === 'offline' && <OfflineTab data={filteredData} sub={offlineSub} setSub={setOfflineSub} />}
+        {activeTab === 'amazon' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
+        {activeTab === 'flipkart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Flipkart" />}
+        {activeTab === 'blinkit' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Blinkit" />}
+        {activeTab === 'cred' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="CRED" />}
+        {activeTab === 'firstcry' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Firstcry" />}
+        {activeTab === 'instamart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Instamart" />}
+        {activeTab === 'zepto' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Zepto" />}
+        {activeTab === 'myntra' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Myntra" />}
+        {activeTab === 'international' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="International" />}
+        {activeTab === 'offline' && <OfflineTab data={filteredData} sub={offlineSub} setSub={setOfflineSub} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'qc' && <QCTab data={filteredData} />}
         {activeTab === 'ops' && <OpsTab data={filteredData} />}
         {activeTab === 'cx' && <CXTab data={filteredData} />}
