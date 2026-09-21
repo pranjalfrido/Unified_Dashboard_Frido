@@ -11,54 +11,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { C } from './utils.js'
 
-// Approach-the-ceiling easing: each tick closes a fixed fraction of the remaining
-// distance, so the number moves quickly at first and visibly slows near the top,
-// which reads as "working" rather than "stuck" during a long query.
-const CEILING = 90
-const APPROACH = 0.085
-const TICK_MS = 90
+// A short delay before showing: most cached responses land in well under this, and
+// flashing a loader for 80ms reads as a glitch rather than as feedback. Nothing is
+// shown for a fetch that resolves quickly.
+const SHOW_DELAY_MS = 180
 
-function useLoadingProgress(active) {
-  const [pct, setPct] = useState(0)
-  // `visible` outlives `active` by the exit animation, so the ring can finish at
-  // 100% and fade instead of vanishing mid-count.
+function useLoadingVisible(active) {
   const [visible, setVisible] = useState(false)
   const timerRef = useRef(null)
-  const exitRef = useRef(null)
 
   useEffect(() => {
-    clearInterval(timerRef.current)
-    clearTimeout(exitRef.current)
-
+    clearTimeout(timerRef.current)
     if (active) {
-      // Intentional setState-in-effect: this component mirrors an external async
-      // lifecycle (a prop that flips when a fetch starts and ends), which is exactly
-      // the case the rule cannot express. The writes are guarded by the `active`
-      // branch and the timers are cleared above, so this cannot loop.
+      timerRef.current = setTimeout(() => setVisible(true), SHOW_DELAY_MS)
+    } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setVisible(true)
-      setPct(0)
-      timerRef.current = setInterval(() => {
-        setPct(p => (p >= CEILING ? p : p + (CEILING - p) * APPROACH))
-      }, TICK_MS)
-    } else if (visible) {
-      // Land on 100, hold long enough to be seen, then unmount.
-      setPct(100)
-      exitRef.current = setTimeout(() => setVisible(false), 420)
+      setVisible(v => (v ? false : v))
     }
-
-    return () => { clearInterval(timerRef.current); clearTimeout(exitRef.current) }
-    // `visible` is deliberately not a dependency: including it would re-run this
-    // on the exit transition and cancel the very timeout that ends it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => clearTimeout(timerRef.current)
   }, [active])
 
-  return { pct: Math.round(pct), visible }
+  return visible
 }
-
-// ── Glyphs ──────────────────────────────────────────────────────────────────
-// Each takes the same `pct` and renders a different mark. They are pure
-// presentation: the progress hook above is the single source of the number.
 
 // ── The mark ────────────────────────────────────────────────────────────────
 // The Navigator logo as the loader: a faint full ring as the track, a travelling
@@ -70,11 +44,10 @@ function useLoadingProgress(active) {
 // otherwise share one <defs> id and the second would take the first's stops.
 let gradSeq = 0
 
-function NavigatorMark({ pct }) {
+function NavigatorMark() {
   const [gid] = useState(() => `navRing${++gradSeq}`)
 
   const R = 20.5
-  const CIRC = 2 * Math.PI * R
 
   return (
     <svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true" style={{ display: 'block' }}>
@@ -85,19 +58,10 @@ function NavigatorMark({ pct }) {
         </linearGradient>
       </defs>
 
-      {/* Track — always visible, so the ring reads as a whole even at 0%. */}
+      {/* Faint full ring behind the travelling arc. */}
       <circle cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.2" opacity="0.22" />
 
-      {/* Determinate progress: the arc the percentage actually fills. */}
-      <circle
-        cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" strokeLinecap="round"
-        strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - pct / 100)}
-        transform="rotate(-90 24 24)"
-        style={{ transition: 'stroke-dashoffset .28s cubic-bezier(.4,0,.2,1)' }}
-      />
-
-      {/* Travelling highlight over the top, so the mark still reads as alive while
-          the percentage sits at its ceiling waiting on the response. */}
+      {/* Travelling arc — the whole motion, since there is no determinate figure. */}
       <circle className="nav-shimmer" cx="24" cy="24" r={R} fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" strokeLinecap="round" />
 
       <g className="nav-mark">
@@ -111,24 +75,12 @@ function NavigatorMark({ pct }) {
 
 
 export default function LoadingOverlay({ loading, label = 'Loading' }) {
-  const { pct, visible } = useLoadingProgress(loading)
+  const visible = useLoadingVisible(loading)
   if (!visible) return null
-  const done = pct >= 100
 
   return (
-    <div
-      className={`load-veil${done ? ' is-done' : ''}`}
-      role="status"
-      aria-live="polite"
-      aria-label={`${label}, ${pct} percent`}
-    >
-      <div className="load-card">
-        <NavigatorMark pct={pct} />
-        <div className="load-meta">
-          <span className="load-label">{label}</span>
-          <span className="load-pct">{pct}%</span>
-        </div>
-      </div>
+    <div className="load-veil" role="status" aria-live="polite" aria-label={label}>
+      <NavigatorMark />
     </div>
   )
 }

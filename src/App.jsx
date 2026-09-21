@@ -16860,6 +16860,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [fetchPending, setFetchPending] = useState(false)
   const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
@@ -16889,17 +16890,20 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Client-side cache: key → response data. Cleared when dates change.
   const clientCacheRef = useRef(new Map())
 
-  const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
+  const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false, force = false) => {
     const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
     const cacheKey = JSON.stringify({ start, end, ...extraFilters, channel: ch })
 
-    // Client-side cache hit: skip fetch entirely
-    if (keepPrev && clientCacheRef.current.has(cacheKey)) {
+    // Client-side cache hit: skip the fetch entirely. Checked for every call, not
+    // just keepPrev ones - the cache key already identifies the response exactly, so
+    // re-requesting it would return the same rows after a visible delay.
+    if (!force && clientCacheRef.current.has(cacheKey)) {
+      const cached = clientCacheRef.current.get(cacheKey)
       setRawRows(prev => {
-        const cached = clientCacheRef.current.get(cacheKey)
-        if (prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
         return cached
       })
+      setFetchPending(false)
       return
     }
 
@@ -16927,6 +16931,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             return c
           })
           setLoading(false)
+          setFetchPending(false)
           return
         }
       } catch (_) {}
@@ -16960,7 +16965,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         setRawRows(null)
       }
     }
-    finally { if (reqId === reqIdRef.current) setLoading(false) }
+    finally { if (reqId === reqIdRef.current) { setLoading(false); setFetchPending(false) } }
   }, [API])
 
   const debounceRef = useRef(null)
@@ -16970,6 +16975,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   useEffect(() => {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
+    // Intentional: this effect schedules an external fetch, and the flag records that
+    // a request is now on its way. Writing it here is the point - it is what stops the
+    // empty state flashing during the debounce window.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
@@ -17295,16 +17305,16 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={loading || !!inventoryDateControl?.loading} />
+        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
+        <LoadingOverlay loading={loading || fetchPending || !!inventoryDateControl?.loading} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
-            <button onClick={() => fetchData(filters.start, filters.end)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+            <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
