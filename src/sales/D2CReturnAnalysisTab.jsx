@@ -142,8 +142,6 @@ function TopReturnedProductsCard({ topProducts, paymentTypeOpts, paymentType, se
   )
 }
 
-// Getter, not a plain array: a module-level array would freeze the accent at import.
-const PALETTE = { get reason(){ return [C.acc, C.acm, C.acd, '#D9BE7A', '#8C6A3F', C.acs, '#4A3A1E', '#B89A6B'] } }
 
 // Payment Type-wise Return Breakdown, transposed — payment types (Prepaid/COD/PPCOD) run across
 // as columns, metrics (Revenue/Cancel%/RTO%/CIR%/Exchange%/Total Return%) run down as rows. Only
