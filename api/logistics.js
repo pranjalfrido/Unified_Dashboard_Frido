@@ -146,7 +146,7 @@ WITH base AS (
 ),
 kpis AS (
   SELECT
-    COUNT(awb) AS total_shipments,
+    COUNT(DISTINCT awb) AS total_shipments,
     SUM(invoice_value) AS total_value,
     COUNTIF(unified_status = 'Delivered') AS delivered,
     COUNTIF(unified_status = 'RTO') AS rto,
@@ -1008,7 +1008,7 @@ ndr_by_courier AS (
   SELECT
     courier_group AS courier,
     UPPER(payment_mode) AS payment_mode,
-    COUNT(awb) AS total_shipments,
+    COUNT(DISTINCT awb) AS total_shipments,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered')) AS ndr_count,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered') AS ndr_del,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'RTO') AS ndr_rto,
