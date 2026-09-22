@@ -8,7 +8,7 @@ import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAl
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
-import LoadingOverlay, { LoadingScreen } from './LoadingOverlay.jsx'
+import LoadingOverlay, { LoadingScreen, BrandMark } from './LoadingOverlay.jsx'
 import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache } from './theme.js'
 import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
@@ -2886,8 +2886,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
           cursor: (!allowedTabs || allowedTabs.includes('overview')) ? 'pointer' : 'default',
         }}
       >
-        <img src={theme === 'indigo' ? '/frido-navigator-icon-indigo.png' : '/frido-navigator-icon-light-theme (2).png'}
-          alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
+        <BrandMark size={42} />
       </div>
       <hr className="sb-sep" />
       {items.map(item => {

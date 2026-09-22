@@ -13,7 +13,7 @@
       (function () {
         try {
           var t = localStorage.getItem("frido.theme");
-          document.documentElement.setAttribute("data-theme", (t === "gold" || t === "indigo") ? t : "gold");
+          document.documentElement.setAttribute("data-theme", ["gold", "indigo", "forest"].indexOf(t) >= 0 ? t : "gold");
         } catch (e) {
           document.documentElement.setAttribute("data-theme", "gold");
         }

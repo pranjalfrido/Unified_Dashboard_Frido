@@ -49,6 +49,24 @@ button,select,input{touch-action:manipulation}
   --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
 }
 
+/* Forest — cool grey-green ground, deep blue-green accent. The accent leans teal
+   (hue ~166) so it stays clearly apart from the semantic success green (~139):
+   a positive delta badge must still read as "good", not as theme chrome. */
+:root[data-theme="forest"]{
+  --bg:#EDF1EF;--card:#fff;--hov:#F2F6F4;
+  --b1:#E2E9E6;--b2:#CBD8D3;
+  --t1:#16211D;--t2:#42544E;--t3:#72847E;--tg:#4E605A;
+  --acc:#1F6F5C;--acl:#E6F2EE;--acm:#175A4A;--acd:#0E3F34;--acs:#A8D5C8;--ach:#CFE8E0;
+  --on-acc:#FFFFFF;
+  --acc-rgb:31,111,92;
+  --ramp:#0E3F34,#175A4A,#1F6F5C,#4E9B87,#88C4B3,#BFE0D6;
+  --G:#E4F3E7;--Gt:#1B6B33;--Gb:#93CFA4;
+  --R:#FCE9E9;--Rt:#A82A2A;--Rb:#EFA3A3;
+  --A:#FCF2DF;--At:#8A5410;--Ab:#EFC680;
+  --B:#E6EFF9;--Bt:#1B4B84;--Bb:#8FB5DE;
+  --P:#EFEAFA;--Pt:#57309B;--Pb:#B59AE6;
+}
+
 /* Shared, theme-independent: elevation, radii, type, layout sizing. */
 :root{
   --sh1:0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05);

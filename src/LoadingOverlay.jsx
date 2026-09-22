@@ -74,6 +74,26 @@ function NavigatorMark() {
 
 
 
+// Static brand mark, drawn from the theme tokens. Shares its geometry with the
+// loader above, so the sidebar logo and the loading animation stay identical and any
+// new theme gets an exact logo without new artwork.
+export function BrandMark({ size = 42 }) {
+  const [gid] = useState(() => `brandRing${++gradSeq}`)
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="4" y1="4" x2="44" y2="44">
+          <stop offset="0" stopColor={C.acs} />
+          <stop offset="1" stopColor={C.acd} />
+        </linearGradient>
+      </defs>
+      <circle cx="24" cy="24" r="20.5" fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" />
+      <path d="M15.5 33 L15.5 15 L32.5 30 L32.5 16.5" fill="none" stroke={C.t1} strokeWidth="5.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M32.5 10 L28.3 17.8 L32.5 15.6 L36.7 17.8 Z" fill={C.acc} />
+    </svg>
+  )
+}
+
 // Full-page variant for the boot screens (session/profile resolving), where there is
 // no rendered page behind to blur. Same mark, no veil, so the app only ever shows one
 // loading animation.

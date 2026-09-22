@@ -23,6 +23,12 @@ export const THEMES = [
     hint: 'Cool grey-blue, indigo accent',
     swatch: ['#EEF0F5', '#5B5BD6', '#3A3A9E'],
   },
+  {
+    id: 'forest',
+    label: 'Forest',
+    hint: 'Cool grey-green, deep green accent',
+    swatch: ['#EDF1EF', '#1F6F5C', '#0E3F34'],
+  },
 ]
 
 export const DEFAULT_THEME = 'gold'
