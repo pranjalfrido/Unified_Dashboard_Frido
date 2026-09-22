@@ -526,7 +526,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         ])
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
-        console.log('[logistics] API response total_shipments:', cur?.kpis?.total_shipments, 'body:', JSON.stringify(body))
         setRawData(cur)
         setRawPrevData(prev)
         try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
