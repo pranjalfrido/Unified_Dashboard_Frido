@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase.js";
+import { C as BASE_C } from "./utils.js";
 
 // ── COGS Tracker — row-wise layout ───────────────────────────────────────────
 // DB: cogs_ledger (itemskucode, productname, tallyproductname, subcategory,
@@ -324,7 +325,9 @@ export default function CogsPage() {
   };
 
   // ── Styles ─────────────────────────────────────────────────────────────────
-  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#D3D7E2', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', red: '#9E2B25' };
+  // Theme tokens, not a private palette: this page used to keep a fixed grey/green
+  // look whatever theme was active. red stays semantic.
+  const C = { bg: BASE_C.bg, card: BASE_C.card, border: BASE_C.border, t1: BASE_C.t1, t2: BASE_C.t2, t3: BASE_C.t3, accent: BASE_C.acc, red: BASE_C.red.tx };
   const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
   const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
   const primaryBtn = { ...btnBase, background: C.accent, color: '#fff', border: 'none' };

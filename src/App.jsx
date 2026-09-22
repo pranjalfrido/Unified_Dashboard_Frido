@@ -3416,7 +3416,7 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
   const d2cSubSel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
   const d2cActive = d2cSubSel[0] || null
 
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd }
 
   const switchTab = (id) => {
     setActiveTab(id)
@@ -3717,7 +3717,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   const toggleExpand = (key) => setExpandedKey(k => k === key ? null : key)
 
   // color tokens
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00', blue: '#1967D2', blueBg: '#E8F0FE', blueBorder: '#AECBFA' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd, blue: C.blue.tx, blueBg: C.blue.bg, blueBorder: C.blue.bd }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '72vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -3868,7 +3868,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
 }
 
 function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, filterOpts, costFilters, setCostFilters }) {
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd }
   const [expandedKey, setExpandedKey] = useState(null)
   const TABS = [
     { id: 'logistics', label: 'Performance Analytics' },
