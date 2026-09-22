@@ -7,13 +7,14 @@ import { BigQuery } from '@google-cloud/bigquery'
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// Match dashboard default: 1st of current month → yesterday
+// Match dashboard default: 1st of current month → yesterday (or use --start/--end args)
 const fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-const endD = new Date()
-endD.setDate(endD.getDate() - 1)
-const end = fmtLocal(endD)
-const startD = new Date(endD.getFullYear(), endD.getMonth(), 1)
-const start = fmtLocal(startD)
+const argStart = process.argv.find(a => a.startsWith('--start='))?.split('=')[1]
+const argEnd   = process.argv.find(a => a.startsWith('--end='))?.split('=')[1]
+const endD = argEnd ? new Date(argEnd) : new Date(); if (!argEnd) endD.setDate(endD.getDate() - 1)
+const end = argEnd || fmtLocal(endD)
+const startD = argStart ? new Date(argStart) : new Date(endD.getFullYear(), endD.getMonth(), 1)
+const start = argStart || fmtLocal(startD)
 const days = Math.round((endD - startD) / 86400000) + 1
 
 // Previous period: same number of days immediately preceding

@@ -143,6 +143,7 @@ WITH base AS (
     ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
   WHERE DATE(c.created_at) BETWEEN '${start}' AND '${end}'
   ${whereClause}
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY c.awb ORDER BY c.created_at) = 1
 ),
 kpis AS (
   SELECT
