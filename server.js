@@ -361,7 +361,7 @@ WITH base AS (
 ),
 kpis AS (
   SELECT
-    COUNT(awb) AS total_shipments,
+    COUNT(DISTINCT awb) AS total_shipments,
     SUM(invoice_value) AS total_value,
     COUNTIF(unified_status = 'Delivered') AS delivered,
     COUNTIF(unified_status = 'RTO') AS rto,
