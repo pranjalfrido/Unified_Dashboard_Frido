@@ -10675,8 +10675,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
               { id: 'roas', label: 'ROAS', sortKey: 'roas',
-                row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
-                total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
+                row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
+                total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
             ]
             // platformReorder is a hook call — must NOT live inside this conditionally-invoked
             // IIFE (would violate the Rules of Hooks the moment selPlatform toggles). Called
@@ -10811,7 +10811,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const prodAddlTotal = catAddlTotal
 
           const roasCell = r => r > 0
-            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
             : '—'
 
           const catColumnDefs = [
@@ -10978,7 +10978,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                             <div>
                               <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                               {effectiveRoas > 0
-                                ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
+                                ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
                                 : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                             </div>
                           </div>
@@ -10998,7 +10998,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                       <div>
                         <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                         {prodRoasAll > 0
-                          ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(prodRoasAll), color: roasColor(prodRoasAll) }}>{prodRoasAll.toFixed(2)}x</span>
+                          ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(prodRoasAll), color: roasColor(prodRoasAll) }}>{prodRoasAll.toFixed(2)}x</span>
                           : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                       </div>
                     </div>
@@ -11094,7 +11094,7 @@ function AdsCredView({ data, filters = {} }) {
   const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? C.amber.tx : r > 0 ? C.red.tx : C.t3
   const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? C.amber.bg : r > 0 ? C.red.bg : C.bg
   const roasCell = r => r > 0
-    ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+    ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
     : '—'
 
   const dailySorted = [...daily].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
@@ -11428,7 +11428,7 @@ function AdsCredView({ data, filters = {} }) {
                         <div>
                           <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                           {effectiveRoas > 0
-                            ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
+                            ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
                             : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                         </div>
                       </div>
