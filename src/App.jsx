@@ -526,6 +526,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         ])
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
+        console.log('[logistics] API response total_shipments:', cur?.kpis?.total_shipments, 'body:', JSON.stringify(body))
         setRawData(cur)
         setRawPrevData(prev)
         try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
@@ -607,7 +608,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
 
       // derive kpis from byCourier rows (all fields now present in each courier row)
-      const kpis = (hasCourier || hasSddNdd || hasShipmentType)
+      // when only shipmentType filter is active (no courier/sddNdd), use raw.kpis directly
+      // since the API already filtered by shipmentType — byCourier.total uses COUNT(awb) not DISTINCT
+      const kpis = (hasCourier || hasSddNdd)
         ? filteredCouriers.reduce((acc, x) => {
             const n = k => typeof x[k] === 'number' ? x[k] : 0
             acc.total_shipments = (acc.total_shipments || 0) + n('total')
@@ -641,7 +644,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           }, {})
         : raw.kpis
 
-      if ((hasCourier || hasSddNdd || hasShipmentType) && kpis._wt) {
+      if ((hasCourier || hasSddNdd) && kpis._wt) {
         kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
         kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
         kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
