@@ -6,24 +6,23 @@
 -- Run this once in Supabase → SQL Editor before using the uploader.
 
 CREATE TABLE IF NOT EXISTS public.logistics_costs_3pl (
-  id             BIGSERIAL PRIMARY KEY,
-  month_year     TEXT NOT NULL,              -- YYYY-MM
-  threepl_name   TEXT NOT NULL,
-  warehouse      TEXT NOT NULL,
-  invoice_number TEXT,
-  operation_fee  NUMERIC DEFAULT 0,
-  inward_fee     NUMERIC DEFAULT 0,
-  rental_fee     NUMERIC DEFAULT 0,
-  other_fee      NUMERIC DEFAULT 0,
-  total_cost     NUMERIC,
-  remarks        TEXT,
-  updated_at     TIMESTAMPTZ DEFAULT now()
+  id                     BIGSERIAL PRIMARY KEY,
+  month_year             TEXT NOT NULL,      -- YYYY-MM
+  threepl_logistics_name TEXT NOT NULL,
+  warehouse              TEXT NOT NULL,
+  invoice_number         TEXT,
+  operation_fee          NUMERIC DEFAULT 0,
+  rental_fee             NUMERIC DEFAULT 0,
+  other_fee              NUMERIC DEFAULT 0,
+  total_cost             NUMERIC,
+  remarks                TEXT,
+  updated_at             TIMESTAMPTZ DEFAULT now()
 );
 
 -- The uploader upserts on this combination, so re-uploading a month corrects that
 -- month in place instead of doubling it. onConflict needs a matching unique index.
 CREATE UNIQUE INDEX IF NOT EXISTS logistics_costs_3pl_key
-  ON public.logistics_costs_3pl (month_year, threepl_name, warehouse);
+  ON public.logistics_costs_3pl (month_year, threepl_logistics_name, warehouse);
 
 -- Month is the usual filter, so index it for the table's own reads.
 CREATE INDEX IF NOT EXISTS logistics_costs_3pl_month
