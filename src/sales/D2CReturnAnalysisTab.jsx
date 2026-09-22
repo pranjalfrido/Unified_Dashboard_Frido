@@ -185,7 +185,7 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
     const v = r[`${m.key.replace('Pct', '')}${pctSuffix}`]
     return (v || 0) > RED_THRESH[m.key] ? '#B91C1C' : C.t1
   }
-  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.acl }
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t1, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.acl }
   const rowLabelStyle = { fontSize: 10.5, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em', padding: '6px 8px 6px 0', whiteSpace: 'nowrap' }
 
   return (
@@ -370,7 +370,7 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   }, [returnReasons])
   const { sortRows, Th } = useSortableTable('count')
   const sortedRows = sortRows(grouped, { reason: r => r.reason, count: r => r.count, pctShare: r => totalCount ? r.count / totalCount * 100 : 0, revenueImpact: r => r.revenueImpact })
-  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', background: C.acl }
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', background: C.acl }
   const totalRevenueImpact = useMemo(() => (returnReasons || []).reduce((s, r) => s + (r.revenueImpact || 0), 0), [returnReasons])
 
   return (

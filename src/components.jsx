@@ -852,7 +852,7 @@ export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
   // press-and-move gesture, so it doesn't fight with a plain click).
   const Th = ({ label, sortKey, style, align, children, dragProps }) => (
     <th onClick={() => onSort(sortKey)} draggable={!!dragProps} {...dragProps}
-      style={{ ...style, textAlign: align ?? style?.textAlign ?? 'right', cursor: dragProps ? 'grab' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
+      style={{ ...style, textAlign: align ?? style?.textAlign ?? 'right', cursor: dragProps ? 'grab' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: style?.color ?? C.t1, position: style?.position || 'relative' }}>
       {label}{sort?.key === sortKey ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
       {children}
     </th>

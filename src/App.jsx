@@ -1730,7 +1730,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const opsValStyle = { fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }
         const opsSubStyle = { fontSize: 10.5, color: C.t3 }
 
-        const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+        const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
         const thL2 = { ...thStyle2, textAlign: 'left' }
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
@@ -2060,7 +2060,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const raw = data.pickupAgeing || []
           if (true || !raw.length) return null
 
-          const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+          const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
           const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
 
           // Aggregate all courier rows into a single totals row + keep per-courier
@@ -2339,7 +2339,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const BASE_OPTS = [{ key: 'order', label: 'Order Creation', subtitle: 'Order creation date' }, { key: 'shipment', label: 'Shipment Creation', subtitle: 'Shipment creation date' }, { key: 'pickup', label: 'Pickup Date', subtitle: 'Pickup date' }]
           const activeBase = BASE_OPTS.find(o => o.key === rtoAgeingBase)
           const pct = (v, tot) => tot ? ((v / tot) * 100).toFixed(1) + '%' : '—'
-          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t1, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thS, textAlign: 'left' }
           const tdS = { padding: '7px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
@@ -2535,7 +2535,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             })
             return { ...s, avg_att: s._att_n ? +(s._att_sum / s._att_n).toFixed(2) : null, avg_intransit_days: s._tat_n ? +(s._tat_sum / s._tat_n).toFixed(2) : null, avg_o2d: s._o2d_n ? +(s._o2d_sum / s._o2d_n).toFixed(2) : null }
           })()
-          const thStyle = { padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+          const thStyle = { padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t1, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thStyle, textAlign: 'left' }
           const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...td, textAlign: 'left', fontWeight: 600 }
@@ -6434,7 +6434,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   // vanished entirely once switched to boxShadow). A real border-bottom here is safe because
   // nothing ever scrolls above the header (it's always the topmost sticky element) — there's no
   // seam for a body row to swallow it at, unlike the footer below.
-  const thStyle = { fontSize: 12, fontWeight: 600, color: plainHeader ? C.t3 : C.t2, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `${plainHeader ? 2 : 1.5}px solid ${plainHeader ? C.border2 : C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `${plainHeader ? 2 : 1.5}px solid ${plainHeader ? C.border2 : C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, fontFamily: 'inherit', textAlign: 'left' }
@@ -10660,7 +10660,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             })
 
             const isMobPlatTable = window.innerWidth <= 768
-            const thStyle = { fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: isMobPlatTable ? '5px 5px' : '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+            const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: isMobPlatTable ? '5px 5px' : '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
             const tdStyle = { fontSize: isMobPlatTable ? 11 : 11.5, padding: isMobPlatTable ? '5px 5px' : '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
             const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none', whiteSpace: 'nowrap', position: 'sticky', bottom: 0, background: C.acl }
             const { Th } = platformTable
@@ -10782,7 +10782,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
           // Same look as the Platform Overview table above: C.bg header band with a 1.5px
           // bottom border, hover-highlighted rows (no zebra striping), roasBg/roasColor badge.
-          const thStyle = { fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: isMob ? '7px 4px' : '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
+          const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: isMob ? '7px 4px' : '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
           const thStyleL = { ...thStyle, textAlign: 'left' }
           const tdStyle = { fontSize: 11.5, padding: isMob ? '5px 4px' : '8px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
           const tdStyleL = { ...tdStyle, textAlign: 'left' }
@@ -10816,7 +10816,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
           const catColumnDefs = [
             {
-              id: 'spend', label: 'Spend', sortKey: 'spend', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: window.innerWidth <= 768 ? '20%' : '26%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -10830,12 +10830,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(catTotal.spend + catAddlTotal)}</td>,
             },
             {
-              id: 'revenue', label: window.innerWidth <= 768 ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'revenue', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
+              id: 'revenue', label: window.innerWidth <= 768 ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'revenue', width: window.innerWidth <= 768 ? '20%' : '28%', style: thStyle,
               row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '16%', style: thStyle,
+              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -10905,7 +10905,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 <div style={{ overflowX: 'hidden', overflowY: 'auto', paddingRight: 10, flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: isMob ? '28%' : '40%' }} />
+                      <col style={{ width: isMob ? '28%' : '28%' }} />
                       {orderedCatCols.map(c => <col key={c.id} style={{ width: isMob
                         ? (c.id === 'spend' ? '22%' : c.id === 'revenue' ? '26%' : c.id === 'roas' ? '24%' : c.width)
                         : c.width }} />)}
@@ -11121,7 +11121,7 @@ function AdsCredView({ data, filters = {} }) {
     { label: 'Cost Per Order', value: (additionalSpend && totalOrders > 0) ? fmt(additionalSpend / totalOrders) : '—', sub: 'Spend / Orders', spark: credCpoSpark },
   ]
 
-  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
   const tdStyleL = { ...tdStyle, textAlign: 'left' }
