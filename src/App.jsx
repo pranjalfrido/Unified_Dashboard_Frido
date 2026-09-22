@@ -6428,7 +6428,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   // Same visual language as the Ads tab's Platform Overview / By Category tables: C.bg sticky
   // header band, hover-highlighted rows, bold sticky-bottom Total row.
-  const headerBg = plainHeader ? C.card : C.acl
+  const headerBg = plainHeader ? C.card : C.ach
   // Plain border, not box-shadow — box-shadow on <th>/<td> is simply not rendered at all when
   // the table has border-collapse:collapse (a browser limitation, confirmed: the header's line
   // vanished entirely once switched to boxShadow). A real border-bottom here is safe because
