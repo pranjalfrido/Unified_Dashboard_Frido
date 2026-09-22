@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import * as XLSXStyle from "xlsx-js-style";
-import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, RefreshCw, Save, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, Warehouse, RefreshCw, Save, AlertCircle } from "lucide-react";
 import { supabase } from "./supabase.js";
 
 // ── SCHEMA CONFIG ────────────────────────────────────────────────────────────
@@ -91,11 +91,51 @@ const FORMATS = {
       "payment_mode expects Prepaid or COD. shipment_mode expects Forward, RTO or Reverse.",
     ],
   },
+  threePL: {
+    key: "threePL",
+    label: "3PL · Warehousing",
+    icon: Warehouse,
+    table: "logistics_costs_3pl",
+    templateFile: "3pl_cost_template.xlsx",
+    exportPrefix: "3pl_warehousing_costs",
+    totalParts: ["operation_fee", "inward_fee", "rental_fee", "other_fee"],
+    totalField: "total_cost",
+    // One bill line per 3PL per warehouse per month, so a re-upload of the same
+    // month corrects that month in place instead of doubling it.
+    uniqueKey: "month_year,threepl_name,warehouse",
+    fields: [
+      { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
+      { key: "threepl_name", label: "threepl_name", type: "text", req: true, w: 170, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
+      { key: "warehouse", label: "warehouse", type: "text", req: true, w: 150, ex: "Bhiwandi", desc: "Warehouse/facility these fees relate to" },
+      { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "3PL-INV-20713", desc: "Partner's invoice/bill number" },
+      { key: "operation_fee", label: "operation_fee", type: "num", w: 130, ex: "185000", desc: "Pick, pack and despatch handling charges" },
+      { key: "inward_fee", label: "inward_fee", type: "num", w: 120, ex: "42000", desc: "GRN / unloading / put-away charges on inbound stock" },
+      { key: "rental_fee", label: "rental_fee", type: "num", w: 120, ex: "260000", desc: "Storage or space rental for the period" },
+      { key: "other_fee", label: "other_fee", type: "num", w: 120, ex: "15500", desc: "Any other charge not covered above" },
+      { key: "total_cost", label: "total_cost", type: "num", req: true, computed: true, w: 130, ex: "502500", desc: "Grand total invoiced for the period" },
+      { key: "remarks", label: "remarks", type: "text", w: 220, ex: "Includes one-off racking charge", desc: "Free-text note" },
+    ],
+    searchKeys: ["threepl_name", "warehouse", "invoice_number", "month_year"],
+    notes: [
+      "One row = one 3PL's charges for one warehouse for one month.",
+      "Re-uploading the same month_year + threepl_name + warehouse UPDATES that row rather than adding a duplicate.",
+      "month_year must be YYYY-MM (e.g. 2026-07).",
+      "total_cost is computed as operation_fee + inward_fee + rental_fee + other_fee when left blank.",
+      "Leave a fee blank or 0 if the partner did not bill it that month.",
+    ],
+  },
 };
 
 // ── DATA LAYER ───────────────────────────────────────────────────────────────
 
 const PK = "id";
+
+// uniqueKey is a comma-separated column list so a format can be keyed on a
+// combination (3PL is one row per month + partner + warehouse). These helpers let
+// the single-column formats keep working unchanged.
+const keyFields = (fmt) => (fmt.uniqueKey ? fmt.uniqueKey.split(",").map((k) => k.trim()).filter(Boolean) : []);
+const keyOf = (fmt, row) => keyFields(fmt).map((k) => String(row?.[k] ?? "").trim().toLowerCase()).join(" | ");
+const keyLabel = (fmt) => keyFields(fmt).map((k) => fmt.fields.find((f) => f.key === k)?.label ?? k).join(" + ");
 
 const db = {
   async fetchRows(fmt, monthFilter) {
@@ -156,7 +196,7 @@ const db = {
       // Deduplicate within chunk — last row wins (matches upsert semantics)
       if (fmt.uniqueKey) {
         const seen = new Map();
-        for (const r of chunk) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+        for (const r of chunk) seen.set(keyOf(fmt, r), r);
         chunk = [...seen.values()];
       }
       const q = fmt.uniqueKey
@@ -346,11 +386,11 @@ export default function LogisticsLedgerPage() {
   const dupKeys = useMemo(() => {
     if (!fmt.uniqueKey) return new Set();
     const seen = new Map();
-    for (const r of rows) { const v = String(r[fmt.uniqueKey] ?? "").trim().toLowerCase(); if (!v) continue; seen.set(v, (seen.get(v) ?? 0) + 1); }
+    for (const r of rows) { const v = keyOf(fmt, r); if (!v.replace(/s||/g, "")) continue; seen.set(v, (seen.get(v) ?? 0) + 1); }
     return new Set(Array.from(seen).filter(([, n]) => n > 1).map(([v]) => v));
   }, [rows, fmt]);
 
-  const isDup = (r) => !!fmt.uniqueKey && dupKeys.has(String(r[fmt.uniqueKey] ?? "").trim().toLowerCase());
+  const isDup = (r) => !!fmt.uniqueKey && dupKeys.has(keyOf(fmt, r));
 
   const totals = useMemo(() => {
     let amount = 0;
@@ -381,7 +421,7 @@ export default function LogisticsLedgerPage() {
 
   const saveAll = async () => {
     if (dupKeys.size) {
-      const label = fmt.fields.find((f) => f.key === fmt.uniqueKey).label;
+      const label = keyLabel(fmt);
       flash("error", `Fix duplicate ${label}s before saving: ${Array.from(dupKeys).slice(0, 5).join(", ")}`);
       return;
     }
@@ -434,7 +474,7 @@ export default function LogisticsLedgerPage() {
     reader.onload = async () => {
       try {
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
-        const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
+        const sigKeys = [...(keyFields(fmt).length ? keyFields(fmt) : ["reference_no"]), "invoice_number"].filter(Boolean);
 
         // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
         let uploaded = 0, totalValid = 0;
@@ -454,7 +494,7 @@ export default function LogisticsLedgerPage() {
               // Deduplicate within chunk — last row wins
               if (fmt.uniqueKey) {
                 const seen = new Map();
-                for (const r of dbRows) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+                for (const r of dbRows) seen.set(keyOf(fmt, r), r);
                 dbRows = [...seen.values()];
               }
               const q = fmt.uniqueKey
@@ -756,7 +796,7 @@ export default function LogisticsLedgerPage() {
                   const isTotal = f.key === fmt.totalField;
                   const derived = isTotal && !isTotalOverridden(fmt, r);
                   const shown = derived ? effectiveTotal(fmt, r) : r[f.key] ?? "";
-                  const dupCell = f.key === fmt.uniqueKey && isDup(r);
+                  const dupCell = keyFields(fmt).includes(f.key) && isDup(r);
                   return (
                     <td key={f.key} style={{ padding: 0, background: C.card, position: i === 0 ? 'sticky' : undefined, left: i === 0 ? 0 : undefined, zIndex: i === 0 ? 1 : undefined }}>
                       <input
@@ -785,7 +825,7 @@ export default function LogisticsLedgerPage() {
       {/* Footer note */}
       <p style={{ fontSize: 11.5, color: C.t3, marginTop: 12, lineHeight: 1.6 }}>
         <strong style={{ color: C.t2 }}>{fmt.label}</strong> ·{' '}
-        {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{fmt.fields.find((f) => f.key === fmt.uniqueKey).label}</strong>. Re-uploading an existing AWB <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
+        {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{keyLabel(fmt)}</strong>. Re-uploading an existing one <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
         <span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.
       </p>
     </div>
