@@ -1693,12 +1693,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
               tool) — they have no meaning on any other channel tab, so they don't appear there at
               all rather than showing disabled. */}
           {activeTab === 'shopify' && (
-            <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid #E3E0D8`, gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid ${C.border}`, gap: 4 }}>
               {PNL_TOOLS.map(tool => {
                 const isActive = activeTool === tool.id
                 return (
                   <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
-                    style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: isActive ? C.acs : 'transparent', color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
                     {tool.id === 'priceSimulator' ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />

@@ -697,16 +697,42 @@ svg text, svg tspan{
 .sb-toggle{ box-shadow:2px 1px 4px rgba(26,28,35,.06); transition:box-shadow .18s ease, color .18s ease }
 .sb-toggle:hover{ box-shadow:2px 1px 8px rgba(var(--acc-rgb),.22); color:var(--acc) }
 
-/* Return Analysis toggle in the D2C filter bar. Inline styles set its resting and
-   active states; this supplies the hover, which they cannot express. !important
-   is required to beat those inline background / border values.                  */
-.d2c-return-link{ transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease }
-.d2c-return-link:hover{
-  background:var(--acl) !important;
-  border:1px solid var(--acs) !important;
-  color:var(--acd) !important;
+/* ── Tool buttons ──────────────────────────────────────────────────────────
+   The Price Simulator / Breakeven ROAS / Return Analysis controls read as bare
+   text without this: a resting outline is what tells you they are clickable.
+   Every colour is a token, so the treatment follows whichever theme is active.
+   The active state uses the accent fill with --on-acc text, which flips light or
+   dark per theme so the label stays legible on any accent.                    */
+.tool-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font);font-size:12px;font-weight:600;
+  padding:5px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;
+  border:1px solid var(--b2);
+  background:var(--card);
+  color:var(--t2);
+  transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.tool-btn:hover{
+  background:var(--acl);
+  border-color:var(--acs);
+  color:var(--acd);
   box-shadow:0 0 8px 1px rgba(var(--acc-rgb),.18);
 }
+.tool-btn:active{ transform:translateY(1px) }
+.tool-btn:focus-visible{ outline:2px solid var(--acm); outline-offset:1px }
+.tool-btn.is-active{
+  background:var(--acc);
+  border-color:var(--acc);
+  color:var(--on-acc);
+  font-weight:700;
+}
+.tool-btn.is-active:hover{
+  background:var(--acm);
+  border-color:var(--acm);
+  color:var(--on-acc);
+}
+@media (prefers-reduced-motion:reduce){ .tool-btn{ transition:none } .tool-btn:active{ transform:none } }
+
 
 /* ── Card hover glow (app-wide) ───────────────────────────────────────────
    A soft halo spreading from the card's edges, replacing the old top accent
