@@ -31,7 +31,7 @@ export const THEMES = [
   },
 ]
 
-export const DEFAULT_THEME = 'gold'
+export const DEFAULT_THEME = 'forest'
 const STORAGE_KEY = 'frido.theme'
 
 export const isValidTheme = id => THEMES.some(t => t.id === id)

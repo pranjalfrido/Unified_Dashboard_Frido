@@ -2832,10 +2832,7 @@ function ThemePicker({ theme, setTheme }) {
                   background: `conic-gradient(${t.swatch[1]} 0 33%, ${t.swatch[2]} 0 66%, ${t.swatch[0]} 0 100%)`,
                   boxShadow: `inset 0 0 0 2px ${C.card}, 0 0 0 1px ${on ? C.acm : C.border2}`,
                 }} />
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 12, fontWeight: on ? 700 : 500, color: on ? C.acd : C.t1, lineHeight: 1.3 }}>{t.label}</span>
-                  <span style={{ display: 'block', fontSize: 10.5, color: C.t3, lineHeight: 1.3 }}>{t.hint}</span>
-                </span>
+                <span style={{ fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? C.acd : C.t1, lineHeight: 1.3, minWidth: 0 }}>{t.label}</span>
                 {on && <span style={{ marginLeft: 'auto', color: C.acm, fontSize: 13, lineHeight: 1 }}>✓</span>}
               </div>
             )

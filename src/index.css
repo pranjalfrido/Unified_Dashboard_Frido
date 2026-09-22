@@ -15,8 +15,7 @@ button,select,input{touch-action:manipulation}
    Semantic colours (G/R/A/B/P) and channel/courier colours are data
    encodings, not decoration, so they do not change between themes.
 
-   Gold — the original warm-beige ground with a gold accent. Default. */
-:root,
+   Gold — the original warm-beige ground with a gold accent. */
 :root[data-theme="gold"]{
   --bg:#F2F1EF;--card:#fff;--hov:#FAF8F3;
   --b1:#E8E6DC;--b2:#D6D0B0;
@@ -49,9 +48,11 @@ button,select,input{touch-action:manipulation}
   --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
 }
 
-/* Forest — cool grey-green ground, deep blue-green accent. The accent leans teal
+/* Forest — cool grey-green ground, deep blue-green accent. The default, so it
+   also fills the bare :root used when no data-theme is set. The accent leans teal
    (hue ~166) so it stays clearly apart from the semantic success green (~139):
    a positive delta badge must still read as "good", not as theme chrome. */
+:root,
 :root[data-theme="forest"]{
   --bg:#EDF1EF;--card:#fff;--hov:#F2F6F4;
   --b1:#E2E9E6;--b2:#CBD8D3;

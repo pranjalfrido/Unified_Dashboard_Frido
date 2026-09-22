@@ -8,33 +8,33 @@ export const IC = {
   // Chrome colours read live from the CSS custom properties in index.css, so the
   // Inventory pages follow a theme switch with the rest of the app. See src/theme.js.
   // Fallbacks are the gold (default) values, used before first paint only.
-  get page(){ return cssVar("--bg","#F2F1EF") },
+  get page(){ return cssVar("--bg", "#EDF1EF") },
   get surface(){ return cssVar("--card","#fff") },
   get surfaceHi(){ return cssVar("--card","#fff") },
-  get border(){ return cssVar("--b1","#E8E6DC") },
-  get border2(){ return cssVar("--b2","#D6D0B0") },
+  get border(){ return cssVar("--b1", "#E2E9E6") },
+  get border2(){ return cssVar("--b2", "#CBD8D3") },
   // Subtle hover fill for slicer/toggle controls — a touch off surface (white) so
   // hovering a dropdown or tile gives visible feedback without looking like an
   // active/selected state (that is still accDim/accBorder).
-  get hoverBg(){ return cssVar("--hov","#FAF8F3") },
-  get t1(){ return cssVar("--t1","#3F3D33") },
-  get t2(){ return cssVar("--t2","#504F68") },
-  get t3(){ return cssVar("--t3","#94939F") },
-  get acc(){ return cssVar("--acc","#D89A1A") },
-  get accDim(){ return cssVar("--acl","#F7EBD2") },
-  get accBorder(){ return cssVar("--acm","#B87D14") },
+  get hoverBg(){ return cssVar("--hov", "#F2F6F4") },
+  get t1(){ return cssVar("--t1", "#16211D") },
+  get t2(){ return cssVar("--t2", "#42544E") },
+  get t3(){ return cssVar("--t3", "#72847E") },
+  get acc(){ return cssVar("--acc", "#1F6F5C") },
+  get accDim(){ return cssVar("--acl", "#E6F2EE") },
+  get accBorder(){ return cssVar("--acm", "#175A4A") },
   // Matches C.acs — the solid-but-soft accent fill used by the app-wide divider-pill
   // toggle pattern (segmented switchers separated by thin dividers, no per-button borders).
-  get acs(){ return cssVar("--acs","#EFCE85") },
+  get acs(){ return cssVar("--acs", "#A8D5C8") },
   // Divider line between adjacent options in a divider-pill toggle — matches C.border2.
-  get divider(){ return cssVar("--b2","#D6D0B0") },
+  get divider(){ return cssVar("--b2", "#CBD8D3") },
   // The app-wide "second series next to the accent" colour (matches C.blue.tx), used
   // wherever a chart needs exactly two distinguishable series and one is the accent.
-  get secondary(){ return cssVar("--Bt","#184078") },
+  get secondary(){ return cssVar("--Bt", "#1B4B84") },
   // Positive/negative delta colour — separate from the accent, since an accent hue does
   // not read as "good" the way the app shell green/red delta badges do.
-  get positive(){ return cssVar("--Gt","#286010") },
-  get negative(){ return cssVar("--Rt","#7A1A1A") },
+  get positive(){ return cssVar("--Gt", "#1B6B33") },
+  get negative(){ return cssVar("--Rt", "#A82A2A") },
   status: {
     'Critical':       { c: '#d03b3b', label: 'Critical' },
     'Low':            { c: '#c98500', label: 'Low' },

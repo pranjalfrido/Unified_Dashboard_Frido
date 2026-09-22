@@ -14,28 +14,28 @@ import { cssVar } from './theme.js'
 const tok = (name, fallback) => cssVar(name, fallback)
 
 export const C = {
-  get acc(){ return tok("--acc","#D89A1A") },
-  get acl(){ return tok("--acl","#F7EBD2") },
-  get acm(){ return tok("--acm","#B87D14") },
-  get acd(){ return tok("--acd","#7A5410") },
-  get acs(){ return tok("--acs","#EFCE85") },
+  get acc(){ return tok("--acc", "#1F6F5C") },
+  get acl(){ return tok("--acl", "#E6F2EE") },
+  get acm(){ return tok("--acm", "#175A4A") },
+  get acd(){ return tok("--acd", "#0E3F34") },
+  get acs(){ return tok("--acs", "#A8D5C8") },
   // One step down from acl. Table headers and total rows sit on this so they read
   // as chrome against the near-white body, without needing light text.
-  get ach(){ return tok("--ach","#F0DFB8") },
+  get ach(){ return tok("--ach", "#CFE8E0") },
   // Text/icons drawn ON the accent fill. Flips with the theme: the gold accent is
   // light and carries dark text, the indigo accent is dark and needs light text.
-  get onAcc(){ return tok("--on-acc","#3A2A08") },
+  get onAcc(){ return tok("--on-acc", "#FFFFFF") },
   // Accent as raw "r,g,b" channels, for rgba() glows and tints that need an alpha.
   // Mirrors --acc-rgb so a JS-built glow follows the theme like the CSS ones do.
-  get accRgb(){ return tok("--acc-rgb", "216,154,26") },
-  get bg(){ return tok("--bg","#F2F1EF") },
+  get accRgb(){ return tok("--acc-rgb", "31,111,92") },
+  get bg(){ return tok("--bg", "#EDF1EF") },
   get card(){ return tok("--card","#fff") },
-  get hov(){ return tok("--hov","#FAF8F3") },
-  get border(){ return tok("--b1","#E8E6DC") },
-  get border2(){ return tok("--b2","#D6D0B0") },
-  get t1(){ return tok("--t1","#3F3D33") },
-  get t2(){ return tok("--t2","#504F68") },
-  get t3(){ return tok("--t3","#94939F") },
+  get hov(){ return tok("--hov", "#F2F6F4") },
+  get border(){ return tok("--b1", "#E2E9E6") },
+  get border2(){ return tok("--b2", "#CBD8D3") },
+  get t1(){ return tok("--t1", "#16211D") },
+  get t2(){ return tok("--t2", "#42544E") },
+  get t3(){ return tok("--t3", "#72847E") },
   // Elevation, matching --sh1/2/3. Use these instead of a border to separate a card.
   get sh1(){ return tok("--sh1","0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05)") },
   get sh2(){ return tok("--sh2","0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06)") },
@@ -51,14 +51,14 @@ export const C = {
   // neighbouring slices stay distinguishable in greyscale and for CVD viewers.
   get ramp(){
     const v = tok("--ramp", "").split(",").map(x => x.trim()).filter(Boolean)
-    // Never hand a chart an empty palette: fall back to the gold ramp if the token
-    // is missing (non-browser render, or before the stylesheet has resolved).
-    return v.length ? v : ["#7A5410", "#A06E14", "#C68A18", "#D89A1A", "#E3B95E", "#EFCE85"]
+    // Never hand a chart an empty palette: fall back to the default theme's ramp if
+    // the token is missing (non-browser render, or before the stylesheet resolved).
+    return v.length ? v : ["#0E3F34", "#175A4A", "#1F6F5C", "#4E9B87", "#88C4B3", "#BFE0D6"]
   },
-  get green(){ return { bg: tok("--G","#E6F4E0"), tx: tok("--Gt","#286010"), bd: tok("--Gb","#9DD470") } },
-  get red(){   return { bg: tok("--R","#FDE8E8"), tx: tok("--Rt","#7A1A1A"), bd: tok("--Rb","#F09898") } },
-  get amber(){ return { bg: tok("--A","#FEF2DC"), tx: tok("--At","#7A4000"), bd: tok("--Ab","#F5C460") } },
-  get blue(){  return { bg: tok("--B","#E1EFFD"), tx: tok("--Bt","#184078"), bd: tok("--Bb","#7AB4EE") } },
+  get green(){ return { bg: tok("--G", "#E4F3E7"), tx: tok("--Gt", "#1B6B33"), bd: tok("--Gb", "#93CFA4") } },
+  get red(){   return { bg: tok("--R", "#FCE9E9"), tx: tok("--Rt", "#A82A2A"), bd: tok("--Rb", "#EFA3A3") } },
+  get amber(){ return { bg: tok("--A", "#FCF2DF"), tx: tok("--At", "#8A5410"), bd: tok("--Ab", "#EFC680") } },
+  get blue(){  return { bg: tok("--B", "#E6EFF9"), tx: tok("--Bt", "#1B4B84"), bd: tok("--Bb", "#8FB5DE") } },
   // Per-marketplace brand colours. Fixed in every theme: a reader maps these to a
   // specific channel, and the brands own the hues.
   ch: {

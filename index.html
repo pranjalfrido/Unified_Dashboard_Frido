@@ -13,9 +13,9 @@
       (function () {
         try {
           var t = localStorage.getItem("frido.theme");
-          document.documentElement.setAttribute("data-theme", ["gold", "indigo", "forest"].indexOf(t) >= 0 ? t : "gold");
+          document.documentElement.setAttribute("data-theme", ["gold", "indigo", "forest"].indexOf(t) >= 0 ? t : "forest");
         } catch (e) {
-          document.documentElement.setAttribute("data-theme", "gold");
+          document.documentElement.setAttribute("data-theme", "forest");
         }
       })();
     </script>
