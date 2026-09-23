@@ -1849,7 +1849,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // request's selection into the next), so narrowing happens on the client. Returning a
   // single function keeps the rule in one place rather than repeated in six memos.
   const b2bPick = useMemo(() => {
-    const tr = filters.transporters || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
+    const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
     if (!tr.length && !vh.length && !ft.length) return null
     const T = tr.length ? new Set(tr) : null
     const V = vh.length ? new Set(vh) : null
@@ -1858,7 +1858,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return r => (!T || T.has(r.transporter))
       && (!V || V.has(r.vehicle))
       && (!F || F.has(r.freight_type))
-  }, [filters.transporters, filters.vehicleTypes, filters.freightTypes])
+  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes])
 
   const b2bTransRows = useMemo(() => {
     if (!b2b) return []
