@@ -6,7 +6,14 @@ import { createPortal } from 'react-dom'
 export const IC = {
   page: '#F2F1EF',
   surface: '#fff',
-  surfaceHi: '#fff',
+  // Previously identical to `surface` (#fff) — every sticky table header/footer across this
+  // page uses surfaceHi specifically so it reads as visually distinct from the plain-white
+  // data rows beneath it, but with both the same white, the only differentiator left was a
+  // thin top border that's easy to miss and gets obscured where a horizontal scrollbar sits
+  // right at a table's bottom edge (confirmed: the Frido Store Inventory footer was reading as
+  // "just another row", not a summary). A light, slightly warm-grey tint keeps it subtle
+  // without introducing a new hue the rest of the page doesn't already use.
+  surfaceHi: '#F5F5F6',
   border: '#E4E4E7',
   border2: '#C7C7CE',
   // Subtle hover fill for slicer/toggle controls — a touch darker than `surface` (white) so
@@ -439,9 +446,9 @@ export function SortableTh({ label, sortKey, sortState, onSort, width, onResize,
       onClick={() => onSort && onSort(sortKey)}
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px',
         whiteSpace: 'nowrap', width, minWidth: 50, boxSizing: 'border-box', position: 'relative',
-        cursor: onSort ? 'pointer' : 'default', userSelect: 'none', background: IC.surfaceHi,
+        cursor: onSort ? 'pointer' : 'default', userSelect: 'none', background: IC.surface,
       }}>
       {label}{arrow}
       {onResize && (
@@ -489,7 +496,7 @@ export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize
   // just the resize handle so dragging it rightward restores the column.
   if (isHidden) {
     return (
-      <th title="Drag to restore this column" style={{ width: 0, minWidth: 0, padding: 0, position: 'relative', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>
+      <th title="Drag to restore this column" style={{ width: 0, minWidth: 0, padding: 0, position: 'relative', background: IC.surface }}>
         <span onMouseDown={startResize}
           style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 6, cursor: 'col-resize', background: IC.accBorder }} />
       </th>
@@ -511,9 +518,9 @@ export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize
       title="Drag to reorder · click to sort · drag right edge to resize (drag to 0 to hide)"
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px',
         whiteSpace: 'nowrap', width, minWidth: MIN_VISIBLE_WIDTH, boxSizing: 'border-box', position: 'relative',
-        cursor: 'grab', userSelect: 'none', background: isDropTarget ? 'rgba(52,211,153,0.10)' : IC.surfaceHi,
+        cursor: 'grab', userSelect: 'none', background: isDropTarget ? 'rgba(52,211,153,0.10)' : IC.surface,
         opacity: isDragging ? 0.4 : 1,
         outline: isDropTarget ? `1px dashed ${IC.accBorder}` : 'none',
       }}>
