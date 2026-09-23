@@ -41,7 +41,7 @@ function getCostPool() {
       idleTimeoutMillis: 30000,
       // Hard ceiling on a single query. Without it, one pathological scan pins a connection
       // indefinitely and every later request starves behind it.
-      statement_timeout: 300000,
+      statement_timeout: 600000,
     })
     // Without this, an idle-client error from the pooler becomes an unhandled
     // rejection that takes the whole server process down.
