@@ -30,6 +30,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS logistics_fixed_vehicles_key
 CREATE INDEX IF NOT EXISTS logistics_fixed_vehicles_month
   ON public.logistics_fixed_vehicles (month_year DESC);
 
+-- Table privileges. RLS decides which ROWS a role sees, but the role still needs
+-- access to the table itself: without these, PostgREST answers 42501 "permission
+-- denied" and the ledger view loads nothing.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.logistics_fixed_vehicles TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
 ALTER TABLE public.logistics_fixed_vehicles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read fixed vehicles" ON public.logistics_fixed_vehicles;

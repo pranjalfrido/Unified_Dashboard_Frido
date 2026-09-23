@@ -28,6 +28,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS logistics_costs_3pl_key
 CREATE INDEX IF NOT EXISTS logistics_costs_3pl_month
   ON public.logistics_costs_3pl (month_year DESC);
 
+-- Table privileges. RLS decides which ROWS a role sees, but the role still needs
+-- access to the table itself: without these, PostgREST answers 42501 "permission
+-- denied" and the ledger view loads nothing.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.logistics_costs_3pl TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
 ALTER TABLE public.logistics_costs_3pl ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read 3pl costs" ON public.logistics_costs_3pl;
