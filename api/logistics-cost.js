@@ -1337,12 +1337,12 @@ export default async function handler(req, res) {
         () => query(pool, `
           SELECT transporter_name AS key, COUNT(*)::int AS trips,
                  SUM(total_cost)::float8 AS cost, AVG(total_cost)::float8 AS avg_cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 3 DESC
         `),
         () => query(pool, `
           SELECT month_year AS key, COUNT(*)::int AS trips, SUM(total_cost)::float8 AS cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 1
         `),
         () => query(pool, `
