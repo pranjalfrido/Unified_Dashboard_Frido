@@ -62,8 +62,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp -r public /tmp/public_generated
           git fetch origin main
           git reset --hard origin/main
+          cp /tmp/public_generated/*.json public/
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
                   public/logistics-data-cod.json public/logistics-data-prepaid.json \
