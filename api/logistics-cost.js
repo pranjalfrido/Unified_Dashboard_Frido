@@ -61,6 +61,12 @@ function getCostPool() {
 // {action:'invalidate'}) rather than waiting this out.
 const REF_TTL_MS = 60 * 60 * 1000
 let refCache = null
+// One build at a time. Without this, concurrent requests on a cold cache each start
+// their own rebuild: the heavy BASE scan was observed running 7 times at once, each
+// holding a connection for 60-116s, so later callers waited past connectionTimeoutMillis
+// and the tab returned "timeout exceeded when trying to connect". Callers now await the
+// same promise instead of duplicating the work.
+let refCacheBuild = null
 
 // Full-response cache keyed on the filter payload. Bounded to RESP_CACHE_MAX entries so a
 // user cycling through slicers cannot grow it without limit; oldest key is evicted first.
@@ -1176,7 +1182,13 @@ export default async function handler(req, res) {
     // so the entry is keyed on them. Without the key the first caller's selection would be
     // served to every later request until REF_TTL_MS elapsed.
     const b2bFilterKey = JSON.stringify([f.couriers ?? [], f.freightTypes ?? [], f.vehicleTypes ?? [], f.months ?? []])
+    const needsBuild = !refCache || refCache.b2bFilterKey !== b2bFilterKey || Date.now() - refCache.at > REF_TTL_MS
+    if (needsBuild && refCacheBuild) {
+      // A build for this key is already running - wait for it rather than starting another.
+      await refCacheBuild
+    }
     if (!refCache || refCache.b2bFilterKey !== b2bFilterKey || Date.now() - refCache.at > REF_TTL_MS) {
+      refCacheBuild = (async () => {
       // ── FTL/PTL slicers ──
       // The sidebar posts couriers (transporters), freightTypes and vehicleTypes, but the
       // B2B queries below ignored them: the controls rendered, toggled and changed nothing.
@@ -1545,6 +1557,8 @@ export default async function handler(req, res) {
         
         b2bSole: b2bSole.rows[0] || null,
       }
+      })()
+      try { await refCacheBuild } finally { refCacheBuild = null }
     }
 
     // Attribution describes the whole book, not the slicer-filtered view: the derived card
