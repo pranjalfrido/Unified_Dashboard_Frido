@@ -108,8 +108,13 @@ async function mapLimit(tasks, limit) {
 async function query(pool, sql, params) {
   for (let attempt = 0; ; attempt++) {
     try {
-      // Calls the driver directly — must not recurse into this wrapper.
-      return await pool.query(sql, params)
+      const client = await pool.connect()
+      try {
+        await client.query('SET statement_timeout = 600000')
+        return await client.query(sql, params)
+      } finally {
+        client.release()
+      }
     } catch (e) {
       const transient = TRANSIENT.has(e.code) || /ECONNRESET|terminated unexpectedly/i.test(e.message || '')
       if (!transient || attempt >= 2) throw e
