@@ -2251,8 +2251,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     [overallMonths, ovTrendMonths]
   )
 
-  const toggleIn = (key, val) =>
+  const toggleIn = (key, val) => {
+    if (Array.isArray(val)) { setOne(key, val); return }
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
+  }
   const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
 
   // ── Default billing period: the most recent 6 months ──
