@@ -1031,11 +1031,19 @@ function cubeToBreakdowns(rows) {
 }
 
 // Filters that can be satisfied purely from the cube (no API needed).
-function isCubeFilter(f) {
+function isCubeFilter(f, scope) {
   // originCity and exactSlab are NOT in the cube (it carries no origin_city column and is
   // pre-aggregated by band, not by exact slab), so either one must force an API request.
   // Omitting them here would serve stale cube rows and the filter would silently no-op.
+  //
+  // The FTL/PTL slicers are the same case: the cube is built from the B2C ledger and has
+  // no freight_type or vehicle column, and its courier_name never matches a freight
+  // transporter, so slicing it for those filtered the wrong rows by the wrong column.
+  // The freight tab never uses the cube: every figure on it comes from the two B2B
+  // tables, and `couriers` means transporter_name there rather than courier_name.
+  if (scope === 'b2b') return false
   return !f.band && !f.destCity && !f.originCity && f.exactSlab == null
+    && !f.freightTypes?.length && !f.vehicleTypes?.length
 }
 
 // Apply cube-compatible filters to cube rows.
@@ -1157,7 +1165,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     const f = JSON.parse(filterKey)
 
     // If the base data is loaded AND the filter can be handled by the cube, skip the API.
-    if (baseData?.cube && isCubeFilter(f)) {
+    if (baseData?.cube && isCubeFilter(f, scope)) {
       const filtered = filterCube(baseData.cube, f)
       const totals = sumCube(filtered)
       // dt_*/dc_* come from refCache and are filter-independent — they are not in the cube
@@ -1269,7 +1277,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     })()
 
     return () => ctl.abort()
-  }, [filterKey, API, reloadKey, baseData])
+  }, [filterKey, API, reloadKey, baseData, scope])
 
   // ── Derived views ──
   const kpis = useMemo(() => {

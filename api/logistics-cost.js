@@ -1171,8 +1171,45 @@ export default async function handler(req, res) {
     out.cube = cubeRes.rows
     // Served from refCache — see the note on the mapLimit call above.
 
-    // ── 4. Filter-independent reference data, cached ──
-    if (!refCache || Date.now() - refCache.at > REF_TTL_MS) {
+    // ── 4. Reference data, cached ──
+    // Mostly filter-independent, but the B2B aggregates below honour the FTL/PTL slicers,
+    // so the entry is keyed on them. Without the key the first caller's selection would be
+    // served to every later request until REF_TTL_MS elapsed.
+    const b2bFilterKey = JSON.stringify([f.couriers ?? [], f.freightTypes ?? [], f.vehicleTypes ?? [], f.months ?? []])
+    if (!refCache || refCache.b2bFilterKey !== b2bFilterKey || Date.now() - refCache.at > REF_TTL_MS) {
+      // ── FTL/PTL slicers ──
+      // The sidebar posts couriers (transporters), freightTypes and vehicleTypes, but the
+      // B2B queries below ignored them: the controls rendered, toggled and changed nothing.
+      //
+      // Two tables answer this tab and they name the same things differently, so each gets
+      // its own predicate list:
+      //   logistics_invoices_b2b  transporter_name / vehicle_type / "freight_type_FTL_PTL"
+      //   b2b_trip_priced         transporter      / vehicle      / freight_type
+      // freight_type_FTL_PTL is mixed-case and must stay double-quoted.
+      //
+      // Values are inlined as quoted literals rather than bound parameters because these
+      // fragments are interpolated into a dozen separate query strings, several of which
+      // already carry their own $n params — a shared counter across them would be fragile.
+      // Every value is escaped below and only ever reaches a TEXT column.
+      const sqlLit = (v) => "'" + String(v).replace(/'/g, "''") + "'"
+      const inList = (vals) => "(" + vals.map(sqlLit).join(", ") + ")"
+      const b2bWhere = (cols) => {
+        const c = []
+        if (f.couriers?.length)     c.push(`${cols.transporter} IN ${inList(f.couriers)}`)
+        if (f.freightTypes?.length) c.push(`${cols.freightType} IN ${inList(f.freightTypes)}`)
+        if (f.vehicleTypes?.length) c.push(`${cols.vehicle} IN ${inList(f.vehicleTypes)}`)
+        if (f.months?.length)       c.push(`${cols.month} IN ${inList(f.months)}`)
+        return c
+      }
+      const LEDGER_COLS = { transporter: 'transporter_name', freightType: '"freight_type_FTL_PTL"', vehicle: 'vehicle_type', month: 'month_year' }
+      const PRICED_COLS = { transporter: 'transporter', freightType: 'freight_type', vehicle: 'vehicle', month: 'month_year' }
+      // Ready-made clauses: AND-form to append to a query that already has a WHERE,
+      // WHERE-form for one that does not.
+      const ledgerAnd   = b2bWhere(LEDGER_COLS).map((x) => ` AND ${x}`).join('')
+      const ledgerWhere = b2bWhere(LEDGER_COLS).length ? ' WHERE ' + b2bWhere(LEDGER_COLS).join(' AND ') : ''
+      const pricedAnd   = b2bWhere(PRICED_COLS).map((x) => ` AND ${x}`).join('')
+      const pricedWhere = b2bWhere(PRICED_COLS).length ? ' WHERE ' + b2bWhere(PRICED_COLS).join(' AND ') : ''
+
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
@@ -1262,7 +1299,7 @@ export default async function handler(req, res) {
                  "freight_type_FTL_PTL" AS freight_type,
                  charged_weight::float8 AS charged_weight,
                  total_cost::float8 AS total_cost
-            FROM public.logistics_invoices_b2b
+            FROM public.logistics_invoices_b2b${ledgerWhere}
            ORDER BY month_year DESC NULLS LAST LIMIT 500
         `),
         // ── B2B aggregates for the B2B tab ──
@@ -1284,7 +1321,7 @@ export default async function handler(req, res) {
                  SUM(p.variance)::float8 AS variance,
                  COUNT(p.card_rate)::int AS priced_trips
             FROM public.b2b_trip_priced p
-           WHERE p.billed > 0
+           WHERE p.billed > 0${pricedAnd.replace(/ (transporter|freight_type|vehicle|month_year) /g, ' p.$1 ')}
            GROUP BY 1, 2, 3
            ORDER BY 5 DESC
            LIMIT 60
@@ -1295,24 +1332,24 @@ export default async function handler(req, res) {
                  AVG(total_cost)::float8 AS avg_cost,
                  COUNT(DISTINCT transporter_name)::int AS transporters,
                  (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
         `),
         () => query(pool, `
           SELECT transporter_name AS key, COUNT(*)::int AS trips,
                  SUM(total_cost)::float8 AS cost, AVG(total_cost)::float8 AS avg_cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
            GROUP BY 1 ORDER BY 3 DESC
         `),
         () => query(pool, `
           SELECT month_year AS key, COUNT(*)::int AS trips, SUM(total_cost)::float8 AS cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
            GROUP BY 1 ORDER BY 1
         `),
         () => query(pool, `
           SELECT COALESCE("freight_type_FTL_PTL", 'Unknown') AS key,
                  COUNT(*)::int AS trips, SUM(total_cost)::float8 AS cost,
                  AVG(total_cost)::float8 AS avg_cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
            GROUP BY 1 ORDER BY 3 DESC
         `),
         // ── B2B contract variance (spec: audit trips against the signed rate card) ──
@@ -1352,7 +1389,7 @@ export default async function handler(req, res) {
                       (to_jsonb(b) ->> 'Shipment value')
                     )::numeric)::float8
                FROM public.logistics_invoices_b2b b)                  AS value_total
-          FROM public.b2b_trip_priced
+          FROM public.b2b_trip_priced${pricedWhere}
         `),
         // ── Monthly spend + contract variance ──
         // Variance is expressed against PRICED spend only. Dividing it by total spend would
@@ -1364,7 +1401,7 @@ export default async function handler(req, res) {
                  SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8 AS billed_priced,
                  SUM(card_rate)::float8 AS card_total,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3, 4 ORDER BY 1
         `),
         // ── Transporter x month, long form ──
@@ -1375,7 +1412,7 @@ export default async function handler(req, res) {
         () => query(pool, `
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3, 4 ORDER BY 1, 4 DESC
         `),
         // ── Vehicle type analysis ──
@@ -1390,7 +1427,7 @@ export default async function handler(req, res) {
                  COUNT(DISTINCT transporter)::int AS transporters,
                  COUNT(card_rate)::int AS priced_trips,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3 ORDER BY 5 DESC
         `),
         // ── Lane x vehicle detail ──
@@ -1409,7 +1446,7 @@ export default async function handler(req, res) {
                  SUM(variance)::float8 AS variance,
                  COUNT(card_rate)::int AS priced_trips
             FROM public.b2b_trip_priced
-           WHERE billed > 0
+           WHERE billed > 0${pricedAnd}
            GROUP BY 1, 2, 3, 4, 5, 6
            ORDER BY 9 DESC
         `),
@@ -1425,7 +1462,7 @@ export default async function handler(req, res) {
                  COUNT(*)::int AS trips,
                  percentile_cont(0.5) WITHIN GROUP (ORDER BY billed)::float8 AS median_cost,
                  SUM(billed)::float8 AS spend
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2
           -- 8 trips is the floor for a rate to mean anything. Below it a carrier can look
           -- cheap on two lucky trips and trigger a switch that costs money.
@@ -1480,7 +1517,7 @@ export default async function handler(req, res) {
         // so it is measured once per cache period like the other reference data.
         subCube: subCube.rows,
         trendAll: trendRes.rows,
-        at: Date.now(), options, b2b: b2b.rows,
+        at: Date.now(), b2bFilterKey, options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
         health: { ...health.rows[0], ...joinCov.rows[0] },
         // Kept for the existing disclosure line above Cost Overview.
@@ -1490,9 +1527,9 @@ export default async function handler(req, res) {
         b2bTrans: b2bTrans.rows,
         b2bMonths: b2bMonths.rows,
         b2bTypes: b2bTypes.rows,
-        // Contract variance against the signed rate card. Filter-independent, like the
-        // other B2B aggregates — the B2B ledger is trip-billed and the sidebar's
-        // courier/zone/weight slicers do not apply to it.
+        // Contract variance against the signed rate card. Now honours the FTL/PTL
+        // slicers (transporter / freight type / vehicle size) like the other B2B
+        // aggregates; the B2C zone and weight slicers still do not apply to trip billing.
         b2bVar: b2bVar.rows[0] || null,
         
         
