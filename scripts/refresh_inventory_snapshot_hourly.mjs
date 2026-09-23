@@ -54,7 +54,16 @@ corrected AS (
       THEN 0
       ELSE Quantity
     END AS Quantity_Final,
-    IFNULL(QuantityBlocked, 0) AS QuantityBlocked
+    -- Apply the same staleness correction to blocked qty — Unicommerce stops sending a row
+    -- once blocked qty hits 0 (same quirk as available qty), so stale blocked rows must be
+    -- zeroed by the same >12h rule, otherwise they accumulate indefinitely.
+    CASE
+      WHEN IFNULL(QuantityBlocked, 0) > 0
+        AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), last_seen_ts, HOUR) > ${STALE_HOURS_THRESHOLD}
+        AND NOT REGEXP_CONTAINS(Shelf, r'^(RTN|DEMO)')
+      THEN 0
+      ELSE IFNULL(QuantityBlocked, 0)
+    END AS QuantityBlocked_Final
   FROM raw_latest
 )
 SELECT
@@ -62,7 +71,7 @@ SELECT
   Facility,
   MAX(last_seen_ts) AS Updated,
   SUM(IF(InventoryType = 'GOOD_INVENTORY', Quantity_Final, 0)) AS Inventory,
-  SUM(QuantityBlocked) AS InventoryBlocked,
+  SUM(QuantityBlocked_Final) AS InventoryBlocked,
   -- Vadgaon_OPS only: RTD/Raw split by shelf-name substring, not the pack-qty/raw-SKU-text
   -- heuristic every other facility uses. A shelf containing "RTD" is RTD (RTD-LANE-* shelves
   -- included — RTD wins the tie over LANE); a shelf containing "LANE" but not "RTD" is Raw.
@@ -70,7 +79,7 @@ SELECT
   -- Inventory is RtdInvt + RawInvt only, deliberately smaller than its full GOOD_INVENTORY sum.
   SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND REGEXP_CONTAINS(Shelf, r'RTD'), Quantity_Final, 0)) AS RtdInvt,
   SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'LANE'), Quantity_Final, 0)) AS RawInvt,
-  SUM(IF(Facility = 'Vadgaon_OPS' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'LANE'), QuantityBlocked, 0)) AS RawBlockedInvt
+  SUM(IF(Facility = 'Vadgaon_OPS' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'LANE'), QuantityBlocked_Final, 0)) AS RawBlockedInvt
 FROM corrected
 GROUP BY ItemTypeSKUCode, Facility
 `
