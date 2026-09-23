@@ -27,8 +27,11 @@ function getCostPool() {
   if (!costPool) {
     const connStr = process.env.SUPABASE_URL
     if (!connStr) throw new Error('SUPABASE_URL not configured')
+    // Append options=-c statement_timeout=600000 so the setting survives pgBouncer's
+    // transaction-mode session reset (a plain SET in the query is wiped between transactions).
+    const connStrWithOpts = connStr.includes('options=') ? connStr : connStr + (connStr.includes('?') ? '&' : '?') + 'options=-c%20statement_timeout%3D600000'
     costPool = new Pool({
-      connectionString: connStr,
+      connectionString: connStrWithOpts,
       ssl: { rejectUnauthorized: false },
       // 6, not 3: the handler needs several scans per request and 3 meant queries queued
       // behind each other until connectionTimeoutMillis fired — the "timeout exceeded when
@@ -110,7 +113,6 @@ async function query(pool, sql, params) {
     try {
       const client = await pool.connect()
       try {
-        await client.query('SET statement_timeout = 600000')
         return await client.query(sql, params)
       } finally {
         client.release()
