@@ -2925,6 +2925,22 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         {/* No header on this block — the cards are self-describing. The spacer keeps the
             vertical rhythm the SectionHdr used to provide. */}
         <div style={{ height: 12 }} />
+        {b2b.totals?.unpriced_rows > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 0 12px',
+            padding: '10px 14px', borderRadius: 10,
+            background: C.amber.bg, border: `1px solid ${C.amber.bd}`, color: C.amber.tx,
+            fontSize: 12, lineHeight: 1.5,
+          }}>
+            <span style={{ fontWeight: 700 }}>⚠</span>
+            <span>
+              <strong>{fmtN(b2b.totals.unpriced_rows)} invoice lines ({fmt(b2b.totals.unpriced_cost)})</strong>
+              {' '}are uploaded but not yet priced, so they are missing from every figure on this tab.
+              {' '}Run <code style={{ fontSize: 11.5 }}>node -r dotenv/config scripts/build-b2b-variance.mjs</code>{' '}
+              after a B2B upload to include them.
+            </span>
+          </div>
+        )}
         {/* Hero plus a 4x2 tile grid, the same arrangement and gap as the B2C tab so the two
             tabs read as one dashboard. Every figure derives from b2bHead, which is built off
             the per-transporter rows — so the whole block responds to the sidebar selection

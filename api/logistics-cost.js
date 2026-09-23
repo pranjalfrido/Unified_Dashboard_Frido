@@ -1331,7 +1331,13 @@ export default async function handler(req, res) {
                  SUM(total_cost)::float8 AS cost,
                  AVG(total_cost)::float8 AS avg_cost,
                  COUNT(DISTINCT transporter_name)::int AS transporters,
-                 (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes
+                 (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes,
+                 (SELECT COUNT(*)::int FROM public.logistics_invoices_b2b u
+                   WHERE u.total_cost > 0
+                     AND NOT EXISTS (SELECT 1 FROM public.b2b_trip_priced pp WHERE pp.month_year = u.month_year)) AS unpriced_rows,
+                 (SELECT COALESCE(SUM(u.total_cost), 0)::float8 FROM public.logistics_invoices_b2b u
+                   WHERE u.total_cost > 0
+                     AND NOT EXISTS (SELECT 1 FROM public.b2b_trip_priced pp WHERE pp.month_year = u.month_year)) AS unpriced_cost
             FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
         `),
         () => query(pool, `
