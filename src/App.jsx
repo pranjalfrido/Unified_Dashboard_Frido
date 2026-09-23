@@ -1,5 +1,6 @@
 ﻿import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, Component } from 'react'
 import { createPortal } from 'react-dom'
+import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -203,7 +204,9 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
         <span style={{ fontSize: 9, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 -8px 28px rgba(0,0,0,.14)', minWidth: 210, maxHeight: 320, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 320, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 340 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
+        }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${label.toLowerCase()}...`} style={{ width: '100%', fontSize: 11.5, padding: '5px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
           </div>
@@ -384,7 +387,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   // sharing cSort (their column keys/rows differ, and silently reusing cSort here was the bug).
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
-  const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
+  const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
+  // cSelected: set of active toggles. cPrimary = last-clicked toggle = primary view.
+  const [cSelected, setCSelected] = useState(new Set(['courier']))
+  const [cPrimary, setCPrimary] = useState('courier')
+  const [cPayment, setCPayment] = useState(null) // 'COD' | 'Prepaid' | null — local to breakdown table only
+  const [cPaymentData, setCPaymentData] = useState(null) // breakdown-scoped data when cPayment is set
+  const [cTier, setCTier] = useState(null) // 'Tier 1' | 'Tier 2' | 'Tier 3' | null
+  // cView = primary if it's still selected, else fall back to whichever is selected
+  const cView = cSelected.has(cPrimary) ? cPrimary : (['courier','zone','facility','month'].find(v => cSelected.has(v)) || 'courier')
+  const cDrill = (() => {
+    const others = ['courier','zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
+    return others[0] || null
+  })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
@@ -394,15 +409,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  useEffect(() => {
+    const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+  }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
+  const [zExpanded, setZExpanded] = useState({})
+  const [fExpanded, setFExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
+  const [rawCodData, setRawCodData] = useState(null)   // cached COD BQ response for current date range
+  const [rawPrepaidData, setRawPrepaidData] = useState(null) // cached Prepaid BQ response
+  const paymentPrefetchActive = useRef(false) // true while background COD/Prepaid fetch is in flight
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
+  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale_v3'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
@@ -415,23 +439,44 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       // Try static file first — served from Vercel CDN in ~14ms
       // Payment-specific files (logistics-data-cod.json / logistics-data-prepaid.json)
       // are generated by the same cron and used when a single payment mode is selected.
-      const hasPaymentFilter = lFilters.paymentMode?.length > 0
+      const hasPaymentFilter = lFilters.paymentMode?.length === 1 // both selected = same as all, no filter
       const singlePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0].toLowerCase() : null
-      const staticFile = singlePayment ? `/logistics-data-${singlePayment}.json` : '/logistics-data.json'
+      const singleShipmentType = (lFilters.shipmentType && lFilters.shipmentType !== 'all') ? lFilters.shipmentType.toLowerCase() : null
+      const staticFile = singlePayment && singleShipmentType
+        ? `/logistics-data-${singleShipmentType}-${singlePayment}.json`
+        : singlePayment
+        ? `/logistics-data-${singlePayment}.json`
+        : singleShipmentType
+        ? `/logistics-data-${singleShipmentType}.json`
+        : '/logistics-data.json'
       const hasGeoFilter = lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.weightSlabs?.length
+      const canPrefetchPayment = !hasPaymentFilter && !hasGeoFilter && !lFilters.category?.length && !lFilters.subCategory?.length
       let usedStatic = false
       if (!hasGeoFilter && (!hasPaymentFilter || singlePayment)) {
         try {
-          const res = await fetch(staticFile)
+          // Fetch main + COD + Prepaid CDN files in parallel — single loading bar
+          const stPrefix = singleShipmentType ? `${singleShipmentType}-` : ''
+          const [res, codRes, prepaidRes] = await Promise.all([
+            fetch(staticFile),
+            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
+            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
+          ])
           if (res.ok) {
-            const json = await res.json()
+            // Parse all 3 in parallel before touching state — single render, single loading bar
+            const [json, codJson, prepaidJson] = await Promise.all([
+              res.json(),
+              codRes?.ok ? codRes.json().catch(() => null) : Promise.resolve(null),
+              prepaidRes?.ok ? prepaidRes.json().catch(() => null) : Promise.resolve(null),
+            ])
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
             const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
             if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
               setRawData(json.current)
               setRawPrevData(json.previous || null)
-              try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
+              try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
               usedStatic = true
+              if (codJson?.current && codJson.dateRange?.start === filters.start && codJson.dateRange?.end === filters.end) setRawCodData(codJson.current)
+              if (prepaidJson?.current && prepaidJson.dateRange?.start === filters.start && prepaidJson.dateRange?.end === filters.end) setRawPrepaidData(prepaidJson.current)
             }
           }
         } catch { /* fall through to live API */ }
@@ -439,6 +484,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
       if (!usedStatic) {
         // Static JSON unavailable or filter active — hit live BQ
+        // Reset payment caches since date/filters changed
+        setRawCodData(null); setRawPrepaidData(null)
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category?.length) body.category = lFilters.category
         if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
@@ -454,6 +501,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
         const fmt = d => d.toISOString().slice(0, 10)
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
+        // await only main + prev
         const [r, rPrev] = await Promise.all([
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
@@ -462,12 +510,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
-        try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
+        try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) {
       // API failed — try localStorage stale data before showing error
       try {
-        const stale = localStorage.getItem('logistics_stale')
+        const stale = localStorage.getItem('logistics_stale_v3')
         if (stale) {
           const parsed = JSON.parse(stale)
           const staleMatches = parsed.dateRange && parsed.dateRange.start === filters.start && parsed.dateRange.end === filters.end
@@ -478,9 +526,44 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     }
     finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
+  }, [filters.start, filters.end, lFilters.shipmentType, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  // reset breakdown payment toggle when sidebar payment filter is applied
+  useEffect(() => {
+    if (lFilters.paymentMode?.length > 0) { setCPayment(null); setCPaymentData(null) }
+  }, [JSON.stringify(lFilters.paymentMode)]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // fetch breakdown-local payment data when COD/Prepaid toggle is active
+  useEffect(() => {
+    if (!cPayment) { setCPaymentData(null); return }
+    const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType.toLowerCase() : null
+
+    // 1. Use in-memory BQ cache if available (works for any shipmentType)
+    if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
+    if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
+    // prefetch in flight — wait, effect re-runs when cache arrives
+    if (paymentPrefetchActive.current) return
+
+    // 2. Try static file — instant for MTD
+    const file = shipmentType
+      ? `/logistics-data-${shipmentType}-${cPayment.toLowerCase()}.json`
+      : `/logistics-data-${cPayment.toLowerCase()}.json`
+    fetch(file)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+        if (json?.current && dateMatches) { setCPaymentData(json.current); return }
+        // 3. Fallback: live BQ
+        const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
+        if (shipmentType) body.shipmentType = shipmentType
+        return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(r => r.ok ? r.json() : null)
+          .then(json => { if (json) setCPaymentData(json) })
+      })
+      .catch(() => {})
+  }, [cPayment, lFilters.shipmentType, filters.start, filters.end, rawCodData, rawPrepaidData])
 
   // instant client-side filter — runs on every slicer change, no BQ call
   useEffect(() => {
@@ -506,7 +589,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
 
       // derive kpis from byCourier rows (all fields now present in each courier row)
-      const kpis = (hasCourier || hasSddNdd || hasShipmentType)
+      // when only shipmentType filter is active (no courier/sddNdd), use raw.kpis directly
+      // since the API already filtered by shipmentType — byCourier.total uses COUNT(awb) not DISTINCT
+      const kpis = (hasCourier || hasSddNdd)
         ? filteredCouriers.reduce((acc, x) => {
             const n = k => typeof x[k] === 'number' ? x[k] : 0
             acc.total_shipments = (acc.total_shipments || 0) + n('total')
@@ -540,7 +625,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           }, {})
         : raw.kpis
 
-      if ((hasCourier || hasSddNdd || hasShipmentType) && kpis._wt) {
+      if ((hasCourier || hasSddNdd) && kpis._wt) {
         kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
         kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
         kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
@@ -559,6 +644,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
         byZone: raw.byZone,
         byZoneDetail: raw.byZoneDetail,
+        byZoneFrido: raw.byZoneFrido,
+        byCourierZone: raw.byCourierZone,
+        byCourierFacility: raw.byCourierFacility,
+        byZoneFacility: raw.byZoneFacility,
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -769,7 +858,18 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     return acc
   }, {}))
   const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, del_value_pct: d.del_value_pct ?? (d.total_value ? +((d.total_value - (d.rto_value||0)) / d.total_value * 100).toFixed(1) : 0), rto_value_pct: d.rto_value_pct ?? (d.total_value ? +((d.rto_value||0) / d.total_value * 100).toFixed(1) : 0), rto_value: d.rto_value ?? 0 }))
-  const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+  const tierFilteredData = cTier ? (() => {
+    const src = cPaymentData || data
+    if (!src) return null
+    return {
+      ...src,
+      byCourier: (src.byCourierTier || []).filter(r => r.tier === cTier),
+      byZoneFrido: (src.byZoneFridoTier || []).filter(r => r.tier === cTier),
+      byFacility: (src.byFacilityTier || []).filter(r => r.tier === cTier),
+    }
+  })() : null
+  const breakdownSrc = tierFilteredData || cPaymentData || data
+  const byCourierData = (breakdownSrc?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
   const statusDonutData = [...(data?.byStatus || [])].sort((a, b) => b.total - a.total)
@@ -1114,17 +1214,94 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <div className="card-hoverable" style={{ ...cardStyle, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {['Courier','Facility','Month'].map((v, i) => (
-                <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                  {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
-                  <button onClick={() => setCView(v.toLowerCase())} style={{
-                    fontSize: 11, fontWeight: cView===v.toLowerCase() ? 700 : 500, padding: '3px 9px', borderRadius: 6,
-                    border: 'none', outline: 'none', background: cView===v.toLowerCase() ? C.acs : 'transparent',
-                    color: cView===v.toLowerCase() ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
-                  }}>{v}</button>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {(() => {
+                const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+                const unfilteredViews = ['Zone','Facility','Month']
+                const viewToggles = ['Courier','Zone','Facility','Month'].map((v, i) => {
+                  const vl = v.toLowerCase()
+                  const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
+                  const isActive = cSelected.has(vl)
+                  const isPrimary = cView === vl
+                  const isDrill = cDrill === vl
+                  const cantDeselect = isActive && cSelected.size === 1
+                  return (
+                    <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => {
+                          if (isDisabled || cantDeselect) return
+                          setCSelected(prev => {
+                            const next = new Set(prev)
+                            if (next.has(vl)) {
+                              next.delete(vl)
+                              // if primary was deselected, promote the remaining one
+                              setCPrimary(p => p === vl ? (['courier','zone','facility','month'].find(k => next.has(k)) || vl) : p)
+                            } else {
+                              // max 2 — if already 2 selected, replace the drill (non-primary)
+                              if (next.size >= 2) {
+                                next.forEach(k => { if (k !== cView) next.delete(k) })
+                              }
+                              next.add(vl)
+                              // do NOT update cPrimary — first-selected stays primary
+                            }
+                            return next
+                          })
+                          setCExpanded({}); setZExpanded({}); setFExpanded({})
+                        }}
+                        title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isPrimary ? C.acs : isDrill ? '#F3DC9E' : 'transparent',
+                          color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
+                          cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                          opacity: isDisabled ? 0.45 : 1,
+                        }}
+                      >{v}</button>
+                    </div>
+                  )
+                })
+                const sidebarHasPayment = lFilters.paymentMode?.length > 0
+                const payToggles = sidebarHasPayment ? [] : ['COD','Prepaid'].map((p, i) => {
+                  const isActive = cPayment === p
+                  return (
+                    <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => setCPayment(isActive ? null : p)}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{p}</button>
+                    </div>
+                  )
+                })
+                const tierMap = { 'Tier I':'Tier 1','Tier II':'Tier 2','Tier III':'Tier 3' }
+                const tierToggles = ['Tier I','Tier II','Tier III'].map((t, i) => {
+                  const isActive = cTier === tierMap[t]
+                  return (
+                    <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => setCTier(isActive ? null : tierMap[t])}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{t}</button>
+                    </div>
+                  )
+                })
+                return [...tierToggles, <div key="sep-tier" style={{ width: 16 }} />, ...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
+              })()}
             </div>
           </div>
           <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 450 }}>
@@ -1139,6 +1316,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
+                { key: '_eddBreachPct', label: 'EDD Breach %' },
                 { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
                 { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
@@ -1154,6 +1332,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled || 0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num || 0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach || 0) / ((r.on_time || 0) + (r.sla_breach || 0))) * 100).toFixed(2) : null,
               }))
               const [sortCol, setSortCol] = [cSort?.col, (col) => setCSort(s => ({ col, dir: s?.col === col && s?.dir === 'desc' ? 'asc' : 'desc' }))]
               const sortDir = cSort?.dir || 'desc'
@@ -1176,8 +1355,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
               }))
-              const byCourierMonth = (data?.byCourierMonth || [])
+              const byCourierMonth = (breakdownSrc?.byCourierMonth || [])
               const byCourierDay = (data?.byCourierDay || [])
               const byCourierWeek = (data?.byCourierWeek || [])
               // helper to build period breakdown table for daily/weekly/monthly courier views
@@ -1228,8 +1408,144 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   </div>
                 )
               }
+              if (cView === 'zone') {
+                const byZoneFrido = (breakdownSrc?.byZoneFrido || []).filter(r => r.zone_group)
+                const zoneTotalAll = byZoneFrido.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichZoneRaw = byZoneFrido.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / zoneTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
+                  _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                  _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
+                }))
+                const sumZD = enrichZoneRaw.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumZR = enrichZoneRaw.reduce((s,r)=>s+(r.rto||0),0)
+                const sumZC = enrichZoneRaw.reduce((s,r)=>s+(r.cancelled||0),0)
+                const sumZD1 = enrichZoneRaw.reduce((s,r)=>s+(r.d1||0),0)
+                const sumZRN = enrichZoneRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
+                const sumZOfd = enrichZoneRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumZOnTime = enrichZoneRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumZSlaBreach = enrichZoneRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
+                const wavgZ = (key) => { const w = enrichZoneRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return zoneTotalAll>0?w/zoneTotalAll:null }
+                const td9z = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
+                const td9zL = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
+                const ZONE_COLS = [
+                  { key: 'zone_group', label: 'Zone', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
+                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                  { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
+                ]
+                const zoneSortCol = zoneSort?.col
+                const zoneSortDir = zoneSort?.dir || 'asc'
+                const enrichZone = zoneSortCol ? [...enrichZoneRaw].sort((a, b) => {
+                  const av = a[zoneSortCol], bv = b[zoneSortCol]
+                  if (av == null) return 1; if (bv == null) return -1
+                  if (typeof av === 'string') return zoneSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+                  return zoneSortDir === 'asc' ? av - bv : bv - av
+                }) : enrichZoneRaw
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
+                        {ZONE_COLS.map((col,i) => (
+                          <th key={col.key} onClick={() => setZoneSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>{col.label}{zoneSortCol === col.key ? (zoneSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichZone.map((r, ri) => (
+                        <Fragment key={r.zone_group}>
+                        <tr style={{ borderBottom: zExpanded[r.zone_group] ? 'none' : `1px solid ${C.border}`, background: ri%2===1?'#FAF9F6':'transparent', transition:'box-shadow .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseLeave={e => { e.currentTarget.style.background=ri%2===1?'#FAF9F6':'transparent'; e.currentTarget.style.boxShadow='none' }}>
+                          <td style={{ ...td9zL, display:'flex', alignItems:'center', gap:6 }}>
+                            {cDrill && <span onClick={() => setZExpanded(e => ({ ...e, [r.zone_group]: !e[r.zone_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:zExpanded[r.zone_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                            Zone {r.zone_group}
+                          </td>
+                          <td style={td9z}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...td9z, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={td9z}>{r._delPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{d(r.avg_processing_days)}</td>
+                          <td style={td9z}>{d(r.avg_pickup_days)}</td>
+                          <td style={td9z}>{d(r.avg_intransit_days)}</td>
+                          <td style={td9z}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={td9z}>{d(r.avg_rto_tat_days)}</td>
+                        </tr>
+                        {zExpanded[r.zone_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'facility'
+                            ? (breakdownSrc?.byZoneFacility || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : []
+                          return drillRows.map(z => {
+                            const _zd = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _zr = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _zc = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _zf = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _zra = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _zvp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
+                            const drillKey = cDrill === 'courier' ? z.courier_group : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{drillKey}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zvp.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(z.total)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zd.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zr.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zc.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zf!=null?_zf.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zra!=null?_zra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{(z.on_time||z.sla_breach)?((z.sla_breach||0)/((z.on_time||0)+(z.sla_breach||0))*100).toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>100.00%</td>
+                        <td style={{ ...td9z, color:C.t1, fontWeight:700 }}>{n(zoneTotalAll)}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZD/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZR/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZD1/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZRN/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZOnTime+sumZSlaBreach)?(sumZSlaBreach/(sumZOnTime+sumZSlaBreach)*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_processing_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_pickup_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_intransit_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_fulfilment_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_rto_tat_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
               if (cView === 'facility') {
-                const byFacility = (data?.byFacility || []).filter(r => r.facility)
+                const byFacility = (breakdownSrc?.byFacility || []).filter(r => r.facility)
                 const facTotalAll = byFacility.reduce((s,r) => s+(r.total||0), 0) || 1
                 const enrichFacRaw = byFacility.map(r => ({
                   ...r,
@@ -1240,6 +1556,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                   _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                   _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
                 }))
                 const sumD = enrichFacRaw.reduce((s,r)=>s+(r.delivered||0),0)
                 const sumR = enrichFacRaw.reduce((s,r)=>s+(r.rto||0),0)
@@ -1248,8 +1565,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichFacRaw.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichFacRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichFacRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumFacOnTime = enrichFacRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumFacSlaBreach = enrichFacRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavg = (key) => { const w = enrichFacRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return facTotalAll>0?w/facTotalAll:null }
-                const td9 = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9 = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
                 const td9L = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
                 const FAC_COLS = [
                   { key: 'facility', label: 'Facility', left: true, str: true },
@@ -1257,7 +1576,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
-                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
+                  { key: 'avg_processing_days', label: 'Avg Process.' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
                 ]
@@ -1277,16 +1597,22 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {FAC_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace: i===0 ? 'normal' : 'nowrap', overflow: i===0 ? 'hidden' : undefined, textOverflow: i===0 ? 'ellipsis' : undefined, maxWidth: i===0 ? 0 : undefined, cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {enrichFac.map((r, ri) => (
-                        <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}`, background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                          onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
-                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>{r.facility}</td>
+                        <Fragment key={r.facility}>
+                        <tr style={{ borderBottom: fExpanded[r.facility] ? 'none' : `1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>
+                            <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              {cDrill && <span onClick={() => setFExpanded(e => ({ ...e, [r.facility]: !e[r.facility] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:fExpanded[r.facility]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                              <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{r.facility}</span>
+                            </span>
+                          </td>
                           <td style={td9}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9}>{r._delPct.toFixed(2)}%</td>
@@ -1295,6 +1621,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{r._cancPct.toFixed(2)}%</td>
                           <td style={td9}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{d(r.avg_processing_days)}</td>
                           <td style={td9}>{d(r.avg_pickup_days)}</td>
                           <td style={td9}>{d(r.avg_intransit_days)}</td>
@@ -1302,6 +1629,46 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{d(r.avg_rto_tat_days)}</td>
                           <td style={td9}>{d(r.avg_s2a_days)}</td>
                         </tr>
+                        {fExpanded[r.facility] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (breakdownSrc?.byCourierFacility || []).filter(f => f.facility === r.facility).sort((a,b) => b.total - a.total)
+                            : cDrill === 'zone'
+                            ? (breakdownSrc?.byZoneFacility || []).filter(f => f.facility === r.facility).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : []
+                          return drillRows.map(f => {
+                            const _fd = f.total ? +((f.delivered/f.total)*100).toFixed(2) : 0
+                            const _fr = f.total ? +((f.rto/f.total)*100).toFixed(2) : 0
+                            const _fzr = f.total ? +(((f.z_rto||0)/f.total)*100).toFixed(2) : 0
+                            const _fc = f.total ? +(((f.cancelled||0)/f.total)*100).toFixed(2) : 0
+                            const _ff = f.ofd_total ? +((f.d1/f.ofd_total)*100).toFixed(2) : null
+                            const _fra = f.ofd_total ? +(((f.rasr_num||0)/f.ofd_total)*100).toFixed(2) : null
+                            const _fvp = r.total ? +((f.total/r.total)*100).toFixed(2) : 0
+                            const drillKey = cDrill === 'courier' ? f.courier_group : `Zone ${f.zone_group}`
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:0 }}>{drillKey}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fvp.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(f.total)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fd.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fzr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fc.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_ff!=null?_ff.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fra!=null?_fra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_processing_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_pickup_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_intransit_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_rto_tat_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_s2a_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
@@ -1315,12 +1682,73 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td9}>{(sumC/facTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={td9}>{(sumFacOnTime+sumFacSlaBreach)?(sumFacSlaBreach/(sumFacOnTime+sumFacSlaBreach)*100).toFixed(2)+'%':'—'}</td>
                         <td style={td9}>{d(wavg('avg_processing_days'))}</td>
                         <td style={td9}>{d(wavg('avg_pickup_days'))}</td>
                         <td style={td9}>{d(wavg('avg_intransit_days'))}</td>
                         <td style={td9}>{d(wavg('avg_fulfilment_days'))}</td>
                         <td style={td9}>{d(wavg('avg_rto_tat_days'))}</td>
                         <td style={td9}>{d(wavg('avg_s2a_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
+              if (cView === 'tier') {
+                const byTierData = (breakdownSrc?.byTier || []).filter(r => !cTier || r.tier === cTier)
+                const tierTotalAll = byTierData.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichTier = byTierData.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / tierTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +((r.cancelled / r.total) * 100).toFixed(2) : 0,
+                }))
+                const sumTD = enrichTier.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumTR = enrichTier.reduce((s,r)=>s+(r.rto||0),0)
+                const sumTC = enrichTier.reduce((s,r)=>s+(r.cancelled||0),0)
+                const wavgT = (key) => { const w = enrichTier.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return tierTotalAll>0?w/tierTotalAll:null }
+                const tdT = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const TIER_COLS = [
+                  { key: 'tier', label: 'Tier', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                ]
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead><tr style={{ borderBottom:`2px solid ${C.border}`, background:C.acl }}>
+                      {TIER_COLS.map(c => (
+                        <th key={c.key} style={{ padding:'8px 10px', textAlign: c.left ? 'left' : 'right', color:C.t2, fontSize:10, fontWeight:600, whiteSpace:'nowrap', cursor:'default' }}>{c.label}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {enrichTier.map(r => (
+                        <tr key={r.tier} style={{ borderBottom:`1px solid ${C.border}` }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                          onMouseLeave={e => { e.currentTarget.style.background='' }}>
+                          <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{ {'Tier 1':'Tier I','Tier 2':'Tier II','Tier 3':'Tier III'}[r.tier] || r.tier }</td>
+                          <td style={tdT}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...tdT, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={tdT}>{r._delPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r.avg_intransit_days!=null?r.avg_intransit_days.toFixed(2)+'d':'—'}</td>
+                          <td style={tdT}>{r.avg_fulfilment_days!=null?r.avg_fulfilment_days.toFixed(2)+'d':'—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>100.00%</td>
+                        <td style={{ ...tdT, color:C.t1, fontWeight:700 }}>{n(tierTotalAll)}</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTD/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTR/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTC/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={tdT}>{wavgT('avg_intransit_days')!=null?wavgT('avg_intransit_days').toFixed(2)+'d':'—'}</td>
+                        <td style={tdT}>{wavgT('avg_fulfilment_days')!=null?wavgT('avg_fulfilment_days').toFixed(2)+'d':'—'}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1335,6 +1763,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichMonth.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichMonth.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichMonth.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumMOnTime = enrichMonth.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumMSlaBreach = enrichMonth.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavgM = (key) => { const w = enrichMonth.reduce((s,r)=>s+(r[key]!=null?r[key]*r.total:0),0); return w/tot }
                 const MONTH_COLS = [
                   { key: 'month_label', label: 'Month', left: true, str: true },
@@ -1342,6 +1772,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
                   { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
@@ -1359,7 +1790,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {MONTH_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1373,20 +1804,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                             onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                             <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.month_label}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontSize:11 }}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
                           </tr>
                         )
                       })}
@@ -1394,20 +1826,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
                         <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>100.00%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>100.00%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumMOnTime+sumMSlaBreach)?(sumMSlaBreach/(sumMOnTime+sumMSlaBreach)*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1416,12 +1849,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <colgroup>
-                    {[<col key={0} style={{ width:'10%' }} />, ...Array(12).fill(0).map((_,i) => <col key={i+1} style={{ width:'7.5%' }} />)]}
+                    {[<col key={0} style={{ width:'10%' }} />, ...Array(13).fill(0).map((_,i) => <col key={i+1} style={{ width:'7%' }} />)]}
                   </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.acl }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '10px 12px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'center', color: C.t1, fontWeight: 700, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1445,7 +1878,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           onMouseLeave={e => { e.currentTarget.style.background = rowBg; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = stickyBg; td.style.boxShadow = 'none' }) }}>
                           <td data-sticky style={{ padding: '8px 12px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
+                              {cDrill && <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -1453,48 +1886,60 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <span style={{ color: C.t1, fontWeight: 600, fontSize: 11 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
-                        {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
-                          const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
-                          const _rtoPct = m.total ? +((m.rto/m.total)*100).toFixed(2) : 0
-                          const _zrtoPct = m.total ? +(((m.z_rto||0)/m.total)*100).toFixed(2) : 0
-                          const _cancPct = m.total ? +(((m.cancelled||0)/m.total)*100).toFixed(2) : 0
-                          const _fasrPct = m.ofd_total ? +((m.d1/m.ofd_total)*100).toFixed(2) : null
-                          const _rasrPct = m.ofd_total ? +(((m.rasr_num||0)/m.ofd_total)*100).toFixed(2) : null
-                          const mVolPct = +((m.total/totalAll)*100).toFixed(2)
-                          const mRtoColor = _rtoPct > avgRtoPct ? C.red.tx : C.t1
-                          return (
-                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:C.hov, transition: 'box-shadow .12s, background .12s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.acl; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
-                              onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.hov; td.style.boxShadow = 'none' }) }}>
-                              <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:C.hov, zIndex:1, transition: 'box-shadow .12s, background .12s' }}>{m.month_label}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:mRtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_processing_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_pickup_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                            </tr>
-                          )
-                        })}
+                        {cExpanded[r.courier_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'zone'
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : cDrill === 'facility'
+                            ? (breakdownSrc?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'month'
+                            ? (breakdownSrc?.byCourierMonth || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1)
+                            : []
+                          return drillRows.map(z => {
+                            const _dp = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _rp = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _cp = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _fp = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _rap = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _vp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
+                            const _rc = _rp > avgRtoPct ? C.red.tx : C.t1
+                            const drillKey = cDrill === 'zone' ? z.zone_group : cDrill === 'month' ? z.month_label : z.facility
+                            const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : cDrill === 'month' ? z.month_label : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition:'box-shadow .12s, background .12s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FDF8ED' }) }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8'; e.currentTarget.style.boxShadow='none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FAFAF8' }) }}>
+                                <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1 }}>{drillLabel}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_vp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{n(z.total)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_dp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:_rc, fontSize:11 }}>{_rp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
                         </Fragment>
                       )
                     })}
@@ -1509,22 +1954,25 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const sumD1 = enriched.reduce((s,r) => s + (r.d1||0), 0)
                       const sumRN = enriched.reduce((s,r) => s + (r.rasr_num||0), 0)
                       const sumOfd = enriched.reduce((s,r) => s + (r.ofd_total||0), 0)
+                      const sumSlaBreach = enriched.reduce((s,r) => s + (r.sla_breach||0), 0)
+                      const sumOnTime = enriched.reduce((s,r) => s + (r.on_time||0), 0)
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
-                          <td style={{ padding: '8px 12px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>100.00%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>100.00%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
@@ -3093,6 +3541,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'Last Quarter', fn: () => {
       // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
@@ -3122,6 +3571,8 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
 
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
@@ -3330,12 +3781,15 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
             </div>
             {/* Quick presets as horizontal chips */}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 14px', flexShrink: 0, scrollbarWidth: 'none' }}>
-              {PRESETS.map(p => (
-                <button key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                  style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${T.border2}`, background: T.bg, color: T.t2, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0 }}>
-                  {p.label}
-                </button>
-              ))}
+              {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+                const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+                return (
+                  <button key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
+                    {p.label}
+                  </button>
+                )
+              })}
             </div>
             {/* Calendar */}
             {calendarBody}
@@ -3346,14 +3800,17 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: T.card, border: `1px solid ${T.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
           <div style={{ width: 140, borderRight: `1px solid ${T.border}`, padding: '8px 0', flexShrink: 0 }}>
-            {PRESETS.map(p => (
-              <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                style={{ padding: '5px 14px', fontSize: 12, color: T.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => e.currentTarget.style.background = T.bg}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                {p.label}
-              </div>
-            ))}
+            {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+              const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+              return (
+                <div key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bg }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+                  {p.label}
+                </div>
+              )
+            })}
           </div>
           {calendarBody}
         </div>
@@ -4635,8 +5092,8 @@ const pill = (label, value, color = C.t1, bg = C.bg) => (
 const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
   <div className="card-hoverable" style={{
     gridColumn: `span ${span}`, background: tint || C.card, border: `1px solid ${tint ? 'transparent' : C.border}`, borderRadius: 14,
-    padding: hero ? '20px 22px' : '14px 16px', boxShadow: hero
-      ? `0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(${C.accRgb},0.35)`
+    padding: hero ? '20px 22px' : '12px 16px', boxShadow: hero
+      ? '0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(216,154,26,0.35)'
       : '0 1px 2px rgba(0,0,0,0.04), 0 6px 16px -8px rgba(0,0,0,0.08)',
     position: 'relative', overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style,
   }}>
@@ -4648,12 +5105,12 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
 // tinted background (tint) for an at-a-glance good/bad read, not just a thin top stripe.
 const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3 }) => (
   <KpiCard span={span} accent={accent} tint={tint} hero={hero}>
-    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 7 }}>{label}</div>
+    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 5 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: hero ? 36 : 22, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: hero ? 36 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
       {deltaVal !== undefined && delta(deltaVal)}
     </div>
-    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>{sub}</div>}
   </KpiCard>
 )
 // Same tile as ReturnTrendChart's TrendStatTile (D2CReturnAnalysisTab.jsx) — a 3px color bar
@@ -4752,8 +5209,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const heroTrendRaw = (dailyArr || []).map((d, i) => {
     const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
     const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
+    const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
     const prevRev = prevDailyArr?.[i]?.rev ?? null
-    return { date: d.date, revenue, netRevenue, prevRevenue: prevRev }
+    return { date: d.date, revenue, netRevenue, units, prevRevenue: prevRev }
   })
   // Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
   // weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM.
@@ -4763,9 +5221,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
       const key = trendGroupBy === 'weekly'
         ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
         : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, prevRevenue: 0 }
+      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, prevRevenue: 0 }
       buckets[key].revenue += d.revenue
       buckets[key].netRevenue += d.netRevenue
+      buckets[key].units += d.units
       if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
     })
     return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
@@ -5061,9 +5520,11 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
                 badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
               <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
                 badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
@@ -5081,7 +5542,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       {payload.map(p => (
                         <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                          <span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span>
+                          <span style={{ color: C.t2 }}>{p.name}: {p.dataKey === 'units' ? fmtN(p.value) : fmt(p.value)}</span>
                         </div>
                       ))}
                     </div>
@@ -5170,7 +5631,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   onChange={e => setProductSearch(e.target.value)}
                   placeholder="Search sub-category…"
                   style={{
-                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 28px 6px 28px',
+                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '3px 28px 3px 28px',
                     borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.t1, outline: 'none',
                     transition: 'border-color .15s, box-shadow .15s',
                   }}
@@ -5191,7 +5652,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ maxHeight: 560, overflowY: 'auto', paddingRight: 10, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+            <div style={{ maxHeight: 450, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10, paddingBottom: 16 }}>
               <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
@@ -5287,7 +5748,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             const STAT_GRID_COLS = 8
             const STAT_COL_WIDTH = 145
             const StatStrip = ({ items }) => (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '20px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '16px 24px' }}>
                 {items.map((t, i) => (
                   <div key={t.label} style={{
                     minWidth: 0,
@@ -5298,9 +5759,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                         (e.g. SLA Threshold tiles' "n of d" caption) and some don't (Ops Performance
                         tiles), which previously made hover boxes visibly different heights next to
                         each other in the same row. */}
-                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 62, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 7, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
-                      <div style={{ fontSize: 21, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
+                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 5, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
                       {t.sub && <div style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>{t.sub}</div>}
                     </div>
                   </div>
@@ -5308,7 +5769,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               </div>
             )
             const Section = ({ children, first }) => (
-              <div style={{ padding: '22px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
+              <div style={{ padding: '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
             )
             return (
             <>
@@ -5918,12 +6379,6 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
             <button onClick={channelReorder.resetOrder} title="Reset column order to default"
               style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
               ↺ Reset columns
-            </button>
-          )}
-          {!isMob && (
-            <button onClick={handleExport}
-              style={{ ...selStyle, marginLeft: 4, fontSize: 11.5, fontWeight: 400, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, fontFamily: 'var(--font)' }}>
-              Export CSV
             </button>
           )}
         </div>
@@ -6562,11 +7017,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
             style={plainHeader
               ? { fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.t1, outline: 'none', fontFamily: 'var(--font)', width: isMob ? 120 : 150 }
               : { fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 120 : 200, outline: 'none' }} />
-          {!isMob && (
-            <button onClick={handleExport} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-              Export CSV
-            </button>
-          )}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 440 }}>
@@ -7312,6 +7762,91 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
   ]
 
+  const handleOverallExport = (type) => {
+    const dateTag = `${rangeStart}_${rangeEnd}`
+
+    if (type === 'channel' || type === 'all') {
+      const rows = sortedCh.map(([ch, v]) => ({
+        'Channel': ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch,
+        'Gross Revenue': v.rev,
+        'Net Revenue': v.netRev ?? '',
+        'Orders': v.orders?.size ?? v.orders ?? 0,
+        'Units': v.aspUnits || v.units || 0,
+        'AOV': v.orders ? Math.round(v.rev / (v.orders?.size ?? v.orders)) : 0,
+        'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+      }))
+      exportCSV(rows, `revenue_by_channel_${dateTag}.csv`)
+    }
+
+    if (type === 'category' || type === 'all') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat, cv]) => {
+        rows.push({
+          'Type': 'Category', 'Category': cat, 'Sub-Category': '', 'SKU': '',
+          'Gross Revenue': cv.rev, 'Net Revenue': cv.excRev,
+          'Units': cv.units, 'Orders': cv.orders,
+          'Cancel Rev': cv.cancelRev, 'RTO Rev': cv.rtoRev, 'CIR Rev': cv.cirRev, 'Return Rev': cv.returnRev,
+        })
+        const scData = subCatMatrixDataAll[cat] || {}
+        Object.entries(scData).forEach(([sc, sv]) => {
+          rows.push({
+            'Type': 'Sub-Category', 'Category': cat, 'Sub-Category': sc, 'SKU': '',
+            'Gross Revenue': sv.rev, 'Net Revenue': sv.excRev,
+            'Units': sv.units, 'Orders': sv.orders,
+            'Cancel Rev': sv.cancelRev, 'RTO Rev': sv.rtoRev, 'CIR Rev': sv.cirRev, 'Return Rev': sv.returnRev,
+          })
+          const skuData = skuChannelMapBySku[cat]?.[sc] || {}
+          Object.entries(skuData).forEach(([sku, skv]) => {
+            rows.push({
+              'Type': 'SKU', 'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': skv.rev, 'Net Revenue': skv.excRev,
+              'Units': skv.units, 'Orders': '',
+              'Cancel Rev': skv.cancelRev, 'RTO Rev': skv.rtoRev, 'CIR Rev': skv.cirRev, 'Return Rev': skv.returnRev,
+            })
+          })
+        })
+      })
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+
+    if (type === 'states' || type === 'all') {
+      const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = stateRows.map(s => {
+        const share = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
+        cum += share
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': s.rev, 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((s.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_states_${dateTag}.csv`)
+    }
+
+    if (type === 'cities' || type === 'all') {
+      const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = cityRows.map(c => {
+        const share = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
+        cum += share
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Revenue': c.rev, 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((c.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_cities_${dateTag}.csv`)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list — same style as Ads tab */}
@@ -7401,8 +7936,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport />
           </div>
         )
       })()}
@@ -7718,7 +8253,7 @@ function TopSubCatBar({ subCatRows }) {
   )
 }
 
-function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note }) {
+function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note, hideExport = false }) {
   const isMob = useIsMobile()
   const [shareMode, setShareMode] = useState('pct') // 'pct' | 'count'
   const table = useSortableTable('rev')
@@ -7805,7 +8340,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
             ))}
           </div>
           {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
-          {!isMob && (
+          {!isMob && !hideExport && (
             <button onClick={handleExport}
               style={{ fontSize: 11.5, fontWeight: 400, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
               Export CSV
@@ -8894,6 +9429,94 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      {/* Store-wise table */}
+      {(() => {
+        const rawStoreRows = ebo.storeRows || []
+        if (!rawStoreRows.length) return null
+        const byStore = {}
+        rawStoreRows.forEach(r => {
+          if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
+          const s = byStore[r.storeName]
+          s.gross += r.gross || 0; s.netRev += r.netRev || 0
+          s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
+          s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
+          s.orders += r.orders || 0; s.units += r.units || 0
+        })
+        const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
+        const tot = rows.reduce((s, r) => ({
+          gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
+          rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
+          orders: s.orders+r.orders, units: s.units+r.units,
+        }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+        const pctOf = (n, d) => d > 0 ? n / d * 100 : 0
+        const thS = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: '1.5px solid ' + C.border, background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+        const thSL = { ...thS, textAlign: 'left' }
+        const tdS = { fontSize: 12, padding: '3px 10px', textAlign: 'right', color: C.t1, borderBottom: '1px solid ' + C.border, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+        const tdSL = { ...tdS, textAlign: 'left', fontFamily: 'inherit', fontWeight: 500 }
+        const totS = { ...tdS, padding: '7px 10px', fontWeight: 700, borderBottom: 'none' }
+        const totSL = { ...totS, textAlign: 'left', fontFamily: 'inherit' }
+        const pctCell = (n, d, threshold) => {
+          if (d <= 0) return <span style={{ color: C.t3 }}>—</span>
+          const v = pctOf(n, d)
+          return <span style={{ color: v <= 0 ? C.t3 : (threshold && v > threshold ? C.red.tx : 'inherit') }}>{v.toFixed(2)}%</span>
+        }
+        return (
+          <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Store-wise Sales · EBO</div>
+              <span style={{ fontSize: 11, color: C.t3 }}>{rows.length} stores</span>
+            </div>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 440 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
+                <colgroup>
+                  {['20%','10%','10%','10%','10%','10%','10%','10%','10%'].map((w,i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr style={{ background: C.acl }}>
+                    <th style={thSL}>Store</th>
+                    <th style={thS}>Orders</th>
+                    <th style={thS}>Units</th>
+                    <th style={thS}>Gross Rev / Share</th>
+                    <th style={thS}>Net Rev</th>
+                    <th style={thS}>Cancel %</th>
+                    <th style={thS}>CIR %</th>
+                    <th style={thS}>Total Return %</th>
+                    <th style={thS}>AOV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.storeName} onMouseEnter={e => e.currentTarget.style.background = C.bg} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={tdSL}>{r.storeName}</td>
+                      <td style={tdS}>{r.orders}</td>
+                      <td style={tdS}>{r.units}</td>
+                      <td style={tdS}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross/tot.gross*100).toFixed(1)}%)</span>}</td>
+                      <td style={tdS}>{fmt(r.netRev)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev, r.gross, 3)}</td>
+                      <td style={tdS}>{pctCell(r.cirRev, r.gross, 9)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev + r.rtoRev + r.returnRev + r.cirRev, r.gross, 20)}</td>
+                      <td style={tdS}>₹{r.orders ? Math.round(r.gross/r.orders).toLocaleString('en-IN') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
+                    <td style={totSL}>Total</td>
+                    <td style={totS}>{tot.orders}</td>
+                    <td style={totS}>{tot.units}</td>
+                    <td style={totS}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td>
+                    <td style={totS}>{fmt(tot.netRev)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev, tot.gross, 3)}</td>
+                    <td style={totS}>{pctCell(tot.cirRev, tot.gross, 9)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev + tot.rtoRev + tot.returnRev + tot.cirRev, tot.gross, 20)}</td>
+                    <td style={totS}>₹{tot.orders ? Math.round(tot.gross/tot.orders).toLocaleString('en-IN') : '—'}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -9140,7 +9763,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     { label: 'GST', value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)), sub: channelView === 'all' ? 'SC + VC GST' : channelView === 'sc' ? 'SC GST' : 'VC GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     { label: 'Daily Avg Net Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                     { label: 'ASP', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}`, sub: channelView === 'all' ? 'Gross rev ÷ units (SC+VC)' : 'Gross rev ÷ units', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalUnits + vcTotalOrderedUnits) ? (scTotalRev + vcTotalOrdered) / (scTotalUnits + vcTotalOrderedUnits) : 0, amzPrevASP) },
-                    ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order count)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
+                    ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
                     ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
@@ -9241,7 +9864,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 325 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                     {isMob ? (
                       <Dropdown value={ovTrendMetric} onChange={setOvTrendMetric} options={[{ id: 'rev', label: 'Revenue' }, { id: 'orders', label: 'Orders' }, { id: 'units', label: 'Units' }]} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, width: 78 }} />
@@ -9259,8 +9882,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                   </div>
                 }>
                   <div style={isMob ? { margin: '0 -18px' } : {}}>
-                  <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
-                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
+                  <ResponsiveContainer width="100%" height={isMob ? 200 : 255} minHeight={180}>
+                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 20, left: isMob ? 18 : 0 }}>
                       <defs>
                         <linearGradient id="amzTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
@@ -9332,11 +9955,11 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                    height={370}
+                    height={325}
                   />
                 })()}
                 {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={370} />
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={325} />
                   : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
               </div>
             )
@@ -9605,7 +10228,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
-          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.25fr 0.9fr 0.85fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
@@ -13066,7 +13689,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 325 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={offTrendMetric} onChange={setOffTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -13142,9 +13765,9 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
-              height={370}
+              height={325}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={370} />
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={325} />
           </div>
         )
       })()}
@@ -13422,6 +14045,839 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
 
+  const [allExportOpen, setAllExportOpen] = useState(false)
+  const [d2cExportOpen, setD2cExportOpen] = useState(false)
+  const [amzExportOpen, setAmzExportOpen] = useState(false)
+  const [fkExportOpen, setFkExportOpen] = useState(false)
+  const [blExportOpen, setBlExportOpen] = useState(false)
+  const [insExportOpen, setInsExportOpen] = useState(false)
+  const [ztExportOpen, setZtExportOpen] = useState(false)
+  const [crExportOpen, setCrExportOpen] = useState(false)
+  const [fcExportOpen, setFcExportOpen] = useState(false)
+  const [mnExportOpen, setMnExportOpen] = useState(false)
+  const [offExportOpen, setOffExportOpen] = useState(false)
+
+  const handleD2CExport = (type) => {
+    setD2cExportOpen(false)
+    const sh = (filteredData || {}).shopify || {}
+    const subCh = filters.subChannel // 'MyFrido', 'Mobility', or null/'' = Overall
+    const subChLabel = subCh === 'MyFrido' ? 'MyFrido' : subCh === 'Mobility' ? 'Mobility' : 'Overall'
+    const matrixSubCh = (subCh === 'MyFrido' || subCh === 'Mobility') ? subCh.toLowerCase() : null
+    const dateTag = `${filters.start}_${filters.end}`
+
+    if (type === 'sku' || type === 'all') {
+      // Date × SKU rows from sh.dailySKU, filtered by subChannel
+      const dailySKU = sh.dailySKU || []
+      // Build sku→{cat,subCat} lookup from skuMap
+      const skuCatLookup = {}
+      Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap_]) => {
+          Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+        })
+      })
+      const filtered = matrixSubCh
+        ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+        : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+      const skuRows = filtered.map(r => {
+        const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+        const gross = r.rev || 0
+        const excGst = r.excRev || 0
+        const cancelRev = r.cancelRev || 0
+        const rtoRev = r.rtoRev || 0
+        const cirRev = r.cirRev || 0
+        const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+        return {
+          'Date': r.date,
+          'Sub Channel': r.subChannel || '',
+          'Category': lookup.cat,
+          'Sub-Category': lookup.sc,
+          'SKU': r.sku || '',
+          'Units': r.units || 0,
+          'Gross Revenue': Math.round(gross),
+          'Net Revenue': Math.round(excGst * retainedShare),
+          'Cancel Rev': Math.round(cancelRev),
+          'RTO Rev': Math.round(rtoRev),
+          'CIR Rev': Math.round(cirRev),
+        }
+      }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+      if (type === 'sku') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_daywise_sku_${dateTag}.xlsx`)
+        return
+      }
+    }
+
+    if (type === 'states' || type === 'all') {
+      const stateMap = sh.stateMap || {}
+      const statePrevMap = sh.statePrevMap || {}
+      const shCityRows = sh.cityRows || []
+      const cityPrevMap = sh.cityPrevMap || {}
+      const stTotal = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+      const stSheet = Object.entries(stateMap)
+        .map(([state, v]) => ({ state, rev: v.rev || 0, orders: v.orders || 0, cities: v.cities || 0 }))
+        .sort((a, b) => b.rev - a.rev)
+        .map(s => ({
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders, 'Cities': s.cities,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+        }))
+      const ctTotal = shCityRows.reduce((s, r) => s + (r.rev || 0), 0)
+      const ctSheet = shCityRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders || 0,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+      }))
+
+      if (type === 'states') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_geo_${dateTag}.xlsx`)
+        return
+      }
+
+      if (type === 'all') {
+        // Build SKU rows again for full export
+        const dailySKU = sh.dailySKU || []
+        const skuCatLookup = {}
+        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap_]) => {
+            Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+          })
+        })
+        const filteredSKU = matrixSubCh
+          ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+          : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+        const skuRows = filteredSKU.map(r => {
+          const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+          const gross = r.rev || 0
+          const excGst = r.excRev || 0
+          const cancelRev = r.cancelRev || 0
+          const rtoRev = r.rtoRev || 0
+          const cirRev = r.cirRev || 0
+          const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+          return {
+            'Date': r.date, 'Sub Channel': r.subChannel || '',
+            'Category': lookup.cat, 'Sub-Category': lookup.sc, 'SKU': r.sku || '',
+            'Units': r.units || 0, 'Gross Revenue': Math.round(gross),
+            'Net Revenue': Math.round(excGst * retainedShare),
+            'Cancel Rev': Math.round(cancelRev), 'RTO Rev': Math.round(rtoRev), 'CIR Rev': Math.round(cirRev),
+          }
+        }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_full_export_${dateTag}.xlsx`)
+      }
+    }
+  }
+
+  const handleAmzExport = (type) => {
+    setAmzExportOpen(false)
+    const amzSC = (filteredData || {}).amzSC || {}
+    const amzVC = (filteredData || {}).amzVC || {}
+    const amzVCMatrix = (filteredData || {}).amzVCMatrix || {}
+    const view = channelView // 'all', 'sc', 'vc'
+    const viewLabel = view === 'sc' ? 'SellerCentral' : view === 'vc' ? 'VendorCentral' : 'Overall'
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildSkuRows = () => {
+      const rows = []
+      if (view !== 'vc') {
+        // SC: skuChannel = {cat: {sc: {sku: {FBA:{...}, MFN:{...}}}}}
+        Object.entries(amzSC.skuChannel || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              const keys = view === 'sc' ? ['FBA','MFN'] : ['FBA','MFN']
+              const agg = keys.reduce((a, k) => {
+                const r = v[k] || {}
+                return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), returnRev: a.returnRev+(r.returnRev||0) }
+              }, { rev:0, excRev:0, units:0, cancelRev:0, rtoRev:0, cirRev:0, returnRev:0 })
+              if (!agg.rev) return
+              const deduct = agg.cancelRev + agg.rtoRev + agg.cirRev + agg.returnRev
+              const retained = agg.rev > 0 ? Math.max(0, 1 - deduct/agg.rev) : 0
+              rows.push({ 'Channel': 'Amazon SC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': agg.units, 'Gross Revenue': Math.round(agg.rev), 'Net Revenue': Math.round(agg.excRev * retained), 'Cancel Rev': Math.round(agg.cancelRev), 'RTO Rev': Math.round(agg.rtoRev), 'CIR Rev': Math.round(agg.cirRev), 'Return Rev': Math.round(agg.returnRev) })
+            })
+          })
+        })
+      }
+      if (view !== 'sc') {
+        // VC: skuData = {cat: {sc: {sku: {rev, excRev, units, returnRev}}}}
+        Object.entries(amzVCMatrix.skuData || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              if (!v.rev) return
+              const retained = v.rev > 0 ? Math.max(0, 1 - (v.returnRev||0)/v.rev) : 0
+              rows.push({ 'Channel': 'Amazon VC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units||0, 'Gross Revenue': Math.round(v.rev||0), 'Net Revenue': Math.round((v.excRev||0) * retained), 'Cancel Rev': 0, 'RTO Rev': 0, 'CIR Rev': 0, 'Return Rev': Math.round(v.returnRev||0) })
+            })
+          })
+        })
+      }
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Geo sheets (SC only) ──
+    const buildGeoSheets = () => {
+      const stTotal = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+      const stSheet = (amzSC.states||[]).map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders||0,
+        'AOV': s.orders ? Math.round(s.rev/s.orders) : 0,
+        'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0,
+      }))
+      const ctTotal = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+      const ctSheet = (amzSC.cities||[]).map(c => ({
+        'City': c.city, 'State': c.state||'',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders||0,
+        'AOV': c.orders ? Math.round(c.rev/c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0,
+      }))
+      const rgTotal = (amzSC.regionRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const rgSheet = (amzSC.regionRows||[]).map(r => ({
+        'Region': r.region, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': rgTotal > 0 ? parseFloat(((r.rev||0)/rgTotal*100).toFixed(2)) : 0,
+      }))
+      const trTotal = (amzSC.tierRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const trSheet = (amzSC.tierRows||[]).map(r => ({
+        'City Tier': r.label || `Tier ${r.tier}`, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': trTotal > 0 ? parseFloat(((r.rev||0)/trTotal*100).toFixed(2)) : 0,
+      }))
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleFKExport = (type) => {
+    setFkExportOpen(false)
+    const fk = (filteredData || {}).flipkart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildFKSkuRows = () => {
+      const rows = []
+      Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap]) => {
+          Object.entries(skuMap).forEach(([sku, v]) => {
+            if (!v.rev) return
+            const gross = v.rev || 0
+            const excRev = v.excRev || 0
+            const returnRev = v.returnRev || 0
+            const cancelRev = v.cancelRev || 0
+            const deduct = cancelRev + returnRev
+            const retained = gross > 0 ? Math.max(0, 1 - deduct / gross) : 0
+            rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Cancel Rev': Math.round(cancelRev), 'Return Rev': Math.round(returnRev) })
+          })
+        })
+      })
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Daily sheet ──
+    const buildFKDailyRows = () => {
+      const dailyMap = {}
+      ;(fk.daily || []).forEach(x => {
+        if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returnRev: 0 }
+        dailyMap[x.date].rev += x.rev || 0
+        dailyMap[x.date].orders += x.orders || 0
+        dailyMap[x.date].units += x.units || 0
+        dailyMap[x.date].returnRev += x.returnRev || 0
+      })
+      return Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Return Rev': Math.round(r.returnRev),
+      }))
+    }
+
+    // ── Geo sheets ──
+    const buildFKGeoSheets = () => {
+      const stTotal = Object.values((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = 0; m[x.state] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const stSheet = Object.entries((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = { rev: 0, orders: 0, returnRev: 0 }; m[x.state].rev += x.rev; m[x.state].orders += x.orders; m[x.state].returnRev += (x.returnRev||0) }); return m })())
+        .map(([state, v]) => ({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((v.rev/stTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const ctTotal = Object.values((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = 0; m[x.city] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const ctSheet = Object.entries((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = { rev: 0, orders: 0, returnRev: 0 }; m[x.city].rev += x.rev; m[x.city].orders += x.orders; m[x.city].returnRev += (x.returnRev||0) }); return m })())
+        .map(([city, v]) => ({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((v.rev/ctTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const rgAgg = {}
+      ;(fk.regions||[]).forEach(x => { if (!rgAgg[x.region]) rgAgg[x.region] = { rev: 0, orders: 0 }; rgAgg[x.region].rev += x.rev; rgAgg[x.region].orders += x.orders })
+      const rgTotal = Object.values(rgAgg).reduce((s,v) => s+v.rev, 0)
+      const rgSheet = Object.entries(rgAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `flipkart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Generic builder helpers ──────────────────────────────────────────────
+  const _buildQcSkuRows = (channel, chKey, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(v.rev || 0), 'Net Revenue (Ex GST)': Math.round(v.excRev || 0) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildQcDailyRows = (daily) =>
+    (daily || []).map(r => ({ 'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0, 'Gross Revenue': Math.round(r.rev || 0), 'Net Revenue (Ex GST)': Math.round(r.excRev || 0) }))
+
+  const _buildQcGeoSheets = (cities, states, stTotal, ctTotal) => {
+    const regAgg = {}, tierAgg = {}
+    ;(cities || []).forEach(c => {
+      if (c.region) { if (!regAgg[c.region]) regAgg[c.region] = { rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders || 0 }
+      if (c.cityTier) { const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders || 0 }
+    })
+    const rgTotal = Object.values(regAgg).reduce((s, v) => s + v.rev, 0)
+    const trTotal = Object.values(tierAgg).reduce((s, v) => s + v.rev, 0)
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    const rgSheet = Object.entries(regAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    const trSheet = Object.entries(tierAgg).map(([tier, v]) => ({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTotal > 0 ? parseFloat((v.rev/trTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    return { stSheet, ctSheet, rgSheet, trSheet }
+  }
+
+  const _buildMktSkuRows = (channel, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          const gross = v.rev || 0, excRev = v.excRev || 0, returnRev = v.returnRev || 0
+          const retained = gross > 0 ? Math.max(0, 1 - returnRev / gross) : 0
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Orders': v.orders || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Return Rev': Math.round(returnRev) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildMktGeoSheets = (states, cities, stTotal, ctTotal) => {
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'AOV': s.orders ? Math.round(s.rev/s.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'AOV': c.orders ? Math.round(c.rev/c.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    return { stSheet, ctSheet }
+  }
+
+  // ── Blinkit ──────────────────────────────────────────────────────────────
+  const handleBlExport = (type) => {
+    setBlExportOpen(false)
+    const bl = (filteredData || {}).blinkit || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = bl.stateTotal || (bl.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = bl.cityTotal || (bl.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(bl.cities, bl.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `blinkit_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(bl.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Instamart ────────────────────────────────────────────────────────────
+  const handleInsExport = (type) => {
+    setInsExportOpen(false)
+    const ins = (filteredData || {}).instamart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = ins.stateTotal || (ins.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = ins.cityTotal || (ins.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(ins.cities, ins.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `instamart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(ins.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Zepto ────────────────────────────────────────────────────────────────
+  const handleZtExport = (type) => {
+    setZtExportOpen(false)
+    const zt = (filteredData || {}).zepto || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = zt.stateTotal || (zt.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = zt.cityTotal || (zt.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(zt.cities, zt.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `zepto_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(zt.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── CRED ─────────────────────────────────────────────────────────────────
+  const handleCrExport = (type) => {
+    setCrExportOpen(false)
+    const cr = (filteredData || {}).cred || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = cr.stateTotal || (cr.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = cr.cityTotal || (cr.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(cr.states, cr.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `cred_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (cr.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── FirstCry ─────────────────────────────────────────────────────────────
+  const handleFcExport = (type) => {
+    setFcExportOpen(false)
+    const fc = (filteredData || {}).firstcry || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = fc.stateTotal || (fc.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = fc.cityTotal || (fc.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(fc.states, fc.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `firstcry_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (fc.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Myntra ───────────────────────────────────────────────────────────────
+  const handleMnExport = (type) => {
+    setMnExportOpen(false)
+    const mn = (filteredData || {}).myntra || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = mn.stateTotal || (mn.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = mn.cityTotal || (mn.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(mn.states, mn.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `myntra_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (mn.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0), 'Return Rev': Math.round(r.returnRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Offline ──────────────────────────────────────────────────────────────
+  const handleOffExport = (type) => {
+    setOffExportOpen(false)
+    const off = (filteredData || {}).offline || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const subLabel = offlineSub !== 'all' ? `_${offlineSub}` : ''
+
+    const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isStockist = sc => sc?.startsWith('Stockist')
+    const filterOffSub = rows => {
+      if (offlineSub === 'all') return rows
+      if (offlineSub === 'b2b') return rows.filter(r => isB2B(r.subChannel))
+      if (offlineSub === 'Stockist') return rows.filter(r => isStockist(r.subChannel))
+      if (offlineSub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
+      if (offlineSub === 'misc') return rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
+      return rows.filter(r => r.subChannel === offlineSub)
+    }
+
+    const buildOffDailyRows = () => {
+      const m = {}
+      filterOffSub(off.daily || []).forEach(d => {
+        if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, cnRev: 0, cnExcRev: 0, orders: 0, units: 0 }
+        m[d.date].rev += d.rev || 0; m[d.date].excRev += d.excRev || 0
+        m[d.date].cnRev += Math.abs(d.cnRev || 0); m[d.date].cnExcRev += Math.abs(d.cnExcRev || 0)
+        m[d.date].orders += d.orders || 0; m[d.date].units += d.units || 0
+      })
+      return Object.values(m).sort((a,b) => a.date.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Credit Notes': Math.round(r.cnRev),
+        'Net Revenue': Math.round((r.excRev || 0) - (r.cnExcRev || 0)),
+      }))
+    }
+
+    const buildOffSkuRows = () => {
+      const m = {}
+      filterOffSub(off.skuRows || []).forEach(x => {
+        const k = `${x.category}::${x.subCategory}::${x.sku}`
+        if (!m[k]) m[k] = { 'Category': x.category, 'Sub-Category': x.subCategory, 'SKU': x.sku, 'Units': 0, 'Orders': 0, 'Gross Revenue': 0, 'Net Revenue (Ex GST)': 0 }
+        m[k]['Units'] += x.units || 0; m[k]['Orders'] += x.orders || 0
+        m[k]['Gross Revenue'] += x.rev || 0; m[k]['Net Revenue (Ex GST)'] += x.excRev || 0
+      })
+      return Object.values(m).map(r => ({ ...r, 'Gross Revenue': Math.round(r['Gross Revenue']), 'Net Revenue (Ex GST)': Math.round(r['Net Revenue (Ex GST)']) })).sort((a,b) => b['Gross Revenue']-a['Gross Revenue'])
+    }
+
+    const buildOffGeoSheets = () => {
+      const stAgg = {}, ctAgg = {}, rgAgg = {}, trAgg = {}
+      filterOffSub(off.stateRows || []).forEach(r => { if (!stAgg[r.state]) stAgg[r.state] = { rev: 0, orders: 0 }; stAgg[r.state].rev += r.rev||0; stAgg[r.state].orders += r.orders||0 })
+      filterOffSub(off.cityRows || []).forEach(r => { if (!ctAgg[r.city]) ctAgg[r.city] = { rev: 0, orders: 0 }; ctAgg[r.city].rev += r.rev||0; ctAgg[r.city].orders += r.orders||0 })
+      filterOffSub(off.regionRows || []).forEach(r => { if (!rgAgg[r.region]) rgAgg[r.region] = { rev: 0, orders: 0 }; rgAgg[r.region].rev += r.rev||0; rgAgg[r.region].orders += r.orders||0 })
+      filterOffSub(off.tierRows || []).forEach(r => { const k = r.label||`Tier ${r.tier}`; if (!trAgg[k]) trAgg[k] = { rev: 0, orders: 0 }; trAgg[k].rev += r.rev||0; trAgg[k].orders += r.orders||0 })
+      const stTot = Object.values(stAgg).reduce((s,v)=>s+v.rev,0)
+      const ctTot = Object.values(ctAgg).reduce((s,v)=>s+v.rev,0)
+      const rgTot = Object.values(rgAgg).reduce((s,v)=>s+v.rev,0)
+      const trTot = Object.values(trAgg).reduce((s,v)=>s+v.rev,0)
+      const stSheet = Object.entries(stAgg).map(([state,v])=>({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': stTot>0?parseFloat((v.rev/stTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const ctSheet = Object.entries(ctAgg).map(([city,v])=>({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': ctTot>0?parseFloat((v.rev/ctTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const rgSheet = Object.entries(rgAgg).map(([region,v])=>({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTot>0?parseFloat((v.rev/rgTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const trSheet = Object.entries(trAgg).map(([tier,v])=>({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTot>0?parseFloat((v.rev/trTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `offline${subLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleAllExport = (type) => {
+    setAllExportOpen(false)
+    const d = filteredData || {}
+    const { chMap = {}, catMap = {}, subCatMap = {}, catPrevMap = {}, subCatPrevMap = {}, stateMap = {}, statePrevMap = {}, stateTotal = 0, cityRows: cRows = [], cityPrevMap = {}, cityTotal = 0, skuRows: allSkuRows = [] } = d
+    const totalRev = Object.values(chMap).reduce((s, v) => s + (v.rev || 0), 0)
+    const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
+    const dateTag = `${filters.start}_${filters.end}`
+
+    const skuChannelMapBySku = {}
+    allSkuRows.forEach(x => {
+      const cat = x.category || 'Others'; const sc = x.subCategory || 'Others'; const sku = x.sku
+      if (!sku) return
+      if (!skuChannelMapBySku[cat]) skuChannelMapBySku[cat] = {}
+      if (!skuChannelMapBySku[cat][sc]) skuChannelMapBySku[cat][sc] = {}
+      if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+      skuChannelMapBySku[cat][sc][sku].rev += x.rev || 0; skuChannelMapBySku[cat][sc][sku].units += x.units || 0
+      skuChannelMapBySku[cat][sc][sku].excRev += x.exc_rev || 0; skuChannelMapBySku[cat][sc][sku].cancelRev += x.cancel_rev || 0
+      skuChannelMapBySku[cat][sc][sku].rtoRev += x.rto_rev || 0; skuChannelMapBySku[cat][sc][sku].cirRev += x.cir_rev || 0
+      skuChannelMapBySku[cat][sc][sku].returnRev += x.return_rev || 0
+    })
+    const catMatrixDataAll = {}
+    Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
+    const subCatMatrixDataAll = {}
+    Object.entries(subCatMap).forEach(([k, v]) => {
+      const [cat, sc] = k.split('::')
+      if (!subCatMatrixDataAll[cat]) subCatMatrixDataAll[cat] = {}
+      subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, returnRev: v.returnRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
+      if (catMatrixDataAll[cat]) { catMatrixDataAll[cat].cancelRev += v.cancelRev || 0; catMatrixDataAll[cat].rtoRev += v.rtoRev || 0; catMatrixDataAll[cat].cirRev += v.cirRev || 0; catMatrixDataAll[cat].returnRev += v.returnRev || 0 }
+    })
+    const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, cities: v.cities?.size ?? 0 })).sort((a, b) => b.rev - a.rev)
+
+    if (type === 'channel' || type === 'all') {
+      const { dailyArr: dArr = [] } = d
+      const knownChannels = sortedCh.map(([ch]) => ch)
+      // Sheet 1: Channel Totals (matches dashboard KPIs exactly)
+      const chUnitsMap = {}
+      dArr.forEach(day => {
+        knownChannels.forEach(ch => {
+          chUnitsMap[ch] = (chUnitsMap[ch] || 0) + (day[`${ch}_u`] || 0)
+        })
+      })
+      const totalRows = []
+      sortedCh.forEach(([ch, v]) => {
+        const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+        const chOrders = v.orders?.size ?? v.orders ?? 0
+        const chUnits = chUnitsMap[ch] || 0
+        totalRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': chLabel,
+          'Gross Revenue': Math.round(v.rev), 'Net Revenue': Math.round(v.netRev ?? v.excRev ?? 0),
+          'Orders': chOrders, 'Units': chUnits,
+          'AOV': chOrders ? Math.round(v.rev / chOrders) : 0,
+          'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+        })
+      })
+      // Sheet 2: Day-wise (date × channel)
+      const dayRows = []
+      ;[...dArr].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(day => {
+        knownChannels.forEach(ch => {
+          const rev = day[ch] || 0
+          if (!rev) return
+          const orders = day[`${ch}_o`] || 0
+          const units = day[`${ch}_u`] || 0
+          const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+          dayRows.push({
+            'Date': day.date, 'Channel': chLabel,
+            'Gross Revenue': Math.round(rev),
+            'Orders': orders, 'Units': units,
+            'AOV': orders ? Math.round(rev / orders) : 0,
+            'Share %': totalRev > 0 ? (rev / totalRev * 100).toFixed(2) : 0,
+          })
+        })
+      })
+      // Sheet 3: Category Breakdown (channel × category × sub-category)
+      const catRows = []
+      const chCatMap = {}
+      allSkuRows.forEach(x => {
+        const ch = x.channel === 'Shopify' ? 'D2C' : x.channel === 'offline_sales' ? 'Offline Sales' : (x.channel || 'Unknown')
+        const cat = x.category || 'Others'
+        const sc = x.subCategory || 'Others'
+        const key = `${ch}||${cat}||${sc}`
+        if (!chCatMap[key]) chCatMap[key] = { ch, cat, sc, rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0 }
+        chCatMap[key].rev += x.rev || 0; chCatMap[key].excRev += x.exc_rev || 0
+        chCatMap[key].units += x.units || 0; chCatMap[key].cancelRev += x.cancel_rev || 0
+        chCatMap[key].rtoRev += x.rto_rev || 0; chCatMap[key].returnRev += x.return_rev || 0
+        chCatMap[key].cirRev += x.cir_rev || 0
+      })
+      Object.values(chCatMap).sort((a, b) => b.rev - a.rev).forEach(r => {
+        const returnTotal = (r.returnRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
+        catRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': r.ch, 'Category': r.cat, 'Sub-Category': r.sc,
+          'Gross Revenue': Math.round(r.rev), 'Net Revenue': Math.round(r.excRev),
+          'Units': r.units,
+          'Share %': totalRev > 0 ? (r.rev / totalRev * 100).toFixed(2) : 0,
+          'Return %': r.rev > 0 ? (returnTotal / r.rev * 100).toFixed(2) : 0,
+          'Cancel %': r.rev > 0 ? (r.cancelRev / r.rev * 100).toFixed(2) : 0,
+          'RTO %': r.rev > 0 ? ((r.rtoRev + r.cirRev) / r.rev * 100).toFixed(2) : 0,
+        })
+      })
+      if (type === 'channel') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+        XLSX.writeFile(wb, `revenue_by_channel_${dateTag}.xlsx`)
+      }
+    }
+    if (type === 'category') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            rows.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+    if (type === 'states' || type === 'cities') {
+      const stTotal = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet = stateRows.map(s => {
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const ctTotal = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet = cRows.map(c => {
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Region': c.region || '', 'City Tier': c.cityTier || '',
+          'Revenue': Math.round(c.rev), 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `geo_report_${dateTag}.xlsx`)
+    }
+    if (type === 'all') {
+      // Build category SKU rows
+      const catRows2 = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            catRows2.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      catRows2.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      // Build states & cities rows
+      const stTotal2 = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet2 = stateRows.map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders,
+        'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+        'Cities': s.cities,
+        'Share (out of 100)': stTotal2 > 0 ? parseFloat((s.rev / stTotal2 * 100).toFixed(2)) : 0,
+      }))
+      const ctTotal2 = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet2 = cRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal2 > 0 ? parseFloat((c.rev / ctTotal2 * 100).toFixed(2)) : 0,
+      }))
+      // All in 1 xlsx, 5 tabs
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows2), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet2), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet2), 'Top Cities')
+      XLSX.writeFile(wb, `full_export_${dateTag}.xlsx`)
+    }
+  }
+
   // Sync D2C subChannel from URL into filters
   useEffect(() => {
     if (activeTab !== 'shopify' || d2cSubChannelFromUrl === null) return
@@ -13505,6 +14961,237 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
                 className={`tool-btn${shopifyView === 'returns' ? ' is-active' : ''}`} aria-pressed={shopifyView === 'returns'}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
+            )}
+            {activeTab === 'shopify' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {d2cExportOpen && (
+                  <>
+                    <div onClick={() => setD2cExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Day-wise & SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleD2CExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'amazon' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {amzExportOpen && (
+                  <>
+                    <div onClick={() => setAmzExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].filter(([key]) => !(key === 'states' && channelView === 'vc')).map(([key, label]) => (
+                        <div key={key} onClick={() => handleAmzExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'flipkart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fkExportOpen && (
+                  <>
+                    <div onClick={() => setFkExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFKExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'blinkit' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {blExportOpen && (
+                  <>
+                    <div onClick={() => setBlExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleBlExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'instamart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {insExportOpen && (
+                  <>
+                    <div onClick={() => setInsExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleInsExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'zepto' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {ztExportOpen && (
+                  <>
+                    <div onClick={() => setZtExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleZtExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'cred' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {crExportOpen && (
+                  <>
+                    <div onClick={() => setCrExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleCrExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'firstcry' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fcExportOpen && (
+                  <>
+                    <div onClick={() => setFcExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFcExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'myntra' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {mnExportOpen && (
+                  <>
+                    <div onClick={() => setMnExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleMnExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'offline' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {offExportOpen && (
+                  <>
+                    <div onClick={() => setOffExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleOffExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'all' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {allExportOpen && (
+                  <>
+                    <div onClick={() => setAllExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['channel','Revenue by Channel'],['category','Category Revenue Matrix'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => { handleAllExport(key); setAllExportOpen(false) }}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             <FilterIconPopover activeCount={activeFilterCount}>
             <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />

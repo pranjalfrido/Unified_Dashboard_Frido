@@ -41,7 +41,7 @@ function getCostPool() {
       idleTimeoutMillis: 30000,
       // Hard ceiling on a single query. Without it, one pathological scan pins a connection
       // indefinitely and every later request starves behind it.
-      statement_timeout: 120000,
+      statement_timeout: 300000,
     })
     // Without this, an idle-client error from the pooler becomes an unhandled
     // rejection that takes the whole server process down.
@@ -1420,26 +1420,21 @@ export default async function handler(req, res) {
         // each vehicle the rate card can audit, so a vehicle with no contracted rate reports
         // a NULL variance rather than a zero that would read as 'billed exactly on rate'.
         () => query(pool, `
-          SELECT vehicle, transporter, freight_type, COUNT(*)::int AS trips,
+          SELECT month_year, vehicle, transporter, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed,
-                 AVG(billed)::float8 AS avg_cost,
-                 COUNT(DISTINCT origin || '>' || dest)::int AS lanes,
-                 COUNT(DISTINCT transporter)::int AS transporters,
                  COUNT(card_rate)::int AS priced_trips,
                  SUM(variance)::float8 AS variance
             FROM public.b2b_trip_priced${pricedWhere}
-           GROUP BY 1, 2, 3 ORDER BY 5 DESC
+           GROUP BY 1, 2, 3, 4 ORDER BY 5 DESC
         `),
         // ── Lane x vehicle detail ──
         // 46 lanes become 112 rows once vehicle is in the key. That is the right grain for a
         // rate comparison — a lane price is meaningless without the vehicle it was quoted
         // for — and the table is searchable, so the extra rows cost nothing to navigate.
         () => query(pool, `
-          SELECT origin || ' → ' || dest AS lane, origin, dest, vehicle, transporter, freight_type,
+          SELECT month_year, origin || ' → ' || dest AS lane, origin, dest, vehicle, transporter, freight_type,
                  COUNT(*)::int AS trips,
-                 COUNT(DISTINCT transporter)::int AS transporters,
                  SUM(billed)::float8 AS cost,
-                 AVG(billed)::float8 AS avg_cost,
                  MIN(billed)::float8 AS min_cost,
                  MAX(billed)::float8 AS max_cost,
                  SUM(card_rate)::float8 AS card_cost,
@@ -1447,7 +1442,7 @@ export default async function handler(req, res) {
                  COUNT(card_rate)::int AS priced_trips
             FROM public.b2b_trip_priced
            WHERE billed > 0${pricedAnd}
-           GROUP BY 1, 2, 3, 4, 5, 6
+           GROUP BY 1, 2, 3, 4, 5, 6, 7
            ORDER BY 9 DESC
         `),
         // ── Rate comparison: same vehicle, different carrier ──

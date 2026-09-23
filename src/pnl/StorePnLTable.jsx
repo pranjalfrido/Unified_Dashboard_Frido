@@ -47,20 +47,24 @@ export default function StorePnLTable({ rows = [] }) {
   }), { gross: 0, excRev: 0, netRev: 0, units: 0, cogs: 0, anyCogs: false, gm: 0, anyGm: false, snd: 0, anySnd: false, cm1: 0, anyCm1: false, spend: 0, cm2: 0, anyCm2: false, rent: 0, utilities: 0, employeeCost: 0, cam: 0, software: 0, volumetricRent: 0, totalFixedCosts: 0, ebitda: 0, anyEbitda: false })
 
   const handleExport = () => {
+    const ri = v => v != null ? Math.round(v) : ''
+    const p1 = (n, d) => { const v = pctOf(n, d); return v != null ? +v.toFixed(1) : '' }
+    const p2 = (n, d) => { const v = pctOf(n, d); return v != null ? +v.toFixed(2) : '' }
     const csvRows = rows.map(r => ({
       Store: r.storeName,
-      'Gross Rev (Inc GST)': Math.round(r.gross), 'Gross Rev (Ex GST)': Math.round(r.excRev),
-      Units: r.units, 'Net Revenue': Math.round(r.netRev),
-      COGS: r.cogs != null ? Math.round(r.cogs) : '', 'GM %': pctOf(r.gm, r.netRev) != null ? +pctOf(r.gm, r.netRev).toFixed(1) : '',
-      'SnD Cost': r.snd != null ? Math.round(r.snd) : '', 'SnD %': pctOf(r.snd, r.netRev) != null ? +pctOf(r.snd, r.netRev).toFixed(1) : '',
-      CM1: r.cm1 != null ? Math.round(r.cm1) : '', 'CM1 %': pctOf(r.cm1, r.netRev) != null ? +pctOf(r.cm1, r.netRev).toFixed(1) : '',
-      'Marketing Spend': Math.round(r.spend), 'Spend %': +(pctOf(r.spend, r.netRev) ?? 0).toFixed(2),
-      CM2: r.cm2 != null ? Math.round(r.cm2) : '', 'CM2 %': pctOf(r.cm2, r.netRev) != null ? +pctOf(r.cm2, r.netRev).toFixed(1) : '',
-      Rent: Math.round(r.fixedCosts.rent), 'Employee Cost': Math.round(r.fixedCosts.employeeCost),
-      CAM: Math.round(r.fixedCosts.cam), Utilities: Math.round(r.fixedCosts.utilities),
-      Software: Math.round(r.fixedCosts.software), 'Volumetric Rent': Math.round(r.fixedCosts.volumetricRent),
-      'Total Fixed Costs': Math.round(r.totalFixedCosts),
-      EBITDA: r.ebitda != null ? Math.round(r.ebitda) : '', 'EBITDA %': r.ebitda != null && r.netRev > MIN_REV_FOR_RATIOS ? +(r.ebitda / r.netRev * 100).toFixed(1) : '',
+      'Gross Rev (Inc GST)': ri(r.gross), 'Gross Rev (Ex GST)': ri(r.excRev),
+      Units: r.units, 'Net Revenue': ri(r.netRev),
+      COGS: r.cogs != null ? ri(r.cogs) : '',
+      'Gross Margin': r.gm != null ? ri(r.gm) : '', 'GM %': p1(r.gm, r.netRev),
+      'SnD Cost': r.snd != null ? ri(r.snd) : '', 'SnD %': p1(r.snd, r.netRev),
+      CM1: r.cm1 != null ? ri(r.cm1) : '', 'CM1 %': p1(r.cm1, r.netRev),
+      'Marketing Spend': ri(r.spend), 'Spend %': p2(r.spend, r.netRev),
+      CM2: r.cm2 != null ? ri(r.cm2) : '', 'CM2 %': p1(r.cm2, r.netRev),
+      Rent: ri(r.fixedCosts.rent), 'Employee Cost': ri(r.fixedCosts.employeeCost),
+      CAM: ri(r.fixedCosts.cam), Utilities: ri(r.fixedCosts.utilities),
+      Software: ri(r.fixedCosts.software), 'Volumetric Rent': ri(r.fixedCosts.volumetricRent),
+      'Total Fixed Costs': ri(r.totalFixedCosts),
+      EBITDA: r.ebitda != null ? ri(r.ebitda) : '', 'EBITDA %': r.ebitda != null ? p1(r.ebitda, r.netRev) : '',
     }))
     exportCSV(csvRows, 'store_pnl_ebo.csv')
   }

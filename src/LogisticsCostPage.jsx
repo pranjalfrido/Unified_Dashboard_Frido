@@ -512,7 +512,7 @@ function ExportMenu({ items, suffix }) {
           padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
           background: C.acc, color: C.onAcc,
           border: `1px solid ${C.acm}`,
-          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.06)',
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : 'none',
           transition: 'box-shadow .15s',
         }}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.onAcc} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -674,7 +674,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   )
 }
 
-function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
+function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -706,40 +706,37 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
       ? `last ${win.count} months`
       : `${win.count} of ${win.total}`
 
+  const activePreset = win.kind === 'default' ? win.count : (win.kind === 'all' || win.kind === 'all-short') ? 999 : null
+
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={() => setOpen(o => !o)}
-        title={win.kind === 'all-short'
-          ? `The ledger holds ${win.total} month(s), fewer than the ${defaultCount}-month default. Every one is included. Click to choose months.`
-          : win.kind === 'all'
-            ? `All ${win.total} uploaded months are included. Click to choose months.`
-            : win.kind === 'default'
-              ? `Default view: the most recent ${win.count} of ${win.total} uploaded months. Click to choose months.`
-              : `${win.count} of ${win.total} months selected. Click to change.`}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 0, padding: 0,
-          background: C.card, border: `1px solid ${open ? C.acm : C.border2}`,
-          borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
-          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.04)',
-          cursor: 'pointer', fontFamily: 'var(--font)', transition: 'box-shadow .15s, border-color .15s',
-        }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <rect x="3" y="5" width="18" height="16" rx="2" />
-            <path d="M8 3v4M16 3v4M3 11h18" />
-          </svg>
-          <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
-            {win.range}
-          </strong>
-        </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {/* Button 1: date range — same style as chart toggle buttons */}
         <span style={{
-          fontSize: 10.5, color: C.t2, background: C.bg, padding: '5px 9px',
-          borderLeft: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          fontSize: 10.5, fontWeight: 500, color: C.t1, fontFamily: 'var(--font)',
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 6,
+          padding: '4px 9px', whiteSpace: 'nowrap',
         }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" />
+          </svg>
+          {win.range}
+        </span>
+        {/* Button 2: preset dropdown — active state matches selected chart button */}
+        <button onClick={() => setOpen(o => !o)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 10.5, fontWeight: open ? 700 : 500, color: C.t1, fontFamily: 'var(--font)',
+            background: open ? C.acl : C.card,
+            border: `1px solid ${open ? C.acm : C.border2}`, borderRadius: 6,
+            padding: '4px 9px', whiteSpace: 'nowrap', cursor: 'pointer',
+            transition: 'background .15s, border-color .15s',
+          }}>
           {suffix}
           <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
-        </span>
-      </button>
+        </button>
+      </div>
 
       {open && (
         <div style={{
@@ -747,8 +744,6 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
           background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
           boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
         }}>
-          {/* Shortcuts first: reaching the 6-month default or the full ledger by hand would
-              otherwise mean several clicks. */}
           <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
             <button onClick={() => { onRecent(); setOpen(false) }}
               style={{
@@ -860,6 +855,7 @@ function SegPair({ options, value, onChange }) {
 function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [staged, setStaged] = useState([])
   const ref = useRef(null)
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
@@ -870,19 +866,25 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const list = options || []
   const sel = multi ? (selected || []) : []
   const active = multi ? sel.length > 0 : !!value
-  // Search only appears once the list is long enough to need it.
   const searchable = list.length > 8
   const filtered = list.filter(o => o.toLowerCase().includes(search.toLowerCase())).slice(0, 200)
+  const allSelected = filtered.length > 0 && filtered.every(o => staged.includes(o))
 
   const summary = multi
     ? (sel.length === 0 ? label : sel.length === 1 ? sel[0] : `${label} · ${sel.length}`)
     : (value || label)
 
-  const isOn = o => (multi ? sel.includes(o) : o === value)
+  const handleOpen = () => { setStaged([...sel]); setSearch(''); setOpen(true) }
+  const handleApply = () => { onChange(staged.length ? staged : null); setOpen(false); setSearch('') }
+  const handleClear = () => setStaged([])
+  const toggleStaged = o => setStaged(s => s.includes(o) ? s.filter(x => x !== o) : [...s, o])
+  const toggleAll = () => setStaged(s => allSelected ? s.filter(x => !filtered.includes(x)) : [...new Set([...s, ...filtered])])
+
+  const isOn = o => multi ? staged.includes(o) : o === value
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={handleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
           border: `1.5px solid ${active ? C.acm : C.border2}`, borderRadius: 8,
@@ -894,22 +896,32 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.14)', minWidth: 196, width: '100%', maxHeight: 300, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
+        }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
               <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
                 style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
             </div>
           )}
-          <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1 }}>
-            <div onClick={() => { onChange(null); if (!multi) setOpen(false); setSearch('') }}
-              style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
-              All {label}
-            </div>
+          {multi && filtered.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 7px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.t1, borderBottom: `1px solid ${C.border}` }}>
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ accentColor: C.acm }} />
+              <span>Select all</span>
+            </label>
+          )}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {!multi && (
+              <div onClick={() => { onChange(null); setOpen(false); setSearch('') }}
+                style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
+                All {label}
+              </div>
+            )}
             {filtered.map(o => {
               const on = isOn(o)
               return (
-                <div key={o} onClick={() => { onChange(o); if (!multi) { setOpen(false); setSearch('') } }}
+                <div key={o} onClick={() => { if (multi) toggleStaged(o); else { onChange(o); setOpen(false); setSearch('') } }}
                   style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: on ? C.t1 : C.t2, fontWeight: on ? 700 : 400, background: on ? C.acl : 'transparent' }}
                   onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
                   onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
@@ -924,6 +936,12 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
             })}
             {!filtered.length && <div style={{ padding: '10px 12px', fontSize: 11.5, color: C.t3 }}>No match</div>}
           </div>
+          {multi && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <button onClick={handleClear} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500 }}>Clear</button>
+              <button onClick={handleApply} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: 'none', background: C.acm, color: '#1a1400', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 700 }}>Apply</button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1850,15 +1868,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // single function keeps the rule in one place rather than repeated in six memos.
   const b2bPick = useMemo(() => {
     const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
-    if (!tr.length && !vh.length && !ft.length) return null
+    const mo = filters.months || []
+    if (!tr.length && !vh.length && !ft.length && !mo.length) return null
     const T = tr.length ? new Set(tr) : null
     const V = vh.length ? new Set(vh) : null
     const F = ft.length ? new Set(ft) : null
+    const M = mo.length ? new Set(mo) : null
     // An empty selection in a row means ALL of that row, matching every other slicer here.
     return r => (!T || T.has(r.transporter))
       && (!V || V.has(r.vehicle))
       && (!F || F.has(r.freight_type))
-  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes])
+      && (!M || M.has(r.month_year || r.month))
+  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes, filters.months])
 
   const b2bTransRows = useMemo(() => {
     if (!b2b) return []
@@ -1884,20 +1905,51 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   const b2bTypeRows = useMemo(() => {
     if (!b2b) return []
-    const total = Number(b2b.totals.cost) || 0
-    return b2b.types.map(t => ({
-      key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
-      avgCost: Number(t.avg_cost) || 0,
-      share: total ? (Number(t.cost) / total) * 100 : 0,
+    // Re-aggregate from varMonths so transporter/vehicle/month slicers apply.
+    // Falls back to the static b2b.types when no filters are active (b2bPick === null).
+    if (!b2bPick) {
+      const total = Number(b2b.totals?.cost) || 0
+      return (b2b.types || []).map(t => ({
+        key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
+        avgCost: Number(t.avg_cost) || 0,
+        share: total ? (Number(t.cost) / total) * 100 : 0,
+      })).sort((a, b2) => b2.cost - a.cost)
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.freight_type || 'Unknown'
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s, r) => s + r.cost, 0)
+    return rows.map(r => ({
+      key: r.key, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      share: total ? (r.cost / total) * 100 : 0,
     })).sort((a, b2) => b2.cost - a.cost)
   }, [b2b, b2bPick])
 
   const b2bMonthRows = useMemo(() => {
     if (!b2b) return []
-    return b2b.months.map(m => ({
-      month: monthLabel(m.key), raw: m.key,
-      trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
-    }))
+    // Re-aggregate from varMonths so transporter/vehicle/freight slicers apply.
+    if (!b2bPick) {
+      return (b2b.months || []).map(m => ({
+        month: monthLabel(m.key), raw: m.key,
+        trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
+      }))
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    return [...by.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
   }, [b2b, b2bPick])
 
   // Freight as a share of goods value — the only figure this tab still takes from the
@@ -1939,21 +1991,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     for (const v of b2b.vehicles || []) {
       if (b2bPick && !b2bPick(v)) continue
       const k = v.vehicle || '—'
-      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: 0, carriers: new Set(), priced: 0, variance: 0 })
+      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: new Set(), carriers: new Set(), priced: 0, variance: 0 })
       const a = by.get(k)
       a.trips += num(v.trips); a.cost += num(v.billed)
-      // Best available without the raw rows: the max lane count any single transporter shows
-      // on this vehicle. Summing would over-count shared lanes; max never overstates.
-      a.lanes = Math.max(a.lanes, num(v.lanes))
       a.carriers.add(v.transporter)
       a.priced += num(v.priced_trips); a.variance += num(v.variance)
+    }
+    // Count distinct lanes per vehicle from the lane-detail rows (same filter applied).
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const a = by.get(r.vehicle || '—')
+      if (a) a.lanes.add(r.lane)
     }
     const rows = [...by.values()]
     const total = rows.reduce((s, r) => s + r.cost, 0)
     return rows.map(r => ({
       vehicle: r.vehicle, trips: r.trips, cost: r.cost,
       avgCost: r.trips ? r.cost / r.trips : 0,
-      lanes: r.lanes, transporters: r.carriers.size,
+      lanes: r.lanes.size, transporters: r.carriers.size,
       variance: r.priced ? r.variance : null,
       share: total ? (r.cost / total) * 100 : 0,
     })).sort((a, b2) => b2.cost - a.cost)
@@ -2759,16 +2814,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     if (!active || !payload?.length) return null
                     const r = payload[0].payload
                     return (
-                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>
-                          <span style={{ color: C.acm, fontWeight: 700, fontSize: 12 }}>■</span> {fmt(r.total)}
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)', minWidth: 160 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 7 }}>{label}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 5, borderBottom: `1px solid ${C.border2}`, paddingBottom: 5 }}>
+                          <span><span style={{ color: C.acm, fontWeight: 700 }}>■</span> Total</span>
+                          <span>{fmt(r.total)}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: C.t2, marginTop: 4 }}>
-                          <span style={{ color: SER.blue, fontWeight: 700 }}>■</span> {fmt(r.b2c)} parcel
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
+                          <span><span style={{ color: SER.blue, fontWeight: 700 }}>■</span> B2C</span>
+                          <span>{fmt(r.b2c)}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: C.t2 }}>
-                          <span style={{ color: SER.orange, fontWeight: 700 }}>■</span> {fmt(r.b2b)} freight
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
+                          <span><span style={{ color: SER.orange, fontWeight: 700 }}>■</span> FTL/PTL</span>
+                          <span>{fmt(r.b2b)}</span>
                         </div>
                       </div>
                     )
@@ -4605,6 +4663,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 })}
                 onAll={() => setOne('months', [])}
                 onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
+                onOne={n => setOne('months', (scopeMonths).slice(-n))}
                 defaultCount={DEFAULT_MONTH_COUNT}
               />
               {/* Export sits to the RIGHT of the chip: the chip says what period is in

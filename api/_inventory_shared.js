@@ -18,7 +18,13 @@ export function sortByLocationOrder(items, getLocation = x => x) {
   })
 }
 
-// ── Reference lookups (SharePoint Excel exports, pending GCP sync) ──────────
+// ── Reference lookups ────────────────────────────────────────────────────
+// Sourced from BigQuery `inventory_sales_allocation` (facility_master, state_region_nearest_wh,
+// uc_channel_desc), synced into Supabase by export_to_supabase.mjs. Callers with a live DB
+// connection (generate-inv-cache.mjs, api/inventory.js) should query Supabase and pass the rows
+// in directly. loadRefData() below reads the local JSON snapshot in api/data/ purely as a
+// fallback for contexts without a DB connection — that snapshot is not kept in sync and should
+// not be relied on as the source of truth.
 let _facilityRows, _channelRows, _regionRows
 export function loadRefData() {
   if (!_facilityRows) _facilityRows = JSON.parse(readFileSync(join(DATA_DIR, 'facility_master.json'), 'utf8'))
@@ -27,8 +33,8 @@ export function loadRefData() {
   return { facilityRows: _facilityRows, channelRows: _channelRows, regionRows: _regionRows }
 }
 
-export function buildFacilityMaps() {
-  const { facilityRows, regionRows, channelRows } = loadRefData()
+export function buildFacilityMaps(refRows) {
+  const { facilityRows, regionRows, channelRows } = refRows || loadRefData()
   const facilityToLocation = new Map()
   const facilityToType = new Map()
   const facilityToStatus = new Map()
@@ -38,7 +44,7 @@ export function buildFacilityMaps() {
     if (!r.Facility || !r.Location) continue
     facilityToLocation.set(r.Facility, r.Location)
     facilityToType.set(r.Facility, r.FacilityType || 'Regular')
-    facilityToStatus.set(r.Facility, r['FCs Status for Invt'] || 'Not Live')
+    facilityToStatus.set(r.Facility, r.FCs_Status_for_Invt || r['FCs Status for Invt'] || 'Not Live')
     facilityToDisplayName.set(r.Facility, r.Facility2 || r.Facility)
     if (!locationToFacilities.has(r.Location)) locationToFacilities.set(r.Location, [])
     locationToFacilities.get(r.Location).push(r.Facility)
@@ -202,22 +208,38 @@ export const isPseudoSku = sku => {
 // Facility) — taking the latest by Updated/_daton_batch_runtime — and must select
 // Inventory_st/InventoryBlocked_st (cast to numeric, aliased to the base names) —
 // those are where live data actually is on this table today. See api/inventory.js.
+//
+// Vadgaon_OPS is a special case: its RTD/Raw split is computed upstream (in
+// refresh_inventory_snapshot_hourly.mjs) directly from Shelfwise shelf names — any shelf
+// containing "RTD" is RTD (RTD-LANE-* included — RTD wins the tie), any shelf containing
+// "LANE" (and not "RTD") is Raw, and Total = RTD + Raw only (PKG/RTN/QC-prefixed shelves
+// are deliberately excluded from Vadgaon_OPS's total, unlike every other facility). Those
+// pre-computed sums arrive as row.RtdInvt/row.RawInvt and are used as-is here — the
+// pack-qty/raw-SKU-text heuristic below does not apply to this facility.
 export function computeRowInventory(row) {
+  if (row.Facility === 'Vadgaon_OPS') {
+    const rtdInvt = Number(row.RtdInvt || 0)
+    const rawInvt = Number(row.RawInvt || 0)
+    const rawBlockedInvt = Number(row.RawBlockedInvt || 0)
+    return { totalInventory: rtdInvt + rawInvt + rawBlockedInvt, rawInvt, rawBlockedInvt, rtdInvt, packQty: 1 }
+  }
+
   const inv2 = Number(row.Inventory || 0)
   const blocked2 = Number(row.InventoryBlocked || 0)
   const packQty = parsePackQty(row.ItemSkuCode)
   const isRawCategory = isRawSkuText(row.ItemSkuCode) || String(row.ItemSkuCode || '').toLowerCase() === 'raw'
-  // Available and blocked are computed separately (both scaled by Pack_Qty for raw SKUs)
-  // so callers can report "Blocked Raw Inventory" on its own rather than folded into RAW.
-  const availableInventory = isRawCategory ? packQty * inv2 : inv2
-  const blockedInventory = isRawCategory ? packQty * blocked2 : 0
-  const totalInventory = availableInventory + blockedInventory
+  const isRawFacilityRow = row.Facility === 'myfrido-Vadgaon_ITEM' || packQty > 1 || isRawCategory
 
-  const isRawFacilityRow = row.Facility === 'myfrido-Vadgaon_ITEM' || packQty > 1 || isRawSkuText(row.ItemSkuCode)
-  const rawInvt = isRawFacilityRow ? availableInventory : 0
-  const rawBlockedInvt = isRawFacilityRow ? blockedInventory : 0
-  const rtdInvt = isRawFacilityRow ? 0 : totalInventory
-  return { totalInventory, rawInvt, rawBlockedInvt, rtdInvt, packQty }
+  if (isRawFacilityRow) {
+    // Raw rows: scale both available and blocked by Pack_Qty
+    const rawInvt = packQty * inv2
+    const rawBlockedInvt = packQty * blocked2
+    return { totalInventory: rawInvt + rawBlockedInvt, rawInvt, rawBlockedInvt, rtdInvt: 0, packQty }
+  } else {
+    // RTD rows: RTD = Inventory only (InventoryBlocked is NOT included in RTD)
+    // Total = Inventory + InventoryBlocked (blocked portion sits in Total but not RTD)
+    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: inv2, packQty }
+  }
 }
 
 // RTD Level — matches the original PBIX RTDLevelFilter: RTD_Invt ÷ Avg_Sale < 2 → "Low", else "Sufficient".
