@@ -1225,7 +1225,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube, fixedVeh, fixedVehMonths] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1494,6 +1494,24 @@ export default async function handler(req, res) {
             FROM l
         `),
         wrQ, gridQ, trendQ, disputesQ, slabQ, SUBCUBE_Q,
+        // ── Fixed vehicle rentals ──
+        // Vehicles on a standing monthly charge rather than per-trip billing. Reported
+        // separately from freight: there are no trips or lanes to divide by, so folding
+        // this into the freight total would distort every per-trip figure on the tab.
+        // .catch() keeps the tab working before the table is created.
+        () => query(pool, `
+          SELECT COUNT(*)::int AS vehicles,
+                 COUNT(DISTINCT vehicle_number)::int AS distinct_vehicles,
+                 COUNT(DISTINCT month_year)::int AS months,
+                 COALESCE(SUM(cost), 0)::float8 AS cost,
+                 COALESCE(SUM(agreed_km), 0)::float8 AS agreed_km
+            FROM public.logistics_fixed_vehicles
+        `).catch(() => ({ rows: [{ vehicles: 0, distinct_vehicles: 0, months: 0, cost: 0, agreed_km: 0 }] })),
+        () => query(pool, `
+          SELECT month_year, COUNT(*)::int AS vehicles, COALESCE(SUM(cost), 0)::float8 AS cost
+            FROM public.logistics_fixed_vehicles
+           GROUP BY 1 ORDER BY 1
+        `).catch(() => ({ rows: [] })),
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -1556,6 +1574,8 @@ export default async function handler(req, res) {
         
         
         b2bSole: b2bSole.rows[0] || null,
+        fixedVeh: fixedVeh.rows[0] || null,
+        fixedVehMonths: fixedVehMonths.rows,
       }
       })()
       try { await refCacheBuild } finally { refCacheBuild = null }
@@ -1613,6 +1633,8 @@ export default async function handler(req, res) {
     
     
     out.b2bSole = refCache.b2bSole
+    out.fixedVeh = refCache.fixedVeh
+    out.fixedVehMonths = refCache.fixedVehMonths
 
     // Store before responding. Claims are read fresh every request elsewhere, so a cached
     // body would not hide a newly filed claim from the register.

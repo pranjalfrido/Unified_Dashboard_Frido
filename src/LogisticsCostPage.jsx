@@ -1267,6 +1267,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           laneVeh: j.b2bLaneVeh || [],
           rateCmp: j.b2bRateCmp || [],
           sole: j.b2bSole || null,
+          // Vehicles on a standing monthly charge. Separate from totals on purpose —
+          // these have no trips or lanes, so they must not reach any per-trip figure.
+          fixedVeh: j.fixedVeh || null,
+          fixedVehMonths: j.fixedVehMonths || [],
         })
         if (j.options) {
           setOpts({
@@ -1866,6 +1870,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // refCache, which is filter-independent by design (filtering there would leak one
   // request's selection into the next), so narrowing happens on the client. Returning a
   // single function keeps the rule in one place rather than repeated in six memos.
+  const fixedVeh = b2b?.fixedVeh || null
   const b2bPick = useMemo(() => {
     const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
     const mo = filters.months || []
@@ -2729,6 +2734,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               sub={`${(overall.total ? (overall.b2cCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
             <Tile label="FTL/PTL Freight Cost" value={fmt(overall.b2bCost)}
               sub={`${(overall.total ? (overall.b2bCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
+            {/* Reported alongside freight rather than added to it: these vehicles are
+                retained monthly whether they run or not, so the cost belongs to the
+                period, not to any trip. Folding it into the freight total would make
+                every cost-per-trip and lane rate on the page wrong. */}
+            <Tile label="Rental Fixed Vehicle"
+              value={fixedVeh && fixedVeh.cost > 0 ? fmt(fixedVeh.cost) : '—'}
+              sub={fixedVeh && fixedVeh.months > 0
+                ? `${fmt(fixedVeh.cost / fixedVeh.months)}/month · ${fmtN(fixedVeh.distinct_vehicles)} vehicles`
+                : 'no fixed rentals uploaded'} />
             {/* The hero already reports total cost, so this card carries the carrier count
                 the three removed tiles held — value is the total, sub is the split. */}
             <Tile label="Total Carriers" value={fmtN(overall.carriers)}
@@ -2987,10 +3001,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <Tile label="Avg Cost / Trip"
               value={'₹' + Math.round(b2bHead ? b2bHead.avgTrip : b2b.totals.avg_cost).toLocaleString('en-IN')}
               sub={b2bHead ? `across ${fmtN(b2bHead.lanes)} lanes` : null} />
-            <Tile label="Trips / Month" value={b2bHead ? fmtN(b2bHead.tripsPerMonth) : '—'}
-              sub={b2bHead && b2bHead.momTrips != null
-                ? `${b2bHead.momTrips > 0 ? '+' : ''}${b2bHead.momTrips.toFixed(1)}% vs prior period`
-                : 'average run rate'} />
+            <Tile label="Rental Fixed Vehicle"
+              value={fixedVeh && fixedVeh.months > 0
+                ? fmt(fixedVeh.cost / fixedVeh.months)
+                : '—'}
+              sub={fixedVeh && fixedVeh.vehicles > 0
+                ? `${fmtN(fixedVeh.distinct_vehicles)} vehicles · ${fmt(fixedVeh.cost)} total`
+                : 'no fixed rentals uploaded'} />
             <Tile label="Vehicle Types" value={fmtN(b2bVehicleRows.length)}
               sub={b2bVehicleRows[0] ? `${b2bVehicleRows[0].vehicle} leads · ${fmt(b2bVehicleRows[0].cost)}` : null} />
             <Tile label="Dearest Vehicle"

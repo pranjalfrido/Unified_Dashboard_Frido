@@ -10,7 +10,7 @@ import { C as BASE_C } from "./utils.js";
 const FORMATS = {
   b2b: {
     key: "b2b",
-    label: "B2B · Freight",
+    label: "FTL/PTL",
     icon: Truck,
     table: "logistics_invoices_b2b",
     templateFile: "b2b_courier_invoice_template.xlsx",
@@ -122,6 +122,36 @@ const FORMATS = {
       "month_year must be YYYY-MM (e.g. 2026-07).",
       "total_cost is computed as operation_fee + rental_fee + other_fee when left blank.",
       "Leave a fee blank or 0 if the partner did not bill it that month.",
+    ],
+  },
+  fixedVehicles: {
+    key: "fixedVehicles",
+    label: "FTL/PTL · Rental Fixed Vehicle",
+    parent: "b2b",
+    icon: Truck,
+    table: "logistics_fixed_vehicles",
+    templateFile: "fixed_vehicle_template.xlsx",
+    exportPrefix: "fixed_vehicle_rentals",
+    totalParts: [],
+    totalField: "cost",
+    uniqueKey: "month_year,vehicle_number",
+    fields: [
+      { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-04", desc: "Month this rental covers" },
+      { key: "location", label: "location", type: "text", req: true, w: 170, ex: "Talwade, Pune", desc: "Site the vehicle is stationed at" },
+      { key: "transport_name", label: "transport_name", type: "text", req: true, w: 190, ex: "RN Transport", desc: "Transporter the vehicle is rented from" },
+      { key: "vehicle_type", label: "vehicle_type", type: "text", w: 130, ex: "Pickup", desc: "Type/size of vehicle" },
+      { key: "vehicle_number", label: "vehicle_number", type: "text", req: true, w: 160, ex: "MH 14 JL 6920", desc: "Registration number" },
+      { key: "agreed_km", label: "agreed_km", type: "num", w: 140, ex: "3000", desc: "Kilometres included in the monthly charge" },
+      { key: "cost", label: "cost", type: "num", req: true, w: 130, ex: "55000", desc: "Fixed monthly charge for this vehicle" },
+      { key: "remarks", label: "remarks", type: "text", w: 200, ex: "Contract renewed Apr'26", desc: "Free-text note" },
+    ],
+    searchKeys: ["location", "transport_name", "vehicle_number", "vehicle_type", "month_year"],
+    notes: [
+      "One row = one vehicle's fixed charge for one month.",
+      "Re-uploading the same month_year + vehicle_number UPDATES that row rather than adding a duplicate.",
+      "month_year must be YYYY-MM (e.g. 2026-04).",
+      "cost is the standing monthly charge, not a per-trip rate — it is reported separately from FTL/PTL freight and never divided by trips.",
+      "agreed_km is the distance included in that charge, for tracking overruns.",
     ],
   },
 };
@@ -741,8 +771,8 @@ export default function LogisticsLedgerPage() {
 
       {/* Format tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-        {Object.values(FORMATS).map((f) => {
-          const Ico = f.icon; const active = f.key === tab;
+        {Object.values(FORMATS).filter((f) => !f.parent).map((f) => {
+          const Ico = f.icon; const active = f.key === tab || FORMATS[tab]?.parent === f.key;
           return (
             <button key={f.key} onClick={() => setTab(f.key)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', borderBottom: `2px solid ${active ? C.accent : 'transparent'}`, padding: '8px 14px', fontSize: 13, fontWeight: 600, color: active ? C.accent : C.t2, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -752,6 +782,29 @@ export default function LogisticsLedgerPage() {
         })}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: C.t3, fontFamily: 'monospace', paddingBottom: 8 }}>{fmt.table}</span>
       </div>
+
+      {/* Sub-views of the active ledger. FTL/PTL carries two: the per-trip freight
+          ledger, and vehicles on a standing monthly charge. Kept apart because a
+          rental has one location rather than a lane and no trips to divide by, so its
+          cost must never enter the per-trip or per-lane freight figures. */}
+      {(() => {
+        const parentKey = FORMATS[tab]?.parent || tab
+        const views = Object.values(FORMATS).filter((f) => f.key === parentKey || f.parent === parentKey)
+        if (views.length < 2) return null
+        return (
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {views.map((v) => {
+              const on = v.key === tab
+              return (
+                <button key={v.key} onClick={() => setTab(v.key)}
+                  className={`tool-btn${on ? " is-active" : ""}`} aria-pressed={on}>
+                  {v.parent ? "Rental Fixed Vehicle" : "Freight (per trip)"}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -828,7 +881,9 @@ export default function LogisticsLedgerPage() {
       <p style={{ fontSize: 11.5, color: C.t3, marginTop: 12, lineHeight: 1.6 }}>
         <strong style={{ color: C.t2 }}>{fmt.label}</strong> ·{' '}
         {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{keyLabel(fmt)}</strong>. Re-uploading an existing one <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
-        <span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.
+        {fmt.totalParts.length > 0
+          ? <><span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.</>
+          : <>Cost is the standing monthly charge, entered directly.</>}
       </p>
     </div>
   );
