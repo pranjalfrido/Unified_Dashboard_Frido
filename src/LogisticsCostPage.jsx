@@ -2734,15 +2734,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               sub={`${(overall.total ? (overall.b2cCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
             <Tile label="FTL/PTL Freight Cost" value={fmt(overall.b2bCost)}
               sub={`${(overall.total ? (overall.b2bCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
-            {/* Reported alongside freight rather than added to it: these vehicles are
-                retained monthly whether they run or not, so the cost belongs to the
-                period, not to any trip. Folding it into the freight total would make
-                every cost-per-trip and lane rate on the page wrong. */}
-            <Tile label="Rental Fixed Vehicle"
-              value={fixedVeh && fixedVeh.cost > 0 ? fmt(fixedVeh.cost) : '—'}
-              sub={fixedVeh && fixedVeh.months > 0
-                ? `${fmt(fixedVeh.cost / fixedVeh.months)}/month · ${fmtN(fixedVeh.distinct_vehicles)} vehicles`
-                : 'no fixed rentals uploaded'} />
             {/* The hero already reports total cost, so this card carries the carrier count
                 the three removed tiles held — value is the total, sub is the split. */}
             <Tile label="Total Carriers" value={fmtN(overall.carriers)}
@@ -2924,6 +2915,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               </div>
             </div>
           ))}
+          {/* Fixed rentals sit with the partners because that is what they are — a
+              transporter relationship — but they are billed monthly rather than per
+              trip, so the card shows a monthly charge where the others show ₹/trip.
+              Its cost is never added to the freight total above. */}
+          {fixedVeh && fixedVeh.cost > 0 && (
+            <div className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Rental Fixed Vehicle</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>fixed</span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(fixedVeh.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(fixedVeh.distinct_vehicles)} vehicles</span>
+                <span style={{ textAlign: 'right' }}>
+                  {fixedVeh.months > 0 ? `${fmt(fixedVeh.cost / fixedVeh.months)} / month` : '—'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </>
     )
