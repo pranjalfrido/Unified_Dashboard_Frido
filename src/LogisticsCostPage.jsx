@@ -1849,15 +1849,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // single function keeps the rule in one place rather than repeated in six memos.
   const b2bPick = useMemo(() => {
     const tr = filters.transporters || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
-    if (!tr.length && !vh.length && !ft.length) return null
+    const mo = filters.months || []
+    if (!tr.length && !vh.length && !ft.length && !mo.length) return null
     const T = tr.length ? new Set(tr) : null
     const V = vh.length ? new Set(vh) : null
     const F = ft.length ? new Set(ft) : null
+    const M = mo.length ? new Set(mo) : null
     // An empty selection in a row means ALL of that row, matching every other slicer here.
     return r => (!T || T.has(r.transporter))
       && (!V || V.has(r.vehicle))
       && (!F || F.has(r.freight_type))
-  }, [filters.transporters, filters.vehicleTypes, filters.freightTypes])
+      && (!M || M.has(r.month_year || r.month))
+  }, [filters.transporters, filters.vehicleTypes, filters.freightTypes, filters.months])
 
   const b2bTransRows = useMemo(() => {
     if (!b2b) return []
@@ -1883,20 +1886,51 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   const b2bTypeRows = useMemo(() => {
     if (!b2b) return []
-    const total = Number(b2b.totals.cost) || 0
-    return b2b.types.map(t => ({
-      key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
-      avgCost: Number(t.avg_cost) || 0,
-      share: total ? (Number(t.cost) / total) * 100 : 0,
+    // Re-aggregate from varMonths so transporter/vehicle/month slicers apply.
+    // Falls back to the static b2b.types when no filters are active (b2bPick === null).
+    if (!b2bPick) {
+      const total = Number(b2b.totals?.cost) || 0
+      return (b2b.types || []).map(t => ({
+        key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
+        avgCost: Number(t.avg_cost) || 0,
+        share: total ? (Number(t.cost) / total) * 100 : 0,
+      })).sort((a, b2) => b2.cost - a.cost)
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.freight_type || 'Unknown'
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s, r) => s + r.cost, 0)
+    return rows.map(r => ({
+      key: r.key, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      share: total ? (r.cost / total) * 100 : 0,
     })).sort((a, b2) => b2.cost - a.cost)
   }, [b2b, b2bPick])
 
   const b2bMonthRows = useMemo(() => {
     if (!b2b) return []
-    return b2b.months.map(m => ({
-      month: monthLabel(m.key), raw: m.key,
-      trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
-    }))
+    // Re-aggregate from varMonths so transporter/vehicle/freight slicers apply.
+    if (!b2bPick) {
+      return (b2b.months || []).map(m => ({
+        month: monthLabel(m.key), raw: m.key,
+        trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
+      }))
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    return [...by.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
   }, [b2b, b2bPick])
 
   // Freight as a share of goods value — the only figure this tab still takes from the
@@ -1938,21 +1972,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     for (const v of b2b.vehicles || []) {
       if (b2bPick && !b2bPick(v)) continue
       const k = v.vehicle || '—'
-      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: 0, carriers: new Set(), priced: 0, variance: 0 })
+      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: new Set(), carriers: new Set(), priced: 0, variance: 0 })
       const a = by.get(k)
       a.trips += num(v.trips); a.cost += num(v.billed)
-      // Best available without the raw rows: the max lane count any single transporter shows
-      // on this vehicle. Summing would over-count shared lanes; max never overstates.
-      a.lanes = Math.max(a.lanes, num(v.lanes))
       a.carriers.add(v.transporter)
       a.priced += num(v.priced_trips); a.variance += num(v.variance)
+    }
+    // Count distinct lanes per vehicle from the lane-detail rows (same filter applied).
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const a = by.get(r.vehicle || '—')
+      if (a) a.lanes.add(r.lane)
     }
     const rows = [...by.values()]
     const total = rows.reduce((s, r) => s + r.cost, 0)
     return rows.map(r => ({
       vehicle: r.vehicle, trips: r.trips, cost: r.cost,
       avgCost: r.trips ? r.cost / r.trips : 0,
-      lanes: r.lanes, transporters: r.carriers.size,
+      lanes: r.lanes.size, transporters: r.carriers.size,
       variance: r.priced ? r.variance : null,
       share: total ? (r.cost / total) * 100 : 0,
     })).sort((a, b2) => b2.cost - a.cost)
