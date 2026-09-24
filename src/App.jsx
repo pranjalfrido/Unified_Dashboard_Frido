@@ -3507,7 +3507,16 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
 
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
-    if (start && end) { setFilters(f => ({ ...f, start, end })); setOpen(false) }
+    if (start && end) {
+      // Navigate calendar to show the selected start month so reopening the picker
+      // reflects the chosen range (e.g. Last FY starts Apr 2025, not current month).
+      const startDate = parseD(start)
+      if (startDate) {
+        setLeftMonth(new Date(startDate.getFullYear(), startDate.getMonth(), 1))
+        setRightMonth(new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1))
+      }
+      setFilters(f => ({ ...f, start, end })); setOpen(false)
+    }
   }
 
   const getDays = (monthStart) => {

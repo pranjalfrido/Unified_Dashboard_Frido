@@ -470,8 +470,14 @@ function computePayload(windowDays) {
   let dominantStatus = null, dominantCount = -1
   for (const [st,cnt] of Object.entries(statusCounts)) { if (cnt > dominantCount) { dominantStatus = st; dominantCount = cnt } }
 
+  // locationMap is built from the already-filtered `skus` (Uncategorized excluded) so that
+  // WH health cards match the KPI tiles and table — previously built from raw skuLocRows,
+  // which included Uncategorized SKUs (316 rows / ~30k units at PNQ alone) and made the
+  // card totals higher than every other number on the page.
+  const categorizedSkuKeys = new Set(skus.map(s => s.skuKey))
   const locationMap = new Map()
   for (const r of skuLocRows) {
+    if (!categorizedSkuKeys.has(r.skuKey)) continue
     if (!locationMap.has(r.location)) locationMap.set(r.location, { location: r.location, totalInvt:0, rawInvt:0, rawBlockedInvt:0, rtdInvt:0, rawAvgSaleQty:0, rawTotalAvgSaleQty:0, orderAllocation:0 })
     const acc = locationMap.get(r.location)
     acc.totalInvt+=r.totalInvt; acc.rawInvt+=r.rawInvt; acc.rawBlockedInvt+=r.rawBlockedInvt; acc.rtdInvt+=r.rtdInvt
