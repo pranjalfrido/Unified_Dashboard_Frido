@@ -839,7 +839,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
     const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
     return { ...f, [key]: next }
   })
-  const anyActive = ['category', 'subCategory', 'facility', 'productId', 'location', 'stockStatus']
+  const anyActive = ['category', 'subCategory', 'facility', 'productId', 'location', 'stockStatus', 'websiteStatus']
     .some(k => filters[k]?.length)
 
   // On mobile: renders as a fixed overlay drawer. On desktop: position:fixed panel anchored
@@ -879,6 +879,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} width={240} height={SLICER_HEIGHT} />
           <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
           <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Website Status" options={['Live', 'Stock Out']} selected={filters.websiteStatus || []} onChange={v => set('websiteStatus', v)} width={240} height={SLICER_HEIGHT} />
           {anyActive && (
             <button onClick={() => setFilters({})} style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
               ✕ Clear all filters
@@ -941,6 +942,8 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
         <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)}
           getKey={o => o.sku} getLabel={o => o.sku} width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+        <SearchableMultiSelect label="Website Status" options={['Live', 'Stock Out']} selected={filters.websiteStatus || []} onChange={v => set('websiteStatus', v)}
+          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
 
         {anyActive && (
           <button onClick={() => setFilters({})} style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
@@ -1285,6 +1288,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (filters.productId?.length) rows = rows.filter(r => filters.productId.includes(r.sku))
     if (filters.stockStatus?.length) rows = rows.filter(r => filters.stockStatus.includes(r.stockStatus))
     if (filters.rtdLevel?.length) rows = rows.filter(r => filters.rtdLevel.includes(r.rtdLevel))
+    if (filters.websiteStatus?.length) rows = rows.filter(r => filters.websiteStatus.includes(r.websiteStatus))
     if (filters.location?.length) {
       const locSet = new Set(filters.location)
       rows = rows.filter(r => (r.facilities || []).some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0))
@@ -1304,7 +1308,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       return sign * (av - bv)
     })
     return rows
-  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.location, search, sort])
+  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, search, sort])
 
   // Footer totals for the Inventory Detail table — sums the measure columns across
   // whatever's currently visible (search + slicers applied), so it reads as "total for
