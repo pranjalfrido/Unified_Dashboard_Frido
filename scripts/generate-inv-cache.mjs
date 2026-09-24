@@ -53,7 +53,7 @@ const invRows = r1.rows, salesRows = r2.rows, lastSaleRows = r3.rows
 const itemMasterRows = r4.rows, skuMappingRows = r5.rows, shopifyInvRows = r6.rows
 const facilityRows = r7.rows, regionRows = r8.rows, channelRows = r9.rows
 
-const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
+const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, facilityToStoreLocation, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
 const skuMap = buildSkuMap(skuMappingRows)
 
 const liveOnWebsite = new Set()
@@ -128,7 +128,7 @@ for (const [, entry] of invBySkuFacility) {
   if (!invBySkuLoc.has(mapKey)) invBySkuLoc.set(mapKey, { sku: entry.sku, skuKey: entry.skuKey, location: entry.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, facilities: [] })
   const acc = invBySkuLoc.get(mapKey)
   acc.totalInvt += entry.totalInvt; acc.rawInvt += entry.rawInvt; acc.rawBlockedInvt += entry.rawBlockedInvt; acc.rtdInvt += entry.rtdInvt
-  acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
+  acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, storeLocation: facilityToStoreLocation.get(entry.facility) || null, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
 }
 
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
@@ -525,7 +525,7 @@ function computePayload(windowDays) {
     stockStatuses: STOCK_STATUS_VALUES,
     rtdLevels: ['Low','Sufficient'],
     facilityTypes: [...new Set(liveFacilities.map(f=>facilityToType.get(f)))].sort(),
-    facilities: liveFacilities.map(f => ({ facility:f, displayName:facilityToDisplayName.get(f)||f, location:facilityToLocation.get(f), facilityType:facilityToType.get(f) })).sort((a,b)=>a.location.localeCompare(b.location)||a.facility.localeCompare(b.facility)),
+    facilities: liveFacilities.map(f => ({ facility:f, displayName:facilityToDisplayName.get(f)||f, location:facilityToLocation.get(f), facilityType:facilityToType.get(f), storeLocation:facilityToStoreLocation.get(f)||null })).sort((a,b)=>a.location.localeCompare(b.location)||a.facility.localeCompare(b.facility)),
     productIds: skus.map(s=>({sku:s.sku, category:s.category})).sort((a,b)=>a.sku.localeCompare(b.sku)),
   }
   const pivotLocations = sortByLocationOrder([...new Set(skus.flatMap(s=>s.locations.map(l=>l.location)))])
