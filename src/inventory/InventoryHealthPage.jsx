@@ -839,7 +839,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
     const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]
     return { ...f, [key]: next }
   })
-  const anyActive = ['category', 'subCategory', 'facility', 'productId', 'location', 'stockStatus']
+  const anyActive = ['category', 'subCategory', 'facility', 'productId', 'location', 'stockStatus', 'websiteStatus']
     .some(k => filters[k]?.length)
 
   // On mobile: renders as a fixed overlay drawer. On desktop: position:fixed panel anchored
@@ -864,6 +864,12 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
             {sortByStatusOrder(opts.stockStatuses).map(s => (
               <TileToggle key={s} label={IC.status[s]?.label || s} active={(filters.stockStatus || []).includes(s)} onClick={() => toggleTile('stockStatus', s)} />
+            ))}
+          </div>
+          <SidebarSectionTitle title="Website Status" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {['Live', 'Stock Out'].map(s => (
+              <TileToggle key={s} label={s} active={(filters.websiteStatus || []).includes(s)} onClick={() => toggleTile('websiteStatus', s)} />
             ))}
           </div>
           <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
@@ -917,6 +923,13 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
           {sortByStatusOrder(opts.stockStatuses).map(s => (
             <TileToggle key={s} label={IC.status[s]?.label || s} active={(filters.stockStatus || []).includes(s)} onClick={() => toggleTile('stockStatus', s)} />
+          ))}
+        </div>
+
+        <SidebarSectionTitle title="Website Status" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+          {['Live', 'Stock Out'].map(s => (
+            <TileToggle key={s} label={s} active={(filters.websiteStatus || []).includes(s)} onClick={() => toggleTile('websiteStatus', s)} />
           ))}
         </div>
 
@@ -1282,6 +1295,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (filters.productId?.length) rows = rows.filter(r => filters.productId.includes(r.sku))
     if (filters.stockStatus?.length) rows = rows.filter(r => filters.stockStatus.includes(r.stockStatus))
     if (filters.rtdLevel?.length) rows = rows.filter(r => filters.rtdLevel.includes(r.rtdLevel))
+    if (filters.websiteStatus?.length) rows = rows.filter(r => filters.websiteStatus.includes(r.websiteStatus))
     if (filters.location?.length) {
       const locSet = new Set(filters.location)
       rows = rows.filter(r => (r.facilities || []).some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0))
@@ -1301,7 +1315,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       return sign * (av - bv)
     })
     return rows
-  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.location, search, sort])
+  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, search, sort])
 
   // Footer totals for the Inventory Detail table — sums the measure columns across
   // whatever's currently visible (search + slicers applied), so it reads as "total for
@@ -1651,7 +1665,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               ]} />
           </div>
         }>
-        <PivotTable pivot={filteredPivot} search={pivotSearch} facilityTypeFilter={['Regular']} />
+        <PivotTable pivot={filteredPivot} search={pivotSearch} facilityTypeFilter={[]} />
       </GlassCard></div>
 
       {/* Slow-moving + Dead stock — each card sits in its own minWidth:0 wrapper div,

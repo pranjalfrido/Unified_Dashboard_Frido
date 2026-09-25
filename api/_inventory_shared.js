@@ -39,6 +39,7 @@ export function buildFacilityMaps(refRows) {
   const facilityToType = new Map()
   const facilityToStatus = new Map()
   const facilityToDisplayName = new Map()
+  const facilityToStoreLocation = new Map()
   const locationToFacilities = new Map()
   for (const r of facilityRows) {
     if (!r.Facility || !r.Location) continue
@@ -46,6 +47,7 @@ export function buildFacilityMaps(refRows) {
     facilityToType.set(r.Facility, r.FacilityType || 'Regular')
     facilityToStatus.set(r.Facility, r.FCs_Status_for_Invt || r['FCs Status for Invt'] || 'Not Live')
     facilityToDisplayName.set(r.Facility, r.Facility2 || r.Facility)
+    if (r.Store_Location) facilityToStoreLocation.set(r.Facility, r.Store_Location)
     if (!locationToFacilities.has(r.Location)) locationToFacilities.set(r.Location, [])
     locationToFacilities.get(r.Location).push(r.Facility)
   }
@@ -83,7 +85,7 @@ export function buildFacilityMaps(refRows) {
     channelToUnified2.set(norm(r.uniware_channels), r.unified_channel2 || null)
     channelToDescription.set(norm(r.uniware_channels), r.channel_description || null)
   }
-  return { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, locationToFacilities, stateToNearestWH, stateToRegion, locationToRegion, channelToUnified, channelToUnified2, channelToDescription }
+  return { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, facilityToStoreLocation, locationToFacilities, stateToNearestWH, stateToRegion, locationToRegion, channelToUnified, channelToUnified2, channelToDescription }
 }
 
 // A sales row counts toward "B2C" avg sale if its channel_description is exactly

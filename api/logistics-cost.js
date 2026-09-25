@@ -27,8 +27,11 @@ function getCostPool() {
   if (!costPool) {
     const connStr = process.env.SUPABASE_URL
     if (!connStr) throw new Error('SUPABASE_URL not configured')
+    // Append options=-c statement_timeout=600000 so the setting survives pgBouncer's
+    // transaction-mode session reset (a plain SET in the query is wiped between transactions).
+    const connStrWithOpts = connStr.includes('options=') ? connStr : connStr + (connStr.includes('?') ? '&' : '?') + 'options=-c%20statement_timeout%3D600000'
     costPool = new Pool({
-      connectionString: connStr,
+      connectionString: connStrWithOpts,
       ssl: { rejectUnauthorized: false },
       // 6, not 3: the handler needs several scans per request and 3 meant queries queued
       // behind each other until connectionTimeoutMillis fired — the "timeout exceeded when
@@ -41,7 +44,7 @@ function getCostPool() {
       idleTimeoutMillis: 30000,
       // Hard ceiling on a single query. Without it, one pathological scan pins a connection
       // indefinitely and every later request starves behind it.
-      statement_timeout: 300000,
+      statement_timeout: 600000,
     })
     // Without this, an idle-client error from the pooler becomes an unhandled
     // rejection that takes the whole server process down.
@@ -114,8 +117,12 @@ async function mapLimit(tasks, limit) {
 async function query(pool, sql, params) {
   for (let attempt = 0; ; attempt++) {
     try {
-      // Calls the driver directly — must not recurse into this wrapper.
-      return await pool.query(sql, params)
+      const client = await pool.connect()
+      try {
+        return await client.query(sql, params)
+      } finally {
+        client.release()
+      }
     } catch (e) {
       const transient = TRANSIENT.has(e.code) || /ECONNRESET|terminated unexpectedly/i.test(e.message || '')
       if (!transient || attempt >= 2) throw e

@@ -31,10 +31,16 @@ const fakeRes = {
   json(body) { responseBody = body; return this },
 }
 
-await handler(fakeReq, fakeRes)
+try {
+  await handler(fakeReq, fakeRes)
+} catch (e) {
+  console.warn(`⚠️  logistics-cost handler threw: ${e.message} — keeping last good JSON, workflow continues`)
+  process.exit(0)
+}
 
 if (responseStatus !== 200 || !responseBody) {
-  throw new Error(`Handler returned status ${responseStatus}: ${JSON.stringify(responseBody)}`)
+  console.warn(`⚠️  logistics-cost handler returned status ${responseStatus}: ${JSON.stringify(responseBody)} — keeping last good JSON, workflow continues`)
+  process.exit(0)
 }
 
 // Add a timestamp so the frontend can check freshness
