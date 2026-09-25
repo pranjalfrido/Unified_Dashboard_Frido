@@ -439,7 +439,9 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         background: IC.surface,
-        ...(frozenIdx != null ? { ...frozenStyle(frozenIdx), zIndex: 3 } : {}),
+        position: 'sticky', top: 0,
+        zIndex: frozenIdx != null ? 4 : 2,
+        ...(frozenIdx != null ? frozenStyle(frozenIdx) : {}),
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
     </th>
@@ -477,7 +479,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
               {columns.map(c => <col key={c} style={{ width: 90 }} />)}
               <col style={{ width: 90 }} />
             </colgroup>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+            <thead>
               <tr>
                 {th('Category', 'category', 'left', 0)}
                 {th('Sub-category', 'subCategory', 'left', 1)}
@@ -493,10 +495,10 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   broke the thead's own sticky behavior on scroll in this table specifically —
                   putting the filler row here, as the first <tbody> row instead, avoids the
                   nested-sticky-context problem while still sitting flush under the header. */}
-              <tr style={{ height: 1 }}>
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
+              <tr style={{ height: 1, position: 'sticky', top: 29, zIndex: 2 }}>
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(0), zIndex: 3 }} />
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(1), zIndex: 3 }} />
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(2), zIndex: 3 }} />
                 <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
               </tr>
               {sortedRows.map(r => (
