@@ -1,19 +1,70 @@
-// Site accent (acc/acl/acm) and primary ink (t1) are sampled directly from the Frido Navigator
-// logo mark (public/frido-navigator-icon-light-theme (2).png): acc/acl/acm from the gold ring
-// gradient, t1 from the charcoal "N" glyph — so the app's own UI reads as one brand with its
-// icon, rather than an invented accent that happens to sit near the logo's colors.
+// Theme colours, read live from the CSS custom properties in index.css.
+//
+// index.css is the single source of truth: it defines one token block per theme
+// and the active one is selected by <html data-theme>. Every property below is a
+// GETTER, so C.acc re-resolves on each read and follows a theme switch without
+// any call site changing. The fallbacks are the gold (default) values, used only
+// before first paint or in a non-browser context.
+//
+// Semantic colours (green/red/amber/blue) and the channel/courier colours are
+// DATA ENCODINGS, not decoration - a reader maps them to a meaning - so they are
+// identical across themes and several are kept as plain static values.
+import { cssVar } from './theme.js'
+
+const tok = (name, fallback) => cssVar(name, fallback)
+
 export const C = {
-  acc: '#D89A1A', acl: '#F7EBD2', acm: '#B87D14', acd: '#7A5410', acs: '#EFCE85',
-  bg: '#F2F1EF', card: '#fff', border: '#E8E6DC', border2: '#D6D0B0',
-  t1: '#3F3D33', t2: '#504F68', t3: '#94939F',
-  green: { bg: '#E6F4E0', tx: '#286010', bd: '#9DD470' },
-  red:   { bg: '#FDE8E8', tx: '#7A1A1A', bd: '#F09898' },
-  amber: { bg: '#FEF2DC', tx: '#7A4000', bd: '#F5C460' },
-  blue:  { bg: '#E1EFFD', tx: '#184078', bd: '#7AB4EE' },
+  get acc(){ return tok("--acc", "#1F6F5C") },
+  get acl(){ return tok("--acl", "#E6F2EE") },
+  get acm(){ return tok("--acm", "#175A4A") },
+  get acd(){ return tok("--acd", "#0E3F34") },
+  get acs(){ return tok("--acs", "#A8D5C8") },
+  // One step down from acl. Table headers and total rows sit on this so they read
+  // as chrome against the near-white body, without needing light text.
+  get ach(){ return tok("--ach", "#CFE8E0") },
+  // Text/icons drawn ON the accent fill. Flips with the theme: the gold accent is
+  // light and carries dark text, the indigo accent is dark and needs light text.
+  get onAcc(){ return tok("--on-acc", "#FFFFFF") },
+  // Accent as raw "r,g,b" channels, for rgba() glows and tints that need an alpha.
+  // Mirrors --acc-rgb so a JS-built glow follows the theme like the CSS ones do.
+  get accRgb(){ return tok("--acc-rgb", "31,111,92") },
+  get bg(){ return tok("--bg", "#EDF1EF") },
+  get card(){ return tok("--card","#fff") },
+  get hov(){ return tok("--hov", "#F2F6F4") },
+  get border(){ return tok("--b1", "#E2E9E6") },
+  get border2(){ return tok("--b2", "#CBD8D3") },
+  get t1(){ return tok("--t1", "#16211D") },
+  get t2(){ return tok("--t2", "#42544E") },
+  get t3(){ return tok("--t3", "#72847E") },
+  // Elevation, matching --sh1/2/3. Use these instead of a border to separate a card.
+  get sh1(){ return tok("--sh1","0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05)") },
+  get sh2(){ return tok("--sh2","0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06)") },
+  get sh3(){ return tok("--sh3","0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08)") },
+  r: { sm: 8, md: 12, lg: 16, xl: 20 },
+  get display(){ return tok("--display","Arial,Helvetica,sans-serif") },
+  // Chart series palette as a SET. The accent leads, so it tracks the theme; the
+  // rest are fixed hues chosen to stay distinguishable beside either accent.
+  get series(){ return [this.acc, "#F2724F", "#3D9BE9", "#F0B429", "#2BB3A3", "#B06AD9", "#5C6B84"] },
+  // Sequential ramp for parts-of-a-whole (donuts, stacked shares) where slices are
+  // ordered by size and the eye should read rank, not category. Built from the
+  // theme accent so it recolours on switch; steps are spaced on lightness so
+  // neighbouring slices stay distinguishable in greyscale and for CVD viewers.
+  get ramp(){
+    const v = tok("--ramp", "").split(",").map(x => x.trim()).filter(Boolean)
+    // Never hand a chart an empty palette: fall back to the default theme's ramp if
+    // the token is missing (non-browser render, or before the stylesheet resolved).
+    return v.length ? v : ["#0E3F34", "#175A4A", "#1F6F5C", "#4E9B87", "#88C4B3", "#BFE0D6"]
+  },
+  get green(){ return { bg: tok("--G", "#E4F3E7"), tx: tok("--Gt", "#1B6B33"), bd: tok("--Gb", "#93CFA4") } },
+  get red(){   return { bg: tok("--R", "#FCE9E9"), tx: tok("--Rt", "#A82A2A"), bd: tok("--Rb", "#EFA3A3") } },
+  get amber(){ return { bg: tok("--A", "#FCF2DF"), tx: tok("--At", "#8A5410"), bd: tok("--Ab", "#EFC680") } },
+  get blue(){  return { bg: tok("--B", "#E6EFF9"), tx: tok("--Bt", "#1B4B84"), bd: tok("--Bb", "#8FB5DE") } },
+  // Per-marketplace brand colours. Fixed in every theme: a reader maps these to a
+  // specific channel, and the brands own the hues.
   ch: {
-    Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
-    Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',
-    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71', offline_sales: '#6B7280', EBO: '#8B5E3C'
+    Shopify: "#FFD600", "Shopify International": "#B8A000", Amazon: "#E8930A", Flipkart: "#2E74CC",
+    Blinkit: "#0D9E68", CRED: "#CC4078", Instamart: "#4AB89A",
+    Zepto: "#858380", Myntra: "#E87858", Firstcry: "#9B56B6", Pharmeasy: "#2ECC71", offline_sales: "#6B7280", EBO: "#8B5E3C"
   }
 }
 
@@ -312,6 +363,17 @@ export function exportCSV(rows, filename = 'frido_export.csv') {
 function localDateStr(d) {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+// Inclusive day count for a YYYY-MM-DD range, used as the divisor for daily run
+// rate. Inclusive because a single-day range is one day of selling, not zero, and
+// parsed as local midnight so a timezone offset cannot shift the count by one.
+export function daysInRange(start, end) {
+  if (!start || !end) return 0
+  const a = new Date(start + 'T00:00:00'), b = new Date(end + 'T00:00:00')
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0
+  const d = Math.floor((b - a) / 86400000) + 1
+  return d > 0 ? d : 0
 }
 
 export function getDefaultDates() {

@@ -4,6 +4,11 @@
 
 import { writeFileSync } from 'fs'
 import { createServer } from 'http'
+// In CI the env comes from repository secrets; locally it comes from .env. Without this
+// the script died with "SUPABASE_URL not configured" when run by hand, which is exactly
+// when you want to regenerate the cache after an upload.
+import { config } from 'dotenv'
+config()
 
 // Import the handler directly to avoid needing an HTTP server
 // This runs the exact same code path as the API, using the same SUPABASE_URL env var.

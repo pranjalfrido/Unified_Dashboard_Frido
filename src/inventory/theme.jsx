@@ -2,36 +2,39 @@
 // used by the rest of the app shell (Logistics/Sales/Overview, see utils.js's `C`).
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { cssVar } from '../theme.js'
 
 export const IC = {
-  page: '#F2F1EF',
-  surface: '#fff',
-  surfaceHi: '#fff',
-  border: '#E4E4E7',
-  border2: '#C7C7CE',
-  // Subtle hover fill for slicer/toggle controls — a touch darker than `surface` (white) so
-  // hovering a dropdown or tile gives visible feedback without looking like an active/
-  // selected state (that's still accDim/accBorder).
-  hoverBg: '#F5F5F6',
-  t1: '#1F1F23',
-  t2: '#5B5B62',
-  t3: '#8B8B92',
-  acc: '#D89A1A',
-  accDim: '#F7EBD2',
-  accBorder: '#B87D14',
-  // Matches App.jsx's C.acs — the solid-but-soft gold fill used by the app-wide divider-pill
+  // Chrome colours read live from the CSS custom properties in index.css, so the
+  // Inventory pages follow a theme switch with the rest of the app. See src/theme.js.
+  // Fallbacks are the gold (default) values, used before first paint only.
+  get page(){ return cssVar("--bg", "#EDF1EF") },
+  get surface(){ return cssVar("--card","#fff") },
+  get surfaceHi(){ return cssVar("--card","#fff") },
+  get border(){ return cssVar("--b1", "#E2E9E6") },
+  get border2(){ return cssVar("--b2", "#CBD8D3") },
+  // Subtle hover fill for slicer/toggle controls — a touch off surface (white) so
+  // hovering a dropdown or tile gives visible feedback without looking like an
+  // active/selected state (that is still accDim/accBorder).
+  get hoverBg(){ return cssVar("--hov", "#F2F6F4") },
+  get t1(){ return cssVar("--t1", "#16211D") },
+  get t2(){ return cssVar("--t2", "#42544E") },
+  get t3(){ return cssVar("--t3", "#72847E") },
+  get acc(){ return cssVar("--acc", "#1F6F5C") },
+  get accDim(){ return cssVar("--acl", "#E6F2EE") },
+  get accBorder(){ return cssVar("--acm", "#175A4A") },
+  // Matches C.acs — the solid-but-soft accent fill used by the app-wide divider-pill
   // toggle pattern (segmented switchers separated by thin dividers, no per-button borders).
-  acs: '#EFCE85',
-  // Divider line between adjacent options in a divider-pill toggle — matches App.jsx's C.border2.
-  divider: '#D6D0B0',
-  // Muted navy — the app-wide "second series next to gold" color (matches App.jsx's C.blue.tx),
-  // used wherever a chart needs exactly two distinguishable series and one of them isn't gold.
-  secondary: '#184078',
-  // Positive/negative delta color — separate from `acc` (the yellow brand accent used for
-  // active-toggle highlighting) since yellow doesn't read as "good" the way the app shell's
-  // green/red delta badges do (see App.jsx's HeroKPICard `chg` badge).
-  positive: '#286010',
-  negative: '#7A1A1A',
+  get acs(){ return cssVar("--acs", "#A8D5C8") },
+  // Divider line between adjacent options in a divider-pill toggle — matches C.border2.
+  get divider(){ return cssVar("--b2", "#CBD8D3") },
+  // The app-wide "second series next to the accent" colour (matches C.blue.tx), used
+  // wherever a chart needs exactly two distinguishable series and one is the accent.
+  get secondary(){ return cssVar("--Bt", "#1B4B84") },
+  // Positive/negative delta colour — separate from the accent, since an accent hue does
+  // not read as "good" the way the app shell green/red delta badges do.
+  get positive(){ return cssVar("--Gt", "#1B6B33") },
+  get negative(){ return cssVar("--Rt", "#A82A2A") },
   status: {
     'Critical':       { c: '#d03b3b', label: 'Critical' },
     'Low':            { c: '#c98500', label: 'Low' },
@@ -45,7 +48,9 @@ export const IC = {
   categorical: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
 }
 
-export const PAGE_BACKGROUND = '#F2F1EF'
+// NOTE: no PAGE_BACKGROUND constant. A module-level `const x = IC.page` would freeze
+// the colour at import time and stop following theme switches; read IC.page at the
+// call site instead, inside render.
 
 // ── Laptop-width scaling ──────────────────────────────────────────────────────
 // The Inventory tab was built and tuned against a large desktop monitor. On a laptop screen

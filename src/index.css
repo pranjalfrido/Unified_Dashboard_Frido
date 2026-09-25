@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,32 +7,92 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 button,select,input{touch-action:manipulation}
 
-:root{
-  --bg:#F2F1EF;--card:#fff;--hov:#FBF3E1;
+/* ── Theme tokens ───────────────────────────────────────────────
+   Colour lives per-theme; everything structural (elevation, radii, type,
+   sizing) is shared and defined once below. Switching themes sets
+   data-theme on <html>, so every var(--x) re-resolves with no reload.
+
+   Semantic colours (G/R/A/B/P) and channel/courier colours are data
+   encodings, not decoration, so they do not change between themes.
+
+   Gold — the original warm-beige ground with a gold accent. */
+:root[data-theme="gold"]{
+  --bg:#F2F1EF;--card:#fff;--hov:#FAF8F3;
   --b1:#E8E6DC;--b2:#D6D0B0;
-  --t1:#3F3D33;--t2:#504F68;--t3:#94939F;--tg:#5C5A52;
-  --acc:#D89A1A;--acl:#F7EBD2;--acm:#B87D14;--acd:#7A5410;
+  --t1:#3F3D33;--t2:#504F68;--t3:#94939F;--tg:#565A66;
+  --acc:#D89A1A;--acl:#F7EBD2;--acm:#B87D14;--acd:#7A5410;--acs:#EFCE85;--ach:#F0DFB8;
+  --on-acc:#3A2A08;
+  /* Accent as raw channels, for rgba() glows and tints that need an alpha. */
+  --acc-rgb:216,154,26;
+  --ramp:#7A5410,#A06E14,#C68A18,#D89A1A,#E3B95E,#EFCE85;
   --G:#E6F4E0;--Gt:#286010;--Gb:#9DD470;
   --R:#FDE8E8;--Rt:#7A1A1A;--Rb:#F09898;
   --A:#FEF2DC;--At:#7A4000;--Ab:#F5C460;
   --B:#E1EFFD;--Bt:#184078;--Bb:#7AB4EE;
-  --P:#F3E8FD;--Pt:#5B1685;--Pb:#C480F0;
+  --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
+}
+
+/* Indigo — cool grey-blue ground, indigo accent. */
+:root[data-theme="indigo"]{
+  --bg:#EEF0F5;--card:#fff;--hov:#F3F4F9;
+  --b1:#E8EAF0;--b2:#D3D7E2;
+  --t1:#1A1C23;--t2:#4A4E5C;--t3:#767B8A;--tg:#565A66;
+  --acc:#5B5BD6;--acl:#EEEEFB;--acm:#4A4AC4;--acd:#3A3A9E;--acs:#C7C7F2;--ach:#E0E0F7;
+  --on-acc:#FFFFFF;
+  --acc-rgb:91,91,214;
+  --ramp:#3A3A9E,#4A4AC4,#5B5BD6,#8484E3,#AEAEEF,#D3D3F7;
+  --G:#E8F6E9;--Gt:#1B7F3B;--Gb:#8FD69C;
+  --R:#FDEAEA;--Rt:#B4232A;--Rb:#F2A0A0;
+  --A:#FEF4E2;--At:#96590A;--Ab:#F5C978;
+  --B:#E8F0FE;--Bt:#1A4FA0;--Bb:#8AB8F0;
+  --P:#F0EAFD;--Pt:#5B2A9E;--Pb:#B894F0;
+}
+
+/* Forest — cool grey-green ground, deep blue-green accent. The default, so it
+   also fills the bare :root used when no data-theme is set. The accent leans teal
+   (hue ~166) so it stays clearly apart from the semantic success green (~139):
+   a positive delta badge must still read as "good", not as theme chrome. */
+:root,
+:root[data-theme="forest"]{
+  --bg:#EDF1EF;--card:#fff;--hov:#F2F6F4;
+  --b1:#E2E9E6;--b2:#CBD8D3;
+  --t1:#16211D;--t2:#42544E;--t3:#72847E;--tg:#4E605A;
+  --acc:#1F6F5C;--acl:#E6F2EE;--acm:#175A4A;--acd:#0E3F34;--acs:#A8D5C8;--ach:#CFE8E0;
+  --on-acc:#FFFFFF;
+  --acc-rgb:31,111,92;
+  --ramp:#0E3F34,#175A4A,#1F6F5C,#4E9B87,#88C4B3,#BFE0D6;
+  --G:#E4F3E7;--Gt:#1B6B33;--Gb:#93CFA4;
+  --R:#FCE9E9;--Rt:#A82A2A;--Rb:#EFA3A3;
+  --A:#FCF2DF;--At:#8A5410;--Ab:#EFC680;
+  --B:#E6EFF9;--Bt:#1B4B84;--Bb:#8FB5DE;
+  --P:#EFEAFA;--Pt:#57309B;--Pb:#B59AE6;
+}
+
+/* Shared, theme-independent: elevation, radii, type, layout sizing. */
+:root{
+  --sh1:0 1px 2px rgba(40,38,30,.04),0 1px 3px rgba(40,38,30,.05);
+  --sh2:0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06);
+  --sh3:0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08);
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;
   --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+  --display:'Plus Jakarta Sans','Inter',sans-serif;
+  --num:'JetBrains Mono',monospace;
   --sb:72px; /* sidebar width desktop */
-  --nav:52px; /* topnav height */
+  --nav:46px; /* topnav height */
   --bot:60px; /* bottom nav height mobile */
 }
+
 
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#c0c0c0;border-radius:2px}
+::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:100vh;overflow:hidden;background:var(--bg)}
-.app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
 
 /* ── Sidebar (desktop) ─────────────────────── */
 .sidebar{
@@ -40,12 +100,15 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   display:flex;flex-direction:column;align-items:center;
   padding:12px 0;flex-shrink:0;z-index:40;gap:0;
 }
+.sidebar::-webkit-scrollbar{width:0}
 .sb-item{
   width:60px;border-radius:10px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;cursor:pointer;
   padding:7px 4px 6px;gap:3px;transition:all .13s;color:var(--t3);
 }
 .sb-item:hover{background:var(--hov);color:var(--t1)}
+/* Active is now a filled bubble rather than an edge bar - an edge marker has
+   nothing to sit against once the rail is detached from the page edge.    */
 .sb-item.active{background:transparent;color:var(--t1);box-shadow:-3px 0 0 0 var(--acc);}
 .sb-item .sb-icon{font-size:18px;line-height:1}
 .sb-item .sb-icon svg{color:currentColor}
@@ -71,20 +134,26 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .bn-item.active .bn-label{font-weight:700}
 
 /* ── Topnav ────────────────────────────────── */
+/* Plain white card, matching the sidebar rail and the cards below. Everything inside
+   returns to the dark text tokens - there is no coloured ground to contrast against. */
 .topnav{
   height:var(--nav);background:var(--card);border-bottom:1px solid var(--b1);
   display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;overflow:visible;position:relative;z-index:100;
 }
-.tnav-title{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* Only when a tab row follows does the bar square its bottom edge and the pair become
+   one card. Pages without tabs keep a fully rounded floating bar.                     */
+.tnav-title{font-family:var(--display);font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tnav-sep{width:1px;height:15px;background:var(--b1);flex-shrink:0}
 .tnav-sub{font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tnav-right{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;margin-left:auto;overflow:visible;flex-shrink:0}
 .tnav-right::-webkit-scrollbar{display:none}
-.tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:1px solid var(--b2);font-size:12px;font-weight:500;color:var(--t2);background:var(--card);cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0}
+.tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;border:1px solid var(--b2);font-size:12px;font-weight:500;color:var(--t2);background:var(--card);cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0}
 .tnav-btn:hover{background:var(--hov)}
-.tnav-btn-primary{background:var(--acc);color:#13121A;border-color:var(--acc);font-weight:600}
-.tnav-btn-primary:hover{background:#E6C200}
+.tnav-btn-primary{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+.tnav-btn-primary:hover{background:var(--acm)}
 .tnav-date{font-size:11.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--t1);outline:none;width:108px;font-family:var(--font);flex-shrink:0}
+.tnav-date::-webkit-calendar-picker-indicator{ opacity:.55; cursor:pointer }
+.tnav-date::-webkit-calendar-picker-indicator:hover{ opacity:1 }
 .tnav-preset{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--b1);background:var(--card);color:var(--t2);cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0}
 .tnav-preset:hover{background:var(--hov)}
 
@@ -93,9 +162,15 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    clip/scroll on its OWN overflow wrapper, never widen this container and drag the whole
    window into horizontal scroll (which visually detaches fixed elements like the top bar
    and side rails from what's actually in view). */
+/* 14px top pulls the dashboard closer to the filter bar. Sides and bottom stay at 24px:
+   that clearance is what keeps the card hover glow from being clipped by this
+   container's overflow-x:hidden. The top edge needs less because the glow of the
+   first row reads against the filter bar's own background, not a hard boundary. */
 .page-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px}
+/* clip-path:none is not enough - the scroll container clips regardless. The side and
+   bottom padding above is what actually gives the card hover glow room to render. */
 .page-scroll::-webkit-scrollbar{width:4px}
-.page-scroll::-webkit-scrollbar-thumb{background:#c0c0c0;border-radius:2px}
+.page-scroll::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
@@ -111,26 +186,35 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .g-intel{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 
 /* ── KPI card ──────────────────────────────── */
-.kpi-card{background:var(--card);border:1px solid var(--b1);border-radius:12px;padding:13px 15px;box-shadow:inset 0 3px 0 0 transparent;transition:box-shadow .15s;cursor:default}
-.kpi-card:hover{box-shadow:inset 0 3px 0 0 var(--acc),0 4px 16px rgba(216,154,26,.18)}
-
-.card-hoverable{box-shadow:inset 0 3px 0 0 transparent;transition:box-shadow .18s ease,transform .18s ease}
-.card-hoverable:hover{transform:translateY(-2px);box-shadow:inset 0 3px 0 0 var(--acc),0 10px 26px -10px rgba(216,154,26,.32),0 4px 12px rgba(0,0,0,.06)}
+.kpi-card{background:var(--card);border:1px solid transparent;border-radius:var(--r-lg);padding:16px 18px;box-shadow:inset 0 3px 0 0 transparent,var(--sh1);transition:box-shadow .15s;cursor:default}
+/* Hover for both card types is defined once in the "Card hover glow" block near
+   the end of this file, so it stays consistent across every tab. */
+.card-hoverable{box-shadow:inset 0 3px 0 0 transparent}
 
 .row-hoverable tbody tr{transition:background-color .1s}
-.row-hoverable tbody tr:hover{background-color:rgba(216,154,26,.08)!important}
+.row-hoverable tbody tr:hover{background-color:rgba(var(--acc-rgb),.055)!important}
 
 .channel-card-hover{transition:transform .15s ease,box-shadow .15s ease}
-.channel-card-hover:hover{transform:translateY(-2px);box-shadow:0 0 18px 2px rgba(216,154,26,.35),0 10px 22px -8px rgba(216,154,26,.5)!important}
+.channel-card-hover:hover{transform:translateY(-2px);box-shadow:var(--sh3)!important}
 
 .stat-tile-hover{transition:background-color .15s ease,box-shadow .15s ease;border-radius:10px}
-.stat-tile-hover:hover{background-color:rgba(216,154,26,.06);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.stat-tile-hover:hover{background-color:rgba(var(--acc-rgb),.05);box-shadow:var(--sh1)}
 
 .info-dot-tip{opacity:0;visibility:hidden}
 .info-dot-wrap:hover .info-dot-tip{opacity:1;visibility:visible}
-.kpi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--tg);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi-value{font-size:21px;font-weight:700;color:var(--tg);letter-spacing:-.02em;margin-bottom:4px;line-height:1.1}
+.kpi-label{font-size:11.5px;font-weight:600;letter-spacing:0;color:var(--t2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi-value{font-family:var(--display);font-size:26px;font-weight:500;color:var(--t1);letter-spacing:-.025em;margin-bottom:4px;line-height:1.12;font-variant-numeric:tabular-nums}
 .kpi-sub{font-size:11px;color:var(--t3)}
+/* Icon chip: the tinted round tile that leads each KPI in the reference. */
+.kpi-chip{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;
+  justify-content:center;flex-shrink:0;background:var(--acl);color:var(--acm);font-size:14px;line-height:1}
+/* Delta pill: dot + signed change. Semantic (green/red), never the accent - it encodes
+   direction, not brand. */
+.kpi-delta{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+  padding:3px 8px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kpi-delta .dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.kpi-delta.up{background:var(--G);color:var(--Gt)}
+.kpi-delta.down{background:var(--R);color:var(--Rt)}
 
 /* ── Card ──────────────────────────────────── */
 .card{background:var(--card);border:1px solid var(--b1);border-radius:13px;padding:16px 18px}
@@ -168,26 +252,32 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:7px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px}
 .spbar{height:22px;border-radius:8px;overflow:hidden;display:flex}
 .hero-grad{background:linear-gradient(135deg,var(--acl) 0%,var(--card) 60%);border:1px solid var(--border)}
-@keyframes progress{from{width:0}to{width:85%}}
-.progress-bar{animation:progress 1.8s ease-out forwards}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .spin{animation:spin 1s linear infinite}
 
 /* ── Sales tabs ────────────────────────────── */
+/* Sits flush under the gradient bar and carries the rounded bottom corners, so the two
+   read as a single floating card rather than two stacked strips.                    */
 .sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:stretch;padding:0 6px;gap:0;flex-shrink:0;position:sticky;top:0;z-index:20}
 .stab{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border:none;white-space:nowrap;background:none;font-family:var(--font);transition:color .15s ease;position:relative;padding:0 4px;outline:none;border-radius:6px 6px 0 0}
-.stab+.stab::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:1px;height:14px;background:#D6D6D6;transition:opacity .15s ease}
-.stab:hover{color:var(--t1);background:rgba(201,162,79,.06)}
+.stab+.stab::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:1px;height:14px;background:var(--b2);transition:opacity .15s ease}
+.stab:hover{color:var(--t1);background:var(--hov)}
 .stab.active{color:var(--t1);font-weight:700}
 .stab.active:hover{background:none}
-.stab.active::after{content:'';position:absolute;left:8px;right:8px;bottom:-1px;height:2.5px;border-radius:2px;background:linear-gradient(90deg,#D9AE5A,#C9A24F 55%,#D9AE5A);box-shadow:0 0 6px 0 rgba(201,162,79,.55);transform-origin:center;animation:tabIn .18s ease}
+.stab.active::after{content:'';position:absolute;left:12px;right:12px;bottom:6px;height:3px;border-radius:999px;background:linear-gradient(90deg,var(--acc),var(--acd) 55%,var(--acc));box-shadow:0 0 6px 0 rgba(var(--acc-rgb),.45);transform-origin:center;animation:tabIn .18s ease}
 .stab.active+.stab::before,.stab+.stab.active::before{opacity:0}
 @keyframes tabIn{from{transform:scaleX(.4);opacity:.4}to{transform:scaleX(1);opacity:1}}
 
 /* ── Filter bar ────────────────────────────── */
-.fbar{background:#ECEAE8;border-bottom:1px solid var(--b1);padding:0 16px;display:flex;align-items:center;flex-shrink:0;overflow:visible;position:relative;z-index:10}
-.fbar-inner{display:flex;align-items:center;gap:6px;overflow-x:visible;padding:4px 0;flex:1;scrollbar-width:none}
+/* Sits on the page ground rather than on its own white band - the controls it holds
+   are chrome, not content, so the bar itself should recede. No bottom rule either:
+   with no colour change across the edge, a line would just read as a stray stroke. */
+.fbar{background:var(--bg);border-bottom:none;padding:0 24px;display:flex;align-items:center;flex-shrink:0;overflow:visible;position:relative;z-index:10}
+/* Centres the slicer row between the channel tabs above and the KPI cards below.
+   The 24px of .page-scroll padding already sits under this bar, so the bottom value
+   here is the remainder needed to match the top, not the full gap. */
+.fbar-inner{display:flex;align-items:center;gap:6px;overflow-x:visible;padding:10px 0 2px;flex:1;scrollbar-width:none}
 .fbar-inner::-webkit-scrollbar{display:none}
 .fsel{font-size:11.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--t1);outline:none;font-family:var(--font)}
 .fsrch{font-size:11.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--t1);outline:none;width:130px;font-family:var(--font)}
@@ -266,7 +356,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .g-intel{ grid-template-columns:1fr 1fr !important }
 
   /* KPI smaller on mobile */
-  .kpi-value{ font-size:17px }
+  .kpi-value{ font-size:20px }
 
   /* Cards less padding */
   .card{ padding:12px 14px }
@@ -484,7 +574,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    component is a trap for whoever edits it next. */
 .ov-kpis .kpi-card { padding: 10px 16px; }
 .ov-kpis .kpi-label { margin-bottom: 2px; }
-.ov-kpis .kpi-value { font-size: 19px; margin-bottom: 1px; }
+.ov-kpis .kpi-value { font-size: 22px; margin-bottom: 1px; }
 .ov-kpis .kpi-sub { font-size: 10.5px; }
 
 
@@ -494,8 +584,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    fires per row on mouse-move — the scorecard and category tables share this class.
    :hover only, so keyboard focus styling stays whatever the theme sets. */
 .ov-drill { transition: background .12s ease, box-shadow .12s ease; }
-.ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
-.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #FFD600); }
+.ov-drill:hover { background: var(--acl); }
+.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #D89A1A); }
 
 /* Refresh indicator on the Logistics Cost scope bar. A pulsing dot reads as activity at a
    glance and takes less width than the word alone, which matters in a right-aligned cluster
@@ -503,6 +593,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 @keyframes lcPulse {
   0%, 100% { opacity: .25; transform: scale(.85); }
   50%      { opacity: 1;   transform: scale(1); }
+}
+
+/* Rotation for the Courier Allocation loading ring. lcPulse animates opacity and scale,
+   which leaves a border-ring spinner sitting still — this is the one that actually spins. */
+@keyframes lcSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* Card titles and sub-lines on Logistics Cost.
@@ -520,3 +616,209 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    of the palette rather than a different colour. */
 .lc-page .kpi-label { color: #75747F; }
 .lc-page .kpi-sub { color: #75747F; }
+
+
+/* ── Charts ──────────────────────────────────────────────────────────────────
+   Recharts renders its own SVG, so the reference's chart finish is set here once
+   rather than per-component: a barely-there dashed grid, no axis rules, and a
+   tooltip that floats as a soft card instead of sitting in a bordered box. */
+.recharts-cartesian-grid line{stroke:var(--b1);stroke-dasharray:3 4}
+.recharts-cartesian-axis-line,.recharts-cartesian-axis-tick-line{stroke:transparent}
+.recharts-text{font-family:var(--font);fill:var(--t3)}
+.recharts-tooltip-wrapper{filter:drop-shadow(0 4px 16px rgba(26,28,35,.10))}
+.recharts-default-tooltip{border:none!important;border-radius:var(--r-md)!important;
+  box-shadow:var(--sh2)!important;padding:10px 12px!important}
+/* Ghost bars — the faint volume bars behind the lines in the reference. */
+.ghost-bar{fill:var(--b1);opacity:.55}
+
+/* ── Dashboard theme (app-wide) ───────────────────────────────────────────
+   Promoted out of the old .sales-theme scope so every tab shares one set of
+   rules. Changing anything here now reaches Overview, Logistics, Inventory
+   and Sales together, rather than drifting per tab.                         */
+
+/* Breathing room. Between stacked sections (22 vs the old 14) and between
+   cards in a row (18 vs 12). The section stacks set gap:14 as an inline style
+   attribute, so that one needs !important; the grid classes are plain rules. */
+.page-scroll > div[style*="flex-direction:column"],
+.page-scroll > div[style*="flex-direction: column"]{ gap:22px !important }
+.g-2, .g-3, .g-21, .g-hero{ gap:18px }
+.g-kpi3, .g-kpi4, .g-kpi5, .g-kpi7{ gap:14px }
+.g-kpi8, .g-kpi9{ gap:12px }
+
+:root{
+  --card-pad:20px 22px;
+}
+
+/* SVG <text> does not inherit the document font, so chart labels fall back to the
+   browser default (Times) unless the family is named for them explicitly. */
+svg text, svg tspan{
+  font-family:var(--font);
+}
+
+/* .card kept a hairline border and a 13px radius; drop it onto the shadow so it
+   matches .kpi-card and .card-hoverable.                                     */
+.card{
+  border-color:transparent;
+  border-radius:var(--r-lg);
+  box-shadow:var(--sh1);
+  padding:20px 22px;
+}
+
+.kpi-value{
+  font-family:var(--num);
+  font-size:26px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+.kpi-delta, .num{ font-family:var(--num) }
+.kpi-label{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--tg);
+}
+
+/* Chart chrome: softer grid, no axis spine, floating tooltip. SVG <text> does
+   not inherit the document font, which is why it is named in the blanket rule
+   above - without it, chart labels fall back to the browser default (Times). */
+.recharts-cartesian-grid line{ stroke:var(--b1); stroke-dasharray:3 4 }
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line{ stroke:transparent }
+.recharts-default-tooltip{
+  border:none !important;
+  border-radius:var(--r-md) !important;
+  box-shadow:var(--sh3) !important;
+}
+
+/* The sidebar expand toggle borrows .card-hoverable for its resting shadow, but it is
+   an 18px sliver - the full card glow spreads wider than the control itself and the 2px
+   lift reads as a jump. Scale both down.                                              */
+.sb-toggle{ box-shadow:2px 1px 4px rgba(26,28,35,.06); transition:box-shadow .18s ease, color .18s ease }
+.sb-toggle:hover{ box-shadow:2px 1px 8px rgba(var(--acc-rgb),.22); color:var(--acc) }
+
+/* ── Tool buttons ──────────────────────────────────────────────────────────
+   The Price Simulator / Breakeven ROAS / Return Analysis controls read as bare
+   text without this: a resting outline is what tells you they are clickable.
+   Every colour is a token, so the treatment follows whichever theme is active.
+   The active state uses the accent fill with --on-acc text, which flips light or
+   dark per theme so the label stays legible on any accent.                    */
+.tool-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font);font-size:12px;font-weight:600;
+  padding:5px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;
+  border:1px solid var(--b2);
+  background:var(--card);
+  color:var(--t2);
+  transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.tool-btn:hover{
+  background:var(--acl);
+  border-color:var(--acs);
+  color:var(--acd);
+  box-shadow:0 0 8px 1px rgba(var(--acc-rgb),.18);
+}
+.tool-btn:active{ transform:translateY(1px) }
+.tool-btn:focus-visible{ outline:2px solid var(--acm); outline-offset:1px }
+.tool-btn.is-active{
+  background:var(--acc);
+  border-color:var(--acc);
+  color:var(--on-acc);
+  font-weight:700;
+}
+.tool-btn.is-active:hover{
+  background:var(--acm);
+  border-color:var(--acm);
+  color:var(--on-acc);
+}
+@media (prefers-reduced-motion:reduce){ .tool-btn{ transition:none } .tool-btn:active{ transform:none } }
+
+
+/* ── Card hover glow (app-wide) ───────────────────────────────────────────
+   A soft halo spreading from the card's edges, replacing the old top accent
+   bar which lit only one edge. Deliberately NOT scoped to .sales-theme: the
+   same cards appear on Overview, Logistics and Inventory, and hover feedback
+   should not differ by tab. Only :hover is touched, so every card's resting
+   appearance is unchanged.
+   !important is required because Card sets boxShadow inline, which a plain
+   rule cannot beat.                                                        */
+.card-hoverable:hover,
+.kpi-card:hover{
+  box-shadow:
+    0 0 0 1px rgba(var(--acc-rgb),.13),
+    0 0 20px 4px rgba(var(--acc-rgb),.13),
+    0 2px 10px rgba(26,28,35,.05) !important;
+}
+/* Every card lifts. KPI tiles rise less than the big cards - they sit in tight
+   grids, so a full 2px reads as jitter across a row of six.                */
+.card-hoverable,
+.kpi-card{ transition:box-shadow .18s ease, transform .18s ease }
+.card-hoverable:hover{ transform:translateY(-2px) }
+.kpi-card:hover{ transform:translateY(-1px) }
+
+@media (prefers-reduced-motion:reduce){
+  .card-hoverable:hover,
+  .kpi-card:hover{ transform:none }
+}
+
+/* Theme picker menu rows. Hover only lifts a row that is not already selected,
+   so the selected row's accent tint is never replaced by the neutral hover fill. */
+.theme-opt{ transition:background .12s ease }
+.theme-opt:hover{ background:var(--hov) }
+.theme-opt[aria-checked="true"]:hover{ background:var(--acl) }
+.theme-opt:focus-visible{ outline:2px solid var(--acm); outline-offset:-2px }
+
+/* ── Loading overlay ────────────────────────────────────────────────────────
+   Covers the content area only: the sidebar and top bar stay sharp and usable,
+   so navigation and filters keep working while a query runs. The veil is
+   absolutely positioned, so its parent must be a positioning context.        */
+.load-veil{
+  position:absolute;inset:0;z-index:300;
+  display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter:blur(7px) saturate(.9);
+  -webkit-backdrop-filter:blur(7px) saturate(.9);
+  animation:veil-in .18s ease-out;
+}
+/* Fades out on the way from 100% to unmount, so the ring is not cut off mid-count. */
+.load-veil.is-done{ animation:veil-out .42s ease-in forwards }
+@keyframes veil-in{ from{opacity:0} to{opacity:1} }
+@keyframes veil-out{ from{opacity:1} to{opacity:0} }
+
+
+
+
+/* Loader mark. The arc spins while its dash length breathes, so the ring keeps
+   moving during the long wait at the progress ceiling; the N pulses in step.
+   circumference at r=20.5 is ~128.8, so the dash pairs below sum to that.      */
+.nav-shimmer{
+  transform-origin:24px 24px;
+  animation:nav-rotate 2.4s linear infinite, nav-arclen 2.4s ease-in-out infinite;
+}
+@keyframes nav-rotate{ to{ transform:rotate(360deg) } }
+@keyframes nav-arclen{
+  0%,100%{ stroke-dasharray:16 112.8 }
+  50%    { stroke-dasharray:56 72.8 }
+}
+.nav-mark{
+  transform-origin:24px 24px;
+  animation:nav-breathe 2.4s ease-in-out infinite;
+}
+@keyframes nav-breathe{
+  0%,100%{ transform:scale(1);    opacity:.92 }
+  50%    { transform:scale(1.05); opacity:1   }
+}
+@media (prefers-reduced-motion:reduce){
+  .nav-shimmer{ animation:none; opacity:0 }
+  .nav-mark{ animation:none }
+}
+
+/* Backdrop-filter is unsupported in a few engines; without it the veil would be a
+   flat wash with no blur, so lean on opacity there instead. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .load-veil{ background:color-mix(in srgb, var(--bg) 88%, transparent) }
+}
+@media (prefers-reduced-motion:reduce){
+  .load-veil,.load-veil.is-done{ animation:none }
+  .load-veil.is-done{ opacity:0 }
+}

@@ -198,11 +198,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const totCm2 = totCm1ForCm2 != null ? totCm1ForCm2 - totSpend : null
   const totCm2Pct = totCm2 != null && tot.cm1NetCovered > 0 ? pctOf(totCm2, tot.cm1NetCovered) : 0
 
-  const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border2}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.acl, borderTop: `1.5px solid ${C.border}`, zIndex: 1 }
+  const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.ach, borderTop: `1px solid ${C.border2}`, zIndex: 3 }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
   const noCostCell = <span style={{ color: C.t3 }} title="No cost entry for this SKU/product yet">—</span>
   const pctCellOf = (val, netCoveredVal) => netCoveredVal > 0 ? `${pctOf(val, netCoveredVal).toFixed(1)}%` : noCostCell
@@ -380,10 +380,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
           </colgroup>
           <thead>
             <tr style={{ background: C.acl }}>
-              <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }} align="left" />
-              <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }} align="left" />
+              <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
+              <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
               {reorder.orderedColumns.map(c => (
-                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}
+                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }}
                   dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
               ))}
             </tr>
@@ -396,11 +396,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const scTotalGross = allSkus.reduce((s, sk) => s + sk.gross, 0)
               const hasSkus = allSkus.length > 0
-              const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                     onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     <td style={{ ...tdStyleL, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.cat}>{r.cat}</td>
                     <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden' }}>
@@ -425,9 +425,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     // they're currently displayed in.
                     const sk = { ...sk_, _costed: costed, _cogs: skCogs, _gm: skGm, _snd: skSnd, _cm1: skCm1 }
                     return (
-                      <tr key={sk.sku} style={{ cursor: 'default', background: '#FAFAF7', transition: 'box-shadow .12s, background .12s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
+                      <tr key={sk.sku} style={{ cursor: 'default', background: C.hov, transition: 'box-shadow .12s, background .12s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                        onMouseLeave={e => { e.currentTarget.style.background = C.hov; e.currentTarget.style.boxShadow = 'none' }}>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}

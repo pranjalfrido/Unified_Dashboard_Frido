@@ -99,7 +99,7 @@ function ChangeBadge({ pct }) {
 
 // ── Tiny inline sparkline (single series, no axes/legend — the mark IS the label) ──
 // ── Left filter sidebar — same pattern/component set as Inventory Health, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, popover}) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region']
@@ -159,17 +159,19 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
   }
 
   return (
-    <div style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      background: IC.surface,
+      overflow: 'hidden', flexShrink: 0,
+      // Width-reserver only: its child is position:fixed. Deliberately transparent so the
+      // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(open ? {
-          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)',
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
+          position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)',
+          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
         {filterContent(false)}
@@ -228,7 +230,7 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140, isMobil
   // stretch them to fill the box edge-to-edge instead of leaving blank space below the
   // last row — same fill-vs-scroll split used for Category Revenue/Geography on the Sales tab.
   return (
-    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column' }}>
       {rows.map((r, i) => {
         const val = r[metric]
         const pctOfTotal = grandTotal > 0 ? (val / grandTotal) * 100 : 0
@@ -293,7 +295,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
 // under the name — level is already stated in the toggle above, so it'd just repeat.
 function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 10 }}>
       {rows.length === 0 && <div style={{ fontSize: isMobile ? 9.6 : 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
       {rows.map((r, i) => {
         const label = level === 'sku' ? r.sku : level === 'subCategory' ? r.subCategory : r.category
@@ -739,21 +741,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />
-      {/* Desktop collapse-toggle — hidden on mobile via CSS */}
-      <button className="inv-filter-toggle" onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'fixed', top: 'calc(var(--nav) + 4px)',
-        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
-        zIndex: 30, transition: 'left .2s ease',
-      }}>
-        {sidebarOpen ? '‹' : '›'}
-      </button>
+      {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />}
 
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
-      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
         {/* Mobile filter button */}
         <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
@@ -995,19 +986,19 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                       <tr onClick={() => toggleMatrixExpanded(category)} style={{ cursor: 'pointer', borderBottom: `1px solid ${IC.border}` }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <td style={{ position: 'sticky', left: 0, background: IC.surface, padding: '6px 10px', fontWeight: 700, color: IC.t1 }}>
+                        <td style={{ position: 'sticky', left: 0, background: IC.surface, padding: '8px 12px', fontWeight: 700, color: IC.t1 }}>
                           <span style={{ display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s', marginRight: 6, color: IC.t3, fontSize: 9 }}>›</span>
                           {category}
                         </td>
                         {matrixColumns.map(col => {
                           const v = catCells?.get(col)
                           return (
-                            <td key={col} style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>
+                            <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>
                               {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                             </td>
                           )
                         })}
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
                           {catTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(catTotal.rev) : '—') : fmtInt(catTotal.qty)) : '—'}
                         </td>
                       </tr>
@@ -1029,12 +1020,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                               {matrixColumns.map(col => {
                                 const v = subCells?.get(col)
                                 return (
-                                  <td key={col} style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>
+                                  <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>
                                     {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                                   </td>
                                 )
                               })}
-                              <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t2, borderLeft: `1px solid ${IC.border2}` }}>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t2, borderLeft: `1px solid ${IC.border2}` }}>
                                 {subTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(subTotal.rev) : '—') : fmtInt(subTotal.qty)) : '—'}
                               </td>
                             </tr>
@@ -1050,12 +1041,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                                   {matrixColumns.map(col => {
                                     const v = skuCells?.get(col)
                                     return (
-                                      <td key={col} style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3, fontSize: 11 }}>
+                                      <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3, fontSize: 11 }}>
                                         {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                                       </td>
                                     )
                                   })}
-                                  <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t3, fontSize: 11, borderLeft: `1px solid ${IC.border2}` }}>
+                                  <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t3, fontSize: 11, borderLeft: `1px solid ${IC.border2}` }}>
                                     {skuTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(skuTotal.rev) : '—') : fmtInt(skuTotal.qty)) : '—'}
                                   </td>
                                 </tr>
@@ -1070,16 +1061,16 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               </tbody>
               <tfoot>
                 <tr style={{ position: 'sticky', bottom: 0, background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}` }}>
-                  <td style={{ position: 'sticky', left: 0, background: IC.surfaceHi, padding: '7px 10px', fontWeight: 700, color: IC.t1 }}>Grand Total</td>
+                  <td style={{ position: 'sticky', left: 0, background: IC.surfaceHi, padding: '8px 12px', fontWeight: 700, color: IC.t1 }}>Grand Total</td>
                   {matrixColumns.map(col => {
                     const v = matrixGrandTotal.perBucket.get(col)
                     return (
-                      <td key={col} style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
+                      <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
                         {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                       </td>
                     )
                   })}
-                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
                     {matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(matrixGrandTotal.total.rev) : '—') : fmtInt(matrixGrandTotal.total.qty)}
                   </td>
                 </tr>
@@ -1091,3 +1082,6 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     </div>
   )
 }
+
+// Exported so InventoryPage can render this panel inside the top-bar Filters popover.
+export { FilterSidebar as SalesFilterSidebar }

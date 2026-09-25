@@ -793,7 +793,7 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
           from { opacity: 0; transform: translateX(-50%) translateY(10px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
-        .profile-page-input:focus { outline: none; border-color: #F4B400 !important; box-shadow: 0 0 0 3px rgba(244,180,0,.15) !important; }
+        .profile-page-input:focus { outline: none; border-color: var(--acc) !important; box-shadow: 0 0 0 3px rgba(var(--acc-rgb),.15) !important; }
       `}</style>
     </div>
   )

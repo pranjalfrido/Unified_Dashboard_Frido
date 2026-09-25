@@ -14,6 +14,7 @@
 import pkg from 'pg'
 import { config } from 'dotenv'
 import { loadCourierProfiles, persistCourierProfiles, PER_KG_COURIERS, sqlList } from './courier-profiles.mjs'
+import { buildCube } from '../api/logistics-cost.js'
 config()
 
 const pool = new pkg.Pool({
@@ -329,6 +330,23 @@ await swap('lc_slab_costs', `
     FROM j
    GROUP BY 1
 `, 'CREATE INDEX __IDX__ ON __TARGET__ (slab)')
+
+// The dashboard cube, materialised last because it reads lc_addon_rate built above.
+//
+// This is the query that made the Logistics Cost tab fail: scanned live it reads all
+// 1.1M ledger rows (679 MB against 256 MB of shared_buffers) and overran the server's
+// 120s statement_timeout, so the tab returned "canceling statement due to statement
+// timeout". Pre-aggregated it is 17,085 rows that the API reads in ~1.7s, and because
+// every measure is additive and every filter is a cube dimension, the rolled-up numbers
+// are identical to the live scan — verified exact on row count and total cost.
+//
+// Built via buildCube() in api/logistics-cost.js rather than a copy of the SQL here, so
+// the materialised table can never drift from what the API would have computed.
+{
+  const t = Date.now()
+  const n = await buildCube(pool)
+  console.log(`  ${'lc_cube'.padEnd(22)} ${String(n).padStart(6)} rows  ${((Date.now() - t) / 1000).toFixed(1)}s`)
+}
 
 console.log('all aggregates refreshed.')
 await pool.end()

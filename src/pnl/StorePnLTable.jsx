@@ -11,7 +11,8 @@ import { useSortableTable } from '../components.jsx'
 // COGS/SnD/Marketing are — a store simply not yet onboarded into a given cost sheet defaults to
 // 0 for that line rather than blocking EBITDA (confirmed 2026-08-20: those sheets are still being
 // filled in store-by-store, so blocking would leave EBITDA permanently blank for most stores).
-const noCostCell = <span style={{ color: C.t3 }}>—</span>
+// A JSX element built at module scope would freeze C.t3; a getter rebuilds it per read.
+const CELL = { get noCost(){ return <span style={{ color: C.t3 }}>—</span> } }
 const MIN_REV_FOR_RATIOS = 100
 const pctOf = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : null
 
@@ -68,7 +69,7 @@ export default function StorePnLTable({ rows = [] }) {
     exportCSV(csvRows, 'store_pnl_ebo.csv')
   }
 
-  const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
@@ -88,26 +89,26 @@ export default function StorePnLTable({ rows = [] }) {
           </colgroup>
           <thead className="tbl-head">
             <tr>
-              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} align="left" />
-              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Net Rev" sortKey="netRev" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Utilities" sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Employee Cost" sortKey="employeeCost" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CAM" sortKey="cam" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Software" sortKey="software" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Volumetric Rent" sortKey="volumetricRent" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Fixed Costs" sortKey="totalFixedCosts" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="EBITDA" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="EBITDA %" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
+              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
+              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Net Rev" sortKey="netRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Utilities" sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Employee Cost" sortKey="employeeCost" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CAM" sortKey="cam" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Software" sortKey="software" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Volumetric Rent" sortKey="volumetricRent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Fixed Costs" sortKey="totalFixedCosts" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA %" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
             </tr>
           </thead>
           <tbody>
@@ -124,13 +125,13 @@ export default function StorePnLTable({ rows = [] }) {
                   <td style={tdStyle}>{fmt(r.gross)}</td>
                   <td style={tdStyle}>{r.units.toLocaleString('en-IN')}</td>
                   <td style={tdStyle}>{fmt(r.netRev)}</td>
-                  <td style={tdStyle}>{r.cogs != null ? fmt(r.cogs) : noCostCell}</td>
-                  <td style={tdStyle}>{gmPct != null ? `${gmPct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{sndPct != null ? `${sndPct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{cm1Pct != null ? `${cm1Pct.toFixed(1)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{spendPct != null ? `${spendPct.toFixed(2)}%` : noCostCell}</td>
-                  <td style={tdStyle}>{r.cm2 != null ? fmt(r.cm2) : noCostCell}</td>
-                  <td style={tdStyle}>{cm2Pct != null ? `${cm2Pct.toFixed(1)}%` : noCostCell}</td>
+                  <td style={tdStyle}>{r.cogs != null ? fmt(r.cogs) : CELL.noCost}</td>
+                  <td style={tdStyle}>{gmPct != null ? `${gmPct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{sndPct != null ? `${sndPct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{cm1Pct != null ? `${cm1Pct.toFixed(1)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{spendPct != null ? `${spendPct.toFixed(2)}%` : CELL.noCost}</td>
+                  <td style={tdStyle}>{r.cm2 != null ? fmt(r.cm2) : CELL.noCost}</td>
+                  <td style={tdStyle}>{cm2Pct != null ? `${cm2Pct.toFixed(1)}%` : CELL.noCost}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.rent)}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.utilities)}</td>
                   <td style={tdStyle}>{fmt(r.fixedCosts.employeeCost)}</td>
@@ -139,9 +140,9 @@ export default function StorePnLTable({ rows = [] }) {
                   <td style={tdStyle}>{fmt(r.fixedCosts.volumetricRent)}</td>
                   <td style={tdStyle}>{fmt(r.totalFixedCosts)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>
-                    {r.ebitda != null ? fmt(r.ebitda) : noCostCell}
+                    {r.ebitda != null ? fmt(r.ebitda) : CELL.noCost}
                   </td>
-                  <td style={tdStyle}>{ebitdaPct != null ? `${ebitdaPct.toFixed(1)}%` : noCostCell}</td>
+                  <td style={tdStyle}>{ebitdaPct != null ? `${ebitdaPct.toFixed(1)}%` : CELL.noCost}</td>
                 </tr>
               )
             })}
@@ -152,13 +153,13 @@ export default function StorePnLTable({ rows = [] }) {
               <td style={totalTdStyle}>{fmt(tot.gross)}</td>
               <td style={totalTdStyle}>{tot.units.toLocaleString('en-IN')}</td>
               <td style={totalTdStyle}>{fmt(tot.netRev)}</td>
-              <td style={totalTdStyle}>{tot.anyCogs ? fmt(tot.cogs) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyGm ? `${pctOf(tot.gm, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anySnd ? `${pctOf(tot.snd, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCm1 ? `${pctOf(tot.cm1, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCogs ? fmt(tot.cogs) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyGm ? `${pctOf(tot.gm, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anySnd ? `${pctOf(tot.snd, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyCm1 ? `${pctOf(tot.cm1, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
               <td style={totalTdStyle}>{`${pctOf(tot.spend, tot.netRev)?.toFixed(2) ?? '0.00'}%`}</td>
-              <td style={totalTdStyle}>{tot.anyCm2 ? fmt(tot.cm2) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCm2 ? `${pctOf(tot.cm2, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCm2 ? fmt(tot.cm2) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyCm2 ? `${pctOf(tot.cm2, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
               <td style={totalTdStyle}>{fmt(tot.rent)}</td>
               <td style={totalTdStyle}>{fmt(tot.utilities)}</td>
               <td style={totalTdStyle}>{fmt(tot.employeeCost)}</td>
@@ -166,8 +167,8 @@ export default function StorePnLTable({ rows = [] }) {
               <td style={totalTdStyle}>{fmt(tot.software)}</td>
               <td style={totalTdStyle}>{fmt(tot.volumetricRent)}</td>
               <td style={totalTdStyle}>{fmt(tot.totalFixedCosts)}</td>
-              <td style={{ ...totalTdStyle, fontWeight: 700 }}>{tot.anyEbitda ? fmt(tot.ebitda) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.netRev)?.toFixed(1) ?? '0.0'}%` : noCostCell}</td>
+              <td style={{ ...totalTdStyle, fontWeight: 700 }}>{tot.anyEbitda ? fmt(tot.ebitda) : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
             </tr>
           </tfoot>
         </table>

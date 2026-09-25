@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase.js";
+import { C as BASE_C } from "./utils.js";
 
 // ── COGS Tracker — row-wise layout ───────────────────────────────────────────
 // DB: cogs_ledger (itemskucode, productname, tallyproductname, subcategory,
@@ -324,7 +325,9 @@ export default function CogsPage() {
   };
 
   // ── Styles ─────────────────────────────────────────────────────────────────
-  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#E8E4DA', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', red: '#9E2B25' };
+  // Theme tokens, not a private palette: this page used to keep a fixed grey/green
+  // look whatever theme was active. red stays semantic.
+  const C = { bg: BASE_C.bg, card: BASE_C.card, border: BASE_C.border, t1: BASE_C.t1, t2: BASE_C.t2, t3: BASE_C.t3, accent: BASE_C.acc, red: BASE_C.red.tx };
   const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
   const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
   const primaryBtn = { ...btnBase, background: C.accent, color: '#fff', border: 'none' };
@@ -437,15 +440,15 @@ export default function CogsPage() {
                 <th key={f.key} style={{
                   position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2,
                   left: i === 0 ? 0 : undefined,
-                  background: '#F5F2EC', textAlign: f.type === 'num' ? 'right' : 'left',
-                  padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t2,
+                  background: C.ach, textAlign: f.type === 'num' ? 'right' : 'left',
+                  padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t2,
                   textTransform: 'uppercase', letterSpacing: 0.4,
                   borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w,
                 }}>
                   {f.label}{f.req && <span style={{ color: C.red }}> *</span>}
                 </th>
               ))}
-              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F5F2EC', width: 40, borderBottom: `1px solid ${C.border}` }} />
+              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: C.ach, width: 40, borderBottom: `1px solid ${C.border}` }} />
             </tr>
           </thead>
           <tbody>
@@ -456,7 +459,7 @@ export default function CogsPage() {
             )}
             {filtered.map((r) => (
               <tr key={r._uid}
-                onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = '#FAFAF7')}
+                onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.hov)}
                 onMouseLeave={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.card)}>
                 {FIELDS.map((f, i) => (
                   <td key={f.key} style={{
@@ -469,7 +472,7 @@ export default function CogsPage() {
                       placeholder={f.ex}
                       style={{
                         width: '100%', border: 'none', background: 'transparent',
-                        padding: '9px 10px', fontSize: 12.5, color: C.t1, fontFamily: 'inherit',
+                        padding: '10px 12px', fontSize: 12.5, color: C.t1, fontFamily: 'inherit',
                         textAlign: f.type === 'num' ? 'right' : 'left',
                         outline: 'none', boxSizing: 'border-box',
                       }}

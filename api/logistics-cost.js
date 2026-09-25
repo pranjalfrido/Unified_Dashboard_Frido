@@ -64,6 +64,12 @@ function getCostPool() {
 // {action:'invalidate'}) rather than waiting this out.
 const REF_TTL_MS = 60 * 60 * 1000
 let refCache = null
+// One build at a time. Without this, concurrent requests on a cold cache each start
+// their own rebuild: the heavy BASE scan was observed running 7 times at once, each
+// holding a connection for 60-116s, so later callers waited past connectionTimeoutMillis
+// and the tab returned "timeout exceeded when trying to connect". Callers now await the
+// same promise instead of duplicating the work.
+let refCacheBuild = null
 
 // Full-response cache keyed on the filter payload. Bounded to RESP_CACHE_MAX entries so a
 // user cycling through slicers cannot grow it without limit; oldest key is evicted first.
@@ -331,6 +337,43 @@ async function updateClaim(pool, body) {
 //
 // Failures are logged and retried on the next tick rather than thrown: a warm-up that cannot
 // reach the database must not stop the server from serving other routes.
+// Set on the first unfiltered request; read by the aggregate refresh script so the
+// materialised cube is built from the same SQL the API would have run.
+let UNFILTERED_CUBE_SQL = null
+
+// Materialises the cube into public.lc_cube using EXACTLY the SQL an unfiltered request
+// would run. Called by scripts/refresh-cost-aggregates.mjs after every invoice upload.
+//
+// Built beside the live table and swapped in a transaction, so a concurrent dashboard
+// request never sees a half-built or missing table. Mirrors swap() in that script.
+export async function buildCube(pool) {
+  // Populate UNFILTERED_CUBE_SQL by running the SQL-building half of the handler.
+  // Cheap: it returns before issuing the expensive queries.
+  const noop = { status() { return this }, json() { return this } }
+  await handler({ method: 'POST', body: { __cubeSqlOnly: true } }, noop)
+  const sql = UNFILTERED_CUBE_SQL
+  if (!sql) throw new Error('could not capture unfiltered cube SQL')
+
+  const c = await pool.connect()
+  try {
+    await c.query('SET statement_timeout = 600000')
+    await c.query('DROP TABLE IF EXISTS public.lc_cube_new')
+    await c.query(`CREATE TABLE public.lc_cube_new AS ${sql}`)
+    await c.query('ANALYZE public.lc_cube_new')
+    await c.query('BEGIN')
+    await c.query('DROP TABLE IF EXISTS public.lc_cube')
+    await c.query('ALTER TABLE public.lc_cube_new RENAME TO lc_cube')
+    await c.query('COMMIT')
+    const { rows } = await c.query('SELECT COUNT(*)::int n FROM public.lc_cube')
+    return rows[0].n
+  } catch (e) {
+    await c.query('ROLLBACK').catch(() => {})
+    throw e
+  } finally {
+    c.release()
+  }
+}
+
 let warmTimer = null
 export async function prewarm() {
   const fakeRes = {
@@ -370,6 +413,15 @@ export async function prewarm() {
     console.log(`[logistics-cost] cache warm in ${((Date.now() - t) / 1000).toFixed(1)}s`)
   } catch (e) {
     console.error('[logistics-cost] prewarm failed:', e.message)
+  }
+  // A prewarm that overruns is worse than no prewarm: it holds pool connections while it
+  // runs, and real requests then fail with "timeout exceeded when trying to connect"
+  // rather than merely being slow. Observed at 425s before the cube was materialised.
+  // Warn loudly if it ever regresses past a sane budget.
+  const warmSec = (Date.now() - t) / 1000
+  if (warmSec > 90) {
+    console.warn(`[logistics-cost] prewarm took ${warmSec.toFixed(0)}s — pool was held this long. ` +
+      `Is public.lc_cube current? Run: node scripts/refresh-cost-aggregates.mjs`)
   }
   clearTimeout(warmTimer)
   warmTimer = setTimeout(prewarm, RESP_TTL_MS * 0.9)
@@ -671,6 +723,41 @@ export default async function handler(req, res) {
     // reads the table once and emits the grand total plus every breakdown as labelled
     // rows, so this is a single short query instead of nine competing ones — which is
     // both the correctness fix and ~9x less database work.
+    // ── Can this request be answered from the materialised cube? ──
+    //
+    // The cube is grouped by (courier, zone, mode, month, payment, acct, is_overbilled,
+    // slab, band). A filter on any of those dimensions is just a WHERE on the cube, so the
+    // rolled-up answer stays exact. Anything else — city filters, the band/slab post
+    // filters, billing=over/ok — needs per-shipment detail the cube does not carry, and
+    // those requests fall back to scanning the ledger.
+    //
+    // This matters for the DEFAULT page load, not just the unfiltered one: the UI opens on
+    // the most recent 6 billing months, which is a months filter. Serving only the
+    // no-filter case left that first load on the slow path, which is where the tab was
+    // timing out.
+    const cubeDims = []
+    const cubeParams = []
+    const cubeAdd = (col, val) => { cubeParams.push(val); cubeDims.push(`${col} = ANY($${cubeParams.length})`) }
+    // Only dimensions the cube stores VERBATIM. zone and mode are deliberately absent:
+    // the ledger holds raw values the base query rewrites before grouping (zone via
+    // ZONE_MAP_SQL, which folds 'North'/'EAST'/'ROI' into the lettered zones; mode via
+    // the RTO/Reverse/Forward collapse). The cube stores the mapped result, so comparing
+    // a raw filter value against it matches nothing and returns a silent zero rather than
+    // an error. Those filters take the live path, where the same mapping is applied to
+    // both sides.
+    if (f.months?.length) cubeAdd('month', f.months)
+    if (f.payments?.length) cubeAdd('payment', f.payments)
+    if (f.couriers?.length) cubeAdd('courier_name', f.couriers)
+    if (f.accountTypes?.length) cubeAdd('acct', f.accountTypes)
+
+    // Every filter the request carries must be expressible on the cube. Comparing counts
+    // is what makes this safe: if any filter was added to `params` that did NOT map to a
+    // cube dimension above, the counts differ and we take the live path rather than
+    // silently ignoring that filter.
+    const cubeUsable = postFilters.length === 0 && cubeParams.length === params.length
+    const cubeWhere = cubeDims.length ? `WHERE ${cubeDims.join(' AND ')}` : ''
+    const cubeIsUnfiltered = cubeUsable
+
     const GROUPED = `
       ${BASE}
       SELECT
@@ -751,6 +838,72 @@ export default async function handler(req, res) {
       )
     `
 
+    // GROUPED, served from the materialised cube.
+    //
+    // Every measure below is a plain SUM of a column the cube already aggregated, because
+    // each one is additive: summing per-(courier,zone,mode,month,payment,acct,slab,band)
+    // subtotals gives the same answer as evaluating the FILTER against all 1.1M raw rows.
+    // The per-row predicates (gap > 0.001, frido_carrier > frido_base, ...) were applied
+    // when the cube was built, so they must NOT be repeated here.
+    //
+    // Dimensions match the cube's columns; GROUPING SETS are unchanged, so the result is
+    // row-for-row identical to the live GROUPED query.
+    const GROUPED_CUBE = `
+      SELECT
+        CASE
+          WHEN GROUPING(zone) = 0 THEN 'zone'
+          WHEN GROUPING(mode) = 0 THEN 'mode'
+          WHEN GROUPING(month) = 0 THEN 'month'
+          WHEN GROUPING(courier_name) = 0 THEN 'courier'
+          WHEN GROUPING(payment) = 0 THEN 'pay'
+          WHEN GROUPING(acct) = 0 THEN 'acct'
+          WHEN GROUPING(band) = 0 THEN 'band'
+          ELSE 'total'
+        END AS dim,
+        COALESCE(zone, mode, month, courier_name,
+                 payment, acct, band, 'ALL')::text AS key,
+        COALESCE(SUM(n), 0)::int                      AS n,
+        COALESCE(SUM(cost), 0)::float8                AS cost,
+        COALESCE(SUM(wt), 0)::float8                  AS wt,
+        COALESCE(SUM(decl_wt), 0)::float8             AS decl_wt,
+        COALESCE(SUM(value), 0)::float8               AS value,
+        COALESCE(SUM(surcharge), 0)::float8           AS surcharge,
+        COALESCE(SUM(over_n), 0)::int                 AS over_n,
+        COALESCE(SUM(over_kg), 0)::float8             AS over_kg,
+        COALESCE(SUM(rec_infl), 0)::float8            AS rec_infl,
+        COALESCE(SUM(rec_unexp), 0)::float8           AS rec_unexp,
+        COALESCE(SUM(rec_admit_n), 0)::int            AS rec_admit_n,
+        COALESCE(SUM(rec_admit), 0)::float8           AS rec_admit,
+        COALESCE(SUM(claimable_n), 0)::int            AS claimable_n,
+        COALESCE(SUM(claimable_rs), 0)::float8        AS claimable_rs,
+        COALESCE(SUM(reverse_n), 0)::int              AS reverse_n,
+        COALESCE(SUM(over_cost), 0)::float8           AS over_cost,
+        COALESCE(SUM(slab_n), 0)::int                 AS slab_n,
+        COALESCE(SUM(slab_kg), 0)::float8             AS slab_kg,
+        COALESCE(SUM(slab_cost), 0)::float8           AS slab_cost,
+        COALESCE(SUM(rc_entitled), 0)::float8         AS rc_entitled,
+        COALESCE(SUM(rc_carrier), 0)::float8          AS rc_carrier,
+        COALESCE(SUM(rc_entitled_allin), 0)::float8   AS rc_entitled_allin,
+        COALESCE(SUM(rc_carrier_allin), 0)::float8    AS rc_carrier_allin,
+        COALESCE(SUM(rc_entitled_surcharge), 0)::float8 AS rc_entitled_surcharge,
+        COALESCE(SUM(inv_addons), 0)::float8          AS inv_addons,
+        COALESCE(SUM(rc_total), 0)::float8            AS rc_total,
+        COALESCE(SUM(inv_freight), 0)::float8         AS inv_freight,
+        COALESCE(SUM(rc_priced), 0)::int              AS rc_priced,
+        COALESCE(SUM(rc_over_n), 0)::int              AS rc_over_n,
+        COALESCE(SUM(rc_over_cost), 0)::float8        AS rc_over_cost,
+        COALESCE(SUM(rc_infl_cost), 0)::float8        AS rc_infl_cost,
+        COALESCE(SUM(rc_infl_n), 0)::int              AS rc_infl_n,
+        COALESCE(SUM(margin_killer_n), 0)::int        AS margin_killer_n,
+        COALESCE(SUM(margin_killer_cost), 0)::float8  AS margin_killer_cost
+      FROM public.lc_cube
+      ${cubeWhere}
+      GROUP BY GROUPING SETS (
+        (), (zone), (mode), (month),
+        (courier_name), (payment), (acct), (band)
+      )
+    `
+
     // ── Like-for-like courier comparison ──
     // Per-shipment averages are not comparable across couriers because each carries a
     // different weight and zone mix. This holds BOTH constant — forward parcels only,
@@ -813,7 +966,20 @@ export default async function handler(req, res) {
     // A courier quietly raising its effective rate is invisible in a blended total but
     // shows up immediately here. Couriers with thin months are excluded so a handful of
     // shipments can't produce a fake spike.
-    const driftQ = () => query(pool, `
+    // Cost-per-kg drift by month and courier. Both inputs (cost, weight) are additive and
+    // both are cube columns, so an unfiltered request rolls up lc_cube — a third full scan
+    // removed. The ratio is computed AFTER summing, exactly as the live query does, so the
+    // per-kg figure is weight-weighted rather than an average of averages.
+    const DRIFT_CUBE = `
+      SELECT month AS month_year, courier_name,
+             SUM(n)::int AS n,
+             (SUM(cost) / NULLIF(SUM(wt), 0))::float8 AS cpk
+        FROM public.lc_cube ${cubeWhere}
+       GROUP BY 1, 2
+      HAVING SUM(n) >= 500
+       ORDER BY 2, 1
+    `
+    const DRIFT_LIVE = `
       ${BASE}
       SELECT month_year, courier_name,
              COUNT(*)::int AS n,
@@ -822,7 +988,18 @@ export default async function handler(req, res) {
        GROUP BY 1, 2
       HAVING COUNT(*) >= 500
        ORDER BY 2, 1
-    `, params)
+    `
+    const driftQ = cubeIsUnfiltered
+      ? (async () => {
+          try {
+            const r = await query(pool, DRIFT_CUBE, cubeParams)
+            if (r.rows.length) return r
+          } catch (e) {
+            console.warn('[logistics-cost] drift via lc_cube failed (%s) — live scan', e.message)
+          }
+          return query(pool, DRIFT_LIVE, params)
+        })
+      : () => query(pool, DRIFT_LIVE, params)
 
     // Lanes stay separate: high cardinality, and capped + ordered server-side so the
     // payload stays small. One extra short query is fine; nine were not.
@@ -1076,6 +1253,9 @@ export default async function handler(req, res) {
         mode_group                                                AS mode,
         month_year                                               AS month,
         COALESCE(payment_mode, 'Unknown')                        AS payment,
+        -- Carried so the GROUPED rollup can also be served from this table. Without it
+        -- the 'acct' grouping set would still need its own full scan of the ledger.
+        courier_account_type                                     AS acct,
         (gap > 0.001 AND COALESCE(dw, 0) > 0)                   AS is_overbilled,
         slab,
         CASE WHEN cw < 1 THEN '0-1'
@@ -1123,13 +1303,80 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value)::int AS margin_killer_n,
         COALESCE(SUM(cost) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value), 0)::float8 AS margin_killer_cost
       FROM base
-      GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
-      ORDER BY 1, 2, 3, 4, 5, 6, 7, 8
+      GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
+      ORDER BY 1, 2, 3, 4, 5, 6, 7, 8, 9
     `
 
+    // The cube is the single most expensive query on this endpoint: it scans the whole
+    // 1.1M-row ledger and, cold, overruns the server's 120s statement_timeout — the
+    // "canceling statement due to statement timeout" this tab used to fail with.
+    //
+    // Every cube measure is additive (SUM/COUNT only) and every filter this endpoint
+    // accepts is itself a cube dimension, so for an UNFILTERED request the answer is
+    // byte-identical to a pre-built rollup. scripts/refresh-cost-aggregates.mjs
+    // materialises exactly this query into lc_cube after each upload; here we just read
+    // it. Filtered requests still scan, but they are narrow enough to finish in time.
+    //
+    // Falls back to the live scan if the table is missing (first deploy, or a refresh
+    // that has not run yet) so a stale environment degrades to "slow" rather than "broken".
+    // Publish the unfiltered form so scripts/refresh-cost-aggregates.mjs can materialise
+    // EXACTLY this SQL. Captured from the live builder rather than copied into the script,
+    // which is how the two would otherwise drift apart.
+    if (params.length === 0 && postFilters.length === 0) UNFILTERED_CUBE_SQL = CUBE_Q
+    if (f.__cubeSqlOnly) return res.status(200).json({ ok: true })
+
+    const cubeQ = cubeIsUnfiltered
+      ? (async () => {
+          try {
+            const r = await query(pool, `SELECT * FROM public.lc_cube ${cubeWhere}`, cubeParams)
+            if (r.rows.length) return r
+            console.warn('[logistics-cost] lc_cube empty — falling back to live scan')
+          } catch (e) {
+            console.warn('[logistics-cost] lc_cube unavailable (%s) — live scan', e.message)
+          }
+          return query(pool, CUBE_Q, params)
+        })
+      : () => query(pool, CUBE_Q, params)
+
+    // Same substitution as the cube: unfiltered requests roll up lc_cube instead of
+    // rescanning the ledger. GROUPED and the cube were two of the five full scans this
+    // endpoint used to run per request.
+    const groupedQ = cubeIsUnfiltered
+      ? (async () => {
+          try {
+            const r = await query(pool, GROUPED_CUBE, cubeParams)
+            if (r.rows.length) return r
+            console.warn('[logistics-cost] lc_cube empty — GROUPED falling back to live scan')
+          } catch (e) {
+            console.warn('[logistics-cost] GROUPED via lc_cube failed (%s) — live scan', e.message)
+          }
+          return query(pool, GROUPED, params)
+        })
+      : () => query(pool, GROUPED, params)
+
+    // ── Scope gating ──
+    // One endpoint serves every tab, and before this it computed everything for all of them
+    // on every request. Opening FTL/PTL therefore paid the full B2C workload — measured at
+    // ~90s cold, of which the FTL/PTL queries themselves were ~0.5s against 456 kB tables.
+    // The parcel ledger is 679 MB; the freight one is not.
+    //
+    // Only the four heavy B2C DETAIL queries are gated. GROUPED and the cube stay for every
+    // scope: Overview reads the same totals, and both come off the materialised lc_cube in
+    // ~2s, so skipping them would save nothing and risk a tab rendering empty.
+    //
+    // A request with no scope (the CDN cache generator, scripted callers) gets everything,
+    // so a missing field can never be a silent consequence of this.
+    const scope = typeof f.scope === 'string' ? f.scope : null
+    const needsB2cDetail = scope === null || scope === 'all' || scope === 'b2c'
+    const EMPTY = { rows: [] }
+
     const [grouped, lanes, lfl, drift, product, cubeRes] = await mapLimit([
-      () => query(pool, GROUPED, params), lanesQ, lflQ, driftQ, productQ,
-      () => query(pool, CUBE_Q, params),
+      groupedQ,
+      needsB2cDetail ? lanesQ : () => EMPTY,
+      needsB2cDetail ? lflQ : () => EMPTY,
+      needsB2cDetail ? driftQ : () => EMPTY,
+      needsB2cDetail ? productQ : () => EMPTY,
+      cubeQ,
     ], 3)
 
     const DIM_KEY = {
@@ -1178,12 +1425,59 @@ export default async function handler(req, res) {
     out.cube = cubeRes.rows
     // Served from refCache — see the note on the mapLimit call above.
 
-    // ── 4. Filter-independent reference data, cached ──
-    if (!refCache || Date.now() - refCache.at > REF_TTL_MS) {
+    // ── 4. Reference data, cached ──
+    // Mostly filter-independent, but the B2B aggregates below honour the FTL/PTL slicers,
+    // so the entry is keyed on them. Without the key the first caller's selection would be
+    // served to every later request until REF_TTL_MS elapsed.
+    // needsB2cDetail is part of the key on purpose. A freight-scoped build skips the B2C
+    // halves of this cache, so without it the next B2C request would be handed that partial
+    // entry and render empty option lists and a blank rate grid — a cache-poisoning bug that
+    // would only show up when someone opened FTL/PTL first.
+    const b2bFilterKey = JSON.stringify([f.couriers ?? [], f.freightTypes ?? [], f.vehicleTypes ?? [], f.months ?? [], needsB2cDetail])
+    const needsBuild = !refCache || refCache.b2bFilterKey !== b2bFilterKey || Date.now() - refCache.at > REF_TTL_MS
+    if (needsBuild && refCacheBuild) {
+      // A build for this key is already running - wait for it rather than starting another.
+      await refCacheBuild
+    }
+    if (!refCache || refCache.b2bFilterKey !== b2bFilterKey || Date.now() - refCache.at > REF_TTL_MS) {
+      refCacheBuild = (async () => {
+      // ── FTL/PTL slicers ──
+      // The sidebar posts couriers (transporters), freightTypes and vehicleTypes, but the
+      // B2B queries below ignored them: the controls rendered, toggled and changed nothing.
+      //
+      // Two tables answer this tab and they name the same things differently, so each gets
+      // its own predicate list:
+      //   logistics_invoices_b2b  transporter_name / vehicle_type / "freight_type_FTL_PTL"
+      //   b2b_trip_priced         transporter      / vehicle      / freight_type
+      // freight_type_FTL_PTL is mixed-case and must stay double-quoted.
+      //
+      // Values are inlined as quoted literals rather than bound parameters because these
+      // fragments are interpolated into a dozen separate query strings, several of which
+      // already carry their own $n params — a shared counter across them would be fragile.
+      // Every value is escaped below and only ever reaches a TEXT column.
+      const sqlLit = (v) => "'" + String(v).replace(/'/g, "''") + "'"
+      const inList = (vals) => "(" + vals.map(sqlLit).join(", ") + ")"
+      const b2bWhere = (cols) => {
+        const c = []
+        if (f.couriers?.length)     c.push(`${cols.transporter} IN ${inList(f.couriers)}`)
+        if (f.freightTypes?.length) c.push(`${cols.freightType} IN ${inList(f.freightTypes)}`)
+        if (f.vehicleTypes?.length) c.push(`${cols.vehicle} IN ${inList(f.vehicleTypes)}`)
+        if (f.months?.length)       c.push(`${cols.month} IN ${inList(f.months)}`)
+        return c
+      }
+      const LEDGER_COLS = { transporter: 'transporter_name', freightType: '"freight_type_FTL_PTL"', vehicle: 'vehicle_type', month: 'month_year' }
+      const PRICED_COLS = { transporter: 'transporter', freightType: 'freight_type', vehicle: 'vehicle', month: 'month_year' }
+      // Ready-made clauses: AND-form to append to a query that already has a WHERE,
+      // WHERE-form for one that does not.
+      const ledgerAnd   = b2bWhere(LEDGER_COLS).map((x) => ` AND ${x}`).join('')
+      const ledgerWhere = b2bWhere(LEDGER_COLS).length ? ' WHERE ' + b2bWhere(LEDGER_COLS).join(' AND ') : ''
+      const pricedAnd   = b2bWhere(PRICED_COLS).map((x) => ` AND ${x}`).join('')
+      const pricedWhere = b2bWhere(PRICED_COLS).length ? ' WHERE ' + b2bWhere(PRICED_COLS).join(' AND ') : ''
+
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube, fixedVeh, fixedVehMonths, tplTotals, tplPartners, tplMonths, tplWarehouses, tplWhMonths] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1222,13 +1516,23 @@ export default async function handler(req, res) {
         `),
         () => query(pool, `
           SELECT
-            (SELECT array_agg(DISTINCT month_year ORDER BY month_year) FROM public.logistics_invoices_b2c WHERE month_year IS NOT NULL) AS months,
-            -- Only the five real zones, matching the exclusion in the base CTE. Without
-            -- this the slicer offered "North"/"West", which would filter to zero rows.
-            (SELECT array_agg(DISTINCT (${ZONE_MAP_SQL('zone')}) ORDER BY (${ZONE_MAP_SQL('zone')})) FROM public.logistics_invoices_b2c WHERE (${ZONE_MAP_SQL('zone')}) IS NOT NULL) AS zones,
-            (SELECT array_agg(DISTINCT m ORDER BY m) FROM (SELECT DISTINCT CASE WHEN upper(shipment_mode)='RTO' THEN 'RTO' WHEN upper(shipment_mode) IN ('REVERSE','RVP','DTO') THEN 'Reverse' WHEN upper(shipment_mode)='FORWARD' THEN 'Forward' ELSE shipment_mode END AS m FROM public.logistics_invoices_b2c WHERE shipment_mode IS NOT NULL) q) AS modes,
-            (SELECT array_agg(DISTINCT payment_mode ORDER BY payment_mode) FROM public.logistics_invoices_b2c WHERE payment_mode IS NOT NULL) AS payments,
-            (SELECT array_agg(DISTINCT courier_name ORDER BY courier_name) FROM public.logistics_invoices_b2c WHERE courier_name IS NOT NULL) AS couriers,
+            -- These five are read from lc_cube, not the ledger. They are the SLICER OPTION
+            -- LISTS, so they are filter-independent by definition, and every value is
+            -- already a cube dimension — the cube is built by grouping on exactly these
+            -- columns, so its distinct values are identical to the ledger's by construction.
+            --
+            -- As six DISTINCT scans over 1.1M rows this block measured 48s, the single
+            -- largest item in a cold request after lfl and product. Off the 17,893-row cube
+            -- it is milliseconds.
+            --
+            -- The zone and mode lists also come out already MAPPED here (lettered zones,
+            -- collapsed legs), which is what the slicer must offer: the raw ledger holds
+            -- 'North'/'EAST'/'ROI' spellings that would filter to zero rows.
+            (SELECT array_agg(DISTINCT month ORDER BY month) FROM public.lc_cube WHERE month IS NOT NULL) AS months,
+            (SELECT array_agg(DISTINCT zone ORDER BY zone) FROM public.lc_cube WHERE zone IS NOT NULL) AS zones,
+            (SELECT array_agg(DISTINCT mode ORDER BY mode) FROM public.lc_cube WHERE mode IS NOT NULL) AS modes,
+            (SELECT array_agg(DISTINCT payment ORDER BY payment) FROM public.lc_cube WHERE payment IS NOT NULL) AS payments,
+            (SELECT array_agg(DISTINCT courier_name ORDER BY courier_name) FROM public.lc_cube WHERE courier_name IS NOT NULL) AS couriers,
             -- FTL/PTL transporters, for the sidebar when that tab is active. The B2C courier
             -- list is meaningless there: none of those carriers appear in the freight ledger.
             (SELECT array_agg(DISTINCT transporter_name ORDER BY transporter_name)
@@ -1240,7 +1544,7 @@ export default async function handler(req, res) {
                FROM public.b2b_trip_priced WHERE vehicle IS NOT NULL) AS vehicle_types,
             (SELECT array_agg(DISTINCT freight_type ORDER BY freight_type)
                FROM public.b2b_trip_priced WHERE freight_type IS NOT NULL) AS freight_types,
-            (SELECT array_agg(DISTINCT courier_account_type ORDER BY courier_account_type) FROM public.logistics_invoices_b2c WHERE courier_account_type IS NOT NULL) AS account_types
+            (SELECT array_agg(DISTINCT acct ORDER BY acct) FROM public.lc_cube WHERE acct IS NOT NULL) AS account_types
         `),
         () => query(pool, `
           SELECT destination_city AS c FROM public.logistics_invoices_b2c
@@ -1269,7 +1573,7 @@ export default async function handler(req, res) {
                  "freight_type_FTL_PTL" AS freight_type,
                  charged_weight::float8 AS charged_weight,
                  total_cost::float8 AS total_cost
-            FROM public.logistics_invoices_b2b
+            FROM public.logistics_invoices_b2b${ledgerWhere}
            ORDER BY month_year DESC NULLS LAST LIMIT 500
         `),
         // ── B2B aggregates for the B2B tab ──
@@ -1291,7 +1595,7 @@ export default async function handler(req, res) {
                  SUM(p.variance)::float8 AS variance,
                  COUNT(p.card_rate)::int AS priced_trips
             FROM public.b2b_trip_priced p
-           WHERE p.billed > 0
+           WHERE p.billed > 0${pricedAnd.replace(/ (transporter|freight_type|vehicle|month_year) /g, ' p.$1 ')}
            GROUP BY 1, 2, 3
            ORDER BY 5 DESC
            LIMIT 60
@@ -1301,8 +1605,14 @@ export default async function handler(req, res) {
                  SUM(total_cost)::float8 AS cost,
                  AVG(total_cost)::float8 AS avg_cost,
                  COUNT(DISTINCT transporter_name)::int AS transporters,
-                 (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+                 (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes,
+                 (SELECT COUNT(*)::int FROM public.logistics_invoices_b2b u
+                   WHERE u.total_cost > 0
+                     AND NOT EXISTS (SELECT 1 FROM public.b2b_trip_priced pp WHERE pp.month_year = u.month_year)) AS unpriced_rows,
+                 (SELECT COALESCE(SUM(u.total_cost), 0)::float8 FROM public.logistics_invoices_b2b u
+                   WHERE u.total_cost > 0
+                     AND NOT EXISTS (SELECT 1 FROM public.b2b_trip_priced pp WHERE pp.month_year = u.month_year)) AS unpriced_cost
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
         `),
         () => query(pool, `
           SELECT transporter_name AS key, COUNT(*)::int AS trips,
@@ -1319,7 +1629,7 @@ export default async function handler(req, res) {
           SELECT COALESCE("freight_type_FTL_PTL", 'Unknown') AS key,
                  COUNT(*)::int AS trips, SUM(total_cost)::float8 AS cost,
                  AVG(total_cost)::float8 AS avg_cost
-            FROM public.logistics_invoices_b2b WHERE total_cost > 0
+            FROM public.logistics_invoices_b2b WHERE total_cost > 0${ledgerAnd}
            GROUP BY 1 ORDER BY 3 DESC
         `),
         // ── B2B contract variance (spec: audit trips against the signed rate card) ──
@@ -1359,7 +1669,7 @@ export default async function handler(req, res) {
                       (to_jsonb(b) ->> 'Shipment value')
                     )::numeric)::float8
                FROM public.logistics_invoices_b2b b)                  AS value_total
-          FROM public.b2b_trip_priced
+          FROM public.b2b_trip_priced${pricedWhere}
         `),
         // ── Monthly spend + contract variance ──
         // Variance is expressed against PRICED spend only. Dividing it by total spend would
@@ -1371,7 +1681,7 @@ export default async function handler(req, res) {
                  SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8 AS billed_priced,
                  SUM(card_rate)::float8 AS card_total,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3, 4 ORDER BY 1
         `),
         // ── Transporter x month, long form ──
@@ -1382,7 +1692,7 @@ export default async function handler(req, res) {
         () => query(pool, `
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3, 4 ORDER BY 1, 4 DESC
         `),
         // ── Vehicle type analysis ──
@@ -1394,7 +1704,7 @@ export default async function handler(req, res) {
                  SUM(billed)::float8 AS billed,
                  COUNT(card_rate)::int AS priced_trips,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2, 3, 4 ORDER BY 5 DESC
         `),
         // ── Lane x vehicle detail ──
@@ -1411,7 +1721,7 @@ export default async function handler(req, res) {
                  SUM(variance)::float8 AS variance,
                  COUNT(card_rate)::int AS priced_trips
             FROM public.b2b_trip_priced
-           WHERE billed > 0
+           WHERE billed > 0${pricedAnd}
            GROUP BY 1, 2, 3, 4, 5, 6, 7
            ORDER BY 9 DESC
         `),
@@ -1427,7 +1737,7 @@ export default async function handler(req, res) {
                  COUNT(*)::int AS trips,
                  percentile_cont(0.5) WITHIN GROUP (ORDER BY billed)::float8 AS median_cost,
                  SUM(billed)::float8 AS spend
-            FROM public.b2b_trip_priced
+            FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2
           -- 8 trips is the floor for a rate to mean anything. Below it a carrier can look
           -- cheap on two lucky trips and trigger a switch that costs money.
@@ -1445,7 +1755,203 @@ export default async function handler(req, res) {
                  SUM(spend)::float8 AS total_spend
             FROM l
         `),
-        wrQ, gridQ, trendQ, disputesQ, slabQ, SUBCUBE_Q,
+        // wrQ / gridQ / trendQ read the 679 MB B2C ledger and cost ~17s, ~14s and ~16s.
+        // They feed the weight-vs-rate attribution, the rate-card grid and the B2C monthly
+        // trend — none of which the freight tab renders, so a freight-scoped request skips
+        // them. b2bFilterKey carries needsB2cDetail, so this partial build can never be
+        // served to a request that does need them.
+        needsB2cDetail ? wrQ : () => EMPTY,
+        needsB2cDetail ? gridQ : () => EMPTY,
+        needsB2cDetail ? trendQ : () => EMPTY,
+        disputesQ, slabQ, SUBCUBE_Q,
+        // ── Fixed vehicle rentals ──
+        // Vehicles on a standing monthly charge rather than per-trip billing. Reported
+        // separately from freight: there are no trips or lanes to divide by, so folding
+        // this into the freight total would distort every per-trip figure on the tab.
+        // .catch() keeps the tab working before the table is created.
+        () => query(pool, `
+          SELECT COUNT(*)::int AS vehicles,
+                 COUNT(DISTINCT vehicle_number)::int AS distinct_vehicles,
+                 COUNT(DISTINCT month_year)::int AS months,
+                 COALESCE(SUM(cost), 0)::float8 AS cost,
+                 COALESCE(SUM(agreed_km), 0)::float8 AS agreed_km
+            FROM public.logistics_fixed_vehicles
+        `).catch(() => ({ rows: [{ vehicles: 0, distinct_vehicles: 0, months: 0, cost: 0, agreed_km: 0 }] })),
+        () => query(pool, `
+          SELECT month_year, COUNT(*)::int AS vehicles, COALESCE(SUM(cost), 0)::float8 AS cost
+            FROM public.logistics_fixed_vehicles
+           GROUP BY 1 ORDER BY 1
+        `).catch(() => ({ rows: [] })),
+        // ── 3PL warehousing ──
+        // Storage and handling billed by the warehouse partner, per site per month.
+        // A separate cost base from freight: these are not shipments, so they share no
+        // per-trip or per-parcel denominator with the other two scopes.
+        // .catch() keeps the page working before the table is created.
+        () => query(pool, `
+          SELECT COUNT(*)::int AS rows,
+                 COUNT(DISTINCT threepl_logistics_name)::int AS partners,
+                 COUNT(DISTINCT facility_pincode)::int AS warehouses,
+                 COUNT(DISTINCT month_year)::int AS months,
+                 COALESCE(SUM(total_cost), 0)::float8    AS cost,
+                 COALESCE(SUM(operation_fee), 0)::float8 AS operation_fee,
+                 COALESCE(SUM(rental_fee), 0)::float8    AS rental_fee,
+                 COALESCE(SUM(other_fee), 0)::float8     AS other_fee
+            FROM public.logistics_costs_3pl
+        `).catch(() => ({ rows: [{ rows: 0, partners: 0, warehouses: 0, months: 0, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0 }] })),
+        () => query(pool, `
+          -- Volume joined on (warehouse, partner, month), the grain the sync now writes.
+          -- Partner matters in the key: Hyderabad is billed by Losung and WareIQ in the same
+          -- months, and joining on the site alone would hand each of them the other's
+          -- parcels as well, roughly halving both per-parcel rates.
+          WITH cost AS (
+            SELECT threepl_logistics_name AS key,
+                   COUNT(DISTINCT facility_pincode)::int AS warehouses,
+                   COUNT(DISTINCT month_year)::int  AS months,
+                   COALESCE(SUM(total_cost), 0)::float8    AS cost,
+                   COALESCE(SUM(operation_fee), 0)::float8 AS operation_fee,
+                   COALESCE(SUM(rental_fee), 0)::float8    AS rental_fee,
+                   COALESCE(SUM(other_fee), 0)::float8     AS other_fee
+              FROM public.logistics_costs_3pl GROUP BY 1
+          ),
+          -- DISTINCT billed triples first, so a partner billing one site twice in a month
+          -- does not double that month's volume.
+          vol AS (
+            SELECT m.partner AS key,
+                   SUM(s.shipments)::int    AS shipments,
+                   SUM(s.weight_kg)::float8 AS weight_kg
+              FROM (SELECT DISTINCT facility_pincode, threepl_logistics_name AS partner, month_year
+                      FROM public.logistics_costs_3pl) m
+              JOIN public.logistics_3pl_shipments s
+                ON s.facility_pincode = m.facility_pincode AND s.month_year = m.month_year
+             GROUP BY 1
+          )
+          SELECT c.*, v.shipments, v.weight_kg
+            FROM cost c LEFT JOIN vol v ON v.key = c.key
+           ORDER BY c.cost DESC
+        `).catch(() => ({ rows: [] })),
+        () => query(pool, `
+          -- Volume joined from logistics_3pl_shipments (BigQuery Clickpost, synced by
+          -- scripts/sync-3pl-shipments.mjs). Summed per month across only the warehouses
+          -- that actually billed that month, so the denominator matches the numerator.
+          -- Volume is summed over the DISTINCT (warehouse, month) pairs that were billed,
+          -- not joined row-by-row onto the cost table: where two partners bill one site in
+          -- one month, a direct join would count that site's shipments twice.
+          WITH cost AS (
+            SELECT month_year,
+                   COALESCE(SUM(total_cost), 0)::float8    AS cost,
+                   COALESCE(SUM(operation_fee), 0)::float8 AS operation_fee,
+                   COALESCE(SUM(rental_fee), 0)::float8    AS rental_fee,
+                   COALESCE(SUM(other_fee), 0)::float8     AS other_fee
+              FROM public.logistics_costs_3pl GROUP BY 1
+          ),
+          -- Join on the full (warehouse, partner, month) key the shipments table now uses.
+          -- Matching on site+month alone would pair a Hyderabad site-month against BOTH its
+          -- partner rows and count that site's parcels twice.
+          vol AS (
+            SELECT m.month_year,
+                   SUM(s.shipments)::int    AS shipments,
+                   SUM(s.weight_kg)::float8 AS weight_kg
+              FROM (SELECT DISTINCT facility_pincode, month_year
+                      FROM public.logistics_costs_3pl) m
+              JOIN public.logistics_3pl_shipments s
+                ON s.facility_pincode = m.facility_pincode AND s.month_year = m.month_year
+             GROUP BY 1
+          )
+          SELECT c.month_year AS key, c.cost, c.operation_fee, c.rental_fee, c.other_fee,
+                 v.shipments, v.weight_kg
+            FROM cost c LEFT JOIN vol v ON v.month_year = c.month_year
+           ORDER BY 1
+        `).catch(() => ({ rows: [] })),
+        () => query(pool, `
+          -- Per-site cost with the shipment volume that site actually moved in the months
+          -- it billed. The EXISTS guard is what keeps the per-unit figures honest: a site
+          -- ships in months it is not billed for (and vice versa), and counting those would
+          -- divide a part-period cost by a full-period volume.
+          --
+          -- Shipments/weight are NULL where the billed months have no matching volume —
+          -- Haryana May 2026 is the live example — so the UI shows a dash rather than a
+          -- fabricated per-shipment cost.
+          -- One row per WAREHOUSE, with every partner that bills it listed.
+          --
+          -- Grain matters here. Haryana is billed by three Hexalog entities, sometimes in
+          -- the same month, but there is one physical site with one shipment stream: the
+          -- tracking report cannot say which parcel belongs to which contract. Reporting
+          -- per (warehouse, partner) gave GGN-1 and GGN-2 the same 61,985 June+July
+          -- shipments each, so the same parcels produced 62.9/shipment for one and
+          -- 19.8 for the other — both wrong, and neither figure means anything.
+          --
+          -- Costs for a site are therefore TOTALLED across its partners and divided by that
+          -- site's real volume once. That is the only per-unit figure the data supports.
+          WITH cost AS (
+            SELECT facility_pincode,
+                   -- Name falls back to location then the pincode itself, so a facility
+                   -- uploaded without a name still has a readable label.
+                   COALESCE(MAX(NULLIF(facility_name, '')), MAX(NULLIF(facility_location, '')),
+                            facility_pincode) AS facility,
+                   MAX(facility_location) AS location,
+                   string_agg(DISTINCT threepl_logistics_name, ', ' ORDER BY threepl_logistics_name) AS partner,
+                   COUNT(DISTINCT threepl_logistics_name)::int AS partner_n,
+                   COUNT(DISTINCT month_year)::int             AS months,
+                   COALESCE(SUM(total_cost), 0)::float8        AS cost,
+                   COALESCE(SUM(operation_fee), 0)::float8     AS operation_fee,
+                   COALESCE(SUM(rental_fee), 0)::float8        AS rental_fee
+              FROM public.logistics_costs_3pl
+             GROUP BY facility_pincode
+          ),
+          -- DISTINCT months first: with several partners billing one site in one month the
+          -- month would otherwise be counted once per partner, multiplying its volume.
+          vol AS (
+            SELECT m.facility_pincode,
+                   SUM(s.shipments)::int    AS shipments,
+                   SUM(s.weight_kg)::float8 AS weight_kg
+              FROM (SELECT DISTINCT facility_pincode, month_year
+                      FROM public.logistics_costs_3pl) m
+              JOIN public.logistics_3pl_shipments s
+                ON s.facility_pincode = m.facility_pincode AND s.month_year = m.month_year
+             GROUP BY 1
+          )
+          SELECT c.facility AS key, c.facility_pincode AS pincode, c.location,
+                 c.partner, c.partner_n, c.months,
+                 c.cost, c.operation_fee, c.rental_fee,
+                 v.shipments, v.weight_kg
+            FROM cost c LEFT JOIN vol v ON v.facility_pincode = c.facility_pincode
+           ORDER BY c.cost DESC
+        `).catch(() => ({ rows: [] })),
+        // Per-site, per-month cost and volume, for the warehouse trend chart. Same
+        // (warehouse, month) join as above, kept at full grain so the UI can plot each
+        // site's rate over time and leave a gap in months it did not bill.
+        () => query(pool, `
+          -- Cost and volume aggregated separately then joined, because the two sides have
+          -- different row counts per site-month: a shared site has one cost row per partner
+          -- and one volume row per partner, and multiplying them in a single join would
+          -- square the site's parcels. MAX() was wrong for the same reason — with two
+          -- partners on one site it returned the larger partner's volume instead of both.
+          -- Kept at (site, partner, month) grain, NOT rolled to the site. The client
+          -- rebuilds every 3PL figure from these rows when a slicer is active, and a
+          -- site-grain row cannot answer "just WareIQ" for a site two partners share:
+          -- filtering by partner would drag in the co-tenant's spend as well.
+          -- Volume is per (pincode, month) while cost is per (pincode, partner, month): a
+          -- facility shared by two partners has one volume row and two cost rows. MAX()
+          -- rather than SUM() therefore takes that one volume figure once instead of
+          -- repeating it per partner and doubling the site's parcels.
+          SELECT COALESCE(NULLIF(c.facility_name, ''), NULLIF(c.facility_location, ''),
+                          c.facility_pincode) AS warehouse,
+                 c.facility_pincode AS pincode,
+                 c.threepl_logistics_name AS partner, c.month_year,
+                 COALESCE(SUM(c.total_cost), 0)::float8 AS cost,
+                 -- The fee split at this grain too. The client rebuilds the monthly trend
+                 -- from these rows whenever a slicer is active, and without the split the
+                 -- stacked areas had nothing to plot and the chart rendered as a bare line.
+                 COALESCE(SUM(c.operation_fee), 0)::float8 AS operation_fee,
+                 COALESCE(SUM(c.rental_fee), 0)::float8    AS rental_fee,
+                 COALESCE(SUM(c.other_fee), 0)::float8     AS other_fee,
+                 MAX(s.shipments)                       AS shipments,
+                 MAX(s.weight_kg)::float8               AS weight_kg
+            FROM public.logistics_costs_3pl c
+            LEFT JOIN public.logistics_3pl_shipments s
+              ON s.facility_pincode = c.facility_pincode AND s.month_year = c.month_year
+           GROUP BY 1, 2, 3, 4 ORDER BY 1, 4, 3
+        `).catch(() => ({ rows: [] })),
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -1482,7 +1988,7 @@ export default async function handler(req, res) {
         // so it is measured once per cache period like the other reference data.
         subCube: subCube.rows,
         trendAll: trendRes.rows,
-        at: Date.now(), options, b2b: b2b.rows,
+        at: Date.now(), b2bFilterKey, options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
         health: { ...health.rows[0], ...joinCov.rows[0] },
         // Kept for the existing disclosure line above Cost Overview.
@@ -1492,9 +1998,9 @@ export default async function handler(req, res) {
         b2bTrans: b2bTrans.rows,
         b2bMonths: b2bMonths.rows,
         b2bTypes: b2bTypes.rows,
-        // Contract variance against the signed rate card. Filter-independent, like the
-        // other B2B aggregates — the B2B ledger is trip-billed and the sidebar's
-        // courier/zone/weight slicers do not apply to it.
+        // Contract variance against the signed rate card. Now honours the FTL/PTL
+        // slicers (transporter / freight type / vehicle size) like the other B2B
+        // aggregates; the B2C zone and weight slicers still do not apply to trip billing.
         b2bVar: b2bVar.rows[0] || null,
         
         
@@ -1508,7 +2014,16 @@ export default async function handler(req, res) {
         
         
         b2bSole: b2bSole.rows[0] || null,
+        fixedVeh: fixedVeh.rows[0] || null,
+        fixedVehMonths: fixedVehMonths.rows,
+        tplTotals: tplTotals.rows[0] || null,
+        tplPartners: tplPartners.rows,
+        tplMonths: tplMonths.rows,
+        tplWarehouses: tplWarehouses.rows,
+        tplWhMonths: tplWhMonths.rows,
       }
+      })()
+      try { await refCacheBuild } finally { refCacheBuild = null }
     }
 
     // Attribution describes the whole book, not the slicer-filtered view: the derived card
@@ -1563,6 +2078,13 @@ export default async function handler(req, res) {
     
     
     out.b2bSole = refCache.b2bSole
+    out.fixedVeh = refCache.fixedVeh
+    out.fixedVehMonths = refCache.fixedVehMonths
+    out.tplTotals = refCache.tplTotals
+    out.tplPartners = refCache.tplPartners
+    out.tplMonths = refCache.tplMonths
+    out.tplWarehouses = refCache.tplWarehouses
+    out.tplWhMonths = refCache.tplWhMonths
 
     // Store before responding. Claims are read fresh every request elsewhere, so a cached
     // body would not hide a newly filed claim from the register.

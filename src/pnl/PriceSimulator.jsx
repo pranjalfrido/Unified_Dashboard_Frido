@@ -149,8 +149,8 @@ const WATERFALL_STAGES = [
   { key: 'gross', label: 'Gross Revenue', color: C.acc },
   { key: 'net', label: 'Net Revenue', color: C.acm },
   { key: 'gm', label: 'Gross Margin', color: C.acd },
-  { key: 'cm1', label: 'CM1', color: '#5A420C' },
-  { key: 'cm2', label: 'CM2', color: '#4A360A' },
+  { key: 'cm1', label: 'CM1', color: C.t2 },
+  { key: 'cm2', label: 'CM2', color: C.t1 },
 ]
 const BAR_H = 9
 const BAR_GAP = 2
@@ -676,11 +676,11 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
           <div style={{ display: 'flex', gap: 4 }}>
             {PICK_MODES.map((m, i) => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                 <button onClick={() => handlePickModeChange(m.id)}
                   style={{
                     fontSize: 12, fontWeight: pickMode === m.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', outline: 'none',
-                    background: pickMode === m.id ? C.acs : 'transparent', color: pickMode === m.id ? '#3F3D33' : C.t2,
+                    background: pickMode === m.id ? C.acs : 'transparent', color: pickMode === m.id ? C.t1 : C.t2,
                     cursor: 'pointer',
                   }}>{m.label}</button>
               </div>

@@ -1682,7 +1682,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
               <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
                 {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => { setActiveTool(null); setD2cSubCh(opt.id) }} style={{ fontSize: 12, fontWeight: !activeTool && d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !activeTool && d2cSubCh === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+                <button onClick={() => { setActiveTool(null); setD2cSubCh(opt.id) }} style={{ fontSize: 12, fontWeight: !activeTool && d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !activeTool && d2cSubCh === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
               </div>
             ))
           )}
@@ -1693,12 +1693,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
               tool) — they have no meaning on any other channel tab, so they don't appear there at
               all rather than showing disabled. */}
           {activeTab === 'shopify' && (
-            <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid #E3E0D8`, gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid ${C.border}`, gap: 4 }}>
               {PNL_TOOLS.map(tool => {
                 const isActive = activeTool === tool.id
                 return (
                   <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
-                    style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: isActive ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
                     {tool.id === 'priceSimulator' ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
@@ -1721,7 +1721,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map((opt, i) => (
               <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
                 {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+                <button onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
               </div>
             ))
           )}
@@ -1729,12 +1729,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
               <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
                 {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
               </div>
             ))
           )}
           {!['shopify', 'amazon', 'offline'].includes(activeTab) && (
-            <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: '#3F3D33', display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: C.t1, display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
           )}
         </div>
       </div>}

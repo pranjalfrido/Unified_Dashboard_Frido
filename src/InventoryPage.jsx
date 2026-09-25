@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { IC, PAGE_BACKGROUND, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
+import { IC, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
+import LoadingOverlay from './LoadingOverlay.jsx'
 import InventoryHealthPage from './inventory/InventoryHealthPage.jsx'
+import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
+import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
 
@@ -407,6 +410,12 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       invSalesOpts: sales.data?.filterOptions || null,
       invSalesAsOf: sales.data?.asOf || null,
       invSalesLastSales: sales.data?.lastSalesDateConsidered || null,
+      invActiveTab: tab,
+      invFilterCount: Object.values((tab === 'sales' ? salesFilters : healthFilters) || {})
+        .reduce((a, v) => a + (Array.isArray(v) ? v.length : v ? 1 : 0), 0),
+      invFilterPanel: tab === 'health'
+        ? (invData ? <HealthFilterSidebar data={invData} filters={healthFilters} setFilters={setHealthFilters} open popover /> : null)
+        : (sales.data ? <SalesFilterSidebar data={sales.data} filters={salesFilters} setFilters={setSalesFilters} open popover /> : null),
     }
     if (tab === 'sales') {
       onTopbarDateControl({
@@ -639,7 +648,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   }, [inv.data, healthFilters])
 
   return (
-    <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: IC.page, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
       {/* Mobile-only tab bar — the desktop tab switcher lives inside the FilterSidebar. On
           mobile the sidebar is hidden, so we surface the same tabs as a horizontal scroll row. */}
       <div className="inv-mobile-subtabs" style={{
@@ -657,10 +666,8 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       </div>
 
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {active.loading && !active.data && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: IC.t3, fontSize: 13, margin: '0 24px' }}>Loading…</div>
-        )}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <LoadingOverlay loading={active.loading && !active.data} label="Loading inventory" />
         {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}

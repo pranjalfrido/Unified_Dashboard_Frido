@@ -577,7 +577,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   )
 
   return (
-    <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+    <div style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 10 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 190 }} />
@@ -606,21 +606,21 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                   style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 30 }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
                   </td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
                 </tr>
                 {isOpen && r.skus.map((s, j) => (
                   <tr key={key + '-' + j} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 28 }}>
                     <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
                   </tr>
                 ))}
               </React.Fragment>
@@ -717,20 +717,20 @@ function MobilityErgoAvgSaleTable({ rows }) {
               <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}`, height: 32 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
-                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
-                <td style={{ padding: '6px 10px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rtdInvt)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rawInvt)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.status.Low.c }}>{fmtInt(r.rawBlockedInvt)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtDays(r.lifeDays)}d</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10.5, color: IC.t3 }} title={`${r.windowStart} → ${r.windowEnd}`}>{fmtDays(r.windowDays)}d</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
-                <td style={{ padding: '6px 10px' }}><StatusChip status={r.stockStatus} /></td>
-                <td style={{ padding: '6px 10px' }}>
+                <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
+                <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
+                <td style={{ padding: '8px 12px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rtdInvt)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rawInvt)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.status.Low.c }}>{fmtInt(r.rawBlockedInvt)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtDays(r.lifeDays)}d</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10.5, color: IC.t3 }} title={`${r.windowStart} → ${r.windowEnd}`}>{fmtDays(r.windowDays)}d</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
+                <td style={{ padding: '8px 12px' }}><StatusChip status={r.stockStatus} /></td>
+                <td style={{ padding: '8px 12px' }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                     background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
@@ -824,7 +824,7 @@ function TileToggle({ label, active, onClick }) {
   )
 }
 
-function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, facilityView }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, popover, facilityView }) {
   const opts = data.filterOptions
   // Facility slicer only offers facilities matching the active Regular/Other Facilities tab —
   // otherwise selecting a Dark Store here while on the Regular view would filter the Regular
@@ -896,22 +896,19 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
   }
 
   return (
-    <div style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer div only reserves width
-      // in the flex row (its child is position:fixed), but it still occupies real vertical
-      // space at its own top offset (pushed down by the page's own padding). Without a
-      // matching background here, the app shell's grey shows through as a gap above/around
-      // where the fixed white sidebar visually begins.
-      background: IC.surface,
+      overflow: 'hidden', flexShrink: 0,
+      // Width-reserver only: its child is position:fixed. Deliberately transparent so the
+      // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(open ? {
-          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)',
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
+          position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)',
+          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
         {sidebarTop}
@@ -1063,7 +1060,7 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
     const v = obj[loc] || { totalInvt: 0, avgSale: 0 }
     const invt = isLeaf ? cellInvt(v) : (v.totalInvt || 0)
     return (
-      <td key={loc} style={{ padding: '6px 4px', borderRight: `1px solid ${IC.border}` }}>
+      <td key={loc} style={{ padding: '8px 12px', borderRight: `1px solid ${IC.border}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontVariantNumeric: 'tabular-nums' }}>
           <span style={{ color, flex: 1, textAlign: 'right', paddingRight: 4 }}>{fmtInt(invt)}</span>
           <span style={{ color: IC.t3, flex: 1, textAlign: 'right' }}>{fmtInt(v.avgSale)}</span>
@@ -1114,12 +1111,12 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
                   <tr onClick={() => toggle(catKey)} style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.045)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}>
-                    <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>
                       <span style={{ display: 'inline-block', width: 14, transform: catOpen ? 'rotate(90deg)' : 'none', transition: 'transform .12s', color: IC.t3 }}>›</span>
                       {cat.name}
                     </td>
                     {pivot.locations.map(loc => locCell(cat.byLoc, loc, IC.t1))}
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
                       {fmtInt(cat.totalInvt)} <span style={{ color: IC.t3, fontWeight: 500 }}>/ {fmtInt(cat.avgSale)}</span>
                     </td>
                   </tr>
@@ -1136,7 +1133,7 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
                             {sub.name}
                           </td>
                           {pivot.locations.map(loc => locCell(sub.byLoc, loc, IC.t2))}
-                          <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
                             {fmtInt(sub.totalInvt)} <span style={{ color: IC.t3 }}>/ {fmtInt(sub.avgSale)}</span>
                           </td>
                         </tr>
@@ -1164,7 +1161,7 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
             <tr style={{ background: IC.surface }}>
               <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>Grand Total</td>
               {pivot.locations.map(loc => locCell(grandTotal.byLoc, loc, IC.t1))}
-              <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
                 {fmtInt(grandTotal.totalInvt)} <span style={{ color: IC.t2, fontWeight: 600 }}>/ {fmtInt(grandTotal.avgSale)}</span>
               </td>
             </tr>
@@ -1443,23 +1440,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} facilityView={facilityView} />
-      {/* Desktop collapse-toggle button — hidden on mobile via CSS */}
-      <button className="inv-filter-toggle" onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'fixed', top: 'calc(var(--nav) + 4px)',
-        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
-        zIndex: 30, transition: 'left .2s ease',
-      }}>
-        {sidebarOpen ? '‹' : '›'}
-      </button>
+      {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />}
 
-      {/* +16 accounts for the collapse-toggle button's own width — it's position:fixed
-          (out of flow) now, so this padding is the only thing keeping content from
-          starting underneath it. */}
-      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+      {/* The collapse toggle is position:fixed and docked against the nav rail, so it no
+          longer sits where content begins - this padding is just the page gutter. */}
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
         {/* Mobile filter button — hidden on desktop via CSS (display:none by default) */}
         <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
@@ -1743,3 +1728,6 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
     />
   )
 }
+
+// Exported so InventoryPage can render this panel inside the top-bar Filters popover.
+export { FilterSidebar as HealthFilterSidebar }
