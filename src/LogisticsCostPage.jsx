@@ -1236,11 +1236,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       setLoading(true); setError(null)
       try {
         let j
-        // Try CDN static file on first load (no filters set yet, or base not cached)
-        const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
+        // Try CDN static file on first load. months is excluded from this check because the
+        // static JSON carries ALL months and b2b/tpl data is filtered client-side — the
+        // auto-selected last-N months should never force a live BQ call.
+        const isDefaultFilters = !f.zones?.length && !f.modes?.length &&
           !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
           !f.band && !f.destCity && !f.originCity && f.exactSlab == null &&
-          (!f.billing || f.billing === 'all')
+          (!f.billing || f.billing === 'all') &&
+          !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
         if (isDefaultFilters && !baseData) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
