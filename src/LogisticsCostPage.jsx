@@ -1183,6 +1183,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
   const [baseData, setBaseData] = useState(null)
+  // b2b never uses the cube so we can't store its data in baseData (that would re-trigger the
+  // effect on every load). Track "already served from static" with a ref instead.
+  const b2bStaticServed = useRef(false)
 
   // The API request key. tplPartners/tplSites are stripped: 3PL aggregates arrive from the
   // server's filter-independent refCache and are narrowed on the client, so including them
@@ -1236,18 +1239,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       setLoading(true); setError(null)
       try {
         let j
-        // Try CDN static file on first load (no filters set yet, or base not cached)
-        const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
+        // Try CDN static file on first load. months is excluded from this check because the
+        // static JSON carries ALL months and b2b/tpl data is filtered client-side — the
+        // auto-selected last-N months should never force a live BQ call.
+        const isDefaultFilters = !f.zones?.length && !f.modes?.length &&
           !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
           !f.band && !f.destCity && !f.originCity && f.exactSlab == null &&
-          (!f.billing || f.billing === 'all')
+          (!f.billing || f.billing === 'all') &&
+          !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
-        if (isDefaultFilters && !baseData) {
+        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it.
+        // Use a ref to track first-serve so we don't loop (setting state re-triggers the effect).
+        const wantsStatic = isDefaultFilters && (!baseData || (scope === 'b2b' && !b2bStaticServed.current))
+        if (wantsStatic) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 48 * 60 * 60 * 1000) { j = data }
+            if (age < 48 * 60 * 60 * 1000) { j = data; if (scope === 'b2b') b2bStaticServed.current = true }
           }
         }
 
@@ -1268,7 +1277,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         if (scanRef.current !== myRun) return
 
         // Cache the full base response so future cube-compatible filters are instant.
-        if (isDefaultFilters && j.cube) setBaseData(j)
+        // Skip for b2b: it never uses the cube, and setting baseData would re-trigger this effect.
+        if (isDefaultFilters && j.cube && scope !== 'b2b') setBaseData(j)
 
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
@@ -3558,7 +3568,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.orange}
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.blue}
                     radius={[0, 4, 4, 0]} maxBarSize={16}>
                     <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
                       style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />

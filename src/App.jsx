@@ -4859,7 +4859,19 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
         </div>
       )}
       {page === 'inventory' && inventoryDateControl?.invFilterPanel && (
-        <div className="tnav-right">
+        <div className="tnav-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {invTab === 'health' && inventoryDateControl.invHealthAsOf && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+              <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
+                Snapshot {new Date(inventoryDateControl.invHealthAsOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+              </span>
+              {inventoryDateControl.invHealthLastSales && (
+                <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
+                  Latest sales {new Date(inventoryDateControl.invHealthLastSales + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+          )}
           <FilterIconPopover activeCount={inventoryDateControl.invFilterCount}>
             {inventoryDateControl.invFilterPanel}
           </FilterIconPopover>

@@ -349,6 +349,10 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
   const onSort = key => setSort(prev => prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
   const [selectedFacilities, setSelectedFacilities] = useState([])
+  const headerScrollRef = useRef(null)
+  const bodyScrollRef = useRef(null)
+  const syncFromBody = e => { if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
+  const syncFromHeader = e => { if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
 
   const facilityOptions = useMemo(
     () => allFacilities.filter(f => f.facilityType === facilityType).sort((a, b) => a.facility.localeCompare(b.facility)),
@@ -439,7 +443,9 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         background: IC.surface,
-        ...(frozenIdx != null ? { ...frozenStyle(frozenIdx), zIndex: 3 } : {}),
+        position: 'sticky', top: 0,
+        zIndex: frozenIdx != null ? 4 : 2,
+        ...(frozenIdx != null ? frozenStyle(frozenIdx) : {}),
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
     </th>
@@ -468,67 +474,73 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
       {sortedRows.length === 0 ? (
         <div style={{ color: IC.t3, fontSize: 12 }}>No inventory at {selectedFacilities.length > 0 ? 'the selected store(s)' : `${facilityType} facilities`}.</div>
       ) : (
-        <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-          <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: FROZEN_WIDTHS[0] }} />
-              <col style={{ width: FROZEN_WIDTHS[1] }} />
-              <col style={{ width: FROZEN_WIDTHS[2] }} />
-              {columns.map(c => <col key={c} style={{ width: 90 }} />)}
-              <col style={{ width: 90 }} />
-            </colgroup>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-              <tr>
-                {th('Category', 'category', 'left', 0)}
-                {th('Sub-category', 'subCategory', 'left', 1)}
-                {th('Product ID', 'sku', 'left', 2)}
-                {columns.map(c => th(storeLocationByFacility.get(c) || c, colKey(c)))}
-                {th('Total Invt', 'totalInvt')}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Divider as a real row (genuine table content, 1px tall) — border/box-shadow on
-                  the sticky <thead> proved unreliable across several tables on this page, and a
-                  filler <tr> nested INSIDE that sticky <thead> (with its own sticky-left cells)
-                  broke the thead's own sticky behavior on scroll in this table specifically —
-                  putting the filler row here, as the first <tbody> row instead, avoids the
-                  nested-sticky-context problem while still sitting flush under the header. */}
-              <tr style={{ height: 1 }}>
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
-                <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
-              </tr>
-              {sortedRows.map(r => (
-                <tr key={r.sku} style={{ borderBottom: `1px solid ${IC.border}`, height: 34 }}>
-                  <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(0) }}>{r.category}</td>
-                  <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(1) }}>{r.subCategory}</td>
-                  <td style={{ padding: '7px 10px', color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(2) }}>{r.sku}</td>
-                  {columns.map(c => (
-                    <td key={c} style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(colValue(r, c))}</td>
-                  ))}
-                  <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(rowTotal(r))}</td>
+        <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${IC.border}`, borderRadius: 8, overflow: 'hidden' }}>
+          {/* Fixed header — scrolls horizontally in sync with body */}
+          <div ref={headerScrollRef} onScroll={syncFromHeader} style={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
+            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
+                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {th('Category', 'category', 'left', 0)}
+                  {th('Sub-category', 'subCategory', 'left', 1)}
+                  {th('Product ID', 'sku', 'left', 2)}
+                  {columns.map(c => th(storeLocationByFacility.get(c) || c, colKey(c)))}
+                  {th('Total Invt', 'totalInvt')}
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ height: 1 }}>
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
-                <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
-              </tr>
-              <tr style={{ position: 'sticky', bottom: 0, zIndex: 1, background: IC.surface, height: 34 }}>
-                <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, background: IC.surface, ...frozenStyle(0), zIndex: 2 }}>Total</td>
-                <td style={{ padding: '7px 10px', background: IC.surface, ...frozenStyle(1), zIndex: 2 }} />
-                <td style={{ padding: '7px 10px', fontSize: 11, color: IC.t3, fontWeight: 500, background: IC.surface, ...frozenStyle(2), zIndex: 2 }}>{fmtInt(filtered.length)} SKUs</td>
-                {columns.map(c => (
-                  <td key={c} style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(totalByCol[c] || 0)}</td>
+                <tr style={{ height: 1 }}>
+                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
+                  <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
+                </tr>
+              </thead>
+            </table>
+          </div>
+          {/* Scrollable body */}
+          <div ref={bodyScrollRef} onScroll={syncFromBody} style={{ overflowX: 'auto', overflowY: 'auto', height: 370 }}>
+            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
+                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
+              </colgroup>
+              <tbody>
+                {sortedRows.map(r => (
+                  <tr key={r.sku} style={{ borderBottom: `1px solid ${IC.border}`, height: 34 }}>
+                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(0) }}>{r.category}</td>
+                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(1) }}>{r.subCategory}</td>
+                    <td style={{ padding: '7px 10px', color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: IC.surface, ...frozenStyle(2) }}>{r.sku}</td>
+                    {columns.map(c => (
+                      <td key={c} style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(colValue(r, c))}</td>
+                    ))}
+                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(rowTotal(r))}</td>
+                  </tr>
                 ))}
-                <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(total)}</td>
-              </tr>
-            </tfoot>
-          </table>
+              </tbody>
+            </table>
+          </div>
+          {/* Fixed footer total */}
+          <div ref={null} style={{ overflowX: 'hidden', borderTop: `1px solid ${IC.border}` }}>
+            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
+                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
+              </colgroup>
+              <tbody>
+                <tr style={{ background: IC.surface, height: 34 }}>
+                  <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, background: IC.surface, ...frozenStyle(0), zIndex: 2 }}>Total</td>
+                  <td style={{ padding: '7px 10px', background: IC.surface, ...frozenStyle(1), zIndex: 2 }} />
+                  <td style={{ padding: '7px 10px', fontSize: 11, color: IC.t3, fontWeight: 500, background: IC.surface, ...frozenStyle(2), zIndex: 2 }}>{fmtInt(filtered.length)} SKUs</td>
+                  {columns.map(c => (
+                    <td key={c} style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(totalByCol[c] || 0)}</td>
+                  ))}
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(total)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </GlassCard></div>
@@ -729,8 +741,8 @@ function MobilityErgoAvgSaleTable({ rows }) {
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
-                <td style={{ padding: '8px 12px' }}><StatusChip status={r.stockStatus} /></td>
-                <td style={{ padding: '8px 12px' }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                     background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
