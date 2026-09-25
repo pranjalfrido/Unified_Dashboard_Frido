@@ -511,14 +511,14 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                 </tr>
               ))}
             </tbody>
-            <tfoot>
+            <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 1 }}>
               <tr style={{ height: 1 }}>
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(0), zIndex: 2 }} />
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(1), zIndex: 2 }} />
+                <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(2), zIndex: 2 }} />
                 <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
               </tr>
-              <tr style={{ position: 'sticky', bottom: 0, zIndex: 1, background: IC.surface, height: 34 }}>
+              <tr style={{ background: IC.surface, height: 34 }}>
                 <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, background: IC.surface, ...frozenStyle(0), zIndex: 2 }}>Total</td>
                 <td style={{ padding: '7px 10px', background: IC.surface, ...frozenStyle(1), zIndex: 2 }} />
                 <td style={{ padding: '7px 10px', fontSize: 11, color: IC.t3, fontWeight: 500, background: IC.surface, ...frozenStyle(2), zIndex: 2 }}>{fmtInt(filtered.length)} SKUs</td>
@@ -729,8 +729,8 @@ function MobilityErgoAvgSaleTable({ rows }) {
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
-                <td style={{ padding: '8px 12px' }}><StatusChip status={r.stockStatus} /></td>
-                <td style={{ padding: '8px 12px' }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                     background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
