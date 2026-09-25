@@ -1245,7 +1245,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           (!f.billing || f.billing === 'all') &&
           !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
-        if (isDefaultFilters && !baseData) {
+        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it — always
+        // try the static JSON for b2b with default filters, even if baseData is already set.
+        if (isDefaultFilters && (!baseData || scope === 'b2b')) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
