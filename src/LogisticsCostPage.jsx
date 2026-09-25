@@ -1183,6 +1183,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
   const [baseData, setBaseData] = useState(null)
+  // b2b never uses the cube so we can't store its data in baseData (that would re-trigger the
+  // effect on every load). Track "already served from static" with a ref instead.
+  const b2bStaticServed = useRef(false)
 
   // The API request key. tplPartners/tplSites are stripped: 3PL aggregates arrive from the
   // server's filter-independent refCache and are narrowed on the client, so including them
@@ -1245,14 +1248,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           (!f.billing || f.billing === 'all') &&
           !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
-        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it — always
-        // try the static JSON for b2b with default filters, even if baseData is already set.
-        if (isDefaultFilters && (!baseData || scope === 'b2b')) {
+        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it.
+        // Use a ref to track first-serve so we don't loop (setting state re-triggers the effect).
+        const wantsStatic = isDefaultFilters && (!baseData || (scope === 'b2b' && !b2bStaticServed.current))
+        if (wantsStatic) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 48 * 60 * 60 * 1000) { j = data }
+            if (age < 48 * 60 * 60 * 1000) { j = data; if (scope === 'b2b') b2bStaticServed.current = true }
           }
         }
 
@@ -1273,7 +1277,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         if (scanRef.current !== myRun) return
 
         // Cache the full base response so future cube-compatible filters are instant.
-        if (isDefaultFilters && j.cube) setBaseData(j)
+        // Skip for b2b: it never uses the cube, and setting baseData would re-trigger this effect.
+        if (isDefaultFilters && j.cube && scope !== 'b2b') setBaseData(j)
 
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
