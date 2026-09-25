@@ -468,7 +468,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
       {sortedRows.length === 0 ? (
         <div style={{ color: IC.t3, fontSize: 12 }}>No inventory at {selectedFacilities.length > 0 ? 'the selected store(s)' : `${facilityType} facilities`}.</div>
       ) : (
-        <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
+        <div style={{ height: 420, overflow: 'auto' }}>
           <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: FROZEN_WIDTHS[0] }} />
