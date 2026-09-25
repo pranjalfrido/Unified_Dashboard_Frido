@@ -3557,7 +3557,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.orange}
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.blue}
                     radius={[0, 4, 4, 0]} maxBarSize={16}>
                     <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
                       style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />
