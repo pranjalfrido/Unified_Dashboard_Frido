@@ -425,6 +425,30 @@ export function MultiLineChart({ dailyArr, channels }) {
 // `height` here is the fix; the rest keeps one set of legend props so every chart
 // agrees on size, colour and placement. The label colour reads the theme token,
 // so legends follow a theme switch instead of being pinned to one palette.
+// ── Shared bar gradient ─────────────────────────────────────────────────────
+// Vertical accent ramp for the "magnitude" bar in a chart — the one carrying period spend
+// or volume, usually with trend lines drawn in front of it.
+//
+// Built from the theme's own accent tokens (acc -> acm -> acd, light to dark) rather than
+// literals, so the bars follow a palette switch: green on forest, gold on gold. Darkest at
+// the base gives the bar a defined foot against the axis while the lighter top keeps any
+// line in front of it readable.
+//
+// Usage: drop <BarGradient id="myBars" /> inside the chart and set fill="url(#myBars)".
+// The id must be unique per chart — two SVG gradients sharing an id resolve to whichever
+// mounted last, so one chart would silently borrow the other's colours.
+export function BarGradient({ id }) {
+  return (
+    <defs>
+      <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={C.acc} stopOpacity={0.72} />
+        <stop offset="55%" stopColor={C.acm} stopOpacity={0.88} />
+        <stop offset="100%" stopColor={C.acd} stopOpacity={0.96} />
+      </linearGradient>
+    </defs>
+  )
+}
+
 export function chartLegendProps({ fontSize = 11, height = 26, iconSize = 10 } = {}) {
   return {
     layout: 'horizontal',
@@ -524,7 +548,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
         <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 44 : 20, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
-            <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
+            <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acd} stopOpacity={0.15} /><stop offset="95%" stopColor={C.acd} stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
@@ -548,7 +572,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
           ) : null} />
           {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
-          {showNet && <Area yAxisId="rev" type="monotone" dataKey="_net" name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+          {showNet && <Area yAxisId="rev" type="monotone" dataKey="_net" name="Net Revenue" stroke={C.acd} fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />}
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
           {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#92720A" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
         </ComposedChart>
@@ -556,7 +580,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
       </div>
       {isMob && (
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
-          {[{ name: 'Gross Revenue', color: grossColor }, ...(showNet ? [{ name: 'Net Revenue', color: '#B8960C' }] : []), ...(showCogs ? [{ name: 'COGS', color: '#F59E0B' }] : []), ...(showSnd ? [{ name: 'SnD', color: '#92720A' }] : [])].map(it => (
+          {[{ name: 'Gross Revenue', color: grossColor }, ...(showNet ? [{ name: 'Net Revenue', color: C.acd }] : []), ...(showCogs ? [{ name: 'COGS', color: '#F59E0B' }] : []), ...(showSnd ? [{ name: 'SnD', color: '#92720A' }] : [])].map(it => (
             <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
             </span>

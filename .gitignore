@@ -37,3 +37,6 @@ sa_key.json
 # copies like "sa_key 1 (1).json" that download managers create.
 sa_key*.json
 *service-account*.json
+
+# Ad-hoc analysis output (pincode extracts etc) — regenerate on demand, not source.
+exports/

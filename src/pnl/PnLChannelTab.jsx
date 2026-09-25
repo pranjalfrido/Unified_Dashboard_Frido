@@ -26,7 +26,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
     acc.push([+x.toFixed(1), +y.toFixed(1)])
     return acc
   }, [])
-  const spark = '#F4B400'
+  const spark = C.acc
   const gid = `pnlsg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   const path = coords.length > 1 ? coords.reduce((d, [x, y], i) => {
     if (i === 0) return `M${x},${y}`

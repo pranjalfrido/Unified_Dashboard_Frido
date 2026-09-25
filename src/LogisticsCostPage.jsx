@@ -4,7 +4,7 @@ import LoadingOverlay from './LoadingOverlay.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, chartLegendProps } from './components.jsx'
+  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, chartLegendProps, BarGradient } from './components.jsx'
 
 // Page-local palette. Identical to the shared one except for `t3`, the secondary grey used
 // by card titles, sub-lines, section notes and slicer labels.
@@ -58,6 +58,11 @@ const MODE = {
 const DRIFT = { get colors(){ return [C.acc, '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9'] } }
 
 // Chart chrome — recessive hairlines, muted axis ink.
+// Per-unit rates, to one decimal. fmt() compacts to lakhs/crores, which is right for spend
+// but wrong for a 45-rupee-per-parcel figure — it would render as "₹45" and lose the
+// precision the whole comparison turns on.
+const money1 = v => (v == null || !isFinite(v) ? '—' : '₹' + Number(v).toFixed(1))
+
 const VIZ = {
   grid: '#e1e0d9',
   axis: '#c3c2b7',
@@ -146,11 +151,16 @@ const SCOPES = [
   { id: 'all', label: 'Overview', hint: 'FTL/PTL + B2C combined summary' },
   { id: 'b2c', label: 'B2C', hint: 'Courier / parcel shipments' },
   { id: 'b2b', label: 'FTL/PTL', hint: 'Full / part truckload freight, lane-wise' },
+  { id: 'tpl', label: '3PL', hint: 'Warehousing — storage and handling, per site' },
 ]
 
 const EMPTY_FILTERS = {
   months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [],
   accountTypes: [], band: null, destCity: null, originCity: null, exactSlab: null, billing: 'all',
+  // 3PL warehousing. Its own keys rather than reusing `couriers`: the 3PL aggregates come
+  // from the server's filter-independent refCache and are narrowed on the client, so these
+  // must never reach the API's filter key or they would trigger a needless full rebuild.
+  tplPartners: [], tplSites: [],
 }
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
@@ -1174,7 +1184,17 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
   const [baseData, setBaseData] = useState(null)
 
-  const filterKey = JSON.stringify(filters)
+  // The API request key. tplPartners/tplSites are stripped: 3PL aggregates arrive from the
+  // server's filter-independent refCache and are narrowed on the client, so including them
+  // here would refetch the entire cost ledger every time a warehousing chip is clicked and
+  // come back with identical data.
+  const filterKey = useMemo(() => {
+    const { tplPartners: _tp, tplSites: _ts, ...apiFilters } = filters
+    // scope rides along so the API can skip the heavy B2C detail queries when a tab does not
+    // display them. It is part of the key on purpose: two scopes return different payloads,
+    // so they must not share a cache entry.
+    return JSON.stringify({ ...apiFilters, scope })
+  }, [filters, scope])
   const scanRef = useRef(0)
 
   useEffect(() => {
@@ -1271,6 +1291,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           // these have no trips or lanes, so they must not reach any per-trip figure.
           fixedVeh: j.fixedVeh || null,
           fixedVehMonths: j.fixedVehMonths || [],
+          // 3PL warehousing. Carried here so one fetch serves every scope, but kept as
+          // its own block: warehousing bills per site per month, not per shipment, so it
+          // shares no denominator with the freight or parcel figures.
+          tplTotals: j.tplTotals || null,
+          tplPartners: j.tplPartners || [],
+          tplMonths: j.tplMonths || [],
+          tplWarehouses: j.tplWarehouses || [],
+          // Per-site, per-month rates for the Warehouse Trend chart. Easy to miss: this
+          // object is an explicit field list, so a key added to the API response but not
+          // here arrives as undefined and the chart renders its axes and legend with no
+          // lines — which is exactly how this one failed.
+          tplWhMonths: j.tplWhMonths || [],
         })
         if (j.options) {
           setOpts({
@@ -1871,6 +1903,159 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // request's selection into the next), so narrowing happens on the client. Returning a
   // single function keeps the rule in one place rather than repeated in six memos.
   const fixedVeh = b2b?.fixedVeh || null
+  // 3PL, narrowed on the client. The server sends these aggregates unfiltered (they come
+  // from refCache, which is shared across requests by design), so partner, site and month
+  // selections are applied here instead.
+  //
+  // Everything is rebuilt from tplWhMonths — the one table at full (site, month) grain —
+  // rather than filtering the pre-rolled partner and warehouse rows. Those carry totals
+  // that are already summed across months, so a month filter could not narrow them and
+  // would leave the cards contradicting the charts beside them.
+  const tpl = useMemo(() => {
+    if (!b2b) return null
+    const allWh = b2b.tplWarehouses || []
+    const allPartners = b2b.tplPartners || []
+    const selP = filters.tplPartners || [], selS = filters.tplSites || [], selM = filters.months || []
+    const anyFilter = selP.length || selS.length || selM.length
+    if (!anyFilter) {
+      return {
+        totals: b2b.tplTotals, partners: allPartners,
+        months: b2b.tplMonths || [], warehouses: allWh,
+        whMonths: b2b.tplWhMonths || [],
+      }
+    }
+
+    // Matched on each row's OWN partner, not on the site's partner list. Hyderabad is
+    // billed by Losung and WareIQ together, so a site-level test would hand all of that
+    // site's spend to whichever of the two was selected — 33.94L instead of WareIQ's real
+    // 25.43L. The row-level partner keeps the two contracts separate.
+    const rowOk = r => (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selM.length || selM.includes(r.month_year))
+
+    const rows = (b2b.tplWhMonths || []).filter(rowOk)
+    const add = (map, k, r) => {
+      const e = map.get(k) || {
+        cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0,
+        shipments: 0, weight_kg: 0, months: new Set(), sites: new Set(),
+      }
+      e.cost += Number(r.cost) || 0
+      // The fee split has to be summed here too, or the monthly trend's stacked areas get
+      // undefined for every series the moment a slicer is active and draw nothing.
+      e.operation_fee += Number(r.operation_fee) || 0
+      e.rental_fee += Number(r.rental_fee) || 0
+      e.other_fee += Number(r.other_fee) || 0
+      // Volume stays null-safe: a month with no matched parcels contributes cost but not a
+      // denominator, which is what keeps a filtered rate honest rather than inflated.
+      if (r.shipments > 0) { e.shipments += Number(r.shipments); e.weight_kg += Number(r.weight_kg) || 0 }
+      e.months.add(r.month_year); e.sites.add(r.warehouse)
+      map.set(k, e)
+      return e
+    }
+
+    const byMonth = new Map(), bySite = new Map()
+    for (const r of rows) { add(byMonth, r.month_year, r); add(bySite, r.warehouse, r) }
+
+    const fin = (k, e, extra = {}) => ({
+      key: k, cost: e.cost,
+      operation_fee: e.operation_fee, rental_fee: e.rental_fee, other_fee: e.other_fee,
+      shipments: e.shipments || null,
+      weight_kg: e.weight_kg || null, months: e.months.size, ...extra,
+    })
+    const warehouses = [...bySite.entries()].map(([k, e]) => {
+      const src = allWh.find(w => w.key === k) || {}
+      // Spread the source row rather than naming fields: the measures below are recomputed
+      // from the filtered rows, but the descriptive ones (pincode, location, partner) are
+      // properties of the facility and do not change with a filter. Listing them by hand is
+      // what left Pincode and Location blank whenever any slicer was active — a field added
+      // to the API but not to that list silently became a dash.
+      return { ...src, ...fin(k, e) }
+    }).sort((a, c) => c.cost - a.cost)
+
+    // Partner rows are recomputed from the sites each partner bills, so a site filter
+    // narrows a partner's cost rather than dropping the partner entirely.
+    const byPartner = new Map()
+    for (const r of rows) add(byPartner, r.partner, r)
+    const partners = [...byPartner.entries()].map(([k, e]) => {
+      const src = allPartners.find(pp => pp.key === k) || {}
+      return {
+        ...src, key: k, cost: e.cost,
+        operation_fee: e.operation_fee, rental_fee: e.rental_fee, other_fee: e.other_fee,
+        shipments: e.shipments || null, weight_kg: e.weight_kg || null,
+        warehouses: e.sites.size, months: e.months.size,
+      }
+    }).sort((a, c) => c.cost - a.cost)
+
+    const months = [...byMonth.entries()].map(([k, e]) => fin(k, e))
+      .sort((a, c) => String(a.key).localeCompare(String(c.key)))
+
+    const totalCost = rows.reduce((a, r) => a + (Number(r.cost) || 0), 0)
+    return {
+      totals: {
+        rows: rows.length, cost: totalCost,
+        partners: partners.length, warehouses: warehouses.length, months: byMonth.size,
+        // Summed from the filtered rows now that the fee split is carried at (site, month)
+        // grain. This replaces apportioning the unfiltered totals by share of spend, which
+        // was an estimate that could not reflect a filter selecting months whose mix
+        // differed from the average.
+        operation_fee: rows.reduce((a, r) => a + (Number(r.operation_fee) || 0), 0),
+        rental_fee: rows.reduce((a, r) => a + (Number(r.rental_fee) || 0), 0),
+        other_fee: rows.reduce((a, r) => a + (Number(r.other_fee) || 0), 0),
+      },
+      partners, months, warehouses, whMonths: rows,
+    }
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.months])
+
+  // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
+  // in a month with no shipment data so the line breaks instead of diving to the axis.
+  const tplTrend = useMemo(() => (tpl?.months || []).map(m => ({
+    ...m,
+    per_ship: m.shipments > 0 ? m.cost / m.shipments : null,
+    per_kg: m.weight_kg > 0 ? m.cost / m.weight_kg : null,
+  })), [tpl?.months])
+
+  // Per-site rate over time, pivoted to one column per warehouse for a multi-line chart.
+  // Sites are ordered by total spend so the biggest site keeps the first colour as months
+  // come and go.
+  const tplWhNames = useMemo(() =>
+    (tpl?.warehouses || []).map(w => w.key).filter(Boolean), [tpl?.warehouses])
+  const tplWhTrend = useMemo(() => {
+    const rows = tpl?.whMonths || []
+    if (!rows.length) return []
+    const byMonth = new Map()
+    for (const r of rows) {
+      if (!byMonth.has(r.month_year)) byMonth.set(r.month_year, { key: r.month_year })
+      // Left undefined where the month has no volume, which is what makes the gap appear.
+      if (r.shipments > 0) byMonth.get(r.month_year)[r.warehouse] = r.cost / r.shipments
+    }
+    return [...byMonth.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)))
+  }, [tpl?.whMonths])
+
+  // Sites ranked by cost per parcel. Sites with no matched volume are dropped rather than
+  // plotted at zero, which would read as "free" instead of "unknown".
+  // Both rate charts are keyed by PARTNER, not facility. The partner is who the contract is
+  // with and who a rate is renegotiated against; a partner running several sites is judged
+  // on its blended rate across them. Facility-level detail stays in the table and the
+  // Warehouse Trend chart below.
+  const tplRateBySite = useMemo(() => (tpl?.partners || [])
+    .filter(p => p.shipments > 0)
+    .map(p => ({ key: p.key, per_ship: p.cost / p.shipments }))
+    .sort((a, b) => b.per_ship - a.per_ship), [tpl?.partners])
+
+  // Share of spend against share of parcels, per partner. Equal shares mean a partner costs
+  // what its volume implies; a spend bar taller than its parcel bar is a partner charging
+  // above the blended rate. Both are percentages of the MATCHED totals, so the two sets are
+  // comparable — using total spend (which includes unmatched months) against matched
+  // parcels would bias every partner's cost share upward.
+  const tplShareBySite = useMemo(() => {
+    const rated = (tpl?.partners || []).filter(p => p.shipments > 0)
+    const tc = rated.reduce((a, p) => a + Number(p.cost || 0), 0)
+    const ts = rated.reduce((a, p) => a + Number(p.shipments || 0), 0)
+    if (!tc || !ts) return []
+    return rated
+      .map(p => ({ key: p.key, cost_pct: (p.cost / tc) * 100, ship_pct: (p.shipments / ts) * 100 }))
+      .sort((a, b) => b.cost_pct - a.cost_pct)
+  }, [tpl?.partners])
   const b2bPick = useMemo(() => {
     const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
     const mo = filters.months || []
@@ -2165,10 +2350,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!agg || !b2b) return null
     const b2cCost = agg.cost
     const b2bCost = Number(b2b.totals.cost) || 0
-    const total = b2cCost + b2bCost
+    // Warehousing. Part of the cost of moving the same goods, so it counts toward the total
+    // logistics spend rather than sitting outside it — the hero would otherwise understate
+    // what logistics actually costs by the whole 3PL book.
+    const tplCost = Number(b2b.tplTotals?.cost) || 0
+    const total = b2cCost + b2bCost + tplCost
     return {
       total,
-      b2cCost, b2bCost,
+      b2cCost, b2bCost, tplCost,
+      tplSites: Number(b2b.tplTotals?.warehouses) || 0,
+      tplPartners: Number(b2b.tplTotals?.partners) || 0,
       b2cUnits: agg.n,
       b2bUnits: Number(b2b.totals.trips) || 0,
       b2bLanes: Number(b2b.totals.lanes) || 0,
@@ -2195,17 +2386,27 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
   const overallMonths = useMemo(() => {
-    if (!monthSeries.length && !b2bMonthRows.length) return []
-    const keys = [...new Set([...monthSeries.map(m => m.raw), ...b2bMonthRows.map(m => m.raw)])].sort()
+    const tplRows = tpl?.months || []
+    if (!monthSeries.length && !b2bMonthRows.length && !tplRows.length) return []
+    const keys = [...new Set([
+      ...monthSeries.map(m => m.raw),
+      ...b2bMonthRows.map(m => m.raw),
+      ...tplRows.map(m => m.key),
+    ])].sort()
     const b2cBy = Object.fromEntries(monthSeries.map(m => [m.raw, m.cost]))
     const b2bBy = Object.fromEntries(b2bMonthRows.map(m => [m.raw, m.cost]))
+    // 3PL keys its months as `key` (YYYY-MM) rather than `raw`, matching the other two.
+    const tplBy = Object.fromEntries(tplRows.map(m => [m.key, Number(m.cost) || 0]))
     return keys.map(k => ({
       month: monthLabel(k), raw: k,
       b2c: b2cBy[k] || 0,
       b2b: b2bBy[k] || 0,
-      total: (b2cBy[k] || 0) + (b2bBy[k] || 0),
+      tpl: tplBy[k] || 0,
+      // Warehousing is a third cost of moving the same goods, so it belongs in the total
+      // rather than beside it: a month's true logistics spend is freight plus storage.
+      total: (b2cBy[k] || 0) + (b2bBy[k] || 0) + (tplBy[k] || 0),
     }))
-  }, [monthSeries, b2bMonthRows])
+  }, [monthSeries, b2bMonthRows, tpl?.months])
 
   // ── Overview: carrier cards ──
   // One card per partner, both ledgers, with the few figures that actually differentiate a
@@ -2278,7 +2479,23 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Apr-Jul, so on FTL/PTL the chip was claiming "last 6 months" and offering Jan-Mar in
   // the picker — months with no freight rows at all. Overview spans both ledgers, so it
   // keeps the full B2C-derived list.
+  // 3PL slicer options. Read from the raw b2b response, never from the filtered `tpl`
+  // object — deriving them from filtered data would make each selection delete the other
+  // options and strand the user with no way back.
+  const tplPartnerOpts = useMemo(
+    () => (b2b?.tplPartners || []).map(p => p.key).filter(Boolean),
+    [b2b?.tplPartners])
+  const tplSiteOpts = useMemo(
+    () => (b2b?.tplWarehouses || []).map(w => w.key).filter(Boolean).sort(),
+    [b2b?.tplWarehouses])
+
   const scopeMonths = useMemo(() => {
+    // 3PL bills its own months — offering the parcel ledger's list would show periods the
+    // warehousing ledger has no rows for, which filter to an empty tab.
+    if (scope === 'tpl') {
+      const tm = [...new Set((b2b?.tplMonths || []).map(m => m.key).filter(Boolean))].sort()
+      return tm.length ? tm : (opts.months || [])
+    }
     if (scope !== 'b2b') return opts.months || []
     const bm = [...new Set((b2b?.months || [])
       .map(r => r.month_year || r.key || r.month)
@@ -2359,9 +2576,20 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (scope === 'all') {
       return [
         {
-          label: 'Monthly trend (both ledgers)', file: 'overview_monthly',
+          label: 'Monthly trend (all ledgers)', file: 'overview_monthly',
+          // tpl included so the exported columns still sum to `total`; without it the
+          // spreadsheet would show a total that does not reconcile with its parts.
           rows: (ovTrendWindow || []).map(r => ({
             month: r.month, total: round(r.total), b2c: round(r.b2c), b2b: round(r.b2b),
+            tpl: round(r.tpl),
+          })),
+        },
+        {
+          label: '3PL warehousing partners', file: 'overview_3pl_partners',
+          rows: (tpl?.partners || []).map(r => ({
+            partner: r.key, sites: r.warehouses, months: r.months, cost: round(r.cost),
+            operations: round(r.operation_fee), rental: round(r.rental_fee),
+            per_month: r.months > 0 ? round(r.cost / r.months) : null,
           })),
         },
         {
@@ -2386,11 +2614,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return [
       {
         label: 'By courier', file: 'b2c_couriers',
-        rows: (courierRows || []).map(r => ({
-          courier: r.courier, shipments: r.shipments, cost: round(r.cost),
-          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
-          avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
-        })),
+        rows: (courierRows || []).map(r => {
+          const tot = (courierRows || []).reduce((a, x) => a + (Number(x.cost) || 0), 0)
+          return {
+            courier: r.courier, shipments: r.shipments, cost: round(r.cost),
+            avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+            avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+            // Matches the on-screen column, so an exported sheet reconciles with the tab.
+            share_of_spend_pct: tot > 0 ? round((Number(r.cost) || 0) / tot * 100, 1) : null,
+          }
+        }),
       },
       {
         label: zoneSub ? `Cost by zone (${zoneSub})` : 'Cost by zone', file: 'b2c_zones',
@@ -2435,6 +2668,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       },
     ]
   }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      tpl?.partners,
       courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
 
   // Filename suffix so a file on disk still says what it was filtered to.
@@ -2499,7 +2733,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0) +
     (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
     (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
-    (filters.freightTypes?.length || 0)
+    (filters.freightTypes?.length || 0) +
+    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0)
 
   // ── Render ──
   // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
@@ -2526,6 +2761,37 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             FTL/PTL transporters on the freight tab. Showing Bluedart and Delhivery while
             the freight ledger is on screen invited a filter that could only ever return
             nothing, because those carriers do not appear in it. */}
+        {/* 3PL has no carriers at all — it bills warehousing partners, and the B2C courier
+            list shown here previously offered filters that could only ever return nothing.
+            Plain rows rather than CourierRow: these partners have no logo assets. */}
+        {scope === 'tpl' ? (<>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>3PL Partner</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {tplPartnerOpts.map(c => {
+            const on = (filters.tplPartners || []).includes(c)
+            return (
+              <button key={c} onClick={() => toggleIn('tplPartners', c)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
+                  fontSize: 11.5, fontWeight: on ? 700 : 500, textAlign: 'left',
+                  borderRadius: 7, cursor: 'pointer', fontFamily: 'var(--font)',
+                  border: `1px solid ${on ? C.acm : 'transparent'}`,
+                  background: on ? C.acl : 'transparent', color: C.t1,
+                }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0,
+                  background: on ? C.acm : C.border2 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c}</span>
+              </button>
+            )
+          })}
+          {(filters.tplPartners || []).length > 0 && (
+            <button onClick={() => setOne('tplPartners', [])}
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', marginTop: 4 }}>
+              ✕ Clear
+            </button>
+          )}
+        </div>
+        </>) : (<>
         <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>{scope === 'b2b' ? 'Transporter' : 'Courier Partner'}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {(scope === 'b2b' ? opts.transporters : opts.couriers).map(c => (
@@ -2538,6 +2804,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             </button>
           )}
         </div>
+        </>)}
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
 
@@ -2560,7 +2827,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
         </>)}
 
-        {scope !== 'b2b' && (<>
+        {scope !== 'b2b' && scope !== 'tpl' && (<>
         {/* Two-up segmented pairs, the same treatment as Courier Direction. */}
         {/* Two separate filters, so two separate headings — one block labelled
             "Shipment Direction" was covering both direction AND billing status.
@@ -2586,7 +2853,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
-        {scope !== 'b2b' && (<>
+        {scope === 'tpl' && (
+          <SearchSelect label="Warehouse" options={tplSiteOpts} multi
+            selected={filters.tplSites || []}
+            onChange={v => (v === null ? setOne('tplSites', []) : toggleIn('tplSites', v))} />
+        )}
+
+        {scope !== 'b2b' && scope !== 'tpl' && (<>
         <SearchSelect label="Zone" options={opts.zones} multi
           selected={filters.zones}
           onChange={v => (v === null ? setOne('zones', []) : toggleIn('zones', v))} />
@@ -2734,19 +3007,22 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               sub={`${(overall.total ? (overall.b2cCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
             <Tile label="FTL/PTL Freight Cost" value={fmt(overall.b2bCost)}
               sub={`${(overall.total ? (overall.b2bCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
-            {/* The hero already reports total cost, so this card carries the carrier count
-                the three removed tiles held — value is the total, sub is the split. */}
-            <Tile label="Total Carriers" value={fmtN(overall.carriers)}
-              sub={`${fmtN(overall.b2cCarriers)} B2C courier · ${fmtN(overall.b2bCarriers)} FTL/PTL`} />
+            {/* The third cost stream, sitting with the other two so the row reads as the
+                full split of the hero's total rather than two streams and a stray count. */}
+            <Tile label="3PL Warehousing Cost"
+              value={overall.tplCost > 0 ? fmt(overall.tplCost) : '—'}
+              sub={overall.tplCost > 0
+                ? `${(overall.total ? (overall.tplCost / overall.total) * 100 : 0).toFixed(1)}% of spend`
+                : 'no warehousing bills'} />
 
-            {/* Row 2 — goods value, and the ratio it supports. */}
+            {/* Row 2 — the partner estate, then goods value and the ratio it supports. */}
+            {/* Carriers across both freight ledgers, plus the warehousing partners, so the
+                tile covers every logistics relationship rather than only the moving ones. */}
+            <Tile label="Partners"
+              value={fmtN(overall.carriers + overall.tplPartners)}
+              sub={`${fmtN(overall.carriers)} carriers · ${fmtN(overall.tplPartners)} 3PL · ${fmtN(overall.tplSites)} sites`} />
             <Tile label="B2C Shipment Value" value={fmt(overall.shipValue)}
               sub="goods moved by courier" />
-            {/* No value column on the freight ledger yet. An em-dash says that plainly; a
-                zero would read as "no goods moved" and quietly deflate the ratio beside it. */}
-            <Tile label="FTL/PTL Shipment Value"
-              value={overall.b2bValue == null ? '—' : fmt(overall.b2bValue)}
-              sub={overall.b2bValue == null ? 'not yet in the ledger' : 'goods moved by freight'} />
             {overall.b2bValue == null
               ? (
                 <Tile label="Logistics % of Value"
@@ -2768,6 +3044,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { label: 'Total Logistics Cost', value: fmt(overall.total), sub: `${fmtBig(overall.b2cUnits)} parcels` },
               { label: 'B2C Courier Spend', value: fmt(overall.b2cCost), sub: overall.total > 0 ? `${(overall.b2cCost / overall.total * 100).toFixed(1)}% of total` : '' },
               { label: 'B2B Freight Spend', value: fmt(overall.b2bCost), sub: overall.total > 0 ? `${(overall.b2bCost / overall.total * 100).toFixed(1)}% of total` : '' },
+              { label: '3PL Warehousing', value: fmt(overall.tplCost), sub: overall.total > 0 ? `${(overall.tplCost / overall.total * 100).toFixed(1)}% of total` : '' },
               { label: 'B2C Shipments', value: fmtBig(overall.b2cUnits), sub: 'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel' },
               { label: 'B2B Trips', value: fmtN(overall.b2bUnits), sub: 'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip' },
               { label: 'Recoverable (B2C)', value: fmt(kpis.overbilledCost), sub: 'weight overbilling', accent: C.red.tx },
@@ -2811,6 +3088,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           <div style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={ovTrendWindow} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                {/* Vertical accent ramp for the magnitude bars. Built from the theme's own
+                    accent tokens (acc -> acm -> acd, light to dark) rather than a literal
+                    colour, so the bars follow a palette switch like everything else — in the
+                    forest theme that reads as a green gradient, in gold as a gold one.
+                    Darker at the base gives the bar a defined foot against the axis; the
+                    lighter top keeps the two trend lines in front of it. */}
+                <BarGradient id="ovTotalBar" />
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
@@ -2831,9 +3115,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           <span><span style={{ color: SER.blue, fontWeight: 700 }}>■</span> B2C</span>
                           <span>{fmt(r.b2c)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
-                          <span><span style={{ color: SER.orange, fontWeight: 700 }}>■</span> FTL/PTL</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
+                          <span><span style={{ color: '#2BB3A3', fontWeight: 700 }}>■</span> FTL/PTL</span>
                           <span>{fmt(r.b2b)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
+                          <span><span style={{ color: SER.orange, fontWeight: 700 }}>■</span> 3PL</span>
+                          <span>{fmt(r.tpl)}</span>
                         </div>
                       </div>
                     )
@@ -2851,12 +3139,17 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     card the fill alone is too faint to hold an edge, so it carries a stroke in
                     the deeper accent (C.acm) to define the bar. Hue clash is not a concern
                     here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
-                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.85}
+                <Bar dataKey="total" name="Total" fill="url(#ovTotalBar)"
                   radius={[4, 4, 0, 0]} maxBarSize={56} />
                 <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
                   strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
                 <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#2BB3A3"
                   strokeWidth={2} dot={{ r: 3.5, fill: '#2BB3A3' }} />
+                {/* Warehousing, the third stream. Orange separates cleanly from the accent
+                    and the aqua above it, and is the same hue 3PL carries on its own tab so
+                    the colour means one thing across the dashboard. */}
+                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={SER.orange}
+                  strokeWidth={2} dot={{ r: 3.5, fill: SER.orange }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -2935,6 +3228,51 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             </div>
           )}
         </div>
+
+        {/* ── 3PL warehousing partners ──
+            A separate section from the carriers above, because these are not carriers: they
+            store and handle goods rather than move them, and are billed per site per month.
+            The card therefore shows sites and a monthly charge where a carrier card shows
+            trips and a per-trip rate. Cost per parcel appears where the site's volume could
+            be matched to the Clickpost pickup data — see the 3PL tab for the full detail. */}
+        {tpl?.partners?.length > 0 && (
+          <>
+            <SectionHdr title="3PL Warehousing Partners"
+              note={`${fmtN(tpl.partners.length)} partners · ${fmtN(overall.tplSites)} sites · ${fmt(overall.tplCost)}`}
+              collapsed={secHid['ov-tpl-cards']} onToggle={() => toggleSec('ov-tpl-cards')} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12,
+              ...(secHid['ov-tpl-cards'] ? { display: 'none' } : {}) }}>
+              {tpl.partners.map(pp => {
+                const pct = overall.tplCost > 0 ? (pp.cost / overall.tplCost) * 100 : 0
+                return (
+                  <div key={pp.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, overflow: 'hidden',
+                        textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pp.key}>{pp.key}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(pp.cost)}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                      <span>{fmtN(pp.warehouses)} site{pp.warehouses === 1 ? '' : 's'}</span>
+                      <span style={{ textAlign: 'right' }}>
+                        {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / month` : '—'}
+                      </span>
+                      {/* Per-unit rates, on their own row so they line up across cards. A
+                          dash where the partner's billed months have no matched parcels —
+                          never a zero, which would read as "free" rather than "unknown". */}
+                      <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                      <span style={{ textAlign: 'right' }}>
+                        {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
       </>
     )
   } else if (scope === 'b2b') {
@@ -3413,6 +3751,330 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         </Card>
       </>
     )
+  } else if (scope === 'tpl') {
+    // ── 3PL warehousing ──
+    // Storage and handling billed per site per month, against the shipment volume each site
+    // actually moved. Volume comes from the Clickpost tracking report via pickup_name
+    // (scripts/sync-3pl-shipments.mjs) — the ledger itself carries no parcel count, so
+    // without that join this tab could only report rupees.
+    content = !tpl ? <Card title="Loading 3PL warehousing…" /> : !tpl.totals?.rows ? (
+      <Card title="No 3PL invoices yet">
+        <div style={{ fontSize: 12.5, color: C.t2 }}>
+          Add warehousing bills from the <strong>Logistics Bill Ledger</strong> page (3PL · Warehousing format)
+          and the site breakdown will appear here.
+        </div>
+      </Card>
+    ) : (() => {
+      const t = tpl.totals
+      const perMonth = t.months > 0 ? t.cost / t.months : 0
+      const share = v => (t.cost > 0 ? (v / t.cost) * 100 : 0)
+
+      // Blended rate across every site that has volume. Costs from months with no shipment
+      // data are EXCLUDED from the numerator as well as the denominator — counting Haryana's
+      // unmatched May spend against April–August volume would overstate the rate for every
+      // site at once.
+      const rated = (tpl.warehouses || []).filter(w => w.shipments > 0)
+      const ratedCost = rated.reduce((a, w) => a + Number(w.cost || 0), 0)
+      const totalShip = rated.reduce((a, w) => a + Number(w.shipments || 0), 0)
+      const totalKg = rated.reduce((a, w) => a + Number(w.weight_kg || 0), 0)
+      const perShip = totalShip > 0 ? ratedCost / totalShip : null
+      const perKg = totalKg > 0 ? ratedCost / totalKg : null
+      const avgWt = totalShip > 0 ? totalKg / totalShip : null
+      const unmatched = t.cost - ratedCost
+
+      // Rate movement, last billed month against the one before. Only months with volume on
+      // both sides can be compared, so months missing a denominator are skipped rather than
+      // treated as a drop to zero.
+      const mRates = (tplTrend || []).filter(m => m.per_ship != null)
+      const last = mRates[mRates.length - 1], prev = mRates[mRates.length - 2]
+      const rateDelta = last && prev && prev.per_ship > 0
+        ? ((last.per_ship - prev.per_ship) / prev.per_ship) * 100 : null
+
+      return (
+      <>
+        <div style={{ height: 12 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 14, alignItems: 'stretch' }}>
+          <Hero
+            label="Total Warehousing Cost"
+            value={fmt(t.cost)}
+            // Falling cost per parcel is good news, so `good` is the inverse of `up`.
+            deltas={rateDelta != null ? [{
+              pct: rateDelta, up: rateDelta > 0, good: rateDelta < 0, note: `₹/parcel vs ${prev.key}`,
+            }] : []}
+            sub={<div>{fmt(perMonth)} per month · {fmtN(t.partners)} partners · {fmtN(t.warehouses)} sites</div>}
+          >
+            {tpl.months.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={tpl.months} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="tplHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="cost" stroke={SER.blue}
+                    strokeWidth={2} fill="url(#tplHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14 }}>
+            {/* Row 1 — the unit economics. These are the figures a warehousing contract is
+                actually judged on; the composition split moved to row 2. */}
+            <Tile label="Cost / Parcel" value={perShip != null ? money1(perShip) : '—'}
+              accent={C.acc}
+              sub={perShip != null ? `across ${fmtN(totalShip)} parcels` : 'no volume matched'} />
+            <Tile label="Cost / kg" value={perKg != null ? money1(perKg) : '—'}
+              sub={perKg != null ? `${fmtN(Math.round(totalKg))} kg handled` : 'no weight matched'} />
+            <Tile label="Avg Parcel Weight" value={avgWt != null ? `${avgWt.toFixed(2)} kg` : '—'}
+              sub="shipped weight ÷ parcels" />
+            <Tile label="Cost / Site / Month"
+              value={t.warehouses > 0 && t.months > 0 ? fmt(t.cost / t.warehouses / t.months) : '—'}
+              sub={`${fmtN(t.warehouses)} sites · ${fmtN(t.months)} months`} />
+            {/* Row 2 — what the bill is made of, and how concentrated it is. Operations and
+                rental are negotiated separately, so they are never shown as one number. */}
+            <Tile label="Operations" value={fmt(t.operation_fee)}
+              sub={`${share(t.operation_fee).toFixed(1)}% of spend`} />
+            <Tile label="Rental" value={t.rental_fee > 0 ? fmt(t.rental_fee) : '—'}
+              sub={t.rental_fee > 0 ? `${share(t.rental_fee).toFixed(1)}% — fixed, volume-blind` : 'nothing billed'} />
+            <Tile label="Top Site Share"
+              value={tpl.warehouses.length ? `${share(tpl.warehouses[0].cost).toFixed(1)}%` : '—'}
+              sub={tpl.warehouses.length ? tpl.warehouses[0].key : null} />
+            {/* Unmatched spend is a data-quality figure, not a cost figure. It is shown
+                because every per-unit number above silently excludes it, and a reader
+                comparing them against the total needs to know why they do not reconcile. */}
+            <Tile label="Unmatched Spend"
+              value={unmatched > 0.5 ? fmt(unmatched) : '₹0'}
+              accent={unmatched > 0.5 ? C.red.tx : undefined}
+              sub={unmatched > 0.5 ? 'billed, no parcels matched' : 'every month has volume'} />
+          </div>
+        </div>
+
+        <SectionHdr title="3PL Partners" note={`${fmtN(tpl.partners.length)} partners · ${fmt(t.cost)}`}
+          collapsed={secHid['tpl-partners']} onToggle={() => toggleSec('tpl-partners')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12,
+          ...(secHid['tpl-partners'] ? { display: 'none' } : {}) }}>
+          {tpl.partners.map(pp => {
+            const pct = share(pp.cost)
+            return (
+            <div key={pp.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pp.key}>{pp.key}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {pct.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(pp.cost)}</div>
+              {/* Share bar: the ranking is the point of this grid, and a bar reads faster
+                  than comparing seven percentages. Width is share of the LARGEST partner,
+                  not of total, so the biggest bar fills the card and the rest scale against
+                  it — at 7 partners a share-of-total bar would leave every card nearly empty. */}
+              <div style={{ height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: SER.blue,
+                  width: `${tpl.partners[0]?.cost > 0 ? (pp.cost / tpl.partners[0].cost) * 100 : 0}%`,
+                }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(pp.warehouses)} site{pp.warehouses === 1 ? '' : 's'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / mo` : '—'}
+                </span>
+                <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
+                </span>
+              </div>
+            </div>
+          )})}
+        </div>
+
+        <SectionHdr title="Monthly Trend"
+          note="cost per parcel against spend — the rate is what the chart is for"
+          collapsed={secHid['tpl-trend']} onToggle={() => toggleSec('tpl-trend')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-trend'] ? { display: 'none' } : {}) }}><Card>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {/* Spend as a stacked area on the left axis, cost per parcel as a line on the
+                  right. Two axes on purpose: rupees and a per-unit rate are different
+                  quantities, and a month can bill MORE in total while getting cheaper per
+                  parcel — which is exactly what this data does and what the chart is for.
+                  Areas rather than bars: the filled mass reads as the spend the line is
+                  computed from, and at five periods bars left most of the plot empty. */}
+              <ComposedChart data={tplTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="tplOps" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.55} />
+                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0.12} />
+                  </linearGradient>
+                  <linearGradient id="tplRent" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SER.orange} stopOpacity={0.55} />
+                    <stop offset="95%" stopColor={SER.orange} stopOpacity={0.12} />
+                  </linearGradient>
+                  <linearGradient id="tplOther" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SER.yellow} stopOpacity={0.55} />
+                    <stop offset="95%" stopColor={SER.yellow} stopOpacity={0.12} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis yAxisId="l" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
+                  tickLine={false} tickFormatter={v => fmt(v)} width={64} />
+                {/* From 0, not the data's own range. Recharts would otherwise start this axis
+                    near the lowest rate and make a 16-to-31 rupee move look like a collapse. */}
+                <YAxis yAxisId="r" orientation="right" domain={[0, 'auto']}
+                  tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} width={52} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                <Area yAxisId="l" type="monotone" dataKey="operation_fee" name="Operations"
+                  stackId="a" stroke={SER.blue} strokeWidth={1.5} fill="url(#tplOps)" />
+                <Area yAxisId="l" type="monotone" dataKey="rental_fee" name="Rental"
+                  stackId="a" stroke={SER.orange} strokeWidth={1.5} fill="url(#tplRent)" />
+                <Area yAxisId="l" type="monotone" dataKey="other_fee" name="Other"
+                  stackId="a" stroke={SER.yellow} strokeWidth={1.5} fill="url(#tplOther)" />
+                {/* Drawn last so it sits above the filled areas rather than under them. */}
+                <Line yAxisId="r" type="monotone" dataKey="per_ship" name="₹ / parcel"
+                  stroke={SER.aqua} strokeWidth={2.5} connectNulls={false}
+                  dot={{ r: 3.5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card></div>
+
+        <SectionHdr title="Warehouse Detail"
+          note="per-unit costs are per SITE — one shipment stream cannot be split between contracts"
+          collapsed={secHid['tpl-sites']} onToggle={() => toggleSec('tpl-sites')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-sites'] ? { display: 'none' } : {}) }}><Card>
+          <DataTable
+            rows={tpl.warehouses}
+            columns={[
+              { key: 'key', label: 'Facility' },
+              // The join key to shipment volume, shown so a facility with no parcels can be
+              // traced to the pincode that failed to match rather than looking unexplained.
+              { key: 'pincode', label: 'Pincode', align: 'center',
+                render: (_, r) => r.pincode || '—' },
+              { key: 'location', label: 'Location', render: (_, r) => r.location || '—' },
+              { key: 'partner', label: 'Partner', render: (_, r) => (
+                  r.partner_n > 1
+                    ? <span title={r.partner}>{r.partner_n} contracts</span>
+                    : r.partner
+                ) },
+              { key: 'shipments', label: 'Parcels', align: 'center',
+                render: (_, r) => (r.shipments > 0 ? fmtN(r.shipments) : '—') },
+              { key: 'weight_kg', label: 'Weight', align: 'center',
+                render: (_, r) => (r.weight_kg > 0 ? fmtN(Math.round(r.weight_kg)) + ' kg' : '—') },
+              { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
+              // The two figures this tab exists to produce. Shown as a dash, never as zero
+              // or infinity, where the site billed a month that has no shipment data.
+              { key: 'per_ship', label: '₹ / Parcel', align: 'center',
+                render: (_, r) => (r.shipments > 0 ? money1(r.cost / r.shipments) : '—') },
+              { key: 'per_kg', label: '₹ / kg', align: 'center',
+                render: (_, r) => (r.weight_kg > 0 ? money1(r.cost / r.weight_kg) : '—') },
+            ]}
+            search searchKeys={['key', 'pincode', 'location', 'partner']} searchPlaceholder="Find a facility, pincode or partner…"
+            maxRows={120}
+            maxHeight={420}
+          />
+          {tpl.warehouses.some(w => !(w.shipments > 0)) && (
+            <div style={{ marginTop: 10, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
+              A dash means the site billed a month with no matching shipment data in the
+              tracking report, so there is no denominator to divide by. Those months still
+              count in Total.
+            </div>
+          )}
+        </Card></div>
+
+        <SectionHdr title="Rate by Partner" note="₹ per parcel — the ranking the contracts should be judged on"
+          collapsed={secHid['tpl-rate']} onToggle={() => toggleSec('tpl-rate')} />
+        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))',
+          gap: 14, ...(secHid['tpl-rate'] ? { display: 'none' } : {}) }}>
+          <Card title="Cost per parcel by partner" note="partners with no matched volume are omitted">
+            <div style={{ height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {/* Horizontal bars: site names are words, not dates, and reading them along
+                    a vertical axis beats rotating them under a column chart. */}
+                <BarChart data={tplRateBySite} layout="vertical"
+                  margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                    axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} />
+                  {/* 150px, not 84: partner names are long enough that the shorter track
+                      clipped them mid-word ("areiq_HYD_item"). Truncation with an ellipsis
+                      is deliberate over wrapping — a wrapped label pushes the bars apart
+                      and the full name is in the tooltip. */}
+                  <YAxis type="category" dataKey="key" width={150}
+                    tick={{ fontSize: 11, fill: C.t2 }} axisLine={false} tickLine={false}
+                    tickFormatter={v => (String(v).length > 20 ? String(v).slice(0, 19) + '…' : v)} />
+                  <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
+                  <Bar dataKey="per_ship" name="₹ / parcel" fill={SER.blue} radius={[0, 4, 4, 0]} barSize={16}>
+                    <LabelList dataKey="per_ship" position="right"
+                      formatter={v => money1(v)}
+                      style={{ fontSize: 10.5, fill: C.t2, fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+          <Card title="Spend vs volume" note="a taller spend bar means the partner charges above the blended rate">
+            <div style={{ height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {/* Deliberately NOT a scatter plot: with six sites a labelled bar pair reads
+                    faster and needs no legend-hunting to tell which dot is which site. Share
+                    of spend against share of parcels — the gap between the two bars IS the
+                    story, so they sit adjacent rather than stacked. */}
+                <BarChart data={tplShareBySite} margin={{ top: 8, right: 8, left: 4, bottom: 46 }}>
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  {/* Angled and given 46px of bottom margin. Horizontal labels at
+                      interval={0} overlapped into each other ("Arcatron Mobility PrivateIQ"
+                      in the earlier build); interval={0} is kept because dropping labels
+                      would leave bars no reader could identify. */}
+                  <XAxis dataKey="key" tick={{ fontSize: 10, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                    angle={-32} textAnchor="end" height={50}
+                    tickFormatter={v => (String(v).length > 18 ? String(v).slice(0, 17) + '…' : v)} />
+                  <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => v + '%'} />
+                  <Tooltip content={<ChartTooltip formatter={v => Number(v).toFixed(1) + '%'} />} />
+                  <Legend {...chartLegendProps({ fontSize: 10.5 })} />
+                  <Bar dataKey="cost_pct" name="% of spend" fill={SER.blue} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="ship_pct" name="% of parcels" fill={SER.aqua} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        <SectionHdr title="Warehouse Trend" note="cost per parcel by site, per billing month"
+          collapsed={secHid['tpl-whtrend']} onToggle={() => toggleSec('tpl-whtrend')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-whtrend'] ? { display: 'none' } : {}) }}><Card>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={tplWhTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => '₹' + Math.round(v)} width={56} />
+                <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                {/* connectNulls={false} so a month a site did not bill leaves a gap in its
+                    line rather than drawing a straight segment across it, which would read
+                    as a steady rate through a period with no data at all. */}
+                {tplWhNames.map((w, i) => (
+                  <Line key={w} type="monotone" dataKey={w} name={w} connectNulls={false}
+                    stroke={DRIFT.colors[i % DRIFT.colors.length]} strokeWidth={2} dot={{ r: 2.5 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card></div>
+      </>
+      )
+    })()
   } else {
     content = (
       <>
@@ -3431,7 +4093,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
             { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
             { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
-            { label: 'Claimable', value: fmt(billingGap.weight), spark: monthSeries.map(d => d.claim || 0), accent: C.red.tx, invertColor: true },
             ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
           ].map(m => {
             const pts = m.spark.slice(-14)
@@ -3501,12 +4162,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
             sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
             accent={C.red.tx} />
-          <Tile label="Claimable — Wrong Weight" value={fmt(billingGap.weight)}
-            sub={`${billingGap.pctOfBilled.toFixed(1)}% of total cost billed`}
-            accent={C.red.tx} />
           <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
             sub={`${fmtN(reverseBurden.n)} legs · ${reverseBurden.pct.toFixed(1)}% of spend`}
             accent={C.red.tx} />
+          {/* Fills the eighth slot the Claimable tile vacated. A RATE rather than a rupee
+              claim figure: how often the courier's charged weight exceeds our declared one,
+              which is the billing-accuracy signal. The rupee value of it lives in the
+              Recoverable section, where the claim workflow is. */}
+          <Tile label="Weight Disputes"
+            value={kpis.overbilledPct != null ? kpis.overbilledPct.toFixed(1) + '%' : '—'}
+            sub={`${fmtN(agg.overbilledRows)} of ${fmtN(kpis.shipments)} shipments`} />
         </div>
       </div>
       )}
@@ -3562,6 +4227,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <div style={{ height: 200, marginTop: isMobile ? 20 : 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={trendWindow} margin={{ top: 12, right: isMobile ? -28 : 14, left: isMobile ? -4 : 4, bottom: 4 }}>
+              {/* Same accent ramp as the Overview trend — both bars carry period magnitude
+                  with a rate line in front, so they get the same treatment. Its own id: two
+                  SVG gradients sharing one id would resolve to whichever mounted last. */}
+              <BarGradient id="ftlTotalBar" />
               <CartesianGrid stroke={VIZ.grid} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
                 axisLine={{ stroke: VIZ.axis }} tickLine={false} />
@@ -3591,7 +4260,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 }} />
               <Legend {...chartLegendProps({ fontSize: 11.5 })} />
               <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
-                fill={C.acc} fillOpacity={0.85} radius={[4, 4, 0, 0]} maxBarSize={64} />
+                fill="url(#ftlTotalBar)" radius={[4, 4, 0, 0]} maxBarSize={64} />
               <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
                 stroke={C.acm} strokeWidth={2.5}
                 dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
@@ -3610,8 +4279,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11 }}>
                 <thead>
-                  <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>FREIGHT COST</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>SHIPMENTS</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>AVG COST/SHIP</th>
@@ -3649,11 +4318,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'pctGmv', label: '% of GMV', align: 'center', render: (_, r) => (
                 r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'
               ) },
-              { key: 'claim', label: 'Claimable', align: 'center', render: (_, r) => (
-                r.claim > 0
-                  ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span>
-                  : <span style={{ color: C.t3 }}>—</span>
-              ) },
+              // Share of the VISIBLE window, not of all time: the window is user-selectable
+              // (3/6/12 months), and a share of a total the table does not show would never
+              // sum to 100 and would silently change meaning with the range buttons.
+              { key: 'shareSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+                const tot = trendWindow.reduce((a, x) => a + (Number(x.cost) || 0), 0)
+                return tot > 0 ? ((Number(r.cost) || 0) / tot * 100).toFixed(1) + '%' : '—'
+              } },
             ]}
             rows={trendWindow}
           />
@@ -3671,8 +4342,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
             <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
               <thead>
-                <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
-                  <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                  <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
@@ -3713,11 +4384,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 {r.overPct.toFixed(1) + '%'}
               </span>
             ) },
-            { key: 'claimRs', label: 'Claimable', align: 'center', render: (_, r) => (
-              r.claimRs > 0
-                ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span>
-                : <span style={{ color: C.t3 }}>—</span>
-            ) },
+            // Share of spend across the partners listed here, so the column sums to 100%
+            // and stays consistent when a sidebar filter narrows the set. ShareBar is the
+            // same treatment the FTL/PTL transporter and vehicle tables use, so a share
+            // reads identically wherever it appears.
+            { key: 'shareSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+              const tot = courierRows.reduce((a, x) => a + (Number(x.cost) || 0), 0)
+              if (!(tot > 0)) return '—'
+              const pct = (Number(r.cost) || 0) / tot * 100
+              return <ShareBar pct={pct}>{pct.toFixed(1) + '%'}</ShareBar>
+            } },
           ]}
           rows={courierRows}
         />
@@ -3749,7 +4425,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
                 <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                   <thead>
-                    <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
+                    <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
                       <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
@@ -3868,8 +4544,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ overflowX: 'auto', marginTop: 8, marginLeft: -8, marginRight: -8 }}>
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11, width: '100%' }}>
                 <thead>
-                  <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>SHIPMENTS</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>AVG COST/SHIP</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>COST/KG</th>
@@ -4004,8 +4680,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11.5 }}>
                 <thead>
-                  <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
@@ -4092,8 +4768,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                 <thead>
-                  <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Shipments</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Cost</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 58, whiteSpace: 'nowrap' }}>Share</th>
@@ -4168,8 +4844,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
                 <thead>
-                  <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>First</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Latest</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Drift</th>
@@ -4537,8 +5213,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
                 <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                   <thead>
-                    <tr style={{ background: C.ach, borderBottom: `1px solid ${C.border2}` }}>
-                      <th style={{ position: 'sticky', left: 0, background: C.ach, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                    <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 50, whiteSpace: 'nowrap' }}>Shipments</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 48, whiteSpace: 'nowrap' }}>Avg ₹</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 44, whiteSpace: 'nowrap' }}>₹/kg</th>

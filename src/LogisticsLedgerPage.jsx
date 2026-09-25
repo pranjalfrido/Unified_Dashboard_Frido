@@ -103,11 +103,17 @@ const FORMATS = {
     totalField: "total_cost",
     // One bill line per 3PL per warehouse per month, so a re-upload of the same
     // month corrects that month in place instead of doubling it.
-    uniqueKey: "month_year,threepl_logistics_name,warehouse",
+    // Keyed on FACILITY_PINCODE, not a facility name: the pincode is what joins this ledger
+    // to Clickpost's pickup_pincode, so per-parcel and per-kg costs depend on it being
+    // present and correct. Names vary between the invoice and the tracking feed; a pincode
+    // does not.
+    uniqueKey: "month_year,threepl_logistics_name,facility_pincode",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "threepl_logistics_name", label: "3PL_Logistics_Name", type: "text", req: true, w: 190, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
-      { key: "warehouse", label: "warehouse", type: "text", req: true, w: 150, ex: "Bhiwandi", desc: "Warehouse/facility these fees relate to" },
+      { key: "facility_name", label: "Facility_Name", type: "text", w: 170, ex: "Hexalog_GGN2", desc: "Facility as the partner names it" },
+      { key: "facility_location", label: "Facility_Location", type: "text", w: 150, ex: "Bhiwandi", desc: "City or area the facility sits in" },
+      { key: "facility_pincode", label: "Facility_Pincode", type: "text", req: true, w: 140, ex: "421302", desc: "Pincode of the facility — joins to shipment volume" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "3PL-INV-20713", desc: "Partner's invoice/bill number" },
       { key: "operation_fee", label: "operation_fee", type: "num", w: 130, ex: "185000", desc: "Pick, pack and despatch handling charges" },
       { key: "rental_fee", label: "rental_fee", type: "num", w: 120, ex: "260000", desc: "Storage or space rental for the period" },
@@ -115,10 +121,11 @@ const FORMATS = {
       { key: "total_cost", label: "total_cost", type: "num", req: true, computed: true, w: 130, ex: "460500", desc: "Grand total invoiced for the period" },
       { key: "remarks", label: "remarks", type: "text", w: 220, ex: "Includes one-off racking charge", desc: "Free-text note" },
     ],
-    searchKeys: ["threepl_logistics_name", "warehouse", "invoice_number", "month_year"],
+    searchKeys: ["threepl_logistics_name", "facility_name", "facility_location", "facility_pincode", "invoice_number", "month_year"],
     notes: [
-      "One row = one 3PL's charges for one warehouse for one month.",
-      "Re-uploading the same month_year + 3PL_Logistics_Name + warehouse UPDATES that row rather than adding a duplicate.",
+      "One row = one 3PL's charges for one facility for one month.",
+      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode UPDATES that row rather than adding a duplicate.",
+      "Facility_Pincode must match the pickup pincode the courier records for that facility — it is what links this bill to the parcels shipped, and cost per parcel / per kg stay blank without it.",
       "month_year must be YYYY-MM (e.g. 2026-07).",
       "total_cost is computed as operation_fee + rental_fee + other_fee when left blank.",
       "Leave a fee blank or 0 if the partner did not bill it that month.",

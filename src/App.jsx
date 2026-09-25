@@ -6,7 +6,7 @@ import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileTex
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
-import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps } from './components.jsx'
+import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
 import LoadingOverlay, { LoadingScreen, BrandMark } from './LoadingOverlay.jsx'
@@ -297,7 +297,7 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
     acc.push([+x.toFixed(1), +y.toFixed(1)])
     return acc
   }, [])
-  const sparkColor = '#F4B400'
+  const sparkColor = C.acc
   const gradId = `sg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   // Build smooth cubic bezier path
   const smoothPath = coordPts.length > 1 ? coordPts.reduce((d, [x, y], i) => {
@@ -1186,7 +1186,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 }} />
-                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill={C.acc} opacity={0.85} radius={[3,3,0,0]} />
+                <BarGradient id="gShipTotal" />
+                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="url(#gShipTotal)" radius={[3,3,0,0]} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#B14A82" strokeWidth={1.5} dot={false} connectNulls />
                 <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#3D6FBE" strokeWidth={1.5} dot={false} connectNulls />
                 <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#3F9E5F" strokeWidth={1.5} dot={false} connectNulls />
@@ -1227,7 +1228,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   const cantDeselect = isActive && cSelected.size === 1
                   return (
                     <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                       <button
                         onClick={() => {
                           if (isDisabled || cantDeselect) return
@@ -1253,7 +1254,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
-                          background: isPrimary ? C.acs : isDrill ? '#F3DC9E' : 'transparent',
+                          background: isPrimary ? C.acs : isDrill ? C.ach : 'transparent',
                           color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
                           cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                           opacity: isDisabled ? 0.45 : 1,
@@ -1267,7 +1268,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   const isActive = cPayment === p
                   return (
                     <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                       <button
                         onClick={() => setCPayment(isActive ? null : p)}
                         style={{
@@ -1286,7 +1287,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   const isActive = cTier === tierMap[t]
                   return (
                     <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                       <button
                         onClick={() => setCTier(isActive ? null : tierMap[t])}
                         style={{
@@ -2716,7 +2717,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </div>
                       )
                     }} />
-                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill={C.acc} fillOpacity={0.85} radius={[3,3,0,0]} barSize={40} />
+                    <BarGradient id="gQtyTotal" />
+                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="url(#gQtyTotal)" radius={[3,3,0,0]} barSize={40} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke={C.blue.tx} strokeWidth={2} dot={{ r: 3, fill: C.blue.tx }} />
                     {!isMobile && <Legend {...chartLegendProps({ fontSize: 10 })} />}
@@ -2931,7 +2933,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </div>
                       )
                     }} />
-                    <Bar dataKey="total" fill={C.acc} radius={[4, 4, 0, 0]}>
+                    <BarGradient id="gCatTotal" />
+                    <Bar dataKey="total" fill="url(#gCatTotal)" radius={[4, 4, 0, 0]}>
                       <LabelList dataKey="total" position="top" formatter={v => ((v / totalRto) * 100).toFixed(1) + '%'} style={{ fontSize: 9, fill: C.t3 }} />
                     </Bar>
                   </BarChart>
@@ -15271,7 +15274,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
       )}
       {insight && (
         <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 8, padding: '9px 11px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7A6000', marginBottom: 4 }}>◈ Insight</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.acd, marginBottom: 4 }}>◈ Insight</div>
           <div style={{ fontSize: 11.5, color: C.t2, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: insight }} />
         </div>
       )}
@@ -15449,7 +15452,7 @@ function IntelPage({ data }) {
 
       <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 6 }}>◈ Period Trend Signal</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acd, marginBottom: 6 }}>◈ Period Trend Signal</div>
           <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
           <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
         </div>
@@ -15542,7 +15545,7 @@ function HeroSparkCard({ c }) {
     setHov(Math.max(0, Math.min(vals.length - 1, idx)))
   }
   return (
-    <div onMouseEnter={() => setHovCard(true)} onMouseLeave={() => setHovCard(false)} style={{ background: 'var(--card)', border: `1px solid ${hovCard ? '#F5C518' : 'var(--b1)'}`, borderRadius: 12, padding: '10px 14px 6px', display: 'flex', flexDirection: 'column', gap: 2, transition: 'border-color .15s', cursor: 'default' }}>
+    <div onMouseEnter={() => setHovCard(true)} onMouseLeave={() => setHovCard(false)} style={{ background: 'var(--card)', border: `1px solid ${hovCard ? C.acc : 'var(--b1)'}`, borderRadius: 12, padding: '10px 14px 6px', display: 'flex', flexDirection: 'column', gap: 2, transition: 'border-color .15s', cursor: 'default' }}>
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', color: 'var(--t3)', textTransform: 'uppercase' }}>{c.label}</span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.15, color: c.valColor }}>{c.value}</span>
@@ -15898,7 +15901,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             return null
           })()
 
-          function MetricTable({ title, rows, accentColor = '#F5C518', insight = null }) {
+          function MetricTable({ title, rows, accentColor = C.acc, insight = null }) {
             return (
               <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
                 {/* title header */}
@@ -15987,14 +15990,14 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   return gs > 0 ? (r.repeatRevenue || 0) / gs * 100 : 0
                 })
                 const heroCards = [
-                  { label: 'GROSS SALES', value: fmt(kpis.grossSales), sub: `${fmtN(kpis.totalOrders||0)} orders · AOV ${fmt(kpis.aov)}`, badge: chgBadgeCp(kpis.grossSales, prevKpis.grossSales), accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: '#F5C518', valColor: '#15130B', sparkVals: newCustVals, sparkColor: '#D9A800', fmt: v => fmtN(v) },
-                  { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: '#F5C518', valColor: '#15130B', sparkVals: spendVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: '#F5C518', valColor: '#D97706', sparkVals: roasVals, sparkColor: '#D97706', fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: '#F5C518', valColor: '#15130B', sparkVals: cacVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: roasVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: '#F5C518', valColor: '#15130B', sparkVals: repeatRevPctVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(1)}%` },
+                  { label: 'GROSS SALES', value: fmt(kpis.grossSales), sub: `${fmtN(kpis.totalOrders||0)} orders · AOV ${fmt(kpis.aov)}`, badge: chgBadgeCp(kpis.grossSales, prevKpis.grossSales), accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: C.acc, valColor: C.t1, sparkVals: newCustVals, sparkColor: C.acm, fmt: v => fmtN(v) },
+                  { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
@@ -16006,7 +16009,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
               {/* Metric tables */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor="#D9A800" insight={spendInsight} />
+                <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor={C.acm} insight={spendInsight} />
                 <MetricTable title="Revenue & Lifetime Value" rows={ledger2} accentColor="#0D9E68" insight={revenueInsight} />
               </div>
 
@@ -16064,7 +16067,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   ...pill(active),
                   padding: '2px 9px', fontSize: 10.5,
                 })
-                const ttStyle = { background: '#fff', border: '1px solid #F0E2BC', borderRadius: 8, fontSize: 11, color: C.t1 }
+                const ttStyle = { background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, fontSize: 11, color: C.t1 }
 
                 return (
                   <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -16074,7 +16077,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         <div style={{ display: 'flex', gap: 4 }}>
                           {views.map(v => <button key={v.id} style={pill(ovChartView === v.id)} onClick={() => setOvChartView(v.id)}>{v.label}</button>)}
                         </div>
-                        <div style={{ width: 1, height: 16, background: '#E2D9C8' }} />
+                        <div style={{ width: 1, height: 16, background: C.border }} />
                         <div style={{ display: 'flex', gap: 4 }}>
                           {['daily','weekly','monthly'].map(g => <button key={g} style={granPill(ovGran === g)} onClick={() => setOvGran(g)}>{g.charAt(0).toUpperCase()+g.slice(1)}</button>)}
                         </div>
@@ -16090,10 +16093,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
                             <Legend {...chartLegendProps({ fontSize: 10 })} />
-                            <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acc} maxBarSize={32} radius={[3,3,0,0]} />
+                            <BarGradient id="gGrossRev" />
+                            <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="url(#gGrossRev)" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
-                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#9E9484" strokeWidth={2} dot={false} />
+                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke={C.t3} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
@@ -16103,9 +16107,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
                             <Legend {...chartLegendProps({ fontSize: 10 })} />
-                            <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill={C.acc} maxBarSize={32} radius={[3,3,0,0]} />
-                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
+                            <BarGradient id="gNewCust" />
+                            <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="url(#gNewCust)" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
+                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
@@ -16115,9 +16120,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
                             <Legend {...chartLegendProps({ fontSize: 10 })} />
-                            <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
+                            <BarGradient id="gAov" />
+                            <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="url(#gAov)" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke={C.acc} strokeWidth={2} dot={false} />
-                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} strokeDasharray="4 3" />
                           </ComposedChart>
                         )}
                       </ResponsiveContainer>
@@ -16417,8 +16423,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
-                      <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
-                      <Line yAxisId="sales" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                      <Bar yAxisId="cust" dataKey="customersAcquired" fill={C.acc} maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
+                      <Line yAxisId="sales" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16437,8 +16443,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
-                      <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
-                      <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]} />
+                      <Bar dataKey={newKey} stackId="a" fill={C.acc} name="New" radius={[0,0,0,0]} />
+                      <Bar dataKey={repKey} stackId="a" fill={C.acs} name="Repeat" radius={[3,3,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16455,8 +16461,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
-                      <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
-                      <Line yAxisId="roas" dataKey="roas" stroke="#8A8478" strokeWidth={2.5} dot={false} name="RoAS" />
+                      <Bar yAxisId="cac" dataKey="cac" fill={C.acc} maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
+                      <Line yAxisId="roas" dataKey="roas" stroke={C.t3} strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16503,7 +16509,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       />
                       <Bar dataKey={dowMetric === 'customers' ? 'avg' : dowMetric === 'revenue' ? 'avgRev' : 'avgOrders'}
                         name={dowMetric === 'customers' ? 'Avg New Customers' : dowMetric === 'revenue' ? 'Avg Gross Sales (Ex GST)' : 'Avg Orders'}
-                        radius={[4,4,0,0]} fill="#F5C518">
+                        radius={[4,4,0,0]} fill={C.acc}>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>}
@@ -16528,8 +16534,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
                     <Legend {...chartLegendProps({ fontSize: 10 })} />
-                    <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                    <Line yAxisId="spend" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                    <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                    <Line yAxisId="spend" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
                     <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -16552,8 +16558,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
-                      <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                      <Line yAxisId="cac" dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" />
+                      <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                      <Line yAxisId="cac" dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16586,7 +16592,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                           <Legend {...chartLegendProps({ fontSize: 10 })} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
-                          <Line dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
+                          <Line dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </SCard>
@@ -16652,7 +16658,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     {info && (
                       <div style={{ position: 'relative', display: 'inline-flex' }} className="info-icon-wrap">
                         <span style={{ width: 15, height: 15, borderRadius: '50%', background: C.acs, color: C.t2, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', userSelect: 'none', flexShrink: 0 }}>ⓘ</span>
-                        <div style={{ position: 'absolute', top: 20, left: 0, zIndex: 99, background: C.t1, color: '#FFF9E8', fontSize: 11, lineHeight: 1.5, padding: '8px 12px', borderRadius: 8, width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s' }} className="info-tooltip">
+                        <div style={{ position: 'absolute', top: 20, left: 0, zIndex: 99, background: C.t1, color: '#fff', fontSize: 11, lineHeight: 1.5, padding: '8px 12px', borderRadius: 8, width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s' }} className="info-tooltip">
                           {info}
                         </div>
                       </div>
@@ -16910,11 +16916,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       {Array.from({ length: visibleMax + 1 }, (_, i) => <col key={i} />)}
                     </colgroup>
                     <thead>
-                      <tr style={{ background: '#F3DFA0', borderBottom: `1px solid #E6C877` }}>
-                        <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, background: '#F3DFA0', padding: '10px 12px', textAlign: 'left', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Cohort</th>
-                        <th style={{ position: 'sticky', top: 0, left: 72, zIndex: 4, background: '#F3DFA0', padding: '10px 12px', textAlign: 'right', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Size</th>
+                      <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                        <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, background: C.acl, padding: '10px 12px', textAlign: 'left', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Cohort</th>
+                        <th style={{ position: 'sticky', top: 0, left: 72, zIndex: 4, background: C.acl, padding: '10px 12px', textAlign: 'right', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Size</th>
                         {Array.from({ length: visibleMax + 1 }, (_, i) => (
-                          <th key={i} style={{ position: 'sticky', top: 0, zIndex: 3, background: '#F3DFA0', padding: '10px 12px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
+                          <th key={i} style={{ position: 'sticky', top: 0, zIndex: 3, background: C.acl, padding: '10px 12px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
                         ))}
                       </tr>
                     </thead>
@@ -16931,7 +16937,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               const rawVal = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
                               const pctVal = base > 0 ? rawVal / base * 100 : 0
                               const intensity = idx === 0 ? 1 : Math.min(pctVal / heatCeiling, 1)
-                              const bg = idx === 0 ? CT.amberDeep : `rgba(232,197,120,${(intensity * 0.85 + 0.05).toFixed(2)})`
+                              const bg = idx === 0 ? CT.amberDeep : `rgba(${C.accRgb},${(intensity * 0.85 + 0.05).toFixed(2)})`
                               const textColor = idx === 0 ? '#fff' : CT.t1
                               return (
                                 <td key={idx} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -17026,10 +17032,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           // cell color for lift
           const liftCellBg = (lv) => {
             if (lv === null) return 'transparent'
-            if (lv >= 3) return `rgba(245,197,24,0.90)`
-            if (lv >= 2) return `rgba(245,197,24,0.65)`
-            if (lv >= 1.5) return `rgba(245,197,24,0.40)`
-            if (lv >= 1) return `rgba(245,197,24,0.15)`
+            if (lv >= 3) return `rgba(${C.accRgb},0.90)`
+            if (lv >= 2) return `rgba(${C.accRgb},0.65)`
+            if (lv >= 1.5) return `rgba(${C.accRgb},0.40)`
+            if (lv >= 1) return `rgba(${C.accRgb},0.15)`
             return `rgba(148,147,159,0.12)`
           }
 
@@ -17116,7 +17122,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               const cnt = countMatrix[f]?.[s] || 0
                               const lv = liftVal(f, s)
                               const rv = rateVal(f, s)
-                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(245,197,24,${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(245,197,24,${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
                               const display = liftDisplay === 'lift' ? (lv != null && cnt >= 5 ? `${lv}×` : '') : liftDisplay === 'rate' ? (rv > 0 ? `${rv}%` : '') : (cnt > 0 ? fmtN(cnt) : '')
                               return (
                                 <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
@@ -17532,7 +17538,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
                   { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'All RFM segments combined', tooltip: 'Total unique customers across all 7 RFM segments. This is your entire analyzed customer base.' },
-                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: '#FFF7ED', sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
+                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
                   { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
                   { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },
                 ].map((kpi, i) => (
@@ -17551,7 +17557,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <div className="rfm-kpi-tt" style={{
                       opacity: 0, pointerEvents: 'none', transition: 'opacity .15s',
                       position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
-                      background: '#ffffff', color: C.t1, fontSize: 11, lineHeight: 1.5, border: '1px solid #E8DFC8',
+                      background: '#ffffff', color: C.t1, fontSize: 11, lineHeight: 1.5, border: `1px solid ${C.border2}`,
                       padding: '7px 10px', borderRadius: 7, whiteSpace: 'normal', width: 200,
                       boxShadow: '0 4px 14px rgba(0,0,0,.18)', zIndex: 99, textAlign: 'center',
                     }}>{kpi.tooltip}</div>
@@ -18120,7 +18126,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <PieChart>
                               <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={2}>
                                 <Cell fill={C.acc} />
-                                <Cell fill="#E4DAC0" />
+                                <Cell fill={C.acs} />
                               </Pie>
                               <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
                             </PieChart>
