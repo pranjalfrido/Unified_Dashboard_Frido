@@ -1305,7 +1305,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               })()}
             </div>
           </div>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 450 }}>
+          {/* 720, not 450: the courier list is 9 rows plus a total, and logo rows run
+              ~53px, so 450 clipped it and the table always showed a scrollbar despite
+              having few rows. The cap stays so a long Month view still scrolls rather
+              than running off the page; overflowY:auto hides the bar when it fits. */}
+          <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 720 }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
               const COLS = [
@@ -2656,7 +2660,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, alignItems: 'start' }}>
               {/* Left: Donut with toggle */}
-              <div className="card-hoverable" style={{ ...cardStyle, height: 300 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, height: 330 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -2690,13 +2694,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
-              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 300 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 330 }}>
                 <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10, flexShrink: 0 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <div style={{ overflowX: 'auto', flex: 1, minHeight: 220 }}>
-                <ResponsiveContainer width="100%" height={220}>
+                <div style={{ overflow: 'hidden', flex: 1, minHeight: 0 }}>
+                <ResponsiveContainer width="100%" height={248}>
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -3298,6 +3302,11 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
   const [logHover, setLogHover] = useState(false)
   const hoverTimerRef = useRef(null)
   const logHoverTimerRef = useRef(null)
+  // Viewport top of the hovered nav row. The flyouts are position:fixed (so .app-shell's
+  // overflow:hidden cannot clip them and the loading veil cannot paint over them), which
+  // means they no longer inherit the row's position and have to be told where to sit.
+  const [invHoverTop, setInvHoverTop] = useState(0)
+  const [logHoverTop, setLogHoverTop] = useState(0)
   const allItems = [
     { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
     { id: 'sales',     label: 'Sales',     Icon: ChartBar },
@@ -3352,13 +3361,13 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
             <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
               className={`sb-item${page === 'inventory' ? ' active' : ''}`}
               style={{ position: 'relative' }}
-              onMouseEnter={() => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHover(true) } }}
+              onMouseEnter={e => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHoverTop(e.currentTarget.getBoundingClientRect().top); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
               {hasBothInv && invHover && (
                 <div style={{
-                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  position: 'fixed', left: 'var(--sb)', top: invHoverTop, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 170,
                   display: 'flex', flexDirection: 'column', gap: 2,
@@ -3404,13 +3413,13 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
             <div onClick={() => setPage(defaultLogPage)}
               className={`sb-item${logActive ? ' active' : ''}`}
               style={{ position: 'relative' }}
-              onMouseEnter={() => { if (showPopup) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
+              onMouseEnter={e => { if (showPopup) { clearTimeout(logHoverTimerRef.current); setLogHoverTop(e.currentTarget.getBoundingClientRect().top); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
               {showPopup && logHover && (
                 <div style={{
-                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  position: 'fixed', left: 'var(--sb)', top: logHoverTop, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 200,
                   display: 'flex', flexDirection: 'column', gap: 2,

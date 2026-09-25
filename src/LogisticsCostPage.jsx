@@ -2263,38 +2263,49 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Grouped by VEHICLE, not lane+vehicle: only 3 lane cells have a comparable second carrier
   // where 4 vehicles do, so the finer grain would render as almost no data. That does mean a
   // cheaper carrier here might be running easier lanes — the note on the card says so.
-  const b2bRateCmpRows = useMemo(() => {
+  // ── Rate consistency: what the SAME lane and vehicle actually cost, trip to trip ──
+  // Replaces a carrier-vs-carrier comparison that almost never had data: it needed one
+  // vehicle with two carriers at 8+ trips each, which no vehicle met, so the card sat empty.
+  //
+  // This asks a question the ledger can always answer — the same route, the same vehicle
+  // size, how far apart is the cheapest trip from the dearest. Holding vehicle constant
+  // matters: a lane's spread is otherwise just its vehicle mix, not a pricing problem.
+  // Nashik-Pune on a 7.5T runs 250 to 14,100 across 105 trips, which is a rate question
+  // rather than a mix artefact.
+  //
+  // Ranked by rupees at stake (spread x trips), not by percentage: a 300% gap on two trips
+  // matters less than a smaller gap repeated two hundred times.
+  const b2bSpreadRows = useMemo(() => {
     if (!b2b) return []
     const by = new Map()
-    for (const r of b2b.rateCmp || []) {
+    for (const r of b2b.laneVeh || []) {
       if (b2bPick && !b2bPick(r)) continue
-      const k = r.vehicle || '—'
-      if (!by.has(k)) by.set(k, { vehicle: k, carriers: [] })
-      by.get(k).carriers.push({
-        name: r.transporter, trips: num(r.trips),
-        median: num(r.median_cost), spend: num(r.spend),
-      })
+      const trips = num(r.trips)
+      const lo = num(r.min_cost), hi = num(r.max_cost)
+      if (!trips || !(lo > 0) || !(hi > lo)) continue
+      const k = `${r.lane} · ${r.vehicle}`
+      const e = by.get(k) || { key: k, lane: r.lane, vehicle: r.vehicle, trips: 0, lo: Infinity, hi: 0, cost: 0 }
+      e.trips += trips
+      e.lo = Math.min(e.lo, lo)
+      e.hi = Math.max(e.hi, hi)
+      e.cost += num(r.cost)
+      by.set(k, e)
     }
-    // Only vehicles with a second carrier are a comparison at all.
     return [...by.values()]
-      .filter(v => v.carriers.length > 1)
-      .map(v => {
-        const sorted = [...v.carriers].sort((a, b2) => a.median - b2.median)
-        const lo = sorted[0], hi = sorted[sorted.length - 1]
-        return {
-          vehicle: v.vehicle,
-          carriers: sorted,
-          cheapest: lo.name, cheapestRate: lo.median,
-          dearest: hi.name, dearestRate: hi.median,
-          spreadPct: lo.median ? ((hi.median / lo.median) - 1) * 100 : 0,
-          // Rupees left on the table if the dearest carrier billed the cheapest rate. A
-          // ceiling, not a forecast: it assumes the cheap carrier could absorb the volume.
-          gapRs: hi.trips * (hi.median - lo.median),
-          spend: v.carriers.reduce((s, c) => s + c.spend, 0),
-        }
-      })
-      .sort((a, b2) => b2.gapRs - a.gapRs)
+      // Below ~8 trips a min/max range is two outliers, not a rate pattern.
+      .filter(e => e.trips >= 8 && e.hi > e.lo)
+      .map(e => ({
+        ...e,
+        spread: e.hi - e.lo,
+        spreadPct: e.lo > 0 ? ((e.hi - e.lo) / e.lo) * 100 : 0,
+        avg: e.trips > 0 ? e.cost / e.trips : 0,
+        // Bar base and height, so a stacked bar draws as a floating lo-to-hi range.
+        band: e.hi - e.lo,
+      }))
+      .sort((a, b) => (b.spread * b.trips) - (a.spread * a.trips))
+      .slice(0, 8)
   }, [b2b, b2bPick])
+
 
   // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
   // the whole block responds to the sidebar selection, not just the charts below it.
@@ -3667,67 +3678,71 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             />
           </Card>
 
-          {/* The only view on this tab that names a cheaper alternative. Grouped bars, one per
-              carrier, so the comparison is read side by side rather than inferred from a table.
-              Ordered by rupees at stake, not by spread %, because a 306% gap on a small vehicle
-              matters less than a smaller gap on a large one. */}
-          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Same vehicle, different carrier"
-            note="median cost per trip · min 3 trips per carrier to qualify">
-            {b2bRateCmpRows.length ? (
+          {/* Same route, same vehicle size — how far apart the cheapest and dearest trip
+              were. Holding vehicle constant is the point: a lane's raw spread is otherwise
+              just its vehicle mix rather than a pricing inconsistency. Ranked by rupees at
+              stake (spread x trips), so a wide gap on two trips does not outrank a smaller
+              one repeated two hundred times. */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Rate consistency by lane"
+            note="cheapest to dearest trip on the same lane and vehicle · min 8 trips">
+            {b2bSpreadRows.length ? (
               <>
                 <div style={{ flex: 1, minHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={b2bRateCmpRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
-                      <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                      <XAxis dataKey="vehicle" tick={{ fontSize: 11, fill: VIZ.muted }}
-                        axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0} />
-                      <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    {/* A floating band: `lo` is stacked first with a transparent fill and the
+                        visible bar sits on top of it, so each bar spans min to max. Recharts
+                        has no native range bar. */}
+                    <BarChart data={b2bSpreadRows} layout="vertical"
+                      margin={{ top: 6, right: 58, left: 4, bottom: 4 }}>
+                      <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                        axisLine={false} tickLine={false}
                         tickFormatter={v => '₹' + Math.round(v / 1000) + 'k'} />
+                      <YAxis type="category" dataKey="key" width={158}
+                        tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false}
+                        tickFormatter={v => (String(v).length > 24 ? String(v).slice(0, 23) + '…' : v)} />
                       <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
                         content={({ active, payload }) => {
                           if (!active || !payload?.length) return null
                           const r = payload[0].payload
                           return (
-                            <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{r.vehicle}</div>
-                              {r.carriers.map((c, i) => (
-                                <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.t2 }}>
-                                  <span style={{ color: i === 0 ? C.green.tx : C.t2, fontWeight: i === 0 ? 700 : 400 }}>{c.name}</span>
-                                  <span style={{ marginLeft: 'auto', paddingLeft: 12, fontWeight: 700, color: C.t1 }}>
-                                    ₹{Math.round(c.median).toLocaleString('en-IN')}
-                                  </span>
-                                  <span style={{ color: C.t3, fontSize: 10.5 }}>{fmtN(c.trips)} trips</span>
-                                </div>
-                              ))}
-                              <div style={{ fontSize: 11, color: C.red.tx, marginTop: 5, fontWeight: 700 }}>
-                                {fmt(r.gapRs)} at stake · {r.spreadPct.toFixed(0)}% spread
+                            <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)', minWidth: 190 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 6 }}>{r.lane}</div>
+                              <div style={{ fontSize: 10.5, color: C.t3, marginBottom: 6 }}>{r.vehicle} · {fmtN(r.trips)} trips</div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2 }}>
+                                <span>Cheapest</span><span>{fmt(r.lo)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2 }}>
+                                <span>Average</span><span>{fmt(r.avg)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2, marginBottom: 5 }}>
+                                <span>Dearest</span><span>{fmt(r.hi)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1px solid ${C.border2}`, paddingTop: 5 }}>
+                                <span>Spread</span><span>{fmt(r.spread)} ({r.spreadPct.toFixed(0)}%)</span>
                               </div>
                             </div>
                           )
                         }} />
-                      {/* One bar per carrier slot, coloured by RANK not identity: the leftmost is
-                          always the cheapest for that vehicle, so the reader compares position
-                          rather than remembering which colour is which carrier. */}
-                      {[0, 1, 2, 3].map(i => (
-                        <Bar key={i} dataKey={r => r.carriers[i]?.median ?? null}
-                          name={i === 0 ? 'Cheapest' : i === 1 ? '2nd' : i === 2 ? '3rd' : '4th'}
-                          fill={i === 0 ? SER.aqua : i === 1 ? SER.blue : i === 2 ? SER.orange : SER.yellow}
-                          radius={[3, 3, 0, 0]} maxBarSize={22} />
-                      ))}
-                      <Legend {...chartLegendProps({ fontSize: 10.5 })} />
+                      <Bar dataKey="lo" stackId="s" fill="transparent" isAnimationActive={false} />
+                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={13}>
+                        <LabelList dataKey="spreadPct" position="right"
+                          formatter={v => '+' + Math.round(v) + '%'}
+                          style={{ fontSize: 10, fill: C.t2, fontWeight: 600 }} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: 4 }}>
-                  Grouped by vehicle rather than lane: only 3 lane cells have a comparable second
-                  carrier. A cheaper carrier here may be running easier lanes — check the lane
-                  table before shifting volume.
+                <div style={{ marginTop: 8, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
+                  Each bar runs from the cheapest to the dearest trip billed on that lane and
+                  vehicle. A wide band means the same journey is being priced inconsistently —
+                  worth checking against the rate card before assuming the average is the rate.
                 </div>
               </>
             ) : (
               <div style={{ fontSize: 12.5, color: C.t2 }}>
-                No vehicle has two carriers with 3+ trips each, so there is nothing to compare
-                like for like.
+                No lane has 8+ trips on one vehicle size yet, so there is no rate pattern to
+                read — only individual quotes.
               </div>
             )}
           </Card>
@@ -3790,7 +3805,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const perShip = totalShip > 0 ? ratedCost / totalShip : null
       const perKg = totalKg > 0 ? ratedCost / totalKg : null
       const avgWt = totalShip > 0 ? totalKg / totalShip : null
-      const unmatched = t.cost - ratedCost
 
       // Rate movement, last billed month against the one before. Only months with volume on
       // both sides can be compared, so months missing a denominator are skipped rather than
@@ -3850,13 +3864,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <Tile label="Top Site Share"
               value={tpl.warehouses.length ? `${share(tpl.warehouses[0].cost).toFixed(1)}%` : '—'}
               sub={tpl.warehouses.length ? tpl.warehouses[0].key : null} />
-            {/* Unmatched spend is a data-quality figure, not a cost figure. It is shown
-                because every per-unit number above silently excludes it, and a reader
-                comparing them against the total needs to know why they do not reconcile. */}
-            <Tile label="Unmatched Spend"
-              value={unmatched > 0.5 ? fmt(unmatched) : '₹0'}
-              accent={unmatched > 0.5 ? C.red.tx : undefined}
-              sub={unmatched > 0.5 ? 'billed, no parcels matched' : 'every month has volume'} />
+            <Tile label="Top Partner Share"
+              value={tpl.partners.length ? `${share(tpl.partners[0].cost).toFixed(1)}%` : '—'}
+              sub={tpl.partners.length ? tpl.partners[0].key : null} />
           </div>
         </div>
 
@@ -3906,46 +3916,41 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <div style={{ marginTop: 14, ...(secHid['tpl-trend'] ? { display: 'none' } : {}) }}><Card>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
-              {/* Spend as a stacked area on the left axis, cost per parcel as a line on the
-                  right. Two axes on purpose: rupees and a per-unit rate are different
-                  quantities, and a month can bill MORE in total while getting cheaper per
-                  parcel — which is exactly what this data does and what the chart is for.
-                  Areas rather than bars: the filled mass reads as the spend the line is
-                  computed from, and at five periods bars left most of the plot empty. */}
+              {/* Total spend as the bar, its components and the unit rate as lines.
+                  Stacked areas were the wrong call here: with Rental billed in only two of
+                  five months the bands crossed and overlapped, and the filled mass made the
+                  total impossible to read off. A bar carries the total unambiguously and the
+                  lines sit in front of it.
+
+                  Two axes on purpose — rupees and a per-parcel rate are different quantities,
+                  and a month can bill MORE in total while getting cheaper per parcel, which is
+                  exactly what this data does and what the chart is for. */}
               <ComposedChart data={tplTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
-                <defs>
-                  <linearGradient id="tplOps" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.55} />
-                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0.12} />
-                  </linearGradient>
-                  <linearGradient id="tplRent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SER.orange} stopOpacity={0.55} />
-                    <stop offset="95%" stopColor={SER.orange} stopOpacity={0.12} />
-                  </linearGradient>
-                  <linearGradient id="tplOther" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SER.yellow} stopOpacity={0.55} />
-                    <stop offset="95%" stopColor={SER.yellow} stopOpacity={0.12} />
-                  </linearGradient>
-                </defs>
+                <BarGradient id="tplTotalBar" />
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis yAxisId="l" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
                   tickLine={false} tickFormatter={v => fmt(v)} width={64} />
                 {/* From 0, not the data's own range. Recharts would otherwise start this axis
-                    near the lowest rate and make a 16-to-31 rupee move look like a collapse. */}
+                    near the lowest rate and make an 18-to-58 rupee move look like a collapse. */}
                 <YAxis yAxisId="r" orientation="right" domain={[0, 'auto']}
                   tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} width={52} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend {...chartLegendProps({ fontSize: 11 })} />
-                <Area yAxisId="l" type="monotone" dataKey="operation_fee" name="Operations"
-                  stackId="a" stroke={SER.blue} strokeWidth={1.5} fill="url(#tplOps)" />
-                <Area yAxisId="l" type="monotone" dataKey="rental_fee" name="Rental"
-                  stackId="a" stroke={SER.orange} strokeWidth={1.5} fill="url(#tplRent)" />
-                <Area yAxisId="l" type="monotone" dataKey="other_fee" name="Other"
-                  stackId="a" stroke={SER.yellow} strokeWidth={1.5} fill="url(#tplOther)" />
-                {/* Drawn last so it sits above the filled areas rather than under them. */}
+                <Bar yAxisId="l" dataKey="cost" name="Total spend" fill="url(#tplTotalBar)"
+                  radius={[4, 4, 0, 0]} maxBarSize={54} />
+                {/* Components as lines over the bar. Not stacked — each is read against the
+                    same rupee axis as the total, so Rental sitting near zero in three months
+                    is visible as a fact rather than hidden inside a band. */}
+                <Line yAxisId="l" type="monotone" dataKey="operation_fee" name="Operations"
+                  stroke={SER.blue} strokeWidth={2} dot={{ r: 3, fill: SER.blue }} />
+                <Line yAxisId="l" type="monotone" dataKey="rental_fee" name="Rental"
+                  stroke={SER.orange} strokeWidth={2} dot={{ r: 3, fill: SER.orange }} />
+                <Line yAxisId="l" type="monotone" dataKey="other_fee" name="Other"
+                  stroke={SER.yellow} strokeWidth={2} dot={{ r: 3, fill: SER.yellow }} />
+                {/* Drawn last so the rate — the reason this chart exists — sits on top. */}
                 <Line yAxisId="r" type="monotone" dataKey="per_ship" name="₹ / parcel"
                   stroke={SER.aqua} strokeWidth={2.5} connectNulls={false}
                   dot={{ r: 3.5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }}
