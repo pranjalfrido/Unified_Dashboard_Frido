@@ -3665,7 +3665,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               Ordered by rupees at stake, not by spread %, because a 306% gap on a small vehicle
               matters less than a smaller gap on a large one. */}
           <Card style={{ display: 'flex', flexDirection: 'column' }} title="Same vehicle, different carrier"
-            note="median cost per trip · min 8 trips per carrier to qualify">
+            note="median cost per trip · min 3 trips per carrier to qualify">
             {b2bRateCmpRows.length ? (
               <>
                 <div style={{ flex: 1, minHeight: 200 }}>
@@ -3719,7 +3719,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               </>
             ) : (
               <div style={{ fontSize: 12.5, color: C.t2 }}>
-                No vehicle has two carriers with 8+ trips each, so there is nothing to compare
+                No vehicle has two carriers with 3+ trips each, so there is nothing to compare
                 like for like.
               </div>
             )}

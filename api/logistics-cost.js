@@ -1739,9 +1739,9 @@ export default async function handler(req, res) {
                  SUM(billed)::float8 AS spend
             FROM public.b2b_trip_priced${pricedWhere}
            GROUP BY 1, 2
-          -- 8 trips is the floor for a rate to mean anything. Below it a carrier can look
-          -- cheap on two lucky trips and trigger a switch that costs money.
-          HAVING COUNT(*) >= 8
+          -- 3 trips is the floor for a rate to mean anything. Below it a carrier can look
+          -- cheap on one lucky trip and trigger a switch that costs money.
+          HAVING COUNT(*) >= 3
            ORDER BY 1, 4
         `),
         // ── Single-sourcing: share of spend on lanes served by ONE transporter ──
