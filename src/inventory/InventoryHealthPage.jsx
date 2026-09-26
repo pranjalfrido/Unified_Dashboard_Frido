@@ -1458,28 +1458,23 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Mobile filter button — hidden on desktop via CSS (display:none by default) */}
-        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
-          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
-        }}>
-          ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
-        </button>
-
-        {/* Regular / Other Facilities — fixed toggle strip above everything else, since it
-            changes the scope of every section below it. Same PillToggle component used for
-            every other view-switch across Sales & Allocation and the rest of the dashboard. */}
-        <PillToggle
-          options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
-          value={facilityView}
-          onChange={v => {
-            setFacilityView(v)
-            // Clear any Facility selection made under the previous tab — a Dark Store picked
-            // while on "Other Facilities" isn't a valid option once back on "Regular" (and
-            // vice versa), and leaving it selected would silently filter the table to nothing.
-            setFilters(f => ({ ...f, facility: [] }))
-          }}
-        />
+        {/* Top row: Regular/Other Facilities toggle on left, Filters button on right */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <PillToggle
+            options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
+            value={facilityView}
+            onChange={v => {
+              setFacilityView(v)
+              setFilters(f => ({ ...f, facility: [] }))
+            }}
+          />
+          <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+            display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer',
+          }}>
+            ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
+          </button>
+        </div>
 
         {facilityView === 'regular' ? <>
 
