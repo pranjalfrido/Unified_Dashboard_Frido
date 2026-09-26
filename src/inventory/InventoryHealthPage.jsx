@@ -1184,6 +1184,39 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
   )
 }
 
+function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView, isMobile, setSidebarOpen }) {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef(null)
+  React.useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const activeCount = filters ? Object.values(filters).reduce((a, v) => a + (Array.isArray(v) ? v.length : v ? 1 : 0), 0) : 0
+  if (isMobile) {
+    return (
+      <button onClick={() => setSidebarOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? IC.accBorder : IC.border2}`, background: activeCount > 0 ? IC.accDim : IC.surface, color: IC.t1, cursor: 'pointer' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+        Filters{activeCount > 0 && <span style={{ background: IC.accBorder, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px' }}>{activeCount}</span>}
+      </button>
+    )
+  }
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? IC.accBorder : IC.border2}`, background: activeCount > 0 ? IC.accDim : IC.surface, color: IC.t1, cursor: 'pointer' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+        Filters
+        {activeCount > 0 && <span style={{ background: IC.accBorder, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{activeCount}</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 200, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.18)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 260, maxHeight: '70vh', overflowY: 'auto' }}>
+          <FilterSidebar data={data} filters={filters} setFilters={setFilters} open popover sidebarTop={sidebarTop} facilityView={facilityView} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
@@ -1454,13 +1487,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} facilityView={facilityView} />
+      {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} facilityView={facilityView} />}
 
       {/* The collapse toggle is position:fixed and docked against the nav rail, so it no
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Toggle row: facility toggle on left, Filters button on right */}
+        {/* Toggle row: facility toggle on left, Filters popover button on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
@@ -1470,12 +1503,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               setFilters(f => ({ ...f, facility: [] }))
             }}
           />
-          <button onClick={() => setSidebarOpen(true)} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
-            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer',
-          }}>
-            ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
-          </button>
+          <InvFilterPopover filters={filters} setFilters={setFilters} data={data} sidebarTop={sidebarTop} facilityView={facilityView} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
         </div>
 
         {facilityView === 'regular' ? <>
