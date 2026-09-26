@@ -41,11 +41,12 @@ async function run() {
         item_sku_code TEXT, facility TEXT, updated TIMESTAMPTZ, inventory FLOAT, inventory_blocked FLOAT,
         PRIMARY KEY (item_sku_code, facility)
       )`)
-    // rtd_invt/raw_invt: Vadgaon_OPS's shelf-substring-based RTD/Raw split (0 for every other
-    // facility, which keeps using computeRowInventory's pack-qty heuristic instead) — added
-    // after inv_snapshot's original creation, so migrate existing deployments.
+    // rtd_invt/raw_invt/raw_blocked_invt: Vadgaon_OPS's shelf-substring-based RTD/Raw split
+    // (0 for every other facility, which keeps using computeRowInventory's pack-qty heuristic
+    // instead) — added after inv_snapshot's original creation, so migrate existing deployments.
     await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS rtd_invt FLOAT`)
     await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS raw_invt FLOAT`)
+    await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS raw_blocked_invt FLOAT`)
     await db.query(`
       CREATE TABLE IF NOT EXISTS sales_window (
         id SERIAL PRIMARY KEY,
@@ -83,7 +84,7 @@ async function run() {
     ] = await Promise.all([
       bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
       bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')` }),
-      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\`` }),
+      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt, RawBlockedInvt FROM \`frido-429506.production.shelfwise_inventory_corrected\`` }),
       bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\`` }),
       bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\`` }),
       bq.query({ query: `SELECT sku, available FROM \`frido-429506.production.inventory_shopify_hourly\`` }),
@@ -99,8 +100,8 @@ async function run() {
     await bulkLoad(db, 'sku_mapping', skuRows, ['a','b'],
       r => [r.productid||null, r.masterskucode||null])
 
-    await bulkLoad(db, 'inv_snapshot', invRows, ['a','b','c','d','e','f','g'],
-      r => [r.ItemSkuCode||null, r.Facility||null, r.Updated?.value||r.Updated||null, r.Inventory??null, r.InventoryBlocked??null, r.RtdInvt??null, r.RawInvt??null], 1000)
+    await bulkLoad(db, 'inv_snapshot', invRows, ['a','b','c','d','e','f','g','h'],
+      r => [r.ItemSkuCode||null, r.Facility||null, r.Updated?.value||r.Updated||null, r.Inventory??null, r.InventoryBlocked??null, r.RtdInvt??null, r.RawInvt??null, r.RawBlockedInvt??null], 1000)
 
     await db.query('TRUNCATE sales_window RESTART IDENTITY')
     for (let i = 0; i < salesRows.length; i += 1000) {

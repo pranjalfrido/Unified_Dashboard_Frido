@@ -22,6 +22,14 @@ function percentile(sortedArr, p) {
   const idx = Math.min(sortedArr.length - 1, Math.floor(p * sortedArr.length))
   return sortedArr[idx]
 }
+// Plain average, added 2026-09-15 alongside median/P90 on every TAT metric (per explicit
+// request, despite the sheet's own design note that median+P90 was chosen specifically to
+// avoid outlier distortion -- Average is more outlier-sensitive but is the only one of the
+// three that's additive across a further roll-up, e.g. a monthly summary).
+function average(arr) {
+  if (!arr.length) return null
+  return arr.reduce((s, v) => s + v, 0) / arr.length
+}
 
 const w = { wk: parseInt(WK), start: START, end: END }
 const r = {}
@@ -46,7 +54,8 @@ const promiseRows = await q(`
     GROUP BY OrderId, OrderDate, Order_Status
   ),
   cp AS (
-    SELECT order_id, MIN(TIMESTAMP(delivery_date, 'Asia/Kolkata')) AS delivery_ts, MIN(rto_mark_date) AS rto_mark_date
+    SELECT order_id, MIN(TIMESTAMP(delivery_date, 'Asia/Kolkata')) AS delivery_ts,
+      MAX(IF(UPPER(clickpost_unified_status) LIKE '%RTO%', 1, 0)) AS is_rto
     FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
     WHERE shipment_type='Forward' AND channel_name='SHOPIFY'
     GROUP BY order_id
@@ -55,12 +64,37 @@ const promiseRows = await q(`
     COUNT(DISTINCT o.OrderId) AS cohort_orders,
     COUNT(DISTINCT CASE WHEN cp.delivery_ts IS NOT NULL THEN o.OrderId END) AS delivered,
     COUNT(DISTINCT CASE WHEN cp.delivery_ts IS NOT NULL AND DATE(cp.delivery_ts, 'Asia/Kolkata') <= DATE_ADD(o.OrderDate, INTERVAL 5 DAY) THEN o.OrderId END) AS delivered_on_or_before_cpd,
-    COUNT(DISTINCT CASE WHEN o.Order_Status='RTO' OR cp.rto_mark_date IS NOT NULL THEN o.OrderId END) AS rto,
+    COUNT(DISTINCT CASE WHEN o.Order_Status='RTO' OR cp.is_rto = 1 THEN o.OrderId END) AS rto,
     COUNT(DISTINCT CASE WHEN o.Order_Status='Cancelled' THEN o.OrderId END) AS cancelled
   FROM orders o LEFT JOIN cp ON o.OrderId = cp.order_id
 `)
 r.promise = promiseRows[0]
 console.log('Promise adherence (cohort):', r.promise)
+
+// C2D TAT (order-date cohort) -- Created (OrderDate) -> Delivered gap, in days. Same cohort
+// population as the Promise section above (order-date basis, excludes _EX), but reports the
+// raw distribution of delivery speed rather than a threshold pass/fail against CPD.
+const c2dRows = await q(`
+  WITH orders AS (
+    SELECT OrderId, OrderDate
+    FROM \`frido-429506.production.fact_all_platform_sales_report\`
+    WHERE Channel='Shopify' AND OrderDate BETWEEN '${w.start}' AND '${w.end}' AND NOT (OrderId LIKE '%_EX%')
+    GROUP BY OrderId, OrderDate
+  ),
+  cp AS (
+    SELECT order_id, MIN(TIMESTAMP(delivery_date, 'Asia/Kolkata')) AS delivery_ts
+    FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
+    WHERE shipment_type='Forward' AND channel_name='SHOPIFY'
+    GROUP BY order_id
+  )
+  SELECT
+    TIMESTAMP_DIFF(cp.delivery_ts, TIMESTAMP(o.OrderDate), MINUTE) / 1440.0 AS c2d_days
+  FROM orders o JOIN cp ON o.OrderId = cp.order_id
+  WHERE cp.delivery_ts IS NOT NULL
+`)
+const c2dDays = c2dRows.map(x => parseFloat(x.c2d_days)).filter(v => v != null && !isNaN(v) && v >= 0).sort((a, b) => a - b)
+r.c2dTat = { count: c2dDays.length, avg: average(c2dDays), median: percentile(c2dDays, 0.5), p90: percentile(c2dDays, 0.9) }
+console.log('C2D TAT (order-date cohort, days):', r.c2dTat)
 
 const breachRows = await q(`
   WITH orders AS (
@@ -127,7 +161,7 @@ const dispatchRows = await q(`
     AND DATE(TIMESTAMP(pickup_date,'Asia/Kolkata'), 'Asia/Kolkata') BETWEEN '${w.start}' AND '${w.end}'
 `)
 const dispatchTats = dispatchRows.map(x => parseFloat(x.tat_hrs)).filter(v => v != null && !isNaN(v) && v >= 0).sort((a,b)=>a-b)
-r.dispatchTat = { count: dispatchTats.length, median: percentile(dispatchTats, 0.5), p90: percentile(dispatchTats, 0.9) }
+r.dispatchTat = { count: dispatchTats.length, avg: average(dispatchTats), median: percentile(dispatchTats, 0.5), p90: percentile(dispatchTats, 0.9) }
 console.log('Dispatch TAT:', r.dispatchTat)
 
 const dispatchBreach = { d1: 0, d2: 0, d35: 0, d5plus: 0, total: dispatchTats.length }
@@ -152,7 +186,7 @@ const transitRows = await q(`
     AND DATE(TIMESTAMP(delivery_date,'Asia/Kolkata'), 'Asia/Kolkata') BETWEEN '${w.start}' AND '${w.end}'
 `)
 const transitTats = transitRows.map(x => parseFloat(x.tat_days)).filter(v => v != null && !isNaN(v) && v >= 0).sort((a,b)=>a-b)
-r.transitTat = { count: transitTats.length, median: percentile(transitTats, 0.5), p90: percentile(transitTats, 0.9) }
+r.transitTat = { count: transitTats.length, avg: average(transitTats), median: percentile(transitTats, 0.5), p90: percentile(transitTats, 0.9) }
 console.log('Transit TAT:', r.transitTat)
 
 const vsEdd = transitRows.map(x => x.vs_edd_days).filter(v => v != null)
@@ -169,19 +203,21 @@ console.log('Transit breach vs EDD:', transitBreach)
 
 const rtoRows = await q(`
   WITH ships AS (
-    SELECT cp.order_id, cp.created_at, cp.rto_mark_date, f.payment_type
+    SELECT cp.order_id, cp.created_at,
+      MAX(IF(UPPER(cp.clickpost_unified_status) LIKE '%RTO%', 1, 0)) AS is_rto,
+      ANY_VALUE(f.payment_type) AS payment_type
     FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` cp
     JOIN \`frido-429506.production.fact_all_platform_sales_report\` f ON cp.order_id = f.OrderId
     WHERE cp.shipment_type='Forward' AND cp.channel_name='SHOPIFY'
       AND DATE(cp.created_at) BETWEEN '${w.start}' AND '${w.end}'
-    GROUP BY cp.order_id, cp.created_at, cp.rto_mark_date, f.payment_type
+    GROUP BY cp.order_id, cp.created_at
   )
   SELECT
     COUNT(DISTINCT order_id) AS shipped,
     COUNT(DISTINCT CASE WHEN payment_type='COD' THEN order_id END) AS shipped_cod,
     COUNT(DISTINCT CASE WHEN payment_type!='COD' THEN order_id END) AS shipped_prepaid,
-    COUNT(DISTINCT CASE WHEN rto_mark_date IS NOT NULL AND payment_type='COD' THEN order_id END) AS rto_cod,
-    COUNT(DISTINCT CASE WHEN rto_mark_date IS NOT NULL AND payment_type!='COD' THEN order_id END) AS rto_prepaid
+    COUNT(DISTINCT CASE WHEN is_rto = 1 AND payment_type='COD' THEN order_id END) AS rto_cod,
+    COUNT(DISTINCT CASE WHEN is_rto = 1 AND payment_type!='COD' THEN order_id END) AS rto_prepaid
   FROM ships
 `)
 r.rto = rtoRows[0]
@@ -224,7 +260,7 @@ const ndrTats = ndrOrders.filter(x => x.delivery_date && x.pickup_date && x.ndr_
 r.ndr = {
   totalShipmentsWithAttemptData: ndrRows.length,
   ndrCount: ndrOrders.length, attemptBuckets,
-  ndrShipmentsTat: { count: ndrTats.length, median: percentile(ndrTats, 0.5), p90: percentile(ndrTats, 0.9) }
+  ndrShipmentsTat: { count: ndrTats.length, avg: average(ndrTats), median: percentile(ndrTats, 0.5), p90: percentile(ndrTats, 0.9) }
 }
 console.log('NDR:', JSON.stringify(r.ndr))
 
@@ -247,14 +283,20 @@ rcTats.forEach(h => {
   else if (days <= 5) rcBuckets.d35++
   else rcBuckets.d5plus++
 })
-r.reversePickup = { total: rcTotal, pickedUp: rcWithPickup.length, tat: { count: rcTats.length, median: percentile(rcTats,0.5), p90: percentile(rcTats,0.9) }, buckets: rcBuckets }
+r.reversePickup = { total: rcTotal, pickedUp: rcWithPickup.length, tat: { count: rcTats.length, avg: average(rcTats), median: percentile(rcTats,0.5), p90: percentile(rcTats,0.9) }, buckets: rcBuckets }
 console.log('Reverse pickup [RC2P]:', JSON.stringify(r.reversePickup))
 
 const pickupRefundRows = await q(`
   WITH rev AS (
+    -- Return_Type='Return' ONLY (2026-09-15 fix) -- confirmed the previous unfiltered version
+    -- pulled BOTH Return and Exchange reverse pickups combined (e.g. week 36: 2,992 Returns +
+    -- 5,626 Exchanges = 8,618 total vs. the intended 2,992), which made this section's D+0/D+1
+    -- buckets sum to far more than "Return Refunded Post Pick Up" (the adjacent Post-delivery:
+    -- Returns section's own Returns-only count) -- >100% "% D+0"/"% D+1" values were the symptom.
+    -- Scoped to match that section exactly, per explicit confirmation.
     SELECT order_id, MIN(TIMESTAMP(pickup_date, 'Asia/Kolkata')) AS pickup_ts
     FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
-    WHERE shipment_type='Reverse' AND pickup_date IS NOT NULL
+    WHERE shipment_type='Reverse' AND Return_Type='Return' AND pickup_date IS NOT NULL
       AND DATE(pickup_date) BETWEEN '${w.start}' AND '${w.end}'
     GROUP BY order_id
   ),
@@ -284,7 +326,7 @@ withRefund.forEach(x => {
   else prBuckets.d5plus++
 })
 prDays.sort((a,b)=>a-b)
-r.pickupToRefund = { pickedUpTotal, refundedCount: prDays.length, buckets: prBuckets, tat: { median: percentile(prDays, 0.5), p90: percentile(prDays, 0.9) } }
+r.pickupToRefund = { pickedUpTotal, refundedCount: prDays.length, buckets: prBuckets, tat: { avg: average(prDays), median: percentile(prDays, 0.5), p90: percentile(prDays, 0.9) } }
 console.log('Pickup->Refund:', JSON.stringify(r.pickupToRefund))
 
 // Returns (single cohort, order-date basis, tracked forward) -- includes both fixes from the start
@@ -341,7 +383,8 @@ const exRows = await q(`
     GROUP BY OrderId, OrderDate, Order_Status
   ),
   cp AS (
-    SELECT order_id, MIN(TIMESTAMP(delivery_date, 'Asia/Kolkata')) AS delivery_ts, MIN(rto_mark_date) AS rto_mark_date
+    SELECT order_id, MIN(TIMESTAMP(delivery_date, 'Asia/Kolkata')) AS delivery_ts,
+      MAX(IF(UPPER(clickpost_unified_status) LIKE '%RTO%', 1, 0)) AS is_rto
     FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
     WHERE shipment_type='Forward' AND channel_name='SHOPIFY'
     GROUP BY order_id
@@ -350,7 +393,7 @@ const exRows = await q(`
     COUNT(DISTINCT ex.OrderId) AS initiated,
     COUNT(DISTINCT CASE WHEN cp.delivery_ts IS NOT NULL THEN ex.OrderId END) AS delivered,
     COUNT(DISTINCT CASE WHEN cp.delivery_ts IS NOT NULL AND DATE(cp.delivery_ts, 'Asia/Kolkata') <= DATE_ADD(ex.OrderDate, INTERVAL 5 DAY) THEN ex.OrderId END) AS delivered_on_or_before_cpd,
-    COUNT(DISTINCT CASE WHEN cp.rto_mark_date IS NOT NULL THEN ex.OrderId END) AS rto,
+    COUNT(DISTINCT CASE WHEN cp.is_rto = 1 THEN ex.OrderId END) AS rto,
     COUNT(DISTINCT CASE WHEN ex.Order_Status='Cancelled' THEN ex.OrderId END) AS cancelled
   FROM ex LEFT JOIN cp ON ex.OrderId = cp.order_id
 `)

@@ -1270,6 +1270,37 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     return t
   }, [regularSkus])
 
+  // Warehouse Health cards were still reading data.locations[].byFacilityType — a
+  // server-precomputed breakdown by facility TYPE only (Regular/Dark Store/etc.), with no
+  // per-facility granularity. So picking a specific Facility in the sidebar (e.g. just
+  // Vadgaon_OPS) correctly narrowed the KPI tiles/table above (via regularSkus, which does
+  // respect filters.facility) but the PNQ card kept showing the sum of EVERY Regular facility
+  // at that location, not just the selected one. Only build this per-location, facility-scoped
+  // override when a Facility filter is actually active — otherwise pass through undefined so
+  // WhCarousel keeps using the cheaper precomputed data.locations as before.
+  const facilityScopedLocations = useMemo(() => {
+    if (!selectedFacilitySet || !data) return null
+    const byLoc = new Map()
+    for (const s of regularSkus) {
+      for (const f of (s.facilities || [])) {
+        if (f.facilityType !== 'Regular' || !selectedFacilitySet.has(f.facility)) continue
+        const acc = byLoc.get(f.location) || { totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0 }
+        acc.totalInvt += f.totalInvt || 0
+        acc.rtdInvt += f.rtdInvt || 0
+        acc.rawInvt += f.rawInvt || 0
+        acc.rawBlockedInvt += f.rawBlockedInvt || 0
+        byLoc.set(f.location, acc)
+      }
+    }
+    // Keep every other field (avgSale/doi/stockStatus/etc.) from the original location object —
+    // only the inventory figures need to be facility-scoped; sales/allocation data has no
+    // facility identity to split by (same reasoning WhCarousel already applies for facilityTypes).
+    return data.locations.map(loc => {
+      const scoped = byLoc.get(loc.location)
+      return scoped ? { ...loc, ...scoped, byFacilityType: [{ facilityType: 'Regular', ...scoped }] } : { ...loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, byFacilityType: [] }
+    })
+  }, [selectedFacilitySet, regularSkus, data])
+
   // Every sidebar/table slicer below was previously a "dead" filter on this table — each
   // control existed, visually toggled active, and even fed data.filterOptions correctly, but
   // filteredSkus never actually read filters.location/stockStatus/category/subCategory/
@@ -1483,7 +1514,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </KpiCarousel>
 
         {/* Warehouse Health — desktop: GlassCard grid; mobile: swipe carousel */}
-        <WhCarousel locations={data.locations} filters={filters} facilityTypes={['Regular']} />
+        <WhCarousel locations={facilityScopedLocations || data.locations} filters={filters} facilityTypes={['Regular']} />
 
         {/* Main inventory table */}
         <div className="inv-detail-card"><GlassCard

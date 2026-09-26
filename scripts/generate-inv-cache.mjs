@@ -36,7 +36,7 @@ console.log('Fetching all tables from Supabase in parallel...')
 const t0 = Date.now()
 const [c1,c2,c3,c4,c5,c6,c7,c8,c9] = await Promise.all([1,2,3,4,5,6,7,8,9].map(() => pool.connect()))
 const [r1,r2,r3,r4,r5,r6,r7,r8,r9] = await Promise.all([
-  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked", rtd_invt AS "RtdInvt", raw_invt AS "RawInvt" FROM inv_snapshot`),
+  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked", rtd_invt AS "RtdInvt", raw_invt AS "RawInvt", raw_blocked_invt AS "RawBlockedInvt" FROM inv_snapshot`),
   c2.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`),
   c3.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`),
   c4.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`),
@@ -53,7 +53,7 @@ const invRows = r1.rows, salesRows = r2.rows, lastSaleRows = r3.rows
 const itemMasterRows = r4.rows, skuMappingRows = r5.rows, shopifyInvRows = r6.rows
 const facilityRows = r7.rows, regionRows = r8.rows, channelRows = r9.rows
 
-const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
+const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, facilityToStoreLocation, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
 const skuMap = buildSkuMap(skuMappingRows)
 
 const liveOnWebsite = new Set()
@@ -380,10 +380,21 @@ function computePayload(windowDays) {
   // like totalInvt=90 / doi=0 / stockStatus="Out of Stock" once the real total was summed in.
   const skuLocMap = new Map()
   for (const r of skuFacilityRows) {
+    // Same Uncategorized exclusion as locFacTypeMap above — skuLocRows (built from this map)
+    // feeds both locationMap (Warehouse Health cards' own totalInvt) and rolledSkuMap's
+    // locations/facilities arrays, so leaving Uncategorized rows in here would reintroduce the
+    // same card-vs-table mismatch even after fixing locFacTypeMap on its own.
+    if (r.category === 'Uncategorized') continue
     const locKey = `${r.skuKey}|${r.location}`
-    if (!skuLocMap.has(locKey)) skuLocMap.set(locKey, { ...r, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+    // byFacility: one entry per facility contributing to this (sku, location), each carrying
+    // its own facilityType — this is what lets a location's SKU-level total be re-split by
+    // Facility Type (Warehouse Health cards, Location-Wise pivot). Named distinctly from the
+    // unrelated `facilities` field already on `r` (shelf-level detail from invBySkuFacility,
+    // not location-siblings) to avoid the two colliding when spread below.
+    if (!skuLocMap.has(locKey)) skuLocMap.set(locKey, { ...r, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, byFacility: [] })
     const acc = skuLocMap.get(locKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+    acc.byFacility.push({ facility: r.facility, facilityType: r.facilityType, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt })
   }
   // Recompute doi/isDead/stockStatus/rtdLevel/requiredStock/thirtyDayReq/inventoryShort for
   // each (sku, location) using the summed totalInvt — the initial spread from the first
@@ -427,7 +438,7 @@ function computePayload(windowDays) {
     const acc = rolledSkuMap.get(r.skuKey)
     if (!acc) continue
     acc.rawAvgSaleQty += r.rawAvgSaleQty; acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty; acc.orderAllocation += r.orderAllocation
-    acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.facilities })
+    acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.byFacility })
   }
 
   let skus = [...rolledSkuMap.values()].map(s => {
@@ -477,12 +488,44 @@ function computePayload(windowDays) {
     acc.totalInvt+=r.totalInvt; acc.rawInvt+=r.rawInvt; acc.rawBlockedInvt+=r.rawBlockedInvt; acc.rtdInvt+=r.rtdInvt
     acc.rawAvgSaleQty+=r.rawAvgSaleQty; acc.rawTotalAvgSaleQty+=r.rawTotalAvgSaleQty; acc.orderAllocation+=r.orderAllocation
   }
+  // Inventory-only breakdown per (Location, FacilityType) — sales/allocation are only ever
+  // attributed at Location grain (nearest-warehouse-by-state has no facility identity, see
+  // skuFacilityRows comment above), so avgSale/DOI/stockStatus cannot be meaningfully split by
+  // facility type without inventing numbers; this carries inventory figures only. Used so the
+  // Warehouse Health cards can show a single facility type's inventory instead of always
+  // combining every type at that location, and to build a company-wide Facility Type summary.
+  // Uncategorized (no item_master category mapping) SKUs are excluded from `skus` below (the
+  // SKU table/KPI tiles) — must be excluded here too, or this Warehouse Health breakdown counts
+  // stock the rest of the dashboard hides, producing a card total that doesn't match the KPI
+  // tiles/table for the same facility/location (confirmed: 30,748 units / 316 rows at PNQ alone).
+  const locFacTypeMap = new Map()
+  for (const r of skuFacilityRows) {
+    if (r.category === 'Uncategorized') continue
+    const key = `${r.location}|${r.facilityType}`
+    if (!locFacTypeMap.has(key)) locFacTypeMap.set(key, { location: r.location, facilityType: r.facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+    const acc = locFacTypeMap.get(key)
+    acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+  }
+  const locationFacilityTypeBreakdown = [...locFacTypeMap.values()].filter(l => l.location !== 'Unmapped')
+  const facilityTypeSummary = (() => {
+    const m = new Map()
+    for (const r of locFacTypeMap.values()) {
+      if (!m.has(r.facilityType)) m.set(r.facilityType, { facilityType: r.facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+      const acc = m.get(r.facilityType)
+      acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+    }
+    return [...m.values()].sort((a, b) => b.totalInvt - a.totalInvt)
+  })()
+
   const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.location !== 'Unmapped').map(l => {
     const avgSale = Math.ceil(l.rawAvgSaleQty/windowDays)
     const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty/windowDays)
     const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
     const doi = l.totalInvt>0 && denominator===0 ? null : (denominator>0 ? Math.floor(l.totalInvt/denominator) : 0)
-    return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}) }
+    const byFacilityType = locationFacilityTypeBreakdown
+      .filter(f => f.location === l.location)
+      .map(({ facilityType, totalInvt, rawInvt, rawBlockedInvt, rtdInvt }) => ({ facilityType, totalInvt, rawInvt, rawBlockedInvt, rtdInvt }))
+    return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}), byFacilityType }
   }), l => l.location)
 
   const subCatMap = new Map()
@@ -519,14 +562,24 @@ function computePayload(windowDays) {
     stockStatuses: STOCK_STATUS_VALUES,
     rtdLevels: ['Low','Sufficient'],
     facilityTypes: [...new Set(liveFacilities.map(f=>facilityToType.get(f)))].sort(),
-    facilities: liveFacilities.map(f => ({ facility:f, displayName:facilityToDisplayName.get(f)||f, location:facilityToLocation.get(f), facilityType:facilityToType.get(f) })).sort((a,b)=>a.location.localeCompare(b.location)||a.facility.localeCompare(b.facility)),
+    facilities: liveFacilities.map(f => ({ facility:f, displayName:facilityToDisplayName.get(f)||f, location:facilityToLocation.get(f), facilityType:facilityToType.get(f), storeLocation:facilityToStoreLocation.get(f)||null })).sort((a,b)=>a.location.localeCompare(b.location)||a.facility.localeCompare(b.facility)),
     productIds: skus.map(s=>({sku:s.sku, category:s.category})).sort((a,b)=>a.sku.localeCompare(b.sku)),
   }
   const pivotLocations = sortByLocationOrder([...new Set(skus.flatMap(s=>s.locations.map(l=>l.location)))])
   const pivotRows = skus.map(s => ({
     sku: s.sku, category: s.category, subCategory: s.subCategory,
     totalInvt: Math.round(s.totalInvt), avgSale: s.avgSale,
-    byLocation: Object.fromEntries(s.locations.map(l=>[l.location,{totalInvt:Math.round(l.totalInvt),avgSale:l.avgSale}])),
+    // byFacilityType per location cell — same reasoning as Warehouse Health's byFacilityType
+    // above: inventory can be split by facility type (each facility carries its own type),
+    // avgSale cannot (only attributed at Location grain), so a facility-type filter swaps in
+    // just the inventory total for that cell, leaving avgSale as the location's own value.
+    byLocation: Object.fromEntries(s.locations.map(l=>[l.location,{
+      totalInvt:Math.round(l.totalInvt), avgSale:l.avgSale,
+      byFacilityType: (l.facilities||[]).reduce((acc,f)=>{
+        acc[f.facilityType] = (acc[f.facilityType]||0) + (f.totalInvt||0)
+        return acc
+      }, {}),
+    }])),
   }))
 
   return {
@@ -548,7 +601,7 @@ function computePayload(windowDays) {
       deadStockCount: skus.filter(s=>s.isDead).length, deadStockUnits: skus.filter(s=>s.isDead).reduce((s,r)=>s+r.totalInvt,0),
     },
     statusBreakdown: Object.entries(statusCounts).map(([status,count])=>({status,count})),
-    locations, leadTimeRisk, deadStock, slowMoving,
+    locations, facilityTypeSummary, leadTimeRisk, deadStock, slowMoving,
     pivot: { locations: pivotLocations, rows: pivotRows },
     filterOptions, skus,
     // Independent of windowDays — this table's Avg Sale is driven entirely by each SKU's own
