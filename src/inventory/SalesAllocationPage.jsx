@@ -359,7 +359,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     // Check if date range matches the cache's pre-computed range (no need to re-filter)
     const cacheRange = data.dateRange
     const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
-    if (!anyActive && dateMatchesCache) return data
+    if (!anyActive && dateMatchesCache && data.matrixCellRows) return data
 
     const rows = data.rawRows.filter(r => {
       if (dateStart && r.date < dateStart) return false
