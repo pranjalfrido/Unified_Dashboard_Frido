@@ -223,7 +223,13 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
   )
 }
 
-const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#E8930A','#A78BFA']
+// Steps through the theme's green accent family first, then extends with distinguishable
+// hues. C.acc/acm/acd are live getters so these follow a theme switch automatically.
+const CAT_COLORS = () => [
+  C.acc, C.acm, C.acd,
+  '#2BB3A3', '#0A7A5F',
+  '#F0B429', '#B06AD9', '#3D9BE9', '#E24B4A', '#FF6B35', '#06D6A0', '#A78BFA',
+]
 
 // Stacked bar chart: X = last 6 months (fixed, ignores date picker).
 // Bars stacked by category. Dropdown to filter by sub-category (or All).
@@ -323,7 +329,7 @@ function CancelBucketChart({ cancelByBucket }) {
                   if (!active || !payload?.length) return null
                   const buckets = payload[0]?.payload?._buckets || {}
                   const total = Object.values(buckets).reduce((s, v) => s + v, 0)
-                  const BCOLS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078']
+                  const BCOLS = CAT_COLORS()
                   return (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{label} · {fmtN(total)} cancellations</div>
@@ -339,9 +345,10 @@ function CancelBucketChart({ cancelByBucket }) {
                   )
                 }}
               />
-              {keys.map((k, i) => (
-                <Bar key={k} dataKey={k} name={k} stackId="a" fill={CAT_COLORS[i % CAT_COLORS.length]} />
-              ))}
+              {keys.map((k, i) => {
+                const cats = CAT_COLORS()
+                return <Bar key={k} dataKey={k} name={k} stackId="a" fill={cats[i % cats.length]} />
+              })}
             </BarChart>
           </ResponsiveContainer>
         </div>

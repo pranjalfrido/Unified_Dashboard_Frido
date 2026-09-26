@@ -47,15 +47,18 @@ const SER = {
   get aqua(){ return SERIES_BASE.aqua },
   get yellow(){ return SERIES_BASE.yellow },
 }
-// Forward / Reverse / RTO are distinct states, not a scale, so they take distinct hues.
+// Forward / Reverse / RTO — distinct states drawn from the theme's green family so all
+// three read as on-theme. acm (mid accent) and acd (deep accent) step darker than acc;
+// acl is reserved for fills, not lines, so only the two deeper tokens are used here.
 const MODE = {
   get Forward(){ return C.acc },
-  get Reverse(){ return SERIES_BASE.orange },
-  get RTO(){ return SERIES_BASE.aqua },
+  get Reverse(){ return C.acm },
+  get RTO(){ return C.acd },
 }
 
-// Courier trend lines — one hue per courier, so a categorical set rather than a ramp.
-const DRIFT = { get colors(){ return [C.acc, '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9'] } }
+// Courier trend lines — theme accent leads; remaining hues step through greens/teal so
+// the line chart stays in the forest family rather than pulling in off-brand oranges.
+const DRIFT = { get colors(){ return [C.acc, C.acm, '#2BB3A3', '#0A7A5F', '#F0B429', '#B06AD9'] } }
 
 // Chart chrome — recessive hairlines, muted axis ink.
 // Per-unit rates, to one decimal. fmt() compacts to lakhs/crores, which is right for spend
@@ -3137,11 +3140,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           <span>{fmt(r.b2c)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
-                          <span><span style={{ color: '#2BB3A3', fontWeight: 700 }}>■</span> FTL/PTL</span>
+                          <span><span style={{ color: C.acm, fontWeight: 700 }}>■</span> FTL/PTL</span>
                           <span>{fmt(r.b2b)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
-                          <span><span style={{ color: SER.orange, fontWeight: 700 }}>■</span> 3PL</span>
+                          <span><span style={{ color: C.acd, fontWeight: 700 }}>■</span> 3PL</span>
                           <span>{fmt(r.tpl)}</span>
                         </div>
                       </div>
@@ -3164,13 +3167,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   radius={[4, 4, 0, 0]} maxBarSize={56} />
                 <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
                   strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
-                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#2BB3A3"
-                  strokeWidth={2} dot={{ r: 3.5, fill: '#2BB3A3' }} />
-                {/* Warehousing, the third stream. Orange separates cleanly from the accent
-                    and the aqua above it, and is the same hue 3PL carries on its own tab so
-                    the colour means one thing across the dashboard. */}
-                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={SER.orange}
-                  strokeWidth={2} dot={{ r: 3.5, fill: SER.orange }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={C.acm}
+                  strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
+                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={C.acd}
+                  strokeWidth={2} dot={{ r: 3.5, fill: C.acd }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
