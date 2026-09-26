@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 5
+const CACHE_VERSION = 6
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -286,22 +286,16 @@ export default async function handler(req, res) {
           SELECT
             cp.return_sku AS from_sku,
             f_to.masterskucode AS to_sku,
-            f_from.Category AS from_cat,
-            f_from.SubCategory AS from_subcat,
-            f_to.Category AS to_cat,
-            f_to.SubCategory AS to_subcat,
             COUNT(*) AS cnt
           FROM \`frido-429506.production.Clickpost_Returns_Exchange_Report\` cp
           JOIN \`frido-429506.production.fact_all_platform_sales_report\` f_to
             ON cp.exchange_order_id = f_to.OrderId AND f_to.Channel = 'Shopify'
-          LEFT JOIN (SELECT DISTINCT masterskucode, Category, SubCategory FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify') f_from
-            ON f_from.masterskucode = cp.return_sku
           WHERE cp.Return_Type = 'Exchange'
             AND cp.exchange_order_id IS NOT NULL
             AND cp.return_sku IS NOT NULL
             AND cp.return_sku != f_to.masterskucode
             AND NOT STARTS_WITH(COALESCE(f_to.masterskucode, ''), 'COUP')
-          GROUP BY 1,2,3,4,5,6
+          GROUP BY 1,2
         ),
         cp_agg AS (
           SELECT
