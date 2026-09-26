@@ -4877,6 +4877,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
               )}
             </div>
           )}
+          {inventoryDateControl.invFacilityToggle}
           <FilterIconPopover activeCount={inventoryDateControl.invFilterCount}>
             {inventoryDateControl.invFilterPanel}
           </FilterIconPopover>

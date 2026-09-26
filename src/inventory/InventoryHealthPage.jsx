@@ -1184,7 +1184,7 @@ function PivotTable({ pivot, search, facilityTypeFilter }) {
   )
 }
 
-const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -1228,7 +1228,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // never actually filtered the main Inventory Detail table (only Warehouse Health/pivot did,
   // and only after this session's fixes) — a hardcoded top-level switch removes that class of
   // "filter exists but silently doesn't apply everywhere" bug entirely.
-  const [facilityView, setFacilityView] = useState('regular')
+  const [facilityViewLocal, setFacilityViewLocal] = useState('regular')
+  const facilityView = facilityViewProp ?? facilityViewLocal
+  const setFacilityView = setFacilityViewProp ?? setFacilityViewLocal
 
   // Remembers each column's last nonzero width so hiding it (dragging to 0) and later
   // restoring it — via the seam drag or the "Columns" menu — brings back its old size
@@ -1458,23 +1460,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Top row: Regular/Other Facilities toggle on left, Filters button on right */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <PillToggle
-            options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
-            value={facilityView}
-            onChange={v => {
-              setFacilityView(v)
-              setFilters(f => ({ ...f, facility: [] }))
-            }}
-          />
-          <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
-            display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer',
-          }}>
-            ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
-          </button>
-        </div>
+        {/* Mobile filter button — hidden on desktop, shown via CSS on mobile */}
+        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+        }}>
+          ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
+        </button>
 
         {facilityView === 'regular' ? <>
 
@@ -1725,13 +1717,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   )
 })
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop }) {
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
     <InventoryHealthInner
       data={data} filters={filters} setFilters={setFilters}
       sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+      facilityViewProp={facilityViewProp} setFacilityViewProp={setFacilityViewProp}
     />
   )
 }
