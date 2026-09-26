@@ -1,18 +1,24 @@
-﻿import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+﻿import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, Component } from 'react'
+import { createPortal } from 'react-dom'
+import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
-import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
+import LoadingOverlay, { LoadingScreen, BrandMark } from './LoadingOverlay.jsx'
+import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache } from './theme.js'
 import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
+import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
+import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
@@ -151,7 +157,7 @@ function LDropdown({ label, options, value, onChange, flex }) {
               <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
             </div>
           )}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1 }}>
             <div onClick={() => { onChange(null); setOpen(false); setSearch('') }} style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>All {label}</div>
             {filtered.map(opt => (
               <div key={opt} onClick={() => { onChange(opt); setOpen(false); setSearch('') }}
@@ -199,7 +205,9 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
         <span style={{ fontSize: 9, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 -8px 28px rgba(0,0,0,.14)', minWidth: 210, maxHeight: 320, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 320, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 340 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
+        }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${label.toLowerCase()}...`} style={{ width: '100%', fontSize: 11.5, padding: '5px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
           </div>
@@ -269,26 +277,6 @@ function LSectionTitle({ title, collapsed, onToggle }) {
   )
 }
 
-function LogisticsSkeleton() {
-  const sk = (w, h, r = 8) => ({ width: w, height: h, borderRadius: r, background: C.border, animation: 'pulse 1.5s ease infinite', flexShrink: 0 })
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-        {[...Array(5)].map((_, i) => <div key={i} style={sk('100%', 88)} />)}
-      </div>
-      {/* Trend chart */}
-      <div style={sk('100%', 220)} />
-      {/* Two side-by-side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div style={sk('100%', 200)} />
-        <div style={sk('100%', 200)} />
-      </div>
-      {/* Table */}
-      <div style={sk('100%', 180)} />
-    </div>
-  )
-}
 
 // Mobile KPI card with mini sparkline — Option A style.
 // sparkData: array of numbers (e.g. daily totals). Yellow line + fill on mobile ads list.
@@ -310,7 +298,7 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
     acc.push([+x.toFixed(1), +y.toFixed(1)])
     return acc
   }, [])
-  const sparkColor = '#F4B400'
+  const sparkColor = C.acc
   const gradId = `sg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   // Build smooth cubic bezier path
   const smoothPath = coordPts.length > 1 ? coordPts.reduce((d, [x, y], i) => {
@@ -375,7 +363,7 @@ function LogKpiCarousel({ slides }) {
   )
 }
 
-function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFilters: setLFiltersProp, onFilterOptsChange }) {
+function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFilters: setLFiltersProp, onFilterOptsChange, onFilterUI }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
@@ -400,7 +388,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   // sharing cSort (their column keys/rows differ, and silently reusing cSort here was the bug).
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
-  const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
+  const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
+  // cSelected: set of active toggles. cPrimary = last-clicked toggle = primary view.
+  const [cSelected, setCSelected] = useState(new Set(['courier']))
+  const [cPrimary, setCPrimary] = useState('courier')
+  const [cPayment, setCPayment] = useState(null) // 'COD' | 'Prepaid' | null — local to breakdown table only
+  const [cPaymentData, setCPaymentData] = useState(null) // breakdown-scoped data when cPayment is set
+  const [cTier, setCTier] = useState(null) // 'Tier 1' | 'Tier 2' | 'Tier 3' | null
+  // cView = primary if it's still selected, else fall back to whichever is selected
+  const cView = cSelected.has(cPrimary) ? cPrimary : (['courier','zone','facility','month'].find(v => cSelected.has(v)) || 'courier')
+  const cDrill = (() => {
+    const others = ['courier','zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
+    return others[0] || null
+  })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
@@ -410,16 +410,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  useEffect(() => {
+    const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+  }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
+  const [zExpanded, setZExpanded] = useState({})
+  const [fExpanded, setFExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
+  const [rawCodData, setRawCodData] = useState(null)   // cached COD BQ response for current date range
+  const [rawPrepaidData, setRawPrepaidData] = useState(null) // cached Prepaid BQ response
+  const paymentPrefetchActive = useRef(false) // true while background COD/Prepaid fetch is in flight
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [showSkeleton, setShowSkeleton] = useState(false)
   const [error, setError] = useState(null)
-  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
+  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale_v3'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
@@ -428,28 +436,48 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
-    const skTimer = setTimeout(() => setShowSkeleton(true), 400)
     try {
       // Try static file first — served from Vercel CDN in ~14ms
       // Payment-specific files (logistics-data-cod.json / logistics-data-prepaid.json)
       // are generated by the same cron and used when a single payment mode is selected.
-      const hasPaymentFilter = lFilters.paymentMode?.length > 0
+      const hasPaymentFilter = lFilters.paymentMode?.length === 1 // both selected = same as all, no filter
       const singlePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0].toLowerCase() : null
-      const staticFile = singlePayment ? `/logistics-data-${singlePayment}.json` : '/logistics-data.json'
+      const singleShipmentType = (lFilters.shipmentType && lFilters.shipmentType !== 'all') ? lFilters.shipmentType.toLowerCase() : null
+      const staticFile = singlePayment && singleShipmentType
+        ? `/logistics-data-${singleShipmentType}-${singlePayment}.json`
+        : singlePayment
+        ? `/logistics-data-${singlePayment}.json`
+        : singleShipmentType
+        ? `/logistics-data-${singleShipmentType}.json`
+        : '/logistics-data.json'
       const hasGeoFilter = lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.weightSlabs?.length
+      const canPrefetchPayment = !hasPaymentFilter && !hasGeoFilter && !lFilters.category?.length && !lFilters.subCategory?.length
       let usedStatic = false
       if (!hasGeoFilter && (!hasPaymentFilter || singlePayment)) {
         try {
-          const res = await fetch(staticFile)
+          // Fetch main + COD + Prepaid CDN files in parallel — single loading bar
+          const stPrefix = singleShipmentType ? `${singleShipmentType}-` : ''
+          const [res, codRes, prepaidRes] = await Promise.all([
+            fetch(staticFile),
+            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
+            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
+          ])
           if (res.ok) {
-            const json = await res.json()
+            // Parse all 3 in parallel before touching state — single render, single loading bar
+            const [json, codJson, prepaidJson] = await Promise.all([
+              res.json(),
+              codRes?.ok ? codRes.json().catch(() => null) : Promise.resolve(null),
+              prepaidRes?.ok ? prepaidRes.json().catch(() => null) : Promise.resolve(null),
+            ])
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
             const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
             if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
               setRawData(json.current)
               setRawPrevData(json.previous || null)
-              try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
+              try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
               usedStatic = true
+              if (codJson?.current && codJson.dateRange?.start === filters.start && codJson.dateRange?.end === filters.end) setRawCodData(codJson.current)
+              if (prepaidJson?.current && prepaidJson.dateRange?.start === filters.start && prepaidJson.dateRange?.end === filters.end) setRawPrepaidData(prepaidJson.current)
             }
           }
         } catch { /* fall through to live API */ }
@@ -457,6 +485,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
       if (!usedStatic) {
         // Static JSON unavailable or filter active — hit live BQ
+        // Reset payment caches since date/filters changed
+        setRawCodData(null); setRawPrepaidData(null)
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category?.length) body.category = lFilters.category
         if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
@@ -472,6 +502,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
         const fmt = d => d.toISOString().slice(0, 10)
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
+        // await only main + prev
         const [r, rPrev] = await Promise.all([
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
@@ -480,12 +511,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
-        try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
+        try { localStorage.setItem('logistics_stale_v3', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) {
       // API failed — try localStorage stale data before showing error
       try {
-        const stale = localStorage.getItem('logistics_stale')
+        const stale = localStorage.getItem('logistics_stale_v3')
         if (stale) {
           const parsed = JSON.parse(stale)
           const staleMatches = parsed.dateRange && parsed.dateRange.start === filters.start && parsed.dateRange.end === filters.end
@@ -494,11 +525,46 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       } catch {}
       setError(e.message)
     }
-    finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
+    finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
+  }, [filters.start, filters.end, lFilters.shipmentType, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  // reset breakdown payment toggle when sidebar payment filter is applied
+  useEffect(() => {
+    if (lFilters.paymentMode?.length > 0) { setCPayment(null); setCPaymentData(null) }
+  }, [JSON.stringify(lFilters.paymentMode)]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // fetch breakdown-local payment data when COD/Prepaid toggle is active
+  useEffect(() => {
+    if (!cPayment) { setCPaymentData(null); return }
+    const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType.toLowerCase() : null
+
+    // 1. Use in-memory BQ cache if available (works for any shipmentType)
+    if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
+    if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
+    // prefetch in flight — wait, effect re-runs when cache arrives
+    if (paymentPrefetchActive.current) return
+
+    // 2. Try static file — instant for MTD
+    const file = shipmentType
+      ? `/logistics-data-${shipmentType}-${cPayment.toLowerCase()}.json`
+      : `/logistics-data-${cPayment.toLowerCase()}.json`
+    fetch(file)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+        if (json?.current && dateMatches) { setCPaymentData(json.current); return }
+        // 3. Fallback: live BQ
+        const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
+        if (shipmentType) body.shipmentType = shipmentType
+        return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(r => r.ok ? r.json() : null)
+          .then(json => { if (json) setCPaymentData(json) })
+      })
+      .catch(() => {})
+  }, [cPayment, lFilters.shipmentType, filters.start, filters.end, rawCodData, rawPrepaidData])
 
   // instant client-side filter — runs on every slicer change, no BQ call
   useEffect(() => {
@@ -524,7 +590,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
 
       // derive kpis from byCourier rows (all fields now present in each courier row)
-      const kpis = (hasCourier || hasSddNdd || hasShipmentType)
+      // when only shipmentType filter is active (no courier/sddNdd), use raw.kpis directly
+      // since the API already filtered by shipmentType — byCourier.total uses COUNT(awb) not DISTINCT
+      const kpis = (hasCourier || hasSddNdd)
         ? filteredCouriers.reduce((acc, x) => {
             const n = k => typeof x[k] === 'number' ? x[k] : 0
             acc.total_shipments = (acc.total_shipments || 0) + n('total')
@@ -558,7 +626,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           }, {})
         : raw.kpis
 
-      if ((hasCourier || hasSddNdd || hasShipmentType) && kpis._wt) {
+      if ((hasCourier || hasSddNdd) && kpis._wt) {
         kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
         kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
         kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
@@ -577,6 +645,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
         byZone: raw.byZone,
         byZoneDetail: raw.byZoneDetail,
+        byZoneFrido: raw.byZoneFrido,
+        byCourierZone: raw.byCourierZone,
+        byCourierFacility: raw.byCourierFacility,
+        byZoneFacility: raw.byZoneFacility,
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -770,7 +842,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => { if (onFilterOptsChange && data?.filterOpts) onFilterOptsChange(data.filterOpts) }, [data?.filterOpts])
   const toggleCourier = c => setLFilters(f => ({ ...f, couriers: f.couriers.includes(c) ? f.couriers.filter(x => x !== c) : [...f.couriers, c] }))
 
-  const STATUS_COLORS = { Delivered: '#FFD600', RTO: '#F87171', Intransit: '#60A5FA', 'Pickup Pending': '#FBBF24', Cancelled: '#C084FC', Lost: '#FB923C', Damaged: '#94A3B8' }
+  const STATUS_COLORS = { Delivered: C.acc, RTO: '#F87171', Intransit: '#60A5FA', 'Pickup Pending': '#FBBF24', Cancelled: '#C084FC', Lost: '#FB923C', Damaged: '#94A3B8' }
   const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
 
   const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
@@ -787,7 +859,18 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     return acc
   }, {}))
   const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, del_value_pct: d.del_value_pct ?? (d.total_value ? +((d.total_value - (d.rto_value||0)) / d.total_value * 100).toFixed(1) : 0), rto_value_pct: d.rto_value_pct ?? (d.total_value ? +((d.rto_value||0) / d.total_value * 100).toFixed(1) : 0), rto_value: d.rto_value ?? 0 }))
-  const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+  const tierFilteredData = cTier ? (() => {
+    const src = cPaymentData || data
+    if (!src) return null
+    return {
+      ...src,
+      byCourier: (src.byCourierTier || []).filter(r => r.tier === cTier),
+      byZoneFrido: (src.byZoneFridoTier || []).filter(r => r.tier === cTier),
+      byFacility: (src.byFacilityTier || []).filter(r => r.tier === cTier),
+    }
+  })() : null
+  const breakdownSrc = tierFilteredData || cPaymentData || data
+  const byCourierData = (breakdownSrc?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
   const statusDonutData = [...(data?.byStatus || [])].sort((a, b) => b.total - a.total)
@@ -796,9 +879,17 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
+  const lActiveCount = useMemo(() => {
+    const skip = new Set(['shipmentType', 'sddNdd'])
+    return Object.entries(lFilters || {}).reduce((n, [k, v]) => {
+      if (skip.has(k)) return n
+      return n + (Array.isArray(v) ? v.length : (v ? 1 : 0))
+    }, 0)
+  }, [lFilters])
+
   const filterSidebarContent = (
-    <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
+    <div style={{ width: 220, margin: '8px 12px 12px 0', padding: '14px 12px', paddingRight: 8, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: 'auto', flex: 1, minHeight: 0, background: C.card, borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)', boxSizing: 'border-box' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, letterSpacing: 0 }}>Courier Partner</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} sidebar />
@@ -808,24 +899,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             )}
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Direction</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, letterSpacing: 0 }}>Courier Direction</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[['Forward','Reverse'],['Regular','SDD/NDD']].map((opts, gi) => {
               const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
               const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
               return (
                 <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {gi === 1 && <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Shipment Type</div>}
+                  {gi === 1 && <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, letterSpacing: 0, marginTop: 4 }}>Shipment Type</div>}
                 <div style={{ display: 'flex', gap: 4 }}>
                   {opts.map((opt, i) => {
                     const isActive = val === (gi === 0 ? opt.toLowerCase() : opt)
                     return (
                       <div key={opt} style={{ display: 'flex', alignItems: 'center' }}>
-                        {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                         <button onClick={() => { const v = gi === 0 ? opt.toLowerCase() : opt; onChange(v === val ? 'all' : v) }} style={{
                           fontSize: 11.5, fontWeight: isActive ? 700 : 500, padding: '4px 12px', borderRadius: 6,
                           border: 'none', outline: 'none', background: isActive ? C.acs : 'transparent',
-                          color: isActive ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
+                          color: isActive ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
                         }}>{opt}</button>
                       </div>
                     )
@@ -836,7 +927,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             })}
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, letterSpacing: 0 }}>Filters</div>
           <LMultiDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
           <LMultiDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
           <LMultiDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
@@ -851,20 +942,22 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         </div>
   )
 
+  useEffect(() => {
+    if (!onFilterUI) return
+    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onFilterUI, lFilters, lActiveCount, opts])
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {loading && (
-        <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading logistics" />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* ── Filter Sidebar: overlay drawer on mobile, inline panel on desktop ── */}
         {isMobile ? (
           filterSidebarOpen && <>
             <div onClick={() => setFilterSidebarOpen(false)} style={{ position: 'fixed', inset: 0, top: 'var(--nav)', background: 'rgba(0,0,0,0.35)', zIndex: 199 }} />
-            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(100vh - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(100vh - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px', borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Menu & Filters</span>
                 <button onClick={() => setFilterSidebarOpen(false)} style={{ background: 'none', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
@@ -891,27 +984,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               )}
             </div>
           </>
-        ) : (
-          <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            {filterSidebarContent}
-          </div>
-        )}
-
-        {/* ── Sidebar Toggle Button (desktop only) ── */}
-        {!isMobile && (
-          <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
-            {filterSidebarOpen ? '‹' : '›'}
-          </button>
-        )}
+        ) : null}
 
         {/* ── Main Content ── */}
         <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '8px 12px 16px' : '16px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
 
       {error && !rawData && !staleData && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error} <button onClick={fetchLogistics} style={{ marginLeft: 8, fontSize: 11, cursor: 'pointer' }}>Retry</button></div>}
-      {showSkeleton && !rawData && !staleData && (
-        <LogisticsSkeleton />
-      )}
 
       {data && <>
 
@@ -937,10 +1016,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           </div>
         ) : (
           // Desktop: hero card left + 2×6 grid right
-          <div style={{ display: 'grid', gridTemplateColumns: filterSidebarOpen ? '1.3fr 5fr' : '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
             {/* Hero card */}
-            <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: filterSidebarOpen ? 3 : 5, padding: filterSidebarOpen ? '8px 12px' : '10px 14px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-              <div className="kpi-label" style={{ fontSize: 11 }}>Total Shipments</div>
+            <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '10px 14px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+              <div className="kpi-label" style={{ fontSize: 13 }}>Total Shipments</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                 <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{n(k.total_shipments)}</div>
                 {(() => { const chg = k.total_shipments && pk.total_shipments ? (k.total_shipments - pk.total_shipments) / pk.total_shipments * 100 : null; return chg != null ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span> : null })()}
@@ -1108,7 +1187,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 }} />
-                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill={C.acc} opacity={0.85} radius={[3,3,0,0]} />
+                <BarGradient id="gShipTotal" />
+                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="url(#gShipTotal)" radius={[3,3,0,0]} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#B14A82" strokeWidth={1.5} dot={false} connectNulls />
                 <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#3D6FBE" strokeWidth={1.5} dot={false} connectNulls />
                 <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#3F9E5F" strokeWidth={1.5} dot={false} connectNulls />
@@ -1136,20 +1216,101 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <div className="card-hoverable" style={{ ...cardStyle, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {['Courier','Facility','Month'].map((v, i) => (
-                <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                  {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                  <button onClick={() => setCView(v.toLowerCase())} style={{
-                    fontSize: 11, fontWeight: cView===v.toLowerCase() ? 700 : 500, padding: '3px 9px', borderRadius: 6,
-                    border: 'none', outline: 'none', background: cView===v.toLowerCase() ? C.acs : 'transparent',
-                    color: cView===v.toLowerCase() ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
-                  }}>{v}</button>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {(() => {
+                const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+                const unfilteredViews = ['Zone','Facility','Month']
+                const viewToggles = ['Courier','Zone','Facility','Month'].map((v, i) => {
+                  const vl = v.toLowerCase()
+                  const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
+                  const isActive = cSelected.has(vl)
+                  const isPrimary = cView === vl
+                  const isDrill = cDrill === vl
+                  const cantDeselect = isActive && cSelected.size === 1
+                  return (
+                    <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                      <button
+                        onClick={() => {
+                          if (isDisabled || cantDeselect) return
+                          setCSelected(prev => {
+                            const next = new Set(prev)
+                            if (next.has(vl)) {
+                              next.delete(vl)
+                              // if primary was deselected, promote the remaining one
+                              setCPrimary(p => p === vl ? (['courier','zone','facility','month'].find(k => next.has(k)) || vl) : p)
+                            } else {
+                              // max 2 — if already 2 selected, replace the drill (non-primary)
+                              if (next.size >= 2) {
+                                next.forEach(k => { if (k !== cView) next.delete(k) })
+                              }
+                              next.add(vl)
+                              // do NOT update cPrimary — first-selected stays primary
+                            }
+                            return next
+                          })
+                          setCExpanded({}); setZExpanded({}); setFExpanded({})
+                        }}
+                        title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isPrimary ? C.acs : isDrill ? C.ach : 'transparent',
+                          color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
+                          cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                          opacity: isDisabled ? 0.45 : 1,
+                        }}
+                      >{v}</button>
+                    </div>
+                  )
+                })
+                const sidebarHasPayment = lFilters.paymentMode?.length > 0
+                const payToggles = sidebarHasPayment ? [] : ['COD','Prepaid'].map((p, i) => {
+                  const isActive = cPayment === p
+                  return (
+                    <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                      <button
+                        onClick={() => setCPayment(isActive ? null : p)}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{p}</button>
+                    </div>
+                  )
+                })
+                const tierMap = { 'Tier I':'Tier 1','Tier II':'Tier 2','Tier III':'Tier 3' }
+                const tierToggles = ['Tier I','Tier II','Tier III'].map((t, i) => {
+                  const isActive = cTier === tierMap[t]
+                  return (
+                    <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                      <button
+                        onClick={() => setCTier(isActive ? null : tierMap[t])}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{t}</button>
+                    </div>
+                  )
+                })
+                return [...tierToggles, <div key="sep-tier" style={{ width: 16 }} />, ...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
+              })()}
             </div>
           </div>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
+          {/* 720, not 450: the courier list is 9 rows plus a total, and logo rows run
+              ~53px, so 450 clipped it and the table always showed a scrollbar despite
+              having few rows. The cap stays so a long Month view still scrolls rather
+              than running off the page; overflowY:auto hides the bar when it fits. */}
+          <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 720 }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
               const COLS = [
@@ -1161,6 +1322,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
+                { key: '_eddBreachPct', label: 'EDD Breach %' },
                 { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
                 { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
@@ -1176,6 +1338,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled || 0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num || 0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach || 0) / ((r.on_time || 0) + (r.sla_breach || 0))) * 100).toFixed(2) : null,
               }))
               const [sortCol, setSortCol] = [cSort?.col, (col) => setCSort(s => ({ col, dir: s?.col === col && s?.dir === 'desc' ? 'asc' : 'desc' }))]
               const sortDir = cSort?.dir || 'desc'
@@ -1198,8 +1361,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
               }))
-              const byCourierMonth = (data?.byCourierMonth || [])
+              const byCourierMonth = (breakdownSrc?.byCourierMonth || [])
               const byCourierDay = (data?.byCourierDay || [])
               const byCourierWeek = (data?.byCourierWeek || [])
               // helper to build period breakdown table for daily/weekly/monthly courier views
@@ -1229,9 +1393,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </thead>
                     <tbody>
                       {[...new Set(periodRows.map(r => r.courier_group))].sort().map((cg, i) => (
-                        <tr key={cg} style={{ borderBottom:`1px solid ${C.border}`, background: i % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                          onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                        <tr key={cg} style={{ borderBottom:`1px solid ${C.border}`, background: i % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                           <td style={{ padding:'8px 10px', fontWeight:600, fontSize:11, whiteSpace:'nowrap' }}>{cg}</td>
                           {periods.map(p => {
                             const row = periodRows.find(r => r.courier_group === cg && r[periodLabelKey] === p)
@@ -1250,8 +1414,144 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   </div>
                 )
               }
+              if (cView === 'zone') {
+                const byZoneFrido = (breakdownSrc?.byZoneFrido || []).filter(r => r.zone_group)
+                const zoneTotalAll = byZoneFrido.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichZoneRaw = byZoneFrido.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / zoneTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
+                  _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                  _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
+                }))
+                const sumZD = enrichZoneRaw.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumZR = enrichZoneRaw.reduce((s,r)=>s+(r.rto||0),0)
+                const sumZC = enrichZoneRaw.reduce((s,r)=>s+(r.cancelled||0),0)
+                const sumZD1 = enrichZoneRaw.reduce((s,r)=>s+(r.d1||0),0)
+                const sumZRN = enrichZoneRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
+                const sumZOfd = enrichZoneRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumZOnTime = enrichZoneRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumZSlaBreach = enrichZoneRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
+                const wavgZ = (key) => { const w = enrichZoneRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return zoneTotalAll>0?w/zoneTotalAll:null }
+                const td9z = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
+                const td9zL = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
+                const ZONE_COLS = [
+                  { key: 'zone_group', label: 'Zone', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
+                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                  { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
+                ]
+                const zoneSortCol = zoneSort?.col
+                const zoneSortDir = zoneSort?.dir || 'asc'
+                const enrichZone = zoneSortCol ? [...enrichZoneRaw].sort((a, b) => {
+                  const av = a[zoneSortCol], bv = b[zoneSortCol]
+                  if (av == null) return 1; if (bv == null) return -1
+                  if (typeof av === 'string') return zoneSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+                  return zoneSortDir === 'asc' ? av - bv : bv - av
+                }) : enrichZoneRaw
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
+                        {ZONE_COLS.map((col,i) => (
+                          <th key={col.key} onClick={() => setZoneSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>{col.label}{zoneSortCol === col.key ? (zoneSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichZone.map((r, ri) => (
+                        <Fragment key={r.zone_group}>
+                        <tr style={{ borderBottom: zExpanded[r.zone_group] ? 'none' : `1px solid ${C.border}`, background: ri%2===1?'#FAF9F6':'transparent', transition:'box-shadow .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseLeave={e => { e.currentTarget.style.background=ri%2===1?'#FAF9F6':'transparent'; e.currentTarget.style.boxShadow='none' }}>
+                          <td style={{ ...td9zL, display:'flex', alignItems:'center', gap:6 }}>
+                            {cDrill && <span onClick={() => setZExpanded(e => ({ ...e, [r.zone_group]: !e[r.zone_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:zExpanded[r.zone_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                            Zone {r.zone_group}
+                          </td>
+                          <td style={td9z}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...td9z, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={td9z}>{r._delPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{d(r.avg_processing_days)}</td>
+                          <td style={td9z}>{d(r.avg_pickup_days)}</td>
+                          <td style={td9z}>{d(r.avg_intransit_days)}</td>
+                          <td style={td9z}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={td9z}>{d(r.avg_rto_tat_days)}</td>
+                        </tr>
+                        {zExpanded[r.zone_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'facility'
+                            ? (breakdownSrc?.byZoneFacility || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : []
+                          return drillRows.map(z => {
+                            const _zd = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _zr = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _zc = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _zf = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _zra = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _zvp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
+                            const drillKey = cDrill === 'courier' ? z.courier_group : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{drillKey}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zvp.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(z.total)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zd.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zr.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zc.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zf!=null?_zf.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zra!=null?_zra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{(z.on_time||z.sla_breach)?((z.sla_breach||0)/((z.on_time||0)+(z.sla_breach||0))*100).toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>100.00%</td>
+                        <td style={{ ...td9z, color:C.t1, fontWeight:700 }}>{n(zoneTotalAll)}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZD/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZR/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZD1/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZRN/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZOnTime+sumZSlaBreach)?(sumZSlaBreach/(sumZOnTime+sumZSlaBreach)*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_processing_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_pickup_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_intransit_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_fulfilment_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_rto_tat_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
               if (cView === 'facility') {
-                const byFacility = (data?.byFacility || []).filter(r => r.facility)
+                const byFacility = (breakdownSrc?.byFacility || []).filter(r => r.facility)
                 const facTotalAll = byFacility.reduce((s,r) => s+(r.total||0), 0) || 1
                 const enrichFacRaw = byFacility.map(r => ({
                   ...r,
@@ -1262,6 +1562,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                   _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                   _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
                 }))
                 const sumD = enrichFacRaw.reduce((s,r)=>s+(r.delivered||0),0)
                 const sumR = enrichFacRaw.reduce((s,r)=>s+(r.rto||0),0)
@@ -1270,8 +1571,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichFacRaw.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichFacRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichFacRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumFacOnTime = enrichFacRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumFacSlaBreach = enrichFacRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavg = (key) => { const w = enrichFacRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return facTotalAll>0?w/facTotalAll:null }
-                const td9 = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9 = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
                 const td9L = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
                 const FAC_COLS = [
                   { key: 'facility', label: 'Facility', left: true, str: true },
@@ -1279,7 +1582,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
-                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
+                  { key: 'avg_processing_days', label: 'Avg Process.' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
                 ]
@@ -1299,16 +1603,22 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {FAC_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace: i===0 ? 'normal' : 'nowrap', overflow: i===0 ? 'hidden' : undefined, textOverflow: i===0 ? 'ellipsis' : undefined, maxWidth: i===0 ? 0 : undefined, cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {enrichFac.map((r, ri) => (
-                        <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                        <Fragment key={r.facility}>
+                        <tr style={{ borderBottom: fExpanded[r.facility] ? 'none' : `1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                           onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
-                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>{r.facility}</td>
+                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>
+                            <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              {cDrill && <span onClick={() => setFExpanded(e => ({ ...e, [r.facility]: !e[r.facility] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:fExpanded[r.facility]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                              <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{r.facility}</span>
+                            </span>
+                          </td>
                           <td style={td9}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9}>{r._delPct.toFixed(2)}%</td>
@@ -1317,6 +1627,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{r._cancPct.toFixed(2)}%</td>
                           <td style={td9}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{d(r.avg_processing_days)}</td>
                           <td style={td9}>{d(r.avg_pickup_days)}</td>
                           <td style={td9}>{d(r.avg_intransit_days)}</td>
@@ -1324,6 +1635,46 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{d(r.avg_rto_tat_days)}</td>
                           <td style={td9}>{d(r.avg_s2a_days)}</td>
                         </tr>
+                        {fExpanded[r.facility] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (breakdownSrc?.byCourierFacility || []).filter(f => f.facility === r.facility).sort((a,b) => b.total - a.total)
+                            : cDrill === 'zone'
+                            ? (breakdownSrc?.byZoneFacility || []).filter(f => f.facility === r.facility).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : []
+                          return drillRows.map(f => {
+                            const _fd = f.total ? +((f.delivered/f.total)*100).toFixed(2) : 0
+                            const _fr = f.total ? +((f.rto/f.total)*100).toFixed(2) : 0
+                            const _fzr = f.total ? +(((f.z_rto||0)/f.total)*100).toFixed(2) : 0
+                            const _fc = f.total ? +(((f.cancelled||0)/f.total)*100).toFixed(2) : 0
+                            const _ff = f.ofd_total ? +((f.d1/f.ofd_total)*100).toFixed(2) : null
+                            const _fra = f.ofd_total ? +(((f.rasr_num||0)/f.ofd_total)*100).toFixed(2) : null
+                            const _fvp = r.total ? +((f.total/r.total)*100).toFixed(2) : 0
+                            const drillKey = cDrill === 'courier' ? f.courier_group : `Zone ${f.zone_group}`
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:0 }}>{drillKey}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fvp.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(f.total)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fd.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fzr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fc.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_ff!=null?_ff.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fra!=null?_fra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_processing_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_pickup_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_intransit_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_rto_tat_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_s2a_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
@@ -1337,12 +1688,73 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td9}>{(sumC/facTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={td9}>{(sumFacOnTime+sumFacSlaBreach)?(sumFacSlaBreach/(sumFacOnTime+sumFacSlaBreach)*100).toFixed(2)+'%':'—'}</td>
                         <td style={td9}>{d(wavg('avg_processing_days'))}</td>
                         <td style={td9}>{d(wavg('avg_pickup_days'))}</td>
                         <td style={td9}>{d(wavg('avg_intransit_days'))}</td>
                         <td style={td9}>{d(wavg('avg_fulfilment_days'))}</td>
                         <td style={td9}>{d(wavg('avg_rto_tat_days'))}</td>
                         <td style={td9}>{d(wavg('avg_s2a_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
+              if (cView === 'tier') {
+                const byTierData = (breakdownSrc?.byTier || []).filter(r => !cTier || r.tier === cTier)
+                const tierTotalAll = byTierData.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichTier = byTierData.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / tierTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +((r.cancelled / r.total) * 100).toFixed(2) : 0,
+                }))
+                const sumTD = enrichTier.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumTR = enrichTier.reduce((s,r)=>s+(r.rto||0),0)
+                const sumTC = enrichTier.reduce((s,r)=>s+(r.cancelled||0),0)
+                const wavgT = (key) => { const w = enrichTier.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return tierTotalAll>0?w/tierTotalAll:null }
+                const tdT = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const TIER_COLS = [
+                  { key: 'tier', label: 'Tier', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                ]
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead><tr style={{ borderBottom:`2px solid ${C.border}`, background:C.acl }}>
+                      {TIER_COLS.map(c => (
+                        <th key={c.key} style={{ padding:'8px 10px', textAlign: c.left ? 'left' : 'right', color:C.t2, fontSize:10, fontWeight:600, whiteSpace:'nowrap', cursor:'default' }}>{c.label}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {enrichTier.map(r => (
+                        <tr key={r.tier} style={{ borderBottom:`1px solid ${C.border}` }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                          onMouseLeave={e => { e.currentTarget.style.background='' }}>
+                          <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{ {'Tier 1':'Tier I','Tier 2':'Tier II','Tier 3':'Tier III'}[r.tier] || r.tier }</td>
+                          <td style={tdT}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...tdT, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={tdT}>{r._delPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r.avg_intransit_days!=null?r.avg_intransit_days.toFixed(2)+'d':'—'}</td>
+                          <td style={tdT}>{r.avg_fulfilment_days!=null?r.avg_fulfilment_days.toFixed(2)+'d':'—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>100.00%</td>
+                        <td style={{ ...tdT, color:C.t1, fontWeight:700 }}>{n(tierTotalAll)}</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTD/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTR/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTC/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={tdT}>{wavgT('avg_intransit_days')!=null?wavgT('avg_intransit_days').toFixed(2)+'d':'—'}</td>
+                        <td style={tdT}>{wavgT('avg_fulfilment_days')!=null?wavgT('avg_fulfilment_days').toFixed(2)+'d':'—'}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1357,6 +1769,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichMonth.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichMonth.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichMonth.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumMOnTime = enrichMonth.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumMSlaBreach = enrichMonth.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavgM = (key) => { const w = enrichMonth.reduce((s,r)=>s+(r[key]!=null?r[key]*r.total:0),0); return w/tot }
                 const MONTH_COLS = [
                   { key: 'month_label', label: 'Month', left: true, str: true },
@@ -1364,6 +1778,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
                   { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
@@ -1381,7 +1796,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {MONTH_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1391,24 +1806,25 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         const rtoColor = r._rtoPct<=3?C.green.tx:r._rtoPct<=7?'#d97706':C.red.tx
                         const tatColor = (v,hi,lo) => v==null?C.t3:+v<=lo?C.green.tx:+v<=hi?'#d97706':C.red.tx
                         return (
-                          <tr key={r.month_label} style={{ borderBottom:`1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                            onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                          <tr key={r.month_label} style={{ borderBottom:`1px solid ${C.border}`, background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                            onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                             <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.month_label}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontSize:11 }}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
                           </tr>
                         )
                       })}
@@ -1416,20 +1832,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
                         <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>100.00%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>100.00%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumMOnTime+sumMSlaBreach)?(sumMSlaBreach/(sumMOnTime+sumMSlaBreach)*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1438,12 +1855,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <colgroup>
-                    {[<col key={0} style={{ width:'10%' }} />, ...Array(12).fill(0).map((_,i) => <col key={i+1} style={{ width:'7.5%' }} />)]}
+                    {[<col key={0} style={{ width:'10%' }} />, ...Array(13).fill(0).map((_,i) => <col key={i+1} style={{ width:'7%' }} />)]}
                   </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.acl }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'center', color: C.t1, fontWeight: 700, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1458,16 +1875,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const color = COURIER_COLORS[r.courier_group] || C.t3
                       const rtoColor = r._rtoPct > avgRtoPct ? C.red.tx : C.t1
                       const tatColor = () => C.t1
-                      const rowBg = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
-                      const stickyBg = ri % 2 === 1 ? '#FAF9F6' : C.card
+                      const rowBg = ri % 2 === 1 ? C.hov : 'transparent'
+                      const stickyBg = ri % 2 === 1 ? C.hov : C.card
                       return (
                         <Fragment key={r.courier_group}>
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}`, background: rowBg, transition: 'box-shadow .12s, background .12s' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FDF8ED'; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.acl; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
                           onMouseLeave={e => { e.currentTarget.style.background = rowBg; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = stickyBg; td.style.boxShadow = 'none' }) }}>
-                          <td data-sticky style={{ padding: '6px 7px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
+                          <td data-sticky style={{ padding: '8px 12px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
+                              {cDrill && <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -1475,48 +1892,60 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <span style={{ color: C.t1, fontWeight: 600, fontSize: 11 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
-                        {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
-                          const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
-                          const _rtoPct = m.total ? +((m.rto/m.total)*100).toFixed(2) : 0
-                          const _zrtoPct = m.total ? +(((m.z_rto||0)/m.total)*100).toFixed(2) : 0
-                          const _cancPct = m.total ? +(((m.cancelled||0)/m.total)*100).toFixed(2) : 0
-                          const _fasrPct = m.ofd_total ? +((m.d1/m.ofd_total)*100).toFixed(2) : null
-                          const _rasrPct = m.ofd_total ? +(((m.rasr_num||0)/m.ofd_total)*100).toFixed(2) : null
-                          const mVolPct = +((m.total/totalAll)*100).toFixed(2)
-                          const mRtoColor = _rtoPct > avgRtoPct ? C.red.tx : C.t1
-                          return (
-                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition: 'box-shadow .12s, background .12s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FDF8ED'; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
-                              onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF8'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FAFAF8'; td.style.boxShadow = 'none' }) }}>
-                              <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1, transition: 'box-shadow .12s, background .12s' }}>{m.month_label}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:mRtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_processing_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_pickup_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                            </tr>
-                          )
-                        })}
+                        {cExpanded[r.courier_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'zone'
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : cDrill === 'facility'
+                            ? (breakdownSrc?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'month'
+                            ? (breakdownSrc?.byCourierMonth || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1)
+                            : []
+                          return drillRows.map(z => {
+                            const _dp = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _rp = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _cp = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _fp = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _rap = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _vp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
+                            const _rc = _rp > avgRtoPct ? C.red.tx : C.t1
+                            const drillKey = cDrill === 'zone' ? z.zone_group : cDrill === 'month' ? z.month_label : z.facility
+                            const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : cDrill === 'month' ? z.month_label : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition:'box-shadow .12s, background .12s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FDF8ED' }) }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8'; e.currentTarget.style.boxShadow='none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FAFAF8' }) }}>
+                                <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1 }}>{drillLabel}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_vp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{n(z.total)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_dp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:_rc, fontSize:11 }}>{_rp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
                         </Fragment>
                       )
                     })}
@@ -1531,17 +1960,20 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const sumD1 = enriched.reduce((s,r) => s + (r.d1||0), 0)
                       const sumRN = enriched.reduce((s,r) => s + (r.rasr_num||0), 0)
                       const sumOfd = enriched.reduce((s,r) => s + (r.ofd_total||0), 0)
+                      const sumSlaBreach = enriched.reduce((s,r) => s + (r.sla_breach||0), 0)
+                      const sumOnTime = enriched.reduce((s,r) => s + (r.on_time||0), 0)
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
                           <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>100.00%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>100.00%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(tot)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
@@ -1752,7 +2184,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const opsValStyle = { fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }
         const opsSubStyle = { fontSize: 10.5, color: C.t3 }
 
-        const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+        const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
         const thL2 = { ...thStyle2, textAlign: 'left' }
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
@@ -1802,7 +2234,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               )
 
               const BOX_H = 320
-              const thS = { fontSize: 11.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.03em', padding: '9px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thS = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '9px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 12.35, color: C.t2, padding: '5.75px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
@@ -1885,9 +2317,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               const isLast = ri === arr.length - 1
                               const label = row.facility
                               return (
-                                <tr key={label} style={{ background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                                <tr key={label} style={{ background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.op_0_1, row.op_2_3, row.op_4_5, row.op_5plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tatCellStyle(v, tot, t1TotalPcts[ci], TAT_CFG.processing[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
@@ -1921,7 +2353,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment creation → shipment pickup</span></span>
                       </div>
-                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', paddingRight: 10, maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.acl }}>
@@ -1936,9 +2368,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
                               const isLast = ri === arr.length - 1
                               return (
-                                <tr key={row.label} style={{ background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                                <tr key={row.label} style={{ background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.label}</td>
                                   {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tatCellStyle(v, tot, t2TotalPcts[ci], TAT_CFG.pickup[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
@@ -1972,7 +2404,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment pickup → shipment delivery</span></span>
                       </div>
-                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', paddingRight: 10, maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.acl }}>
@@ -1987,9 +2419,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               const tot = row.delivered || 0
                               const isLast = ri === arr.length - 1
                               return (
-                                <tr key={row.courier_group} style={{ background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                                <tr key={row.courier_group} style={{ background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.courier_group}</td>
                                   {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tatCellStyle(v, tot, t3TotalPcts[ci], TAT_CFG.transit[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
@@ -2039,9 +2471,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               const isLast = ri === arr.length - 1
                               const label = row.facility
                               return (
-                                <tr key={label} style={{ background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
+                                <tr key={label} style={{ background: ri % 2 === 1 ? C.hov : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? C.hov : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tatCellStyle(v, tot, t4TotalPcts[ci], TAT_CFG.fulfilment[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
@@ -2082,7 +2514,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const raw = data.pickupAgeing || []
           if (true || !raw.length) return null
 
-          const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+          const thStyle2 = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
           const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
 
           // Aggregate all courier rows into a single totals row + keep per-courier
@@ -2229,23 +2661,23 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, alignItems: 'start' }}>
               {/* Left: Donut with toggle */}
-              <div className="card-hoverable" style={{ ...cardStyle, height: 300 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, height: 330 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     {[['qty','Qty'],['value','Value']].map(([id,lbl], i) => (
                       <div key={id} style={{ display: 'flex', alignItems: 'center' }}>
-                        {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                         <button onClick={() => setWMetric(id)} style={{
                           fontSize: 11, fontWeight: wMetric === id ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none', background: wMetric === id ? C.acs : 'transparent',
-                          color: wMetric === id ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
+                          color: wMetric === id ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
                         }}>{lbl}</button>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, overflowY: 'auto', maxHeight: 225 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, overflowY: 'auto', paddingRight: 10, maxHeight: 225 }}>
                   {barData.map(d => (
                     <div key={d.name}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
@@ -2263,13 +2695,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
-              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 300 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 330 }}>
                 <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10, flexShrink: 0 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <div style={{ overflowX: 'auto', flex: 1, minHeight: 220 }}>
-                <ResponsiveContainer width="100%" height={220}>
+                <div style={{ overflow: 'hidden', flex: 1, minHeight: 0 }}>
+                <ResponsiveContainer width="100%" height={248}>
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -2290,10 +2722,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </div>
                       )
                     }} />
-                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill={C.acc} fillOpacity={0.85} radius={[3,3,0,0]} barSize={40} />
+                    <BarGradient id="gQtyTotal" />
+                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="url(#gQtyTotal)" radius={[3,3,0,0]} barSize={40} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke={C.blue.tx} strokeWidth={2} dot={{ r: 3, fill: C.blue.tx }} />
-                    {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                    {!isMobile && <Legend {...chartLegendProps({ fontSize: 10 })} />}
                   </ComposedChart>
                 </ResponsiveContainer>
                 </div>
@@ -2361,7 +2794,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const BASE_OPTS = [{ key: 'order', label: 'Order Creation', subtitle: 'Order creation date' }, { key: 'shipment', label: 'Shipment Creation', subtitle: 'Shipment creation date' }, { key: 'pickup', label: 'Pickup Date', subtitle: 'Pickup date' }]
           const activeBase = BASE_OPTS.find(o => o.key === rtoAgeingBase)
           const pct = (v, tot) => tot ? ((v / tot) * 100).toFixed(1) + '%' : '—'
-          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t1, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thS, textAlign: 'left' }
           const tdS = { padding: '7px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
@@ -2390,8 +2823,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   <div style={{ display: 'flex' }}>
                     {BASE_OPTS.map((o, i) => (
                       <div key={o.key} style={{ display: 'flex', alignItems: 'center' }}>
-                        {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                        <button onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: rtoAgeingBase === o.key ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: rtoAgeingBase === o.key ? C.acs : 'transparent', color: rtoAgeingBase === o.key ? '#3F3D33' : C.t2, fontFamily: 'var(--font)' }}>
+                        {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                        <button onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: rtoAgeingBase === o.key ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: rtoAgeingBase === o.key ? C.acs : 'transparent', color: rtoAgeingBase === o.key ? C.acd : C.t2, fontFamily: 'var(--font)' }}>
                           {o.label}
                         </button>
                       </div>
@@ -2471,7 +2904,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             <div className="card-hoverable" style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
               <div style={{ ...chartTitle, marginBottom: 14, flexShrink: 0 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               {isMobile ? (
-                <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {reasons.map((r, i) => {
                     const pct = ((r.total / totalRto) * 100).toFixed(1)
                     const barW = ((r.total / reasons[0].total) * 100).toFixed(1)
@@ -2505,7 +2938,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </div>
                       )
                     }} />
-                    <Bar dataKey="total" fill={C.acc} radius={[4, 4, 0, 0]}>
+                    <BarGradient id="gCatTotal" />
+                    <Bar dataKey="total" fill="url(#gCatTotal)" radius={[4, 4, 0, 0]}>
                       <LabelList dataKey="total" position="top" formatter={v => ((v / totalRto) * 100).toFixed(1) + '%'} style={{ fontSize: 9, fill: C.t3 }} />
                     </Bar>
                   </BarChart>
@@ -2557,7 +2991,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             })
             return { ...s, avg_att: s._att_n ? +(s._att_sum / s._att_n).toFixed(2) : null, avg_intransit_days: s._tat_n ? +(s._tat_sum / s._tat_n).toFixed(2) : null, avg_o2d: s._o2d_n ? +(s._o2d_sum / s._o2d_n).toFixed(2) : null }
           })()
-          const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+          const thStyle = { padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t1, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thStyle, textAlign: 'left' }
           const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...td, textAlign: 'left', fontWeight: 600 }
@@ -2568,15 +3002,15 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <div style={{ display: 'flex', gap: 4 }}>
                   {['All', 'COD', 'PREPAID'].map((v, i) => (
                     <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                      <button onClick={() => setNdrPayFilter(v)} style={{ padding: '3px 9px', fontSize: 11, fontWeight: ndrPayFilter === v ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: ndrPayFilter === v ? C.acs : 'transparent', color: ndrPayFilter === v ? '#3F3D33' : C.t2, fontFamily: 'var(--font)', textAlign: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                      <button onClick={() => setNdrPayFilter(v)} style={{ padding: '3px 9px', fontSize: 11, fontWeight: ndrPayFilter === v ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: ndrPayFilter === v ? C.acs : 'transparent', color: ndrPayFilter === v ? C.acd : C.t2, fontFamily: 'var(--font)', textAlign: 'center' }}>
                         {v === 'PREPAID' ? 'Prepaid' : v}
                       </button>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 450 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
@@ -2664,9 +3098,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { label: 'Avg Refund ₹', value: rk.avg_refund_amount ? '₹'+(rk.avg_refund_amount).toLocaleString('en-IN') : '—', sub: `Total: ₹${((rk.total_refunded||0)/100000).toFixed(1)}L`, color: '#7c3aed', bg: '#F5F3FF', border: '#DDD6FE' },
                 ].map(m => (
                   <div key={m.label} style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 14, padding: '16px 18px' }}>
-                    <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
+                    <div style={{ fontSize: 9.5, color: C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: m.color, letterSpacing: '-0.5px', marginBottom: 4 }}>{m.value}</div>
-                    <div style={{ fontSize: 10, color: '#94939F' }}>{m.sub}</div>
+                    <div style={{ fontSize: 10, color: C.t3 }}>{m.sub}</div>
                   </div>
                 ))}
               </div>
@@ -2693,7 +3127,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <div title={r.reason} style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'default' }}>{r.reason}</div>
                         <div style={{ flex: 1, height: 22, borderRadius: 4, background: C.border, overflow: 'hidden', position: 'relative' }}>
                           <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
-                            {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: '#13121A' }}>{r.pct}%</span>}
+                            {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: C.onAcc }}>{r.pct}%</span>}
                           </div>
                           {parseFloat(barW) <= 15 && <span style={{ position: 'absolute', left: barW+'%', top: '50%', transform: 'translateY(-50%)', marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.t1 }}>{r.pct}%</span>}
                         </div>
@@ -2725,7 +3159,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: C.t3 }} />
                       <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
                       <Tooltip formatter={(v, n) => n.includes('%') ? [v.toFixed(1)+'%', n] : [v.toLocaleString('en-IN'), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Line yAxisId="vol" type="monotone" dataKey="returns" name="Returns" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 2.5, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="vol" type="monotone" dataKey="exchanges" name="Exchanges" stroke={C.acm} strokeWidth={2.5} dot={{ r: 2.5, fill: C.acm, strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a', strokeWidth: 0 }} strokeDasharray="4 3" />
@@ -2777,11 +3211,107 @@ const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeW
   </svg>
 )
 
-function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
+// ── Theme picker ────────────────────────────────────────────────────────────
+// Sits in the sidebar rail just above the profile icon. The menu renders through
+// a portal so the sidebar's own bounds cannot clip it, and is positioned from the
+// trigger's measured rect (the rail is narrow, so the menu opens to its right).
+function ThemePicker({ theme, setTheme }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return
+    const r = btnRef.current.getBoundingClientRect()
+    // Anchor the menu's bottom near the trigger, clamped to stay on screen.
+    const MENU_H = 34 + THEMES.length * 46
+    setPos({ top: Math.max(8, Math.min(r.bottom - MENU_H, window.innerHeight - MENU_H - 8)), left: r.right + 10 })
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = e => {
+      if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  const active = THEMES.find(t => t.id === theme) || THEMES[0]
+
+  return (
+    <>
+      <div ref={btnRef} onClick={() => setOpen(o => !o)}
+        className={`sb-item${open ? ' active' : ''}`}
+        title={`Theme: ${active.label}`}
+        style={{ position: 'relative' }}>
+        <span className="sb-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Swatch ring of the active theme — reads as "colour" at rail size far
+              better than a generic palette glyph. */}
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%',
+            background: `conic-gradient(${active.swatch[1]} 0 33%, ${active.swatch[2]} 0 66%, ${active.swatch[0]} 0 100%)`,
+            boxShadow: `inset 0 0 0 1.5px ${C.card}, 0 0 0 1px ${C.border2}`,
+          }} />
+        </span>
+        <span className="sb-label">Theme</span>
+      </div>
+
+      {open && createPortal(
+        <div ref={menuRef} role="menu" aria-label="Colour theme"
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+            background: C.card, borderRadius: 14, boxShadow: C.sh3,
+            border: `1px solid ${C.border}`, padding: 6, minWidth: 190,
+          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t3, padding: '6px 10px 8px' }}>
+            Colour theme
+          </div>
+          {THEMES.map(t => {
+            const on = t.id === theme
+            const disabled = t.id !== 'forest'
+            return (
+              <div key={t.id} role="menuitemradio" aria-checked={on} tabIndex={disabled ? -1 : 0}
+                onClick={() => { if (!disabled) { setTheme(t.id); setOpen(false) } }}
+                onKeyDown={e => { if (!disabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setTheme(t.id); setOpen(false) } }}
+                className="theme-opt"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                  borderRadius: 10, cursor: disabled ? 'default' : 'pointer',
+                  background: on ? C.acl : 'transparent',
+                  opacity: disabled ? 0.35 : 1,
+                  filter: disabled ? 'blur(0.6px)' : 'none',
+                  pointerEvents: disabled ? 'none' : 'auto',
+                }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  background: `conic-gradient(${t.swatch[1]} 0 33%, ${t.swatch[2]} 0 66%, ${t.swatch[0]} 0 100%)`,
+                  boxShadow: `inset 0 0 0 2px ${C.card}, 0 0 0 1px ${on ? C.acm : C.border2}`,
+                }} />
+                <span style={{ fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? C.acd : C.t1, lineHeight: 1.3, minWidth: 0 }}>{t.label}</span>
+                {on && <span style={{ marginLeft: 'auto', color: C.acm, fontSize: 13, lineHeight: 1 }}>✓</span>}
+              </div>
+            )
+          })}
+        </div>, document.body)}
+    </>
+  )
+}
+
+function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme, setTheme }) {
   const [invHover, setInvHover] = useState(false)
   const [logHover, setLogHover] = useState(false)
   const hoverTimerRef = useRef(null)
   const logHoverTimerRef = useRef(null)
+  // Viewport top of the hovered nav row. The flyouts are position:fixed (so .app-shell's
+  // overflow:hidden cannot clip them and the loading veil cannot paint over them), which
+  // means they no longer inherit the row's position and have to be told where to sit.
+  const [invHoverTop, setInvHoverTop] = useState(0)
+  const [logHoverTop, setLogHoverTop] = useState(0)
   const allItems = [
     { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
     { id: 'sales',     label: 'Sales',     Icon: ChartBar },
@@ -2808,7 +3338,8 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     <nav className="sidebar">
       {/* Logo doubles as a Home/Overview shortcut — standard pattern (click the brand mark to
           return to the main dashboard), gated by the same overview-permission check used for the
-          Overview nav item itself, so a user without Overview access can't jump there via the logo. */}
+          Overview nav item itself, so a user without Overview access can't jump there via the logo.
+          The mark is tinted per theme, so the artwork follows the active palette. */}
       <div
         onClick={() => { if (!allowedTabs || allowedTabs.includes('overview')) setPage('overview') }}
         title={(!allowedTabs || allowedTabs.includes('overview')) ? 'Go to Overview' : undefined}
@@ -2817,7 +3348,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           cursor: (!allowedTabs || allowedTabs.includes('overview')) ? 'pointer' : 'default',
         }}
       >
-        <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
+        <BrandMark size={42} />
       </div>
       <hr className="sb-sep" />
       {items.map(item => {
@@ -2835,13 +3366,13 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
             <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
               className={`sb-item${page === 'inventory' ? ' active' : ''}`}
               style={{ position: 'relative' }}
-              onMouseEnter={() => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHover(true) } }}
+              onMouseEnter={e => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHoverTop(e.currentTarget.getBoundingClientRect().top); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
               {hasBothInv && invHover && (
                 <div style={{
-                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  position: 'fixed', left: 'var(--sb)', top: invHoverTop, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 170,
                   display: 'flex', flexDirection: 'column', gap: 2,
@@ -2867,26 +3398,33 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         }
         if (item.id === 'logistics') {
           const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
-          const hasCost = !allowedTabs || allowedTabs.includes('logistics:cost')
+          const hasCost = !allowedTabs || hasCostAccess(allowedTabs)
+          // Which cost sub-tab to land on — respects granular permissions (b2b-only → FTL/PTL)
+          const defaultCostScope = !allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all') ? 'all'
+            : allowedTabs.includes('logistics:cost:b2c') ? 'b2c'
+            : 'b2b'
           const hasBoth = hasPerf && hasCost
           const logSubTabs = [
             ...(hasPerf ? [{ id: 'logistics', label: 'Performance Analytics' }] : []),
             ...(hasCost ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
           ]
           const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
-          const logActive = page === 'logistics' || page === 'logistics-cost'
+          // courier-allocation included so the Logistics group stays expanded and highlighted
+          // while the simulator is open — it is reached from Cost Analytics, not the sidebar.
+          const logActive = page === 'logistics' || page === 'logistics-cost' || page === 'courier-allocation'
+          const showPopup = hasBoth || (hasCost && logSubTabs.length > 0)
           return (
             <Fragment key="logistics">
             <div onClick={() => setPage(defaultLogPage)}
               className={`sb-item${logActive ? ' active' : ''}`}
               style={{ position: 'relative' }}
-              onMouseEnter={() => { if (hasBoth) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
+              onMouseEnter={e => { if (showPopup) { clearTimeout(logHoverTimerRef.current); setLogHoverTop(e.currentTarget.getBoundingClientRect().top); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
-              {hasBoth && logHover && (
+              {showPopup && logHover && (
                 <div style={{
-                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  position: 'fixed', left: 'var(--sb)', top: logHoverTop, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 200,
                   display: 'flex', flexDirection: 'column', gap: 2,
@@ -2925,6 +3463,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
+        <ThemePicker theme={theme} setTheme={setTheme} />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
           {profile?.avatar_url
@@ -3019,6 +3558,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'Last Quarter', fn: () => {
       // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
@@ -3049,9 +3589,20 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
+
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
-    if (start && end) { setFilters(f => ({ ...f, start, end })); setOpen(false) }
+    if (start && end) {
+      // Navigate calendar to show the selected start month so reopening the picker
+      // reflects the chosen range (e.g. Last FY starts Apr 2025, not current month).
+      const startDate = parseD(start)
+      if (startDate) {
+        setLeftMonth(new Date(startDate.getFullYear(), startDate.getMonth(), 1))
+        setRightMonth(new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1))
+      }
+      setFilters(f => ({ ...f, start, end })); setOpen(false)
+    }
   }
 
   const getDays = (monthStart) => {
@@ -3105,7 +3656,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
               }}
               onMouseEnter={() => selecting === 'end' && setHover(ds)}
               onMouseLeave={() => setHover(null)}
-              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? T.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? T.acc : T.t1, border: isToday && !sel ? `1px solid ${T.acc}` : '1px solid transparent' }}>
+              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? T.acc : inR ? T.acl : 'transparent', color: sel ? T.onAcc : isToday ? T.acc : T.t1, border: isToday && !sel ? `1px solid ${T.acc}` : '1px solid transparent' }}>
                 {day.getDate()}
               </div>
             )
@@ -3213,7 +3764,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${T.border}`, marginTop: 'auto' }}>
         <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${T.border2}`, background: 'transparent', color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
-        <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
+        <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: T.onAcc, cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
       </div>
     </div>
   )
@@ -3243,7 +3794,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
             position: 'fixed', bottom: 'var(--bot)', left: 0, right: 0, zIndex: 9999,
             background: T.card, borderRadius: '16px 16px 0 0',
             boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
-            maxHeight: '90vh', overflowY: 'auto',
+            maxHeight: '90vh', overflowY: 'auto', paddingRight: 10,
             display: 'flex', flexDirection: 'column',
           }}>
             {/* Handle + header */}
@@ -3256,12 +3807,15 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
             </div>
             {/* Quick presets as horizontal chips */}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 14px', flexShrink: 0, scrollbarWidth: 'none' }}>
-              {PRESETS.map(p => (
-                <button key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                  style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${T.border2}`, background: T.bg, color: T.t2, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0 }}>
-                  {p.label}
-                </button>
-              ))}
+              {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+                const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+                return (
+                  <button key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
+                    {p.label}
+                  </button>
+                )
+              })}
             </div>
             {/* Calendar */}
             {calendarBody}
@@ -3272,14 +3826,17 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: T.card, border: `1px solid ${T.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
           <div style={{ width: 140, borderRight: `1px solid ${T.border}`, padding: '8px 0', flexShrink: 0 }}>
-            {PRESETS.map(p => (
-              <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                style={{ padding: '5px 14px', fontSize: 12, color: T.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => e.currentTarget.style.background = T.bg}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                {p.label}
-              </div>
-            ))}
+            {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+              const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+              return (
+                <div key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bg }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+                  {p.label}
+                </div>
+              )
+            })}
           </div>
           {calendarBody}
         </div>
@@ -3342,7 +3899,7 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
   const d2cSubSel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
   const d2cActive = d2cSubSel[0] || null
 
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd }
 
   const switchTab = (id) => {
     setActiveTab(id)
@@ -3453,7 +4010,7 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
       </div>
 
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: 10 }}>
         {/* Channel — accordion style like filters */}
         <div style={{ borderBottom: `1px solid ${PV.border}` }}>
           <div onClick={() => toggleExpand('__channel')}
@@ -3643,7 +4200,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   const toggleExpand = (key) => setExpandedKey(k => k === key ? null : key)
 
   // color tokens
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00', blue: '#1967D2', blueBg: '#E8F0FE', blueBorder: '#AECBFA' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd, blue: C.blue.tx, blueBg: C.blue.bg, blueBorder: C.blue.bd }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '72vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -3698,7 +4255,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
       </div>
 
       {/* Scrollable filter list */}
-      <div style={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${PV.border}` }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: 10, borderTop: `1px solid ${PV.border}` }}>
         {invTab === 'inward' ? (
           <div style={{ padding: 24, fontSize: 13, color: PV.sub, textAlign: 'center' }}>No filters for Inward</div>
         ) : currentSlicers.length === 0 ? (
@@ -3794,7 +4351,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
 }
 
 function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, filterOpts, costFilters, setCostFilters }) {
-  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
+  const PV = { bg: C.card, canvas: C.bg, border: C.border, ink: C.t1, sub: C.t3, accent: C.acc, accentDark: C.acd }
   const [expandedKey, setExpandedKey] = useState(null)
   const TABS = [
     { id: 'logistics', label: 'Performance Analytics' },
@@ -3858,7 +4415,7 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
 
       {/* Scrollable filter list */}
       {page === 'logistics' ? (
-        <div style={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${PV.border}` }}>
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: 10, borderTop: `1px solid ${PV.border}` }}>
 
           {/* Courier Partner */}
           <div style={{ borderBottom: `1px solid ${PV.border}` }}>
@@ -3988,7 +4545,7 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
           { key: 'payments', label: 'Payment', options: opts.payments || [], value: cf.payments, multi: true, onChange: v => setcf(f => ({ ...f, payments: v === null ? [] : (f.payments || []).includes(v) ? f.payments.filter(x => x !== v) : [...(f.payments || []), v] })) },
         ]
         return (
-          <div style={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${PV.border}` }}>
+          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 10, borderTop: `1px solid ${PV.border}` }}>
             {/* Filters label */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', flexShrink: 0 }}>
               <span style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase' }}>
@@ -4246,9 +4803,9 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ page, setPage, customerTab, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -4292,11 +4849,37 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, combinedAlerts,
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
           </div>
+        </div>
+      )}
+      {page === 'logistics' && logisticsFilterUI && (
+        <div className="tnav-right">
+          <FilterIconPopover activeCount={logisticsFilterUI.activeCount}>
+            {logisticsFilterUI.content}
+          </FilterIconPopover>
+        </div>
+      )}
+      {page === 'inventory' && inventoryDateControl?.invFilterPanel && (
+        <div className="tnav-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {invTab === 'health' && inventoryDateControl.invHealthAsOf && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+              <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
+                Snapshot {new Date(inventoryDateControl.invHealthAsOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+              </span>
+              {inventoryDateControl.invHealthLastSales && (
+                <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
+                  Latest sales {new Date(inventoryDateControl.invHealthLastSales + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+          )}
+          <FilterIconPopover activeCount={inventoryDateControl.invFilterCount}>
+            {inventoryDateControl.invFilterPanel}
+          </FilterIconPopover>
         </div>
       )}
       {page === 'inventory' && inventoryDateControl?.filters && (
@@ -4349,7 +4932,7 @@ function AlertsBell({ alerts }) {
       {open && (
         <div ref={popRef} style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 500,
-          width: 420, maxWidth: '90vw', maxHeight: 420, overflowY: 'auto',
+          width: 420, maxWidth: '90vw', maxHeight: 420, overflowY: 'auto', paddingRight: 10,
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
           boxShadow: '0 12px 32px -8px rgba(0,0,0,0.22)', padding: 8,
           display: 'flex', flexDirection: 'column', gap: 4,
@@ -4547,7 +5130,7 @@ const pill = (label, value, color = C.t1, bg = C.bg) => (
 const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
   <div className="card-hoverable" style={{
     gridColumn: `span ${span}`, background: tint || C.card, border: `1px solid ${tint ? 'transparent' : C.border}`, borderRadius: 14,
-    padding: hero ? '20px 22px' : '14px 16px', boxShadow: hero
+    padding: hero ? '20px 22px' : '12px 16px', boxShadow: hero
       ? '0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(216,154,26,0.35)'
       : '0 1px 2px rgba(0,0,0,0.04), 0 6px 16px -8px rgba(0,0,0,0.08)',
     position: 'relative', overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style,
@@ -4560,12 +5143,12 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
 // tinted background (tint) for an at-a-glance good/bad read, not just a thin top stripe.
 const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3 }) => (
   <KpiCard span={span} accent={accent} tint={tint} hero={hero}>
-    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 7 }}>{label}</div>
+    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 5 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: hero ? 36 : 22, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: hero ? 36 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
       {deltaVal !== undefined && delta(deltaVal)}
     </div>
-    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>{sub}</div>}
   </KpiCard>
 )
 // Same tile as ReturnTrendChart's TrendStatTile (D2CReturnAnalysisTab.jsx) — a 3px color bar
@@ -4602,7 +5185,7 @@ const WideCard = ({ span = 12, children, style }) => (
 
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, logisticsCostData, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
-  const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
   // returns-excluded unit count ShopifyTab uses for its own ASP figure; falls back to totalQty.
@@ -4661,10 +5244,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // Amazon_net, ...), not flat daily totals, so gross + net are summed per day here. No per-day
   // return-rate series exists in this data source (unlike /api/return-analysis) — plotting
   // Revenue + Net Revenue honestly instead of fabricating a %-line the data doesn't have.
-  const heroTrendRaw = (dailyArr || []).map(d => {
+  const heroTrendRaw = (dailyArr || []).map((d, i) => {
     const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
     const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
-    return { date: d.date, revenue, netRevenue }
+    const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
+    const prevRev = prevDailyArr?.[i]?.rev ?? null
+    return { date: d.date, revenue, netRevenue, units, prevRevenue: prevRev }
   })
   // Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
   // weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM.
@@ -4674,9 +5259,11 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
       const key = trendGroupBy === 'weekly'
         ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
         : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0 }
+      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, prevRevenue: 0 }
       buckets[key].revenue += d.revenue
       buckets[key].netRevenue += d.netRevenue
+      buckets[key].units += d.units
+      if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
     })
     return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
   })()
@@ -4971,9 +5558,11 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
                 badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
-              <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color={C.border2} />
+              <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
+              <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
               <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
                 badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
@@ -4991,14 +5580,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       {payload.map(p => (
                         <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                          <span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span>
+                          <span style={{ color: C.t2 }}>{p.name}: {p.dataKey === 'units' ? fmtN(p.value) : fmt(p.value)}</span>
                         </div>
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
+                  <Legend {...chartLegendProps({ fontSize: 11 })} />
                   <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="netRevenue" name="Net Revenue" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" />
+                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -5080,7 +5669,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   onChange={e => setProductSearch(e.target.value)}
                   placeholder="Search sub-category…"
                   style={{
-                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 28px 6px 28px',
+                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '3px 28px 3px 28px',
                     borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.t1, outline: 'none',
                     transition: 'border-color .15s, box-shadow .15s',
                   }}
@@ -5101,12 +5690,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ maxHeight: 560, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+            <div style={{ maxHeight: 450, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10, paddingBottom: 16 }}>
               <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
                     {['Sub-Category', 'Category', 'Revenue (Inc. GST)', 'Units', 'ASP', 'Return %', 'Net Revenue'].map((h, i) => (
-                      <th key={h} style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i <= 1 ? 'left' : 'right', padding: '8px 10px', background: C.card, borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: i <= 1 ? 'left' : 'right', padding: '10px 12px', background: C.card, borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -5117,10 +5706,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   {filteredSubCat.map((g, i) => {
                     const asp = g.units > 0 ? g.rev / g.units : 0
                     return (
-                      <tr key={g.subCategory} style={{ background: i % 2 === 1 ? C.bg : 'transparent' }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }} title={g.subCategory}>{g.subCategory}</td>
-                        <td style={{ padding: '8px 10px', color: C.t3 }}>{g.category}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', width: '20%' }}>
+                      <tr key={g.subCategory} style={{ background: i % 2 === 1 ? C.hov : 'transparent' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }} title={g.subCategory}>{g.subCategory}</td>
+                        <td style={{ padding: '8px 12px', color: C.t3 }}>{g.category}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', width: '20%' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                             <div style={{ flex: 1, maxWidth: 60, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${(g.rev / topSubCatMaxRev) * 100}%`, background: C.acc, borderRadius: 3 }} />
@@ -5131,10 +5720,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', color: C.t2 }}>{fmtN(g.units)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.units > 0 ? `₹${Math.round(asp).toLocaleString('en-IN')}` : '—'}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: g.returnPct !== null ? (g.returnPct > 15 ? C.red.tx : g.returnPct > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—'}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.netRev != null ? fmt(g.netRev) : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t2 }}>{fmtN(g.units)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.units > 0 ? `₹${Math.round(asp).toLocaleString('en-IN')}` : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: g.returnPct !== null ? (g.returnPct > 15 ? C.red.tx : g.returnPct > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.netRev != null ? fmt(g.netRev) : '—'}</td>
                       </tr>
                     )
                   })}
@@ -5197,7 +5786,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             const STAT_GRID_COLS = 8
             const STAT_COL_WIDTH = 145
             const StatStrip = ({ items }) => (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '20px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '16px 24px' }}>
                 {items.map((t, i) => (
                   <div key={t.label} style={{
                     minWidth: 0,
@@ -5208,9 +5797,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                         (e.g. SLA Threshold tiles' "n of d" caption) and some don't (Ops Performance
                         tiles), which previously made hover boxes visibly different heights next to
                         each other in the same row. */}
-                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 62, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 7, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
-                      <div style={{ fontSize: 21, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
+                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 5, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
                       {t.sub && <div style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>{t.sub}</div>}
                     </div>
                   </div>
@@ -5218,7 +5807,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               </div>
             )
             const Section = ({ children, first }) => (
-              <div style={{ padding: '22px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
+              <div style={{ padding: '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
             )
             return (
             <>
@@ -5431,7 +6020,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? C.acl : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -5440,7 +6029,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input ref={searchInputRef} value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1.5px solid ${search ? C.acm : C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: search ? C.acl : C.bg }} />
           </div>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 10 }}>
             {filtered.map(({ code }) => {
               const checked = staged.includes(code)
               return (
@@ -5454,7 +6043,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
           </div>
           <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}` }}>
             <button onMouseDown={e => e.stopPropagation()} onClick={clear} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
-            <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.acc, color: '#3F3D33', cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
+            <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.acc, color: C.acd, cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
           </div>
         </div>
       )}
@@ -5541,7 +6130,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? C.acl : undefined, borderColor: hasValue ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -5550,7 +6139,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input ref={searchInputRef} value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1.5px solid ${search ? C.acm : C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: search ? C.acl : C.bg }} />
           </div>
-          <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 10 }}>
             {filtered.map(opt => {
               const active = multi ? staged.includes(opt) : staged === opt
               return (
@@ -5566,7 +6155,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
             <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}` }}>
               <button onMouseDown={e => e.stopPropagation()} onClick={clear} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
               <button onMouseDown={e => e.stopPropagation()} onClick={() => setPending(filtered)} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Select All</button>
-              <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.acc, color: '#3F3D33', cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.acc, color: C.acd, cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
             </div>
           )}
         </div>
@@ -5798,11 +6387,11 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
   // Same visual language as the Category Revenue Matrix: C.bg sticky header band, sortable
   // columns, hover-highlighted rows, bold sticky-bottom Total row. Numbers only — no per-cell
   // share % (that's what Channel Share is for).
-  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border2}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 11, padding: '5px 10px', textAlign: 'left', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-  const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  const totalTdStyle = { ...tdStyle, fontSize: 10, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+  const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyleL = { ...tdStyle, fontFamily: 'inherit', textAlign: 'left' }
+  const totalTdStyle = { ...tdStyle, fontSize: 11.5, padding: '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none', borderTop: `1px solid ${C.border2}` }
   const stickyCol = isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}
 
   const handleExport = () => {
@@ -5830,37 +6419,26 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
               ↺ Reset columns
             </button>
           )}
-          {!isMob && (
-            <button onClick={handleExport}
-              style={{ ...selStyle, marginLeft: 4, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, fontFamily: 'var(--font)' }}>
-              Export CSV
-            </button>
-          )}
         </div>
       </div>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: isMob ? 420 : 700 }}>
-          <colgroup>
-            <col style={{ width: isMob ? 129 : `${Math.max(14, 100 - channels.length * 9 - 10)}%` }} />
-            {orderedChannels.map(ch => <col key={ch} style={{ width: isMob ? 72 : `${Math.min(12, 80 / channels.length)}%` }} />)}
-            <col style={{ width: isMob ? 72 : '10%' }} />
-          </colgroup>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 420 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', minWidth: isMob ? 420 : 700 }}>
           <thead>
-            <tr style={{ background: C.acl }}>
-              <Th label="Period" sortKey="date" style={{ ...thStyleL, ...stickyCol, position: 'sticky', top: 0, background: C.acl, zIndex: 3 }} align="left" />
+            <tr style={{ background: C.ach }}>
+              <Th label="Period" sortKey="date" style={{ ...thStyleL, ...stickyCol, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
               {orderedChannels.map(ch => (
-                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} align="left" style={{ ...thStyle, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}
+                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} align="right" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 1 }}
                   dragProps={{ onDragStart: channelReorder.onDragStart(ch), onDragOver: channelReorder.onDragOver, onDrop: channelReorder.onDrop(ch) }} />
               ))}
-              <Th label="Total" sortKey="total" align="left" style={{ ...thStyle, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }} />
+              <Th label="Total" sortKey="total" align="right" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 1 }} />
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((d, i) => {
-              const zebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const zebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
-                <tr key={i} style={{ background: zebra, transition: 'box-shadow .12s, background .12s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                <tr key={i} style={{ background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                   onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
                   <td style={{ ...tdStyleL, ...stickyCol }}>{fmtDate(d.date)}</td>
                   {orderedChannels.map(ch => {
@@ -5873,10 +6451,10 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
             })}
           </tbody>
           <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
-            <tr style={{ background: C.acl }}>
-              <td style={{ ...totalTdStyle, textAlign: 'left', ...stickyCol, background: C.acl }}>Total</td>
-              {orderedChannels.map(ch => <td key={ch} style={{ ...totalTdStyle, background: C.acl }}>{fmtVal(colTotals[ch])}</td>)}
-              <td style={{ ...totalTdStyle, background: C.acl }}>{fmtVal(grandTotal)}</td>
+            <tr style={{ background: C.ach }}>
+              <td style={{ ...totalTdStyle, textAlign: 'left', ...stickyCol, background: C.ach }}>Total</td>
+              {orderedChannels.map(ch => <td key={ch} style={{ ...totalTdStyle, background: C.ach }}>{fmtVal(colTotals[ch])}</td>)}
+              <td style={{ ...totalTdStyle, background: C.ach }}>{fmtVal(grandTotal)}</td>
             </tr>
           </tfoot>
         </table>
@@ -5968,9 +6546,9 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, color: C.t2, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', background: C.acl }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t2, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: C.acl }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</th>)}
-              <th style={{ textAlign: 'right', padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t2, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', background: C.acl }}>Total</th>
+              <th style={{ textAlign: 'left', padding: '6px 8px 7px', borderBottom: `1px solid ${C.border}`, color: C.t2, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, background: C.acl }}>Category</th>
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '6px 8px 7px', borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t2, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: C.acl }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</th>)}
+              <th style={{ textAlign: 'right', padding: '6px 8px 7px', borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t2, fontSize: 12, fontWeight: 600, letterSpacing: 0.2, background: C.acl }}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -5989,11 +6567,11 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                 return ta - tb
               })
               const hasSubCats = subCats.length > 0
-              const rowZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={i}>
-                  <tr style={{ borderBottom: `1px solid ${C.border}`, background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td style={{ padding: '6px 8px', fontWeight: 600, color: C.t2, overflow: 'hidden' }}>
+                  <tr style={{ borderBottom: `1px solid ${C.border}`, background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 600, color: C.t2, overflow: 'hidden' }}>
                       <span
                         onClick={() => hasSubCats && !q && toggle(row.cat)}
                         title={row.cat}
@@ -6006,9 +6584,9 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     {channels.map(ch => {
                       const v = row[ch] || 0
                       const { cls, content } = renderCell(v, rowTotal)
-                      return <td key={ch} className={cls} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
+                      return <td key={ch} className={cls} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                     })}
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--num)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
                   </tr>
                   {catOpen && subCats.map(([sc, chData]) => {
                     const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
@@ -6026,7 +6604,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     const scOpen = isScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6036,21 +6614,21 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                           {channels.map(ch => {
                             const v = chData[ch] || 0
                             const { cls, content } = renderCell(v, scTotal)
-                            return <td key={ch} className={cls} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
+                            return <td key={ch} className={cls} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                           })}
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{fmt(scTotal)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--num)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{fmt(scTotal)}</td>
                         </tr>
                         {scOpen && skus.map(([sku, skuChData]) => {
                           const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
                           return (
-                            <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {highlight(sku)}</td>
+                            <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
+                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--num)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {highlight(sku)}</td>
                               {channels.map(ch => {
                                 const v = skuChData[ch] || 0
                                 const { cls, content } = renderCell(v, skuTotal)
-                                return <td key={ch} className={cls} style={{ padding: '3px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{content}</td>
+                                return <td key={ch} className={cls} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                               })}
-                              <td style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 500, color: C.t3, fontFamily: 'var(--mono)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{fmt(skuTotal)}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: C.t3, fontFamily: 'var(--num)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{fmt(skuTotal)}</td>
                             </tr>
                           )
                         })}
@@ -6137,11 +6715,11 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
         </div>
       </div>
     }>
-      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto', paddingRight: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 500, fontWeight: 400 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 12, fontWeight: 600 }}>Category</th>
               {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>{ch}</th>)}
               <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>Total</th>
             </tr>
@@ -6169,9 +6747,9 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     {channels.map(ch => {
                       const v = getVal(row.chData[ch])
                       const { cls, content } = renderCell(v, row.total)
-                      return <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{content}</td>
+                      return <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 11, fontWeight: 400 }}>{content}</td>
                     })}
-                    <td style={{ padding: '5px', textAlign: 'right', fontWeight: 600, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmtVal(row.total)}</td>
+                    <td style={{ padding: '5px', textAlign: 'right', fontWeight: 600, color: C.t1, fontFamily: 'var(--num)', fontSize: 11 }}>{fmtVal(row.total)}</td>
                   </tr>
                   {catOpen && subCats.map(({ sc, chData, total: scTotal }) => {
                     const scKey = `${row.cat}::${sc}`
@@ -6185,7 +6763,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     const scOpen = amIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6195,19 +6773,19 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                           {channels.map(ch => {
                             const v = getVal(chData[ch])
                             const { cls, content } = renderCell(v, scTotal)
-                            return <td key={ch} className={cls} style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{content}</td>
+                            return <td key={ch} className={cls} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10.5, fontWeight: 400 }}>{content}</td>
                           })}
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontWeight: 500, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{fmtVal(scTotal)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: C.t2, fontFamily: 'var(--num)', fontSize: 10.5 }}>{fmtVal(scTotal)}</td>
                         </tr>
                         {scOpen && skus.map(({ sku, chD, total: skuTotal }) => (
-                          <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlAm(sku)}</td>
+                          <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--num)' }}>└ {hlAm(sku)}</td>
                             {channels.map(ch => {
                               const v = getVal(chD[ch])
                               const { cls, content } = renderCell(v, skuTotal)
-                              return <td key={ch} className={cls} style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{content}</td>
+                              return <td key={ch} className={cls} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10, fontWeight: 400 }}>{content}</td>
                             })}
-                            <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 400, color: C.t3, fontFamily: 'var(--mono)', fontSize: 10 }}>{fmtVal(skuTotal)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 400, color: C.t3, fontFamily: 'var(--num)', fontSize: 10 }}>{fmtVal(skuTotal)}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -6219,14 +6797,14 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
           </tbody>
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl }}>
-              <td style={{ padding: '5px 6px', fontSize: 10.5, fontWeight: 700, color: C.t1 }}>Total</td>
+              <td style={{ padding: '8px 12px', fontSize: 10.5, fontWeight: 700, color: C.t1 }}>Total</td>
               {channels.map(ch => (
-                <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>
+                <td key={ch} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>
                   {fmtVal(colTotals[ch])}
                   {metric === 'rev' && grandTotal ? <span style={{ fontSize: 10, fontWeight: 400, color: C.t3, marginLeft: 4 }}>{(colTotals[ch] / grandTotal * 100).toFixed(1)}%</span> : null}
                 </td>
               ))}
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(grandTotal)}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(grandTotal)}</td>
             </tr>
           </tfoot>
         </table>
@@ -6254,7 +6832,12 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd }) {
+  // Daily run rate divides by every day in the selected range, so each row uses the
+  // same divisor and rows stay comparable. Without a range the column is hidden
+  // rather than shown with a wrong or invented divisor.
+  const drrDays = daysInRange(rangeStart, rangeEnd)
+  const showDrr = drrDays > 0
   const isMob = useIsMobile()
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
@@ -6325,6 +6908,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const filteredRows = q ? allRows.filter(r => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || Object.keys(skuData?.[r.cat]?.[r.sc] || {}).some(sku => sku.toLowerCase().includes(q))) : allRows
   const getters = {
     cat: r => r.cat, sc: r => r.sc, gross: r => r.gross, units: r => r.units, asp: r => r.asp,
+    drr: r => r.units,
     prevGross: r => r.prevNet > 0 ? (r.net - r.prevNet) / r.prevNet : -Infinity,
     cancelPct: r => r.cancelPct, rtoPct: r => r.rtoPct, cirPct: r => r.cirPct, exchPct: r => r.exchPct, totalReturnPct: r => r.totalReturnPct, net: r => r.net,
   }
@@ -6337,21 +6921,21 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   // Same visual language as the Ads tab's Platform Overview / By Category tables: C.bg sticky
   // header band, hover-highlighted rows, bold sticky-bottom Total row.
-  const headerBg = plainHeader ? C.card : C.acl
+  const headerBg = plainHeader ? C.card : C.ach
   // Plain border, not box-shadow — box-shadow on <th>/<td> is simply not rendered at all when
   // the table has border-collapse:collapse (a browser limitation, confirmed: the header's line
   // vanished entirely once switched to boxShadow). A real border-bottom here is safe because
   // nothing ever scrolls above the header (it's always the topmost sticky element) — there's no
   // seam for a body row to swallow it at, unlike the footer below.
-  const thStyle = { fontSize: 10, fontWeight: 700, color: plainHeader ? C.t3 : C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `${plainHeader ? 2 : 1.5}px solid ${plainHeader ? C.border2 : C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `${plainHeader ? 2 : 1.5}px solid ${plainHeader ? C.border2 : C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 12, padding: '3px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-  const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
+  const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyleL = { ...tdStyle, fontFamily: 'inherit', textAlign: 'left' }
   // Total row values are a darker grey (C.t2) under plainHeader — deliberately dropping the
   // per-column color-coding (vs-prev arrows, red return-rate thresholds) the same numbers carry
   // in the data rows above, since the Total row reads as a quiet summary line, not another data
   // point to scan for outliers, while staying legible/bold enough to read as a real total.
-  const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: plainHeader ? C.t2 : C.t1, borderBottom: 'none', ...(plainHeader ? { borderTop: `2px solid ${C.border2}` } : {}) }
+  const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, color: plainHeader ? C.t2 : C.t1, borderBottom: 'none', ...(plainHeader ? { borderTop: `2px solid ${C.border2}` } : {}) }
   // Flag in red only past the agreed threshold per metric — Cancel >3%, RTO >9%, CIR >9%,
   // Exch >6%, Total Return >20%. Normal text color otherwise (no gradient/amber tier).
   const pctCell = (n, d, threshold) => {
@@ -6359,6 +6943,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const v = pctOf(n, d)
     const isHigh = threshold != null && v > threshold
     return <span style={{ color: v <= 0 ? C.t3 : isHigh ? C.red.tx : 'inherit' }}>{v.toFixed(2)}%</span>
+  }
+  // Units per day over the selected range, rounded to whole units. A row that sells
+  // at all rounds to at least 1 rather than 0, so a real seller never reads as none.
+  const drrCell = units => {
+    if (!drrDays || !units) return <span style={{ color: C.t3 }}>—</span>
+    const v = units / drrDays
+    return <>{Math.max(1, Math.round(v)).toLocaleString('en-IN')}</>
   }
   const vsPrevCell = (cur, prev, muted = false) => {
     if (!prev || Math.abs(prev) < 1) return <span style={{ color: C.t3 }}>—</span>
@@ -6391,6 +6982,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>,
       total: () => <td style={totalTdStyle}>{fmtN(tot.units)}</td> },
+    ...(showDrr ? [{ id: 'drr', label: 'DRR', sortKey: 'drr', width: 8,
+      row: r => <td style={tdStyle}>{drrCell(r.units)}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{drrCell(sk.units)}</td>,
+      total: () => <td style={totalTdStyle}>{drrCell(tot.units)}</td> }] : []),
     { id: 'asp', label: 'ASP', sortKey: 'asp', width: showReturnPct && detailedReturns ? 8 : 10,
       row: r => <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>,
@@ -6431,7 +7026,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         Category: r.cat, Product: r.sc,
         'Gross Rev': Math.round(r.gross), 'Share %': tot.gross > 0 ? +(r.gross / tot.gross * 100).toFixed(1) : 0,
         'vs Prev %': r.prevGross > 0 ? +((r.gross - r.prevGross) / r.prevGross * 100).toFixed(1) : null,
-        Units: r.units, ASP: Math.round(r.asp),
+        Units: r.units, ...(showDrr ? { DRR: r.units ? Math.max(1, Math.round(r.units / drrDays)) : 0 } : {}), ASP: Math.round(r.asp),
         'Net Rev': Math.round(r.net),
       }
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
@@ -6440,7 +7035,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         return {
           Category: r.cat, Product: `↳ ${sku}`,
           'Gross Rev': Math.round(sk.gross), 'Share %': tot.gross > 0 ? +(sk.gross / tot.gross * 100).toFixed(1) : 0,
-          Units: sk.units, ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
+          Units: sk.units, ...(showDrr ? { DRR: sk.units ? Math.max(1, Math.round(sk.units / drrDays)) : 0 } : {}), ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
           'Net Rev': Math.round(sk.net),
         }
       })
@@ -6460,21 +7055,19 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
             style={plainHeader
               ? { fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.t1, outline: 'none', fontFamily: 'var(--font)', width: isMob ? 120 : 150 }
               : { fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 120 : 200, outline: 'none' }} />
-          {!isMob && (
-            <button onClick={handleExport} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-              Export CSV
-            </button>
-          )}
         </div>
       </div>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 440 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 440 }}>
         {/* border-collapse:separate (only for the plainHeader variant) — collapse mode was
             silently failing to repaint the sticky header/footer's own border once scrolled (a
             known browser quirk with sticky <th>/<tr> + collapsed table borders); separate mode
             gives every cell an independent border so the sticky divider renders reliably. */}
         <table style={{ width: '100%', borderCollapse: plainHeader ? 'separate' : 'collapse', borderSpacing: plainHeader ? 0 : undefined, tableLayout: 'fixed', minWidth: isMob ? 0 : 760 }}>
           <colgroup>
-            <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
+            {/* Category holds short labels (Pillows, Orthotics) so 16% left a wide gap
+                before Product; the 5% it gives up goes to Product, which holds the long
+                names and was the column actually running out of room. */}
+            <col style={{ width: '11%' }} /><col style={{ width: '25%' }} />
             {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
           </colgroup>
           {!isMob && <thead>
@@ -6495,12 +7088,12 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
               if (isMob) {
-                const mobZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+                const mobZebra = i % 2 === 1 ? C.hov : 'transparent'
                 return (
                   <tr key={skuKey} style={{ cursor: 'default', background: mobZebra, transition: 'box-shadow .12s, background .12s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                     onMouseLeave={e => { e.currentTarget.style.background = mobZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td colSpan={ALL_COLUMNS.length + 2} style={{ padding: '5px 4px', borderBottom: `1px solid ${C.border}` }}>
+                    <td colSpan={ALL_COLUMNS.length + 2} style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}` }}>
                       <div style={{ fontWeight: 700, fontSize: 12, color: C.t1, marginBottom: 1 }}>{r.sc}</div>
                       <div style={{ fontSize: 11, color: C.t3, marginBottom: 3 }}>{r.cat}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
@@ -6510,7 +7103,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                           return (
                             <span key={c.id} style={{ fontSize: 11, color: C.t2 }}>
                               <span style={{ fontWeight: 600, color: C.t3, textTransform: 'uppercase', fontSize: 9.5, letterSpacing: 0.3 }}>{c.label} </span>
-                              <span style={{ fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{rawVal}</span>
+                              <span style={{ fontWeight: 700, color: C.t1, fontFamily: 'var(--num)' }}>{rawVal}</span>
                             </span>
                           )
                         })}
@@ -6519,13 +7112,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   </tr>
                 )
               }
-              const zebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const zebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={skuKey}>
-                  <tr style={{ cursor: 'default', background: zebra, transition: 'box-shadow .12s, background .12s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                  <tr style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                     onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td style={{ ...tdStyleL, color: C.t3, fontSize: 11 }}>{r.cat}</td>
+                    <td style={{ ...tdStyleL, color: C.t1 }}>{r.cat}</td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
                       <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6536,10 +7129,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   </tr>
                   {isOpen && skus.map(sk => (
                     <tr key={sk.sku} style={{ background: C.bg, cursor: 'default', transition: 'box-shadow .12s, background .12s' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                      onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                       onMouseLeave={e => { e.currentTarget.style.background = C.bg; e.currentTarget.style.boxShadow = 'none' }}>
                       <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
-                      <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
+                      <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                       {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
                     </tr>
                   ))}
@@ -6654,7 +7247,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const showExtras = neutral || showMoM
 
   const colHdr = { textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.05em' }
-  const cell = (fs = 11.5) => ({ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
+  const cell = (fs = 11.5) => ({ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
   const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(2); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
   const momCell = (cur, prev) => {
     if (!prev || prev === 0) return <span style={{ color: C.t3 }}>—</span>
@@ -6678,11 +7271,11 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     <Card title={title || 'Category Revenue Matrix'} action={
       <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 200, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
     }>
-      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto', paddingRight: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontWeight: 400, tableLayout: 'auto' }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 12, fontWeight: 600, letterSpacing: 0.2 }}>Category</th>
               <th style={{ ...colHdr, color: grossColor }}>Gross Rev{showShare ? ' / Share' : ''}</th>
               <th style={{ ...colHdr, color: C.t2 }}>Units</th>
               {showExtras && <th style={{ ...colHdr, color: C.t3 }}>MoM</th>}
@@ -6710,7 +7303,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
               return (
                 <Fragment key={row.cat}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '6px 8px', color: C.t2, fontSize: 12, fontWeight: 600 }}>
+                    <td style={{ padding: '8px 12px', color: C.t2, fontSize: 12, fontWeight: 600 }}>
                       <span onClick={() => hasSubs && !q && toggle(row.cat)} style={{ cursor: hasSubs && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {hlFin(row.cat)}
@@ -6750,7 +7343,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                     const srPrev = subCatPrevMap[`${row.cat}::${sr.sc}`] || 0
                     return (
                       <Fragment key={sr.sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -6771,8 +7364,8 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                           <td style={{ ...cell(10.5) }}>{fmt(sr.net)}</td>
                         </tr>
                         {scOpen && skus.map(sk => (
-                          <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlFin(sk.sku)}</td>
+                          <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--num)' }}>└ {hlFin(sk.sku)}</td>
                             <td style={{ ...cell(10) }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                             <td style={{ ...cell(10) }}>{fmtN(sk.units)}</td>
                             {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
@@ -6796,19 +7389,19 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           </tbody>
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl }}>
-              <td style={{ padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmt(tot.gross)}{showShare ? <span style={{ color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtN(tot.units)}</td>
-              {showExtras && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              <td style={{ padding: '8px 12px', fontSize: 11.5, fontWeight: 700, color: C.t1 }}>Total</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{fmt(tot.gross)}{showShare ? <span style={{ color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{fmtN(tot.units)}</td>
+              {showExtras && <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
               {hasCancelData && <>
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
+                {neutral && <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
               </>}
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmt(tot.net)}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5 }}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
         </table>
@@ -6861,11 +7454,11 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
     <Card title={title || 'Category Revenue Matrix · Vendor Central'} action={
       <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 200, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
     }>
-      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto', paddingRight: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 12, fontWeight: 600 }}>Category</th>
               <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: '#2E74CC', fontSize: 10, fontWeight: 700 }}>Ordered Qty</th>
               <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: '#2E74CC', fontSize: 10, fontWeight: 700 }}>Ordered Rev</th>
             </tr>
@@ -6889,8 +7482,8 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                         {hlVC(cat)}
                       </span>
                     </td>
-                    <td className={intensity(d.units, totUnits)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.units > 0 ? fmtN(d.units) : '—'}</td>
-                    <td className={intensity(d.rev, totRev)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.rev > 0 ? fmt(d.rev) : '—'}</td>
+                    <td className={intensity(d.units, totUnits)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 11, fontWeight: 400 }}>{d.units > 0 ? fmtN(d.units) : '—'}</td>
+                    <td className={intensity(d.rev, totRev)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 11, fontWeight: 400 }}>{d.rev > 0 ? fmt(d.rev) : '—'}</td>
                   </tr>
                   {catOpen && scs.map(({ sc, sd }) => {
                     const scKey = `${cat}::${sc}`
@@ -6903,21 +7496,21 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                     const scOpen = vcIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {hlVC(sc)}</span>
                             </span>
                           </td>
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : '—'}</td>
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.rev > 0 ? fmt(sd.rev) : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10.5, fontWeight: 400 }}>{sd.rev > 0 ? fmt(sd.rev) : '—'}</td>
                         </tr>
                         {scOpen && skus.map(({ sku, kd }) => (
-                          <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlVC(sku)}</td>
-                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.units > 0 ? fmtN(kd.units) : '—'}</td>
-                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.rev > 0 ? fmt(kd.rev) : '—'}</td>
+                          <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: C.hov }}>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--num)' }}>└ {hlVC(sku)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10, fontWeight: 400 }}>{kd.units > 0 ? fmtN(kd.units) : '—'}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', fontSize: 10, fontWeight: 400 }}>{kd.rev > 0 ? fmt(kd.rev) : '—'}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -6929,9 +7522,9 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
           </tbody>
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl }}>
-              <td style={{ padding: '5px 6px', fontSize: 10.5, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtN(totUnits)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmt(totRev)}</td>
+              <td style={{ padding: '8px 12px', fontSize: 10.5, fontWeight: 700, color: C.t1 }}>Total</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtN(totUnits)}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmt(totRev)}</td>
             </tr>
           </tfoot>
         </table>
@@ -6940,7 +7533,7 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
   )
 }
 
-const REGION_COLORS = ['#534AB7','#0D9E68','#E8930A','#CC4078','#2E74CC','#CC8A00']
+const REGION_COLORS = ['#534AB7','#0D9E68','#E8930A','#CC4078','#2E74CC','#F0B429']
 const TIER_COLORS = [C.acc,'#7AB4EE','#9DD470']
 
 function RegionTierDonutRow({ regionRows, tierRows }) {
@@ -6979,7 +7572,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
               <Pie data={data} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={2}>
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: C.t1, fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -6987,7 +7580,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 10.5, color: C.t2, flex: 1 }}>{d.name}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value, metric)}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t1, fontFamily: 'var(--num)' }}>{metricFmt(d.value, metric)}</span>
                 <span style={{ fontSize: 9.5, color: C.t3, minWidth: 32, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(1) : 0}%</span>
               </div>
             ))}
@@ -7023,15 +7616,16 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'gross', label: 'Gross Rev' }, { id: 'net', label: 'Net Rev' }].map((opt, i) => (
           <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-            {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-            <button onClick={() => setMetric(opt.id)} style={{ fontSize: 11, fontWeight: metric === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: metric === opt.id ? C.acs : 'transparent', color: metric === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
+            {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+            <button onClick={() => setMetric(opt.id)} style={{ fontSize: 11, fontWeight: metric === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: metric === opt.id ? C.acs : 'transparent', color: metric === opt.id ? C.acd : C.t2, cursor: 'pointer', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
           </div>
         ))}
       </div>
     }>
-      <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* paddingRight keeps the share % clear of the scrollbar track, which otherwise
+          sits flush against it once the list overflows. */}
+      <div style={{ height: '100%', overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column' }}>
         {rows.map(r => {
-          const chg = r.prevRev > 1 ? ((r.rev - r.prevRev) / r.prevRev * 100) : null
           const logoSize = r.ch === 'offline_sales' ? 22 : 18
           return (
             <div key={r.ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}`, flex: '1 1 auto', minHeight: 30 }}>
@@ -7042,11 +7636,8 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
               <div className="mob-hidden" style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
                 <div style={{ height: '100%', borderRadius: 3, background: C.acc, width: `${(r.rev / maxRev) * 100}%`, transition: 'width .5s' }} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--num)' }}>{fmt(r.rev)}</span>
               <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(r.rev / totalRev * 100).toFixed(1)}%</span>
-              {chg !== null
-                ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
-                : <span style={{ width: 76, flexShrink: 0 }} />}
             </div>
           )
         })}
@@ -7209,6 +7800,91 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
   ]
 
+  const handleOverallExport = (type) => {
+    const dateTag = `${rangeStart}_${rangeEnd}`
+
+    if (type === 'channel' || type === 'all') {
+      const rows = sortedCh.map(([ch, v]) => ({
+        'Channel': ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch,
+        'Gross Revenue': v.rev,
+        'Net Revenue': v.netRev ?? '',
+        'Orders': v.orders?.size ?? v.orders ?? 0,
+        'Units': v.aspUnits || v.units || 0,
+        'AOV': v.orders ? Math.round(v.rev / (v.orders?.size ?? v.orders)) : 0,
+        'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+      }))
+      exportCSV(rows, `revenue_by_channel_${dateTag}.csv`)
+    }
+
+    if (type === 'category' || type === 'all') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat, cv]) => {
+        rows.push({
+          'Type': 'Category', 'Category': cat, 'Sub-Category': '', 'SKU': '',
+          'Gross Revenue': cv.rev, 'Net Revenue': cv.excRev,
+          'Units': cv.units, 'Orders': cv.orders,
+          'Cancel Rev': cv.cancelRev, 'RTO Rev': cv.rtoRev, 'CIR Rev': cv.cirRev, 'Return Rev': cv.returnRev,
+        })
+        const scData = subCatMatrixDataAll[cat] || {}
+        Object.entries(scData).forEach(([sc, sv]) => {
+          rows.push({
+            'Type': 'Sub-Category', 'Category': cat, 'Sub-Category': sc, 'SKU': '',
+            'Gross Revenue': sv.rev, 'Net Revenue': sv.excRev,
+            'Units': sv.units, 'Orders': sv.orders,
+            'Cancel Rev': sv.cancelRev, 'RTO Rev': sv.rtoRev, 'CIR Rev': sv.cirRev, 'Return Rev': sv.returnRev,
+          })
+          const skuData = skuChannelMapBySku[cat]?.[sc] || {}
+          Object.entries(skuData).forEach(([sku, skv]) => {
+            rows.push({
+              'Type': 'SKU', 'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': skv.rev, 'Net Revenue': skv.excRev,
+              'Units': skv.units, 'Orders': '',
+              'Cancel Rev': skv.cancelRev, 'RTO Rev': skv.rtoRev, 'CIR Rev': skv.cirRev, 'Return Rev': skv.returnRev,
+            })
+          })
+        })
+      })
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+
+    if (type === 'states' || type === 'all') {
+      const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = stateRows.map(s => {
+        const share = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
+        cum += share
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': s.rev, 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((s.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_states_${dateTag}.csv`)
+    }
+
+    if (type === 'cities' || type === 'all') {
+      const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = cityRows.map(c => {
+        const share = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
+        cum += share
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Revenue': c.rev, 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((c.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_cities_${dateTag}.csv`)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list — same style as Ads tab */}
@@ -7220,7 +7896,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero — tall left column */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -7232,7 +7908,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           <div style={{ height: 30, flexShrink: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#curGrad)" dot={false} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
@@ -7263,8 +7939,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       </div>
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'stretch' }}>
-        <div style={{ height: 340, overflow: 'hidden' }}><ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} /></div>
-        <div style={{ height: 340, overflow: 'hidden' }}><CategoryRevenueCard
+        <div style={{ height: 340 }}><ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} /></div>
+        <div style={{ height: 340 }}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRowsRaw}
           skuMap={skuChannelMapBySku}
@@ -7275,10 +7951,10 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={340}
         /></div>
-        <div style={{ height: 340, overflow: 'hidden' }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
+        <div style={{ height: 340 }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
       {(() => {
         const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
         let cumS = 0
@@ -7298,8 +7974,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport />
           </div>
         )
       })()}
@@ -7307,7 +7983,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   )
 }
 
-const PIE_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6']
+const PIE_COLORS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A','#9B59B6']
 const BUCKET_ORDER = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
 
 function OrderValuePieCard({ buckets, bucketRev }) {
@@ -7338,7 +8014,7 @@ function OrderValuePieCard({ buckets, bucketRev }) {
             <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
               <span style={{ flex: 1, color: C.t2 }}>{d.name}</span>
-              <span style={{ fontFamily: 'var(--mono)', color: C.t1, fontSize: 11 }}>{metric === 'orders' ? fmtN(d.value) : fmt(d.value)}</span>
+              <span style={{ fontFamily: 'var(--num)', color: C.t1, fontSize: 11 }}>{metric === 'orders' ? fmtN(d.value) : fmt(d.value)}</span>
               <span style={{ color: C.t3, fontSize: 10, minWidth: 34, textAlign: 'right' }}>{total ? ((d.value / total) * 100).toFixed(1) : 0}%</span>
             </div>
           ))}
@@ -7348,7 +8024,7 @@ function OrderValuePieCard({ buckets, bucketRev }) {
   )
 }
 
-const CAT_PALETTE = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#E8930A','#FFD600']
+const CAT_PALETTE = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#E8930A',C.acc]
 const colorOf = (name, rows) => { const idx = rows.findIndex(r => r.name === name); return CAT_PALETTE[idx >= 0 ? idx % CAT_PALETTE.length : 0] }
 
 function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selectedCat: externalSelectedCat, onSelectCat, selectedSubCat: externalSelectedSubCat, onSelectSubCat }) {
@@ -7375,10 +8051,10 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
       <Card title={title} note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
         action={<div style={{ display: 'flex', gap: 4 }}><button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button><button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button></div>}>
         {catView === 'table' && (
-          <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+          <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
-              <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
+              <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+              <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: C.acc, marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
         )}
@@ -7388,9 +8064,15 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
               <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: C.t2 }} width={95} />
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+              <defs>
+                <linearGradient id="catBarGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={C.acm} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={C.acc} stopOpacity={0.55} />
+                </linearGradient>
+              </defs>
               <Tooltip formatter={v => fmt(v)} cursor={{ fill: 'transparent' }} />
               <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]} onClick={r => setSelectedCat(selectedCat === r.name ? null : r.name)}>
-                {catRows.map(r => <Cell key={r.name} fill="#FFD600" opacity={selectedCat && selectedCat !== r.name ? 0.35 : 1} />)}
+                {catRows.map(r => <Cell key={r.name} fill="url(#catBarGrad)" opacity={selectedCat && selectedCat !== r.name ? 0.3 : 1} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -7399,22 +8081,28 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
       <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={selectedSubCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedSubCat(null)}>✕ Clear</span> : `${filteredSubCat.length} total`}
         action={<div style={{ display: 'flex', gap: 4 }}><button style={scBtnStyle('table')} onClick={() => setSubCatView('table')}>Table</button><button style={scBtnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button></div>}>
         {subCatView === 'table' && (
-          <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+          <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
-              <tbody>{filteredSubCat.map((r, i) => { const isScSelected = selectedSubCat === r.name && selectedCat === r.category; const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name + r.category} onClick={() => { if (setSelectedSubCat) { if (!selectedCat || selectedCat !== r.category) setSelectedCat(r.category); setSelectedSubCat(isScSelected ? null : r.name) } }} style={{ borderBottom: i < filteredSubCat.length - 1 ? `1px solid ${C.border}` : 'none', background: isScSelected ? C.acl : '', cursor: setSelectedSubCat ? 'pointer' : 'default' }} onMouseEnter={e => { if (!isScSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isScSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isScSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
+              <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+              <tbody>{filteredSubCat.map((r, i) => { const isScSelected = selectedSubCat === r.name && selectedCat === r.category; const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name + r.category} onClick={() => { if (setSelectedSubCat) { if (!selectedCat || selectedCat !== r.category) setSelectedCat(r.category); setSelectedSubCat(isScSelected ? null : r.name) } }} style={{ borderBottom: i < filteredSubCat.length - 1 ? `1px solid ${C.border}` : 'none', background: isScSelected ? C.acl : '', cursor: setSelectedSubCat ? 'pointer' : 'default' }} onMouseEnter={e => { if (!isScSelected) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isScSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: C.acc, marginRight: 6 }} />{isScSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
         )}
         {subCatView === 'bar' && (
-          <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+          <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
             <ResponsiveContainer width="100%" height={Math.max(FIXED_H, filteredSubCat.length * 26)}>
               <BarChart data={filteredSubCat} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
                 <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                <defs>
+                  <linearGradient id="subCatBarGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={C.acc} stopOpacity={0.9} />
+                    <stop offset="100%" stopColor={C.acc} stopOpacity={0.45} />
+                  </linearGradient>
+                </defs>
                 <Tooltip formatter={v => fmt(v)} />
-                <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{filteredSubCat.map((r, i) => <Cell key={r.name + r.category} fill="#FFD600" />)}</Bar>
+                <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{filteredSubCat.map((r, i) => <Cell key={r.name + r.category} fill="url(#subCatBarGrad)" />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -7426,9 +8114,9 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
 
 function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, useUnits = false }) {
   const [metric, setMetric] = useState(useUnits ? 'units' : 'rev')
-  const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A']
-  const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
-  const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
+  const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A']
+  const TIER_COLORS = [C.acc,'#FF6B35','#9B59B6']
+  const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#F0B429','#E24B4A','#9B59B6']
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'units' ? (r.units || 0) : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
   const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
@@ -7454,7 +8142,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
                   <div style={{ width: `${barPct}%`, background: color, height: '100%', borderRadius: 3, transition: 'width .3s' }} title={metricFmt(d.value)} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 118, justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 11.5, fontFamily: 'var(--mono)', fontWeight: 600, color: C.t1 }}>{metricFmt(d.value)}</span>
+                  <span style={{ fontSize: 11.5, fontFamily: 'var(--num)', fontWeight: 600, color: C.t1 }}>{metricFmt(d.value)}</span>
                   <span style={{ fontSize: 11, color: C.t3, minWidth: 30, textAlign: 'right' }}>{sharePct.toFixed(0)}%</span>
                 </div>
               </div>
@@ -7495,8 +8183,8 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
 // instead of two side-by-side breakdowns — meant to sit alongside Trend + Category Revenue.
 function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
   const [geoView, setGeoView] = useState('region')
-  const REGION_COLORS = ['#B87D14','#D89A1A','#E3B559','#EDCB84','#F3DBA8','#F9EDD6']
-  const TIER_COLORS = ['#B87D14','#D89A1A','#E3B559']
+  const REGION_COLORS = C.ramp
+  const TIER_COLORS = C.ramp.slice(0, 3)
   const TIER_NAMES = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III', 'I': 'Tier I', 'II': 'Tier II', 'III': 'Tier III' }
   const TIER_ORDER = { 'Tier I': 0, 'Tier II': 1, 'Tier III': 2 }
 
@@ -7528,8 +8216,8 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
         <div style={{ display: 'flex', gap: 4 }}>
           {[{ id: 'region', label: 'Region' }, { id: 'tier', label: 'City Tier' }].map((opt, i) => (
             <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-              {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-              <button onClick={() => setGeoView(opt.id)} style={{ fontSize: 10, fontWeight: geoView === opt.id ? 700 : 500, padding: '2px 7px', borderRadius: 5, border: 'none', outline: 'none', background: geoView === opt.id ? C.acs : 'transparent', color: geoView === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 0, textAlign: 'center' }}>{opt.label}</button>
+              {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+              <button onClick={() => setGeoView(opt.id)} style={{ fontSize: 10, fontWeight: geoView === opt.id ? 700 : 500, padding: '2px 7px', borderRadius: 5, border: 'none', outline: 'none', background: geoView === opt.id ? C.acs : 'transparent', color: geoView === opt.id ? C.acd : C.t2, cursor: 'pointer', minWidth: 0, textAlign: 'center' }}>{opt.label}</button>
             </div>
           ))}
         </div>
@@ -7538,21 +8226,21 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
       {data.length === 0 ? (
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0', height: fixedContentH, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>City-tier detail not available{geoView === 'tier' ? '' : ' for this channel'}</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, height: window.innerWidth > 768 ? fixedContentH : 'auto', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: window.innerWidth > 768 ? fixedContentH : 'auto', boxSizing: 'border-box' }}>
           <ResponsiveContainer width="100%" height={130} style={{ flexShrink: 0 }}>
             <PieChart>
-              <Pie data={data} cx="50%" cy="50%" innerRadius={38} outerRadius={60} dataKey="value" paddingAngle={2}>
+              <Pie data={data} cx="50%" cy="50%" innerRadius={38} outerRadius={60} dataKey="value" paddingAngle={2} stroke="none">
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {fmt(payload[0].value)}</div> : null} />
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: C.t1, fontWeight: 600 }}>{payload[0].name} : {fmt(payload[0].value)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minHeight: 0, justifyContent: 'center' }}>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minHeight: 0, justifyContent: 'flex-start' }}>
             {data.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 11, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(d.value)}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--num)' }}>{fmt(d.value)}</span>
                 <span style={{ fontSize: 10, color: C.t3, minWidth: 32, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(1) : 0}%</span>
               </div>
             ))}
@@ -7565,7 +8253,7 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
 
 function TopSubCatBar({ subCatRows }) {
   const top10 = (subCatRows || []).slice(0, 10)
-  const BAR_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
+  const BAR_COLORS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
   const chartData = top10.map((r, i) => ({ name: r.name, rev: r.rev, color: BAR_COLORS[i % BAR_COLORS.length] }))
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -7574,6 +8262,15 @@ function TopSubCatBar({ subCatRows }) {
           ? <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>
           : <ResponsiveContainer width="100%" height={260}>
               <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 90, left: 0 }}>
+                {/* One vertical fade per bar, derived from that bar's own hue. */}
+                <defs>
+                  {chartData.map((d, i) => (
+                    <linearGradient key={i} id={`topSubCatGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={d.color} stopOpacity={0.95} />
+                      <stop offset="100%" stopColor={d.color} stopOpacity={0.45} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={true} vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.t2 }} interval={0} angle={-45} textAnchor="end" />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} width={48} />
@@ -7584,7 +8281,7 @@ function TopSubCatBar({ subCatRows }) {
                   </div>
                 ) : null} />
                 <Bar dataKey="rev" radius={[4, 4, 0, 0]}>
-                  {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  {chartData.map((d, i) => <Cell key={i} fill={`url(#topSubCatGrad${i})`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -7594,7 +8291,7 @@ function TopSubCatBar({ subCatRows }) {
   )
 }
 
-function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note }) {
+function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note, hideExport = false }) {
   const isMob = useIsMobile()
   const [shareMode, setShareMode] = useState('pct') // 'pct' | 'count'
   const table = useSortableTable('rev')
@@ -7610,11 +8307,11 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   // Same visual language as the Category Revenue Matrix / Ads-tab tables: C.bg sticky header
   // band, sortable columns, hover-highlighted rows, bold sticky-bottom Total row, fixed column
   // widths via colgroup so sorting never reflows the layout.
-  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border2}`, background: C.ach }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 12, padding: '3px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-  const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+  const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyleL = { ...tdStyle, fontFamily: 'inherit', textAlign: 'left' }
+  const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none', borderTop: `1px solid ${C.border2}` }
 
   const momCell = m => {
     if (m === null || m === undefined) return <span style={{ color: C.t3 }}>—</span>
@@ -7675,41 +8372,41 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
           <div style={{ display: 'flex', gap: 4 }}>
             {[{ id: 'pct', label: '%' }, { id: 'count', label: 'Count' }].map((opt, i) => (
               <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                <button onClick={() => setShareMode(opt.id)} style={{ fontSize: 11, fontWeight: shareMode === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: shareMode === opt.id ? C.acs : 'transparent', color: shareMode === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 44, textAlign: 'center' }}>{opt.label}</button>
+                {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                <button onClick={() => setShareMode(opt.id)} style={{ fontSize: 11, fontWeight: shareMode === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: shareMode === opt.id ? C.acs : 'transparent', color: shareMode === opt.id ? C.acd : C.t2, cursor: 'pointer', minWidth: 44, textAlign: 'center' }}>{opt.label}</button>
               </div>
             ))}
           </div>
           {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
-          {!isMob && (
+          {!isMob && !hideExport && (
             <button onClick={handleExport}
-              style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+              style={{ fontSize: 11.5, fontWeight: 400, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
               Export CSV
             </button>
           )}
         </div>
       </div>
-      <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: 440, minWidth: 0 }}>
+      <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1, minHeight: 0, maxHeight: 440, minWidth: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: isMob ? 155 : '12%' }} />
             {ALL_COLUMNS.map((c, i) => <col key={c.id} style={{ width: isMob ? (i === 0 ? 85 : 95) : `${c.width}%` }} />)}
           </colgroup>
           <thead>
-            <tr style={{ background: C.acl }}>
-              <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, left: isMob ? 0 : undefined, background: C.acl, zIndex: isMob ? 3 : 1 }} align="left" />
+            <tr style={{ background: C.ach }}>
+              <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, left: isMob ? 0 : undefined, background: C.ach, zIndex: isMob ? 3 : 1 }} align="left" />
               {reorder.orderedColumns.map(c => (
-                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}
+                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 1 }}
                   dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
               ))}
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((r, i) => {
-              const zebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const zebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
-                <tr key={r[firstKey] + '|' + i} style={{ cursor: 'default', background: zebra, transition: 'box-shadow .12s, background .12s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                <tr key={r[firstKey] + '|' + i} style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                   onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
                   <td style={{ ...tdStyleL, ...(isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}) }}>{formatFirst ? formatFirst(r[firstKey]) : r[firstKey]}</td>
                   {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
@@ -7718,8 +8415,8 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: C.acl, position: 'sticky', bottom: 0, zIndex: isMob ? 2 : 1 }}>
-              <td style={{ ...totalTdStyle, textAlign: 'left', ...(isMob ? { position: 'sticky', left: 0, background: C.acl, zIndex: 3 } : {}) }}>Total</td>
+            <tr style={{ background: C.ach, position: 'sticky', bottom: 0, zIndex: isMob ? 2 : 1 }}>
+              <td style={{ ...totalTdStyle, textAlign: 'left', ...(isMob ? { position: 'sticky', left: 0, background: C.ach, zIndex: 3 } : {}) }}>Total</td>
               {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>
@@ -7758,8 +8455,8 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
   const colTotals = {}
   cats.forEach(cat => { colTotals[cat] = Object.keys(grouped).reduce((s, r) => s + (grouped[r].catOrders[cat] || 0), 0) })
 
-  const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t2, padding: '6px 8px', borderBottom: `1.5px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.acl }
-  const thL = { ...thStyle, textAlign: 'left', minWidth: 180 }
+  const thStyle = { fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t1, padding: '10px 12px', borderBottom: `1px solid ${C.border2}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.ach }
+  const thL = { ...thStyle, minWidth: 180, textAlign: 'left' }
   const pctCell = (v, base) => {
     if (!v || !base) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
     return <span>{(v / base * 100).toFixed(1)}%</span>
@@ -7767,7 +8464,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
 
   return (
     <Card title="Return Reasons · D2C" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 500 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
@@ -7785,28 +8482,28 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                 const tb = Object.values(b[1].catOrders).reduce((s, v) => s + v, 0)
                 return tb - ta
               })
-              const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
               return [
                 <tr key={`r-${reason}`} style={{ borderBottom: `1px solid ${C.border}`, background: rowZebra, cursor: 'pointer', transition: 'box-shadow .12s, background .12s' }}
                   onClick={() => setExpandedReason(p => ({ ...p, [reason]: !p[reason] }))}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                  onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                   onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                  <td style={{ padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>
                     <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExp ? '▼' : '▶'}</span>
                     {reason}
                     <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
-                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
+                  {cats.map(cat => <td key={cat} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
                 </tr>,
                 ...(isExp ? sortedSubs.map(([subReason, sd]) => {
                   const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
                   return (
                     <tr key={`sr-${reason}-${subReason}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl }}>
-                      <td style={{ padding: '4px 8px 4px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '7px 12px 7px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
                         ↳ {subReason}
                         <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
                       </td>
-                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
+                      {cats.map(cat => <td key={cat} style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--num)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
                     </tr>
                   )
                 }) : [])
@@ -7831,13 +8528,13 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
   const active = sel[0] || null
   const opts = [{ id: null, label: 'Overall' }, ...indiaSubChKeys.map(k => ({ id: k, label: k }))]
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', alignItems: 'center' }}>
       {opts.map((opt, i) => {
         const isActive = opt.id == null ? !active : active === opt.id
         return (
           <div key={opt.label} style={{ display: 'flex', alignItems: 'center' }}>
-            {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-            <button onClick={() => setFilters(f => ({ ...f, subChannel: opt.id == null ? 'ShopifyIndia' : (active === opt.id ? 'ShopifyIndia' : opt.id) }))} style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', outline: 'none', background: isActive ? C.acs : 'transparent', color: isActive ? '#3F3D33' : C.t2, cursor: 'pointer' }}>{opt.label}</button>
+            {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 8px' }} />}
+            <button onClick={() => setFilters(f => ({ ...f, subChannel: opt.id == null ? 'ShopifyIndia' : (active === opt.id ? 'ShopifyIndia' : opt.id) }))} style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, padding: '3px 14px', borderRadius: 7, minWidth: 74, textAlign: 'center', border: 'none', outline: 'none', background: isActive ? C.acs : 'transparent', color: isActive ? C.acd : C.t2, cursor: 'pointer' }}>{opt.label}</button>
           </div>
         )
       })}
@@ -7845,7 +8542,7 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
   )
 }
 
-function ShopifyTab({ data, filters, setFilters }) {
+function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
@@ -8102,7 +8799,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
@@ -8111,7 +8808,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="shGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="shGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#shGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
@@ -8225,7 +8922,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
+            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <Dropdown value={shTrendGroup} onChange={setShTrendGroup} options={GROUP_OPTS} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
             }>
               <div style={isMob ? { margin: '0 -18px' } : {}}>
@@ -8233,12 +8930,12 @@ function ShopifyTab({ data, filters, setFilters }) {
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
                   <defs>
                     <linearGradient id="shGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.4} />
-                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.52} />
+                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                     </linearGradient>
                     <linearGradient id="shNetGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.32} />
-                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.44} />
+                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -8265,7 +8962,7 @@ function ShopifyTab({ data, filters, setFilters }) {
               </div>
               <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                 {[{ name: 'Gross Revenue', color: '#E0B800' }, { name: 'Net Revenue', color: '#0D9E68' }, { name: 'Return %', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }].map(it => (
-                  <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                  <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                     <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                   </span>
                 ))}
@@ -8301,11 +8998,11 @@ function ShopifyTab({ data, filters, setFilters }) {
               totalRev={totalRev}
               view={catRevView}
               setView={setCatRevView}
-              height={370}
+              height={320}
             />}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxheight={370} />}
+          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
@@ -8376,12 +9073,12 @@ function ShopifyTab({ data, filters, setFilters }) {
             }
           })
         }
-        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
           const FIXED_H = 290
-          const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
+          const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#F0B429','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
           const colorOf = name => { const idx = catRows.findIndex(r => r.name === name); return CAT_COLORS[idx >= 0 ? idx % CAT_COLORS.length : 0] }
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shCatView === v ? C.acm : C.border}`, background: shCatView === v ? C.acc : 'transparent', color: shCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
@@ -8392,10 +9089,10 @@ function ShopifyTab({ data, filters, setFilters }) {
                 <button style={btnStyle('bar')} onClick={() => setShCatView('bar')}>Chart</button>
               </div>}>
               {shCatView === 'table' && (
-                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
@@ -8427,15 +9124,15 @@ function ShopifyTab({ data, filters, setFilters }) {
                 <button style={btnStyle('bar')} onClick={() => setShSubCatView('bar')}>Chart</button>
               </div>}>
               {shSubCatView === 'table' && (
-                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{subCatRows.map((r, i) => { const isSelSub = (filters.subCategory || []).includes(r.name); const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelSub ? [] : [r.name]; setFilters(f => ({ ...f, subCategory: next })) }} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelSub ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelSub) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isSelSub ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(), marginRight: 6 }} />{isSelSub ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+                    <tbody>{subCatRows.map((r, i) => { const isSelSub = (filters.subCategory || []).includes(r.name); const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelSub ? [] : [r.name]; setFilters(f => ({ ...f, subCategory: next })) }} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelSub ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelSub) e.currentTarget.style.background = C.acl }} onMouseLeave={e => { e.currentTarget.style.background = isSelSub ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(), marginRight: 6 }} />{isSelSub ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--num)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
               {shSubCatView === 'bar' && (
-                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                <div style={{ overflowY: 'auto', paddingRight: 10, maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
                     <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 200 }}>
                       <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
@@ -8667,7 +9364,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
@@ -8676,7 +9373,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           <div style={{ height: 30, flexShrink: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="eboGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.25} /><stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="eboGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.38} /><stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" stroke={EBO_ACCENT} strokeWidth={2} fill="url(#eboGrad)" dot={false} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
@@ -8709,7 +9406,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       </div>
       {/* Revenue & Returns Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
-        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 370, boxSizing: 'border-box' }}>
+        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 320, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
             <Dropdown value={trendGroup} onChange={setTrendGroup} options={EBO_TREND_GROUP_OPTS} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }} />
@@ -8719,12 +9416,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             <ComposedChart data={groupedDaily} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
               <defs>
                 <linearGradient id="eboGrossGrad2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
-                  <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
+                  <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                 </linearGradient>
                 <linearGradient id="eboNetGrad2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.22} />
-                  <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.34} />
+                  <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -8765,11 +9462,99 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           totalRev={totalRev}
           view={catRevView}
           setView={setCatRevView}
-          height={370}
+          height={320}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={370} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
-      <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      {/* Store-wise table */}
+      {(() => {
+        const rawStoreRows = ebo.storeRows || []
+        if (!rawStoreRows.length) return null
+        const byStore = {}
+        rawStoreRows.forEach(r => {
+          if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
+          const s = byStore[r.storeName]
+          s.gross += r.gross || 0; s.netRev += r.netRev || 0
+          s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
+          s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
+          s.orders += r.orders || 0; s.units += r.units || 0
+        })
+        const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
+        const tot = rows.reduce((s, r) => ({
+          gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
+          rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
+          orders: s.orders+r.orders, units: s.units+r.units,
+        }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+        const pctOf = (n, d) => d > 0 ? n / d * 100 : 0
+        const thS = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: '1.5px solid ' + C.border, background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+        const thSL = { ...thS, textAlign: 'left' }
+        const tdS = { fontSize: 12, padding: '3px 10px', textAlign: 'right', color: C.t1, borderBottom: '1px solid ' + C.border, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+        const tdSL = { ...tdS, textAlign: 'left', fontFamily: 'inherit', fontWeight: 500 }
+        const totS = { ...tdS, padding: '7px 10px', fontWeight: 700, borderBottom: 'none' }
+        const totSL = { ...totS, textAlign: 'left', fontFamily: 'inherit' }
+        const pctCell = (n, d, threshold) => {
+          if (d <= 0) return <span style={{ color: C.t3 }}>—</span>
+          const v = pctOf(n, d)
+          return <span style={{ color: v <= 0 ? C.t3 : (threshold && v > threshold ? C.red.tx : 'inherit') }}>{v.toFixed(2)}%</span>
+        }
+        return (
+          <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Store-wise Sales · EBO</div>
+              <span style={{ fontSize: 11, color: C.t3 }}>{rows.length} stores</span>
+            </div>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 440 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
+                <colgroup>
+                  {['20%','10%','10%','10%','10%','10%','10%','10%','10%'].map((w,i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr style={{ background: C.acl }}>
+                    <th style={thSL}>Store</th>
+                    <th style={thS}>Orders</th>
+                    <th style={thS}>Units</th>
+                    <th style={thS}>Gross Rev / Share</th>
+                    <th style={thS}>Net Rev</th>
+                    <th style={thS}>Cancel %</th>
+                    <th style={thS}>CIR %</th>
+                    <th style={thS}>Total Return %</th>
+                    <th style={thS}>AOV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.storeName} onMouseEnter={e => e.currentTarget.style.background = C.bg} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={tdSL}>{r.storeName}</td>
+                      <td style={tdS}>{r.orders}</td>
+                      <td style={tdS}>{r.units}</td>
+                      <td style={tdS}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross/tot.gross*100).toFixed(1)}%)</span>}</td>
+                      <td style={tdS}>{fmt(r.netRev)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev, r.gross, 3)}</td>
+                      <td style={tdS}>{pctCell(r.cirRev, r.gross, 9)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev + r.rtoRev + r.returnRev + r.cirRev, r.gross, 20)}</td>
+                      <td style={tdS}>₹{r.orders ? Math.round(r.gross/r.orders).toLocaleString('en-IN') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
+                    <td style={totSL}>Total</td>
+                    <td style={totS}>{tot.orders}</td>
+                    <td style={totS}>{tot.units}</td>
+                    <td style={totS}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td>
+                    <td style={totS}>{fmt(tot.netRev)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev, tot.gross, 3)}</td>
+                    <td style={totS}>{pctCell(tot.cirRev, tot.gross, 9)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev + tot.rtoRev + tot.returnRev + tot.cirRev, tot.gross, 20)}</td>
+                    <td style={totS}>₹{tot.orders ? Math.round(tot.gross/tot.orders).toLocaleString('en-IN') : '—'}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -8794,15 +9579,15 @@ function AmazonChannelViewToggle({ channelView, setChannelView }) {
     <div style={{ display: 'flex', gap: 4 }}>
       {opts.map((opt, i) => (
         <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-          {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-          <button onClick={() => setChannelView(opt.id)} style={{ fontSize: 12, fontWeight: channelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', outline: 'none', background: channelView === opt.id ? C.acs : 'transparent', color: channelView === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer' }}>{opt.label}</button>
+          {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+          <button onClick={() => setChannelView(opt.id)} style={{ fontSize: 12, fontWeight: channelView === opt.id ? 700 : 500, padding: '3px 14px', borderRadius: 7, border: 'none', outline: 'none', background: channelView === opt.id ? C.acs : 'transparent', color: channelView === opt.id ? C.acd : C.t2, cursor: 'pointer' }}>{opt.label}</button>
         </div>
       ))}
     </div>
   )
 }
 
-function AmazonTab({ data, channelView, setChannelView }) {
+function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
@@ -8991,7 +9776,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             return (
               <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
+                  <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(chScCatRev + chVcCatRev)}</div>
                     {amzTotalChg !== null && !selectedCat && channelView === 'all' && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? '▲' : '▼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
@@ -9000,7 +9785,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={amzSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                        <defs><linearGradient id="amzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                        <defs><linearGradient id="amzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                         <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#amzGrad)" dot={false} connectNulls />
                         <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                         <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
@@ -9016,7 +9801,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     { label: 'GST', value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)), sub: channelView === 'all' ? 'SC + VC GST' : channelView === 'sc' ? 'SC GST' : 'VC GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     { label: 'Daily Avg Net Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                     { label: 'ASP', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}`, sub: channelView === 'all' ? 'Gross rev ÷ units (SC+VC)' : 'Gross rev ÷ units', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalUnits + vcTotalOrderedUnits) ? (scTotalRev + vcTotalOrdered) / (scTotalUnits + vcTotalOrderedUnits) : 0, amzPrevASP) },
-                    ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order count)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
+                    ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
                     ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
@@ -9117,7 +9902,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 325 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                     {isMob ? (
                       <Dropdown value={ovTrendMetric} onChange={setOvTrendMetric} options={[{ id: 'rev', label: 'Revenue' }, { id: 'orders', label: 'Orders' }, { id: 'units', label: 'Units' }]} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, width: 78 }} />
@@ -9125,8 +9910,8 @@ function AmazonTab({ data, channelView, setChannelView }) {
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map((opt, i) => (
                           <Fragment key={opt.v}>
-                            {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                            <button onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: ovTrendMetric === opt.v ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: ovTrendMetric === opt.v ? C.acs : 'transparent', color: ovTrendMetric === opt.v ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
+                            {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                            <button onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: ovTrendMetric === opt.v ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: ovTrendMetric === opt.v ? C.acs : 'transparent', color: ovTrendMetric === opt.v ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
                           </Fragment>
                         ))}
                       </div>
@@ -9135,16 +9920,16 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   </div>
                 }>
                   <div style={isMob ? { margin: '0 -18px' } : {}}>
-                  <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
-                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
+                  <ResponsiveContainer width="100%" height={isMob ? 200 : 255} minHeight={180}>
+                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 20, left: isMob ? 18 : 0 }}>
                       <defs>
                         <linearGradient id="amzTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
-                          <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                          <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
+                          <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                         </linearGradient>
                         <linearGradient id="amzTrendNetGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.22} />
-                          <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                          <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.34} />
+                          <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -9161,7 +9946,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                           ))}
                         </div>
                       ) : null} />
-                      {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                      {!isMob && <Legend {...chartLegendProps({ fontSize: 10 })} />}
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke={C.acm} fill="url(#amzTrendGrossGrad)" strokeWidth={2} dot={false} />
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="url(#amzTrendNetGrad)" strokeWidth={2} dot={false} />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
@@ -9172,7 +9957,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   {isMob && (
                     <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                       {[{name: dk.totalName, color:C.acm}, ...(isRev ? [{name: dk.subName, color:'#0D9E68'}] : []), ...(channelView==='all' ? [{name:dk.aName,color:'#E8930A'},{name:dk.bName,color:'#2E74CC'}] : [])].map(it => (
-                        <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                        <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                           <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                         </span>
                       ))}
@@ -9208,11 +9993,11 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                    height={370}
+                    height={325}
                   />
                 })()}
                 {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={370} />
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={325} />
                   : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
               </div>
             )
@@ -9261,7 +10046,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const skuPrevMap = {}
             const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
             skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -9302,7 +10087,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
   )
 }
 
-function FlipkartTab({ data }) {
+function FlipkartTab({ data, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
   const [fkTrendGroup, setFkTrendGroup] = useState('daily')
   const [fkTrendMetric, setFkTrendMetric] = useState('rev')
@@ -9413,7 +10198,7 @@ function FlipkartTab({ data }) {
       {/* KPI layout: hero + 2 rows of 4 */}
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fkRevChg !== null && !selectedCat && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fkRevChg >= 0 ? C.green.bg : C.red.bg, color: fkRevChg >= 0 ? C.green.tx : C.red.tx }}>{fkRevChg >= 0 ? '▲' : '▼'} {Math.abs(fkRevChg).toFixed(1)}%</span>}
@@ -9422,7 +10207,7 @@ function FlipkartTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={fkSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="fkGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="fkGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#fkGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
@@ -9479,10 +10264,10 @@ function FlipkartTab({ data }) {
         const isRev = fkTrendMetric === 'rev'
         const xFmt = d => fkTrendGroup === 'daily' ? d?.slice(5) : fkTrendGroup === 'monthly' ? d?.slice(0, 7) : d
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
-        const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
+        const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
-          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} action={
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.25fr 0.9fr 0.85fr', gap: 14, alignItems: 'start' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={fkTrendMetric} onChange={setFkTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -9491,7 +10276,7 @@ function FlipkartTab({ data }) {
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l], idx) => (
                       <Fragment key={k}>
-                        {idx > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        {idx > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                         <button style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>
                       </Fragment>
                     ))}
@@ -9540,7 +10325,7 @@ function FlipkartTab({ data }) {
                       </div>
                     )
                   }} />
-                  {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill={`${C.acm}22`} strokeWidth={2} dot={grouped.length <= 3} />
                     <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
@@ -9557,7 +10342,7 @@ function FlipkartTab({ data }) {
               {isMob && (
                 <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
                   {[...(isRev ? [{name:'Gross Revenue',color:'#E8930A'},{name:'Net Revenue',color:'#0D9E68'}] : [{name: fkTrendMetric==='orders'?'Orders':'Units', color:'#E8930A'}]), {name:'Return %',color:'#E24B4A'}].map(it => (
-                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
                     </span>
                   ))}
@@ -9580,14 +10365,14 @@ function FlipkartTab({ data }) {
                 catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={rev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                height={370}
+                height={320}
               />
             })()}
             {(() => {
               const regionAgg = {}
               ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
               const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxheight={370} />
+              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={320} />
             })()}
           </div>
         )
@@ -9628,7 +10413,7 @@ function FlipkartTab({ data }) {
           const parts = k.split('::')
           const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
         })
-        return <FlatCategoryProductMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -9680,7 +10465,7 @@ function FlipkartTab({ data }) {
   )
 }
 
-const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: '#FFD600', Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
+const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: C.acc, Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
 const ADS_CHART_ROW_H = 330
 const ADS_SPEND_TABLE_H = 460
 const ADS_PLATFORMS = [
@@ -10232,7 +11017,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                   same 1.5fr/5fr split Sales uses for its own Gross Revenue hero. */}
               <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Total Spend</div>
+                  <div className="kpi-label" style={{ fontSize: 13 }}>Total Spend</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(d2cTotalSpend)}</div>
                     {chgBadge(d2cTotalSpend, prevSpend, true)}
@@ -10243,7 +11028,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                   <div style={{ height: 30, flexShrink: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={spendSpark.map((v, i) => ({ i, v }))} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                        <defs><linearGradient id="adsHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                        <defs><linearGradient id="adsHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                         <Area type="monotone" dataKey="v" stroke={C.acc} strokeWidth={2} fill="url(#adsHeroGrad)" dot={false} />
                         <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{fmt(payload[0].value)}</div> : null} />
                       </AreaChart>
@@ -10387,8 +11172,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                     <defs>
-                      <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acm} stopOpacity={0.22}/><stop offset="95%" stopColor={C.acm} stopOpacity={0}/></linearGradient>
-                      <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green.tx} stopOpacity={0.14}/><stop offset="95%" stopColor={C.green.tx} stopOpacity={0}/></linearGradient>
+                      <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acm} stopOpacity={0.34}/><stop offset="95%" stopColor={C.acm} stopOpacity={0.04}/></linearGradient>
+                      <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green.tx} stopOpacity={0.26}/><stop offset="95%" stopColor={C.green.tx} stopOpacity={0.04}/></linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
@@ -10536,9 +11321,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             })
 
             const isMobPlatTable = window.innerWidth <= 768
-            const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: isMobPlatTable ? '5px 5px' : '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
-            const tdStyle = { fontSize: isMobPlatTable ? 11 : 12, padding: isMobPlatTable ? '5px 5px' : '5px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
-            const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none', whiteSpace: 'nowrap', position: 'sticky', bottom: 0, background: C.acl }
+            const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: isMobPlatTable ? '5px 5px' : '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+            const tdStyle = { fontSize: isMobPlatTable ? 11 : 11.5, padding: isMobPlatTable ? '5px 5px' : '8px 12px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
+            const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none', whiteSpace: 'nowrap', position: 'sticky', bottom: 0, background: C.acl }
             const { Th } = platformTable
             const totalSpendAll = enrichedRows.reduce((s, r) => s + (r.spend || 0), 0)
             const totalRev = enrichedRows.reduce((s, r) => s + (r.rev || 0), 0)
@@ -10551,8 +11336,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
               { id: 'roas', label: 'ROAS', sortKey: 'roas',
-                row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
-                total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
+                row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
+                total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
             ]
             // platformReorder is a hook call — must NOT live inside this conditionally-invoked
             // IIFE (would violate the Rules of Hooks the moment selPlatform toggles). Called
@@ -10577,7 +11362,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     </button>
                   </div>
                 </div>
-                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: window.innerWidth <= 768 ? 0 : 480 }}>
                     <thead>
                       <tr style={{ background: C.acl }}>
@@ -10591,12 +11376,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     <tbody>
                       {tableRows.map((t, ti) => {
                         const isD2CRow = t.platform === 'D2C'
-                        const rowZebra = ti % 2 === 1 ? '#FAF9F6' : 'transparent'
+                        const rowZebra = ti % 2 === 1 ? C.hov : 'transparent'
                         return (
                           <tr key={t.platform} style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                            onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                             onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                            <td style={{ ...tdStyle, textAlign: 'left', maxWidth: window.innerWidth <= 768 ? 100 : undefined }}>
+                            <td style={{ ...tdStyle, maxWidth: window.innerWidth <= 768 ? 100 : undefined }}>
                               {isD2CRow && window.innerWidth <= 768 ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -10658,11 +11443,11 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
           // Same look as the Platform Overview table above: C.bg header band with a 1.5px
           // bottom border, hover-highlighted rows (no zebra striping), roasBg/roasColor badge.
-          const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: isMob ? '7px 4px' : '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+          const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: isMob ? '7px 4px' : '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
           const thStyleL = { ...thStyle, textAlign: 'left' }
-          const tdStyle = { fontSize: 12, padding: isMob ? '5px 4px' : '5px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
+          const tdStyle = { fontSize: 11.5, padding: isMob ? '5px 4px' : '8px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
           const tdStyleL = { ...tdStyle, textAlign: 'left' }
-          const totalTdStyle = { ...tdStyle, padding: isMob ? '7px 4px' : '7px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+          const totalTdStyle = { ...tdStyle, padding: isMob ? '7px 4px' : '10px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
 
           const catGetters = { category: r => r.category, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => { const scs = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory); return hasAddlSpendData ? scs.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0 } }
           const prodGetters = { category: r => r.category, subCategory: r => r.subCategory, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0 }
@@ -10687,12 +11472,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const prodAddlTotal = catAddlTotal
 
           const roasCell = r => r > 0
-            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
             : '—'
 
           const catColumnDefs = [
             {
-              id: 'spend', label: 'Spend', sortKey: 'spend', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: window.innerWidth <= 768 ? '20%' : '26%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -10706,12 +11491,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(catTotal.spend + catAddlTotal)}</td>,
             },
             {
-              id: 'revenue', label: window.innerWidth <= 768 ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'revenue', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
+              id: 'revenue', label: window.innerWidth <= 768 ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'revenue', width: window.innerWidth <= 768 ? '20%' : '28%', style: thStyle,
               row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '16%', style: thStyle,
+              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -10778,10 +11563,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     </button>
                   </div>
                 </div>
-                <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
+                <div style={{ overflowX: 'hidden', overflowY: 'auto', paddingRight: 10, flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: isMob ? '28%' : '40%' }} />
+                      <col style={{ width: isMob ? '28%' : '28%' }} />
                       {orderedCatCols.map(c => <col key={c.id} style={{ width: isMob
                         ? (c.id === 'spend' ? '22%' : c.id === 'revenue' ? '26%' : c.id === 'roas' ? '24%' : c.width)
                         : c.width }} />)}
@@ -10797,10 +11582,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     </thead>
                     <tbody>
                       {sortedCats.map((r, ri) => {
-                        const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+                        const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
                         return (
                         <tr key={r.category} style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                           onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                           <td style={tdStyleL} title={r.category}>{r.category}</td>
                           {orderedCatCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
@@ -10854,7 +11639,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                             <div>
                               <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                               {effectiveRoas > 0
-                                ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
+                                ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
                                 : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                             </div>
                           </div>
@@ -10874,14 +11659,14 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                       <div>
                         <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                         {prodRoasAll > 0
-                          ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(prodRoasAll), color: roasColor(prodRoasAll) }}>{prodRoasAll.toFixed(2)}x</span>
+                          ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(prodRoasAll), color: roasColor(prodRoasAll) }}>{prodRoasAll.toFixed(2)}x</span>
                           : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                       </div>
                     </div>
                   </div>
                 ) : (
                   /* Desktop: original table */
-                  <div className="kpi-inner-scroll" style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, width: '100%' }}>
+                  <div className="kpi-inner-scroll" style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, flex: 1, width: '100%' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '14%' }} /><col style={{ width: '26%' }} />
@@ -10899,12 +11684,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                       </thead>
                       <tbody>
                         {sortedProds.map((r, ri) => {
-                          const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+                          const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
                           return (
                           <tr key={`${r.category}||${r.subCategory}`} style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                            onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                             onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                            <td style={{ ...tdStyleL, color: C.t3 }} title={r.category}>{r.category}</td>
+                            <td style={{ ...tdStyleL, color: C.t1 }} title={r.category}>{r.category}</td>
                             <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
                             {orderedProdCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                           </tr>
@@ -10970,7 +11755,7 @@ function AdsCredView({ data, filters = {} }) {
   const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? C.amber.tx : r > 0 ? C.red.tx : C.t3
   const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? C.amber.bg : r > 0 ? C.red.bg : C.bg
   const roasCell = r => r > 0
-    ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+    ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
     : '—'
 
   const dailySorted = [...daily].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
@@ -10997,11 +11782,11 @@ function AdsCredView({ data, filters = {} }) {
     { label: 'Cost Per Order', value: (additionalSpend && totalOrders > 0) ? fmt(additionalSpend / totalOrders) : '—', sub: 'Spend / Orders', spark: credCpoSpark },
   ]
 
-  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 12, padding: '5px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
+  const tdStyle = { fontSize: 11.5, padding: '8px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
   const tdStyleL = { ...tdStyle, textAlign: 'left' }
-  const totalTdStyle = { ...tdStyle, padding: '7px 12px', fontWeight: 700, borderBottom: 'none' }
+  const totalTdStyle = { ...tdStyle, padding: '10px 12px', fontWeight: 700, borderBottom: 'none', borderTop: `1px solid ${C.border2}` }
 
   const catQ = catSearch.trim().toLowerCase()
   const prodQ = prodSearch.trim().toLowerCase()
@@ -11053,7 +11838,7 @@ function AdsCredView({ data, filters = {} }) {
       ) : (
         <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
           <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-            <div className="kpi-label" style={{ fontSize: 11 }}>Spend</div>
+            <div className="kpi-label" style={{ fontSize: 13 }}>Spend</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: 6 }}>
               <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt(additionalSpend || 0)}</div>
             </div>
@@ -11063,7 +11848,7 @@ function AdsCredView({ data, filters = {} }) {
             <div style={{ height: 30, flexShrink: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={credSpendSpark.map((v, i) => ({ i, v }))} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                  <defs><linearGradient id="credHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                  <defs><linearGradient id="credHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                   <Area type="monotone" dataKey="v" stroke={C.acc} strokeWidth={2} fill="url(#credHeroGrad)" dot={false} />
                   <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{fmt(payload[0].value)}</div> : null} />
                 </AreaChart>
@@ -11147,8 +11932,8 @@ function AdsCredView({ data, filters = {} }) {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                 <defs>
-                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.25}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.38}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.32}/><stop offset="95%" stopColor="#10B981" stopOpacity={0.04}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
@@ -11229,7 +12014,7 @@ function AdsCredView({ data, filters = {} }) {
                   style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 130 : 150, outline: 'none' }} />
               </div>
             </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: isMob ? '30%' : '40%' }} />
@@ -11248,9 +12033,9 @@ function AdsCredView({ data, filters = {} }) {
                 </thead>
                 <tbody>
                   {sortedCats.map((r, ri) => {
-                    const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+                    const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
                     return (
-                    <tr key={r.category} style={{ background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
+                    <tr key={r.category} style={{ background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                       <td style={tdStyleL}>{r.category}</td>
                       {orderedCredCatCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                     </tr>
@@ -11304,7 +12089,7 @@ function AdsCredView({ data, filters = {} }) {
                         <div>
                           <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
                           {effectiveRoas > 0
-                            ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
+                            ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', marginRight: -6, borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
                             : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
                         </div>
                       </div>
@@ -11313,10 +12098,10 @@ function AdsCredView({ data, filters = {} }) {
                 })}
               </div>
             ) : (
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '16%' }} /><col style={{ width: '30%' }} />
+                  <col style={{ width: '11%' }} /><col style={{ width: '35%' }} />
                   {orderedCredProdCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
                 </colgroup>
                 <thead>
@@ -11331,10 +12116,10 @@ function AdsCredView({ data, filters = {} }) {
                 </thead>
                 <tbody>
                   {sortedProds.map((r, ri) => {
-                    const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
+                    const rowZebra = ri % 2 === 1 ? C.hov : 'transparent'
                     return (
-                    <tr key={`${r.category}||${r.subCategory}`} style={{ background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
-                      <td style={{ ...tdStyleL, color: C.t3 }}>{r.category}</td>
+                    <tr key={`${r.category}||${r.subCategory}`} style={{ background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
+                      <td style={{ ...tdStyleL, color: C.t1 }}>{r.category}</td>
                       <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
                       {orderedCredProdCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                     </tr>
@@ -11358,7 +12143,7 @@ function AdsCredView({ data, filters = {} }) {
   )
 }
 
-function BlinkitTab({ data }) {
+function BlinkitTab({ data, rangeStart, rangeEnd }) {
   const bl = data.blinkit || {}
   const t = bl.totals || {}
   const nDays = t.days || 1
@@ -11440,7 +12225,7 @@ function BlinkitTab({ data }) {
       {/* KPI layout */}
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · MRP</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST · MRP</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {blRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: blRevChg >= 0 ? C.green.bg : C.red.bg, color: blRevChg >= 0 ? C.green.tx : C.red.tx }}>{blRevChg >= 0 ? '▲' : '▼'} {Math.abs(blRevChg).toFixed(1)}%</span>}
@@ -11449,7 +12234,7 @@ function BlinkitTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={blSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="blGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="blGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#blGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
@@ -11480,7 +12265,7 @@ function BlinkitTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11490,17 +12275,17 @@ function BlinkitTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={370}
+          height={320}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
       {/* Category Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
 
       {/* Cities + States */}
       {(() => {
@@ -11533,7 +12318,7 @@ function BlinkitTab({ data }) {
   )
 }
 
-function InstaTab({ data }) {
+function InstaTab({ data, rangeStart, rangeEnd }) {
   const ins = data.instamart || {}
   const t = ins.totals || {}
   const nDays = t.days || 1
@@ -11613,7 +12398,7 @@ function InstaTab({ data }) {
       </div>
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? '▲' : '▼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
@@ -11622,7 +12407,7 @@ function InstaTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={insSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="inGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="inGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#inGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
@@ -11653,7 +12438,7 @@ function InstaTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11663,16 +12448,16 @@ function InstaTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={370}
+          height={320}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
@@ -11704,7 +12489,7 @@ function InstaTab({ data }) {
   )
 }
 
-function ZeptoTab({ data }) {
+function ZeptoTab({ data, rangeStart, rangeEnd }) {
   const zp = data.zepto || {}
   const t = zp.totals || {}
   const nDays = t.days || 1
@@ -11784,7 +12569,7 @@ function ZeptoTab({ data }) {
       </div>
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? '▲' : '▼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
@@ -11793,7 +12578,7 @@ function ZeptoTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={zpSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="zpGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="zpGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#zpGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
@@ -11824,7 +12609,7 @@ function ZeptoTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11834,16 +12619,16 @@ function ZeptoTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={370}
+          height={320}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
@@ -11875,7 +12660,7 @@ function ZeptoTab({ data }) {
   )
 }
 
-function CredTab({ data }) {
+function CredTab({ data, rangeStart, rangeEnd }) {
   const cr = data.cred || {}
   const t = cr.totals || {}
   const nDays = t.days || 1
@@ -11981,7 +12766,7 @@ function CredTab({ data }) {
       {/* Hero + KPI grid */}
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? '▲' : '▼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
@@ -11990,7 +12775,7 @@ function CredTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={crSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="crGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="crGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#crGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
@@ -12044,10 +12829,10 @@ function CredTab({ data }) {
         const isRev = crTrendMetric === 'rev', isOrders = crTrendMetric === 'orders'
         const xFmt = d => crTrendGroup === 'daily' ? d?.slice(5) : crTrendGroup === 'monthly' ? d?.slice(0, 7) : d
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
-        const btnSt = k => ({ fontSize: 11, fontWeight: crTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: crTrendMetric===k?C.acs:'transparent', color: crTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
+        const btnSt = k => ({ fontSize: 11, fontWeight: crTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: crTrendMetric===k?C.acs:'transparent', color: crTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={crTrendMetric} onChange={setCrTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => ({ id: k, label: l }))} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12055,7 +12840,7 @@ function CredTab({ data }) {
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l], idx) => (
                       <Fragment key={k}>
-                        {idx > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        {idx > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                         <button style={btnSt(k)} onClick={() => setCrTrendMetric(k)}>{l}</button>
                       </Fragment>
                     ))}
@@ -12069,12 +12854,12 @@ function CredTab({ data }) {
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="crTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
-                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
+                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                     </linearGradient>
                     <linearGradient id="crTrendNetGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.34} />
+                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -12091,7 +12876,7 @@ function CredTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#crTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#crTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12106,7 +12891,7 @@ function CredTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -12122,15 +12907,15 @@ function CredTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={370}
+              height={320}
             />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxheight={370} />
+            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} />
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -12141,7 +12926,7 @@ function CredTab({ data }) {
   )
 }
 
-function FirstcryTab({ data }) {
+function FirstcryTab({ data, rangeStart, rangeEnd }) {
   const fc = data.firstcry || {}
   const t = fc.totals || {}
   const nDays = t.days || 1
@@ -12243,7 +13028,7 @@ function FirstcryTab({ data }) {
       </div>
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fcRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fcRevChg >= 0 ? C.green.bg : C.red.bg, color: fcRevChg >= 0 ? C.green.tx : C.red.tx }}>{fcRevChg >= 0 ? '▲' : '▼'} {Math.abs(fcRevChg).toFixed(1)}%</span>}
@@ -12252,7 +13037,7 @@ function FirstcryTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={fcSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="fcGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="fcGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#fcGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
@@ -12305,7 +13090,7 @@ function FirstcryTab({ data }) {
         const fcGroupOpts = [{ id: 'daily', label: 'Daily' }, { id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, { id: 'quarterly', label: 'Quarterly' }]
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={fcTrendMetric} onChange={setFcTrendMetric} options={fcMetricOpts} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12313,8 +13098,8 @@ function FirstcryTab({ data }) {
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {fcMetricOpts.map((opt, i) => (
                       <Fragment key={opt.id}>
-                        {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                        <button onClick={() => setFcTrendMetric(opt.id)} style={{ fontSize: 11, fontWeight: fcTrendMetric === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fcTrendMetric === opt.id ? C.acs : 'transparent', color: fcTrendMetric === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
+                        {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+                        <button onClick={() => setFcTrendMetric(opt.id)} style={{ fontSize: 11, fontWeight: fcTrendMetric === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fcTrendMetric === opt.id ? C.acs : 'transparent', color: fcTrendMetric === opt.id ? C.acd : C.t2, cursor: 'pointer', minWidth: 62, textAlign: 'center' }}>{opt.label}</button>
                       </Fragment>
                     ))}
                   </div>
@@ -12327,12 +13112,12 @@ function FirstcryTab({ data }) {
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="fcTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
-                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
+                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                     </linearGradient>
                     <linearGradient id="fcTrendNetGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.34} />
+                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -12349,7 +13134,7 @@ function FirstcryTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#fcTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#fcTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12364,7 +13149,7 @@ function FirstcryTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -12380,14 +13165,14 @@ function FirstcryTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={370}
+              height={320}
             />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxheight={370} />
+            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} />
           </div>
         )
       })()}
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -12397,7 +13182,7 @@ function FirstcryTab({ data }) {
   )
 }
 
-function MyntraTab({ data }) {
+function MyntraTab({ data, rangeStart, rangeEnd }) {
   const mn = data.myntra || {}
   const totals = mn.totals || {}
   const nDays = totals.days || data.nDays || 1
@@ -12499,7 +13284,7 @@ function MyntraTab({ data }) {
       {/* KPI Hero + grid */}
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -12508,7 +13293,7 @@ function MyntraTab({ data }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="mnGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="mnGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#mnGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
@@ -12557,10 +13342,10 @@ function MyntraTab({ data }) {
         const isRev = mnTrendMetric === 'rev', isOrders = mnTrendMetric === 'orders'
         const xFmt = d => mnTrendGroup === 'daily' ? d?.slice(5) : mnTrendGroup === 'monthly' ? d?.slice(0, 7) : d
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
-        const btnSt = k => ({ fontSize: 11, fontWeight: mnTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: mnTrendMetric===k?C.acs:'transparent', color: mnTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
+        const btnSt = k => ({ fontSize: 11, fontWeight: mnTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: mnTrendMetric===k?C.acs:'transparent', color: mnTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={mnTrendMetric} onChange={setMnTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -12590,7 +13375,7 @@ function MyntraTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill={`${C.acm}22`} strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
@@ -12605,7 +13390,7 @@ function MyntraTab({ data }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -12621,7 +13406,7 @@ function MyntraTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={370}
+              height={320}
             />
             {(() => {
               // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
@@ -12629,14 +13414,14 @@ function MyntraTab({ data }) {
               // don't carry a units field).
               const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
               const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
+              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
             })()}
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -12656,15 +13441,15 @@ function OfflineSubToggle({ sub, setSub }) {
     <div style={{ display: 'flex', gap: 4 }}>
       {opts.map((opt, i) => (
         <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-          {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-          <button onClick={() => setSub(opt.id)} style={{ fontSize: 12, fontWeight: sub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', outline: 'none', background: sub === opt.id ? C.acs : 'transparent', color: sub === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer' }}>{opt.label}</button>
+          {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+          <button onClick={() => setSub(opt.id)} style={{ fontSize: 12, fontWeight: sub === opt.id ? 700 : 500, padding: '3px 14px', borderRadius: 7, border: 'none', outline: 'none', background: sub === opt.id ? C.acs : 'transparent', color: sub === opt.id ? C.acd : C.t2, cursor: 'pointer' }}>{opt.label}</button>
         </div>
       ))}
     </div>
   )
 }
 
-function OfflineTab({ data, sub, setSub }) {
+function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
   const off = data.offline || {}
   const [catRevView, setCatRevView] = useState('category')
   const [selectedCat, setSelectedCat] = useState(null)
@@ -12880,7 +13665,7 @@ function OfflineTab({ data, sub, setSub }) {
       {/* KPI Hero + grid */}
       <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{subLabel}</div>
+          <div className="kpi-label" style={{ fontSize: 13 }}>Gross Revenue Inc GST{subLabel}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -12889,7 +13674,7 @@ function OfflineTab({ data, sub, setSub }) {
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                <defs><linearGradient id="offGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+                <defs><linearGradient id="offGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.38} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.04} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#offGrossGrad)" dot={false} connectNulls />
                 <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
@@ -12939,10 +13724,10 @@ function OfflineTab({ data, sub, setSub }) {
         const isRev = offTrendMetric === 'rev', isOrders = offTrendMetric === 'orders'
         const xFmt = d => offTrendGroup === 'daily' ? d?.slice(5) : offTrendGroup === 'monthly' ? d?.slice(0, 7) : d
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
-        const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
+        const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?C.acd:C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 325 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={offTrendMetric} onChange={setOffTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -12951,7 +13736,7 @@ function OfflineTab({ data, sub, setSub }) {
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l], idx) => (
                       <Fragment key={k}>
-                        {idx > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        {idx > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                         <button style={btnSt(k)} onClick={() => setOffTrendMetric(k)}>{l}</button>
                       </Fragment>
                     ))}
@@ -12965,12 +13750,12 @@ function OfflineTab({ data, sub, setSub }) {
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="offTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
-                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={C.acm} stopOpacity={0.40} />
+                      <stop offset="95%" stopColor={C.acm} stopOpacity={0.04} />
                     </linearGradient>
                     <linearGradient id="offTrendNetGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.22} />
-                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.34} />
+                      <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.04} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -12987,7 +13772,7 @@ function OfflineTab({ data, sub, setSub }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
+                  {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="rev" name="Gross Revenue" stroke={C.acm} fill="url(#offTrendGrossGrad)" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="url(#offTrendNetGrad)" strokeWidth={2} dot={grouped.length <= 3} />
@@ -13002,7 +13787,7 @@ function OfflineTab({ data, sub, setSub }) {
               {isMob && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
                   {(isRev ? [{ name: 'Gross Revenue', color: C.acm }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: C.acm }]).map(it => (
-                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t1 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
                     </span>
                   ))}
@@ -13018,15 +13803,15 @@ function OfflineTab({ data, sub, setSub }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
-              height={370}
+              height={325}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={370} />
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={325} />
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch — offline distribution has no such concept, Credit Notes are tracked separately at the KPI level) */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13049,18 +13834,18 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap }) {
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd }) {
   if (channel === 'Shopify') return shopifyView === 'returns'
     ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
-    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
-  if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} />
-  if (channel === 'Flipkart') return <FlipkartTab data={data} />
-  if (channel === 'Blinkit') return <BlinkitTab data={data} />
-  if (channel === 'Instamart') return <InstaTab data={data} />
-  if (channel === 'Zepto') return <ZeptoTab data={data} />
-  if (channel === 'CRED') return <CredTab data={data} />
-  if (channel === 'Firstcry') return <FirstcryTab data={data} />
-  if (channel === 'Myntra') return <MyntraTab data={data} />
+    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Flipkart') return <FlipkartTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Blinkit') return <BlinkitTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Instamart') return <InstaTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Zepto') return <ZeptoTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'CRED') return <CredTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Firstcry') return <FirstcryTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+  if (channel === 'Myntra') return <MyntraTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'International') return <InternationalPlaceholderTab />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
@@ -13245,7 +14030,7 @@ function LaunchDropdown({ value, onChange }) {
   }, [])
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div ref={triggerRef} onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? '#FFF9CC' : undefined, borderColor: selected ? C.acm : undefined }}>
+      <div ref={triggerRef} onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? C.acl : undefined, borderColor: selected ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{selected ? selected.label : 'All Product Launch'}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -13254,7 +14039,7 @@ function LaunchDropdown({ value, onChange }) {
           {selected && <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '9px 14px', fontSize: 12, color: C.t3, cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}>All Product Launch</div>}
           {LAUNCH_OPTS.map(opt => (
             <div key={opt.id} onClick={() => { onChange(opt.id); setOpen(false) }}
-              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? '#FFF9CC' : 'transparent', color: C.t1 }}>
+              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? C.acl : 'transparent', color: C.t1 }}>
               {opt.label}
             </div>
           ))}
@@ -13279,7 +14064,7 @@ function FilterIconPopover({ children, activeCount }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0, marginLeft: 'auto' }}>
-      <button onClick={() => setOpen(o => !o)} title="Filters" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? C.acm : C.border}`, background: activeCount > 0 ? '#FFF9CC' : C.card, color: C.t1, cursor: 'pointer' }}>
+      <button onClick={() => setOpen(o => !o)} title="Filters" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? C.acm : C.border}`, background: activeCount > 0 ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
         Filters
         {activeCount > 0 && <span style={{ background: C.acm, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{activeCount}</span>}
@@ -13297,6 +14082,839 @@ const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': '
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {} }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
+
+  const [allExportOpen, setAllExportOpen] = useState(false)
+  const [d2cExportOpen, setD2cExportOpen] = useState(false)
+  const [amzExportOpen, setAmzExportOpen] = useState(false)
+  const [fkExportOpen, setFkExportOpen] = useState(false)
+  const [blExportOpen, setBlExportOpen] = useState(false)
+  const [insExportOpen, setInsExportOpen] = useState(false)
+  const [ztExportOpen, setZtExportOpen] = useState(false)
+  const [crExportOpen, setCrExportOpen] = useState(false)
+  const [fcExportOpen, setFcExportOpen] = useState(false)
+  const [mnExportOpen, setMnExportOpen] = useState(false)
+  const [offExportOpen, setOffExportOpen] = useState(false)
+
+  const handleD2CExport = (type) => {
+    setD2cExportOpen(false)
+    const sh = (filteredData || {}).shopify || {}
+    const subCh = filters.subChannel // 'MyFrido', 'Mobility', or null/'' = Overall
+    const subChLabel = subCh === 'MyFrido' ? 'MyFrido' : subCh === 'Mobility' ? 'Mobility' : 'Overall'
+    const matrixSubCh = (subCh === 'MyFrido' || subCh === 'Mobility') ? subCh.toLowerCase() : null
+    const dateTag = `${filters.start}_${filters.end}`
+
+    if (type === 'sku' || type === 'all') {
+      // Date × SKU rows from sh.dailySKU, filtered by subChannel
+      const dailySKU = sh.dailySKU || []
+      // Build sku→{cat,subCat} lookup from skuMap
+      const skuCatLookup = {}
+      Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap_]) => {
+          Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+        })
+      })
+      const filtered = matrixSubCh
+        ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+        : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+      const skuRows = filtered.map(r => {
+        const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+        const gross = r.rev || 0
+        const excGst = r.excRev || 0
+        const cancelRev = r.cancelRev || 0
+        const rtoRev = r.rtoRev || 0
+        const cirRev = r.cirRev || 0
+        const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+        return {
+          'Date': r.date,
+          'Sub Channel': r.subChannel || '',
+          'Category': lookup.cat,
+          'Sub-Category': lookup.sc,
+          'SKU': r.sku || '',
+          'Units': r.units || 0,
+          'Gross Revenue': Math.round(gross),
+          'Net Revenue': Math.round(excGst * retainedShare),
+          'Cancel Rev': Math.round(cancelRev),
+          'RTO Rev': Math.round(rtoRev),
+          'CIR Rev': Math.round(cirRev),
+        }
+      }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+      if (type === 'sku') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_daywise_sku_${dateTag}.xlsx`)
+        return
+      }
+    }
+
+    if (type === 'states' || type === 'all') {
+      const stateMap = sh.stateMap || {}
+      const statePrevMap = sh.statePrevMap || {}
+      const shCityRows = sh.cityRows || []
+      const cityPrevMap = sh.cityPrevMap || {}
+      const stTotal = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+      const stSheet = Object.entries(stateMap)
+        .map(([state, v]) => ({ state, rev: v.rev || 0, orders: v.orders || 0, cities: v.cities || 0 }))
+        .sort((a, b) => b.rev - a.rev)
+        .map(s => ({
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders, 'Cities': s.cities,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+        }))
+      const ctTotal = shCityRows.reduce((s, r) => s + (r.rev || 0), 0)
+      const ctSheet = shCityRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders || 0,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+      }))
+
+      if (type === 'states') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_geo_${dateTag}.xlsx`)
+        return
+      }
+
+      if (type === 'all') {
+        // Build SKU rows again for full export
+        const dailySKU = sh.dailySKU || []
+        const skuCatLookup = {}
+        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap_]) => {
+            Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+          })
+        })
+        const filteredSKU = matrixSubCh
+          ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+          : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+        const skuRows = filteredSKU.map(r => {
+          const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+          const gross = r.rev || 0
+          const excGst = r.excRev || 0
+          const cancelRev = r.cancelRev || 0
+          const rtoRev = r.rtoRev || 0
+          const cirRev = r.cirRev || 0
+          const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+          return {
+            'Date': r.date, 'Sub Channel': r.subChannel || '',
+            'Category': lookup.cat, 'Sub-Category': lookup.sc, 'SKU': r.sku || '',
+            'Units': r.units || 0, 'Gross Revenue': Math.round(gross),
+            'Net Revenue': Math.round(excGst * retainedShare),
+            'Cancel Rev': Math.round(cancelRev), 'RTO Rev': Math.round(rtoRev), 'CIR Rev': Math.round(cirRev),
+          }
+        }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_full_export_${dateTag}.xlsx`)
+      }
+    }
+  }
+
+  const handleAmzExport = (type) => {
+    setAmzExportOpen(false)
+    const amzSC = (filteredData || {}).amzSC || {}
+    const amzVC = (filteredData || {}).amzVC || {}
+    const amzVCMatrix = (filteredData || {}).amzVCMatrix || {}
+    const view = channelView // 'all', 'sc', 'vc'
+    const viewLabel = view === 'sc' ? 'SellerCentral' : view === 'vc' ? 'VendorCentral' : 'Overall'
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildSkuRows = () => {
+      const rows = []
+      if (view !== 'vc') {
+        // SC: skuChannel = {cat: {sc: {sku: {FBA:{...}, MFN:{...}}}}}
+        Object.entries(amzSC.skuChannel || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              const keys = view === 'sc' ? ['FBA','MFN'] : ['FBA','MFN']
+              const agg = keys.reduce((a, k) => {
+                const r = v[k] || {}
+                return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), returnRev: a.returnRev+(r.returnRev||0) }
+              }, { rev:0, excRev:0, units:0, cancelRev:0, rtoRev:0, cirRev:0, returnRev:0 })
+              if (!agg.rev) return
+              const deduct = agg.cancelRev + agg.rtoRev + agg.cirRev + agg.returnRev
+              const retained = agg.rev > 0 ? Math.max(0, 1 - deduct/agg.rev) : 0
+              rows.push({ 'Channel': 'Amazon SC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': agg.units, 'Gross Revenue': Math.round(agg.rev), 'Net Revenue': Math.round(agg.excRev * retained), 'Cancel Rev': Math.round(agg.cancelRev), 'RTO Rev': Math.round(agg.rtoRev), 'CIR Rev': Math.round(agg.cirRev), 'Return Rev': Math.round(agg.returnRev) })
+            })
+          })
+        })
+      }
+      if (view !== 'sc') {
+        // VC: skuData = {cat: {sc: {sku: {rev, excRev, units, returnRev}}}}
+        Object.entries(amzVCMatrix.skuData || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              if (!v.rev) return
+              const retained = v.rev > 0 ? Math.max(0, 1 - (v.returnRev||0)/v.rev) : 0
+              rows.push({ 'Channel': 'Amazon VC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units||0, 'Gross Revenue': Math.round(v.rev||0), 'Net Revenue': Math.round((v.excRev||0) * retained), 'Cancel Rev': 0, 'RTO Rev': 0, 'CIR Rev': 0, 'Return Rev': Math.round(v.returnRev||0) })
+            })
+          })
+        })
+      }
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Geo sheets (SC only) ──
+    const buildGeoSheets = () => {
+      const stTotal = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+      const stSheet = (amzSC.states||[]).map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders||0,
+        'AOV': s.orders ? Math.round(s.rev/s.orders) : 0,
+        'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0,
+      }))
+      const ctTotal = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+      const ctSheet = (amzSC.cities||[]).map(c => ({
+        'City': c.city, 'State': c.state||'',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders||0,
+        'AOV': c.orders ? Math.round(c.rev/c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0,
+      }))
+      const rgTotal = (amzSC.regionRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const rgSheet = (amzSC.regionRows||[]).map(r => ({
+        'Region': r.region, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': rgTotal > 0 ? parseFloat(((r.rev||0)/rgTotal*100).toFixed(2)) : 0,
+      }))
+      const trTotal = (amzSC.tierRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const trSheet = (amzSC.tierRows||[]).map(r => ({
+        'City Tier': r.label || `Tier ${r.tier}`, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': trTotal > 0 ? parseFloat(((r.rev||0)/trTotal*100).toFixed(2)) : 0,
+      }))
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleFKExport = (type) => {
+    setFkExportOpen(false)
+    const fk = (filteredData || {}).flipkart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildFKSkuRows = () => {
+      const rows = []
+      Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap]) => {
+          Object.entries(skuMap).forEach(([sku, v]) => {
+            if (!v.rev) return
+            const gross = v.rev || 0
+            const excRev = v.excRev || 0
+            const returnRev = v.returnRev || 0
+            const cancelRev = v.cancelRev || 0
+            const deduct = cancelRev + returnRev
+            const retained = gross > 0 ? Math.max(0, 1 - deduct / gross) : 0
+            rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Cancel Rev': Math.round(cancelRev), 'Return Rev': Math.round(returnRev) })
+          })
+        })
+      })
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Daily sheet ──
+    const buildFKDailyRows = () => {
+      const dailyMap = {}
+      ;(fk.daily || []).forEach(x => {
+        if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returnRev: 0 }
+        dailyMap[x.date].rev += x.rev || 0
+        dailyMap[x.date].orders += x.orders || 0
+        dailyMap[x.date].units += x.units || 0
+        dailyMap[x.date].returnRev += x.returnRev || 0
+      })
+      return Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Return Rev': Math.round(r.returnRev),
+      }))
+    }
+
+    // ── Geo sheets ──
+    const buildFKGeoSheets = () => {
+      const stTotal = Object.values((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = 0; m[x.state] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const stSheet = Object.entries((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = { rev: 0, orders: 0, returnRev: 0 }; m[x.state].rev += x.rev; m[x.state].orders += x.orders; m[x.state].returnRev += (x.returnRev||0) }); return m })())
+        .map(([state, v]) => ({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((v.rev/stTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const ctTotal = Object.values((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = 0; m[x.city] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const ctSheet = Object.entries((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = { rev: 0, orders: 0, returnRev: 0 }; m[x.city].rev += x.rev; m[x.city].orders += x.orders; m[x.city].returnRev += (x.returnRev||0) }); return m })())
+        .map(([city, v]) => ({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((v.rev/ctTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const rgAgg = {}
+      ;(fk.regions||[]).forEach(x => { if (!rgAgg[x.region]) rgAgg[x.region] = { rev: 0, orders: 0 }; rgAgg[x.region].rev += x.rev; rgAgg[x.region].orders += x.orders })
+      const rgTotal = Object.values(rgAgg).reduce((s,v) => s+v.rev, 0)
+      const rgSheet = Object.entries(rgAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `flipkart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Generic builder helpers ──────────────────────────────────────────────
+  const _buildQcSkuRows = (channel, chKey, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(v.rev || 0), 'Net Revenue (Ex GST)': Math.round(v.excRev || 0) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildQcDailyRows = (daily) =>
+    (daily || []).map(r => ({ 'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0, 'Gross Revenue': Math.round(r.rev || 0), 'Net Revenue (Ex GST)': Math.round(r.excRev || 0) }))
+
+  const _buildQcGeoSheets = (cities, states, stTotal, ctTotal) => {
+    const regAgg = {}, tierAgg = {}
+    ;(cities || []).forEach(c => {
+      if (c.region) { if (!regAgg[c.region]) regAgg[c.region] = { rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders || 0 }
+      if (c.cityTier) { const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders || 0 }
+    })
+    const rgTotal = Object.values(regAgg).reduce((s, v) => s + v.rev, 0)
+    const trTotal = Object.values(tierAgg).reduce((s, v) => s + v.rev, 0)
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    const rgSheet = Object.entries(regAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    const trSheet = Object.entries(tierAgg).map(([tier, v]) => ({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTotal > 0 ? parseFloat((v.rev/trTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    return { stSheet, ctSheet, rgSheet, trSheet }
+  }
+
+  const _buildMktSkuRows = (channel, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          const gross = v.rev || 0, excRev = v.excRev || 0, returnRev = v.returnRev || 0
+          const retained = gross > 0 ? Math.max(0, 1 - returnRev / gross) : 0
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Orders': v.orders || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Return Rev': Math.round(returnRev) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildMktGeoSheets = (states, cities, stTotal, ctTotal) => {
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'AOV': s.orders ? Math.round(s.rev/s.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'AOV': c.orders ? Math.round(c.rev/c.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    return { stSheet, ctSheet }
+  }
+
+  // ── Blinkit ──────────────────────────────────────────────────────────────
+  const handleBlExport = (type) => {
+    setBlExportOpen(false)
+    const bl = (filteredData || {}).blinkit || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = bl.stateTotal || (bl.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = bl.cityTotal || (bl.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(bl.cities, bl.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `blinkit_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(bl.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Instamart ────────────────────────────────────────────────────────────
+  const handleInsExport = (type) => {
+    setInsExportOpen(false)
+    const ins = (filteredData || {}).instamart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = ins.stateTotal || (ins.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = ins.cityTotal || (ins.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(ins.cities, ins.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `instamart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(ins.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Zepto ────────────────────────────────────────────────────────────────
+  const handleZtExport = (type) => {
+    setZtExportOpen(false)
+    const zt = (filteredData || {}).zepto || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = zt.stateTotal || (zt.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = zt.cityTotal || (zt.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(zt.cities, zt.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `zepto_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(zt.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── CRED ─────────────────────────────────────────────────────────────────
+  const handleCrExport = (type) => {
+    setCrExportOpen(false)
+    const cr = (filteredData || {}).cred || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = cr.stateTotal || (cr.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = cr.cityTotal || (cr.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(cr.states, cr.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `cred_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (cr.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── FirstCry ─────────────────────────────────────────────────────────────
+  const handleFcExport = (type) => {
+    setFcExportOpen(false)
+    const fc = (filteredData || {}).firstcry || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = fc.stateTotal || (fc.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = fc.cityTotal || (fc.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(fc.states, fc.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `firstcry_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (fc.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Myntra ───────────────────────────────────────────────────────────────
+  const handleMnExport = (type) => {
+    setMnExportOpen(false)
+    const mn = (filteredData || {}).myntra || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = mn.stateTotal || (mn.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = mn.cityTotal || (mn.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(mn.states, mn.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `myntra_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (mn.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0), 'Return Rev': Math.round(r.returnRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Offline ──────────────────────────────────────────────────────────────
+  const handleOffExport = (type) => {
+    setOffExportOpen(false)
+    const off = (filteredData || {}).offline || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const subLabel = offlineSub !== 'all' ? `_${offlineSub}` : ''
+
+    const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isStockist = sc => sc?.startsWith('Stockist')
+    const filterOffSub = rows => {
+      if (offlineSub === 'all') return rows
+      if (offlineSub === 'b2b') return rows.filter(r => isB2B(r.subChannel))
+      if (offlineSub === 'Stockist') return rows.filter(r => isStockist(r.subChannel))
+      if (offlineSub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
+      if (offlineSub === 'misc') return rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
+      return rows.filter(r => r.subChannel === offlineSub)
+    }
+
+    const buildOffDailyRows = () => {
+      const m = {}
+      filterOffSub(off.daily || []).forEach(d => {
+        if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, cnRev: 0, cnExcRev: 0, orders: 0, units: 0 }
+        m[d.date].rev += d.rev || 0; m[d.date].excRev += d.excRev || 0
+        m[d.date].cnRev += Math.abs(d.cnRev || 0); m[d.date].cnExcRev += Math.abs(d.cnExcRev || 0)
+        m[d.date].orders += d.orders || 0; m[d.date].units += d.units || 0
+      })
+      return Object.values(m).sort((a,b) => a.date.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Credit Notes': Math.round(r.cnRev),
+        'Net Revenue': Math.round((r.excRev || 0) - (r.cnExcRev || 0)),
+      }))
+    }
+
+    const buildOffSkuRows = () => {
+      const m = {}
+      filterOffSub(off.skuRows || []).forEach(x => {
+        const k = `${x.category}::${x.subCategory}::${x.sku}`
+        if (!m[k]) m[k] = { 'Category': x.category, 'Sub-Category': x.subCategory, 'SKU': x.sku, 'Units': 0, 'Orders': 0, 'Gross Revenue': 0, 'Net Revenue (Ex GST)': 0 }
+        m[k]['Units'] += x.units || 0; m[k]['Orders'] += x.orders || 0
+        m[k]['Gross Revenue'] += x.rev || 0; m[k]['Net Revenue (Ex GST)'] += x.excRev || 0
+      })
+      return Object.values(m).map(r => ({ ...r, 'Gross Revenue': Math.round(r['Gross Revenue']), 'Net Revenue (Ex GST)': Math.round(r['Net Revenue (Ex GST)']) })).sort((a,b) => b['Gross Revenue']-a['Gross Revenue'])
+    }
+
+    const buildOffGeoSheets = () => {
+      const stAgg = {}, ctAgg = {}, rgAgg = {}, trAgg = {}
+      filterOffSub(off.stateRows || []).forEach(r => { if (!stAgg[r.state]) stAgg[r.state] = { rev: 0, orders: 0 }; stAgg[r.state].rev += r.rev||0; stAgg[r.state].orders += r.orders||0 })
+      filterOffSub(off.cityRows || []).forEach(r => { if (!ctAgg[r.city]) ctAgg[r.city] = { rev: 0, orders: 0 }; ctAgg[r.city].rev += r.rev||0; ctAgg[r.city].orders += r.orders||0 })
+      filterOffSub(off.regionRows || []).forEach(r => { if (!rgAgg[r.region]) rgAgg[r.region] = { rev: 0, orders: 0 }; rgAgg[r.region].rev += r.rev||0; rgAgg[r.region].orders += r.orders||0 })
+      filterOffSub(off.tierRows || []).forEach(r => { const k = r.label||`Tier ${r.tier}`; if (!trAgg[k]) trAgg[k] = { rev: 0, orders: 0 }; trAgg[k].rev += r.rev||0; trAgg[k].orders += r.orders||0 })
+      const stTot = Object.values(stAgg).reduce((s,v)=>s+v.rev,0)
+      const ctTot = Object.values(ctAgg).reduce((s,v)=>s+v.rev,0)
+      const rgTot = Object.values(rgAgg).reduce((s,v)=>s+v.rev,0)
+      const trTot = Object.values(trAgg).reduce((s,v)=>s+v.rev,0)
+      const stSheet = Object.entries(stAgg).map(([state,v])=>({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': stTot>0?parseFloat((v.rev/stTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const ctSheet = Object.entries(ctAgg).map(([city,v])=>({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': ctTot>0?parseFloat((v.rev/ctTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const rgSheet = Object.entries(rgAgg).map(([region,v])=>({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTot>0?parseFloat((v.rev/rgTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const trSheet = Object.entries(trAgg).map(([tier,v])=>({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTot>0?parseFloat((v.rev/trTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `offline${subLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleAllExport = (type) => {
+    setAllExportOpen(false)
+    const d = filteredData || {}
+    const { chMap = {}, catMap = {}, subCatMap = {}, catPrevMap = {}, subCatPrevMap = {}, stateMap = {}, statePrevMap = {}, stateTotal = 0, cityRows: cRows = [], cityPrevMap = {}, cityTotal = 0, skuRows: allSkuRows = [] } = d
+    const totalRev = Object.values(chMap).reduce((s, v) => s + (v.rev || 0), 0)
+    const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
+    const dateTag = `${filters.start}_${filters.end}`
+
+    const skuChannelMapBySku = {}
+    allSkuRows.forEach(x => {
+      const cat = x.category || 'Others'; const sc = x.subCategory || 'Others'; const sku = x.sku
+      if (!sku) return
+      if (!skuChannelMapBySku[cat]) skuChannelMapBySku[cat] = {}
+      if (!skuChannelMapBySku[cat][sc]) skuChannelMapBySku[cat][sc] = {}
+      if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+      skuChannelMapBySku[cat][sc][sku].rev += x.rev || 0; skuChannelMapBySku[cat][sc][sku].units += x.units || 0
+      skuChannelMapBySku[cat][sc][sku].excRev += x.exc_rev || 0; skuChannelMapBySku[cat][sc][sku].cancelRev += x.cancel_rev || 0
+      skuChannelMapBySku[cat][sc][sku].rtoRev += x.rto_rev || 0; skuChannelMapBySku[cat][sc][sku].cirRev += x.cir_rev || 0
+      skuChannelMapBySku[cat][sc][sku].returnRev += x.return_rev || 0
+    })
+    const catMatrixDataAll = {}
+    Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
+    const subCatMatrixDataAll = {}
+    Object.entries(subCatMap).forEach(([k, v]) => {
+      const [cat, sc] = k.split('::')
+      if (!subCatMatrixDataAll[cat]) subCatMatrixDataAll[cat] = {}
+      subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, returnRev: v.returnRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
+      if (catMatrixDataAll[cat]) { catMatrixDataAll[cat].cancelRev += v.cancelRev || 0; catMatrixDataAll[cat].rtoRev += v.rtoRev || 0; catMatrixDataAll[cat].cirRev += v.cirRev || 0; catMatrixDataAll[cat].returnRev += v.returnRev || 0 }
+    })
+    const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, cities: v.cities?.size ?? 0 })).sort((a, b) => b.rev - a.rev)
+
+    if (type === 'channel' || type === 'all') {
+      const { dailyArr: dArr = [] } = d
+      const knownChannels = sortedCh.map(([ch]) => ch)
+      // Sheet 1: Channel Totals (matches dashboard KPIs exactly)
+      const chUnitsMap = {}
+      dArr.forEach(day => {
+        knownChannels.forEach(ch => {
+          chUnitsMap[ch] = (chUnitsMap[ch] || 0) + (day[`${ch}_u`] || 0)
+        })
+      })
+      const totalRows = []
+      sortedCh.forEach(([ch, v]) => {
+        const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+        const chOrders = v.orders?.size ?? v.orders ?? 0
+        const chUnits = chUnitsMap[ch] || 0
+        totalRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': chLabel,
+          'Gross Revenue': Math.round(v.rev), 'Net Revenue': Math.round(v.netRev ?? v.excRev ?? 0),
+          'Orders': chOrders, 'Units': chUnits,
+          'AOV': chOrders ? Math.round(v.rev / chOrders) : 0,
+          'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+        })
+      })
+      // Sheet 2: Day-wise (date × channel)
+      const dayRows = []
+      ;[...dArr].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(day => {
+        knownChannels.forEach(ch => {
+          const rev = day[ch] || 0
+          if (!rev) return
+          const orders = day[`${ch}_o`] || 0
+          const units = day[`${ch}_u`] || 0
+          const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+          dayRows.push({
+            'Date': day.date, 'Channel': chLabel,
+            'Gross Revenue': Math.round(rev),
+            'Orders': orders, 'Units': units,
+            'AOV': orders ? Math.round(rev / orders) : 0,
+            'Share %': totalRev > 0 ? (rev / totalRev * 100).toFixed(2) : 0,
+          })
+        })
+      })
+      // Sheet 3: Category Breakdown (channel × category × sub-category)
+      const catRows = []
+      const chCatMap = {}
+      allSkuRows.forEach(x => {
+        const ch = x.channel === 'Shopify' ? 'D2C' : x.channel === 'offline_sales' ? 'Offline Sales' : (x.channel || 'Unknown')
+        const cat = x.category || 'Others'
+        const sc = x.subCategory || 'Others'
+        const key = `${ch}||${cat}||${sc}`
+        if (!chCatMap[key]) chCatMap[key] = { ch, cat, sc, rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0 }
+        chCatMap[key].rev += x.rev || 0; chCatMap[key].excRev += x.exc_rev || 0
+        chCatMap[key].units += x.units || 0; chCatMap[key].cancelRev += x.cancel_rev || 0
+        chCatMap[key].rtoRev += x.rto_rev || 0; chCatMap[key].returnRev += x.return_rev || 0
+        chCatMap[key].cirRev += x.cir_rev || 0
+      })
+      Object.values(chCatMap).sort((a, b) => b.rev - a.rev).forEach(r => {
+        const returnTotal = (r.returnRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
+        catRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': r.ch, 'Category': r.cat, 'Sub-Category': r.sc,
+          'Gross Revenue': Math.round(r.rev), 'Net Revenue': Math.round(r.excRev),
+          'Units': r.units,
+          'Share %': totalRev > 0 ? (r.rev / totalRev * 100).toFixed(2) : 0,
+          'Return %': r.rev > 0 ? (returnTotal / r.rev * 100).toFixed(2) : 0,
+          'Cancel %': r.rev > 0 ? (r.cancelRev / r.rev * 100).toFixed(2) : 0,
+          'RTO %': r.rev > 0 ? ((r.rtoRev + r.cirRev) / r.rev * 100).toFixed(2) : 0,
+        })
+      })
+      if (type === 'channel') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+        XLSX.writeFile(wb, `revenue_by_channel_${dateTag}.xlsx`)
+      }
+    }
+    if (type === 'category') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            rows.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+    if (type === 'states' || type === 'cities') {
+      const stTotal = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet = stateRows.map(s => {
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const ctTotal = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet = cRows.map(c => {
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Region': c.region || '', 'City Tier': c.cityTier || '',
+          'Revenue': Math.round(c.rev), 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `geo_report_${dateTag}.xlsx`)
+    }
+    if (type === 'all') {
+      // Build category SKU rows
+      const catRows2 = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            catRows2.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      catRows2.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      // Build states & cities rows
+      const stTotal2 = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet2 = stateRows.map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders,
+        'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+        'Cities': s.cities,
+        'Share (out of 100)': stTotal2 > 0 ? parseFloat((s.rev / stTotal2 * 100).toFixed(2)) : 0,
+      }))
+      const ctTotal2 = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet2 = cRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal2 > 0 ? parseFloat((c.rev / ctTotal2 * 100).toFixed(2)) : 0,
+      }))
+      // All in 1 xlsx, 5 tabs
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows2), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet2), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet2), 'Top Cities')
+      XLSX.writeFile(wb, `full_export_${dateTag}.xlsx`)
+    }
+  }
 
   // Sync D2C subChannel from URL into filters
   useEffect(() => {
@@ -13345,7 +14963,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFiltersWrapped} />
     : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
-    : <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: '#3F3D33', display: 'inline-block' }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
+    : <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 14px', borderRadius: 7, background: C.acs, color: C.acd, display: 'inline-block' }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
 
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
     + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
@@ -13377,9 +14995,241 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <div>{channelToggle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {activeTab === 'shopify' && (
-              <button onClick={() => setShopifyView(shopifyView === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
+              <button onClick={() => setShopifyView(shopifyView === 'returns' ? 'overview' : 'returns')}
+                className={`tool-btn${shopifyView === 'returns' ? ' is-active' : ''}`} aria-pressed={shopifyView === 'returns'}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
+            )}
+            {activeTab === 'shopify' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {d2cExportOpen && (
+                  <>
+                    <div onClick={() => setD2cExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Day-wise & SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleD2CExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'amazon' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {amzExportOpen && (
+                  <>
+                    <div onClick={() => setAmzExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].filter(([key]) => !(key === 'states' && channelView === 'vc')).map(([key, label]) => (
+                        <div key={key} onClick={() => handleAmzExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'flipkart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fkExportOpen && (
+                  <>
+                    <div onClick={() => setFkExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFKExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'blinkit' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {blExportOpen && (
+                  <>
+                    <div onClick={() => setBlExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleBlExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'instamart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {insExportOpen && (
+                  <>
+                    <div onClick={() => setInsExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleInsExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'zepto' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {ztExportOpen && (
+                  <>
+                    <div onClick={() => setZtExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleZtExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'cred' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {crExportOpen && (
+                  <>
+                    <div onClick={() => setCrExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleCrExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'firstcry' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fcExportOpen && (
+                  <>
+                    <div onClick={() => setFcExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFcExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'myntra' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {mnExportOpen && (
+                  <>
+                    <div onClick={() => setMnExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleMnExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'offline' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {offExportOpen && (
+                  <>
+                    <div onClick={() => setOffExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleOffExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'all' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {allExportOpen && (
+                  <>
+                    <div onClick={() => setAllExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['channel','Revenue by Channel'],['category','Category Revenue Matrix'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => { handleAllExport(key); setAllExportOpen(false) }}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             <FilterIconPopover activeCount={activeFilterCount}>
             <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
@@ -13400,18 +15250,18 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Content */}
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
+        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
-        {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
-        {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
-        {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
-        {activeTab === 'firstcry' && <ChannelTab data={filteredData} channel="Firstcry" />}
-        {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
-        {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
-        {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
-        {activeTab === 'international' && <ChannelTab data={filteredData} channel="International" />}
-        {activeTab === 'offline' && <OfflineTab data={filteredData} sub={offlineSub} setSub={setOfflineSub} />}
+        {activeTab === 'amazon' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
+        {activeTab === 'flipkart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Flipkart" />}
+        {activeTab === 'blinkit' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Blinkit" />}
+        {activeTab === 'cred' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="CRED" />}
+        {activeTab === 'firstcry' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Firstcry" />}
+        {activeTab === 'instamart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Instamart" />}
+        {activeTab === 'zepto' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Zepto" />}
+        {activeTab === 'myntra' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Myntra" />}
+        {activeTab === 'international' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="International" />}
+        {activeTab === 'offline' && <OfflineTab data={filteredData} sub={offlineSub} setSub={setOfflineSub} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'qc' && <QCTab data={filteredData} />}
         {activeTab === 'ops' && <OpsTab data={filteredData} />}
         {activeTab === 'cx' && <CXTab data={filteredData} />}
@@ -13426,7 +15276,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
     red: 'linear-gradient(90deg,#E24B4A,#F08080)',
     green: 'linear-gradient(90deg,#2D9A50,#6ED98A)',
     blue: 'linear-gradient(90deg,#2E74CC,#7AB4EE)',
-    amber: 'linear-gradient(90deg,#CC8A00,#F5C460)',
+    amber: 'linear-gradient(90deg,#F0B429,#F5C978)',
     purple: 'linear-gradient(90deg,#4843B2,#AAA6E6)',
     pink: 'linear-gradient(90deg,#CC4078,#F09BC0)',
   }
@@ -13459,7 +15309,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
       )}
       {insight && (
         <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 8, padding: '9px 11px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7A6000', marginBottom: 4 }}>◈ Insight</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.acd, marginBottom: 4 }}>◈ Insight</div>
           <div style={{ fontSize: 11.5, color: C.t2, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: insight }} />
         </div>
       )}
@@ -13637,7 +15487,7 @@ function IntelPage({ data }) {
 
       <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 6 }}>◈ Period Trend Signal</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acd, marginBottom: 6 }}>◈ Period Trend Signal</div>
           <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
           <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
         </div>
@@ -13654,20 +15504,6 @@ function IntelPage({ data }) {
   )
 }
 
-// ── Skeleton ──────────────────────────────────────────────────
-function Skeleton() {
-  return (
-    <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="g-hero">
-        {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 130, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
-      </div>
-      <div style={{ height: 240, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />
-      <div className="g-3">
-        {[1, 2, 3].map(i => <div key={i} style={{ height: 200, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
-      </div>
-    </div>
-  )
-}
 
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
@@ -13681,9 +15517,9 @@ const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zep
 //   5. discountDepthRepeatRate: [{bucket, repeatRate}]
 
 const CP = {
-  bg: '#FFFFFF', paper: '#FFFFFF', ink: '#15130B', ink2: '#4A4636', ink3: '#8A8468',
-  yellow: '#F5C518', yellowDeep: '#D9A800', head: '#F3DFA0', headLine: '#E6C877',
-  line: '#8A8478', lineSoft: '#D8CD9E', green: '#2E6B3E', red: '#A62E2E',
+  bg: '#FFFFFF', paper: '#FFFFFF', ink: C.t1, ink2: C.t2, ink3: C.t3,
+  yellow: C.acc, yellowDeep: C.acd, head: C.ach, headLine: C.acs,
+  line: C.border2, lineSoft: C.border, green: C.green.tx, red: C.red.tx,
 }
 
 function CpCard({ title, sub, action, children }) {
@@ -13744,7 +15580,7 @@ function HeroSparkCard({ c }) {
     setHov(Math.max(0, Math.min(vals.length - 1, idx)))
   }
   return (
-    <div onMouseEnter={() => setHovCard(true)} onMouseLeave={() => setHovCard(false)} style={{ background: 'var(--card)', border: `1px solid ${hovCard ? '#F5C518' : 'var(--b1)'}`, borderRadius: 12, padding: '10px 14px 6px', display: 'flex', flexDirection: 'column', gap: 2, transition: 'border-color .15s', cursor: 'default' }}>
+    <div onMouseEnter={() => setHovCard(true)} onMouseLeave={() => setHovCard(false)} style={{ background: 'var(--card)', border: `1px solid ${hovCard ? C.acc : 'var(--b1)'}`, borderRadius: 12, padding: '10px 14px 6px', display: 'flex', flexDirection: 'column', gap: 2, transition: 'border-color .15s', cursor: 'default' }}>
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', color: 'var(--t3)', textTransform: 'uppercase' }}>{c.label}</span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.15, color: c.valColor }}>{c.value}</span>
@@ -14100,7 +15936,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             return null
           })()
 
-          function MetricTable({ title, rows, accentColor = '#F5C518', insight = null }) {
+          function MetricTable({ title, rows, accentColor = C.acc, insight = null }) {
             return (
               <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
                 {/* title header */}
@@ -14167,7 +16003,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, paddingLeft: 16, paddingRight: 16, width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, paddingLeft: 24, paddingRight: 24, width: '100%', boxSizing: 'border-box' }}>
               {/* 8 hero KPIs with interactive sparklines */}
               {(() => {
                 const dailyDates = rawDaily.map(r => r.date || '')
@@ -14189,14 +16025,14 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   return gs > 0 ? (r.repeatRevenue || 0) / gs * 100 : 0
                 })
                 const heroCards = [
-                  { label: 'GROSS SALES', value: fmt(kpis.grossSales), sub: `${fmtN(kpis.totalOrders||0)} orders · AOV ${fmt(kpis.aov)}`, badge: chgBadgeCp(kpis.grossSales, prevKpis.grossSales), accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: '#F5C518', valColor: '#15130B', sparkVals: newCustVals, sparkColor: '#D9A800', fmt: v => fmtN(v) },
-                  { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: '#F5C518', valColor: '#15130B', sparkVals: spendVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: '#F5C518', valColor: '#D97706', sparkVals: roasVals, sparkColor: '#D97706', fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: '#F5C518', valColor: '#15130B', sparkVals: cacVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: roasVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: '#F5C518', valColor: '#15130B', sparkVals: repeatRevPctVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(1)}%` },
+                  { label: 'GROSS SALES', value: fmt(kpis.grossSales), sub: `${fmtN(kpis.totalOrders||0)} orders · AOV ${fmt(kpis.aov)}`, badge: chgBadgeCp(kpis.grossSales, prevKpis.grossSales), accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: C.acc, valColor: C.t1, sparkVals: newCustVals, sparkColor: C.acm, fmt: v => fmtN(v) },
+                  { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
@@ -14208,7 +16044,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
               {/* Metric tables */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor="#D9A800" insight={spendInsight} />
+                <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor={C.acm} insight={spendInsight} />
                 <MetricTable title="Revenue & Lifetime Value" rows={ledger2} accentColor="#0D9E68" insight={revenueInsight} />
               </div>
 
@@ -14255,28 +16091,28 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { id: 'aov',       label: 'AOV' },
                 ]
                 const pill = active => ({
-                  background: active ? '#C9A24F' : '#FBF6E8',
-                  color: active ? '#fff' : '#8A7F63',
-                  border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`,
+                  background: active ? C.acc : C.acl,
+                  color: active ? '#fff' : C.t2,
+                  border: `1px solid ${active ? C.acc : C.acs}`,
                   borderRadius: 20, padding: '3px 11px', fontSize: 11,
                   cursor: 'pointer', fontWeight: active ? 700 : 500,
-                  fontFamily: 'Inter, sans-serif', outline: 'none',
+                  fontFamily: 'var(--font)', outline: 'none',
                 })
                 const granPill = active => ({
                   ...pill(active),
                   padding: '2px 9px', fontSize: 10.5,
                 })
-                const ttStyle = { background: '#fff', border: '1px solid #F0E2BC', borderRadius: 8, fontSize: 11, color: '#3A3324' }
+                const ttStyle = { background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, fontSize: 11, color: C.t1 }
 
                 return (
                   <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #F0EADC', flexWrap: 'wrap', gap: 8 }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: C.t1, textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {views.map(v => <button key={v.id} style={pill(ovChartView === v.id)} onClick={() => setOvChartView(v.id)}>{v.label}</button>)}
                         </div>
-                        <div style={{ width: 1, height: 16, background: '#E2D9C8' }} />
+                        <div style={{ width: 1, height: 16, background: C.border }} />
                         <div style={{ display: 'flex', gap: 4 }}>
                           {['daily','weekly','monthly'].map(g => <button key={g} style={granPill(ovGran === g)} onClick={() => setOvGran(g)}>{g.charAt(0).toUpperCase()+g.slice(1)}</button>)}
                         </div>
@@ -14286,40 +16122,43 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <ResponsiveContainer width="100%" height={280}>
                         {ovChartView === 'revenue' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
-                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
-                            <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtBig(v)} />
-                            <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v}×`} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                            <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
+                            <CartesianGrid stroke={C.border} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
+                            <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtBig(v)} />
+                            <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v}×`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
+                            <BarGradient id="gGrossRev" />
+                            <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="url(#gGrossRev)" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
-                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#9E9484" strokeWidth={2} dot={false} />
+                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke={C.t3} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
-                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
-                            <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtN(v)} />
-                            <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                            <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
+                            <CartesianGrid stroke={C.border} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
+                            <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} />
+                            <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
+                            <BarGradient id="gNewCust" />
+                            <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="url(#gNewCust)" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
+                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
-                            <CartesianGrid stroke="#F0EADC" />
-                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
-                            <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
-                            <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v.toFixed(1)}×`} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                            <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke="#C9A24F" strokeWidth={2} dot={false} />
-                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                            <CartesianGrid stroke={C.border} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
+                            <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} />
+                            <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: C.t1 }} labelStyle={{ color: C.t1, fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
+                            <Legend {...chartLegendProps({ fontSize: 10 })} />
+                            <BarGradient id="gAov" />
+                            <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="url(#gAov)" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke={C.acc} strokeWidth={2} dot={false} />
+                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} strokeDasharray="4 3" />
                           </ComposedChart>
                         )}
                       </ResponsiveContainer>
@@ -14343,11 +16182,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── palette tokens ──────────────────────────────────
           const T = {
-            bg: '#FDFCF8', card: '#FFFFFF', border: '#F0EADC', borderSoft: '#F6F2E8',
-            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
-            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
-            gold: '#D3B36C', goldDeep: '#A8874A', goldSoft: '#F9F3E4',
-            green: '#9CA875', red: '#CFA579',
+            bg: C.bg, card: '#FFFFFF', border: C.border, borderSoft: C.hov,
+            t1: C.t1, t2: C.t2, t3: C.t3,
+            amber: C.acs, amberDeep: C.acc, amberSoft: C.acl, amberLine: C.acs,
+            gold: C.acc, goldDeep: C.acd, goldSoft: C.acl,
+            green: C.green.tx, red: C.red.tx,
           }
           const ttS = { background: '#FFFFFF', border: `1px solid ${T.amberLine}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, fontFamily: 'Inter, sans-serif', color: '#1a1a1a' }
           const ttItemStyle = { color: '#1a1a1a' }
@@ -14359,7 +16198,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             border: `1px solid ${active ? T.amberDeep : T.amberLine}`,
             borderRadius: 20, padding: '3px 11px', fontSize: 11,
             cursor: 'pointer', fontWeight: active ? 700 : 500,
-            fontFamily: 'Inter, sans-serif', outline: 'none',
+            fontFamily: 'var(--font)', outline: 'none',
           })
 
           // ── section card wrapper ──
@@ -14367,8 +16206,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             <div style={{ background: T.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
-                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                  <div style={{ fontSize: 11, fontWeight: 800, color: C.t1, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                  {sub && <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{sub}</div>}
                 </div>
                 {action && <div style={{ display: 'flex', gap: 4 }}>{action}</div>}
               </div>
@@ -14587,7 +16426,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           ]
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: T.bg, width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 24, paddingRight: 24, paddingBottom: 24, background: T.bg, width: '100%', boxSizing: 'border-box' }}>
 
 
               {/* 2. KPI row */}
@@ -14618,9 +16457,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                      <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
-                      <Line yAxisId="sales" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
+                      <Bar yAxisId="cust" dataKey="customersAcquired" fill={C.acc} maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
+                      <Line yAxisId="sales" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -14638,9 +16477,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
                       <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                      <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
-                      <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]} />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
+                      <Bar dataKey={newKey} stackId="a" fill={C.acc} name="New" radius={[0,0,0,0]} />
+                      <Bar dataKey={repKey} stackId="a" fill={C.acs} name="Repeat" radius={[3,3,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -14656,9 +16495,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                      <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
-                      <Line yAxisId="roas" dataKey="roas" stroke="#8A8478" strokeWidth={2.5} dot={false} name="RoAS" />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
+                      <Bar yAxisId="cac" dataKey="cac" fill={C.acc} maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
+                      <Line yAxisId="roas" dataKey="roas" stroke={C.t3} strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -14705,7 +16544,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       />
                       <Bar dataKey={dowMetric === 'customers' ? 'avg' : dowMetric === 'revenue' ? 'avgRev' : 'avgOrders'}
                         name={dowMetric === 'customers' ? 'Avg New Customers' : dowMetric === 'revenue' ? 'Avg Gross Sales (Ex GST)' : 'Avg Orders'}
-                        radius={[4,4,0,0]} fill="#F5C518">
+                        radius={[4,4,0,0]} fill={C.acc}>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>}
@@ -14729,9 +16568,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                     <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                    <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                    <Line yAxisId="spend" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                    <Legend {...chartLegendProps({ fontSize: 10 })} />
+                    <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                    <Line yAxisId="spend" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
                     <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -14753,9 +16592,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                      <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                      <Line yAxisId="cac" dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" />
+                      <Legend {...chartLegendProps({ fontSize: 10 })} />
+                      <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                      <Line yAxisId="cac" dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -14786,9 +16625,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                           <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                          <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                          <Legend {...chartLegendProps({ fontSize: 10 })} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
-                          <Line dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
+                          <Line dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </SCard>
@@ -14803,10 +16642,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
         {activeTab === 'cohort' && (() => {
           const CT = {
-            bg: '#FDFCF8', card: '#FFFFFF', border: '#F0EADC', borderSoft: '#F6F2E8',
-            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
-            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
-            gold: '#D3B36C', green: '#9CA875', red: '#CFA579',
+            bg: C.bg, card: '#FFFFFF', border: C.border, borderSoft: C.hov,
+            t1: C.t1, t2: C.t2, t3: C.t3,
+            amber: C.acs, amberDeep: C.acc, amberSoft: C.acl, amberLine: C.acs,
+            gold: C.acc, green: C.green.tx, red: C.red.tx,
           }
           const ttC = { background: '#fff', border: `1px solid ${CT.amberLine}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#1a1a1a' }
           const iStyle = { color: '#1a1a1a' }
@@ -14817,7 +16656,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             border: `1px solid ${active ? CT.amberDeep : CT.amberLine}`,
             borderRadius: 20, padding: '3px 11px', fontSize: 11,
             cursor: 'pointer', fontWeight: active ? 700 : 500,
-            fontFamily: 'Inter, sans-serif', outline: 'none',
+            fontFamily: 'var(--font)', outline: 'none',
           })
 
           const CDelta = ({ cur, prev, lowerBetter = false }) => {
@@ -14850,17 +16689,17 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.t1, textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
                     {info && (
                       <div style={{ position: 'relative', display: 'inline-flex' }} className="info-icon-wrap">
-                        <span style={{ width: 15, height: 15, borderRadius: '50%', background: '#E8DDB8', color: '#8A7F63', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', userSelect: 'none', flexShrink: 0 }}>ⓘ</span>
-                        <div style={{ position: 'absolute', top: 20, left: 0, zIndex: 99, background: '#3A3324', color: '#FFF9E8', fontSize: 11, lineHeight: 1.5, padding: '8px 12px', borderRadius: 8, width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s' }} className="info-tooltip">
+                        <span style={{ width: 15, height: 15, borderRadius: '50%', background: C.acs, color: C.t2, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', userSelect: 'none', flexShrink: 0 }}>ⓘ</span>
+                        <div style={{ position: 'absolute', top: 20, left: 0, zIndex: 99, background: C.t1, color: '#fff', fontSize: 11, lineHeight: 1.5, padding: '8px 12px', borderRadius: 8, width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s' }} className="info-tooltip">
                           {info}
                         </div>
                       </div>
                     )}
                   </div>
-                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                  {sub && <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{sub}</div>}
                 </div>
                 {action && <div style={{ display: 'flex', gap: 4 }}>{action}</div>}
               </div>
@@ -15005,7 +16844,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const heatCeiling = Math.max(maxNonM0Pct * 1.1, 5)
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: CT.bg, width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 24, paddingRight: 24, paddingBottom: 24, background: CT.bg, width: '100%', boxSizing: 'border-box' }}>
 
               {/* 1. Stat row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
@@ -15104,7 +16943,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   </div>
                 }
               >
-                <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', height: 420, maxHeight: 420 }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, width: '100%', height: 420, maxHeight: 420 }}>
                   <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%', tableLayout: 'auto' }}>
                     <colgroup>
                       <col style={{ width: 72 }} />
@@ -15112,11 +16951,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       {Array.from({ length: visibleMax + 1 }, (_, i) => <col key={i} />)}
                     </colgroup>
                     <thead>
-                      <tr style={{ background: '#F3DFA0', borderBottom: `1px solid #E6C877` }}>
-                        <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, background: '#F3DFA0', padding: '6px 8px', textAlign: 'left', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cohort</th>
-                        <th style={{ position: 'sticky', top: 0, left: 72, zIndex: 4, background: '#F3DFA0', padding: '6px 8px', textAlign: 'right', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Size</th>
+                      <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                        <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, background: C.acl, padding: '10px 12px', textAlign: 'left', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Cohort</th>
+                        <th style={{ position: 'sticky', top: 0, left: 72, zIndex: 4, background: C.acl, padding: '10px 12px', textAlign: 'right', color: CT.t1, fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>Size</th>
                         {Array.from({ length: visibleMax + 1 }, (_, i) => (
-                          <th key={i} style={{ position: 'sticky', top: 0, zIndex: 3, background: '#F3DFA0', padding: '6px 4px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
+                          <th key={i} style={{ position: 'sticky', top: 0, zIndex: 3, background: C.acl, padding: '10px 12px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
                         ))}
                       </tr>
                     </thead>
@@ -15125,18 +16964,18 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
                         return (
                           <tr key={cm} style={{ borderBottom: `1px solid ${CT.borderSoft}`, background: ri % 2 === 0 ? CT.card : CT.bg }}>
-                            <td style={{ position: 'sticky', left: 0, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '5px 8px', color: CT.t2, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{cm}</td>
-                            <td style={{ position: 'sticky', left: 72, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '5px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: CT.t1, fontSize: 10 }}>{fmtN(cohort0[cm] || 0)}</td>
+                            <td style={{ position: 'sticky', left: 0, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '8px 12px', color: CT.t2, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{cm}</td>
+                            <td style={{ position: 'sticky', left: 72, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: CT.t1, fontSize: 10 }}>{fmtN(cohort0[cm] || 0)}</td>
                             {Array.from({ length: visibleMax + 1 }, (_, idx) => {
                               const row = cohortMap[cm]?.[idx]
-                              if (!row) return <td key={idx} style={{ padding: '5px 4px', background: 'transparent' }} />
+                              if (!row) return <td key={idx} style={{ padding: '8px 12px', background: 'transparent' }} />
                               const rawVal = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
                               const pctVal = base > 0 ? rawVal / base * 100 : 0
                               const intensity = idx === 0 ? 1 : Math.min(pctVal / heatCeiling, 1)
-                              const bg = idx === 0 ? CT.amberDeep : `rgba(232,197,120,${(intensity * 0.85 + 0.05).toFixed(2)})`
+                              const bg = idx === 0 ? CT.amberDeep : `rgba(${C.accRgb},${(intensity * 0.85 + 0.05).toFixed(2)})`
                               const textColor = idx === 0 ? '#fff' : CT.t1
                               return (
-                                <td key={idx} style={{ padding: '5px 4px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <td key={idx} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {cohortDisplay === 'pct' ? `${pctVal.toFixed(1)}%` : cohortMode === 'customer' ? fmtN(rawVal) : fmt(rawVal)}
                                 </td>
                               )
@@ -15228,10 +17067,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           // cell color for lift
           const liftCellBg = (lv) => {
             if (lv === null) return 'transparent'
-            if (lv >= 3) return `rgba(245,197,24,0.90)`
-            if (lv >= 2) return `rgba(245,197,24,0.65)`
-            if (lv >= 1.5) return `rgba(245,197,24,0.40)`
-            if (lv >= 1) return `rgba(245,197,24,0.15)`
+            if (lv >= 3) return `rgba(${C.accRgb},0.90)`
+            if (lv >= 2) return `rgba(${C.accRgb},0.65)`
+            if (lv >= 1.5) return `rgba(${C.accRgb},0.40)`
+            if (lv >= 1) return `rgba(${C.accRgb},0.15)`
             return `rgba(148,147,159,0.12)`
           }
 
@@ -15257,7 +17096,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const slowestCat = cycleData[cycleData.length - 1]
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 24, paddingRight: 24, width: '100%', boxSizing: 'border-box' }}>
 
               {/* KPI Strip */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
@@ -15284,12 +17123,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     {[['lift','Lift'], ['rate','Rate %'], ['count','Count']].map(([v, l]) => {
                       const active = liftDisplay === v
-                      return <button key={v} onClick={() => setLiftDisplay(v)} style={{ background: active ? '#C9A24F' : '#FBF6E8', color: active ? '#fff' : '#8A7F63', border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{l}</button>
+                      return <button key={v} onClick={() => setLiftDisplay(v)} style={{ background: active ? C.acc : C.acl, color: active ? '#fff' : C.t2, border: `1px solid ${active ? C.acc : C.acs}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{l}</button>
                     })}
                     <span style={{ width: 8 }} />
                     {['Category', 'Sub Category'].map(f => {
                       const active = crossFilter === f
-                      return <button key={f} onClick={() => setCrossFilter(f)} style={{ background: active ? '#C9A24F' : '#FBF6E8', color: active ? '#fff' : '#8A7F63', border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{f}</button>
+                      return <button key={f} onClick={() => setCrossFilter(f)} style={{ background: active ? C.acc : C.acl, color: active ? '#fff' : C.t2, border: `1px solid ${active ? C.acc : C.acs}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{f}</button>
                     })}
                   </div>
                 }
@@ -15304,24 +17143,24 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       </colgroup>
                       <thead>
                         <tr style={{ background: CP.head }}>
-                          <th style={{ padding: '5px 8px', textAlign: 'left', color: CP.ink3, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>1st Purchase ↓ / 2nd →</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', color: CP.ink3, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>1st Purchase ↓ / 2nd →</th>
                           {liftCols.map(s => (
-                            <th key={s} style={{ padding: '5px 6px', textAlign: 'center', color: CP.ink, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s}>{s.length > 10 ? s.slice(0,10)+'…' : s}</th>
+                            <th key={s} style={{ padding: '10px 12px', textAlign: 'center', color: CP.ink, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s}>{s.length > 10 ? s.slice(0,10)+'…' : s}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {liftRows.map((f, ri) => (
-                          <tr key={f} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: ri % 2 === 0 ? '#FDFCF8' : '#FFF' }}>
-                            <td style={{ padding: '5px 8px', color: CP.ink2, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>{f}</td>
+                          <tr key={f} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: ri % 2 === 0 ? C.hov : '#FFF' }}>
+                            <td style={{ padding: '8px 12px', color: CP.ink2, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>{f}</td>
                             {liftCols.map(s => {
                               const cnt = countMatrix[f]?.[s] || 0
                               const lv = liftVal(f, s)
                               const rv = rateVal(f, s)
-                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(245,197,24,${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(245,197,24,${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
                               const display = liftDisplay === 'lift' ? (lv != null && cnt >= 5 ? `${lv}×` : '') : liftDisplay === 'rate' ? (rv > 0 ? `${rv}%` : '') : (cnt > 0 ? fmtN(cnt) : '')
                               return (
-                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '5px 6px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
+                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
                                   {display}
                                 </td>
                               )
@@ -15394,7 +17233,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === '% of Repeaters' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="pct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="% of Repeaters" />
                           </ComposedChart>
@@ -15419,7 +17258,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => v === '1' ? '1st time' : v === '2' ? '2nd time' : v === '3' ? '3rd time' : v === '6+' ? '6th+ time' : `${v}th time`} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellowDeep} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="cumPct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Cumulative %" />
                           </ComposedChart>
@@ -15447,7 +17286,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <YAxis yAxisId="aov" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => `${v} time`} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                            <Legend {...chartLegendProps({ fontSize: 9 })} />
                             <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="cust" type="monotone" dataKey="customers" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Customers" strokeDasharray="4 3" />
                           </ComposedChart>
@@ -15581,9 +17420,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
-                          <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>First Purchase</th>
-                          <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Then Bought</th>
-                          <th style={{ textAlign: 'right', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Customers</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: 12, color: CP.ink3, fontWeight: 600, letterSpacing: 0.2 }}>First Purchase</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: 12, color: CP.ink3, fontWeight: 600, letterSpacing: 0.2 }}>Then Bought</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 12, color: CP.ink3, fontWeight: 600, letterSpacing: 0.2 }}>Customers</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -15600,9 +17439,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             .slice(0, 7)
                             .map((r, i) => (
                               <tr key={i} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
-                                <td style={{ padding: '6px 8px', color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{r.first || '—'}</td>
-                                <td style={{ padding: '6px 8px', color: CP.ink, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{r.second || '—'}</td>
-                                <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: CP.ink }}>{fmtN(r.customers)}</td>
+                                <td style={{ padding: '8px 12px', color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{r.first || '—'}</td>
+                                <td style={{ padding: '8px 12px', color: CP.ink, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{r.second || '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: CP.ink }}>{fmtN(r.customers)}</td>
                               </tr>
                             ))
                         })()}
@@ -15620,10 +17459,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
         {activeTab === 'rfm' && (() => {
           // ── Design tokens ──────────────────────────────────────
           const RS = {
-            bg: '#FDFCF8', card: '#FFFFFF', border: '#E2D9C8', borderSoft: '#EDE7DA',
-            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
-            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
-            gold: '#D3B36C', green: '#9CA875', red: '#CFA579',
+            bg: C.bg, card: '#FFFFFF', border: C.border2, borderSoft: C.border,
+            t1: C.t1, t2: C.t2, t3: C.t3,
+            amber: C.acs, amberDeep: C.acc, amberSoft: C.acl, amberLine: C.acs,
+            gold: C.acc, green: C.green.tx, red: C.red.tx,
           }
 
           // ── RFM segment taxonomy ────────────────────────────────
@@ -15663,7 +17502,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             <div style={{ background: RS.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: C.t1, textTransform: 'uppercase', letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 5 }}>
                     {title}
                     {infoTooltip && (
                       <span className="rscard-info-wrap" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
@@ -15672,7 +17511,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       </span>
                     )}
                   </div>
-                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                  {sub && <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{sub}</div>}
                 </div>
                 {action && <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{action}</div>}
               </div>
@@ -15719,7 +17558,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const hibSeg = rfm.find(r => r.segment === 'Hibernating')
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 24, paddingRight: 24, paddingBottom: 24, width: '100%', boxSizing: 'border-box' }}>
 
               {/* 1. Insight banner */}
               <div style={{ background: RS.amberSoft, border: `1px solid ${RS.amberLine}`, borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -15734,7 +17573,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
                   { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'All RFM segments combined', tooltip: 'Total unique customers across all 7 RFM segments. This is your entire analyzed customer base.' },
-                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: '#FFF7ED', sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
+                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
                   { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
                   { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },
                 ].map((kpi, i) => (
@@ -15753,7 +17592,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <div className="rfm-kpi-tt" style={{
                       opacity: 0, pointerEvents: 'none', transition: 'opacity .15s',
                       position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
-                      background: '#ffffff', color: '#3A3324', fontSize: 11, lineHeight: 1.5, border: '1px solid #E8DFC8',
+                      background: '#ffffff', color: C.t1, fontSize: 11, lineHeight: 1.5, border: `1px solid ${C.border2}`,
                       padding: '7px 10px', borderRadius: 7, whiteSpace: 'normal', width: 200,
                       boxShadow: '0 4px 14px rgba(0,0,0,.18)', zIndex: 99, textAlign: 'center',
                     }}>{kpi.tooltip}</div>
@@ -15765,7 +17604,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
                 {/* RFM Segments list */}
-                <RSCard title="RFM Segments" sub={`${rfmSorted.length} segments · sorted by revenue`} infoTooltip={<>Segments are assigned based on R + F + M scores:<br/><br/><table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><tbody><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≥4</td><td style={{padding:'2px 0'}}>Champions</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; F≥3</td><td>Loyal Customers</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≤2</td><td>Recent Users</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; M≥3</td><td>Potential Loyalists</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥3</td><td>Cannot Lose Them</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥2</td><td>Hibernating</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Monetary ≥ ₹5000</td><td>Others</td></tr><tr><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Everything else</td><td>Hibernating</td></tr></tbody></table></>}>
+                <RSCard title="RFM Segments" sub={`${rfmSorted.length} segments · sorted by revenue`} infoTooltip={<>Segments are assigned based on R + F + M scores:<br/><br/><table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><tbody><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≥4</td><td style={{padding:'2px 0'}}>Champions</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; F≥3</td><td>Loyal Customers</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≤2</td><td>Recent Users</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; M≥3</td><td>Potential Loyalists</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥3</td><td>Cannot Lose Them</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥2</td><td>Hibernating</td></tr><tr style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Monetary ≥ ₹5000</td><td>Others</td></tr><tr><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Everything else</td><td>Hibernating</td></tr></tbody></table></>}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {rfmSorted.map((seg, i) => {
                       const name = seg.segment || 'Unknown'
@@ -15853,7 +17692,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           const emptyReason = isEmpty ? (emptyReasons[ri]?.[ci] || 'No customers fall into this recency + frequency combination.') : ''
                           return (
                             <div key={ci} className="rfm-grid-cell" style={{
-                              background: isEmpty ? RS.borderSoft : `rgba(201,162,79,${intensity})`,
+                              background: isEmpty ? RS.borderSoft : `rgba(${C.accRgb},${intensity})`,
                               border: `1px solid ${isEmpty ? RS.borderSoft : RS.amberLine}`,
                               borderRadius: 8,
                               padding: isEmpty ? 0 : '10px 12px',
@@ -15939,12 +17778,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 const SM_GREEN_SOFT = '#EEF3E8'
                 const SM_RED        = '#B5615A'
                 const SM_RED_SOFT   = '#FAEEEC'
-                const SM_AMBER_SOFT = '#FBF6E8'
-                const SM_AMBER_LINE = '#F0E2BC'
-                const SM_BORDER     = '#F0EADC'
-                const SM_T1         = '#3A3324'
-                const SM_T2         = '#8A7F63'
-                const SM_T3         = '#B8AE93'
+                const SM_AMBER_SOFT = C.acl
+                const SM_AMBER_LINE = C.acs
+                const SM_BORDER     = C.border
+                const SM_T1         = C.t1
+                const SM_T2         = C.t2
+                const SM_T3         = C.t3
 
                 const MigRow = ({ row, max, barColor, barBg }) => (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 52px', gap: 8, alignItems: 'center' }}>
@@ -15962,7 +17801,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   <div style={{ background: '#FFFFFF', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${SM_BORDER}` }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: SM_AMBER_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#C9A24F' }}>↔</div>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: SM_AMBER_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: C.acc }}>↔</div>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 800, color: SM_T1, fontFamily: 'Inter, sans-serif' }}>Segment Migration</div>
                         <div style={{ fontSize: 10.5, color: SM_T2, fontFamily: 'Inter, sans-serif' }}>Who moved between RFM segments this period vs last</div>
@@ -16108,9 +17947,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           // Bug 3: metaCac/googleCac don't exist in API — show "—" instead of ₹0
 
           const SD = {
-            bg: '#FDFCF8', card: '#FFFFFF', border: '#E2D9C8', borderSoft: '#EDE7DA',
-            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
-            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
+            bg: C.bg, card: '#FFFFFF', border: C.border2, borderSoft: C.border,
+            t1: C.t1, t2: C.t2, t3: C.t3,
+            amber: C.acs, amberDeep: C.acc, amberSoft: C.acl, amberLine: C.acs,
             blue: '#4A7CC7', blueSoft: '#EBF1FB',
           }
 
@@ -16264,7 +18103,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           )
                         }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Legend {...chartLegendProps({ fontSize: 11 })} />
                       <Bar yAxisId="spend" dataKey="totalSpend" fill={SD.amber} name="Total Spend" maxBarSize={40} radius={[3,3,0,0]} />
                       <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={SD.blue} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />
                       <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
@@ -16291,12 +18130,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
                           <YAxis yAxisId="pct" orientation="right" hide />
                           <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %' || name === 'Repeat Customer %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
-                          <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                          <Legend {...chartLegendProps({ fontSize: 11 })} />
                           <Bar yAxisId="orders" dataKey="totalOrders" fill={SD.amberDeep} name="Total Orders" radius={[3,3,0,0]} />
                           <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
                           <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke="#E07000" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 3, fill: '#E07000' }} name="Avg Disc %" />
                           <Line yAxisId="pct" type="monotone" dataKey="revPct" stroke="#2E74CC" strokeWidth={1.5} strokeDasharray="2 2" dot={{ r: 3, fill: '#2E74CC' }} name="Revenue %" />
-                          <Line yAxisId="pct" type="monotone" dataKey="repeatPct" stroke="#7C6F3E" strokeWidth={1.5} strokeDasharray="3 2" dot={{ r: 3, fill: '#7C6F3E' }} name="Repeat Customer %" />
+                          <Line yAxisId="pct" type="monotone" dataKey="repeatPct" stroke="#7C6F3E" strokeWidth={1.5} strokeDasharray="3 2" dot={{ r: 3, fill: C.acd }} name="Repeat Customer %" />
                         </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
@@ -16321,8 +18160,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <ResponsiveContainer width={160} height={160}>
                             <PieChart>
                               <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={2}>
-                                <Cell fill="#C9A24F" />
-                                <Cell fill="#E4DAC0" />
+                                <Cell fill={C.acc} />
+                                <Cell fill={C.acs} />
                               </Pie>
                               <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
                             </PieChart>
@@ -16335,8 +18174,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         {/* Stat rows */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                           {[
-                            { name: 'Discounted', color: '#C9A24F', orders: totalDiscountedOrders, rev: discountedRev, aov: discountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Discounted') },
-                            { name: 'Non-Discounted', color: '#E4DAC0', orders: totalNonDiscountedOrders, rev: nonDiscountedRev, aov: nonDiscountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Non-Discounted') },
+                            { name: 'Discounted', color: C.acc, orders: totalDiscountedOrders, rev: discountedRev, aov: discountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Discounted') },
+                            { name: 'Non-Discounted', color: C.acs, orders: totalNonDiscountedOrders, rev: nonDiscountedRev, aov: nonDiscountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Non-Discounted') },
                           ].map((g, i) => (
                             <div key={i}>
                               {i > 0 && <div style={{ borderTop: `1px solid ${SD.borderSoft}`, margin: '10px 0' }} />}
@@ -16406,11 +18245,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             return [`${v}%`, name]
                           }}
                         />
-                        <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif', paddingTop: 8, bottom: 0 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                        <Legend {...chartLegendProps({ fontSize: 10 })} />
                         <Bar yAxisId="orders" dataKey="totalOrders" name="Total Orders" fill={SD.amberDeep} radius={[3,3,0,0]} maxBarSize={36} />
                         <Line yAxisId="pct" type="monotone" dataKey="discountedOrderPct" name="% Orders Discounted" stroke="#E07000" strokeWidth={2} dot={{ r: 3, fill: '#E07000' }} />
                         <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" name="Avg Disc %" stroke="#2E74CC" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2E74CC' }} />
-                        <Line yAxisId="pct" type="monotone" dataKey="repeatOrderPct" name="Repeat Order %" stroke="#7C6F3E" strokeWidth={2} strokeDasharray="3 2" dot={{ r: 3, fill: '#7C6F3E' }} />
+                        <Line yAxisId="pct" type="monotone" dataKey="repeatOrderPct" name="Repeat Order %" stroke="#7C6F3E" strokeWidth={2} strokeDasharray="3 2" dot={{ r: 3, fill: C.acd }} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -16473,7 +18312,7 @@ function AppInner() {
   }, [session])
 
   if (session === undefined) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+    <LoadingScreen />
   )
   if (session === 'recovery') return <ResetPasswordPage />
 
@@ -16490,7 +18329,7 @@ function AppInner() {
 
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+    <LoadingScreen />
   )
 
   const isAdmin = profile.is_admin === true
@@ -16512,6 +18351,12 @@ function DocumentsPage({ setPage }) {
       title: 'Logistics Bill Ledger',
       description: 'Track B2B freight & B2C courier invoices line by line.',
       icon: '🚚',
+    },
+    {
+      id: 'purchase-ledger',
+      title: 'Purchase Ledger',
+      description: 'Upload domestic, import & packaging purchase data.',
+      icon: '🧾',
     },
   ]
   return (
@@ -16555,6 +18400,19 @@ function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => a
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
+  // Colour theme. index.html already applied the stored value to <html> before
+  // first paint, so this only mirrors it into React state for the picker.
+  const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
+  const [theme, setThemeState] = useState(readStoredTheme)
+  const setTheme = useCallback(id => {
+    const applied = applyTheme(id)
+    // Drop memoised token reads so C.*/IC.* resolve against the new theme.
+    invalidateTokenCache()
+    storeTheme(applied)
+    setThemeState(applied)
+  }, [])
+  useEffect(() => { applyTheme(theme); invalidateTokenCache() }, [theme])
+
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -16565,6 +18423,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const seg1 = parts[1] || null
     const seg2 = parts[2] || null
     // Map URL segments to internal page IDs
+    if (seg0 === 'logistics' && seg1 === 'courier_allocation') return { page: 'courier-allocation', sub: null, sub2: null }
     if (seg0 === 'logistics' && seg1 === 'cost_analytics') return { page: 'logistics-cost', sub: null, sub2: null }
     if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null } // legacy redirect
     if (seg0 === 'logistics') return { page: 'logistics', sub: null, sub2: null }
@@ -16578,7 +18437,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
   const goTo = (page, sub, sub2) => {
     let path
-    if (page === 'logistics-cost') path = '/logistics/cost_analytics'
+    if (page === 'courier-allocation') path = '/logistics/courier_allocation'
+    else if (page === 'logistics-cost') path = '/logistics/cost_analytics'
     else if (page === 'logistics') path = '/logistics/performance_analytics'
     else if (page === 'inventory') path = `/inventory/${sub === 'health' ? 'inventory_health' : sub === 'sales' ? 'sales_allocation' : (sub || 'inventory_health')}`
     else if (page === 'sales') path = sub2 ? `/sales/${sub || 'all'}/${sub2}` : `/sales/${sub || 'all'}`
@@ -16668,6 +18528,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     }
     const isPageAllowed = page === 'profile' ? true :
       page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
+      // Shares Cost Analytics' permission: there is no separate allowedTabs entry for it,
+      // so without this branch the generic allowedTabs.includes(page) test fails and a
+      // user with cost access is bounced straight back to their default page.
+      page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
@@ -16688,6 +18552,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [fetchPending, setFetchPending] = useState(true)
   const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
@@ -16717,17 +18582,20 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Client-side cache: key → response data. Cleared when dates change.
   const clientCacheRef = useRef(new Map())
 
-  const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
+  const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false, force = false) => {
     const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
     const cacheKey = JSON.stringify({ start, end, ...extraFilters, channel: ch })
 
-    // Client-side cache hit: skip fetch entirely
-    if (keepPrev && clientCacheRef.current.has(cacheKey)) {
+    // Client-side cache hit: skip the fetch entirely. Checked for every call, not
+    // just keepPrev ones - the cache key already identifies the response exactly, so
+    // re-requesting it would return the same rows after a visible delay.
+    if (!force && clientCacheRef.current.has(cacheKey)) {
+      const cached = clientCacheRef.current.get(cacheKey)
       setRawRows(prev => {
-        const cached = clientCacheRef.current.get(cacheKey)
-        if (prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
         return cached
       })
+      setFetchPending(false)
       return
     }
 
@@ -16755,6 +18623,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             return c
           })
           setLoading(false)
+          setFetchPending(false)
           return
         }
       } catch (_) {}
@@ -16788,7 +18657,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         setRawRows(null)
       }
     }
-    finally { if (reqId === reqIdRef.current) setLoading(false) }
+    finally { if (reqId === reqIdRef.current) { setLoading(false); setFetchPending(false) } }
   }, [API])
 
   const debounceRef = useRef(null)
@@ -16798,6 +18667,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   useEffect(() => {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
+    // Intentional: this effect schedules an external fetch, and the flag records that
+    // a request is now on its way. Writing it here is the point - it is what stops the
+    // empty state flashing during the debounce window.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
@@ -16839,10 +18713,30 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       {
         const logRange = getMaturityAdjustedRange({ start, end })
         setLogisticsRangeLabel(logRange.label || `· ${logRange.start} – ${logRange.end}`)
-        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => { if (j) setLogisticsData(j) })
-          .catch(() => {})
+        // Try static CDN file first (same file the Logistics tab uses) — instant load.
+        // Fall back to live BQ only if date range doesn't match.
+        const tryStatic = async () => {
+          try {
+            const res = await fetch('/logistics-data.json')
+            if (!res.ok) return false
+            const json = await res.json()
+            const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+            const dateMatches = json.dateRange && json.dateRange.start === logRange.start && json.dateRange.end === logRange.end
+            if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
+              setLogisticsData(json.current)
+              return true
+            }
+          } catch {}
+          return false
+        }
+        tryStatic().then(hit => {
+          if (!hit) {
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
+              .then(r => r.ok ? r.json() : null)
+              .then(j => { if (j) setLogisticsData(j) })
+              .catch(() => {})
+          }
+        })
       }
       // Overview-only fetches (Logistics Cost / Facility Allocation / Inventory Snapshot /
       // Customer Summary tiles) — gated behind page==='overview' so switching filters on any
@@ -17101,34 +18995,29 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
+      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        {(loading || inventoryDateControl?.loading) && (
-          <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-            <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-          </div>
-        )}
+        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
+        <LoadingOverlay loading={loading || fetchPending} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
-            <button onClick={() => fetchData(filters.start, filters.end)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+            <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'logistics-cost' && page !== 'ads' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: C.t1, marginBottom: 4 }}>Frido Intelligence Suite</div>
                 <div style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>Select a date range to load data</div>
-                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: '#13121A', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
+                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: C.onAcc, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
                   Load {filters.start} → {filters.end}
                 </button>
               </div>
             </div>
           )}
-          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'logistics-cost' && page !== 'ads' && page !== 'customer' && <Skeleton />}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} logisticsCostData={logisticsCostData} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
@@ -17136,7 +19025,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
-          {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
@@ -17147,12 +19035,20 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'logistics' && (!allowedTabs || allowedTabs.includes('logistics')) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsPage filters={filters} page={page} setPage={setPage} lFilters={lFilters} setLFilters={setLFilters} onFilterOptsChange={setLogisticsFilterOpts} />
+              <LogisticsPage filters={filters} page={page} setPage={setPage} lFilters={lFilters} setLFilters={setLFilters} onFilterOptsChange={setLogisticsFilterOpts} onFilterUI={setLogisticsFilterUI} />
             </div>
           )}
           {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs} />
+              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
+                onOpenAllocation={() => goTo('courier-allocation')} />
+            </div>
+          )}
+          {/* Gated behind the same permission as Cost Analytics: it is built from the same
+              invoice ledger and opens only from that tab. */}
+          {page === 'courier-allocation' && hasCostAccess(allowedTabs) && (
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <CourierAllocationPage onBack={() => goTo('logistics-cost')} />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (
@@ -17180,6 +19076,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <LogisticsLedgerPage />
             </div>
           )}
+          {page === 'purchase-ledger' && (
+            <div className="page-scroll">
+              <PurchaseLedgerPage />
+            </div>
+          )}
           {page === 'profile' && (
             <div className="page-scroll">
               <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} />
@@ -17195,5 +19096,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 export default function App() {
   return <ErrorBoundary><AppInner /></ErrorBoundary>
 }
+
 
 

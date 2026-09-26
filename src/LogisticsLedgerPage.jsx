@@ -1,15 +1,16 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import * as XLSXStyle from "xlsx-js-style";
-import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, RefreshCw, Save, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, Warehouse, RefreshCw, Save, AlertCircle } from "lucide-react";
 import { supabase } from "./supabase.js";
+import { C as BASE_C } from "./utils.js";
 
 // ── SCHEMA CONFIG ────────────────────────────────────────────────────────────
 
 const FORMATS = {
   b2b: {
     key: "b2b",
-    label: "B2B · Freight",
+    label: "FTL/PTL",
     icon: Truck,
     table: "logistics_invoices_b2b",
     templateFile: "b2b_courier_invoice_template.xlsx",
@@ -91,11 +92,87 @@ const FORMATS = {
       "payment_mode expects Prepaid or COD. shipment_mode expects Forward, RTO or Reverse.",
     ],
   },
+  threePL: {
+    key: "threePL",
+    label: "3PL · Warehousing",
+    icon: Warehouse,
+    table: "logistics_costs_3pl",
+    templateFile: "3pl_cost_template.xlsx",
+    exportPrefix: "3pl_warehousing_costs",
+    totalParts: ["operation_fee", "rental_fee", "other_fee"],
+    totalField: "total_cost",
+    // One bill line per 3PL per warehouse per month, so a re-upload of the same
+    // month corrects that month in place instead of doubling it.
+    // Keyed on FACILITY_PINCODE, not a facility name: the pincode is what joins this ledger
+    // to Clickpost's pickup_pincode, so per-parcel and per-kg costs depend on it being
+    // present and correct. Names vary between the invoice and the tracking feed; a pincode
+    // does not.
+    uniqueKey: "month_year,threepl_logistics_name,facility_pincode",
+    fields: [
+      { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
+      { key: "threepl_logistics_name", label: "3PL_Logistics_Name", type: "text", req: true, w: 190, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
+      { key: "facility_name", label: "Facility_Name", type: "text", w: 170, ex: "Hexalog_GGN2", desc: "Facility as the partner names it" },
+      { key: "facility_location", label: "Facility_Location", type: "text", w: 150, ex: "Bhiwandi", desc: "City or area the facility sits in" },
+      { key: "facility_pincode", label: "Facility_Pincode", type: "text", req: true, w: 140, ex: "421302", desc: "Pincode of the facility — joins to shipment volume" },
+      { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "3PL-INV-20713", desc: "Partner's invoice/bill number" },
+      { key: "operation_fee", label: "operation_fee", type: "num", w: 130, ex: "185000", desc: "Pick, pack and despatch handling charges" },
+      { key: "rental_fee", label: "rental_fee", type: "num", w: 120, ex: "260000", desc: "Storage or space rental for the period" },
+      { key: "other_fee", label: "other_fee", type: "num", w: 120, ex: "15500", desc: "Any other charge not covered above" },
+      { key: "total_cost", label: "total_cost", type: "num", req: true, computed: true, w: 130, ex: "460500", desc: "Grand total invoiced for the period" },
+      { key: "remarks", label: "remarks", type: "text", w: 220, ex: "Includes one-off racking charge", desc: "Free-text note" },
+    ],
+    searchKeys: ["threepl_logistics_name", "facility_name", "facility_location", "facility_pincode", "invoice_number", "month_year"],
+    notes: [
+      "One row = one 3PL's charges for one facility for one month.",
+      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode UPDATES that row rather than adding a duplicate.",
+      "Facility_Pincode must match the pickup pincode the courier records for that facility — it is what links this bill to the parcels shipped, and cost per parcel / per kg stay blank without it.",
+      "month_year must be YYYY-MM (e.g. 2026-07).",
+      "total_cost is computed as operation_fee + rental_fee + other_fee when left blank.",
+      "Leave a fee blank or 0 if the partner did not bill it that month.",
+    ],
+  },
+  fixedVehicles: {
+    key: "fixedVehicles",
+    label: "FTL/PTL · Rental Fixed Vehicle",
+    parent: "b2b",
+    icon: Truck,
+    table: "logistics_fixed_vehicles",
+    templateFile: "fixed_vehicle_template.xlsx",
+    exportPrefix: "fixed_vehicle_rentals",
+    totalParts: [],
+    totalField: "cost",
+    uniqueKey: "month_year,vehicle_number",
+    fields: [
+      { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-04", desc: "Month this rental covers" },
+      { key: "location", label: "location", type: "text", req: true, w: 170, ex: "Talwade, Pune", desc: "Site the vehicle is stationed at" },
+      { key: "transport_name", label: "transport_name", type: "text", req: true, w: 190, ex: "RN Transport", desc: "Transporter the vehicle is rented from" },
+      { key: "vehicle_type", label: "vehicle_type", type: "text", w: 130, ex: "Pickup", desc: "Type/size of vehicle" },
+      { key: "vehicle_number", label: "vehicle_number", type: "text", req: true, w: 160, ex: "MH 14 JL 6920", desc: "Registration number" },
+      { key: "agreed_km", label: "agreed_km", type: "num", w: 140, ex: "3000", desc: "Kilometres included in the monthly charge" },
+      { key: "cost", label: "cost", type: "num", req: true, w: 130, ex: "55000", desc: "Fixed monthly charge for this vehicle" },
+      { key: "remarks", label: "remarks", type: "text", w: 200, ex: "Contract renewed Apr'26", desc: "Free-text note" },
+    ],
+    searchKeys: ["location", "transport_name", "vehicle_number", "vehicle_type", "month_year"],
+    notes: [
+      "One row = one vehicle's fixed charge for one month.",
+      "Re-uploading the same month_year + vehicle_number UPDATES that row rather than adding a duplicate.",
+      "month_year must be YYYY-MM (e.g. 2026-04).",
+      "cost is the standing monthly charge, not a per-trip rate — it is reported separately from FTL/PTL freight and never divided by trips.",
+      "agreed_km is the distance included in that charge, for tracking overruns.",
+    ],
+  },
 };
 
 // ── DATA LAYER ───────────────────────────────────────────────────────────────
 
 const PK = "id";
+
+// uniqueKey is a comma-separated column list so a format can be keyed on a
+// combination (3PL is one row per month + partner + warehouse). These helpers let
+// the single-column formats keep working unchanged.
+const keyFields = (fmt) => (fmt.uniqueKey ? fmt.uniqueKey.split(",").map((k) => k.trim()).filter(Boolean) : []);
+const keyOf = (fmt, row) => keyFields(fmt).map((k) => String(row?.[k] ?? "").trim().toLowerCase()).join(" | ");
+const keyLabel = (fmt) => keyFields(fmt).map((k) => fmt.fields.find((f) => f.key === k)?.label ?? k).join(" + ");
 
 const db = {
   async fetchRows(fmt, monthFilter) {
@@ -156,7 +233,7 @@ const db = {
       // Deduplicate within chunk — last row wins (matches upsert semantics)
       if (fmt.uniqueKey) {
         const seen = new Map();
-        for (const r of chunk) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+        for (const r of chunk) seen.set(keyOf(fmt, r), r);
         chunk = [...seen.values()];
       }
       const q = fmt.uniqueKey
@@ -346,11 +423,11 @@ export default function LogisticsLedgerPage() {
   const dupKeys = useMemo(() => {
     if (!fmt.uniqueKey) return new Set();
     const seen = new Map();
-    for (const r of rows) { const v = String(r[fmt.uniqueKey] ?? "").trim().toLowerCase(); if (!v) continue; seen.set(v, (seen.get(v) ?? 0) + 1); }
+    for (const r of rows) { const v = keyOf(fmt, r); if (!v.replace(/s||/g, "")) continue; seen.set(v, (seen.get(v) ?? 0) + 1); }
     return new Set(Array.from(seen).filter(([, n]) => n > 1).map(([v]) => v));
   }, [rows, fmt]);
 
-  const isDup = (r) => !!fmt.uniqueKey && dupKeys.has(String(r[fmt.uniqueKey] ?? "").trim().toLowerCase());
+  const isDup = (r) => !!fmt.uniqueKey && dupKeys.has(keyOf(fmt, r));
 
   const totals = useMemo(() => {
     let amount = 0;
@@ -381,7 +458,7 @@ export default function LogisticsLedgerPage() {
 
   const saveAll = async () => {
     if (dupKeys.size) {
-      const label = fmt.fields.find((f) => f.key === fmt.uniqueKey).label;
+      const label = keyLabel(fmt);
       flash("error", `Fix duplicate ${label}s before saving: ${Array.from(dupKeys).slice(0, 5).join(", ")}`);
       return;
     }
@@ -434,7 +511,7 @@ export default function LogisticsLedgerPage() {
     reader.onload = async () => {
       try {
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
-        const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
+        const sigKeys = [...(keyFields(fmt).length ? keyFields(fmt) : ["reference_no"]), "invoice_number"].filter(Boolean);
 
         // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
         let uploaded = 0, totalValid = 0;
@@ -454,7 +531,7 @@ export default function LogisticsLedgerPage() {
               // Deduplicate within chunk — last row wins
               if (fmt.uniqueKey) {
                 const seen = new Map();
-                for (const r of dbRows) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+                for (const r of dbRows) seen.set(keyOf(fmt, r), r);
                 dbRows = [...seen.values()];
               }
               const q = fmt.uniqueKey
@@ -590,7 +667,9 @@ export default function LogisticsLedgerPage() {
   const TabIcon = fmt.icon;
 
   // light theme matching other dashboard tabs
-  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#E8E4DA', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', green: '#166534', red: '#9E2B25' };
+  // Theme tokens, not a private palette: this page used to keep a fixed grey/green
+  // look whatever theme was active. green/red stay semantic (success/error).
+  const C = { bg: BASE_C.bg, card: BASE_C.card, border: BASE_C.border, t1: BASE_C.t1, t2: BASE_C.t2, t3: BASE_C.t3, accent: BASE_C.acc, green: BASE_C.green.tx, red: BASE_C.red.tx };
 
   const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
   const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
@@ -699,8 +778,8 @@ export default function LogisticsLedgerPage() {
 
       {/* Format tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-        {Object.values(FORMATS).map((f) => {
-          const Ico = f.icon; const active = f.key === tab;
+        {Object.values(FORMATS).filter((f) => !f.parent).map((f) => {
+          const Ico = f.icon; const active = f.key === tab || FORMATS[tab]?.parent === f.key;
           return (
             <button key={f.key} onClick={() => setTab(f.key)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', borderBottom: `2px solid ${active ? C.accent : 'transparent'}`, padding: '8px 14px', fontSize: 13, fontWeight: 600, color: active ? C.accent : C.t2, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -710,6 +789,29 @@ export default function LogisticsLedgerPage() {
         })}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: C.t3, fontFamily: 'monospace', paddingBottom: 8 }}>{fmt.table}</span>
       </div>
+
+      {/* Sub-views of the active ledger. FTL/PTL carries two: the per-trip freight
+          ledger, and vehicles on a standing monthly charge. Kept apart because a
+          rental has one location rather than a lane and no trips to divide by, so its
+          cost must never enter the per-trip or per-lane freight figures. */}
+      {(() => {
+        const parentKey = FORMATS[tab]?.parent || tab
+        const views = Object.values(FORMATS).filter((f) => f.key === parentKey || f.parent === parentKey)
+        if (views.length < 2) return null
+        return (
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {views.map((v) => {
+              const on = v.key === tab
+              return (
+                <button key={v.key} onClick={() => setTab(v.key)}
+                  className={`tool-btn${on ? " is-active" : ""}`} aria-pressed={on}>
+                  {v.parent ? "Rental Fixed Vehicle" : "Freight (per trip)"}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -734,12 +836,12 @@ export default function LogisticsLedgerPage() {
           <thead>
             <tr>
               {fmt.fields.map((f, i) => (
-                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: '#F5F2EC', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
+                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: C.ach, textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
                   title={[f.desc, f.req ? 'Mandatory.' : 'Optional.', f.computed ? 'Auto-computed.' : null].filter(Boolean).join(' ')}>
                   {f.label}{f.req && <span style={{ color: C.red }}> *</span>}{f.computed && <span style={{ color: C.t3 }}> ƒ</span>}
                 </th>
               ))}
-              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F5F2EC', width: 40, borderBottom: `1px solid ${C.border}` }} />
+              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: C.ach, width: 40, borderBottom: `1px solid ${C.border}` }} />
             </tr>
           </thead>
           <tbody>
@@ -750,13 +852,13 @@ export default function LogisticsLedgerPage() {
             )}
             {filtered.map((r) => (
               <tr key={r._uid} style={{ borderBottom: `1px solid #F0ECE3` }}
-                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = '#FAFAF7')}
+                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = C.hov)}
                 onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = C.card)}>
                 {fmt.fields.map((f, i) => {
                   const isTotal = f.key === fmt.totalField;
                   const derived = isTotal && !isTotalOverridden(fmt, r);
                   const shown = derived ? effectiveTotal(fmt, r) : r[f.key] ?? "";
-                  const dupCell = f.key === fmt.uniqueKey && isDup(r);
+                  const dupCell = keyFields(fmt).includes(f.key) && isDup(r);
                   return (
                     <td key={f.key} style={{ padding: 0, background: C.card, position: i === 0 ? 'sticky' : undefined, left: i === 0 ? 0 : undefined, zIndex: i === 0 ? 1 : undefined }}>
                       <input
@@ -765,7 +867,7 @@ export default function LogisticsLedgerPage() {
                         inputMode={f.type === "num" || f.type === "int" ? "decimal" : undefined}
                         onChange={(e) => setCell(r._uid, f.key, e.target.value)}
                         onBlur={() => commitCell(r._uid)}
-                        style={{ width: '100%', border: 'none', background: dupCell ? '#FEF2F2' : 'transparent', padding: '9px 10px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
+                        style={{ width: '100%', border: 'none', background: dupCell ? '#FEF2F2' : 'transparent', padding: '10px 12px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
                         title={dupCell ? `Duplicate ${f.label}` : derived ? "Computed — type to override" : undefined}
                       />
                     </td>
@@ -785,8 +887,10 @@ export default function LogisticsLedgerPage() {
       {/* Footer note */}
       <p style={{ fontSize: 11.5, color: C.t3, marginTop: 12, lineHeight: 1.6 }}>
         <strong style={{ color: C.t2 }}>{fmt.label}</strong> ·{' '}
-        {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{fmt.fields.find((f) => f.key === fmt.uniqueKey).label}</strong>. Re-uploading an existing AWB <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
-        <span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.
+        {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{keyLabel(fmt)}</strong>. Re-uploading an existing one <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
+        {fmt.totalParts.length > 0
+          ? <><span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.</>
+          : <>Cost is the standing monthly charge, entered directly.</>}
       </p>
     </div>
   );

@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
     <title>Frido Navigator</title>
+    <script>
+      // Applied before first paint so the saved theme is already on <html> when the
+      // stylesheet resolves - otherwise the page paints the default palette first and
+      // visibly flips once React mounts. Inline and synchronous on purpose.
+      (function () {
+        try {
+          var t = localStorage.getItem("frido.theme");
+          document.documentElement.setAttribute("data-theme", ["gold", "indigo", "forest"].indexOf(t) >= 0 ? t : "forest");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "forest");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

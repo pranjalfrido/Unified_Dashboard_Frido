@@ -4,6 +4,11 @@
 
 import { writeFileSync } from 'fs'
 import { createServer } from 'http'
+// In CI the env comes from repository secrets; locally it comes from .env. Without this
+// the script died with "SUPABASE_URL not configured" when run by hand, which is exactly
+// when you want to regenerate the cache after an upload.
+import { config } from 'dotenv'
+config()
 
 // Import the handler directly to avoid needing an HTTP server
 // This runs the exact same code path as the API, using the same SUPABASE_URL env var.
@@ -26,10 +31,16 @@ const fakeRes = {
   json(body) { responseBody = body; return this },
 }
 
-await handler(fakeReq, fakeRes)
+try {
+  await handler(fakeReq, fakeRes)
+} catch (e) {
+  console.warn(`⚠️  logistics-cost handler threw: ${e.message} — keeping last good JSON, workflow continues`)
+  process.exit(0)
+}
 
 if (responseStatus !== 200 || !responseBody) {
-  throw new Error(`Handler returned status ${responseStatus}: ${JSON.stringify(responseBody)}`)
+  console.warn(`⚠️  logistics-cost handler returned status ${responseStatus}: ${JSON.stringify(responseBody)} — keeping last good JSON, workflow continues`)
+  process.exit(0)
 }
 
 // Add a timestamp so the frontend can check freshness

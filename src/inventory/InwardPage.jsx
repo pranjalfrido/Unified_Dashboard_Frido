@@ -25,7 +25,7 @@ const SLICER_HEIGHT = 32
 const SIDEBAR_WIDTH = 220
 
 // ── Left filter sidebar — same pattern as the other two tabs, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, sidebarTop, popover}) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'facility', 'vendor'].some(k => filters[k]?.length)
@@ -34,19 +34,19 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   // instead of a live getBoundingClientRect() measurement (see InventoryHealthPage.jsx's
   // FilterSidebar for the full writeup on why the measured approach could drift).
   return (
-    <div style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — without this, the app shell's grey
-      // shows through where this outer div's own box sits before the fixed panel visually begins.
-      background: IC.surface,
+      overflow: 'hidden', flexShrink: 0,
+      // Width-reserver only: its child is position:fixed. Deliberately transparent so the
+      // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(open ? {
-          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)', zIndex: 50,
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
+          position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)', zIndex: 50,
+          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
         {sidebarTop}
@@ -227,18 +227,19 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
     <div style={{ display: 'flex', gap: 0 }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
+        width: 16, height: 40, border: '1px solid transparent', borderLeft: 'none',
+        background: IC.surface, cursor: 'pointer', borderRadius: '0 9px 9px 0', display: 'flex', alignItems: 'center',
+        boxShadow: '3px 0 6px -2px rgba(26,28,35,.10)',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'fixed', top: 'calc(var(--nav) + 4px)',
-        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
-        zIndex: 30, transition: 'left .2s ease',
+        position: 'fixed', top: 'calc(var(--nav) + 24px)',
+        left: sidebarOpen ? `calc(var(--sb) + 10px + ${SIDEBAR_WIDTH}px)` : 'calc(var(--sb) + 10px)',
+        zIndex: 30, transition: 'left .2s ease, box-shadow .18s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
@@ -287,16 +288,16 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
                   <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding: '7px 10px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
-                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
-                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.qtyReceived)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.soldQty)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.qtyRejected > 0 ? IC.status.Critical.c : IC.t2 }}>{fmtInt(r.qtyRejected)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(r.totalInvt)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.avgSale)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
+                    <td style={{ padding: '8px 12px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
+                    <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
+                    <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.qtyReceived)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.soldQty)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.qtyRejected > 0 ? IC.status.Critical.c : IC.t2 }}>{fmtInt(r.qtyRejected)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(r.totalInvt)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.avgSale)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -363,7 +364,7 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
         <GlassCard title="Sub-Category Breakdown" note="units received, top 20"
           action={<ExportButton filename="subcategory_breakdown.csv" rows={filteredData.subCategoryBreakdown}
             columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }]} />}>
-          <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filteredData.subCategoryBreakdown.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
             {filteredData.subCategoryBreakdown.slice(0, 20).map((sc, i) => (
               <BreakdownBar key={i} label={sc.subCategory} sub={sc.category} value={sc.qtyReceived} rejected={sc.qtyRejected} maxValue={maxSubCatQty} />
@@ -376,7 +377,7 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
           <GlassCard title="Vendor Performance" note="units received & rejection rate, top by volume"
             action={<ExportButton filename="vendor_performance.csv" rows={filteredData.vendorPerformance}
               columns={[{ label: 'Vendor', key: 'vendor' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }, { label: 'Rejection %', key: 'rejectionPct' }, { label: 'GRN Count', key: 'grnCount' }]} />}>
-            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {filteredData.vendorPerformance.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
               {filteredData.vendorPerformance.slice(0, 20).map((v, i) => (
                 <BreakdownBar key={i} label={v.vendor} sub={`${v.grnCount} GRNs · ${v.rejectionPct.toFixed(1)}% rejected`}

@@ -128,7 +128,7 @@ for (const [, entry] of invBySkuFacility) {
   if (!invBySkuLoc.has(mapKey)) invBySkuLoc.set(mapKey, { sku: entry.sku, skuKey: entry.skuKey, location: entry.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, facilities: [] })
   const acc = invBySkuLoc.get(mapKey)
   acc.totalInvt += entry.totalInvt; acc.rawInvt += entry.rawInvt; acc.rawBlockedInvt += entry.rawBlockedInvt; acc.rtdInvt += entry.rtdInvt
-  acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
+  acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, storeLocation: facilityToStoreLocation.get(entry.facility) || null, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
 }
 
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
@@ -380,10 +380,10 @@ function computePayload(windowDays) {
   // like totalInvt=90 / doi=0 / stockStatus="Out of Stock" once the real total was summed in.
   const skuLocMap = new Map()
   for (const r of skuFacilityRows) {
-    // Same Uncategorized exclusion as locFacTypeMap above — skuLocRows (built from this map)
-    // feeds both locationMap (Warehouse Health cards' own totalInvt) and rolledSkuMap's
+    // Same Uncategorized exclusion as locFacilityTypeMap above — skuLocRows (built from this
+    // map) feeds both locationMap (Warehouse Health cards' own totalInvt) and rolledSkuMap's
     // locations/facilities arrays, so leaving Uncategorized rows in here would reintroduce the
-    // same card-vs-table mismatch even after fixing locFacTypeMap on its own.
+    // same card-vs-table mismatch even after fixing locFacilityTypeMap on its own.
     if (r.category === 'Uncategorized') continue
     const locKey = `${r.skuKey}|${r.location}`
     // byFacility: one entry per facility contributing to this (sku, location), each carrying
@@ -481,38 +481,45 @@ function computePayload(windowDays) {
   let dominantStatus = null, dominantCount = -1
   for (const [st,cnt] of Object.entries(statusCounts)) { if (cnt > dominantCount) { dominantStatus = st; dominantCount = cnt } }
 
+  // locationMap is built from the already-filtered `skus` (Uncategorized excluded) so that
+  // WH health cards match the KPI tiles and table — previously built from raw skuLocRows,
+  // which included Uncategorized SKUs (316 rows / ~30k units at PNQ alone) and made the
+  // card totals higher than every other number on the page.
+  const categorizedSkuKeys = new Set(skus.map(s => s.skuKey))
   const locationMap = new Map()
   for (const r of skuLocRows) {
+    if (!categorizedSkuKeys.has(r.skuKey)) continue
     if (!locationMap.has(r.location)) locationMap.set(r.location, { location: r.location, totalInvt:0, rawInvt:0, rawBlockedInvt:0, rtdInvt:0, rawAvgSaleQty:0, rawTotalAvgSaleQty:0, orderAllocation:0 })
     const acc = locationMap.get(r.location)
     acc.totalInvt+=r.totalInvt; acc.rawInvt+=r.rawInvt; acc.rawBlockedInvt+=r.rawBlockedInvt; acc.rtdInvt+=r.rtdInvt
     acc.rawAvgSaleQty+=r.rawAvgSaleQty; acc.rawTotalAvgSaleQty+=r.rawTotalAvgSaleQty; acc.orderAllocation+=r.orderAllocation
   }
-  // Inventory-only breakdown per (Location, FacilityType) — sales/allocation are only ever
-  // attributed at Location grain (nearest-warehouse-by-state has no facility identity, see
-  // skuFacilityRows comment above), so avgSale/DOI/stockStatus cannot be meaningfully split by
-  // facility type without inventing numbers; this carries inventory figures only. Used so the
-  // Warehouse Health cards can show a single facility type's inventory instead of always
-  // combining every type at that location, and to build a company-wide Facility Type summary.
-  // Uncategorized (no item_master category mapping) SKUs are excluded from `skus` below (the
-  // SKU table/KPI tiles) — must be excluded here too, or this Warehouse Health breakdown counts
-  // stock the rest of the dashboard hides, producing a card total that doesn't match the KPI
-  // tiles/table for the same facility/location (confirmed: 30,748 units / 316 rows at PNQ alone).
-  const locFacTypeMap = new Map()
-  for (const r of skuFacilityRows) {
-    if (r.category === 'Uncategorized') continue
-    const key = `${r.location}|${r.facilityType}`
-    if (!locFacTypeMap.has(key)) locFacTypeMap.set(key, { location: r.location, facilityType: r.facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
-    const acc = locFacTypeMap.get(key)
-    acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+  // byFacilityType: per-location breakdown of inventory by facilityType — used by
+  // WhCarousel to show/hide cards when the Regular vs Other Facilities tab is active, and to
+  // build a company-wide Facility Type summary. Built from invBySkuFacility (facility grain)
+  // so facilityType is available. Uncategorized (no item_master category mapping) SKUs are
+  // excluded from `skus` below (the SKU table/KPI tiles) — must be excluded here too, via
+  // categorizedSkuKeys, or this Warehouse Health breakdown counts stock the rest of the
+  // dashboard hides, producing a card total that doesn't match the KPI tiles/table for the
+  // same facility/location (confirmed: 30,748 units / 316 rows at PNQ alone).
+  const locFacilityTypeMap = new Map() // location -> Map(facilityType -> {totalInvt,rtdInvt,rawInvt,rawBlockedInvt})
+  for (const [, entry] of invBySkuFacility) {
+    if (!categorizedSkuKeys.has(entry.skuKey)) continue
+    if (!entry.location || entry.location === 'Unmapped') continue
+    if (!locFacilityTypeMap.has(entry.location)) locFacilityTypeMap.set(entry.location, new Map())
+    const ftMap = locFacilityTypeMap.get(entry.location)
+    if (!ftMap.has(entry.facilityType)) ftMap.set(entry.facilityType, { facilityType: entry.facilityType, totalInvt:0, rtdInvt:0, rawInvt:0, rawBlockedInvt:0 })
+    const acc = ftMap.get(entry.facilityType)
+    acc.totalInvt+=entry.totalInvt; acc.rtdInvt+=entry.rtdInvt; acc.rawInvt+=entry.rawInvt; acc.rawBlockedInvt+=entry.rawBlockedInvt
   }
-  const locationFacilityTypeBreakdown = [...locFacTypeMap.values()].filter(l => l.location !== 'Unmapped')
   const facilityTypeSummary = (() => {
     const m = new Map()
-    for (const r of locFacTypeMap.values()) {
-      if (!m.has(r.facilityType)) m.set(r.facilityType, { facilityType: r.facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
-      const acc = m.get(r.facilityType)
-      acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+    for (const ftMap of locFacilityTypeMap.values()) {
+      for (const r of ftMap.values()) {
+        if (!m.has(r.facilityType)) m.set(r.facilityType, { facilityType: r.facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+        const acc = m.get(r.facilityType)
+        acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+      }
     }
     return [...m.values()].sort((a, b) => b.totalInvt - a.totalInvt)
   })()
@@ -522,9 +529,7 @@ function computePayload(windowDays) {
     const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty/windowDays)
     const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
     const doi = l.totalInvt>0 && denominator===0 ? null : (denominator>0 ? Math.floor(l.totalInvt/denominator) : 0)
-    const byFacilityType = locationFacilityTypeBreakdown
-      .filter(f => f.location === l.location)
-      .map(({ facilityType, totalInvt, rawInvt, rawBlockedInvt, rtdInvt }) => ({ facilityType, totalInvt, rawInvt, rawBlockedInvt, rtdInvt }))
+    const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
     return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}), byFacilityType }
   }), l => l.location)
 

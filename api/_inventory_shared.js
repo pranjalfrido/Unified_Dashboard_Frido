@@ -246,18 +246,19 @@ export function computeRowInventory(row) {
   // ~2 days on that basis, then explicitly restored per direct instruction. Kept as-is here;
   // if this needs revisiting, re ­trace against a fresh live export rather than assuming
   // either direction.
-  const availableInventory = isRawCategory ? packQty * inv2 : inv2
-  const blockedInventory = isRawCategory ? packQty * blocked2 : 0
-  const totalInventory = availableInventory + blockedInventory
+  const isRawFacilityRow = row.Facility === 'myfrido-Vadgaon_ITEM' || packQty > 1 || isRawCategory
 
-  const isRawFacilityRow = row.Facility === 'myfrido-Vadgaon_ITEM' || packQty > 1 || isRawSkuText(row.ItemSkuCode)
-  const rawInvt = isRawFacilityRow ? availableInventory : 0
-  const rawBlockedInvt = isRawFacilityRow ? blockedInventory : 0
-  // RTD is available inventory only — InventoryBlocked is never counted as RTD (blocked stock
-  // isn't ready-to-dispatch by definition), even though totalInventory (available + blocked)
-  // is still reported as-is for the Total Invt column.
-  const rtdInvt = isRawFacilityRow ? 0 : availableInventory
-  return { totalInventory, rawInvt, rawBlockedInvt, rtdInvt, packQty }
+  if (isRawFacilityRow) {
+    // Raw rows: scale both available and blocked by Pack_Qty
+    const rawInvt = packQty * inv2
+    const rawBlockedInvt = packQty * blocked2
+    return { totalInventory: rawInvt + rawBlockedInvt, rawInvt, rawBlockedInvt, rtdInvt: 0, packQty }
+  } else {
+    // RTD is available inventory only — InventoryBlocked is never counted as RTD (blocked
+    // stock isn't ready-to-dispatch by definition), even though totalInventory still includes
+    // it for the Total Invt column.
+    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: inv2, packQty }
+  }
 }
 
 // RTD Level — matches the original PBIX RTDLevelFilter: RTD_Invt ÷ Avg_Sale < 2 → "Low", else "Sufficient".

@@ -26,7 +26,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
     acc.push([+x.toFixed(1), +y.toFixed(1)])
     return acc
   }, [])
-  const spark = '#F4B400'
+  const spark = C.acc
   const gid = `pnlsg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   const path = coords.length > 1 ? coords.reduce((d, [x, y], i) => {
     if (i === 0) return `M${x},${y}`
@@ -49,7 +49,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
     </div>
   )
 }
-import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from '../components.jsx'
+import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, chartLegendProps } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
@@ -63,7 +63,7 @@ const TREND_METRICS = [
   { key: 'excRev', label: 'Net Revenue', axis: 'rev', color: C.blue.tx, isArea: true, dash: '4 2' },
   { key: 'units', label: 'Units', axis: 'units', color: '#2E74CC' },
   { key: 'returnPct', label: 'Returns %', axis: 'pct', color: '#B91C1C' },
-  { key: 'cogsPct', label: 'COGS %', axis: 'pct', color: '#8B5E3C', dash: '5 2' },
+  { key: 'cogsPct', label: 'COGS %', axis: 'pct', color: C.t2, dash: '5 2' },
   { key: 'gmPct', label: 'GM %', axis: 'pct', color: '#0D9E68', dash: '4 2' },
   { key: 'sndPct', label: 'SnD %', axis: 'pct', color: '#E8930A' },
   { key: 'cm1Pct', label: 'CM1 %', axis: 'pct', color: '#9B56B6', dash: '2 2' },
@@ -250,7 +250,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
               ))}
             </div>
           ) : null} />
-          {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          {!isMob && <Legend {...chartLegendProps({ fontSize: 11 })} />}
           {selectedMetrics.map(m => m.isArea ? (
             <Area key={m.key} yAxisId={m.axis} type="monotone" dataKey={m.key} name={m.label}
               stroke={m.color || grossColor} fill={`url(#${m.key === 'rev' ? gradId : gradId + '_net'})`}
