@@ -620,6 +620,24 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     return { perBucket, total: { qty, rev } }
   }, [filteredData, matrixCellsByPath])
 
+  // Flat SKU-per-day rows for CSV export. One row per (category, sub-category, SKU, channel, date)
+  // so the file can be pivoted freely in Excel. Respects the matrix's own channel filter.
+  const matrixExportRows = useMemo(() => {
+    if (!filteredData?.rawRows) return []
+    const mch = filters.matrixChannel || []
+    const rows = mch.length
+      ? filteredData.rawRows.filter(r => mch.includes(r.channel) || mch.includes(r.channel2))
+      : filteredData.rawRows
+    // Aggregate to SKU+channel+date grain (rawRows may have multiple lines per combo)
+    const map = new Map()
+    for (const r of rows) {
+      const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
+      if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
+      const e = map.get(k); e.qty += r.qty; e.rev += r.rev
+    }
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
+  }, [filteredData, filters.matrixChannel])
+
   // Sort comparator shared by all 3 levels — sorts by a specific bucket column, the Total
   // column, or the name itself. Metric (qty vs rev) follows the active matrixMetric toggle.
   const matrixValueFor = (path, key) => {
@@ -953,6 +971,19 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
               <PillToggle value={matrixGranularity} onChange={g => { setMatrixGranularity(g); setMatrixSort({ key: 'total', dir: 'desc' }) }}
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+              <ExportButton
+                filename={`sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`}
+                rows={matrixExportRows}
+                columns={[
+                  { label: 'Date', key: 'date' },
+                  { label: 'Category', key: 'category' },
+                  { label: 'Sub-Category', key: 'subCategory' },
+                  { label: 'SKU', key: 'sku' },
+                  { label: 'Channel', key: 'channel' },
+                  { label: 'Units', key: 'qty' },
+                  { label: 'Revenue', key: 'rev' },
+                ]}
+              />
             </div>
           }>
           <div style={{ maxHeight: 480, overflow: 'auto' }}>
