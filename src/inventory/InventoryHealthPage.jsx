@@ -1454,19 +1454,29 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />}
+      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} facilityView={facilityView} />
 
       {/* The collapse toggle is position:fixed and docked against the nav rail, so it no
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Mobile filter button — hidden on desktop, shown via CSS on mobile */}
-        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
-          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
-        }}>
-          ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
-        </button>
+        {/* Toggle row: facility toggle on left, Filters button on right */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <PillToggle
+            options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
+            value={facilityView}
+            onChange={v => {
+              setFacilityView(v)
+              setFilters(f => ({ ...f, facility: [] }))
+            }}
+          />
+          <button onClick={() => setSidebarOpen(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer',
+          }}>
+            ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
+          </button>
+        </div>
 
         {facilityView === 'regular' ? <>
 
