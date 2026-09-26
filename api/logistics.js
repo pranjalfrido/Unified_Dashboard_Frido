@@ -79,7 +79,7 @@ WITH base AS (
     c.shipment_type,
     c.payment_mode,
     c.zone,
-    COALESCE(c.zone, 'C') AS zone_by_frido,
+    COALESCE(c.zone_by_frido, c.zone, 'C') AS zone_by_frido,
     c.pickup_city,
     c.pickup_state,
     c.drop_city,
