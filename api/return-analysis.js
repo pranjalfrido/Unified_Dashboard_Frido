@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 2
+const CACHE_VERSION = 5
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -262,6 +262,80 @@ export default async function handler(req, res) {
           AND rp.exchange_sku IS NOT NULL AND rp.sku != rp.exchange_sku
           AND NOT STARTS_WITH(rp.exchange_sku, 'COUP')
         GROUP BY 1,2,3,4,5,6,7 ORDER BY exchange_count DESC LIMIT 50`,
+
+      // SKU-wise exchange deep-dive: for each SKU — exchange %, exchange within same subcat,
+      // within same cat (cross-subcat), cross-category, plus top exchanged-to SKU.
+      // Uses fact table for exchange totals + Clickpost_Returns_Exchange_Report for flow direction
+      // (return_sku = FROM, exchange_order_id joins to fact to get TO sku). Covers Mar 2025–present.
+      exchangeSkuDetail: `WITH
+        q AS (${base}),
+        fact AS (
+          SELECT
+            Category AS category,
+            SubCategory AS sub_category,
+            MasterSKU AS sku,
+            SUM(ItemQty) AS total_qty,
+            SUM(CASE WHEN Order_Status = 'Exchange' THEN ItemQty ELSE 0 END) AS exch_qty,
+            SUM(CASE WHEN Order_Status = 'Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev
+          FROM q WHERE ${shWhere}
+            AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+          GROUP BY category, sub_category, sku
+          HAVING exch_qty > 0
+        ),
+        cp_flows AS (
+          SELECT
+            cp.return_sku AS from_sku,
+            f_to.masterskucode AS to_sku,
+            f_from.Category AS from_cat,
+            f_from.SubCategory AS from_subcat,
+            f_to.Category AS to_cat,
+            f_to.SubCategory AS to_subcat,
+            COUNT(*) AS cnt
+          FROM \`frido-429506.production.Clickpost_Returns_Exchange_Report\` cp
+          JOIN \`frido-429506.production.fact_all_platform_sales_report\` f_to
+            ON cp.exchange_order_id = f_to.OrderId AND f_to.Channel = 'Shopify'
+          LEFT JOIN (SELECT DISTINCT masterskucode, Category, SubCategory FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify') f_from
+            ON f_from.masterskucode = cp.return_sku
+          WHERE cp.Return_Type = 'Exchange'
+            AND cp.exchange_order_id IS NOT NULL
+            AND cp.return_sku IS NOT NULL
+            AND cp.return_sku != f_to.masterskucode
+            AND NOT STARTS_WITH(COALESCE(f_to.masterskucode, ''), 'COUP')
+          GROUP BY 1,2,3,4,5,6
+        ),
+        cp_agg AS (
+          SELECT
+            from_sku,
+            SUM(cnt) AS total_flow
+          FROM cp_flows
+          GROUP BY from_sku
+        ),
+        top_to AS (
+          SELECT from_sku, to_sku, cnt,
+            ROW_NUMBER() OVER (PARTITION BY from_sku ORDER BY cnt DESC) AS rn
+          FROM cp_flows
+        )
+        SELECT
+          f.category,
+          f.sub_category,
+          f.sku,
+          f.total_qty,
+          f.exch_qty,
+          f.exch_rev,
+          SAFE_DIVIDE(f.exch_qty, f.total_qty) * 100 AS exch_pct,
+          t1.to_sku AS top1_sku,
+          SAFE_DIVIDE(t1.cnt, ca.total_flow) * 100 AS top1_pct,
+          t2.to_sku AS top2_sku,
+          SAFE_DIVIDE(t2.cnt, ca.total_flow) * 100 AS top2_pct,
+          t3.to_sku AS top3_sku,
+          SAFE_DIVIDE(t3.cnt, ca.total_flow) * 100 AS top3_pct
+        FROM fact f
+        LEFT JOIN cp_agg ca ON ca.from_sku = f.sku
+        LEFT JOIN top_to t1 ON t1.from_sku = f.sku AND t1.rn = 1
+        LEFT JOIN top_to t2 ON t2.from_sku = f.sku AND t2.rn = 2
+        LEFT JOIN top_to t3 ON t3.from_sku = f.sku AND t3.rn = 3
+        ORDER BY f.exch_qty DESC
+        LIMIT 200`,
     }
 
     const entries = Object.entries(queries)
@@ -275,8 +349,13 @@ export default async function handler(req, res) {
         const i = nextIdx++
         if (i >= entries.length) return
         const [key, sql] = entries[i]
-        const [rows] = await bq.query({ query: sql, maximumBytesBilled: '10000000000' })
-        results[key] = rows
+        try {
+          const [rows] = await bq.query({ query: sql, maximumBytesBilled: '10000000000' })
+          results[key] = rows
+        } catch (qErr) {
+          console.error(`[return-analysis] query "${key}" failed:`, qErr.message)
+          results[key] = []
+        }
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, entries.length) }, worker))
@@ -365,6 +444,21 @@ export default async function handler(req, res) {
         toSubcat: r.to_subcat || r.to_sku,
         reason: r.reason,
         count: parseInt(r.exchange_count) || 0,
+      })),
+      exchangeSkuDetail: (results.exchangeSkuDetail || []).map(r => ({
+        category: r.category || 'Others',
+        subCategory: r.sub_category || 'Others',
+        sku: r.sku,
+        totalQty: parseInt(r.total_qty) || 0,
+        exchQty: parseInt(r.exch_qty) || 0,
+        exchRev: parseFloat(r.exch_rev) || 0,
+        exchPct: parseFloat(r.exch_pct) || 0,
+        top1Sku: r.top1_sku || null,
+        top1Pct: r.top1_pct != null ? parseFloat(r.top1_pct) : null,
+        top2Sku: r.top2_sku || null,
+        top2Pct: r.top2_pct != null ? parseFloat(r.top2_pct) : null,
+        top3Sku: r.top3_sku || null,
+        top3Pct: r.top3_pct != null ? parseFloat(r.top3_pct) : null,
       })),
     }
 
