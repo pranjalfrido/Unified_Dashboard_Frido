@@ -18706,7 +18706,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Fall back to live BQ only if date range doesn't match.
         const tryStatic = async () => {
           try {
-            const res = await fetch('/logistics-data.json')
+            const res = await fetch('/logistics-data.json', { cache: 'no-cache' })
             if (!res.ok) return false
             const json = await res.json()
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
@@ -18735,9 +18735,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // query cost. `page` is in this same dependency array below so navigating INTO Overview
       // (without also changing the date range) still triggers the fetch.
       if (page === 'overview') {
-        fetch('/logistics-cost-data.json').then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
-        fetch('/sales-alloc-data.json').then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
-        fetch('/inv-data-7d.json').then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
+        fetch('/logistics-cost-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
+        fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
+        fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
         fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
           .then(r => r.ok ? r.json() : null)
           .then(j => setOverviewCustData(j))

@@ -66,7 +66,7 @@ function netOf(subCatData, netScale = 1) {
 // SnD rates — {weightGm, forward, rto, reverse, fulfilment}, sorted ascending by weightGm.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json').then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 function rateForSlab(slabs, weightSlab) {
@@ -93,7 +93,7 @@ function fulfilmentForWeight(slabs, weightGm) {
 // day-wise trend chart can compute its own GM%/CM1% without threading cogsMap down as a prop.
 let cogsMapPromise = null
 function loadCogsMap() {
-  if (!cogsMapPromise) cogsMapPromise = fetch('/cogs-data.json').then(r => r.ok ? r.json() : {}).catch(() => ({}))
+  if (!cogsMapPromise) cogsMapPromise = fetch('/cogs-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
   return cogsMapPromise
 }
 
