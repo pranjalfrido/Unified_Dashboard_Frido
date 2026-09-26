@@ -17,6 +17,7 @@ import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
+import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
@@ -4848,7 +4849,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
@@ -18351,6 +18352,12 @@ function DocumentsPage({ setPage }) {
       description: 'Track B2B freight & B2C courier invoices line by line.',
       icon: '🚚',
     },
+    {
+      id: 'purchase-ledger',
+      title: 'Purchase Ledger',
+      description: 'Upload domestic, import & packaging purchase data.',
+      icon: '🧾',
+    },
   ]
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
@@ -19067,6 +19074,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
               <LogisticsLedgerPage />
+            </div>
+          )}
+          {page === 'purchase-ledger' && (
+            <div className="page-scroll">
+              <PurchaseLedgerPage />
             </div>
           )}
           {page === 'profile' && (

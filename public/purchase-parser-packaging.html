@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Packing Material Parser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --paper:#f4f7f6; --surface:#ffffff; --ink:#18272a; --muted:#5b6d70; --line:#d6e0de;
+  --accent:#9a5b13; --accent-ink:#ffffff; --accent-soft:#f6ecdf;
+  --good:#1d7a3c; --good-soft:#e3f3e7; --warn:#9a6212; --warn-soft:#fbf0dc; --bad:#b42318; --bad-soft:#fbe6e3;
+  --row:#f8fbfa;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#111a1b; --surface:#172224; --ink:#e3ecea; --muted:#93a6a4; --line:#2a3a3c;
+    --accent:#e0a458; --accent-ink:#1f1406; --accent-soft:#35270f;
+    --good:#5cc47d; --good-soft:#16301f; --warn:#e0a54a; --warn-soft:#33270f; --bad:#f07a6c; --bad-soft:#3a1c18;
+    --row:#1a2729;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#111a1b; --surface:#172224; --ink:#e3ecea; --muted:#93a6a4; --line:#2a3a3c;
+  --accent:#e0a458; --accent-ink:#1f1406; --accent-soft:#35270f;
+  --good:#5cc47d; --good-soft:#16301f; --warn:#e0a54a; --warn-soft:#33270f; --bad:#f07a6c; --bad-soft:#3a1c18;
+  --row:#1a2729;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans);padding-inline:16px;padding-block:16px 24px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.wrap-inner{display:flex;flex-direction:column;gap:10px}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+header h1{font-size:18px;font-weight:600;margin:0}
+header span{color:var(--muted);font-size:13px}
+.drop{border:1.5px dashed var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .txt{flex:1 1 220px;color:var(--muted);font-size:13px}
+.drop .txt b{color:var(--ink);font-weight:600}
+.rtype{font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+select{font:500 13px/1 var(--sans);border-radius:6px;padding:7px 8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button,.btn{font:500 13px/1 var(--sans);border-radius:6px;padding:8px 12px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,label.btn:focus-within,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.source{font-size:12.5px;color:var(--muted)}
+.source b{color:var(--ink);font-weight:500}
+.tag{display:none}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.stat{display:flex;align-items:baseline;gap:6px}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font:500 14px var(--mono);font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:5px;font:500 12px/1 var(--sans);padding:4px 8px;border-radius:999px}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+details.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+details.panel>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px;font-weight:600;font-size:13.5px}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::before{content:"▸";color:var(--muted);margin-right:6px}
+details.panel[open]>summary::before{content:"▾"}
+details.panel>summary .t{margin-right:auto}
+details.panel[open]>summary{border-bottom:1px solid var(--line)}
+.meta{color:var(--muted);font-size:12.5px;font-weight:400}
+.checks{list-style:none;margin:0;padding:2px 0;max-height:200px;overflow:auto}
+.checks li{display:flex;gap:8px;align-items:baseline;padding:5px 12px;font-size:13px}
+.checks li+li{border-top:1px solid var(--line)}
+.sev{flex:none;font:500 10.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:3px 6px;border-radius:4px;min-width:52px;text-align:center}
+.sev.error{background:var(--bad-soft);color:var(--bad)} .sev.warn{background:var(--warn-soft);color:var(--warn)} .sev.ok{background:var(--good-soft);color:var(--good)}
+.checks code{font:12px var(--mono)}
+.tablewrap{overflow:auto;max-height:300px}
+table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12px}
+th,td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:var(--surface);font-weight:600;font-size:11.5px;z-index:1;border-bottom:1.5px solid var(--ink)}
+th.calc{color:var(--accent)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr:nth-child(even) td{background:var(--row)}
+td.prod{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:12.5px;color:var(--muted)}
+.status.err{color:var(--bad)}
+.legend{font-size:12px;color:var(--muted);padding:6px 12px;border-top:1px solid var(--line)}
+.legend b{color:var(--accent);font-weight:600}
+#tsv{width:100%;height:110px;font:12px var(--mono);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Packing Material Parser</h1><span>Tally Purchase Packing Material export → Frido packing material register</span></header>
+
+  <div class="drop" id="drop">
+    <div class="txt"><b>Drop the Tally export here</b> or choose it (.xls / .xlsx). Use the Purchase Packing Material ledger account export. GST % is worked out for every product line. The file stays in your browser.</div>
+    <label class="btn" for="file">Choose file<input type="file" id="file" accept=".xls,.xlsx"></label>
+  </div>
+
+  <div class="source" id="source"></div>
+
+  <div id="results" class="wrap-inner" hidden>
+  <div class="stats" id="stats"></div>
+
+  <div class="actions">
+    <button class="primary" id="dl" disabled>Download parsed register</button>
+    <button id="dlAnyway" hidden>Download anyway</button>
+    <button id="copy">Copy for Excel</button>
+    <button id="saveSupabase" disabled style="background:#16a34a;border-color:#16a34a;color:#fff">Save to Supabase</button>
+    <span class="status" id="dlstatus"></span>
+  </div>
+  <textarea id="tsv" hidden readonly aria-label="Parsed data to copy"></textarea>
+
+  <details class="panel" id="chk">
+    <summary><span class="t">Checks</span><span class="meta" id="checkmeta"></span></summary>
+    <ul class="checks" id="checks"></ul>
+  </details>
+
+  <details class="panel" id="colp">
+    <summary><span class="t">Columns</span><span class="meta" id="colmeta"></span></summary>
+    <div class="tablewrap"><table id="coltbl"></table></div>
+    <div class="legend" id="extras"></div>
+  </details>
+
+  <details class="panel">
+    <summary><span class="t">Preview</span><span class="meta" id="tablemeta"></span></summary>
+    <div class="tablewrap"><table id="tbl"></table></div>
+    <div class="legend" id="legend"></div>
+  </details>
+  </div>
+</div>
+
+<script>
+const COLS=["Date","ProductName","VendorName","VoucherType","VoucherNo","VoucherRefNo","Quantity","UnitofMeasure","Rate","LineItemGrossTotal_Exc_GST","LineItemGrossTotal_Inc_GST","GST_%","CGST_%","SGST_%","IGST_%","PurchaseRateperqty_Rs_Exc_GST"];
+const CALC=new Set(["LineItemGrossTotal_Exc_GST","LineItemGrossTotal_Inc_GST","GST_%","CGST_%","SGST_%","IGST_%","PurchaseRateperqty_Rs_Exc_GST"]);
+const FMTS={0:"d-mmm-yy",6:"#,##0.##",8:"#,##0.00",9:"#,##0.00",10:"#,##0.00",11:"0.00",12:"0.00",13:"0.00",14:"0.00",15:"#,##0.00"};
+const WIDTHS=[10,52,40,12,18,18,10,12,10,16,16,8,8,8,8,16];
+const SLABS=[0,5,18,12,28,40,3,0.25];          // GST rates tried, most common first
+const SLAB_TOL=0.06, PREVIEW=50;
+const UOM={prs:"Pair",pcs:"Piece",nos:"Nos",pck:"Pack",kgs:"Kg",set:"Set",mtr:"Metre","sq.mt":"Sq. metre",box:"Box",roll:"Roll"};
+let result=null, outName="parsed.xlsx";
+
+/* ---------- helpers ---------- */
+const CP1252={0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x0160:0x8A,0x2039:0x8B,0x0152:0x8C,0x017D:0x8E,0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x02DC:0x98,0x2122:0x99,0x0161:0x9A,0x203A:0x9B,0x0153:0x9C,0x017E:0x9E,0x0178:0x9F};
+function fixMojibake(s){
+  if(!/[ÂÃâ]/.test(s)) return s;
+  const b=[]; for(const ch of s){const c=ch.codePointAt(0); if(c<256) b.push(c); else if(CP1252[c]!==undefined) b.push(CP1252[c]); else return s;}
+  try{return new TextDecoder("utf-8",{fatal:true}).decode(new Uint8Array(b));}catch(e){return s;}
+}
+function clean(v){if(v===undefined||v===null) return null; const s=fixMojibake(String(v)).replace(/_x000D_/g," ").replace(/[\r\n ]/g," ").replace(/\s+/g," ").trim(); return s||null;}
+function num(v){if(v===null||v===undefined||v==="") return null; const n=typeof v==="number"?v:parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isFinite(n)?n:null;}
+function unitFrom(fmt){ if(!fmt) return null; const m=String(fmt).match(/"\s*\/?\s*([A-Za-z][A-Za-z.]*)"\s*$/); if(!m) return null; const k=m[1].toLowerCase(); return UOM[k]||m[1]; }
+const r2=x=>Math.round(x*100)/100;
+function snapDate(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+(d.getHours()>=12?1:0));}
+const toSerial=d=>d instanceof Date?Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000+25569:d;
+const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+const inr=x=>Number(x).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate=d=>d instanceof Date&&!isNaN(d)?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"2-digit"}):"";
+const pct=x=>(Math.round(x*100)/100).toString();
+function nearSlab(e){for(const s of SLABS) if(Math.abs(e-s)<SLAB_TOL) return s; return null;}
+const code=s=>`<code>${esc(s)}</code>`;
+const list=(a,n=8)=>a.slice(0,n).map(code).join(", ")+(a.length>n?` and ${a.length-n} more`:"");
+
+/* ---------- columns (matched by name; extra columns are ignored) ---------- */
+const FIELDS=[
+  {key:"Date",aliases:["Date","Voucher Date"],need:"must",use:"finds each invoice"},
+  {key:"Particulars",aliases:["Particulars","Item","Stock Item"],need:"must",use:"ProductName"},
+  {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo"},
+  {key:"Quantity",aliases:["Quantity","Qty","Billed Quantity","Actual Quantity"],need:"calc",use:"Quantity, UnitofMeasure"},
+  {key:"Rate",aliases:["Rate"],need:"calc",use:"Rate"},
+  {key:"Input IGST",aliases:["Input IGST","IGST","Integrated Tax"],need:"opt",use:"IGST on the invoice"},
+  {key:"Input CGST",aliases:["Input CGST","CGST","Central Tax"],need:"opt",use:"CGST on the invoice"},
+  {key:"Input SGST",aliases:["Input SGST","SGST","State Tax","UTGST","Input UTGST"],need:"opt",use:"SGST on the invoice"},
+  {key:"Buyer/Supplier",aliases:["Buyer/Supplier","Supplier","Party Name","Party"],need:"opt",use:"VendorName",fallback:"Particulars"},
+  {key:"Voucher Type",aliases:["Voucher Type","Vch Type"],need:"opt",use:"VoucherType"},
+  {key:"Voucher Ref. No.",aliases:["Voucher Ref. No.","Voucher Ref No","Reference No.","Supplier Invoice No."],need:"opt",use:"VoucherRefNo"}
+];
+const NOT_OTHER=new Set(["date","particulars","buyersupplier","vouchertype","voucherno","voucherrefno","voucherrefdate","gstinuin","panno","quantity","altunits","rate","value","grosstotal","roundoff"]);
+
+/* ---------- read the export ---------- */
+function readExport(ws){
+  if(!ws||!ws["!ref"]) throw new Error("The first sheet is empty.");
+  const range=XLSX.utils.decode_range(ws["!ref"]), cell=(r,c)=>ws[XLSX.utils.encode_cell({r,c})];
+  let hdr=-1, heading=[], headers=[], period=null;
+  for(let r=range.s.r;r<=range.e.r&&hdr<0;r++){
+    const vals=[]; for(let c=range.s.c;c<=range.e.c;c++){const x=cell(r,c); vals.push(x&&x.t!=="n"?clean(x.v):null);}
+    const n=vals.map(norm);
+    if(n.includes("date")&&n.includes("particulars")){hdr=r; headers=vals.map((v,i)=>({name:v,c:i+range.s.c})).filter(h=>h.name);}
+    else{const x=cell(r,range.s.c), t=x?clean(x.v):null; if(t){heading.push(t); if(/\bto\b/.test(t)&&/\d/.test(t)) period=t;}}
+  }
+  if(hdr<0) throw new Error("Couldn't find the headings row. The export needs at least a Date and a Particulars column.");
+  // goods ledger = the heading line that is also a column (e.g. "Purchase- GST- Goods")
+  const byNorm=new Map(headers.map(h=>[norm(h.name),h]));
+  let ledger=null; for(const t of heading){const h=byNorm.get(norm(t)); if(h&&!NOT_OTHER.has(norm(t))){ledger=h;break;}}
+  if(!ledger) ledger=headers.find(h=>/purchase/i.test(h.name)&&!NOT_OTHER.has(norm(h.name)))||null;
+  if(!ledger) throw new Error("Couldn't find the purchase ledger column. Export the Purchase Packing Material ledger account from Tally.");
+  // map fields
+  const col={}, used=new Set([ledger.c]), report=[{field:ledger.name,found:ledger.name,use:"taxable value per invoice",state:"found"}], colChecks=[];
+  for(const f of FIELDS){const al=f.aliases.map(norm); const h=headers.find(h=>!used.has(h.c)&&al.includes(norm(h.name))); if(h){col[f.key]=h.c; used.add(h.c); report.push({field:f.key,found:h.name,use:f.use,state:"found"});}}
+  for(const f of FIELDS){
+    if(col[f.key]!==undefined) continue;
+    if(f.need==="must") throw new Error(`The export has no "${f.key}" column, so invoices and products can't be told apart.`);
+    if(f.fallback&&col[f.fallback]!==undefined){col[f.key]=col[f.fallback]; report.push({field:f.key,found:`"${f.fallback}" used instead`,use:f.use,state:"fallback"}); continue;}
+    report.push({field:f.key,found:"Not in export",use:f.use,state:f.need==="calc"?"missing-calc":"missing"});
+    colChecks.push([f.need==="calc"?"error":"warn",`No "${f.key}" column. ${f.use} can't be filled.`]);
+  }
+  if(col["Input IGST"]===undefined&&col["Input CGST"]===undefined) colChecks.push(["error","No GST columns (Input IGST / Input CGST / Input SGST) in the export, so GST % can't be worked out."]);
+  // other ledgers booked on the same invoice (transport, labour, …); TDS and round-off don't carry GST
+  const others=headers.filter(h=>!used.has(h.c)&&!NOT_OTHER.has(norm(h.name))&&!/^tds/i.test(h.name)&&!/round/i.test(h.name))
+    .map(h=>{const m=h.name.match(/(\d+(?:\.\d+)?)\s*%/); return {name:h.name,c:h.c,rate:m?parseFloat(m[1]):null};});
+  const extras=headers.filter(h=>!used.has(h.c)&&!others.some(o=>o.c===h.c)).map(h=>h.name);
+  const get=(r,k)=>col[k]===undefined?undefined:cell(r,col[k]);
+  const vouchers=[]; let cur=null, grand=null;
+  for(let r=hdr+1;r<=range.e.r;r++){
+    const d=get(r,"Date"), p=get(r,"Particulars"), pv=p?clean(p.v):null;
+    if(pv==="Grand Total"){grand=r;break;}
+    const dv=d?d.v:null;
+    if(dv instanceof Date||(d&&d.t==="d")){cur={r,date:snapDate(dv instanceof Date?dv:new Date(dv)),lines:[]}; vouchers.push(cur); continue;}
+    if(cur&&pv) cur.lines.push(r);
+  }
+  return {cell,get,col,ledger,others,report,colChecks,extras,vouchers,grand,period,heading};
+}
+
+/* ---------- GST logic ----------
+   1. Invoice GST = IGST + CGST + SGST. GST on other ledgers on the same bill (transport @5%/@18%, labour…) is taken out first.
+   2. Effective rate = goods GST ÷ taxable value (purchase ledger). If it sits on a GST slab, every line gets that rate.
+   3. Products seen on clean single-rate invoices remember their rate; mixed-rate invoices use those rates,
+      and any remaining lines are solved as the combination of two slabs that reproduces the invoice's GST.
+   4. Intra-state (CGST+SGST): CGST_% = SGST_% = GST_%/2. Inter-state (IGST): IGST_% = GST_%. */
+function build(x){
+  const checks=[...x.colChecks], rows=[]; const g=(r,k)=>num(x.get(r,k)?.v)||0;
+  const inv=x.vouchers.map(v=>{
+    const r=v.r, taxable=num(x.cell(r,x.ledger.c)?.v)||0, sign=taxable<0?-1:1;
+    const igst=g(r,"Input IGST"), cgst=g(r,"Input CGST"), sgst=g(r,"Input SGST");
+    let othTax=0; const othUnknown=[];
+    for(const o of x.others){const a=num(x.cell(r,o.c)?.v); if(!a) continue; if(o.rate===null){othUnknown.push(o.name); othTax+=a*0.18;} else othTax+=a*o.rate/100;}
+    const lines=v.lines.map(lr=>{const q=x.get(lr,"Quantity"), rt=x.get(lr,"Rate"); const qty=q?num(q.v):null, rate=rt?num(rt.v):null;
+      return {product:clean(x.get(lr,"Particulars")?.v),qty,rate,uom:unitFrom(q&&q.z)||unitFrom(rt&&rt.z),v:(qty!==null&&rate!==null)?qty*rate*sign:null};});
+    // a single line with no qty/rate (e.g. "Packing and courier charges", or a value-only debit note) takes the rest of the taxable value
+    const blank=lines.filter(l=>l.v===null), known=lines.filter(l=>l.v!==null).reduce((a,l)=>a+l.v,0);
+    let unassigned=0;
+    if(blank.length===1){blank[0].v=r2(taxable-known); blank[0].residual=true;}
+    else if(blank.length) unassigned=r2(taxable-known);
+    const tax=igst+cgst+sgst, goodsTax=tax-othTax;
+    return {r,date:v.date,vno:clean(x.get(r,"Voucher No.")?.v),ref:clean(x.get(r,"Voucher Ref. No.")?.v),vtype:clean(x.get(r,"Voucher Type")?.v),
+      vendor:clean(x.get(r,"Buyer/Supplier")?.v)||clean(x.get(r,"Particulars")?.v),taxable,sign,igst,cgst,sgst,tax,goodsTax,othUnknown,lines,unassigned,
+      eff:taxable?goodsTax/taxable*100:null,inter:Math.abs(igst)>0&&!cgst&&!sgst};
+  });
+  // pass 1: clean single-rate invoices, and remember each product's rate
+  const votes=new Map();
+  for(const iv of inv){
+    iv.slab=iv.eff!==null?nearSlab(iv.eff):null;
+    if(iv.slab!==null){ iv.method="single"; iv.lines.forEach(l=>{l.gst=iv.slab; const m=votes.get(l.product)||new Map(); m.set(iv.slab,(m.get(iv.slab)||0)+1); votes.set(l.product,m);}); }
+  }
+  const prodRate=new Map(), conflicts=[];
+  for(const [p,m] of votes){const e=[...m.entries()].sort((a,b)=>b[1]-a[1]); prodRate.set(p,e[0][0]); if(e.length>1) conflicts.push(`${p} (${e.map(([s,n])=>`${s}% ×${n}`).join(", ")})`);}
+  // pass 2: mixed-rate invoices
+  const solved=[], unresolved=[];
+  for(const iv of inv){
+    if(iv.slab!==null||iv.eff===null) continue;
+    const tol=Math.max(1.5,0.5*iv.lines.length);
+    const K=iv.lines.filter(l=>prodRate.has(l.product)&&l.v!==null), U=iv.lines.filter(l=>!prodRate.has(l.product)&&l.v!==null);
+    const R=iv.goodsTax-K.reduce((a,l)=>a+l.v*prodRate.get(l.product)/100,0);
+    let ok=false;
+    if(!U.length) ok=Math.abs(R)<=tol;
+    else{
+      const su=U.reduce((a,l)=>a+l.v,0), s=su?nearSlab(R/su*100):null;
+      if(s!==null){U.forEach(l=>l.tmp=s); ok=true;}
+      else{ // two-slab combination over groups of lines with the same unit price
+        const grp=new Map(); U.forEach(l=>{const k=String(l.rate); (grp.get(k)||grp.set(k,[]).get(k)).push(l);});
+        const G=[...grp.values()].map(ls=>({ls,v:ls.reduce((a,l)=>a+l.v,0)}));
+        if(G.length<=14){
+          outer: for(const a of SLABS) for(const b of SLABS){ if(a===b) continue;
+            for(let mask=0;mask<(1<<G.length);mask++){ let t=0; for(let i=0;i<G.length;i++) t+=G[i].v*((mask>>i)&1?b:a)/100;
+              if(Math.abs(t-R)<=tol){ G.forEach((gp,i)=>gp.ls.forEach(l=>l.tmp=(mask>>i)&1?b:a)); ok=true; break outer; } } }
+        }
+      }
+    }
+    if(ok){ K.forEach(l=>l.gst=prodRate.get(l.product)); U.forEach(l=>l.gst=l.tmp); iv.lines.filter(l=>l.v===null).forEach(l=>l.gst=null); iv.method="mixed"; solved.push(iv.vno); }
+    else{ iv.lines.forEach(l=>l.gst=Math.round(iv.eff*100)/100); iv.method="effective"; unresolved.push(`${iv.vno} (${pct(iv.eff)}%)`); }
+  }
+  // rows
+  let exc=0, lineTax=0, unassigned=0; const diffs=[], unknownOther=new Set(), missing=[];
+  for(const iv of inv){
+    if(!iv.lines.length){ checks.push(["warn",`${code(iv.vno)} has no product lines, so it isn't in the table (₹${inr(iv.taxable)}).`]); unassigned+=iv.taxable; continue; }
+    iv.othUnknown.forEach(n=>unknownOther.add(n));
+    if(iv.unassigned){unassigned+=iv.unassigned; missing.push(`${iv.vno} (₹${inr(iv.unassigned)})`);}
+    const sumLines=iv.lines.reduce((a,l)=>a+(l.v||0),0);
+    if(!iv.unassigned&&Math.abs(sumLines-iv.taxable)>1) diffs.push(`${iv.vno} (lines ₹${inr(sumLines)} vs ledger ₹${inr(iv.taxable)})`);
+    for(const l of iv.lines){
+      const g=l.gst, e=l.v!==null?r2(l.v):null;
+      const incl=(e!==null&&g!==null&&g!==undefined)?r2(e*(1+g/100)):null;
+      if(e!==null&&g!==null&&g!==undefined){exc+=e; lineTax+=e*g/100;}
+      const half=g!==null&&g!==undefined&&!iv.inter?Math.round(g/2*1000)/1000:0;
+      rows.push([iv.date,l.product,iv.vendor,iv.vtype,iv.vno,iv.ref,l.qty!==null?l.qty*iv.sign:null,l.uom,l.rate,e,incl,
+        g??null, g!==null&&g!==undefined?(iv.inter?0:half):null, g!==null&&g!==undefined?(iv.inter?0:half):null, g!==null&&g!==undefined?(iv.inter?g:0):null,
+        (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null]);
+    }
+  }
+  // checks
+  const multi=inv.filter(iv=>iv.method==="mixed").length;
+  if(multi) checks.push(["ok",`${multi} invoice${multi>1?"s":""} have products at different GST rates; each line got its own rate, and the rates add back to the invoice's GST: ${list(solved)}.`]);
+  if(unresolved.length) checks.push(["warn",`${unresolved.length} invoice${unresolved.length>1?"s'":"'s"} GST doesn't match any GST slab or mix of slabs, so their lines show the invoice's effective rate. Check the tax booked in Tally: ${list(unresolved)}.`]);
+  if(conflicts.length) checks.push(["warn",`${conflicts.length} product${conflicts.length>1?"s were":" was"} billed at different GST rates on different invoices (the most common rate is used on mixed invoices): ${conflicts.slice(0,5).map(esc).join("; ")}${conflicts.length>5?"…":""}.`]);
+  if(unknownOther.size) checks.push(["warn",`These ledgers on the same bills have no GST rate in their name, so 18% was assumed when taking their GST out: ${[...unknownOther].map(esc).join(", ")}.`]);
+  if(missing.length) checks.push(["warn",`${missing.length} invoice${missing.length>1?"s have":" has"} product lines with no quantity or rate in Tally, so their value can't be split by product (left blank): ${list(missing,6)}.`]);
+  if(diffs.length) checks.push(["warn",`${diffs.length} invoice${diffs.length>1?"s'":"'s"} lines (Quantity × Rate) don't add up to the purchase ledger amount, usually a discount or charge booked without a line: ${list(diffs,6)}.`]);
+  const neg=inv.filter(iv=>iv.sign<0).length;
+  if(neg) checks.push(["ok",`${neg} debit note${neg>1?"s":""} / returns are shown with negative quantity and value.`]);
+  // reconcile with Tally totals
+  let gtLedger=null, gtTax=null;
+  if(x.grand!==null){gtLedger=num(x.cell(x.grand,x.ledger.c)?.v); gtTax=["Input IGST","Input CGST","Input SGST"].reduce((a,k)=>a+(num(x.get(x.grand,k)?.v)||0),0);}
+  const taxTotal=inv.reduce((a,iv)=>a+iv.tax,0), othTaxTotal=inv.reduce((a,iv)=>a+(iv.tax-iv.goodsTax),0);
+  const valueOk=gtLedger!==null?Math.abs(gtLedger-(exc+unassigned+diffsTotal(inv)))<1:true;
+  if(gtLedger!==null) checks.unshift([Math.abs(gtLedger-exc)<1?"ok":"warn",`Taxable value: table ₹${inr(exc)}${unassigned?` + not split by product ₹${inr(unassigned)}`:""}${Math.abs(diffsTotal(inv))>=1?` + line differences ₹${inr(diffsTotal(inv))}`:""} ${valueOk?"=":"≠"} Tally's ${esc(x.ledger.name)} total ₹${inr(gtLedger)}.`]);
+  const restTax=taxTotal-othTaxTotal-lineTax;   // GST on value that couldn't be split by product, and rounding
+  if(gtTax!==null){const ok=Math.abs(lineTax+othTaxTotal+restTax-gtTax)<Math.max(5,0.0005*Math.abs(gtTax));
+    checks.unshift([ok&&Math.abs(restTax)<Math.max(5,0.0005*Math.abs(gtTax))?"ok":"warn",`GST: product lines ₹${inr(lineTax)} + other ledgers on the bills ₹${inr(othTaxTotal)}${Math.abs(restTax)>=1?` + on value not split by product ₹${inr(restTax)}`:""} ${ok?"=":"≠"} Tally's IGST + CGST + SGST ₹${inr(gtTax)}.`]);}
+  const st={invoices:inv.length,lines:rows.length,exc,match:gtLedger!==null?Math.abs(gtLedger-exc)<1:null,valueOk};
+  return {rows,checks,st};
+}
+function diffsTotal(inv){return inv.reduce((a,iv)=>{if(!iv.lines.length||iv.unassigned) return a; const s=iv.lines.reduce((b,l)=>b+(l.v||0),0); return Math.abs(s-iv.taxable)>1?a+(iv.taxable-s):a;},0);}
+
+/* ---------- render ---------- */
+function render(res,label,x){
+  result=res;
+  document.getElementById("results").hidden=false;
+  document.getElementById("source").innerHTML=`Showing <b>${esc(label)}</b> · ledger <b>${esc(x.ledger.name)}</b>${x.period?` · ${esc(x.period)}`:""}`;
+  const errs=res.checks.filter(c=>c[0]==="error").length, warns=res.checks.filter(c=>c[0]==="warn").length;
+  document.getElementById("saveSupabase").disabled=errs>0;
+  document.getElementById("saveSupabase").textContent=errs>0?"Fix errors to save":"Save to Supabase";
+  const pill=res.st.match===null?`<span class="pill bad">No total row</span>`:res.st.match?`<span class="pill good">Match</span>`:res.st.valueOk?`<span class="pill warn">Explained, see checks</span>`:`<span class="pill bad">Mismatch</span>`;
+  document.getElementById("stats").innerHTML=`<div class="stat"><span class="k">Invoices</span><span class="v">${res.st.invoices}</span></div>
+    <div class="stat"><span class="k">Lines</span><span class="v">${res.st.lines}</span></div>
+    <div class="stat"><span class="k">Taxable value</span><span class="v">₹${inr(res.st.exc)}</span></div>
+    <div class="stat"><span class="k">vs Tally total</span>${pill}</div>`;
+  document.getElementById("checks").innerHTML=res.checks.length?res.checks.map(([s,t])=>`<li><span class="sev ${s}">${s==="error"?"Error":s==="ok"?"OK":"Check"}</span><span>${t}</span></li>`).join(""):`<li><span class="sev ok">OK</span><span>No problems found.</span></li>`;
+  document.getElementById("checkmeta").textContent=`${errs} error${errs===1?"":"s"} · ${warns} to review`;
+  document.getElementById("chk").open=errs>0;
+  const dl=document.getElementById("dl"), any=document.getElementById("dlAnyway"), st=document.getElementById("dlstatus");
+  dl.disabled=errs>0; any.hidden=!(errs>0); st.className="status"+(errs?" err":""); st.textContent=errs?"Fix the errors in Tally and re-export, or download anyway.":"";
+  const lbl={found:["ok","Found"],fallback:["warn","Fallback"],missing:["warn","Missing"],"missing-calc":["error","Missing"]};
+  document.getElementById("coltbl").innerHTML="<thead><tr><th>Needed for</th><th>Tally column</th><th>Status</th></tr></thead><tbody>"+
+    x.report.map(c=>`<tr><td>${esc(c.use)}</td><td>${esc(c.found)}</td><td><span class="sev ${lbl[c.state][0]}">${lbl[c.state][1]}</span></td></tr>`).join("")+"</tbody>";
+  const bad=x.report.filter(c=>c.state!=="found").length;
+  document.getElementById("colp").open=x.report.some(c=>c.state==="missing-calc");
+  document.getElementById("colmeta").textContent=bad?`${bad} column${bad>1?"s":""} missing or substituted`:"All needed columns found";
+  document.getElementById("extras").innerHTML=(x.others.length?`<b>Other ledgers</b> (their GST is taken out before GST % is worked out): ${x.others.map(o=>esc(o.name)+(o.rate===null?" (18% assumed)":"")).join(", ")}<br>`:"")+(x.extras.length?`<b>Ignored</b>: ${x.extras.map(esc).join(", ")}`:"");
+  const numCols=new Set(Object.keys(FMTS).map(Number).filter(i=>i>0));
+  let h="<thead><tr>"+COLS.map((c,i)=>`<th class="${CALC.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
+  for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
+    return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
+  document.getElementById("tbl").innerHTML=h+"</tbody>";
+  document.getElementById("tablemeta").textContent=res.rows.length>PREVIEW?`first ${PREVIEW} of ${res.rows.length} lines`:`${res.rows.length} lines`;
+  document.getElementById("legend").innerHTML="<b>Blue</b> columns are calculated. Exc_GST = Quantity × Rate · GST_% from the invoice's tax (per line when rates are mixed) · Inc_GST = Exc_GST × (1 + GST_%) · CGST_% = SGST_% = GST_% ÷ 2 on intra-state bills, IGST_% = GST_% on inter-state bills · PurchaseRateperqty_Rs_Exc_GST = Exc_GST ÷ Quantity.";
+}
+
+/* ---------- xlsx / download / copy ---------- */
+function buildWorkbook(res){
+  const aoa=[COLS,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])], ws=XLSX.utils.aoa_to_sheet(aoa);
+  for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(FMTS)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
+  ws["!cols"]=WIDTHS.map(w=>({wch:w})); ws["!autofilter"]={ref:ws["!ref"]};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
+  return new Uint8Array(XLSX.write(wb,{type:"array",bookType:"xlsx",compression:true}));
+}
+let dlApi=null;
+async function getDownloads(){
+  if(dlApi) return dlApi;
+  for(let i=0;i<(location.protocol==="file:"?0:20)&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,250));
+  try{dlApi=window.claude&&window.claude.use?await window.claude.use("downloads"):null;}catch(e){dlApi=null;}
+  return dlApi;
+}
+getDownloads();
+async function download(){
+  const st=document.getElementById("dlstatus"); st.className="status"; st.textContent="Preparing file…";
+  const api=await getDownloads();
+  if(!api&&!window.claude){const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([buildWorkbook(result)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})); a.download=outName;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); st.textContent=`Downloaded ${outName}`; return;}
+  if(!api){st.className="status err"; st.textContent="This view can't save files. Use “Copy for Excel”, or open the page in your browser."; return;}
+  try{const b=buildWorkbook(result); await api.save({filename:outName,data:b.buffer}); st.textContent=`Saved ${outName}`;}
+  catch(e){st.className="status err"; st.textContent=e&&e.code==="declined"?"Download cancelled.":e&&e.code==="rate_limited"?"A save prompt is already open.":"This view couldn't save the file ("+(e&&e.code||"error")+"). Use “Copy for Excel” instead.";}
+}
+async function copyTSV(){
+  const st=document.getElementById("dlstatus");
+  const f=(v,i)=>v===null||v===undefined?"":i===0&&v instanceof Date?fmtDate(v):String(v).replace(/[\t\r\n]+/g," ");
+  const txt=[COLS.join("\t"),...result.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+  try{await navigator.clipboard.writeText(txt); st.className="status"; st.textContent=`Copied ${result.rows.length} lines with headers. Paste into cell A1 of a blank sheet.`;}
+  catch(e){const ta=document.getElementById("tsv"); ta.hidden=false; ta.value=txt; ta.focus(); ta.select(); st.className="status err"; st.textContent="Copy was blocked here. The data is selected in the box below: press Ctrl+C (Cmd+C on Mac).";}
+}
+document.getElementById("copy").addEventListener("click",copyTSV);
+document.getElementById("dl").addEventListener("click",download);
+document.getElementById("dlAnyway").addEventListener("click",download);
+
+async function handleFile(f){
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true,cellNF:true});
+    const x=readExport(wb.Sheets[wb.SheetNames[0]]), res=build(x);
+    if(!res.rows.length) throw new Error("No product lines were found under the headings.");
+    outName=f.name.replace(/\.[^.]+$/,"")+"_parsed.xlsx"; render(res,f.name,x);
+  }catch(e){
+    document.getElementById("results").hidden=true;
+    document.getElementById("source").innerHTML=`<span style="color:var(--bad)">Couldn't read ${esc(f.name)}: ${esc(e.message||e)}</span>`;
+  }
+}
+const drop=document.getElementById("drop"), fi=document.getElementById("file");
+fi.addEventListener("change",()=>{if(fi.files[0]) handleFile(fi.files[0]); fi.value="";});
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) handleFile(f);});
+if(!window.XLSX) document.getElementById("source").textContent="The spreadsheet library didn't load. Check your internet connection and reload the page.";
+else document.getElementById("source").textContent="No file uploaded yet. Results will appear here after you upload a Tally export.";
+
+/* ---------- Supabase save ---------- */
+const SB_URL="https://dkvxaekxyqjjxcjoidqz.supabase.co";
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrdnhhZWt4eXFqanhjam9pZHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDY2ODksImV4cCI6MjEwMDcyMjY4OX0.jJdd2Xcmm6UknXXMwxud14bGAwXHoIZw4ooeOYrY1L4";
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+const saveBtn=document.getElementById("saveSupabase");
+saveBtn.addEventListener("click",async()=>{
+  if(!result||!result.rows.length) return;
+  const st=document.getElementById("dlstatus");
+  saveBtn.disabled=true; saveBtn.textContent="Saving…"; st.className="status"; st.textContent="";
+  try{
+    const rows=result.rows.map(r=>({
+      date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
+      product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
+      voucher_ref_no:r[5], quantity:r[6], unit_of_measure:r[7], rate:r[8],
+      line_item_gross_total_exc_gst:r[9], line_item_gross_total_inc_gst:r[10],
+      gst_pct:r[11], cgst_pct:r[12], sgst_pct:r[13], igst_pct:r[14],
+      purchase_rate_per_qty_rs_exc_gst:r[15]
+    }));
+    const CHUNK=500; let done=0;
+    for(let i=0;i<rows.length;i+=CHUNK){
+      const {error}=await sb.from("purchase_ledger_packaging").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
+      if(error) throw error;
+      done+=Math.min(CHUNK,rows.length-i);
+      st.textContent=`Saving… ${done}/${rows.length} rows`;
+    }
+    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows to Supabase.`;
+    saveBtn.textContent="Saved ✓";
+  }catch(e){
+    st.className="status err"; st.textContent="Save failed: "+(e.message||e);
+    saveBtn.disabled=false; saveBtn.textContent="Save to Supabase";
+  }
+});
+</script>
+
+</body>
+</html>
