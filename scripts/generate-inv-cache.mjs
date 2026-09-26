@@ -483,12 +483,28 @@ function computePayload(windowDays) {
     acc.totalInvt+=r.totalInvt; acc.rawInvt+=r.rawInvt; acc.rawBlockedInvt+=r.rawBlockedInvt; acc.rtdInvt+=r.rtdInvt
     acc.rawAvgSaleQty+=r.rawAvgSaleQty; acc.rawTotalAvgSaleQty+=r.rawTotalAvgSaleQty; acc.orderAllocation+=r.orderAllocation
   }
+
+  // byFacilityType: per-location breakdown of inventory by facilityType — used by
+  // WhCarousel to show/hide cards when the Regular vs Other Facilities tab is active.
+  // Built from invBySkuFacility (facility grain) so facilityType is available.
+  const locFacilityTypeMap = new Map() // location -> Map(facilityType -> {totalInvt,rtdInvt,rawInvt,rawBlockedInvt})
+  for (const [, entry] of invBySkuFacility) {
+    if (!categorizedSkuKeys.has(entry.skuKey)) continue
+    if (!entry.location || entry.location === 'Unmapped') continue
+    if (!locFacilityTypeMap.has(entry.location)) locFacilityTypeMap.set(entry.location, new Map())
+    const ftMap = locFacilityTypeMap.get(entry.location)
+    if (!ftMap.has(entry.facilityType)) ftMap.set(entry.facilityType, { facilityType: entry.facilityType, totalInvt:0, rtdInvt:0, rawInvt:0, rawBlockedInvt:0 })
+    const acc = ftMap.get(entry.facilityType)
+    acc.totalInvt+=entry.totalInvt; acc.rtdInvt+=entry.rtdInvt; acc.rawInvt+=entry.rawInvt; acc.rawBlockedInvt+=entry.rawBlockedInvt
+  }
+
   const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.location !== 'Unmapped').map(l => {
     const avgSale = Math.ceil(l.rawAvgSaleQty/windowDays)
     const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty/windowDays)
     const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
     const doi = l.totalInvt>0 && denominator===0 ? null : (denominator>0 ? Math.floor(l.totalInvt/denominator) : 0)
-    return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}) }
+    const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
+    return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}), byFacilityType }
   }), l => l.location)
 
   const subCatMap = new Map()

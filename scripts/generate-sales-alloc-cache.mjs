@@ -27,11 +27,13 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// 60-day window — 2 months of data for client-side date range filtering
+// 180-day window — 6 months of data for client-side date range filtering
+// (extended from 60d so Apr–Aug date ranges work without hitting the API,
+// which times out on Vercel's 60s limit for large date ranges)
 const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
 const startD = new Date(end)
-startD.setDate(startD.getDate() - 59) // 60 days inclusive
+startD.setDate(startD.getDate() - 179) // 180 days inclusive
 const startStr = startD.toISOString().slice(0, 10)
 // Widen fetch for momentum (7d lookback) and top movers (7d lookback from end)
 const fetchStart = new Date(startD)
@@ -74,7 +76,7 @@ const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows]] = await Promi
 
 const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps()
 const skuMap = buildSkuMap(skuMappingRows)
-const daysInRange = 60
+const daysInRange = 180
 
 const itemMaster = new Map()
 for (const r of itemMasterRows) {
@@ -554,10 +556,35 @@ const payload = {
   facilityAllocation, facilityAllocationByRevenue,
   fillRateByWarehouse,
   categorySales, subCategorySales, productSales,
-  matrixCellRows, matrixSkuList, matrixDates,
+  // matrixCellRows/matrixSkuList/matrixDates omitted — frontend derives them from rawRows
   topMoversByQty, topMoversByRevenue,
   deadStock,
-  rawRows,
+  // rawRows encoded with string interning + columnar layout to stay under GitHub's 100 MB limit.
+  // Format: { cols, dict, rows } where string columns store integer indices into dict[colName].
+  // Frontend decodes via rawRowsCols/rawRowsDict/rawRowsData fields.
+  ...(() => {
+    const COLS = ['sku','category','subCategory','salesType','channel','channel2','facility','location','region','nearestWH','date']
+    const STR_COLS = new Set(COLS) // all string cols get interned; qty/rev stay as numbers
+    const dicts = {}
+    const dictIdx = {}
+    for (const c of COLS) { dicts[c] = []; dictIdx[c] = new Map() }
+    const encoded = rawRows.map(r => {
+      const row = []
+      for (const c of COLS) {
+        const v = r[c]
+        let idx = dictIdx[c].get(v)
+        if (idx === undefined) { idx = dicts[c].length; dicts[c].push(v); dictIdx[c].set(v, idx) }
+        row.push(idx)
+      }
+      row.push(r.qty, r.rev)
+      return row
+    })
+    return {
+      rawRowsCols: [...COLS, 'qty', 'rev'],
+      rawRowsDict: dicts,
+      rawRowsData: encoded,
+    }
+  })(),
 }
 
 const json = JSON.stringify(payload)

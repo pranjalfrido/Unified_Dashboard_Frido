@@ -3272,15 +3272,19 @@ function ThemePicker({ theme, setTheme }) {
           </div>
           {THEMES.map(t => {
             const on = t.id === theme
+            const disabled = t.id !== 'forest'
             return (
-              <div key={t.id} role="menuitemradio" aria-checked={on} tabIndex={0}
-                onClick={() => { setTheme(t.id); setOpen(false) }}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTheme(t.id); setOpen(false) } }}
+              <div key={t.id} role="menuitemradio" aria-checked={on} tabIndex={disabled ? -1 : 0}
+                onClick={() => { if (!disabled) { setTheme(t.id); setOpen(false) } }}
+                onKeyDown={e => { if (!disabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setTheme(t.id); setOpen(false) } }}
                 className="theme-opt"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                  borderRadius: 10, cursor: 'pointer',
+                  borderRadius: 10, cursor: disabled ? 'default' : 'pointer',
                   background: on ? C.acl : 'transparent',
+                  opacity: disabled ? 0.35 : 1,
+                  filter: disabled ? 'blur(0.6px)' : 'none',
+                  pointerEvents: disabled ? 'none' : 'auto',
                 }}>
                 <span style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
@@ -18987,7 +18991,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={loading || fetchPending || !!inventoryDateControl?.loading} />
+        <LoadingOverlay loading={loading || fetchPending} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>

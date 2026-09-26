@@ -198,6 +198,20 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
       if (ageMs > 30 * 24 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
+      // Decode columnar rawRows with string interning (cols + dict + data → array-of-objects)
+      if (json.rawRowsCols && json.rawRowsData) {
+        const cols = json.rawRowsCols
+        const dict = json.rawRowsDict || {}
+        const strColCount = json.rawRowsDict ? Object.keys(dict).length : 0
+        json.rawRows = json.rawRowsData.map(r => {
+          const o = {}
+          cols.forEach((c, i) => {
+            o[c] = i < strColCount ? dict[c][r[i]] : r[i]
+          })
+          return o
+        })
+        delete json.rawRowsCols; delete json.rawRowsDict; delete json.rawRowsData
+      }
       cachedDataRef.current = json
       setData(json)
       // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window (default view)

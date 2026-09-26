@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import {
-  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton, PillToggle,
+  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
 
 function SaKpiCarousel({ children }) {
@@ -359,7 +359,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     // Check if date range matches the cache's pre-computed range (no need to re-filter)
     const cacheRange = data.dateRange
     const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
-    if (!anyActive && dateMatchesCache) return data
+    if (!anyActive && dateMatchesCache && data.matrixCellRows) return data
 
     const rows = data.rawRows.filter(r => {
       if (dateStart && r.date < dateStart) return false
@@ -953,6 +953,41 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
               <PillToggle value={matrixGranularity} onChange={g => { setMatrixGranularity(g); setMatrixSort({ key: 'total', dir: 'desc' }) }}
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+              <button
+                onClick={() => {
+                  const raw = filteredData?.rawRows || data?.rawRows || []
+                  const ds = dateFilters?.start, de = dateFilters?.end
+                  const mch = filters.matrixChannel || []
+                  const subset = raw.filter(r => {
+                    if (ds && r.date < ds) return false
+                    if (de && r.date > de) return false
+                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
+                    return true
+                  })
+                  const map = new Map()
+                  for (const r of subset) {
+                    const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
+                    if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
+                    const e = map.get(k); e.qty += r.qty; e.rev += r.rev
+                  }
+                  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
+                  exportCsv(
+                    `sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
+                    [
+                      { label: 'Date', key: 'date' },
+                      { label: 'Category', key: 'category' },
+                      { label: 'Sub-Category', key: 'subCategory' },
+                      { label: 'SKU', key: 'sku' },
+                      { label: 'Channel', key: 'channel' },
+                      { label: 'Units', key: 'qty' },
+                      { label: 'Revenue', key: 'rev' },
+                    ],
+                    rows
+                  )
+                }}
+                style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
+                ⭳ Export CSV
+              </button>
             </div>
           }>
           <div style={{ maxHeight: 480, overflow: 'auto' }}>
