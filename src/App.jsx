@@ -5551,12 +5551,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             {/* Content-sized (not 1fr-stretched) so short values like "71,495" don't get spread
                 across the full card width with large gaps between them. */}
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
-                badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc} />
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
-              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
-                badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2} />
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
