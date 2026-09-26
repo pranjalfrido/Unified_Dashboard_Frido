@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -214,6 +214,54 @@ export default async function handler(req, res) {
         GROUP BY month, month_dt, category, sub_category, bucket
         ORDER BY month_dt, category, sub_category, bucket`
       })(),
+
+      // Exchange spotlight: top sub-categories by exchange qty — feeds the horizontal bar chart.
+      // Queries through the `q` CTE (same base + shopify filter) so date/category/subChannel
+      // filters from the page-level filter bar apply, matching the page's other widgets.
+      exchangeByProduct: `WITH q AS (${base})
+        SELECT Category AS category, SubCategory AS sub_category,
+          SUM(ItemQty) AS total_qty,
+          SUM(CASE WHEN Order_Status = 'Exchange' THEN ItemQty ELSE 0 END) AS exch_qty,
+          SUM(CASE WHEN Order_Status = 'Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev
+        FROM q WHERE ${shWhere}
+        GROUP BY category, sub_category
+        HAVING exch_qty > 0
+        ORDER BY exch_qty DESC
+        LIMIT 15`,
+
+      // Exchange reasons — same direct-table pattern as returnReasons above (Customer_Return_Reason
+      // is not projected through `q`), but scoped to Order_Status = 'Exchange' only.
+      exchangeReasons: `SELECT
+          COALESCE(NULLIF(TRIM(Customer_Return_Reason), ''), 'Unknown') AS reason,
+          COALESCE(NULLIF(TRIM(Customer_Sub_Reason), ''), 'Unknown') AS sub_reason,
+          COUNT(*) AS cnt,
+          SUM(SellingPrice_Inc_GST) AS revenue_impact
+        FROM \`frido-429506.production.fact_all_platform_sales_report\`
+        WHERE OrderDate BETWEEN '${start}' AND '${end}' AND ${shWhere}
+          AND Order_Status = 'Exchange'
+          AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
+        GROUP BY reason, sub_reason ORDER BY cnt DESC`,
+
+      // Exchange flow — from ReturnPrime historical data (2023–2025). Joins back to
+      // fact_all_platform_sales_report to resolve sku → Category/SubCategory labels.
+      // Both tables are in asia-south1; the getBQ() client handles it the same way as
+      // the returnReasons query above (direct table reference, no CTE).
+      exchangeFlow: `SELECT
+          rp.sku AS from_sku,
+          rp.exchange_sku AS to_sku,
+          p_from.Category AS from_category,
+          p_from.SubCategory AS from_subcat,
+          p_to.Category AS to_category,
+          p_to.SubCategory AS to_subcat,
+          rp.reason,
+          COUNT(*) AS exchange_count
+        FROM \`frido-429506.dbt_views.int_returnprime_return_exchange_combined_data\` rp
+        LEFT JOIN (SELECT DISTINCT masterskucode, Category, SubCategory FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify') p_from ON p_from.masterskucode = rp.sku
+        LEFT JOIN (SELECT DISTINCT masterskucode, Category, SubCategory FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify') p_to ON p_to.masterskucode = rp.exchange_sku
+        WHERE rp.request_type = 'exchange' AND rp.exchange_status = 'success'
+          AND rp.exchange_sku IS NOT NULL AND rp.sku != rp.exchange_sku
+          AND NOT STARTS_WITH(rp.exchange_sku, 'COUP')
+        GROUP BY 1,2,3,4,5,6,7 ORDER BY exchange_count DESC LIMIT 50`,
     }
 
     const entries = Object.entries(queries)
@@ -294,6 +342,30 @@ export default async function handler(req, res) {
       paymentTypeTable: (results.byPaymentType || []).map(r => ({ paymentType: r.payment_type, ...withPct(r) })),
       returnReasons: (results.returnReasons || []).map(r => ({ reason: r.reason, subReason: r.sub_reason, count: parseInt(r.count) || 0, revenueImpact: parseFloat(r.revenue_impact) || 0 })),
       cancelByBucket: (results.cancelByBucket || []).map(r => ({ month: r.month, monthDt: r.month_dt?.value || r.month_dt, category: r.category, subCategory: r.sub_category, bucket: r.bucket, cancelCount: parseInt(r.cancel_count) || 0 })),
+      exchangeByProduct: (results.exchangeByProduct || []).map(r => ({
+        category: r.category || 'Others',
+        subCategory: r.sub_category || 'Others',
+        totalQty: parseInt(r.total_qty) || 0,
+        exchQty: parseInt(r.exch_qty) || 0,
+        exchRev: parseFloat(r.exch_rev) || 0,
+        exchPct: parseInt(r.total_qty) > 0 ? (parseInt(r.exch_qty) / parseInt(r.total_qty) * 100) : 0,
+      })),
+      exchangeReasons: (results.exchangeReasons || []).map(r => ({
+        reason: r.reason,
+        subReason: r.sub_reason,
+        count: parseInt(r.cnt) || 0,
+        revenueImpact: parseFloat(r.revenue_impact) || 0,
+      })),
+      exchangeFlow: (results.exchangeFlow || []).map(r => ({
+        fromSku: r.from_sku,
+        toSku: r.to_sku,
+        fromCategory: r.from_category || 'Unknown',
+        fromSubcat: r.from_subcat || r.from_sku,
+        toCategory: r.to_category || 'Unknown',
+        toSubcat: r.to_subcat || r.to_sku,
+        reason: r.reason,
+        count: parseInt(r.exchange_count) || 0,
+      })),
     }
 
     setInCache(cacheKey, payload)

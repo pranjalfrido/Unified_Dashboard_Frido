@@ -449,6 +449,207 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   )
 }
 
+// Exchange Spotlight — two sub-tabs: Products (horizontal bar chart, top sub-cats by exchange
+// qty) and Reasons (expandable table of exchange-specific Customer_Return_Reason rows).
+function ExchangeSpotlightCard({ exchangeByProduct, exchangeReasons }) {
+  const [tab, setTab] = useState('products')
+  const [expanded, setExpanded] = useState({})
+  const { sortRows, Th } = useSortableTable('count')
+
+  // --- Products tab ---
+  const rows = (exchangeByProduct || []).slice(0, 10)
+  const maxExchQty = Math.max(...rows.map(r => r.exchQty), 1)
+
+  // --- Reasons tab ---
+  const totalCount = useMemo(() => (exchangeReasons || []).reduce((s, r) => s + r.count, 0), [exchangeReasons])
+  const grouped = useMemo(() => {
+    const m = {}
+    ;(exchangeReasons || []).forEach(r => {
+      if (!m[r.reason]) m[r.reason] = { reason: r.reason, count: 0, revenueImpact: 0, subReasons: [] }
+      m[r.reason].count += r.count
+      m[r.reason].revenueImpact += r.revenueImpact
+      m[r.reason].subReasons.push(r)
+    })
+    return Object.values(m)
+  }, [exchangeReasons])
+  const sortedReasons = sortRows(grouped, { reason: r => r.reason, count: r => r.count, pctShare: r => totalCount ? r.count / totalCount * 100 : 0, revenueImpact: r => r.revenueImpact })
+
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', background: C.acl }
+
+  const tabBtnStyle = active => ({
+    fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 10px', borderRadius: 6,
+    border: `1px solid ${active ? C.acm : C.border2}`, background: active ? C.acl : C.card,
+    color: active ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)',
+  })
+
+  return (
+    <Card fill title="Exchange Spotlight" action={
+      <div style={{ display: 'flex', gap: 5 }}>
+        <button style={tabBtnStyle(tab === 'products')} onClick={() => setTab('products')}>By Product</button>
+        <button style={tabBtnStyle(tab === 'reasons')} onClick={() => setTab('reasons')}>Reasons</button>
+      </div>
+    }>
+      {tab === 'products' && (
+        <div style={{ height: 355, overflowY: 'auto' }}>
+          {rows.length === 0 && <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '20px 0' }}>No exchange data</div>}
+          {rows.map((r, i) => (
+            <div key={`${r.category}::${r.subCategory}`} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 6px', borderBottom: i < rows.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+              <span style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 700, background: C.bg, color: C.t2 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.subCategory}>{r.subCategory}</div>
+                <div style={{ fontSize: 10, color: C.t3 }}>{r.category} · {r.exchPct.toFixed(1)}% of orders · {fmt(r.exchRev)}</div>
+              </div>
+              <div className="hb-track" style={{ width: 60, flexShrink: 0 }}>
+                <div className="hb-fill" style={{ width: `${(r.exchQty / maxExchQty) * 100}%`, background: C.acc }} />
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 52, textAlign: 'right' }}>{fmtN(r.exchQty)} units</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'reasons' && (
+        <div style={{ height: 340, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr style={{ background: C.acl }}>
+                <Th label="Reason" sortKey="reason" style={thStyle} align="left" />
+                <Th label="Count" sortKey="count" style={thStyle} align="right" />
+                <Th label="% Share" sortKey="pctShare" style={thStyle} align="right" />
+                <Th label="Gross Rev (incl. GST)" sortKey="revenueImpact" style={thStyle} align="right" />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedReasons.map((r, i) => {
+                const isOpen = expanded[r.reason]
+                const subs = [...r.subReasons].sort((a, b) => b.count - a.count)
+                const rowZebra = i % 2 === 1 ? C.hov : 'transparent'
+                return (
+                  <Fragment key={r.reason}>
+                    <tr style={{ borderBottom: (i < sortedReasons.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra }}
+                      onMouseEnter={e => { e.currentTarget.style.background = C.acl }}
+                      onMouseLeave={e => { e.currentTarget.style.background = rowZebra }}>
+                      <td style={{ padding: '5.5px 5px', color: C.t1 }}>
+                        <span onClick={() => setExpanded(prev => ({ ...prev, [r.reason]: !prev[r.reason] }))} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                          <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
+                          {r.reason}
+                        </span>
+                      </td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>{fmtN(r.count)}</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{totalCount ? (r.count / totalCount * 100).toFixed(1) : 0}%</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.revenueImpact)}</td>
+                    </tr>
+                    {isOpen && subs.map((s, si) => (
+                      <tr key={s.subReason} style={{ background: C.hov, borderBottom: (si < subs.length - 1 || i < sortedReasons.length - 1) ? `1px solid ${C.border}` : 'none' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = C.acl }}
+                        onMouseLeave={e => { e.currentTarget.style.background = C.hov }}>
+                        <td style={{ padding: '4px 5px', color: C.t3, fontSize: 11, paddingLeft: 22 }}>↳ {s.subReason}</td>
+                        <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{fmtN(s.count)}</td>
+                        <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalCount ? (s.count / totalCount * 100).toFixed(1) : 0}%</td>
+                        <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2, fontSize: 11 }}>{fmt(s.revenueImpact)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                )
+              })}
+              {sortedReasons.length === 0 && <tr><td colSpan={4} style={{ padding: '20px 5px', textAlign: 'center', color: C.t3 }}>No exchange reason data</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// Exchange Flow — what customers swapped to (ReturnPrime historical data, 2023-2025).
+// Groups pairs by from_subcat → to_subcat; highlights same-subcat (size swaps) vs.
+// cross-subcat (product swaps). Search box narrows by from or to subcat name.
+function ExchangeFlowCard({ exchangeFlow }) {
+  const [search, setSearch] = useState('')
+  const { sortRows, Th } = useSortableTable('count')
+
+  // Aggregate raw SKU-level rows into subcat → subcat pairs
+  const pairs = useMemo(() => {
+    const m = {}
+    ;(exchangeFlow || []).forEach(r => {
+      const key = `${r.fromSubcat}|||${r.toSubcat}`
+      if (!m[key]) m[key] = { fromSubcat: r.fromSubcat, fromCategory: r.fromCategory, toSubcat: r.toSubcat, toCategory: r.toCategory, count: 0, sameSubcat: r.fromSubcat === r.toSubcat }
+      m[key].count += r.count
+    })
+    return Object.values(m)
+  }, [exchangeFlow])
+
+  const filtered = useMemo(() => {
+    if (!search) return pairs
+    const q = search.toLowerCase()
+    return pairs.filter(r => r.fromSubcat.toLowerCase().includes(q) || r.toSubcat.toLowerCase().includes(q) || r.fromCategory.toLowerCase().includes(q) || r.toCategory.toLowerCase().includes(q))
+  }, [pairs, search])
+
+  const sorted = sortRows(filtered, { fromSubcat: r => r.fromSubcat, toSubcat: r => r.toSubcat, count: r => r.count })
+
+  const sizeSwaps = sorted.filter(r => r.sameSubcat)
+  const productSwaps = sorted.filter(r => !r.sameSubcat)
+
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', background: C.acl }
+
+  const renderSection = (label, sectionRows, color) => (
+    <>
+      <tr>
+        <td colSpan={4} style={{ padding: '5px 6px 3px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color, background: C.bg, borderTop: `1.5px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+          {label} · {fmtN(sectionRows.length)} pairs · {fmtN(sectionRows.reduce((s, r) => s + r.count, 0))} exchanges
+        </td>
+      </tr>
+      {sectionRows.length === 0 && (
+        <tr><td colSpan={4} style={{ padding: '8px 6px', textAlign: 'center', color: C.t3, fontSize: 11 }}>None</td></tr>
+      )}
+      {sectionRows.map((r, i) => {
+        const zebra = i % 2 === 1 ? C.hov : 'transparent'
+        return (
+          <tr key={`${r.fromSubcat}|||${r.toSubcat}`} style={{ background: zebra, borderBottom: `1px solid ${C.border}` }}
+            onMouseEnter={e => e.currentTarget.style.background = C.acl}
+            onMouseLeave={e => e.currentTarget.style.background = zebra}>
+            <td style={{ padding: '5px 6px', fontSize: 12, color: C.t1, fontWeight: 600, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${r.fromSubcat} (${r.fromCategory})`}>{r.fromSubcat}</td>
+            <td style={{ padding: '5px 4px', fontSize: 11, color: C.t3, textAlign: 'center', whiteSpace: 'nowrap' }}>→</td>
+            <td style={{ padding: '5px 6px', fontSize: 12, color: r.sameSubcat ? C.t2 : C.t1, fontWeight: r.sameSubcat ? 400 : 600, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${r.toSubcat} (${r.toCategory})`}>{r.toSubcat}</td>
+            <td style={{ padding: '5px 6px', fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtN(r.count)}</td>
+          </tr>
+        )
+      })}
+    </>
+  )
+
+  return (
+    <Card fill title="Exchange Flow · What They Swapped To" titleNoWrap action={
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search product…" style={{ fontSize: 11, padding: '3px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, color: C.t1, width: 130 }} />
+    }>
+      {exchangeFlow && exchangeFlow.length === 0 && (
+        <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '20px 0' }}>No exchange flow data (ReturnPrime historical data 2023–2025)</div>
+      )}
+      {!exchangeFlow && (
+        <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '20px 0' }}>Loading…</div>
+      )}
+      {exchangeFlow && exchangeFlow.length > 0 && (
+        <div style={{ height: 340, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr style={{ background: C.acl }}>
+                <Th label="From" sortKey="fromSubcat" style={thStyle} align="left" />
+                <th style={{ ...thStyle, width: 20 }} />
+                <Th label="To" sortKey="toSubcat" style={thStyle} align="left" />
+                <Th label="Count" sortKey="count" style={thStyle} align="right" />
+              </tr>
+            </thead>
+            <tbody>
+              {renderSection('Size / Variant Swaps (same sub-category)', sizeSwaps, C.acm)}
+              {renderSection('Product Swaps (different sub-category)', productSwaps, '#B91C1C')}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {} }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [data, setData] = useState(null)
@@ -556,6 +757,12 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
             <ReturnReasonsTable returnReasons={data.returnReasons} />
             <CancelBucketChart cancelByBucket={data.cancelByBucket} />
+          </div>
+
+          {/* Exchange Analysis — Exchange Spotlight + Exchange Flow */}
+          <div className="g-2" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
+            <ExchangeSpotlightCard exchangeByProduct={data.exchangeByProduct} exchangeReasons={data.exchangeReasons} />
+            <ExchangeFlowCard exchangeFlow={data.exchangeFlow} />
           </div>
         </>
       )}
