@@ -956,8 +956,14 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               <button
                 onClick={() => {
                   const raw = filteredData?.rawRows || data?.rawRows || []
+                  const ds = dateFilters?.start, de = dateFilters?.end
                   const mch = filters.matrixChannel || []
-                  const subset = mch.length ? raw.filter(r => mch.includes(r.channel) || mch.includes(r.channel2)) : raw
+                  const subset = raw.filter(r => {
+                    if (ds && r.date < ds) return false
+                    if (de && r.date > de) return false
+                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
+                    return true
+                  })
                   const map = new Map()
                   for (const r of subset) {
                     const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
