@@ -547,9 +547,8 @@ function ActivityLog({ userId, onClose }) {
   )
 }
 
-// ── User Row ──────────────────────────────────────────────────────────────────
-function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
-  const [expanded, setExpanded] = useState(false)
+// ── Member Detail Pane (right side of two-pane layout) ───────────────────────
+function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const [localTabs, setLocalTabs] = useState(permissions)
   const [saving, setSaving] = useState(false)
   const [showReset, setShowReset] = useState(false)
@@ -559,13 +558,13 @@ function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => { setLocalTabs(permissions) }, [permissions])
+  useEffect(() => { setLocalTabs(permissions) }, [user.user_id, permissions])
 
   async function savePermissions() {
     setSaving(true)
     await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
     if (localTabs.length > 0) await supabase.from('user_permissions').insert(localTabs.map(tab => ({ user_id: user.user_id, tab })))
-    setSaving(false); setExpanded(false); onUpdate()
+    setSaving(false); onUpdate()
     showToast('Permissions saved')
   }
 
@@ -584,75 +583,54 @@ function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
   }
 
   const tabsChanged = JSON.stringify([...localTabs].sort()) !== JSON.stringify([...permissions].sort())
-  const isRevoked = !user.is_active
 
   return (
-    <>
-      <div style={{
-        borderBottom: isLast ? 'none' : `1px solid #E7E3D8`,
-        padding: '16px 0',
-        opacity: isRevoked ? 0.65 : 1,
-        transition: 'opacity .2s',
-      }}>
-        {/* Main row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <Avatar url={user.avatar_url} name={user.name} size={42} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Name + pills */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#1E2321' }}>{user.name}</span>
+    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: 'calc(100vh - 220px)', paddingLeft: 20 }}>
+      {/* Member header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <Avatar url={user.avatar_url} name={user.name} size={44} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#1E2321', marginBottom: 3 }}>{user.name}</div>
+            <div style={{ fontSize: 12.5, color: '#4B534F', marginBottom: 4 }}>{user.email}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <StatusPill active={user.is_active} />
-              {user.is_admin
-                ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>Admin</span>
-                : <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>{permissions.length} tab{permissions.length !== 1 ? 's' : ''}</span>
-              }
+              {user.is_admin && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>Admin</span>
+              )}
+              <span style={{ fontSize: 11.5, color: '#9BA5A1' }}>Last login: {fmtDate(user.last_login_at)}</span>
             </div>
-            {/* Email */}
-            <div style={{ fontSize: 12.5, color: '#4B534F' }}>{user.email}</div>
-            {/* Last login */}
-            <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 1 }}>Last login: {fmtDate(user.last_login_at)}</div>
-            {/* Tab access toggle link */}
-            <button
-              style={{ background: 'none', border: 'none', padding: 0, marginTop: 6, fontSize: 12.5, color: '#4B534F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-              onClick={() => setExpanded(v => !v)}>
-              <span style={{ fontSize: 10 }}>{expanded ? '▾' : '▸'}</span>
-              {expanded ? 'Hide tab access' : 'Tab access'}
-            </button>
-
-            {/* Expanded tab panel — inline below the link */}
-            {expanded && (
-              <div style={{ marginTop: 10 }}>
-                {user.is_admin ? (
-                  <div style={{ fontSize: 12.5, color: '#4B534F', fontStyle: 'italic' }}>Admins have access to every tab.</div>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Click to grant or remove access</div>
-                    <div style={{ marginBottom: 10 }}>
-                      <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
-                    </div>
-                    {tabsChanged && (
-                      <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
-                        {saving ? 'Saving…' : 'Save permissions'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Text action buttons */}
-          <div style={{ display: 'flex', gap: 16, flexShrink: 0, alignItems: 'center', paddingTop: 2 }}>
-            <button style={S.textBtn} onClick={() => setShowActivity(true)}>Activity</button>
-            <button style={S.textBtn} onClick={() => setShowReset(true)}>Reset pw</button>
-            {user.is_active
-              ? <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
-              : <button style={{ ...S.textBtn, color: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
-            }
-            <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmDelete(true)}>Delete</button>
           </div>
         </div>
+        {/* Action links */}
+        <div style={{ display: 'flex', gap: 14, flexShrink: 0, alignItems: 'center', paddingTop: 4 }}>
+          <button style={S.textBtn} onClick={() => setShowActivity(true)}>Activity</button>
+          <button style={S.textBtn} onClick={() => setShowReset(true)}>Reset pw</button>
+          {user.is_active
+            ? <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
+            : <button style={{ ...S.textBtn, color: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
+          }
+          <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmDelete(true)}>Delete</button>
+        </div>
       </div>
+
+      {/* Divider */}
+      <div style={{ borderTop: '1px solid #E7E3D8', marginBottom: 14 }} />
+
+      {/* Permission panel */}
+      {user.is_admin ? (
+        <div style={{ fontSize: 12.5, color: '#4B534F', fontStyle: 'italic', padding: '8px 0' }}>Admins have access to every tab.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Click chips to grant or remove access</div>
+          <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
+          {tabsChanged && (
+            <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
+              {saving ? 'Saving…' : 'Save permissions'}
+            </button>
+          )}
+        </>
+      )}
 
       {showReset && (
         <ResetPasswordModal session={session} user={user} onClose={() => setShowReset(false)}
@@ -679,7 +657,7 @@ function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
           onCancel={() => setConfirmDelete(false)}
         />
       )}
-    </>
+    </div>
   )
 }
 
@@ -690,6 +668,7 @@ function TeamMembers({ session, showToast }) {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [search, setSearch] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
 
   async function loadUsers() {
     setLoading(true)
@@ -704,10 +683,19 @@ function TeamMembers({ session, showToast }) {
 
   useEffect(() => { loadUsers() }, [])
 
+  // Auto-select first member on load
+  useEffect(() => {
+    if (!loading && users.length > 0 && !selectedId) {
+      setSelectedId(users[0].user_id)
+    }
+  }, [loading, users])
+
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
     return !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
   })
+
+  const selectedUser = users.find(u => u.user_id === selectedId)
 
   return (
     <div style={S.card}>
@@ -722,28 +710,69 @@ function TeamMembers({ session, showToast }) {
         <button style={S.primaryBtn} onClick={() => setShowCreate(true)}>+ Add member</button>
       </div>
 
-      {/* Search */}
-      <div style={{ position: 'relative', marginBottom: 16 }}>
-        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9BA5A1', pointerEvents: 'none' }}>⌕</span>
-        <input
-          style={{ ...S.input, paddingLeft: 34, background: '#F7F5EF' }}
-          placeholder="Search by name or email…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-
-      {/* List */}
       {loading ? (
         <div style={{ color: '#4B534F', fontSize: 14, padding: '20px 0' }}>Loading…</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ color: '#9BA5A1', fontSize: 14, textAlign: 'center', padding: '32px 0' }}>
-          {search ? `No members match "${search}"` : 'No team members yet.'}
-        </div>
       ) : (
-        filtered.map((u, i) => (
-          <UserRow key={u.user_id} user={u} permissions={permissions[u.user_id] || []} session={session} onUpdate={loadUsers} showToast={showToast} isLast={i === filtered.length - 1} />
-        ))
+        <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* Left pane — member list */}
+          <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #E7E3D8', paddingRight: 16, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', boxSizing: 'border-box' }}>
+            {/* Search */}
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9BA5A1', pointerEvents: 'none' }}>⌕</span>
+              <input
+                style={{ ...S.input, paddingLeft: 30, fontSize: 12.5, padding: '8px 10px 8px 30px', background: '#F7F5EF' }}
+                placeholder="Search by name or email…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ color: '#9BA5A1', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+                {search ? `No match for "${search}"` : 'No team members yet.'}
+              </div>
+            ) : (
+              filtered.map(u => {
+                const isSelected = u.user_id === selectedId
+                const tabCount = (permissions[u.user_id] || []).length
+                return (
+                  <div key={u.user_id} onClick={() => setSelectedId(u.user_id)}
+                    style={{
+                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 2,
+                      background: isSelected ? '#E4EFE6' : 'transparent',
+                      borderLeft: isSelected ? '3px solid #3E6B4F' : '3px solid transparent',
+                      transition: 'background .12s',
+                      opacity: u.is_active ? 1 : 0.55,
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F7F5EF' }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E2321', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
+                    <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 2 }}>
+                      {u.is_admin ? 'Admin · all tabs' : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Right pane — selected member detail */}
+          {selectedUser ? (
+            <MemberDetailPane
+              key={selectedUser.user_id}
+              user={selectedUser}
+              permissions={permissions[selectedUser.user_id] || []}
+              session={session}
+              onUpdate={loadUsers}
+              showToast={showToast}
+            />
+          ) : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9BA5A1', fontSize: 13, minHeight: 200 }}>
+              Select a member to view details
+            </div>
+          )}
+        </div>
       )}
 
       {showCreate && (
@@ -804,7 +833,7 @@ const S = {
   page: {
     fontFamily: 'Inter, system-ui, sans-serif',
     padding: '28px 28px 48px',
-    maxWidth: 880,
+    maxWidth: 1100,
     margin: '0 auto',
     color: '#1E2321',
     background: '#F7F5EF',
