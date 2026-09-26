@@ -223,12 +223,22 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
   )
 }
 
-// Steps through the theme's green accent family first, then extends with distinguishable
-// hues. C.acc/acm/acd are live getters so these follow a theme switch automatically.
+// 12-step green/teal ramp for stacked bars. All hues stay in the forest family —
+// light mint at the top, deep forest at the base — so the stack reads as one theme.
+// C.acc/acm/acd are live getters and follow a theme switch automatically.
 const CAT_COLORS = () => [
-  C.acc, C.acm, C.acd,
-  '#2BB3A3', '#0A7A5F',
-  '#F0B429', '#B06AD9', '#3D9BE9', '#E24B4A', '#FF6B35', '#06D6A0', '#A78BFA',
+  C.acd,      // #0E3F34 deepest forest
+  C.acm,      // #175A4A deep green
+  C.acc,      // #1F6F5C mid green (theme accent)
+  '#2B8C72',  // forest-teal step
+  '#2BB3A3',  // teal
+  '#3ECFB8',  // light teal
+  '#57C4A8',  // sage
+  '#7DD4BF',  // pale teal
+  '#A8D5C8',  // mint
+  '#C4E8DE',  // very light mint
+  '#0A7A5F',  // dark teal variant
+  '#4DAE97',  // medium sage
 ]
 
 // Stacked bar chart: X = last 6 months (fixed, ignores date picker).

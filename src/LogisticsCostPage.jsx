@@ -56,9 +56,9 @@ const MODE = {
   get RTO(){ return C.acd },
 }
 
-// Courier trend lines — theme accent leads; remaining hues step through greens/teal so
-// the line chart stays in the forest family rather than pulling in off-brand oranges.
-const DRIFT = { get colors(){ return [C.acc, C.acm, '#2BB3A3', '#0A7A5F', '#F0B429', '#B06AD9'] } }
+// Courier trend lines — all greens/teals so the chart reads as one family.
+// Six steps spaced across light→dark so lines stay apart even on greyscale/CVD.
+const DRIFT = { get colors(){ return [C.acc, '#2BB3A3', C.acm, '#57C4A8', C.acd, '#A8D5C8'] } }
 
 // Chart chrome — recessive hairlines, muted axis ink.
 // Per-unit rates, to one decimal. fmt() compacts to lakhs/crores, which is right for spend
