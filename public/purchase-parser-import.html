@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Import Register Parser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --paper:#f4f7f6; --surface:#ffffff; --ink:#18272a; --muted:#5b6d70; --line:#d6e0de;
+  --accent:#0d6e62; --accent-ink:#ffffff; --accent-soft:#e1f0ed;
+  --good:#1d7a3c; --good-soft:#e3f3e7; --warn:#9a6212; --warn-soft:#fbf0dc; --bad:#b42318; --bad-soft:#fbe6e3;
+  --row:#f8fbfa;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#111a1b; --surface:#172224; --ink:#e3ecea; --muted:#93a6a4; --line:#2a3a3c;
+    --accent:#3fb3a2; --accent-ink:#0b1516; --accent-soft:#18332f;
+    --good:#5cc47d; --good-soft:#16301f; --warn:#e0a54a; --warn-soft:#33270f; --bad:#f07a6c; --bad-soft:#3a1c18;
+    --row:#1a2729;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#111a1b; --surface:#172224; --ink:#e3ecea; --muted:#93a6a4; --line:#2a3a3c;
+  --accent:#3fb3a2; --accent-ink:#0b1516; --accent-soft:#18332f;
+  --good:#5cc47d; --good-soft:#16301f; --warn:#e0a54a; --warn-soft:#33270f; --bad:#f07a6c; --bad-soft:#3a1c18;
+  --row:#1a2729;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans);padding-inline:16px;padding-block:16px 24px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.wrap-inner{display:flex;flex-direction:column;gap:10px}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+header h1{font-size:18px;font-weight:600;margin:0}
+header span{color:var(--muted);font-size:13px}
+.drop{border:1.5px dashed var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .txt{flex:1 1 220px;color:var(--muted);font-size:13px}
+.drop .txt b{color:var(--ink);font-weight:600}
+.rtype{font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+select{font:500 13px/1 var(--sans);border-radius:6px;padding:7px 8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button,.btn{font:500 13px/1 var(--sans);border-radius:6px;padding:8px 12px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,label.btn:focus-within,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.source{font-size:12.5px;color:var(--muted)}
+.source b{color:var(--ink);font-weight:500}
+.tag{display:none}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.stat{display:flex;align-items:baseline;gap:6px}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font:500 14px var(--mono);font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:5px;font:500 12px/1 var(--sans);padding:4px 8px;border-radius:999px}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+details.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+details.panel>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px;font-weight:600;font-size:13.5px}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::before{content:"▸";color:var(--muted);margin-right:6px}
+details.panel[open]>summary::before{content:"▾"}
+details.panel>summary .t{margin-right:auto}
+details.panel[open]>summary{border-bottom:1px solid var(--line)}
+.meta{color:var(--muted);font-size:12.5px;font-weight:400}
+.checks{list-style:none;margin:0;padding:2px 0;max-height:200px;overflow:auto}
+.checks li{display:flex;gap:8px;align-items:baseline;padding:5px 12px;font-size:13px}
+.checks li+li{border-top:1px solid var(--line)}
+.sev{flex:none;font:500 10.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:3px 6px;border-radius:4px;min-width:52px;text-align:center}
+.sev.error{background:var(--bad-soft);color:var(--bad)} .sev.warn{background:var(--warn-soft);color:var(--warn)} .sev.ok{background:var(--good-soft);color:var(--good)}
+.checks code{font:12px var(--mono)}
+.tablewrap{overflow:auto;max-height:300px}
+table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12px}
+th,td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:var(--surface);font-weight:600;font-size:11.5px;z-index:1;border-bottom:1.5px solid var(--ink)}
+th.calc{color:var(--accent)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr:nth-child(even) td{background:var(--row)}
+td.prod{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:12.5px;color:var(--muted)}
+.status.err{color:var(--bad)}
+.legend{font-size:12px;color:var(--muted);padding:6px 12px;border-top:1px solid var(--line)}
+.legend b{color:var(--accent);font-weight:600}
+#tsv{width:100%;height:110px;font:12px var(--mono);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Import Register Parser</h1><span>Tally export → Frido register · Import of Goods and import cost ledgers</span></header>
+
+  <div class="drop" id="drop">
+    <div class="txt"><b>Drop the Tally export here</b> or choose it (.xls / .xlsx). Import of Goods and cost ledgers (Custom Duty, SWS, CAIDC, Cess, CHA, Freight) are recognised automatically. The file stays in your browser.</div>
+    <label class="rtype" for="rtype">Report <select id="rtype"><option value="auto">Detect automatically</option><option value="import">Import of Goods</option><option value="ledger">Cost ledger (Custom Duty, SWS, CAIDC, Cess, CHA, Freight…)</option></select></label>
+    <label class="btn" for="file">Choose file<input type="file" id="file" accept=".xls,.xlsx"></label>
+  </div>
+
+  <div class="source" id="source"></div>
+
+  <div id="results" class="wrap-inner" hidden>
+  <div class="stats" id="stats"></div>
+
+  <div class="actions">
+    <button class="primary" id="dl" disabled>Download parsed register</button>
+    <button id="dlAnyway" hidden>Download anyway</button>
+    <button id="copy">Copy for Excel</button>
+    <button id="saveSupabase" disabled style="background:#16a34a;border-color:#16a34a;color:#fff">Save to Supabase</button>
+    <span class="status" id="dlstatus"></span>
+  </div>
+  <textarea id="tsv" hidden readonly aria-label="Parsed data to copy"></textarea>
+
+  <details class="panel" id="chk">
+    <summary><span class="t">Checks</span><span class="meta" id="checkmeta"></span></summary>
+    <ul class="checks" id="checks"></ul>
+  </details>
+
+  <details class="panel" id="colp">
+    <summary><span class="t">Columns</span><span class="meta" id="colmeta"></span></summary>
+    <div class="tablewrap"><table id="coltbl"></table></div>
+    <div class="legend" id="extras"></div>
+  </details>
+
+  <details class="panel">
+    <summary><span class="t">Preview</span><span class="meta" id="tablemeta"></span></summary>
+    <div class="tablewrap"><table id="tbl"></table></div>
+    <div class="legend" id="legend"></div>
+  </details>
+  </div>
+</div>
+
+<script>
+const UOM={Prs:"Pair",Pcs:"Piece",Nos:"Nos",Pck:"Pack",Kgs:"Kg"};
+const ROE_MIN=80, ROE_MAX=110, PREVIEW=50;
+let result=null, outName="parsed.xlsx", lastFile=null;
+
+/* ---------- text & value helpers ---------- */
+const CP1252={0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x0160:0x8A,0x2039:0x8B,0x0152:0x8C,0x017D:0x8E,0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x02DC:0x98,0x2122:0x99,0x0161:0x9A,0x203A:0x9B,0x0153:0x9C,0x017E:0x9E,0x0178:0x9F};
+function fixMojibake(s){
+  if(!/[ÂÃâ]/.test(s)) return s;
+  const bytes=[];
+  for(const ch of s){const c=ch.codePointAt(0); if(c<256) bytes.push(c); else if(CP1252[c]!==undefined) bytes.push(CP1252[c]); else return s;}
+  try{return new TextDecoder("utf-8",{fatal:true}).decode(new Uint8Array(bytes));}catch(e){return s;}
+}
+function clean(v){
+  if(v===undefined||v===null) return null;
+  const s=fixMojibake(String(v)).replace(/_x000D_/g," ").replace(/[\r\n ]/g," ").replace(/\s+/g," ").trim();
+  return s||null;
+}
+function unitFrom(fmt){const m=/(Prs|Pcs|Nos|Pck|Kgs)/.exec(fmt||""); return m?UOM[m[1]]:null;}
+function num(v){if(v===null||v===undefined||v==="") return null; const n=typeof v==="number"?v:parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isFinite(n)?n:null;}
+const r2=x=>Math.round(x*100)/100;
+/* Excel dates can come back a few seconds before midnight; snap to the nearest calendar day */
+function snapDate(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+(d.getHours()>=12?1:0));}
+const toSerial=d=>d instanceof Date?Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000+25569:d;
+const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+const inr=x=>Number(x).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate=d=>d instanceof Date&&!isNaN(d)?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"2-digit"}):"";
+
+/* ---------- shared fields (matched by name, never by position; extra columns are ignored)
+   need: "must" -> can't parse without it · "calc" -> blocks the download if missing
+         "opt"  -> template column left blank (or filled from a fallback) · "none" -> only used for checks ---------- */
+const F_DATE={key:"Date",aliases:["Date","Voucher Date"],need:"must",use:"finds each voucher"};
+const F_PART={key:"Particulars",aliases:["Particulars","Item","Stock Item","Item Name"],need:"must",use:"ProductName"};
+const F_SUPP={key:"Buyer/Supplier",aliases:["Buyer/Supplier","Supplier","Party Name","Party"],need:"opt",use:"VendorName",fallback:"Particulars"};
+const F_VTYPE={key:"Voucher Type",aliases:["Voucher Type","Vch Type"],need:"opt",use:"VoucherType"};
+const F_GST={key:"GSTIN/UIN",aliases:["GSTIN/UIN","GSTIN","GST No.","GST"],need:"opt",use:"GST"};
+
+/* ---------- report types ---------- */
+const REPORTS={
+  import:{
+    name:"Import of Goods",
+    heading:/import of goods/i,
+    cols:["Date","ProductName","VendorName","VoucherType","VoucherNo","VoucherRefNo","GST","Quantity","UnitofMeasure","Rate_$","GrossTotal_$","GrossTotal_Rs","ROE","PurchaseRateperqty_Rs_Exc_GST"],
+    calc:new Set(["GrossTotal_$","GrossTotal_Rs","ROE","PurchaseRateperqty_Rs_Exc_GST"]),
+    fmts:{0:"d-mmm-yy",7:"#,##0.##",9:"#,##0.00",10:"#,##0.00",11:"#,##0.00",12:"0.0000",13:"#,##0.00"},
+    widths:[10,48,38,11,18,18,8,10,12,9,13,16,9,28],
+    legend:"<b>Blue</b> columns are calculated. ROE = invoice ₹ ÷ invoice $ · GrossTotal_Rs = GrossTotal_$ × ROE · PurchaseRateperqty_Rs_Exc_GST = GrossTotal_Rs ÷ Quantity (import IGST not included).",
+    fields:[F_DATE,F_PART,
+      {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo",fallback:"Voucher Ref. No."},
+      {key:"Quantity",aliases:["Quantity","Qty","Billed Quantity","Actual Quantity"],need:"calc",use:"Quantity, UnitofMeasure"},
+      {key:"Rate",aliases:["Rate","Rate ($)","Rate in FC","Forex Rate"],need:"calc",use:"Rate_$"},
+      {key:"Gross Total",aliases:["Gross Total","Gross Amount","Invoice Value","Total"],need:"calc",use:"invoice ₹ total",fallback:"Import of Goods"},
+      F_SUPP,F_VTYPE,
+      {key:"Voucher Ref. No.",aliases:["Voucher Ref. No.","Voucher Ref No","Reference No.","Supplier Invoice No.","Ref. No."],need:"opt",use:"VoucherRefNo"},
+      F_GST,
+      {key:"Import of Goods",aliases:["Import of Goods"],need:"none",use:"backup for Gross Total"}],
+    build:buildImport
+  },
+  ledger:{
+    name:"Cost ledger",
+    heading:/$^/,   // detected from the ledger name instead (see findLedger)
+    cols:["Date","ProductName","VendorName","VoucherType","VoucherNo","GST","Value"],
+    calc:new Set(),
+    fmts:{0:"d-mmm-yy",6:"#,##0.00"},
+    widths:[10,52,30,11,18,18,14],
+    legend:"One row per product line. Value = the product's share of this ledger's amount, as allocated in Tally.",
+    fields:[F_DATE,F_PART,
+      {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo"},
+      {key:"Value",aliases:["Value","Amount","Item Value"],need:"calc",use:"Value (product share)",fallback:"Gross Total"},
+      F_SUPP,F_VTYPE,F_GST,
+      {key:"Gross Total",aliases:["Gross Total"],need:"none",use:"backup for Value"}],
+    build:buildLedger
+  }
+};
+
+/* ---------- read the sheet: heading block, headings row, vouchers and their lines ---------- */
+function readSheet(ws){
+  if(!ws||!ws["!ref"]) throw new Error("The first sheet is empty.");
+  const range=XLSX.utils.decode_range(ws["!ref"]);
+  const cell=(r,c)=>ws[XLSX.utils.encode_cell({r,c})];
+  const dateA=F_DATE.aliases.map(norm), partA=F_PART.aliases.map(norm);
+  let hdr=-1, period=null, heading=[], headers=[];
+  for(let r=range.s.r;r<=range.e.r&&hdr<0;r++){
+    const vals=[];for(let c=range.s.c;c<=range.e.c;c++){const x=cell(r,c);vals.push(x?clean(x.v):null);}
+    const n=vals.map(norm);
+    if(n.some(v=>dateA.includes(v))&&n.some(v=>partA.includes(v))){hdr=r;headers=vals.map((v,i)=>({name:v,c:i+range.s.c})).filter(h=>h.name);}
+    else{const t=vals.find(v=>v); if(t){heading.push(t); if(/\bto\b/.test(t)&&/\d/.test(t)) period=t;}}
+  }
+  if(hdr<0) throw new Error("Couldn't find the headings row. The export needs at least a Date and a Particulars column.");
+  return {ws,range,cell,hdr,headers,heading,period};
+}
+/* The ledger name is printed in the report heading and is also a column (e.g. "SWS- Social Welfare Service"). */
+function findLedger(sheet){
+  const skip=new Set(["date","particulars","ledgeraccount","value","grosstotal"]);
+  const cols=new Map(sheet.headers.map(h=>[norm(h.name),h.name]));
+  for(const t of sheet.heading){const n=norm(t); if(!skip.has(n)&&cols.has(n)) return cols.get(n);}
+  return null;
+}
+function detect(sheet){
+  const led=findLedger(sheet);
+  if(led&&norm(led)!=="importofgoods") return "ledger";   // e.g. "Freight Charges ( Import of Goods)" is a cost ledger
+  if(REPORTS.import.heading.test(sheet.heading.join(" "))) return "import";
+  const names=sheet.headers.map(x=>norm(x.name));
+  if(names.includes("rate")) return "import";
+  return null;
+}
+function mapFields(sheet,rep){
+  const col={}, used=new Set(), colChecks=[], report=[];
+  for(const f of rep.fields){
+    const al=f.aliases.map(norm);
+    const h=sheet.headers.find(h=>!used.has(h.c)&&al.includes(norm(h.name)));
+    if(h){col[f.key]=h.c; used.add(h.c); if(f.need!=="none") report.push({field:f.key,found:h.name,use:f.use,state:"found"});}
+  }
+  for(const f of rep.fields){
+    if(col[f.key]!==undefined||f.need==="none") continue;
+    const fb=f.fallback&&col[f.fallback]!==undefined?f.fallback:null;
+    if(f.need==="must") throw new Error(`The export has no "${f.key}" column, so vouchers and products can't be told apart.`);
+    if(fb){col[f.key]=col[fb]; report.push({field:f.key,found:`"${fb}" used instead`,use:f.use,state:"fallback"}); colChecks.push(["warn",`No "${f.key}" column. Used "${fb}" for ${f.use}.`]);}
+    else{report.push({field:f.key,found:"Not in export",use:f.use,state:f.need==="calc"?"missing-calc":"missing"});
+      colChecks.push([f.need==="calc"?"error":"warn", f.need==="calc"?`No "${f.key}" column. ${f.use} can't be filled.`:`No "${f.key}" column. ${f.use} is left blank.`]);}
+  }
+  const extras=sheet.headers.filter(h=>!used.has(h.c)).map(h=>h.name);
+  const get=(r,name)=>col[name]===undefined?undefined:sheet.cell(r,col[name]);
+  // group rows: a row with a date starts a voucher, rows below it are its lines; stop at Grand Total
+  const vouchers=[]; let cur=null, grand=null;
+  for(let r=sheet.hdr+1;r<=sheet.range.e.r;r++){
+    const d=get(r,"Date"), p=get(r,"Particulars"), pv=p?clean(p.v):null;
+    if(pv==="Grand Total"){grand=r;break;}
+    const dv=d?d.v:null;
+    if(dv instanceof Date||(d&&d.t==="d")){cur={r,date:snapDate(dv instanceof Date?dv:new Date(dv)),lines:[]}; vouchers.push(cur); continue;}
+    if(cur&&pv) cur.lines.push(r);
+  }
+  const gone=new Set(report.filter(x=>x.state==="missing-calc").map(x=>x.field));
+  return {col,get,colChecks,report,extras,vouchers,grand,gone};
+}
+
+/* ---------- Import of Goods: split invoice ₹ across lines by $ value ---------- */
+function buildImport(sheet,m){
+  const {get,gone}=m, rows=[], checks=[...m.colChecks], seen={};
+  let inrTotal=0, lineTotal=0;
+  for(const v of m.vouchers){
+    const r=v.r, pv=clean(get(r,"Particulars")?.v);
+    const inv={date:v.date,vendor:clean(get(r,"Buyer/Supplier")?.v)||pv,vtype:clean(get(r,"Voucher Type")?.v),vno:clean(get(r,"Voucher No.")?.v),
+      ref:clean(get(r,"Voucher Ref. No.")?.v),gst:clean(get(r,"GSTIN/UIN")?.v),inr:num(get(r,"Gross Total")?.v)};
+    seen[inv.vno]=(seen[inv.vno]||0)+1;
+    if(!v.lines.length){checks.push(["error",`<code>${esc(inv.vno)}</code> has no product lines.`]);continue;}
+    const lines=v.lines.map(lr=>{const q=get(lr,"Quantity"), rt=get(lr,"Rate");
+      return {product:clean(get(lr,"Particulars")?.v),qty:q?num(q.v):null,rate:rt?num(rt.v):null,uom:unitFrom(q&&q.z)||unitFrom(rt&&rt.z)};});
+    for(const l of lines){
+      l.usd=(l.qty!==null&&l.rate!==null)?l.qty*l.rate:null;
+      if(l.usd===null&&!gone.has("Quantity")&&!gone.has("Rate")) checks.push(["error",`<code>${esc(inv.vno)}</code>: “${esc(l.product)}” is missing ${l.qty===null?"Quantity":"Rate"}.`]);
+      if(!l.uom&&!gone.has("Quantity")) checks.push(["warn",`<code>${esc(inv.vno)}</code>: “${esc(l.product)}” has no unit in Tally.`]);
+    }
+    const usd=lines.reduce((a,l)=>a+(l.usd||0),0);
+    let roe=null;
+    if(!inv.inr||!usd){ if(!gone.size) checks.push(["error",`<code>${esc(inv.vno)}</code>: ROE can't be worked out (invoice ₹ ${inv.inr??"missing"}, $ total ${usd||"0"}).`]); }
+    else{
+      roe=inv.inr/usd;
+      if(roe<ROE_MIN||roe>ROE_MAX) checks.push(["error",`<code>${esc(inv.vno)}</code>: ROE ${roe.toFixed(2)} is outside ${ROE_MIN}–${ROE_MAX}. A line's qty or rate is probably wrong in Tally.`]);
+      else if(Math.abs(roe*20-Math.round(roe*20))>0.001) checks.push(["warn",`<code>${esc(inv.vno)}</code>: ROE ${roe.toFixed(4)} isn't a round rate. Check its qty/rate lines in Tally.`]);
+    }
+    const vals=lines.map(l=>(roe&&l.usd!==null)?r2(l.usd*roe):null);
+    if(roe&&vals.every(x=>x!==null)){
+      const diff=r2(inv.inr-vals.reduce((a,b)=>a+b,0));
+      if(diff){let big=0;lines.forEach((l,i)=>{if(l.usd>lines[big].usd)big=i;});vals[big]=r2(vals[big]+diff);}
+    }
+    inrTotal+=inv.inr||0;
+    lines.forEach((l,i)=>{const x=vals[i]; if(x!==null) lineTotal+=x;
+      rows.push([inv.date,l.product,inv.vendor,inv.vtype,inv.vno,inv.ref,inv.gst,l.qty,l.uom,l.rate,l.usd!==null?r2(l.usd):null,x,roe?Math.round(roe*1e6)/1e6:null,(x!==null&&l.qty)?Math.round(x/l.qty*1e4)/1e4:null]);});
+  }
+  Object.entries(seen).filter(([,n])=>n>1).forEach(([v,n])=>checks.unshift(["error",`VoucherNo <code>${esc(v)}</code> appears on ${n} separate invoices in this export.`]));
+  const match=Math.abs(inrTotal-lineTotal)<0.01&&!gone.size;
+  if(!match&&!gone.size) checks.unshift(["error",`Line values add up to ₹${inr(lineTotal)}, but invoice totals are ₹${inr(inrTotal)}.`]);
+  return {rows,checks,match,stats:[["Invoices",m.vouchers.length],["Lines",rows.length],["Invoice value","₹"+inr(inrTotal)]],okText:"Every line has a quantity, rate and unit, and all ROEs look normal."};
+}
+
+/* ---------- Cost ledgers (Custom Duty, SWS, CAIDC, Cess, CHA, Freight …): one row per product line ----------
+   Tally lists each voucher's inventory allocation under it. When a voucher also books another allocated ledger
+   (e.g. CHA and Freight on one bill), the lines of both ledgers are listed together, one block per ledger;
+   only the block that adds up to this ledger's amount is kept. */
+function scaleTo(vals,target){
+  const s=vals.reduce((a,b)=>a+b,0); if(!s) return vals.map(()=>r2(target/vals.length));
+  const out=vals.map(v=>r2(v*target/s)); const diff=r2(target-out.reduce((a,b)=>a+b,0));
+  if(diff){let big=0; vals.forEach((v,i)=>{if(Math.abs(v)>Math.abs(vals[big])) big=i;}); out[big]=r2(out[big]+diff);}
+  return out;
+}
+function findBlock(vals,target){
+  const tol=Math.max(0.05,0.005*vals.length), hits=[];
+  for(let i=0;i<vals.length;i++){let s=0; for(let j=i;j<vals.length;j++){s+=vals[j]; if(Math.abs(s-target)<=tol) hits.push([i,j+1]);}}
+  if(!hits.length) return null;
+  return hits.find(([i,j])=>i===0||j===vals.length)||hits[0];
+}
+function buildLedger(sheet,m,rep){
+  const {get,gone}=m, rows=[], checks=m.colChecks.filter(c=>!/No "Value" column/.test(c[1])), seen={}, left=[], split=[], scaled=[];
+  const noValueCol=m.report.some(x=>x.field==="Value"&&x.state==="fallback");
+  let lineTotal=0;
+  for(const v of m.vouchers){
+    const r=v.r, pv=clean(get(r,"Particulars")?.v);
+    const vh={date:v.date,vendor:clean(get(r,"Buyer/Supplier")?.v)||pv,vtype:clean(get(r,"Voucher Type")?.v),vno:clean(get(r,"Voucher No.")?.v),gst:clean(get(r,"GSTIN/UIN")?.v),
+      value:noValueCol?null:num(get(r,"Value")?.v),led:num(get(r,"Ledger")?.v)};
+    if(!v.lines.length){left.push(vh);continue;}
+    const key=vh.vno; (seen[key]=seen[key]||[]).push(fmtDate(vh.date));
+    let lines=v.lines.map(lr=>({product:clean(get(lr,"Particulars")?.v),val:num(get(lr,"Value")?.v)}));
+    lines.filter(l=>l.val===null).forEach(l=>{if(!gone.has("Value")) checks.push(["error",`<code>${esc(vh.vno)}</code>: “${esc(l.product)}” has no Value.`]);});
+    const vals=lines.map(l=>l.val||0), sum=vals.reduce((a,b)=>a+b,0);
+    if(vh.value!==null&&Math.abs(sum-vh.value)>0.05) checks.push(["error",`<code>${esc(vh.vno)}</code>: product lines add up to ₹${inr(sum)}, but the voucher Value is ₹${inr(vh.value)}.`]);
+    let out=vals;
+    if(vh.led===null){ if(!gone.has("Ledger")) checks.push(["error",`<code>${esc(vh.vno)}</code> has no ${esc(rep.ledger)} amount.`]); }
+    else if(noValueCol){ out=scaleTo(vals,vh.led); }
+    else if(Math.abs(sum-vh.led)>Math.max(0.05,0.005*vals.length)){
+      const blk=findBlock(vals,vh.led);
+      if(blk){ lines=lines.slice(blk[0],blk[1]); out=vals.slice(blk[0],blk[1]); split.push(vh.vno); }
+      else { out=scaleTo(vals,vh.led); scaled.push(vh.vno); }
+    }
+    lines.forEach((l,i)=>{lineTotal+=out[i]; rows.push([vh.date,l.product,vh.vendor,vh.vtype,vh.vno,vh.gst,r2(out[i])]);});
+  }
+  if(noValueCol) checks.push(["warn",`The export has no Value column, so each voucher's ${esc(rep.ledger)} amount was spread over its product lines in proportion to their Gross Total.`]);
+  if(split.length) checks.push(["ok",`${split.length} voucher${split.length>1?"s":""} also book another cost ledger on the same bill; only the lines that belong to ${esc(rep.ledger)} were kept: ${split.slice(0,8).map(x=>`<code>${esc(x)}</code>`).join(", ")}${split.length>8?"…":""}.`]);
+  if(scaled.length) checks.push(["warn",`${scaled.length} voucher${scaled.length>1?"s":""}' lines don't add up to the ${esc(rep.ledger)} amount, so it was spread over the lines in proportion: ${scaled.slice(0,8).map(x=>`<code>${esc(x)}</code>`).join(", ")}${scaled.length>8?"…":""}. Check them in Tally.`]);
+  Object.entries(seen).filter(([,d])=>d.length>1).forEach(([v,d])=>checks.push(["warn",`VoucherNo <code>${esc(v)}</code> is used on ${d.length} separate vouchers (${esc(d.join(", "))}). Check the number in Tally; all are kept.`]));
+  const lsum=left.reduce((a,x)=>a+(x.led||0),0);
+  if(left.length) checks.push(["warn",`${left.length} voucher${left.length>1?"s have":" has"} no product lines, so ${left.length>1?"they aren't":"it isn't"} in the table (${esc(rep.ledger)} ₹${inr(lsum)} in total): `+
+      left.map(x=>`<code>${esc(x.vno)}</code> ${esc(x.vendor||"")} ₹${inr(x.led||0)}`).join(" · ")+". These need to be spread over products separately, or left out if they aren't stock."]);
+  // reconcile with the report's Grand Total for the ledger column
+  let gt=null; if(m.grand!==null&&!gone.has("Ledger")) gt=num(get(m.grand,"Ledger")?.v);
+  const match=gt!==null?Math.abs(gt-(lineTotal+lsum))<0.05:!checks.some(c=>c[0]==="error");
+  if(gt!==null) checks.unshift([match?"ok":"error",`Table ₹${inr(lineTotal)}${left.length?` + vouchers without product lines ₹${inr(lsum)}`:""} ${match?"=":"≠"} Tally's ${esc(rep.ledger)} Grand Total ₹${inr(gt)}.`]);
+  return {rows,checks,match,stats:[["Vouchers",m.vouchers.length-left.length],["Lines",rows.length],["Value","₹"+inr(lineTotal)]].concat(left.length?[["Left out",`${left.length} voucher${left.length>1?"s":""}`]]:[]),okText:"Every product line has a Value, and each voucher's lines add up to its amount."};
+}
+
+/* ---------- render ---------- */
+function run(file,wb){
+  const sheet=readSheet(wb.Sheets[wb.SheetNames[0]]);
+  const choice=document.getElementById("rtype").value;
+  const key=choice==="auto"?detect(sheet):choice;
+  if(!key) throw new Error("This doesn't look like an Import of Goods or cost ledger export. Pick the report type from the list, or check the export.");
+  let rep=REPORTS[key];
+  if(key==="ledger"){
+    const led=findLedger(sheet);
+    if(!led) throw new Error("Couldn't find a column named after the ledger in the report heading. Export the ledger account from Tally with its ledger column switched on.");
+    rep=Object.assign({},rep,{name:led,ledger:led,fields:rep.fields.concat([{key:"Ledger",aliases:[led],need:"calc",use:`${led} amount per voucher`}])});
+  }
+  const m=mapFields(sheet,rep), res=rep.build(sheet,m,rep);
+  if(key==="import"&&choice==="auto"&&!rep.heading.test(sheet.heading.join(" "))) res.checks.push(["warn","The report heading doesn't say Import of Goods, so it was read as Import of Goods from its columns."]);
+  if(!res.rows.length) throw new Error("No product lines were found under the headings.");
+  Object.assign(res,{rep,key,period:sheet.period,report:m.report,extras:m.extras});
+  outName=file.name.replace(/\.[^.]+$/,"")+"_parsed.xlsx";
+  render(res,file.name);
+}
+function render(res,label){
+  result=res; const rep=res.rep;
+  document.getElementById("results").hidden=false;
+  document.getElementById("source").innerHTML=`Showing <b>${esc(label)}</b> · read as <b>${esc(rep.name)}</b>${res.period?` · ${esc(res.period)}`:""}`;
+  const errs=res.checks.filter(c=>c[0]==="error").length, warns=res.checks.filter(c=>c[0]==="warn").length;
+  document.getElementById("saveSupabase").disabled=errs>0;
+  document.getElementById("saveSupabase").textContent=errs>0?"Fix errors to save":"Save to Supabase";
+  document.getElementById("stats").innerHTML=res.stats.map(([k,v])=>`<div class="stat"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join("")+
+    `<div class="stat"><span class="k">vs Tally total</span><span class="pill ${res.match?"good":"bad"}">${res.match?"Match":"Mismatch"}</span></div>`;
+  document.getElementById("checks").innerHTML=res.checks.length?res.checks.map(([s,t])=>`<li><span class="sev ${s}">${s==="error"?"Error":s==="ok"?"OK":"Check"}</span><span>${t}</span></li>`).join("")
+    :`<li><span class="sev ok">OK</span><span>No problems found. ${esc(res.okText)}</span></li>`;
+  document.getElementById("checkmeta").textContent=`${errs} error${errs===1?"":"s"} · ${warns} to review`;
+  document.getElementById("chk").open=errs>0;
+  const dl=document.getElementById("dl"), any=document.getElementById("dlAnyway"), st=document.getElementById("dlstatus");
+  dl.disabled=errs>0; any.hidden=!(errs>0); st.className="status"+(errs?" err":""); st.textContent=errs?"Fix the errors in Tally and re-export, or download anyway.":"";
+  const lbl={found:["ok","Found"],fallback:["warn","Fallback"],missing:["warn","Missing"],"missing-calc":["error","Missing"]};
+  document.getElementById("coltbl").innerHTML="<thead><tr><th>Needed for</th><th>Tally column</th><th>Status</th></tr></thead><tbody>"+
+    res.report.map(x=>`<tr><td>${esc(x.use)}</td><td>${esc(x.found)}</td><td><span class="sev ${lbl[x.state][0]}">${lbl[x.state][1]}</span></td></tr>`).join("")+"</tbody>";
+  const bad=res.report.filter(x=>x.state!=="found").length;
+  document.getElementById("colp").open=res.report.some(x=>x.state==="missing-calc");
+  document.getElementById("colmeta").textContent=bad?`${bad} column${bad>1?"s":""} missing or substituted`:"All needed columns found";
+  document.getElementById("extras").innerHTML=res.extras.length?`<b>Ignored</b> (not used by the template): ${res.extras.map(esc).join(", ")}`:"No extra columns.";
+  const numCols=new Set(Object.keys(rep.fmts).map(Number).filter(i=>i>0));
+  let h="<thead><tr>"+rep.cols.map((c,i)=>`<th class="${rep.calc.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
+  for(const row of res.rows.slice(0,PREVIEW)){
+    h+="<tr>"+row.map((v,i)=>{
+      let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=rep.fmts[i]==="0.0000"?Number(v).toFixed(4):rep.fmts[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
+      return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
+  }
+  document.getElementById("tbl").innerHTML=h+"</tbody>";
+  document.getElementById("tablemeta").textContent=res.rows.length>PREVIEW?`first ${PREVIEW} of ${res.rows.length} lines`:`${res.rows.length} lines`;
+  document.getElementById("legend").innerHTML=rep.legend;
+}
+
+/* ---------- build xlsx ---------- */
+function buildWorkbook(res){
+  const rep=res.rep, aoa=[rep.cols,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(rep.fmts)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
+  ws["!cols"]=rep.widths.map(w=>({wch:w}));
+  ws["!autofilter"]={ref:ws["!ref"]};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
+  /* raw bytes of the .xlsx (a zip); passed as bytes, never as text, so nothing re-encodes them */
+  return new Uint8Array(XLSX.write(wb,{type:"array",bookType:"xlsx",compression:true}));
+}
+/* The viewer's bridge can arrive after this script runs, so ask again at click time. */
+let dlApi=null;
+async function getDownloads(){
+  if(dlApi) return dlApi;
+  for(let i=0;i<(location.protocol==="file:"?0:20)&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,250));
+  try{dlApi=window.claude&&window.claude.use?await window.claude.use("downloads"):null;}catch(e){dlApi=null;}
+  return dlApi;
+}
+getDownloads();
+async function download(){
+  const st=document.getElementById("dlstatus");
+  st.className="status"; st.textContent="Preparing file…";
+  const api=await getDownloads();
+  if(!api&&!window.claude){ /* opened as a local file: a normal browser download works */
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([buildWorkbook(result)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})); a.download=outName;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+    st.className="status"; st.textContent=`Downloaded ${outName}`; return;
+  }
+  if(!api){st.className="status err";st.textContent="This view can't save files. Use “Copy for Excel” and paste into a blank sheet, or open the page in your browser on claude.ai to download.";return;}
+  try{
+    const bytes=buildWorkbook(result);
+    await api.save({filename:outName,data:bytes.buffer});
+    st.className="status"; st.textContent=`Saved ${outName}`;
+  }catch(e){
+    st.className="status err";
+    st.textContent=e&&e.code==="declined"?"Download cancelled.":e&&e.code==="rate_limited"?"A save prompt is already open.":"This view couldn't save the file ("+(e&&e.code||"error")+"). Use “Copy for Excel” instead.";
+  }
+}
+/* Fallback: tab-separated copy that pastes straight into Excel as columns */
+function toTSV(res){
+  const f=(v,i)=>{if(v===null||v===undefined) return ""; if(i===0&&v instanceof Date) return `${v.getDate()}-${v.toLocaleString("en-GB",{month:"short"})}-${String(v.getFullYear()).slice(2)}`; return String(v).replace(/[\t\r\n]+/g," ");};
+  return [res.rep.cols.join("\t"),...res.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+}
+async function copyTSV(){
+  const st=document.getElementById("dlstatus"), txt=toTSV(result);
+  try{await navigator.clipboard.writeText(txt); st.className="status"; st.textContent=`Copied ${result.rows.length} lines with headers. Paste into cell A1 of a blank Excel sheet.`;}
+  catch(e){
+    const ta=document.getElementById("tsv"); ta.hidden=false; ta.value=txt; ta.focus(); ta.select();
+    st.className="status err"; st.textContent="Copy was blocked here. The data is selected in the box below: press Ctrl+C (Cmd+C on Mac).";
+  }
+}
+document.getElementById("copy").addEventListener("click",copyTSV);
+document.getElementById("dl").addEventListener("click",download);
+document.getElementById("dlAnyway").addEventListener("click",download);
+
+/* ---------- file input ---------- */
+async function handleFile(f){
+  lastFile=f;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true,cellNF:true});
+    run(f,wb);
+  }catch(e){
+    document.getElementById("results").hidden=true;
+    document.getElementById("source").innerHTML=`<span style="color:var(--bad)">Couldn't read ${esc(f.name)}: ${esc(e.message||e)}</span>`;
+  }
+}
+document.getElementById("rtype").addEventListener("change",()=>{if(lastFile) handleFile(lastFile);});
+const drop=document.getElementById("drop"), fi=document.getElementById("file");
+fi.addEventListener("change",()=>{if(fi.files[0]) handleFile(fi.files[0]); fi.value="";});
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) handleFile(f);});
+
+if(!window.XLSX) document.getElementById("source").textContent="The spreadsheet library didn't load. Check your internet connection and reload the page.";
+else document.getElementById("source").textContent="No file uploaded yet. Results will appear here after you upload a Tally export.";
+
+/* ---------- Supabase save ---------- */
+const SB_URL="https://dkvxaekxyqjjxcjoidqz.supabase.co";
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrdnhhZWt4eXFqanhjam9pZHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDY2ODksImV4cCI6MjEwMDcyMjY4OX0.jJdd2Xcmm6UknXXMwxud14bGAwXHoIZw4ooeOYrY1L4";
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+const saveBtn=document.getElementById("saveSupabase");
+saveBtn.addEventListener("click",async()=>{
+  if(!result||!result.rows.length) return;
+  const st=document.getElementById("dlstatus");
+  saveBtn.disabled=true; saveBtn.textContent="Saving…"; st.className="status"; st.textContent="";
+  try{
+    const rows=result.rows.map(r=>({
+      date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
+      product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
+      voucher_ref_no:r[5], gst:r[6], quantity:r[7], unit_of_measure:r[8],
+      rate_usd:r[9], gross_total_usd:r[10], gross_total_rs:r[11],
+      roe:r[12], purchase_rate_per_qty_rs_exc_gst:r[13]
+    }));
+    const CHUNK=500; let done=0;
+    for(let i=0;i<rows.length;i+=CHUNK){
+      const {error}=await sb.from("purchase_ledger_import").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
+      if(error) throw error;
+      done+=Math.min(CHUNK,rows.length-i);
+      st.textContent=`Saving… ${done}/${rows.length} rows`;
+    }
+    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows to Supabase.`;
+    saveBtn.textContent="Saved ✓";
+  }catch(e){
+    st.className="status err"; st.textContent="Save failed: "+(e.message||e);
+    saveBtn.disabled=false; saveBtn.textContent="Save to Supabase";
+  }
+});
+</script>
+
+</body>
+</html>

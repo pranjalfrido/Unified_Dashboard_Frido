@@ -17,6 +17,7 @@ import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
+import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
@@ -4848,7 +4849,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
@@ -4862,23 +4863,18 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           </FilterIconPopover>
         </div>
       )}
-      {page === 'inventory' && inventoryDateControl?.invFilterPanel && (
+      {page === 'inventory' && invTab === 'health' && inventoryDateControl?.invHealthAsOf && (
         <div className="tnav-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {invTab === 'health' && inventoryDateControl.invHealthAsOf && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
+            <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
+              Snapshot {new Date(inventoryDateControl.invHealthAsOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+            </span>
+            {inventoryDateControl.invHealthLastSales && (
               <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
-                Snapshot {new Date(inventoryDateControl.invHealthAsOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+                Latest sales {new Date(inventoryDateControl.invHealthLastSales + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
-              {inventoryDateControl.invHealthLastSales && (
-                <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
-                  Latest sales {new Date(inventoryDateControl.invHealthLastSales + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-              )}
-            </div>
-          )}
-          <FilterIconPopover activeCount={inventoryDateControl.invFilterCount}>
-            {inventoryDateControl.invFilterPanel}
-          </FilterIconPopover>
+            )}
+          </div>
         </div>
       )}
       {page === 'inventory' && inventoryDateControl?.filters && (
@@ -5555,12 +5551,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             {/* Content-sized (not 1fr-stretched) so short values like "71,495" don't get spread
                 across the full card width with large gaps between them. */}
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
-                badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc} />
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
-              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
-                badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2} />
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
@@ -18351,6 +18345,12 @@ function DocumentsPage({ setPage }) {
       description: 'Track B2B freight & B2C courier invoices line by line.',
       icon: '🚚',
     },
+    {
+      id: 'purchase-ledger',
+      title: 'Purchase Ledger',
+      description: 'Upload domestic, import & packaging purchase data.',
+      icon: '🧾',
+    },
   ]
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
@@ -19067,6 +19067,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
               <LogisticsLedgerPage />
+            </div>
+          )}
+          {page === 'purchase-ledger' && (
+            <div className="page-scroll">
+              <PurchaseLedgerPage />
             </div>
           )}
           {page === 'profile' && (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { IC, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
+import { IC, getDefaultDates, DateRangeControl, PillToggle } from './inventory/theme.jsx'
 import LoadingOverlay from './LoadingOverlay.jsx'
 import InventoryHealthPage from './inventory/InventoryHealthPage.jsx'
 import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
@@ -365,6 +365,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   const [healthFilters, setHealthFilters] = useState({})
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
+  const [facilityView, setFacilityView] = useState('regular')
 
   const csv = arr => (arr && arr.length ? arr.join(',') : undefined)
   const salesFilterBody = {
@@ -427,6 +428,13 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       invActiveTab: tab,
       invFilterCount: Object.values((tab === 'sales' ? salesFilters : healthFilters) || {})
         .reduce((a, v) => a + (Array.isArray(v) ? v.length : v ? 1 : 0), 0),
+      invFacilityToggle: tab === 'health' ? (
+        <PillToggle
+          options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
+          value={facilityView}
+          onChange={v => { setFacilityView(v); setHealthFilters(f => ({ ...f, facility: [] })) }}
+        />
+      ) : null,
       invFilterPanel: tab === 'health'
         ? (invData ? <HealthFilterSidebar data={invData} filters={healthFilters} setFilters={setHealthFilters} open popover /> : null)
         : (sales.data ? <SalesFilterSidebar data={sales.data} filters={salesFilters} setFilters={setSalesFilters} open popover /> : null),
@@ -688,7 +696,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
