@@ -46,7 +46,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const { Th } = table
 
   useEffect(() => {
-    fetch('/cogs-data.json').then(r => r.ok ? r.json() : {}).then(setCogsMap).catch(() => setCogsMap({}))
+    fetch('/cogs-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).then(setCogsMap).catch(() => setCogsMap({}))
   }, [])
 
   const q = search.trim().toLowerCase()

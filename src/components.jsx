@@ -437,10 +437,13 @@ export function MultiLineChart({ dailyArr, channels }) {
 // Usage: drop <BarGradient id="myBars" /> inside the chart and set fill="url(#myBars)".
 // The id must be unique per chart — two SVG gradients sharing an id resolve to whichever
 // mounted last, so one chart would silently borrow the other's colours.
-export function BarGradient({ id }) {
+export function BarGradient({ id, horizontal = false }) {
+  const dir = horizontal
+    ? { x1: '0', y1: '0', x2: '1', y2: '0' }
+    : { x1: '0', y1: '0', x2: '0', y2: '1' }
   return (
     <defs>
-      <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+      <linearGradient id={id} {...dir}>
         <stop offset="0%" stopColor={C.acc} stopOpacity={0.72} />
         <stop offset="55%" stopColor={C.acm} stopOpacity={0.88} />
         <stop offset="100%" stopColor={C.acd} stopOpacity={0.96} />

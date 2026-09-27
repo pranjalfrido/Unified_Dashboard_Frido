@@ -163,7 +163,7 @@ const EMPTY_FILTERS = {
   // 3PL warehousing. Its own keys rather than reusing `couriers`: the 3PL aggregates come
   // from the server's filter-independent refCache and are narrowed on the client, so these
   // must never reach the API's filter key or they would trigger a needless full rebuild.
-  tplPartners: [], tplSites: [],
+  tplPartners: [], tplSites: [], tplLocations: [],
 }
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
@@ -1195,7 +1195,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // here would refetch the entire cost ledger every time a warehousing chip is clicked and
   // come back with identical data.
   const filterKey = useMemo(() => {
-    const { tplPartners: _tp, tplSites: _ts, ...apiFilters } = filters
+    const { tplPartners: _tp, tplSites: _ts, tplLocations: _tl, ...apiFilters } = filters
     // scope rides along so the API can skip the heavy B2C detail queries when a tab does not
     // display them. It is part of the key on purpose: two scopes return different payloads,
     // so they must not share a cache entry.
@@ -1255,7 +1255,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // Use a ref to track first-serve so we don't loop (setting state re-triggers the effect).
         const wantsStatic = isDefaultFilters && (!baseData || (scope === 'b2b' && !b2bStaticServed.current))
         if (wantsStatic) {
-          const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
+          const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
@@ -1929,7 +1929,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     const allWh = b2b.tplWarehouses || []
     const allPartners = b2b.tplPartners || []
     const selP = filters.tplPartners || [], selS = filters.tplSites || [], selM = filters.months || []
-    const anyFilter = selP.length || selS.length || selM.length
+    const selL = filters.tplLocations || []
+    // tplWhMonths carries pincode, not location, so the city filter resolves through the
+    // warehouse list.
+    const locByPin = new Map(allWh.map(w => [String(w.pincode ?? ''), w.location]))
+    const anyFilter = selP.length || selS.length || selM.length || selL.length
     if (!anyFilter) {
       return {
         totals: b2b.tplTotals, partners: allPartners,
@@ -1945,6 +1949,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     const rowOk = r => (!selS.length || selS.includes(r.warehouse))
       && (!selP.length || selP.includes(r.partner))
       && (!selM.length || selM.includes(r.month_year))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? ''))))
+
 
     const rows = (b2b.tplWhMonths || []).filter(rowOk)
     const add = (map, k, r) => {
@@ -2017,7 +2023,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       },
       partners, months, warehouses, whMonths: rows,
     }
-  }, [b2b, filters.tplPartners, filters.tplSites, filters.months])
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations, filters.months])
 
   // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
   // in a month with no shipment data so the line breaks instead of diving to the axis.
@@ -2349,7 +2355,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (b2bPick && !b2bPick(r)) continue
       const k = r.month
       if (!byMonth.has(k)) byMonth.set(k, { month: monthLabel(k), raw: k })
-      byMonth.get(k)[r.transporter] = num(r.billed)
+      const row = byMonth.get(k)
+      row[r.transporter] = (row[r.transporter] || 0) + num(r.billed)
     }
     return [...byMonth.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
   }, [b2b, b2bPick])
@@ -2511,6 +2518,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     [b2b?.tplPartners])
   const tplSiteOpts = useMemo(
     () => (b2b?.tplWarehouses || []).map(w => w.key).filter(Boolean).sort(),
+    [b2b?.tplWarehouses])
+  // City the facility sits in. Several partners run more than one site and several cities
+  // host more than one partner, so this is a genuinely independent cut rather than a
+  // rename of either existing slicer.
+  const tplLocationOpts = useMemo(
+    () => [...new Set((b2b?.tplWarehouses || []).map(w => w.location).filter(Boolean))].sort(),
     [b2b?.tplWarehouses])
 
   const scopeMonths = useMemo(() => {
@@ -2758,7 +2771,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
     (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
     (filters.freightTypes?.length || 0) +
-    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0)
+    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0) + (filters.tplLocations?.length || 0)
 
   // ── Render ──
   // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
@@ -2877,11 +2890,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
-        {scope === 'tpl' && (
+        {scope === 'tpl' && (<>
           <SearchSelect label="Warehouse" options={tplSiteOpts} multi
             selected={filters.tplSites || []}
             onChange={v => (v === null ? setOne('tplSites', []) : toggleIn('tplSites', v))} />
-        )}
+
+          {/* City, independent of both slicers above: a partner can run several cities and
+              a city can host several partners, so neither one implies this. */}
+          <SearchSelect label="Location" options={tplLocationOpts} multi
+            selected={filters.tplLocations || []}
+            onChange={v => (v === null ? setOne('tplLocations', []) : toggleIn('tplLocations', v))} />
+
+        </>)}
 
         {scope !== 'b2b' && scope !== 'tpl' && (<>
         <SearchSelect label="Zone" options={opts.zones} multi
@@ -3515,6 +3535,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <div style={{ flex: 1, minHeight: 210 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={b2bVehicleRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                  <BarGradient id="gVehSpend" />
                   <CartesianGrid stroke={VIZ.grid} vertical={false} />
                   <XAxis dataKey="vehicle" tick={{ fontSize: 10, fill: VIZ.muted }}
                     axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
@@ -3538,7 +3559,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="cost" name="Freight spend" fill={SER.blue}
+                  <Bar dataKey="cost" name="Freight spend" fill="url(#gVehSpend)"
                     radius={[4, 4, 0, 0]} maxBarSize={38} />
                 </BarChart>
               </ResponsiveContainer>
@@ -3551,6 +3572,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={b2bVehicleRows} layout="vertical"
                   margin={{ top: 6, right: 62, left: 8, bottom: 4 }}>
+                  {/* Horizontal bars, so the ramp runs left-to-right rather than top-down. */}
+                  <BarGradient id="gVehRate" horizontal />
                   <CartesianGrid stroke={VIZ.grid} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
                     tickLine={false} tickFormatter={v => fmt(v)} />
@@ -3568,7 +3591,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         </div>
                       )
                     }} />
-                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SER.blue}
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill="url(#gVehRate)"
                     radius={[0, 4, 4, 0]} maxBarSize={16}>
                     <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
                       style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />
@@ -4008,12 +4031,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))',
           gap: 14, ...(secHid['tpl-rate'] ? { display: 'none' } : {}) }}>
           <Card title="Cost per parcel by partner" note="partners with no matched volume are omitted">
-            <div style={{ height: 240 }}>
+            <div style={{ height: 275 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {/* Horizontal bars: site names are words, not dates, and reading them along
                     a vertical axis beats rotating them under a column chart. */}
                 <BarChart data={tplRateBySite} layout="vertical"
                   margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
+                  <BarGradient id="gTplRate" horizontal />
                   <CartesianGrid stroke={VIZ.grid} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                     axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} />
@@ -4025,7 +4049,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     tick={{ fontSize: 11, fill: C.t2 }} axisLine={false} tickLine={false}
                     tickFormatter={v => (String(v).length > 20 ? String(v).slice(0, 19) + '…' : v)} />
                   <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
-                  <Bar dataKey="per_ship" name="₹ / parcel" fill={SER.blue} radius={[0, 4, 4, 0]} barSize={16}>
+                  <Bar dataKey="per_ship" name="₹ / parcel" fill="url(#gTplRate)" radius={[0, 4, 4, 0]} maxBarSize={26}>
                     <LabelList dataKey="per_ship" position="right"
                       formatter={v => money1(v)}
                       style={{ fontSize: 10.5, fill: C.t2, fontWeight: 600 }} />
@@ -4035,27 +4059,31 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             </div>
           </Card>
           <Card title="Spend vs volume" note="a taller spend bar means the partner charges above the blended rate">
-            <div style={{ height: 240 }}>
+            <div style={{ height: 275 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {/* Deliberately NOT a scatter plot: with six sites a labelled bar pair reads
                     faster and needs no legend-hunting to tell which dot is which site. Share
                     of spend against share of parcels — the gap between the two bars IS the
                     story, so they sit adjacent rather than stacked. */}
-                <BarChart data={tplShareBySite} margin={{ top: 8, right: 8, left: 4, bottom: 46 }}>
+                <BarChart data={tplShareBySite} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                  {/* Only the spend series takes the ramp. This chart is read by comparing
+                      the two bars in each pair, so gradienting both would blur exactly the
+                      distinction it exists to show. */}
+                  <BarGradient id="gTplSpend" />
                   <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                  {/* Angled and given 46px of bottom margin. Horizontal labels at
-                      interval={0} overlapped into each other ("Arcatron Mobility PrivateIQ"
-                      in the earlier build); interval={0} is kept because dropping labels
-                      would leave bars no reader could identify. */}
+                  {/* Angled ticks need room reserved once, via the axis `height`. Setting a
+                      bottom margin as well double-counted it and left a dead band between
+                      the bars and the legend. interval={0} stays: dropping labels would
+                      leave bars no reader could identify. */}
                   <XAxis dataKey="key" tick={{ fontSize: 10, fill: VIZ.muted }}
                     axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
-                    angle={-32} textAnchor="end" height={50}
+                    angle={-28} textAnchor="end" height={64}
                     tickFormatter={v => (String(v).length > 18 ? String(v).slice(0, 17) + '…' : v)} />
                   <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
                     tickFormatter={v => v + '%'} />
                   <Tooltip content={<ChartTooltip formatter={v => Number(v).toFixed(1) + '%'} />} />
                   <Legend {...chartLegendProps({ fontSize: 10.5 })} />
-                  <Bar dataKey="cost_pct" name="% of spend" fill={SER.blue} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="cost_pct" name="% of spend" fill="url(#gTplSpend)" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="ship_pct" name="% of parcels" fill={SER.aqua} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
