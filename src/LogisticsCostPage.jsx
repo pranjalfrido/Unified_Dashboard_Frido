@@ -163,7 +163,7 @@ const EMPTY_FILTERS = {
   // 3PL warehousing. Its own keys rather than reusing `couriers`: the 3PL aggregates come
   // from the server's filter-independent refCache and are narrowed on the client, so these
   // must never reach the API's filter key or they would trigger a needless full rebuild.
-  tplPartners: [], tplSites: [],
+  tplPartners: [], tplSites: [], tplLocations: [],
 }
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
@@ -1195,7 +1195,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // here would refetch the entire cost ledger every time a warehousing chip is clicked and
   // come back with identical data.
   const filterKey = useMemo(() => {
-    const { tplPartners: _tp, tplSites: _ts, ...apiFilters } = filters
+    const { tplPartners: _tp, tplSites: _ts, tplLocations: _tl, ...apiFilters } = filters
     // scope rides along so the API can skip the heavy B2C detail queries when a tab does not
     // display them. It is part of the key on purpose: two scopes return different payloads,
     // so they must not share a cache entry.
@@ -1929,7 +1929,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     const allWh = b2b.tplWarehouses || []
     const allPartners = b2b.tplPartners || []
     const selP = filters.tplPartners || [], selS = filters.tplSites || [], selM = filters.months || []
-    const anyFilter = selP.length || selS.length || selM.length
+    const selL = filters.tplLocations || []
+    // tplWhMonths carries pincode, not location, so the city filter resolves through the
+    // warehouse list.
+    const locByPin = new Map(allWh.map(w => [String(w.pincode ?? ''), w.location]))
+    const anyFilter = selP.length || selS.length || selM.length || selL.length
     if (!anyFilter) {
       return {
         totals: b2b.tplTotals, partners: allPartners,
@@ -1945,6 +1949,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     const rowOk = r => (!selS.length || selS.includes(r.warehouse))
       && (!selP.length || selP.includes(r.partner))
       && (!selM.length || selM.includes(r.month_year))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? ''))))
+
 
     const rows = (b2b.tplWhMonths || []).filter(rowOk)
     const add = (map, k, r) => {
@@ -2017,7 +2023,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       },
       partners, months, warehouses, whMonths: rows,
     }
-  }, [b2b, filters.tplPartners, filters.tplSites, filters.months])
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations, filters.months])
 
   // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
   // in a month with no shipment data so the line breaks instead of diving to the axis.
@@ -2513,6 +2519,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const tplSiteOpts = useMemo(
     () => (b2b?.tplWarehouses || []).map(w => w.key).filter(Boolean).sort(),
     [b2b?.tplWarehouses])
+  // City the facility sits in. Several partners run more than one site and several cities
+  // host more than one partner, so this is a genuinely independent cut rather than a
+  // rename of either existing slicer.
+  const tplLocationOpts = useMemo(
+    () => [...new Set((b2b?.tplWarehouses || []).map(w => w.location).filter(Boolean))].sort(),
+    [b2b?.tplWarehouses])
 
   const scopeMonths = useMemo(() => {
     // 3PL bills its own months — offering the parcel ledger's list would show periods the
@@ -2759,7 +2771,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
     (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
     (filters.freightTypes?.length || 0) +
-    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0)
+    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0) + (filters.tplLocations?.length || 0)
 
   // ── Render ──
   // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
@@ -2878,11 +2890,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
-        {scope === 'tpl' && (
+        {scope === 'tpl' && (<>
           <SearchSelect label="Warehouse" options={tplSiteOpts} multi
             selected={filters.tplSites || []}
             onChange={v => (v === null ? setOne('tplSites', []) : toggleIn('tplSites', v))} />
-        )}
+
+          {/* City, independent of both slicers above: a partner can run several cities and
+              a city can host several partners, so neither one implies this. */}
+          <SearchSelect label="Location" options={tplLocationOpts} multi
+            selected={filters.tplLocations || []}
+            onChange={v => (v === null ? setOne('tplLocations', []) : toggleIn('tplLocations', v))} />
+
+        </>)}
 
         {scope !== 'b2b' && scope !== 'tpl' && (<>
         <SearchSelect label="Zone" options={opts.zones} multi
