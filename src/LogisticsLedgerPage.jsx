@@ -101,13 +101,20 @@ const FORMATS = {
     exportPrefix: "3pl_warehousing_costs",
     totalParts: ["operation_fee", "rental_fee", "other_fee"],
     totalField: "total_cost",
-    // One bill line per 3PL per warehouse per month, so a re-upload of the same
+    // One row per INVOICE per 3PL per warehouse per month, so a re-upload of the same
     // month corrects that month in place instead of doubling it.
+    //
     // Keyed on FACILITY_PINCODE, not a facility name: the pincode is what joins this ledger
     // to Clickpost's pickup_pincode, so per-parcel and per-kg costs depend on it being
     // present and correct. Names vary between the invoice and the tracking feed; a pincode
     // does not.
-    uniqueKey: "month_year,threepl_logistics_name,facility_pincode",
+    //
+    // invoice_number is part of the key because a partner can bill one facility-month
+    // across several invoices — operations on one, rental on another. Those are separate
+    // bills that must each survive, not duplicates to be summed. Without it a 47-line
+    // upload collapsed to 36 rows and the invoice trail was lost. This matches the
+    // logistics_costs_3pl_unique_key index on the table.
+    uniqueKey: "month_year,threepl_logistics_name,facility_pincode,invoice_number",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "threepl_logistics_name", label: "3PL_Logistics_Name", type: "text", req: true, w: 190, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
