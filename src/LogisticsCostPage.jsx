@@ -1257,6 +1257,129 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       return
     }
 
+    // FTL/PTL and 3PL: filter b2b/tpl arrays client-side from baseData — no API call needed.
+    if (baseData && (scope === 'b2b' || scope === 'tpl')) {
+      const months = f.months?.length ? new Set(f.months) : null
+      const transporters = f.transporters?.length ? new Set(f.transporters) : null
+      const vehicleTypes = f.vehicleTypes?.length ? new Set(f.vehicleTypes) : null
+      const freightTypes = f.freightTypes?.length ? new Set(f.freightTypes) : null
+      const tplPartners = f.tplPartners?.length ? new Set(f.tplPartners) : null
+      const tplSites = f.tplSites?.length ? new Set(f.tplSites) : null
+
+      // baseData.b2b holds raw invoice rows, which DO use transporter_name / vehicle_type.
+      // The aggregated arrays below use shorter names and are filtered separately.
+      const b2bFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!transporters || transporters.has(r.transporter_name)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle_type)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+
+      // Field names follow the API payload: tplWhMonths carries `partner` and `warehouse`
+      // (not logistics_partner / warehouse_name), and rows are keyed by `month_year`.
+      const tplFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.warehouse))
+
+      const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
+      const filteredB2bLanes = (baseData.b2bLanes || []).filter(r =>
+        (!transporters || transporters.has(r.transporter_name || r.transporter))
+      )
+      const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
+        (!transporters || transporters.has(r.key || r.transporter_name))
+      )
+      const filteredB2bMonths = (baseData.b2bMonths || []).filter(r =>
+        (!months || months.has(r.key || r.month_year))
+      )
+      const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
+        (!months || months.has(r.month || r.month_year || r.key)) &&
+        (!transporters || transporters.has(r.transporter)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+      )
+      // tplMonths is pre-aggregated ACROSS partners and warehouses — it has no partner or
+      // warehouse column to test, so a partner filter applied to it matched nothing and
+      // zeroed the tab. When either of those slicers is active the month series has to be
+      // rebuilt from tplWhMonths, which is the finest grain that still carries them.
+      const tplMonthsSrc = (baseData.tplWhMonths || []).filter(tplFilter)
+      const filteredTplMonths = (tplPartners || tplSites)
+        ? Object.values(tplMonthsSrc.reduce((acc, r) => {
+            const k = r.month_year
+            const a = acc[k] || (acc[k] = { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0 })
+            a.cost += r.cost || 0
+            a.operation_fee += r.operation_fee || 0
+            a.rental_fee += r.rental_fee || 0
+            a.other_fee += r.other_fee || 0
+            a.shipments += r.shipments || 0
+            a.weight_kg += r.weight_kg || 0
+            return acc
+          }, {})).sort((x, y) => String(x.key).localeCompare(String(y.key)))
+        : (baseData.tplMonths || []).filter(r => !months || months.has(r.key || r.month_year))
+      // tplWarehouses names the site in `key` and the partner in `partner`.
+      const filteredTplWarehouses = (baseData.tplWarehouses || []).filter(r =>
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.key))
+      )
+      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilter)
+
+      // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
+      const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
+        trips: acc.trips + (r.trips || 0),
+        cost: acc.cost + (r.cost || 0),
+      }), { trips: 0, cost: 0 })
+      const b2bTotals = {
+        ...baseData.b2bTotals,
+        trips: b2bTotalsAgg.trips,
+        cost: b2bTotalsAgg.cost,
+        avg_cost: b2bTotalsAgg.trips > 0 ? b2bTotalsAgg.cost / b2bTotalsAgg.trips : 0,
+        transporters: filteredB2bTrans.length,
+        lanes: filteredB2bLanes.length,
+      }
+
+      // Recompute tplTotals from filtered tplMonths
+      const tplTotals = filteredTplMonths.reduce((acc, r) => ({
+        rows: (acc.rows || 0) + (r.rows || 1),
+        partners: acc.partners,
+        warehouses: acc.warehouses,
+        months: acc.months,
+        cost: (acc.cost || 0) + (r.cost || 0),
+        operation_fee: (acc.operation_fee || 0) + (r.operation_fee || 0),
+        rental_fee: (acc.rental_fee || 0) + (r.rental_fee || 0),
+        other_fee: (acc.other_fee || 0) + (r.other_fee || 0),
+      }), { rows: 0, partners: baseData.tplTotals?.partners || 0, warehouses: baseData.tplTotals?.warehouses || 0, months: filteredTplMonths.length, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0 })
+
+      setAgg(shapeResponse(baseData))
+      setB2bRows(filteredB2b)
+      setB2b({
+        lanes: filteredB2bLanes,
+        totals: b2bTotals,
+        transporters: filteredB2bTrans,
+        months: filteredB2bMonths,
+        types: (baseData.b2bTypes || []).filter(r => (!freightTypes || freightTypes.has(r.key))),
+        variance: baseData.b2bVar || null,
+        varMonths: (baseData.b2bVarMonths || []).filter(r =>
+          (!months || months.has(r.month || r.month_year)) &&
+          (!transporters || transporters.has(r.transporter)) &&
+          (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+          (!freightTypes || freightTypes.has(r.freight_type))
+        ),
+        transMonths: filteredB2bTransMonths,
+        vehicles: (baseData.b2bVehicles || []).filter(r => (!months || months.has(r.month_year)) && (!vehicleTypes || vehicleTypes.has(r.vehicle))),
+        laneVeh: baseData.b2bLaneVeh || [],
+        rateCmp: baseData.b2bRateCmp || [],
+        sole: baseData.b2bSole || null,
+        fixedVeh: baseData.fixedVeh || null,
+        fixedVehMonths: (baseData.fixedVehMonths || []).filter(r => !months || months.has(r.month_year)),
+        tplTotals,
+        tplPartners: (baseData.tplPartners || []).filter(r => !tplPartners || tplPartners.has(r.key)),
+        tplMonths: filteredTplMonths,
+        tplWarehouses: filteredTplWarehouses,
+        tplWhMonths: filteredTplWhMonths,
+      })
+      setLoading(false)
+      return
+    }
+
     ;(async () => {
       setLoading(true); setError(null)
       try {
@@ -1270,15 +1393,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           (!f.billing || f.billing === 'all') &&
           !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
-        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it.
-        // Use a ref to track first-serve so we don't loop (setting state re-triggers the effect).
-        const wantsStatic = isDefaultFilters && (!baseData || (scope === 'b2b' && !b2bStaticServed.current))
+        const wantsStatic = isDefaultFilters && !baseData
         if (wantsStatic) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 48 * 60 * 60 * 1000) { j = data; if (scope === 'b2b') b2bStaticServed.current = true }
+            if (age < 48 * 60 * 60 * 1000) { j = data }
           }
         }
 
@@ -1298,9 +1419,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
         if (scanRef.current !== myRun) return
 
-        // Cache the full base response so future cube-compatible filters are instant.
-        // Skip for b2b: it never uses the cube, and setting baseData would re-trigger this effect.
-        if (isDefaultFilters && j.cube && scope !== 'b2b') setBaseData(j)
+        // Cache the full base response so future filters (cube for B2C, raw arrays for b2b/tpl) are instant.
+        if (isDefaultFilters && j.cube) setBaseData(j)
 
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
