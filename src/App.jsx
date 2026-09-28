@@ -6835,6 +6835,8 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const [expandedSku, setExpandedSku] = useState({})
   const [expandedDateCat, setExpandedDateCat] = useState({})
   const toggleDateCat = cat => setExpandedDateCat(prev => ({ ...prev, [cat]: !prev[cat] }))
+  const [expandedDateSc, setExpandedDateSc] = useState({})
+  const toggleDateSc = key => setExpandedDateSc(prev => ({ ...prev, [key]: !prev[key] }))
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
@@ -6967,6 +6969,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       })
     })
     return Object.entries(dateAgg).sort(([a],[b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d }))
+  }
+  const getScDateRows = (cat, sc) => {
+    const dateMap = (subCatDateMap[cat] || {})[sc] || {}
+    return Object.entries(dateMap).sort(([a],[b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d }))
   }
   const fmtDate = (ds) => {
     const parts = ds.split('-')
@@ -7133,6 +7139,66 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                 )
               }
               const zebra = i % 2 === 1 ? C.hov : 'transparent'
+              const isScDateExpanded = expandedDateSc[skuKey]
+              const renderDateRows = (dateRows, indentDate = false) => {
+                if (!dateRows.length) return null
+                const colCount = ALL_COLUMNS.length + 2
+                const dateTdStyle = { fontSize: 11, padding: '5px 12px', textAlign: 'right', color: C.t2, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap' }
+                const dateTdStyleL = { ...dateTdStyle, fontFamily: 'inherit', textAlign: 'left' }
+                return (
+                  <tr>
+                    <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ maxHeight: 160, overflowY: 'auto', background: indentDate ? C.bg : `${C.acl}55` }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '11%' }} /><col style={{ width: '25%' }} />
+                            {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
+                          </colgroup>
+                          <tbody>
+                            {dateRows.map((d, di) => {
+                              const gross = d.rev
+                              const excRev = d.excRev
+                              const net = gross > 0 ? (gross - d.cancelRev - d.rtoRev - d.cirRev) * (excRev / gross) : 0
+                              const prevGross = di > 0 ? dateRows[di - 1].rev : null
+                              const asp = d.units > 0 ? gross / d.units : 0
+                              const cancelPct = gross > 0 ? d.cancelRev / gross * 100 : 0
+                              const rtoPct = gross > 0 ? d.rtoRev / gross * 100 : 0
+                              const cirPct = gross > 0 ? d.cirRev / gross * 100 : 0
+                              const exchPct = gross > 0 ? d.exchRev / gross * 100 : 0
+                              const totalReturnPct = gross > 0 ? (d.cancelRev + d.rtoRev + d.cirRev) / gross * 100 : 0
+                              return (
+                                <tr key={d.date} style={{ background: di % 2 === 0 ? 'transparent' : `${C.border}55` }}>
+                                  <td style={{ ...dateTdStyleL, fontStyle: 'italic', color: C.t3, paddingLeft: indentDate ? 24 : 12 }}>{fmtDate(d.date)}</td>
+                                  <td style={dateTdStyleL}></td>
+                                  {ALL_COLUMNS.map(c => {
+                                    if (c.id === 'gross') return <td key={c.id} style={dateTdStyle}>{fmt(gross)}</td>
+                                    if (c.id === 'net') return <td key={c.id} style={dateTdStyle}>{fmt(net)}</td>
+                                    if (c.id === 'prevGross') {
+                                      if (!prevGross || Math.abs(prevGross) < 1) return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                      const p = (gross - prevGross) / prevGross * 100
+                                      const pos = p >= 0
+                                      return <td key={c.id} style={dateTdStyle}><span style={{ fontSize: 10.5, color: pos ? C.green.tx : C.red.tx }}>{pos ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span></td>
+                                    }
+                                    if (c.id === 'units') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                    if (c.id === 'drr') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                    if (c.id === 'asp') return <td key={c.id} style={dateTdStyle}>₹{Math.round(asp).toLocaleString('en-IN')}</td>
+                                    if (c.id === 'cancelPct') return <td key={c.id} style={dateTdStyle}>{cancelPct > 0 ? `${cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'rtoPct') return <td key={c.id} style={dateTdStyle}>{rtoPct > 0 ? `${rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'cirPct') return <td key={c.id} style={dateTdStyle}>{cirPct > 0 ? `${cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'exchPct') return <td key={c.id} style={dateTdStyle}>{exchPct > 0 ? `${exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'totalReturnPct') return <td key={c.id} style={dateTdStyle}>{totalReturnPct > 0 ? <span style={{ color: totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                  })}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
@@ -7147,13 +7213,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         : r.cat}
                     </td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
-                      <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        {r.sc}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {showDateExpand && <span onClick={() => toggleDateSc(skuKey)} style={{ cursor: 'pointer', userSelect: 'none', fontSize: 9, color: C.acc, display: 'inline-block', transform: isScDateExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                          {r.sc}
+                        </span>
                       </span>
                     </td>
                     {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                   </tr>
+                  {isScDateExpanded && renderDateRows(getScDateRows(r.cat, r.sc), true)}
                   {isOpen && skus.map(sk => (
                     <tr key={sk.sku} style={{ background: C.bg, cursor: 'default', transition: 'box-shadow .12s, background .12s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
@@ -7163,66 +7233,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                       {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
                     </tr>
                   ))}
-                  {showDateExpand && isLastOfCat && isDateExpanded && (() => {
-                    const dateRows = getCatDateRows(r.cat)
-                    if (!dateRows.length) return null
-                    const colCount = ALL_COLUMNS.length + 2
-                    return (
-                      <tr key={`${r.cat}__date_expand`}>
-                        <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${C.border}` }}>
-                          <div style={{ maxHeight: 160, overflowY: 'auto', background: C.bg }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                              <colgroup>
-                                <col style={{ width: '11%' }} /><col style={{ width: '25%' }} />
-                                {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
-                              </colgroup>
-                              <tbody>
-                                {dateRows.map((d, di) => {
-                                  const gross = d.rev
-                                  const excRev = d.excRev
-                                  const net = gross > 0 ? (gross - d.cancelRev - d.rtoRev - d.cirRev) * (excRev / gross) : 0
-                                  const prevGross = di > 0 ? dateRows[di - 1].rev : null
-                                  const asp = d.units > 0 ? gross / d.units : 0
-                                  const cancelPct = gross > 0 ? d.cancelRev / gross * 100 : 0
-                                  const rtoPct = gross > 0 ? d.rtoRev / gross * 100 : 0
-                                  const cirPct = gross > 0 ? d.cirRev / gross * 100 : 0
-                                  const exchPct = gross > 0 ? d.exchRev / gross * 100 : 0
-                                  const totalReturnPct = gross > 0 ? (d.cancelRev + d.rtoRev + d.cirRev) / gross * 100 : 0
-                                  const dateTdStyle = { fontSize: 11, padding: '5px 12px', textAlign: 'right', color: C.t2, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap' }
-                                  const dateTdStyleL = { ...dateTdStyle, fontFamily: 'inherit', textAlign: 'left' }
-                                  return (
-                                    <tr key={d.date} style={{ background: di % 2 === 0 ? C.bg : C.hov }}>
-                                      <td style={{ ...dateTdStyleL, fontStyle: 'italic', color: C.t3 }}>{fmtDate(d.date)}</td>
-                                      <td style={dateTdStyleL}></td>
-                                      {ALL_COLUMNS.map(c => {
-                                        if (c.id === 'gross') return <td key={c.id} style={dateTdStyle}>{fmt(gross)}</td>
-                                        if (c.id === 'net') return <td key={c.id} style={dateTdStyle}>{fmt(net)}</td>
-                                        if (c.id === 'prevGross') {
-                                          if (!prevGross || Math.abs(prevGross) < 1) return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
-                                          const p = (gross - prevGross) / prevGross * 100
-                                          const pos = p >= 0
-                                          return <td key={c.id} style={dateTdStyle}><span style={{ fontSize: 10.5, color: pos ? C.green.tx : C.red.tx }}>{pos ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span></td>
-                                        }
-                                        if (c.id === 'units') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
-                                        if (c.id === 'drr') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
-                                        if (c.id === 'asp') return <td key={c.id} style={dateTdStyle}>₹{Math.round(asp).toLocaleString('en-IN')}</td>
-                                        if (c.id === 'cancelPct') return <td key={c.id} style={dateTdStyle}>{cancelPct > 0 ? `${cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                                        if (c.id === 'rtoPct') return <td key={c.id} style={dateTdStyle}>{rtoPct > 0 ? `${rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                                        if (c.id === 'cirPct') return <td key={c.id} style={dateTdStyle}>{cirPct > 0 ? `${cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                                        if (c.id === 'exchPct') return <td key={c.id} style={dateTdStyle}>{exchPct > 0 ? `${exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                                        if (c.id === 'totalReturnPct') return <td key={c.id} style={dateTdStyle}>{totalReturnPct > 0 ? <span style={{ color: totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                                        return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
-                                      })}
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })()}
+                  {showDateExpand && isLastOfCat && isDateExpanded && renderDateRows(getCatDateRows(r.cat), false)}
                 </Fragment>
               )
             })}
