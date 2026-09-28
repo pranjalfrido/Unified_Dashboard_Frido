@@ -1238,6 +1238,103 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       return
     }
 
+    // FTL/PTL and 3PL: filter b2b/tpl arrays client-side from baseData — no API call needed.
+    if (baseData && (scope === 'b2b' || scope === 'tpl')) {
+      const months = f.months?.length ? new Set(f.months) : null
+      const transporters = f.transporters?.length ? new Set(f.transporters) : null
+      const vehicleTypes = f.vehicleTypes?.length ? new Set(f.vehicleTypes) : null
+      const freightTypes = f.freightTypes?.length ? new Set(f.freightTypes) : null
+      const tplPartners = f.tplPartners?.length ? new Set(f.tplPartners) : null
+      const tplSites = f.tplSites?.length ? new Set(f.tplSites) : null
+
+      const b2bFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!transporters || transporters.has(r.transporter_name)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle_type)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+
+      const tplFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!tplPartners || tplPartners.has(r.partner_name || r.logistics_partner)) &&
+        (!tplSites || tplSites.has(r.warehouse_name || r.facility_name))
+
+      const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
+      const filteredB2bLanes = (baseData.b2bLanes || []).filter(r =>
+        (!months || months.has(r.month_year)) &&
+        (!transporters || transporters.has(r.transporter_name)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle_type)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+      )
+      const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
+        (!transporters || transporters.has(r.transporter_name))
+      )
+      const filteredB2bMonths = (baseData.b2bMonths || []).filter(r =>
+        (!months || months.has(r.key))
+      )
+      const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
+        (!months || months.has(r.month)) &&
+        (!transporters || transporters.has(r.transporter_name))
+      )
+      const filteredTplMonths = (baseData.tplMonths || []).filter(r =>
+        (!months || months.has(r.key || r.month_year)) &&
+        (!tplPartners || tplPartners.has(r.logistics_partner)) &&
+        (!tplSites || tplSites.has(r.warehouse_name))
+      )
+      const filteredTplWarehouses = (baseData.tplWarehouses || []).filter(r =>
+        (!tplPartners || tplPartners.has(r.logistics_partner)) &&
+        (!tplSites || tplSites.has(r.warehouse_name))
+      )
+      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(r =>
+        (!months || months.has(r.month_year || r.key)) &&
+        (!tplPartners || tplPartners.has(r.logistics_partner)) &&
+        (!tplSites || tplSites.has(r.warehouse_name))
+      )
+
+      // Recompute b2bTotals from filtered raw rows
+      const b2bTotals = filteredB2b.reduce((acc, r) => ({
+        trips: (acc.trips || 0) + 1,
+        cost: (acc.cost || 0) + (r.total_cost || 0),
+      }), { trips: 0, cost: 0 })
+
+      // Recompute tplTotals from filtered tplMonths
+      const tplTotals = filteredTplMonths.reduce((acc, r) => ({
+        rows: (acc.rows || 0) + (r.rows || 1),
+        partners: acc.partners,
+        warehouses: acc.warehouses,
+        months: acc.months,
+        cost: (acc.cost || 0) + (r.cost || 0),
+        operation_fee: (acc.operation_fee || 0) + (r.operation_fee || 0),
+        rental_fee: (acc.rental_fee || 0) + (r.rental_fee || 0),
+        other_fee: (acc.other_fee || 0) + (r.other_fee || 0),
+      }), { rows: 0, partners: baseData.tplTotals?.partners || 0, warehouses: baseData.tplTotals?.warehouses || 0, months: filteredTplMonths.length, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0 })
+
+      setAgg(shapeResponse(baseData))
+      setB2bRows(filteredB2b)
+      setB2b({
+        lanes: filteredB2bLanes,
+        totals: b2bTotals,
+        transporters: filteredB2bTrans,
+        months: filteredB2bMonths,
+        types: (baseData.b2bTypes || []).filter(r => (!months || months.has(r.month_year)) && (!freightTypes || freightTypes.has(r.freight_type))),
+        variance: baseData.b2bVar || null,
+        varMonths: (baseData.b2bVarMonths || []).filter(r => !months || months.has(r.month_year)),
+        transMonths: filteredB2bTransMonths,
+        vehicles: (baseData.b2bVehicles || []).filter(r => (!months || months.has(r.month_year)) && (!vehicleTypes || vehicleTypes.has(r.vehicle_type))),
+        laneVeh: baseData.b2bLaneVeh || [],
+        rateCmp: baseData.b2bRateCmp || [],
+        sole: baseData.b2bSole || null,
+        fixedVeh: baseData.fixedVeh || null,
+        fixedVehMonths: (baseData.fixedVehMonths || []).filter(r => !months || months.has(r.month_year)),
+        tplTotals,
+        tplPartners: (baseData.tplPartners || []).filter(r => !tplPartners || tplPartners.has(r.logistics_partner)),
+        tplMonths: filteredTplMonths,
+        tplWarehouses: filteredTplWarehouses,
+        tplWhMonths: filteredTplWhMonths,
+      })
+      setLoading(false)
+      return
+    }
+
     ;(async () => {
       setLoading(true); setError(null)
       try {
@@ -1251,15 +1348,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           (!f.billing || f.billing === 'all') &&
           !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
 
-        // b2b scope never uses the cube, so baseData (a B2C cube) can't serve it.
-        // Use a ref to track first-serve so we don't loop (setting state re-triggers the effect).
-        const wantsStatic = isDefaultFilters && (!baseData || (scope === 'b2b' && !b2bStaticServed.current))
+        const wantsStatic = isDefaultFilters && !baseData
         if (wantsStatic) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 48 * 60 * 60 * 1000) { j = data; if (scope === 'b2b') b2bStaticServed.current = true }
+            if (age < 48 * 60 * 60 * 1000) { j = data }
           }
         }
 
@@ -1279,9 +1374,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
         if (scanRef.current !== myRun) return
 
-        // Cache the full base response so future cube-compatible filters are instant.
-        // Skip for b2b: it never uses the cube, and setting baseData would re-trigger this effect.
-        if (isDefaultFilters && j.cube && scope !== 'b2b') setBaseData(j)
+        // Cache the full base response so future filters (cube for B2C, raw arrays for b2b/tpl) are instant.
+        if (isDefaultFilters && j.cube) setBaseData(j)
 
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
