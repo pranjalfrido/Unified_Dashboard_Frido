@@ -1260,20 +1260,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
       const filteredB2bLanes = (baseData.b2bLanes || []).filter(r =>
-        (!months || months.has(r.month_year)) &&
-        (!transporters || transporters.has(r.transporter_name)) &&
-        (!vehicleTypes || vehicleTypes.has(r.vehicle_type)) &&
-        (!freightTypes || freightTypes.has(r.freight_type))
+        (!transporters || transporters.has(r.transporter_name || r.transporter))
       )
       const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
-        (!transporters || transporters.has(r.transporter_name))
+        (!transporters || transporters.has(r.key || r.transporter_name))
       )
       const filteredB2bMonths = (baseData.b2bMonths || []).filter(r =>
-        (!months || months.has(r.key))
+        (!months || months.has(r.key || r.month_year))
       )
       const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
-        (!months || months.has(r.month)) &&
-        (!transporters || transporters.has(r.transporter_name))
+        (!months || months.has(r.month || r.month_year || r.key)) &&
+        (!transporters || transporters.has(r.transporter)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
       )
       const filteredTplMonths = (baseData.tplMonths || []).filter(r =>
         (!months || months.has(r.key || r.month_year)) &&
@@ -1290,11 +1289,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!tplSites || tplSites.has(r.warehouse_name))
       )
 
-      // Recompute b2bTotals from filtered raw rows
-      const b2bTotals = filteredB2b.reduce((acc, r) => ({
-        trips: (acc.trips || 0) + 1,
-        cost: (acc.cost || 0) + (r.total_cost || 0),
+      // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
+      const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
+        trips: acc.trips + (r.trips || 0),
+        cost: acc.cost + (r.cost || 0),
       }), { trips: 0, cost: 0 })
+      const b2bTotals = {
+        ...baseData.b2bTotals,
+        trips: b2bTotalsAgg.trips,
+        cost: b2bTotalsAgg.cost,
+        avg_cost: b2bTotalsAgg.trips > 0 ? b2bTotalsAgg.cost / b2bTotalsAgg.trips : 0,
+        transporters: filteredB2bTrans.length,
+        lanes: filteredB2bLanes.length,
+      }
 
       // Recompute tplTotals from filtered tplMonths
       const tplTotals = filteredTplMonths.reduce((acc, r) => ({
@@ -1315,11 +1322,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         totals: b2bTotals,
         transporters: filteredB2bTrans,
         months: filteredB2bMonths,
-        types: (baseData.b2bTypes || []).filter(r => (!months || months.has(r.month_year)) && (!freightTypes || freightTypes.has(r.freight_type))),
+        types: (baseData.b2bTypes || []).filter(r => (!freightTypes || freightTypes.has(r.key))),
         variance: baseData.b2bVar || null,
-        varMonths: (baseData.b2bVarMonths || []).filter(r => !months || months.has(r.month_year)),
+        varMonths: (baseData.b2bVarMonths || []).filter(r =>
+          (!months || months.has(r.month || r.month_year)) &&
+          (!transporters || transporters.has(r.transporter)) &&
+          (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+          (!freightTypes || freightTypes.has(r.freight_type))
+        ),
         transMonths: filteredB2bTransMonths,
-        vehicles: (baseData.b2bVehicles || []).filter(r => (!months || months.has(r.month_year)) && (!vehicleTypes || vehicleTypes.has(r.vehicle_type))),
+        vehicles: (baseData.b2bVehicles || []).filter(r => (!months || months.has(r.month_year)) && (!vehicleTypes || vehicleTypes.has(r.vehicle))),
         laneVeh: baseData.b2bLaneVeh || [],
         rateCmp: baseData.b2bRateCmp || [],
         sole: baseData.b2bSole || null,
