@@ -1324,9 +1324,30 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
         (!transporters || transporters.has(r.key || r.transporter_name))
       )
-      const filteredB2bMonths = (baseData.b2bMonths || []).filter(r =>
-        (!months || months.has(r.key || r.month_year))
-      )
+      // b2bMonths is aggregated ACROSS transporters, vehicles and freight types, so filtering
+      // it by month alone left the monthly series — and b2bTotals, which is summed from it —
+      // reporting every carrier no matter what was selected: picking Jopadevi still showed
+      // 3,62,55,450 rather than its own 2,63,35,600.
+      //
+      // b2bTransMonths carries the same measure at (month, transporter, vehicle,
+      // freight_type) grain, so the series is rebuilt from it whenever one of those slicers
+      // is active. Note the column is `billed` there and `cost` here.
+      const monthsNarrowed = transporters || vehicleTypes || freightTypes
+      const filteredB2bMonths = !monthsNarrowed
+        ? (baseData.b2bMonths || []).filter(r => !months || months.has(r.key || r.month_year))
+        : Object.values((baseData.b2bTransMonths || [])
+            .filter(r =>
+              (!months || months.has(r.month)) &&
+              (!transporters || transporters.has(r.transporter)) &&
+              (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+              (!freightTypes || freightTypes.has(r.freight_type)))
+            .reduce((acc, r) => {
+              const a = acc[r.month] || (acc[r.month] = { key: r.month, trips: 0, cost: 0 })
+              a.trips += r.trips || 0
+              a.cost += r.billed || 0
+              return acc
+            }, {}))
+            .sort((x, y) => String(x.key).localeCompare(String(y.key)))
       const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
         (!months || months.has(r.month || r.month_year || r.key)) &&
         (!transporters || transporters.has(r.transporter)) &&
