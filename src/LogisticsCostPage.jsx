@@ -3198,18 +3198,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     forest theme that reads as a green gradient, in gold as a gold one.
                     Darker at the base gives the bar a defined foot against the axis; the
                     lighter top keeps the two trend lines in front of it. */}
-                {/* A LOCAL gradient rather than the shared <BarGradient>. The shared ramp
-                    paints the same three greens at 72-96% opacity, which is correct where
-                    the bar is the subject — but here the bar is the ground that three
-                    same-family lines sit on, and at that weight it swallowed them. Dropping
-                    to 10-22% keeps the period magnitude readable while letting the lines
-                    stay the foreground, which is what the note below always claimed. */}
-                <defs>
-                  <linearGradient id="ovTotalBar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C.acc} stopOpacity={0.10} />
-                    <stop offset="100%" stopColor={C.acd} stopOpacity={0.22} />
-                  </linearGradient>
-                </defs>
+                <BarGradient id="ovTotalBar" />
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
