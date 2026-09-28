@@ -6825,7 +6825,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap = {} }) {
   // Daily run rate divides by every day in the selected range, so each row uses the
   // same divisor and rows stay comparable. Without a range the column is hidden
   // rather than shown with a wrong or invented divisor.
@@ -6833,6 +6833,8 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const showDrr = drrDays > 0
   const isMob = useIsMobile()
   const [expandedSku, setExpandedSku] = useState({})
+  const [expandedDateCat, setExpandedDateCat] = useState({})
+  const toggleDateCat = cat => setExpandedDateCat(prev => ({ ...prev, [cat]: !prev[cat] }))
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
@@ -6951,6 +6953,28 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     return <span style={{ fontSize: 10.5, fontWeight: muted ? 700 : 400, color: muted ? C.t2 : (positive ? C.green.tx : C.red.tx) }}>{positive ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
   const { Th } = table
+
+  const showDateExpand = detailedReturns && Object.keys(subCatDateMap).length > 0
+  const getCatDateRows = (cat) => {
+    const scMap = subCatDateMap[cat] || {}
+    const dateAgg = {}
+    Object.values(scMap).forEach(dateMap => {
+      Object.entries(dateMap).forEach(([date, d]) => {
+        if (!dateAgg[date]) dateAgg[date] = { rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0 }
+        dateAgg[date].rev += d.rev; dateAgg[date].excRev += d.excRev; dateAgg[date].units += d.units
+        dateAgg[date].cancelRev += d.cancelRev; dateAgg[date].rtoRev += d.rtoRev
+        dateAgg[date].cirRev += d.cirRev; dateAgg[date].exchRev += d.exchRev
+      })
+    })
+    return Object.entries(dateAgg).sort(([a],[b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d }))
+  }
+  const fmtDate = (ds) => {
+    const parts = ds.split('-')
+    if (parts.length !== 3) return ds
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const m = months[parseInt(parts[1], 10) - 1] || parts[1]
+    return `${parseInt(parts[2], 10)} ${m}`
+  }
 
   // Column registry. The detailed-returns breakdown (Cancel/RTO/CIR/Exchange/Total Return%) is
   // treated as 5 separate reorderable columns when detailedReturns is on; the simple variant is
@@ -7077,6 +7101,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
             {rows.map((r, i) => {
               const skuKey = `${r.cat}::${r.sc}`
               const isOpen = expandedSku[skuKey]
+              const isFirstOfCat = i === 0 || rows[i - 1].cat !== r.cat
+              const isLastOfCat = i === rows.length - 1 || rows[i + 1].cat !== r.cat
+              const isDateExpanded = expandedDateCat[r.cat]
               const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
@@ -7111,7 +7138,14 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   <tr style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
                     onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                     onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td style={{ ...tdStyleL, color: C.t1 }}>{r.cat}</td>
+                    <td style={{ ...tdStyleL, color: C.t1 }}>
+                      {showDateExpand && isFirstOfCat
+                        ? <span onClick={() => toggleDateCat(r.cat)} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 9, color: C.acm, display: 'inline-block', transform: isDateExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
+                            {r.cat}
+                          </span>
+                        : r.cat}
+                    </td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
                       <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
@@ -7129,6 +7163,66 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                       {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
                     </tr>
                   ))}
+                  {showDateExpand && isLastOfCat && isDateExpanded && (() => {
+                    const dateRows = getCatDateRows(r.cat)
+                    if (!dateRows.length) return null
+                    const colCount = ALL_COLUMNS.length + 2
+                    return (
+                      <tr key={`${r.cat}__date_expand`}>
+                        <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ maxHeight: 160, overflowY: 'auto', background: C.bg }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                              <colgroup>
+                                <col style={{ width: '11%' }} /><col style={{ width: '25%' }} />
+                                {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
+                              </colgroup>
+                              <tbody>
+                                {dateRows.map((d, di) => {
+                                  const gross = d.rev
+                                  const excRev = d.excRev
+                                  const net = gross > 0 ? (gross - d.cancelRev - d.rtoRev - d.cirRev) * (excRev / gross) : 0
+                                  const prevGross = di > 0 ? dateRows[di - 1].rev : null
+                                  const asp = d.units > 0 ? gross / d.units : 0
+                                  const cancelPct = gross > 0 ? d.cancelRev / gross * 100 : 0
+                                  const rtoPct = gross > 0 ? d.rtoRev / gross * 100 : 0
+                                  const cirPct = gross > 0 ? d.cirRev / gross * 100 : 0
+                                  const exchPct = gross > 0 ? d.exchRev / gross * 100 : 0
+                                  const totalReturnPct = gross > 0 ? (d.cancelRev + d.rtoRev + d.cirRev) / gross * 100 : 0
+                                  const dateTdStyle = { fontSize: 11, padding: '5px 12px', textAlign: 'right', color: C.t2, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap' }
+                                  const dateTdStyleL = { ...dateTdStyle, fontFamily: 'inherit', textAlign: 'left' }
+                                  return (
+                                    <tr key={d.date} style={{ background: di % 2 === 0 ? C.bg : C.hov }}>
+                                      <td style={{ ...dateTdStyleL, fontStyle: 'italic', color: C.t3 }}>{fmtDate(d.date)}</td>
+                                      <td style={dateTdStyleL}></td>
+                                      {ALL_COLUMNS.map(c => {
+                                        if (c.id === 'gross') return <td key={c.id} style={dateTdStyle}>{fmt(gross)}</td>
+                                        if (c.id === 'net') return <td key={c.id} style={dateTdStyle}>{fmt(net)}</td>
+                                        if (c.id === 'prevGross') {
+                                          if (!prevGross || Math.abs(prevGross) < 1) return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                          const p = (gross - prevGross) / prevGross * 100
+                                          const pos = p >= 0
+                                          return <td key={c.id} style={dateTdStyle}><span style={{ fontSize: 10.5, color: pos ? C.green.tx : C.red.tx }}>{pos ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span></td>
+                                        }
+                                        if (c.id === 'units') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                        if (c.id === 'drr') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                        if (c.id === 'asp') return <td key={c.id} style={dateTdStyle}>₹{Math.round(asp).toLocaleString('en-IN')}</td>
+                                        if (c.id === 'cancelPct') return <td key={c.id} style={dateTdStyle}>{cancelPct > 0 ? `${cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                        if (c.id === 'rtoPct') return <td key={c.id} style={dateTdStyle}>{rtoPct > 0 ? `${rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                        if (c.id === 'cirPct') return <td key={c.id} style={dateTdStyle}>{cirPct > 0 ? `${cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                        if (c.id === 'exchPct') return <td key={c.id} style={dateTdStyle}>{exchPct > 0 ? `${exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                        if (c.id === 'totalReturnPct') return <td key={c.id} style={dateTdStyle}>{totalReturnPct > 0 ? <span style={{ color: totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                                        return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                      })}
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })()}
                 </Fragment>
               )
             })}
@@ -9066,7 +9160,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
             }
           })
         }
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns subCatDateMap={sh.subCatDateMap || {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9459,7 +9553,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns subCatDateMap={ebo.subCatDateMap || {}} />
       {/* Store-wise table */}
       {(() => {
         const rawStoreRows = ebo.storeRows || []
