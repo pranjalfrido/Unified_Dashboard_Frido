@@ -2191,6 +2191,47 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       .sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
   }, [b2b, b2bPick])
 
+  // ── FTL/PTL monthly trend ──
+  //
+  // Mirrors the B2C "Freight spend and unit cost" chart: bars carry total spend on the left
+  // axis, lines carry unit cost on the right. Two axes because spend is in crores and unit
+  // cost in hundreds — on one scale the unit-cost line would sit flat on the floor.
+  //
+  // There is no weight column on this ledger: freight is billed per TRIP, not per kg, so
+  // the B2C cost-per-kg line has no equivalent here. The second line is FTL share of spend
+  // instead, which is what actually moves the blended rate — a month that shifts toward
+  // part-load shows a falling cost per trip that is a mix change, not a rate win.
+  const b2bTrendRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (b2bPick && !b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, ftlBilled: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips)
+      a.billed += num(m.billed)
+      // FTL only — PT/FTL is a part-load sharing a full-truck vehicle, so folding it in
+      // would report a full-truck share the book does not have.
+      if (String(m.freight_type || '').toUpperCase() === 'FTL') a.ftlBilled += num(m.billed)
+    }
+    const rows = [...by.values()].sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
+    const grand = rows.reduce((t, r) => t + r.billed, 0)
+    return rows.map(r => ({
+      ...r,
+      perTrip: r.trips ? r.billed / r.trips : 0,
+      ftlShare: r.billed ? (r.ftlBilled / r.billed) * 100 : 0,
+      shareOfSpend: grand ? (r.billed / grand) * 100 : 0,
+    }))
+  }, [b2b, b2bPick])
+
+  // Range applies to this chart only, same as the B2C trend.
+  const [b2bTrendMonths, setB2bTrendMonths] = useState(6)
+  const b2bTrendWindow = useMemo(
+    () => (b2bTrendMonths >= 999 ? b2bTrendRows : b2bTrendRows.slice(-b2bTrendMonths)),
+    [b2bTrendRows, b2bTrendMonths]
+  )
+
   // Vehicle type analysis, re-aggregated across the selected transporters. `lanes` and
   // `transporters` are counted from the surviving rows rather than summed — summing distinct
   // counts across transporters would double-count a lane both of them serve.
@@ -3427,53 +3468,123 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         </div>
 
         {/* ── Monthly trend, full width ──
-            An area chart: one measure over time, where the filled region carries the
-            magnitude and the line carries the direction. The tab's blue, with the exact
-            figures on hover rather than printed over the plot.
-            Rate-card variance is deliberately not shown on this tab. */}
-        <SectionHdr title="Monthly Trend" note="freight billed and trips per billing period" collapsed={secHid['ftl-trend']} onToggle={() => toggleSec('ftl-trend')} />
-        <Card style={secHid['ftl-trend'] ? { display: 'none' } : undefined}>
-          <div style={{ height: 240 }}>
+            Matches the B2C "Freight spend and unit cost" chart: bars carry period spend on
+            the left axis, lines carry unit cost on the right. Two axes because spend runs in
+            crores while cost per trip runs in tens of thousands — on a single scale the
+            rate lines would flatten onto the floor and read as no change at all.
+
+            The second line is FTL SHARE, not a cost-per-kg twin: this ledger bills per trip
+            and carries no weight column, so there is no per-kg figure to plot. Share matters
+            because it explains the first line — a month tilting toward part-load shows a
+            falling cost per trip that is a mix shift, not a negotiated win. */}
+        <SectionHdr title="Monthly Trend" note="freight spend, cost per trip and full-truck share per billing period" collapsed={secHid['ftl-trend']} onToggle={() => toggleSec('ftl-trend')} />
+        <Card style={secHid['ftl-trend'] ? { display: 'none' } : undefined}
+          title={isMobile ? <span style={{ fontSize: 15 }}>Freight spend and cost per trip</span> : "Freight spend and cost per trip"}
+          note={isMobile ? "" : "bars = total spend (left axis) · lines = cost per trip and FTL share (right axis)"}
+          action={
+            // Range applies to THIS chart only. Options beyond the available history are
+            // dimmed rather than hidden, so the reader can see how much data exists.
+            isMobile ? (
+              <select value={b2bTrendMonths} onChange={e => setB2bTrendMonths(Number(e.target.value))}
+                style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, fontFamily: 'var(--font)', border: `1.5px solid ${C.acm}`, background: '#fff', color: C.t1, cursor: 'pointer' }}>
+                {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => (
+                  <option key={o.l} value={o.n}>{o.l}</option>
+                ))}
+              </select>
+            ) : (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => {
+                const on = b2bTrendMonths === o.n
+                const short = o.n !== 999 && !on && o.n > b2bTrendRows.length
+                return (
+                  <button key={o.l} onClick={() => !short && setB2bTrendMonths(o.n)} disabled={short}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 6,
+                      fontFamily: 'var(--font)',
+                      border: `1.5px solid ${on ? C.acm : C.border2}`,
+                      background: on ? C.acl : C.card,
+                      color: short ? C.t3 : C.t1,
+                      cursor: short ? 'default' : 'pointer', opacity: short ? 0.45 : 1,
+                    }}>
+                    {o.l}
+                  </button>
+                )
+              })}
+            </div>
+            )
+          }>
+          <div style={{ height: 210, marginTop: isMobile ? 20 : 0 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={b2bVarMonthRows} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
-                <defs>
-                  <linearGradient id="ftlTrend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.28} />
-                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
+              <ComposedChart data={b2bTrendWindow} margin={{ top: 12, right: isMobile ? -28 : 14, left: isMobile ? -4 : 4, bottom: 4 }}>
+                {/* Its own gradient id: two SVG gradients sharing one id resolve to whichever
+                    mounted last, which silently blanks one chart's bars. */}
+                <BarGradient id="ftlTrendBar" />
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false}
-                  tickLine={false} tickFormatter={v => fmt(v)} />
-                {/* A vertical crosshair, not the bar-style column fill — the mark is now an
-                    area, so a shaded column would imply a bar that is not there.
-                    offset pushes the panel clear of the cursor: at the default it sat over
-                    the very point being read. */}
-                <Tooltip cursor={{ stroke: VIZ.muted, strokeWidth: 1, strokeDasharray: "3 3" }}
-                  offset={16}
+                <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+                {/* Cost per trip and FTL share share this axis but not a unit, so it is
+                    formatted bare. The tooltip prints both with their real units. */}
+                <YAxis yAxisId="unit" orientation="right" tick={{ fontSize: 11, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={v => (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : String(Math.round(v)))} />
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }}
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null
                     const r = payload[0].payload
                     return (
-                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 12px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>{fmt(r.billed)}</div>
-                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
-                          {fmtN(r.trips)} trips · ₹{Math.round(r.trips ? r.billed / r.trips : 0).toLocaleString('en-IN')} per trip
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.billed)}</div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                          {fmtN(r.trips)} trips
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.acm, marginTop: 5, fontWeight: 600 }}>
+                          ₹{Math.round(r.perTrip).toLocaleString('en-IN')} / trip
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#2BB3A3', fontWeight: 600 }}>
+                          {r.ftlShare.toFixed(1)}% full-truck
                         </div>
                       </div>
                     )
                   }} />
-                {/* Stroke in the deeper accent: a 2px #FFD600 line is 1.38:1 on white and
-                    would effectively disappear, while the fill below it can stay light. */}
-                <Area type="monotone" dataKey="billed" name="Freight billed" stroke={SER.blue}
-                  strokeWidth={2.5} fill="url(#ftlTrend)"
-                  dot={{ r: 3.5, fill: SER.blue, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: SER.blue, stroke: C.card, strokeWidth: 2 }} />
-              </AreaChart>
+                <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                <Bar yAxisId="spend" dataKey="billed" name="Total freight spend"
+                  fill="url(#ftlTrendBar)" radius={[4, 4, 0, 0]} maxBarSize={64} />
+                <Line yAxisId="unit" type="monotone" dataKey="perTrip" name="Cost / trip"
+                  stroke={C.acm} strokeWidth={2.5}
+                  dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }} />
+                {/* Dashed so it reads as a share, not a second rupee series sharing the axis. */}
+                <Line yAxisId="unit" type="monotone" dataKey="ftlShare" name="FTL share %"
+                  stroke="#2BB3A3" strokeWidth={2.5} strokeDasharray="4 3"
+                  dot={{ r: 3.5, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }} />
+              </ComposedChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Table twin — the real rupees and counts behind the chart. */}
+          <div style={{ marginTop: 12 }}>
+            <DataTable
+              columns={[
+                { key: 'month', label: 'Period' },
+                { key: 'billed', label: 'Freight Cost', align: 'center', render: (_, r) => fmt(r.billed) },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'perTrip', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.perTrip).toLocaleString('en-IN') },
+                { key: 'ftlShare', label: 'FTL Share', align: 'center', render: (_, r) => r.ftlShare.toFixed(1) + '%' },
+                // Share of the VISIBLE window, not of all time: the range buttons change
+                // what is on screen, and a share of a total the table does not show would
+                // never sum to 100 and would quietly change meaning as the range changes.
+                { key: 'shareOfSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+                  const tot = b2bTrendWindow.reduce((a, x) => a + (Number(x.billed) || 0), 0)
+                  const pct = tot > 0 ? (Number(r.billed) || 0) / tot * 100 : 0
+                  return <ShareBar pct={pct}>{pct.toFixed(1) + '%'}</ShareBar>
+                } },
+              ]}
+              rows={b2bTrendWindow}
+            />
           </div>
         </Card>
 
