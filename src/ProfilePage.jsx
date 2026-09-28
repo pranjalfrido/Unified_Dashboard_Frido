@@ -358,13 +358,14 @@ function MyProfile({ session, onProfileUpdated }) {
 }
 
 // ── Create User Modal ─────────────────────────────────────────────────────────
-function CreateUserModal({ session, onClose, onCreated }) {
+function CreateUserModal({ session, onClose, onCreated, existingUsers = [], existingPermissions = {} }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState(() => Math.random().toString(36).slice(2, 10) + 'A1!')
   const [showPw, setShowPw] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [tabs, setTabs] = useState([])
+  const [copyFrom, setCopyFrom] = useState('')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
 
@@ -438,7 +439,27 @@ function CreateUserModal({ session, onClose, onCreated }) {
           </div>
           {!isAdmin && (
             <div>
-              <label style={{ ...S.label, marginBottom: 6 }}>Tab permissions</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ ...S.label, marginBottom: 0 }}>Tab permissions</label>
+                {existingUsers.length > 0 && (
+                  <select
+                    value={copyFrom}
+                    onChange={e => {
+                      const uid = e.target.value
+                      setCopyFrom(uid)
+                      if (uid) setTabs([...(existingPermissions[uid] || [])])
+                    }}
+                    style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid #E7E3D8', background: '#F7F5EF', color: copyFrom ? '#1E2321' : '#9BA5A1', fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', maxWidth: 200 }}
+                  >
+                    <option value="">Copy from member…</option>
+                    {existingUsers.map(u => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.name || u.email}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <PermissionPanel tabs={tabs} setTabs={setTabs} />
             </div>
           )}
@@ -776,7 +797,7 @@ function TeamMembers({ session, showToast }) {
       )}
 
       {showCreate && (
-        <CreateUserModal session={session} onClose={() => setShowCreate(false)} onCreated={() => { loadUsers(); showToast('Member added') }} />
+        <CreateUserModal session={session} onClose={() => setShowCreate(false)} onCreated={() => { loadUsers(); showToast('Member added') }} existingUsers={users} existingPermissions={permissions} />
       )}
     </div>
   )

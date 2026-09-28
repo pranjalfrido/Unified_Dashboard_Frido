@@ -107,7 +107,7 @@ const FORMATS = {
     // to Clickpost's pickup_pincode, so per-parcel and per-kg costs depend on it being
     // present and correct. Names vary between the invoice and the tracking feed; a pincode
     // does not.
-    uniqueKey: "month_year,threepl_logistics_name,facility_pincode",
+    uniqueKey: "month_year,threepl_logistics_name,facility_pincode,invoice_number",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "threepl_logistics_name", label: "3PL_Logistics_Name", type: "text", req: true, w: 190, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
@@ -124,7 +124,7 @@ const FORMATS = {
     searchKeys: ["threepl_logistics_name", "facility_name", "facility_location", "facility_pincode", "invoice_number", "month_year"],
     notes: [
       "One row = one 3PL's charges for one facility for one month.",
-      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode UPDATES that row rather than adding a duplicate.",
+      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode + invoice_number UPDATES that row rather than adding a duplicate.",
       "Facility_Pincode must match the pickup pincode the courier records for that facility — it is what links this bill to the parcels shipped, and cost per parcel / per kg stay blank without it.",
       "month_year must be YYYY-MM (e.g. 2026-07).",
       "total_cost is computed as operation_fee + rental_fee + other_fee when left blank.",
