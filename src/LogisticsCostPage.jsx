@@ -47,6 +47,25 @@ const SER = {
   get aqua(){ return SERIES_BASE.aqua },
   get yellow(){ return SERIES_BASE.yellow },
 }
+// Overview trend: one shade per spend stream, stepped far enough apart in LIGHTNESS to be
+// told apart at 2px on a white card.
+//
+// The three accent tokens alone cannot do this. Forest ships acc #1F6F5C, acm #175A4A and
+// acd #0E3F34 — all mid-to-dark greens within a narrow lightness band, so three lines drawn
+// from them read as one colour repeated. (The chart was worse still: B2C and FTL/PTL were
+// literally both C.acm.)
+//
+// So the ramp keeps the two theme tokens at the dark end and adds a genuinely light green
+// at the top. #4FA88E is the theme's own hue, lightened: 2.9:1 on white, which is thin for
+// text but correct for a 2px stroke, and a clear step above acc. Fixed rather than
+// tokenised because only this chart needs a four-step green ramp; the shared tokens stay
+// the source of truth for everything else.
+const OV_SERIES = {
+  get b2c(){ return '#4FA88E' },   // lightest — the largest stream, so it reads first
+  get b2b(){ return C.acc },      // mid
+  get tpl(){ return C.acd },      // deepest
+}
+
 // Forward / Reverse / RTO — distinct states drawn from the theme's green family so all
 // three read as on-theme. acm (mid accent) and acd (deep accent) step darker than acc;
 // acl is reserved for fills, not lines, so only the two deeper tokens are used here.
@@ -3179,7 +3198,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     forest theme that reads as a green gradient, in gold as a gold one.
                     Darker at the base gives the bar a defined foot against the axis; the
                     lighter top keeps the two trend lines in front of it. */}
-                <BarGradient id="ovTotalBar" />
+                {/* A LOCAL gradient rather than the shared <BarGradient>. The shared ramp
+                    paints the same three greens at 72-96% opacity, which is correct where
+                    the bar is the subject — but here the bar is the ground that three
+                    same-family lines sit on, and at that weight it swallowed them. Dropping
+                    to 10-22% keeps the period magnitude readable while letting the lines
+                    stay the foreground, which is what the note below always claimed. */}
+                <defs>
+                  <linearGradient id="ovTotalBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={C.acc} stopOpacity={0.10} />
+                    <stop offset="100%" stopColor={C.acd} stopOpacity={0.22} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
@@ -3197,15 +3227,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           <span>{fmt(r.total)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
-                          <span><span style={{ color: SER.blue, fontWeight: 700 }}>■</span> B2C</span>
+                          <span><span style={{ color: OV_SERIES.b2c, fontWeight: 700 }}>■</span> B2C</span>
                           <span>{fmt(r.b2c)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
-                          <span><span style={{ color: C.acm, fontWeight: 700 }}>■</span> FTL/PTL</span>
+                          <span><span style={{ color: OV_SERIES.b2b, fontWeight: 700 }}>■</span> FTL/PTL</span>
                           <span>{fmt(r.b2b)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
-                          <span><span style={{ color: C.acd, fontWeight: 700 }}>■</span> 3PL</span>
+                          <span><span style={{ color: OV_SERIES.tpl, fontWeight: 700 }}>■</span> 3PL</span>
                           <span>{fmt(r.tpl)}</span>
                         </div>
                       </div>
@@ -3226,12 +3256,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
                 <Bar dataKey="total" name="Total" fill="url(#ovTotalBar)"
                   radius={[4, 4, 0, 0]} maxBarSize={56} />
-                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
-                  strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
-                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={C.acm}
-                  strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
-                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={C.acd}
-                  strokeWidth={2} dot={{ r: 3.5, fill: C.acd }} />
+                {/* One shade per stream, stepped by lightness — see OV_SERIES. A white dot
+                    ring lifts each marker off the bar behind it, which is the same green
+                    family and would otherwise swallow the dots. */}
+                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={OV_SERIES.b2c}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.b2c, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.b2c, stroke: VIZ.surface, strokeWidth: 2 }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={OV_SERIES.b2b}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.b2b, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.b2b, stroke: VIZ.surface, strokeWidth: 2 }} />
+                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={OV_SERIES.tpl}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.tpl, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.tpl, stroke: VIZ.surface, strokeWidth: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
