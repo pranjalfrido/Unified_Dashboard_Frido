@@ -6843,6 +6843,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   useEffect(() => { setFetchedDateMap(null); setExpandedDateSc({}) }, [rangeStart, rangeEnd, channel])
   const toggleDateSc = async (key) => {
     const willOpen = !expandedDateSc[key]
+    if (willOpen) setExpandedSku(prev => ({ ...prev, [key]: false }))
     setExpandedDateSc(prev => ({ ...prev, [key]: !prev[key] }))
     if (willOpen && channel && !fetchedDateMap && !dateMapLoading) {
       setDateMapLoading(true)
@@ -7229,7 +7230,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         : r.cat}
                     </td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
-                      <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span onClick={() => { if (hasSkus) { if (!isOpen) setExpandedDateSc(prev => ({ ...prev, [skuKey]: false })); toggleSku(skuKey) } }} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {r.sc}
                       </span>
