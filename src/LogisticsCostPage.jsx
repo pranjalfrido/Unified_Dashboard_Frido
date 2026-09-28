@@ -1282,9 +1282,45 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!tplSites || tplSites.has(r.warehouse))
 
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
-      const filteredB2bLanes = (baseData.b2bLanes || []).filter(r =>
-        (!transporters || transporters.has(r.transporter_name || r.transporter))
-      )
+      // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
+      // a name — so there is nothing on it to filter by, and testing a name dropped all 51
+      // lanes to zero. b2bLaneVeh is the finer grain that does carry `transporter`, so the
+      // lane table is rebuilt from it whenever a carrier-level slicer is active.
+      const laneNarrowed = transporters || vehicleTypes || freightTypes || months
+      const filteredB2bLanes = !laneNarrowed
+        ? (baseData.b2bLanes || [])
+        : Object.values((baseData.b2bLaneVeh || [])
+            .filter(r =>
+              (!months || months.has(r.month_year)) &&
+              (!transporters || transporters.has(r.transporter)) &&
+              (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+              (!freightTypes || freightTypes.has(r.freight_type)))
+            .reduce((acc, r) => {
+              const a = acc[r.lane] || (acc[r.lane] = {
+                lane: r.lane, origin_location: r.origin, destination_location: r.dest,
+                trips: 0, cost: 0, min_cost: Infinity, max_cost: 0,
+                _carriers: new Set(), card_cost: 0, variance: 0, priced_trips: 0,
+              })
+              a.trips += r.trips || 0
+              a.cost += r.cost || 0
+              // Extremes across the surviving rows, so min/max still answer "cheapest and
+              // dearest this lane was billed at" for the current selection.
+              if (r.min_cost != null) a.min_cost = Math.min(a.min_cost, r.min_cost)
+              if (r.max_cost != null) a.max_cost = Math.max(a.max_cost, r.max_cost)
+              a._carriers.add(r.transporter)
+              a.card_cost += r.card_cost || 0
+              a.variance += r.variance || 0
+              a.priced_trips += r.priced_trips || 0
+              return acc
+            }, {}))
+            .map(a => ({
+              ...a,
+              avg_cost: a.trips ? a.cost / a.trips : 0,
+              min_cost: a.min_cost === Infinity ? 0 : a.min_cost,
+              transporters: a._carriers.size,
+              _carriers: undefined,
+            }))
+            .sort((x, y) => y.cost - x.cost)
       const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
         (!transporters || transporters.has(r.key || r.transporter_name))
       )
