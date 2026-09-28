@@ -7204,14 +7204,18 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   <tr style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
                     onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                     onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td style={{ ...tdStyleL, color: C.t1 }}>{r.cat}</td>
+                    <td style={{ ...tdStyleL, color: C.t1 }}>
+                      {showDateExpand
+                        ? <span onClick={() => toggleDateSc(skuKey)} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 9, color: C.acm, display: 'inline-block', transform: isScDateExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
+                            {r.cat}
+                          </span>
+                        : r.cat}
+                    </td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        {showDateExpand && <span onClick={() => toggleDateSc(skuKey)} style={{ cursor: 'pointer', userSelect: 'none', fontSize: 9, color: C.acc, display: 'inline-block', transform: isScDateExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                          {r.sc}
-                        </span>
+                      <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {r.sc}
                       </span>
                     </td>
                     {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
