@@ -77,7 +77,12 @@ if (skipped.length) {
 const seen = new Map()
 let mergedPairs = 0
 for (const r of rows) {
-  const k = [r.month_year, r.threepl_logistics_name.toLowerCase(), r.facility_pincode].join('|')
+  // invoice_number is part of the key: a partner can bill one facility-month across
+  // several invoices (operations on one, rental on another), and those are genuinely
+  // separate bills that must each survive, not duplicates to be summed. Without it the
+  // split Hexalog lines collapsed into one row and the invoice trail was lost.
+  const k = [r.month_year, r.threepl_logistics_name.toLowerCase(), r.facility_pincode,
+             (r.invoice_number || '').toLowerCase()].join('|')
   const prev = seen.get(k)
   if (!prev) { seen.set(k, { ...r }); continue }
   mergedPairs++
@@ -94,6 +99,20 @@ for (const r of rows) {
   }
 }
 const merged = [...seen.values()]
+
+// Derive total_cost from the fee columns for EVERY row, not just merged ones.
+//
+// The merge branch above already did this for rows it combined, but a row with no
+// duplicate kept whatever the sheet stated — and a template can leave total_cost
+// blank on every line, which reads as 0. That silently loaded ~37 of 47 rows at zero
+// cost while the merged Hexalog lines looked correct, so the error was easy to miss.
+//
+// The fee columns are the figures the per-fee charts are built from, so they are the
+// authority; a stated total that disagrees with its own parts is the one that's wrong.
+for (const r of merged) {
+  const parts = FEES.reduce((s, f) => s + num(r[f]), 0)
+  if (parts > 0) r.total_cost = parts
+}
 
 const fileTotal = rows.reduce((s, r) => s + num(r.total_cost), 0)
 const outTotal = merged.reduce((s, r) => s + num(r.total_cost), 0)
