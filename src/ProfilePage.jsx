@@ -583,10 +583,14 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
 
   async function savePermissions() {
     setSaving(true)
+    // If user was admin, demote to member first
+    if (user.is_admin) {
+      await supabase.from('user_profiles').update({ is_admin: false }).eq('user_id', user.user_id)
+    }
     await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
     if (localTabs.length > 0) await supabase.from('user_permissions').insert(localTabs.map(tab => ({ user_id: user.user_id, tab })))
     setSaving(false); onUpdate()
-    showToast('Permissions saved')
+    showToast(user.is_admin ? `${user.name} demoted to Member` : 'Permissions saved')
   }
 
   async function revokeUser() {
@@ -639,19 +643,17 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
       <div style={{ borderTop: '1px solid #E7E3D8', marginBottom: 14 }} />
 
       {/* Permission panel */}
-      {user.is_admin ? (
-        <div style={{ fontSize: 12.5, color: '#4B534F', fontStyle: 'italic', padding: '8px 0' }}>Admins have access to every tab.</div>
-      ) : (
-        <>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Click chips to grant or remove access</div>
-          <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
-          {tabsChanged && (
-            <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
-              {saving ? 'Saving…' : 'Save permissions'}
-            </button>
-          )}
-        </>
-      )}
+      <>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
+          {user.is_admin ? 'Admin — select specific tabs to demote to Member' : 'Click chips to grant or remove access'}
+        </div>
+        <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
+        {tabsChanged && (
+          <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
+            {saving ? 'Saving…' : user.is_admin ? 'Demote to Member & save' : 'Save permissions'}
+          </button>
+        )}
+      </>
 
       {showReset && (
         <ResetPasswordModal session={session} user={user} onClose={() => setShowReset(false)}
