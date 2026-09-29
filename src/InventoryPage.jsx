@@ -254,11 +254,16 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
     if (!cached) return
-    // If selected range falls within the full cached data window, use cache (client-side date filter)
-    const withinCache = cachedDataRef.current?.rawRows &&
-      start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    // If cache has rawRows, always use it for client-side date filtering — never fall back to BQ.
+    // (Raw rows cover the full FY window; dates before cache start simply yield no data rows,
+    // which is correct. Avoids live BQ calls that time out on Vercel's 60s limit.)
+    if (cachedDataRef.current?.rawRows) {
+      setData(cachedDataRef.current)
+      return
+    }
+    // No rawRows in cache — fall back to API only if date range is outside cached window
+    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
     if (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current))) {
-      // Restore static data — SalesAllocationPage will filter rawRows by dateFilters client-side
       if (cachedDataRef.current) setData(cachedDataRef.current)
       return
     }

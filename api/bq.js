@@ -141,7 +141,6 @@ const SLOW_QUERY_KEYS = new Set([
   'intlCategories','intlSubCategories','intlSKUMatrix','intlCatPrev','intlSubCatPrev',
   'eboCategory','eboCategoryPrev','eboSubCategory','eboSubCategoryPrev','eboSKU',
   'eboState','eboStatePrev','eboCity','eboCityPrev','eboRegion','eboTier',
-  'eboStoreMonthly','eboStoreSkuCosts',
   'offlineCategory','offlineSubCategory','offlineSKU',
   'offlineState','offlineCity','offlineRegion','offlineTier',
   'offCatPrev','offSubCatPrev','offStatesPrev','offCitiesPrev',
@@ -3814,7 +3813,7 @@ export default async function handler(req, res) {
         _slow_amzVC: chSlow('amzVC', ['cat','subCat','sku','catPrev','subCatPrev','skuPrev','dailyCat','dailySKU']),
         _slow_amzIntl: chSlow('amzIntl', ['countries','skus','catChannel','subCatChannel','skuChannel','returnCat','returnSubCat','returnSKU']),
         _slow_international: chSlow('international', ['categories','subCategories','skuMatrix','catPrev','subCatPrev']),
-        _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev','storeRows','storeSkuCostRows']),
+        _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
         _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
         _slow_ads: chSlow('ads', ['spendDetail','allSpendDetail','spendDetailByPlatform','additionalSpend','additionalSpendByProduct','zeroOrder','dailyByCategory']),
         // Per-channel prev-period totals (moved to slow so fast phase has fewer BQ scans)
