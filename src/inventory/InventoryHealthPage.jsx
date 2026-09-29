@@ -1753,7 +1753,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               ]} />
           </div>
         }>
-        <PivotTable pivot={filteredPivot} search={pivotSearch} facilityTypeFilter={[]} />
+        <PivotTable pivot={filteredPivot} search={pivotSearch} facilityTypeFilter={['Regular']} />
       </GlassCard></div>
 
       {/* Slow-moving + Dead stock — each card sits in its own minWidth:0 wrapper div,
