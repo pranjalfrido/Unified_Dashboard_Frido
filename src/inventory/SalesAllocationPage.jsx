@@ -356,10 +356,11 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       hasFilter(filters.facility) || hasFilter(filters.region)
     const dateStart = dateFilters?.start
     const dateEnd = dateFilters?.end
+    const matrixCh = filters.matrixChannel || []
     // Check if date range matches the cache's pre-computed range (no need to re-filter)
     const cacheRange = data.dateRange
     const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
-    if (!anyActive && dateMatchesCache && data.matrixCellRows) return data
+    if (!anyActive && dateMatchesCache && matrixCh.length === 0 && data.matrixCellRows) return data
 
     const rows = data.rawRows.filter(r => {
       if (dateStart && r.date < dateStart) return false
@@ -450,12 +451,13 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       return { location, qty: Math.round(qty), qtyPerDay: Math.round(qty / days), rev: Math.round(rev), revPerDay: Math.round(rev / days), asp: qty > 0 ? Math.round(rev / qty) : null, sharePct: totalQty > 0 ? qty / totalQty : null, allocationPct: demand > 0 ? Math.min(1, qty / demand) : null, skuCount: 0, region: null }
     })
 
-    // Re-derive Product-Wise Sales Matrix from filtered rows
+    // Re-derive Product-Wise Sales Matrix from filtered rows (+ optional matrixChannel filter)
     const MSEP = '\x1f'
     const matrixCells = new Map()
     const matrixDatesSet = new Set()
     const matrixSkuMetaMap = new Map()
-    for (const r of rows) {
+    const matrixRows = matrixCh.length ? rows.filter(r => matrixCh.includes(r.channel2) || matrixCh.includes(r.channel)) : rows
+    for (const r of matrixRows) {
       matrixDatesSet.add(r.date)
       if (!matrixSkuMetaMap.has(r.sku)) matrixSkuMetaMap.set(r.sku, { sku: r.sku, category: r.category, subCategory: r.subCategory })
       const addCell = (cat, sub, skuKey) => {
@@ -501,7 +503,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       matrixSkuList,
       matrixDates,
     }
-  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region, dateFilters?.start, dateFilters?.end])
+  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region, filters.matrixChannel, dateFilters?.start, dateFilters?.end])
 
   const dailyChart = useMemo(() => {
     if (!filteredData) return []
