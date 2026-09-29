@@ -5,23 +5,22 @@ import { supabase } from "./supabase.js";
 import { C as BASE_C } from "./utils.js";
 
 // ── COGS Tracker — row-wise layout ───────────────────────────────────────────
-// DB: cogs_ledger (itemskucode, productname, tallyproductname, subcategory,
-//                  category, month, cogs, is_explicit)
-// UI: each row = 1 SKU × 1 month, sorted by month then SKU
+// DB: cogs_ledger (itemskucode, month, cogs, is_explicit)
+// UI: each row = 1 SKU × 1 month, sorted by month then SKU. Just a plain
+// uploader — SKU must exist in item master (validated against it below), and
+// api/cogs-context.js is used only for a pre-save sanity check (COGS vs the
+// SKU's last-60-day ASP). Product name/category/subcategory/analysis belong
+// in a separate costing-analysis view, not here.
 
 const FIELDS = [
-  { key: "month",            label: "Month",              w: 110, req: true,  type: "month", ex: "2026-06" },
-  { key: "itemskucode",      label: "SKU Code",           w: 150, req: true,  type: "text",  ex: "SKU001" },
-  { key: "productname",      label: "Product Name",       w: 220, req: false, type: "text",  ex: "Neck Pillow - Grey" },
-  { key: "tallyproductname", label: "Tally Product Name", w: 200, req: false, type: "text",  ex: "Neck Pillow Grey" },
-  { key: "subcategory",      label: "Sub Category",       w: 150, req: false, type: "text",  ex: "Pillows" },
-  { key: "category",         label: "Category",           w: 150, req: false, type: "text",  ex: "Comfort" },
-  { key: "cogs",             label: "COGS",               w: 110, req: true,  type: "num",   ex: "42.50" },
+  { key: "month",       label: "Month",   w: 110, req: true, type: "month", ex: "2026-06" },
+  { key: "itemskucode", label: "SKU Code", w: 150, req: true, type: "text",  ex: "SKU001" },
+  { key: "cogs",        label: "COGS",    w: 110, req: true, type: "num",   ex: "42.50" },
 ];
 
 const todayMonth = () => new Date().toISOString().slice(0, 7);
 const uid = () => Math.random().toString(36).slice(2, 10);
-const blankRow = () => ({ _uid: uid(), _dirty: true, month: todayMonth(), itemskucode: "", productname: "", tallyproductname: "", subcategory: "", category: "", cogs: "" });
+const blankRow = () => ({ _uid: uid(), _dirty: true, month: todayMonth(), itemskucode: "", cogs: "" });
 
 const normMonth = (v) => {
   if (v == null || v === "") return null;
@@ -36,10 +35,6 @@ const normMonth = (v) => {
 
 const toDbRecord = (r) => ({
   itemskucode: r.itemskucode.trim(),
-  productname: r.productname || null,
-  tallyproductname: r.tallyproductname || null,
-  subcategory: r.subcategory || null,
-  category: r.category || null,
   month: r.month,
   cogs: r.cogs !== "" && r.cogs != null ? Number(r.cogs) : null,
   is_explicit: true,
@@ -50,12 +45,10 @@ const fromDbRecord = (d) => ({
   _dirty: false,
   month: d.month ?? "",
   itemskucode: d.itemskucode ?? "",
-  productname: d.productname ?? "",
-  tallyproductname: d.tallyproductname ?? "",
-  subcategory: d.subcategory ?? "",
-  category: d.category ?? "",
   cogs: d.cogs != null ? String(d.cogs) : "",
 });
+
+const API = import.meta.env.VITE_API_URL || "";
 
 export default function CogsPage() {
   const [rows, setRows] = useState([blankRow()]);
@@ -66,7 +59,23 @@ export default function CogsPage() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [validSkus, setValidSkus] = useState(null); // Set of valid item_master Product_Code (uppercased), null until loaded
+  const [skuContext, setSkuContext] = useState({}); // { SKU: { asp_inc_gst_60d, ... } } — cache for the pre-save margin sanity check only
   const fileInput = useRef(null);
+
+  // ── Item master (SKU validity gate) ─────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("item_master").select("Product_Code");
+        if (error) throw error;
+        setValidSkus(new Set((data ?? []).map((d) => String(d.Product_Code || "").trim().toUpperCase())));
+      } catch (e) {
+        console.error("Failed to load item master for SKU validation:", e);
+        setValidSkus(new Set()); // fail closed — validity gate below treats unknown as invalid until this loads
+      }
+    })();
+  }, []);
 
   const flash = (kind, text) => {
     setStatus({ kind, text });
@@ -99,10 +108,25 @@ export default function CogsPage() {
   const saveToDb = async () => {
     const valid = rows.filter((r) => r._dirty && r.itemskucode.trim() && r.month);
     if (!valid.length) { flash("ok", "Nothing new to save."); return; }
+
+    if (validSkus) {
+      const invalid = [...new Set(valid.filter((r) => !validSkus.has(r.itemskucode.trim().toUpperCase())).map((r) => r.itemskucode.trim()))];
+      if (invalid.length) {
+        flash("error", `Cannot save — SKU(s) not found in item master: ${invalid.slice(0, 10).join(", ")}${invalid.length > 10 ? ` (+${invalid.length - 10} more)` : ""}`);
+        return;
+      }
+    }
+
+    const warned = await findMarginWarnings(valid);
+    if (warned.length) {
+      const preview = warned.slice(0, 8).map((r) => `• ${r.itemskucode} / ${r.month}: COGS ${r.cogs}`).join("\n");
+      if (!confirm(`${warned.length} row(s) have COGS at or above the SKU's last-60-day selling price (inc GST) — likely a data-entry mistake:\n\n${preview}\n\nSave anyway?`)) return;
+    }
+
     setSaving(true);
     try {
       const records = valid.map(toDbRecord);
-      const { error } = await supabase.from("cogs_ledger").insert(records);
+      const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
       if (error) throw error;
       setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
       const months = [...new Set(valid.map((r) => r.month))].sort();
@@ -130,6 +154,34 @@ export default function CogsPage() {
 
   const addRow = () => setRows((rs) => [blankRow(), ...rs]);
 
+  // Sanity check before saving: flags any row whose COGS is >= its last-60-day
+  // ASP (inc GST) — i.e. zero/negative margin, almost always a data-entry mistake.
+  // Warns and lets the user confirm rather than hard-blocking, since a genuinely
+  // loss-leading SKU is possible.
+  const findMarginWarnings = async (candidateRows) => {
+    const skus = [...new Set(candidateRows.map((r) => r.itemskucode.trim().toUpperCase()).filter(Boolean))];
+    if (!skus.length) return [];
+    const need = skus.filter((s) => !(s in skuContext));
+    let ctxNow = skuContext;
+    if (need.length) {
+      try {
+        const res = await fetch(`${API}/api/cogs-context`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skus: need }),
+        });
+        const json = await res.json();
+        if (res.ok) { ctxNow = { ...skuContext, ...json.skus }; setSkuContext(ctxNow); }
+      } catch { /* sanity check is best-effort — don't block saving on it failing */ }
+    }
+    return candidateRows.filter((r) => {
+      const ctx = ctxNow[r.itemskucode.trim().toUpperCase()];
+      const asp = ctx?.asp_inc_gst_60d;
+      const cogs = r.cogs !== "" && r.cogs != null ? Number(r.cogs) : null;
+      return asp != null && asp > 0 && cogs != null && cogs >= asp;
+    });
+  };
+
   const filtered = useMemo(() => {
     let r = rows;
     if (monthFilter !== "all") r = r.filter((row) => row.month === monthFilter);
@@ -148,7 +200,6 @@ export default function CogsPage() {
       if (f.key === "month") return "2026-07";
       if (f.key === "cogs") return "38.00";
       if (f.key === "itemskucode") return "SKU002";
-      if (f.key === "productname") return "Back Cushion - Black";
       return f.ex ?? "";
     });
     const ws = XLSX.utils.aoa_to_sheet([headerRow, ex1, ex2]);
@@ -164,18 +215,15 @@ export default function CogsPage() {
     const instrData = [
       ["Column", "Required?", "Description"],
       ["Month", "YES", "Billing month in YYYY-MM format e.g. 2026-06"],
-      ["SKU Code", "YES", "Your internal SKU / item code"],
-      ["Product Name", "no", "Full product name"],
-      ["Tally Product Name", "no", "Name as it appears in Tally"],
-      ["Sub Category", "no", "Product sub-category"],
-      ["Category", "no", "Product category"],
+      ["SKU Code", "YES", "Your internal SKU / item code — must exist in item master"],
       ["COGS", "YES", "Cost of goods sold for this SKU in this month"],
       [""],
       ["Notes"],
       ["1. One row = one SKU for one month."],
       ["2. To upload multiple months, add rows one below the other — June rows first, then July rows etc."],
       ["3. Uploading the same SKU + month will UPDATE that record (upsert)."],
-      ["4. Delete the two sample rows before adding your data."],
+      ["4. Product name, category and sub-category are looked up automatically from item master — do not include them here."],
+      ["5. Delete the two sample rows before adding your data."],
     ];
     const notes = XLSX.utils.aoa_to_sheet(instrData);
     notes["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 80 }];
@@ -227,15 +275,29 @@ export default function CogsPage() {
           if (isEmpty || isSample) return;
 
           const missing = FIELDS.filter((f) => f.req && !r[f.key]).map((f) => f.label);
-          if (missing.length) bad.push({ line: hIdx + 2 + i, missing });
-          else good.push({ ...r, _uid: uid(), _dirty: false });
+          if (missing.length) { bad.push({ line: hIdx + 2 + i, missing }); return; }
+
+          // Hard SKU-validity gate: a SKU not in item master can't be uploaded at all,
+          // not even skipped-with-warning like a soft-missing-field row — surfaced separately below.
+          if (validSkus && !validSkus.has(r.itemskucode.trim().toUpperCase())) {
+            bad.push({ line: hIdx + 2 + i, missing: [`SKU "${r.itemskucode}" not found in item master`] });
+            return;
+          }
+
+          good.push({ ...r, _uid: uid(), _dirty: false });
         });
 
         if (bad.length) {
-          const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
-          if (!confirm(`${bad.length} row(s) will be skipped:\n\n${preview}\n\nImport ${good.length} valid rows?`)) return;
+          const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: ${b.missing.join(", ")}`).join("\n");
+          if (!confirm(`${bad.length} row(s) will be skipped (missing required fields or invalid SKU):\n\n${preview}\n\nImport ${good.length} valid rows?`)) return;
         }
         if (!good.length) { alert("No valid rows found."); return; }
+
+        const warned = await findMarginWarnings(good);
+        if (warned.length) {
+          const preview = warned.slice(0, 8).map((r) => `• ${r.itemskucode} / ${r.month}: COGS ${r.cogs}`).join("\n");
+          if (!confirm(`${warned.length} row(s) have COGS at or above the SKU's last-60-day selling price (inc GST) — likely a data-entry mistake:\n\n${preview}\n\nContinue with upload anyway?`)) return;
+        }
 
         setUploadProgress({ done: 0, total: good.length });
         await new Promise((r) => setTimeout(r, 30));
@@ -244,7 +306,7 @@ export default function CogsPage() {
         let done = 0;
         for (let i = 0; i < good.length; i += PAGE) {
           const chunk = good.slice(i, i + PAGE).map(toDbRecord);
-          const { error } = await supabase.from("cogs_ledger").insert(chunk);
+          const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
           if (error) throw error;
           done += chunk.length;
           setUploadProgress({ done, total: good.length });
@@ -457,7 +519,10 @@ export default function CogsPage() {
                 No records found. Download the template, fill it in, and upload — or add a row manually.
               </td></tr>
             )}
-            {filtered.map((r) => (
+            {filtered.map((r) => {
+              const skuClean = r.itemskucode.trim().toUpperCase();
+              const skuInvalid = validSkus && skuClean && !validSkus.has(skuClean);
+              return (
               <tr key={r._uid}
                 onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.hov)}
                 onMouseLeave={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.card)}>
@@ -470,9 +535,13 @@ export default function CogsPage() {
                       value={r[f.key] ?? ""}
                       onChange={(e) => setCell(r._uid, f.key, e.target.value)}
                       placeholder={f.ex}
+                      title={f.key === "itemskucode" && skuInvalid ? "SKU not found in item master" : undefined}
                       style={{
-                        width: '100%', border: 'none', background: 'transparent',
-                        padding: '10px 12px', fontSize: 12.5, color: C.t1, fontFamily: 'inherit',
+                        width: '100%', border: 'none',
+                        background: f.key === "itemskucode" && skuInvalid ? '#FEF2F2' : 'transparent',
+                        padding: '10px 12px', fontSize: 12.5,
+                        color: f.key === "itemskucode" && skuInvalid ? C.red : C.t1,
+                        fontFamily: 'inherit',
                         textAlign: f.type === 'num' ? 'right' : 'left',
                         outline: 'none', boxSizing: 'border-box',
                       }}
@@ -486,13 +555,15 @@ export default function CogsPage() {
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <p style={{ fontSize: 12, color: C.t3, marginTop: 12 }}>
-        One row = one SKU for one month. Same SKU + month on upload will update the existing record. Use <strong>Month</strong> dropdown to filter by month.
+        One row = one SKU for one month. Same SKU + month on upload will update the existing record. SKU must exist in item master.
+        Use <strong>Month</strong> dropdown to filter by month.
       </p>
     </div>
   );

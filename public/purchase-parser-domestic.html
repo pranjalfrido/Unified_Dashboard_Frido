@@ -95,7 +95,7 @@ td.prod{max-width:280px;overflow:hidden;text-overflow:ellipsis}
   <header><h1>Domestic Purchase Parser</h1><span>Tally Purchase – GST – Goods export → Frido domestic purchase register</span></header>
 
   <div class="drop" id="drop">
-    <div class="txt"><b>Drop the Tally export here</b> or choose it (.xls / .xlsx). Use the Purchase – GST – Goods ledger account export. GST % is worked out for every product line. The file stays in your browser.</div>
+    <div class="txt"><b>Drop the Tally export here</b> or choose it (.xls / .xlsx). Use the Purchase – GST – Goods ledger account export. Taxable value (excluding GST) is split across every product line; GST itself isn't read or computed. The file stays in your browser.</div>
     <label class="btn" for="file">Choose file<input type="file" id="file" accept=".xls,.xlsx"></label>
   </div>
 
@@ -133,12 +133,11 @@ td.prod{max-width:280px;overflow:hidden;text-overflow:ellipsis}
 </div>
 
 <script>
-const COLS=["Date","ProductName","VendorName","VoucherType","VoucherNo","VoucherRefNo","Quantity","UnitofMeasure","Rate","LineItemGrossTotal_Exc_GST","LineItemGrossTotal_Inc_GST","GST_%","CGST_%","SGST_%","IGST_%","PurchaseRateperqty_Rs_Exc_GST"];
-const CALC=new Set(["LineItemGrossTotal_Exc_GST","LineItemGrossTotal_Inc_GST","GST_%","CGST_%","SGST_%","IGST_%","PurchaseRateperqty_Rs_Exc_GST"]);
-const FMTS={0:"d-mmm-yy",6:"#,##0.##",8:"#,##0.00",9:"#,##0.00",10:"#,##0.00",11:"0.00",12:"0.00",13:"0.00",14:"0.00",15:"#,##0.00"};
-const WIDTHS=[10,52,40,12,18,18,10,12,10,16,16,8,8,8,8,16];
-const SLABS=[0,5,18,12,28,40,3,0.25];          // GST rates tried, most common first
-const SLAB_TOL=0.06, PREVIEW=50;
+const COLS=["Date","ProductName","VendorName","VoucherType","VoucherNo","VoucherRefNo","Quantity","UnitofMeasure","Rate","LineItemGrossTotal_Exc_GST","PurchaseRateperqty_Rs_Exc_GST"];
+const CALC=new Set(["LineItemGrossTotal_Exc_GST","PurchaseRateperqty_Rs_Exc_GST"]);
+const FMTS={0:"d-mmm-yy",6:"#,##0.##",8:"#,##0.00",9:"#,##0.00",10:"#,##0.00"};
+const WIDTHS=[10,52,40,12,18,18,10,12,10,16,16];
+const PREVIEW=50;
 const UOM={prs:"Pair",pcs:"Piece",nos:"Nos",pck:"Pack",kgs:"Kg",set:"Set",mtr:"Metre","sq.mt":"Sq. metre",box:"Box",roll:"Roll"};
 let result=null, outName="parsed.xlsx";
 
@@ -160,7 +159,6 @@ function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt
 const inr=x=>Number(x).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate=d=>d instanceof Date&&!isNaN(d)?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"2-digit"}):"";
 const pct=x=>(Math.round(x*100)/100).toString();
-function nearSlab(e){for(const s of SLABS) if(Math.abs(e-s)<SLAB_TOL) return s; return null;}
 const code=s=>`<code>${esc(s)}</code>`;
 const list=(a,n=8)=>a.slice(0,n).map(code).join(", ")+(a.length>n?` and ${a.length-n} more`:"");
 
@@ -171,9 +169,12 @@ const FIELDS=[
   {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo"},
   {key:"Quantity",aliases:["Quantity","Qty","Billed Quantity","Actual Quantity"],need:"calc",use:"Quantity, UnitofMeasure"},
   {key:"Rate",aliases:["Rate"],need:"calc",use:"Rate"},
-  {key:"Input IGST",aliases:["Input IGST","IGST","Integrated Tax"],need:"opt",use:"IGST on the invoice"},
-  {key:"Input CGST",aliases:["Input CGST","CGST","Central Tax"],need:"opt",use:"CGST on the invoice"},
-  {key:"Input SGST",aliases:["Input SGST","SGST","State Tax","UTGST","Input UTGST"],need:"opt",use:"SGST on the invoice"},
+  // Present when a line's price was revised after the original purchase (a later credit/debit
+  // adjustment booked against the same product) — Tally then records the line's rupee value
+  // directly instead of Quantity × Rate, so Quantity/Rate are blank but a real value exists.
+  // Already excludes GST (confirmed: sum of Value across a voucher's lines matches the
+  // voucher's own taxable-value column, not its GST-inclusive Gross Total).
+  {key:"Value",aliases:["Value"],need:"opt",use:"LineItemGrossTotal_Exc_GST when Quantity/Rate are blank"},
   {key:"Buyer/Supplier",aliases:["Buyer/Supplier","Supplier","Party Name","Party"],need:"opt",use:"VendorName",fallback:"Particulars"},
   {key:"Voucher Type",aliases:["Voucher Type","Vch Type"],need:"opt",use:"VoucherType"},
   {key:"Voucher Ref. No.",aliases:["Voucher Ref. No.","Voucher Ref No","Reference No.","Supplier Invoice No."],need:"opt",use:"VoucherRefNo"}
@@ -207,11 +208,9 @@ function readExport(ws){
     report.push({field:f.key,found:"Not in export",use:f.use,state:f.need==="calc"?"missing-calc":"missing"});
     colChecks.push([f.need==="calc"?"error":"warn",`No "${f.key}" column. ${f.use} can't be filled.`]);
   }
-  if(col["Input IGST"]===undefined&&col["Input CGST"]===undefined) colChecks.push(["error","No GST columns (Input IGST / Input CGST / Input SGST) in the export, so GST % can't be worked out."]);
-  // other ledgers booked on the same invoice (transport, labour, …); TDS and round-off don't carry GST
-  const others=headers.filter(h=>!used.has(h.c)&&!NOT_OTHER.has(norm(h.name))&&!/^tds/i.test(h.name)&&!/round/i.test(h.name))
-    .map(h=>{const m=h.name.match(/(\d+(?:\.\d+)?)\s*%/); return {name:h.name,c:h.c,rate:m?parseFloat(m[1]):null};});
-  const extras=headers.filter(h=>!used.has(h.c)&&!others.some(o=>o.c===h.c)).map(h=>h.name);
+  // other columns in the export (GST, transport, labour, TDS, round-off, …) — informational
+  // only now; GST is no longer read or computed at all, per the "no GST" scope for this parser.
+  const extras=headers.filter(h=>!used.has(h.c)).map(h=>h.name);
   const get=(r,k)=>col[k]===undefined?undefined:cell(r,col[k]);
   const vouchers=[]; let cur=null, grand=null;
   for(let r=hdr+1;r<=range.e.r;r++){
@@ -221,104 +220,68 @@ function readExport(ws){
     if(dv instanceof Date||(d&&d.t==="d")){cur={r,date:snapDate(dv instanceof Date?dv:new Date(dv)),lines:[]}; vouchers.push(cur); continue;}
     if(cur&&pv) cur.lines.push(r);
   }
-  return {cell,get,col,ledger,others,report,colChecks,extras,vouchers,grand,period,heading};
+  return {cell,get,col,ledger,report,colChecks,extras,vouchers,grand,period,heading};
 }
 
-/* ---------- GST logic ----------
-   1. Invoice GST = IGST + CGST + SGST. GST on other ledgers on the same bill (transport @5%/@18%, labour…) is taken out first.
-   2. Effective rate = goods GST ÷ taxable value (purchase ledger). If it sits on a GST slab, every line gets that rate.
-   3. Products seen on clean single-rate invoices remember their rate; mixed-rate invoices use those rates,
-      and any remaining lines are solved as the combination of two slabs that reproduces the invoice's GST.
-   4. Intra-state (CGST+SGST): CGST_% = SGST_% = GST_%/2. Inter-state (IGST): IGST_% = GST_%. */
+/* ---------- taxable-value logic (no GST) ----------
+   GST is not read or computed at all. Each invoice's taxable value comes straight from
+   Tally's own Purchase ledger column (already exclusive of GST) and is split across the
+   invoice's product lines. Tally's own "Value" column is used as each line's total whenever
+   it's present (which is nearly always — Tally already computes it as part of the export) —
+   it's confirmed to be ex-GST (sums to the voucher's own taxable-value column, not its
+   GST-inclusive Gross Total) and is more trustworthy than re-deriving Quantity × Rate
+   ourselves: a product's price can be revised after the original purchase (a later
+   credit/debit adjustment booked against the same product, possibly in a different month than
+   the original buy), and Tally doesn't always blank out the line's now-stale Quantity/Rate
+   when that happens — one invoice in testing had a correct Value but a Rate left over from
+   before a revision, which would have computed a wildly wrong total if Quantity × Rate were
+   trusted instead. Quantity × Rate is only actually computed (as a fallback) when Value isn't
+   present at all. A line with neither (e.g. "Packing and courier charges", or a value-only
+   debit note) is genuinely blank; if it's the only such line on the invoice it takes whatever's
+   left of the taxable value, otherwise the remainder is left unassigned instead of guessed. */
 function build(x){
-  const checks=[...x.colChecks], rows=[]; const g=(r,k)=>num(x.get(r,k)?.v)||0;
+  const checks=[...x.colChecks], rows=[];
   const inv=x.vouchers.map(v=>{
     const r=v.r, taxable=num(x.cell(r,x.ledger.c)?.v)||0, sign=taxable<0?-1:1;
-    const igst=g(r,"Input IGST"), cgst=g(r,"Input CGST"), sgst=g(r,"Input SGST");
-    let othTax=0; const othUnknown=[];
-    for(const o of x.others){const a=num(x.cell(r,o.c)?.v); if(!a) continue; if(o.rate===null){othUnknown.push(o.name); othTax+=a*0.18;} else othTax+=a*o.rate/100;}
-    const lines=v.lines.map(lr=>{const q=x.get(lr,"Quantity"), rt=x.get(lr,"Rate"); const qty=q?num(q.v):null, rate=rt?num(rt.v):null;
-      return {product:clean(x.get(lr,"Particulars")?.v),qty,rate,uom:unitFrom(q&&q.z)||unitFrom(rt&&rt.z),v:(qty!==null&&rate!==null)?qty*rate*sign:null};});
-    // a single line with no qty/rate (e.g. "Packing and courier charges", or a value-only debit note) takes the rest of the taxable value
+    const lines=v.lines.map(lr=>{const q=x.get(lr,"Quantity"), rt=x.get(lr,"Rate"), val=x.get(lr,"Value"); const qty=q?num(q.v):null, rate=rt?num(rt.v):null;
+      const vv=val?num(val.v):null;
+      let value=null, fromValue=false;
+      if(vv!==null){value=vv*sign; fromValue=(qty===null||rate===null);}
+      else if(qty!==null&&rate!==null){value=qty*rate*sign;}
+      return {product:clean(x.get(lr,"Particulars")?.v),qty,rate,uom:unitFrom(q&&q.z)||unitFrom(rt&&rt.z),v:value,fromValue};});
     const blank=lines.filter(l=>l.v===null), known=lines.filter(l=>l.v!==null).reduce((a,l)=>a+l.v,0);
     let unassigned=0;
     if(blank.length===1){blank[0].v=r2(taxable-known); blank[0].residual=true;}
     else if(blank.length) unassigned=r2(taxable-known);
-    const tax=igst+cgst+sgst, goodsTax=tax-othTax;
     return {r,date:v.date,vno:clean(x.get(r,"Voucher No.")?.v),ref:clean(x.get(r,"Voucher Ref. No.")?.v),vtype:clean(x.get(r,"Voucher Type")?.v),
-      vendor:clean(x.get(r,"Buyer/Supplier")?.v)||clean(x.get(r,"Particulars")?.v),taxable,sign,igst,cgst,sgst,tax,goodsTax,othUnknown,lines,unassigned,
-      eff:taxable?goodsTax/taxable*100:null,inter:Math.abs(igst)>0&&!cgst&&!sgst};
+      vendor:clean(x.get(r,"Buyer/Supplier")?.v)||clean(x.get(r,"Particulars")?.v),taxable,sign,lines,unassigned};
   });
-  // pass 1: clean single-rate invoices, and remember each product's rate
-  const votes=new Map();
-  for(const iv of inv){
-    iv.slab=iv.eff!==null?nearSlab(iv.eff):null;
-    if(iv.slab!==null){ iv.method="single"; iv.lines.forEach(l=>{l.gst=iv.slab; const m=votes.get(l.product)||new Map(); m.set(iv.slab,(m.get(iv.slab)||0)+1); votes.set(l.product,m);}); }
-  }
-  const prodRate=new Map(), conflicts=[];
-  for(const [p,m] of votes){const e=[...m.entries()].sort((a,b)=>b[1]-a[1]); prodRate.set(p,e[0][0]); if(e.length>1) conflicts.push(`${p} (${e.map(([s,n])=>`${s}% ×${n}`).join(", ")})`);}
-  // pass 2: mixed-rate invoices
-  const solved=[], unresolved=[];
-  for(const iv of inv){
-    if(iv.slab!==null||iv.eff===null) continue;
-    const tol=Math.max(1.5,0.5*iv.lines.length);
-    const K=iv.lines.filter(l=>prodRate.has(l.product)&&l.v!==null), U=iv.lines.filter(l=>!prodRate.has(l.product)&&l.v!==null);
-    const R=iv.goodsTax-K.reduce((a,l)=>a+l.v*prodRate.get(l.product)/100,0);
-    let ok=false;
-    if(!U.length) ok=Math.abs(R)<=tol;
-    else{
-      const su=U.reduce((a,l)=>a+l.v,0), s=su?nearSlab(R/su*100):null;
-      if(s!==null){U.forEach(l=>l.tmp=s); ok=true;}
-      else{ // two-slab combination over groups of lines with the same unit price
-        const grp=new Map(); U.forEach(l=>{const k=String(l.rate); (grp.get(k)||grp.set(k,[]).get(k)).push(l);});
-        const G=[...grp.values()].map(ls=>({ls,v:ls.reduce((a,l)=>a+l.v,0)}));
-        if(G.length<=14){
-          outer: for(const a of SLABS) for(const b of SLABS){ if(a===b) continue;
-            for(let mask=0;mask<(1<<G.length);mask++){ let t=0; for(let i=0;i<G.length;i++) t+=G[i].v*((mask>>i)&1?b:a)/100;
-              if(Math.abs(t-R)<=tol){ G.forEach((gp,i)=>gp.ls.forEach(l=>l.tmp=(mask>>i)&1?b:a)); ok=true; break outer; } } }
-        }
-      }
-    }
-    if(ok){ K.forEach(l=>l.gst=prodRate.get(l.product)); U.forEach(l=>l.gst=l.tmp); iv.lines.filter(l=>l.v===null).forEach(l=>l.gst=null); iv.method="mixed"; solved.push(iv.vno); }
-    else{ iv.lines.forEach(l=>l.gst=Math.round(iv.eff*100)/100); iv.method="effective"; unresolved.push(`${iv.vno} (${pct(iv.eff)}%)`); }
-  }
   // rows
-  let exc=0, lineTax=0, unassigned=0; const diffs=[], unknownOther=new Set(), missing=[];
+  let exc=0, unassigned=0; const diffs=[], missing=[]; let fromValueLines=0; const fromValueInv=new Set();
   for(const iv of inv){
     if(!iv.lines.length){ checks.push(["warn",`${code(iv.vno)} has no product lines, so it isn't in the table (₹${inr(iv.taxable)}).`]); unassigned+=iv.taxable; continue; }
-    iv.othUnknown.forEach(n=>unknownOther.add(n));
     if(iv.unassigned){unassigned+=iv.unassigned; missing.push(`${iv.vno} (₹${inr(iv.unassigned)})`);}
     const sumLines=iv.lines.reduce((a,l)=>a+(l.v||0),0);
     if(!iv.unassigned&&Math.abs(sumLines-iv.taxable)>1) diffs.push(`${iv.vno} (lines ₹${inr(sumLines)} vs ledger ₹${inr(iv.taxable)})`);
     for(const l of iv.lines){
-      const g=l.gst, e=l.v!==null?r2(l.v):null;
-      const incl=(e!==null&&g!==null&&g!==undefined)?r2(e*(1+g/100)):null;
-      if(e!==null&&g!==null&&g!==undefined){exc+=e; lineTax+=e*g/100;}
-      const half=g!==null&&g!==undefined&&!iv.inter?Math.round(g/2*1000)/1000:0;
-      rows.push([iv.date,l.product,iv.vendor,iv.vtype,iv.vno,iv.ref,l.qty!==null?l.qty*iv.sign:null,l.uom,l.rate,e,incl,
-        g??null, g!==null&&g!==undefined?(iv.inter?0:half):null, g!==null&&g!==undefined?(iv.inter?0:half):null, g!==null&&g!==undefined?(iv.inter?g:0):null,
+      const e=l.v!==null?r2(l.v):null;
+      if(e!==null) exc+=e;
+      if(l.fromValue){fromValueLines++; fromValueInv.add(iv.vno);}
+      rows.push([iv.date,l.product,iv.vendor,iv.vtype,iv.vno,iv.ref,l.qty!==null?l.qty*iv.sign:null,l.uom,l.rate,e,
         (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null]);
     }
   }
   // checks
-  const multi=inv.filter(iv=>iv.method==="mixed").length;
-  if(multi) checks.push(["ok",`${multi} invoice${multi>1?"s":""} have products at different GST rates; each line got its own rate, and the rates add back to the invoice's GST: ${list(solved)}.`]);
-  if(unresolved.length) checks.push(["warn",`${unresolved.length} invoice${unresolved.length>1?"s'":"'s"} GST doesn't match any GST slab or mix of slabs, so their lines show the invoice's effective rate. Check the tax booked in Tally: ${list(unresolved)}.`]);
-  if(conflicts.length) checks.push(["warn",`${conflicts.length} product${conflicts.length>1?"s were":" was"} billed at different GST rates on different invoices (the most common rate is used on mixed invoices): ${conflicts.slice(0,5).map(esc).join("; ")}${conflicts.length>5?"…":""}.`]);
-  if(unknownOther.size) checks.push(["warn",`These ledgers on the same bills have no GST rate in their name, so 18% was assumed when taking their GST out: ${[...unknownOther].map(esc).join(", ")}.`]);
-  if(missing.length) checks.push(["warn",`${missing.length} invoice${missing.length>1?"s have":" has"} product lines with no quantity or rate in Tally, so their value can't be split by product (left blank): ${list(missing,6)}.`]);
-  if(diffs.length) checks.push(["warn",`${diffs.length} invoice${diffs.length>1?"s'":"'s"} lines (Quantity × Rate) don't add up to the purchase ledger amount, usually a discount or charge booked without a line: ${list(diffs,6)}.`]);
+  if(fromValueLines) checks.push(["ok",`${fromValueLines} line${fromValueLines>1?"s":""} across ${fromValueInv.size} invoice${fromValueInv.size>1?"s":""} had no Quantity and/or Rate in Tally but did have a "Value" (usually a price revision booked after the original purchase) — used for LineItemGrossTotal_Exc_GST; rate-per-qty is left blank where Quantity is missing, since there's no per-unit split to show.`]);
+  if(missing.length) checks.push(["warn",`${missing.length} invoice${missing.length>1?"s have":" has"} product lines with no quantity, rate, or value in Tally, so their value can't be split by product (left blank): ${list(missing,6)}.`]);
+  if(diffs.length) checks.push(["warn",`${diffs.length} invoice${diffs.length>1?"s'":"'s"} lines (Quantity × Rate, or Value) don't add up to the purchase ledger amount, usually a discount or charge booked without a line: ${list(diffs,6)}.`]);
   const neg=inv.filter(iv=>iv.sign<0).length;
   if(neg) checks.push(["ok",`${neg} debit note${neg>1?"s":""} / returns are shown with negative quantity and value.`]);
-  // reconcile with Tally totals
-  let gtLedger=null, gtTax=null;
-  if(x.grand!==null){gtLedger=num(x.cell(x.grand,x.ledger.c)?.v); gtTax=["Input IGST","Input CGST","Input SGST"].reduce((a,k)=>a+(num(x.get(x.grand,k)?.v)||0),0);}
-  const taxTotal=inv.reduce((a,iv)=>a+iv.tax,0), othTaxTotal=inv.reduce((a,iv)=>a+(iv.tax-iv.goodsTax),0);
+  // reconcile with Tally's own taxable-value total
+  let gtLedger=null;
+  if(x.grand!==null) gtLedger=num(x.cell(x.grand,x.ledger.c)?.v);
   const valueOk=gtLedger!==null?Math.abs(gtLedger-(exc+unassigned+diffsTotal(inv)))<1:true;
   if(gtLedger!==null) checks.unshift([Math.abs(gtLedger-exc)<1?"ok":"warn",`Taxable value: table ₹${inr(exc)}${unassigned?` + not split by product ₹${inr(unassigned)}`:""}${Math.abs(diffsTotal(inv))>=1?` + line differences ₹${inr(diffsTotal(inv))}`:""} ${valueOk?"=":"≠"} Tally's ${esc(x.ledger.name)} total ₹${inr(gtLedger)}.`]);
-  const restTax=taxTotal-othTaxTotal-lineTax;   // GST on value that couldn't be split by product, and rounding
-  if(gtTax!==null){const ok=Math.abs(lineTax+othTaxTotal+restTax-gtTax)<Math.max(5,0.0005*Math.abs(gtTax));
-    checks.unshift([ok&&Math.abs(restTax)<Math.max(5,0.0005*Math.abs(gtTax))?"ok":"warn",`GST: product lines ₹${inr(lineTax)} + other ledgers on the bills ₹${inr(othTaxTotal)}${Math.abs(restTax)>=1?` + on value not split by product ₹${inr(restTax)}`:""} ${ok?"=":"≠"} Tally's IGST + CGST + SGST ₹${inr(gtTax)}.`]);}
   const st={invoices:inv.length,lines:rows.length,exc,match:gtLedger!==null?Math.abs(gtLedger-exc)<1:null,valueOk};
   return {rows,checks,st};
 }
@@ -348,14 +311,14 @@ function render(res,label,x){
   const bad=x.report.filter(c=>c.state!=="found").length;
   document.getElementById("colp").open=x.report.some(c=>c.state==="missing-calc");
   document.getElementById("colmeta").textContent=bad?`${bad} column${bad>1?"s":""} missing or substituted`:"All needed columns found";
-  document.getElementById("extras").innerHTML=(x.others.length?`<b>Other ledgers</b> (their GST is taken out before GST % is worked out): ${x.others.map(o=>esc(o.name)+(o.rate===null?" (18% assumed)":"")).join(", ")}<br>`:"")+(x.extras.length?`<b>Ignored</b>: ${x.extras.map(esc).join(", ")}`:"");
+  document.getElementById("extras").innerHTML=x.extras.length?`<b>Ignored</b>: ${x.extras.map(esc).join(", ")}`:"";
   const numCols=new Set(Object.keys(FMTS).map(Number).filter(i=>i>0));
   let h="<thead><tr>"+COLS.map((c,i)=>`<th class="${CALC.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
   for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
     return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
   document.getElementById("tbl").innerHTML=h+"</tbody>";
   document.getElementById("tablemeta").textContent=res.rows.length>PREVIEW?`first ${PREVIEW} of ${res.rows.length} lines`:`${res.rows.length} lines`;
-  document.getElementById("legend").innerHTML="<b>Blue</b> columns are calculated. Exc_GST = Quantity × Rate · GST_% from the invoice's tax (per line when rates are mixed) · Inc_GST = Exc_GST × (1 + GST_%) · CGST_% = SGST_% = GST_% ÷ 2 on intra-state bills, IGST_% = GST_% on inter-state bills · PurchaseRateperqty_Rs_Exc_GST = Exc_GST ÷ Quantity.";
+  document.getElementById("legend").innerHTML="<b>Blue</b> columns are calculated. LineItemGrossTotal_Exc_GST = Quantity × Rate, taken from Tally's own taxable-value column for the invoice · PurchaseRateperqty_Rs_Exc_GST = LineItemGrossTotal_Exc_GST ÷ Quantity. No GST is read or computed by this parser.";
 }
 
 /* ---------- xlsx / download / copy ---------- */
@@ -428,9 +391,8 @@ saveBtn.addEventListener("click",async()=>{
       date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
       product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
       voucher_ref_no:r[5], quantity:r[6], unit_of_measure:r[7], rate:r[8],
-      line_item_gross_total_exc_gst:r[9], line_item_gross_total_inc_gst:r[10],
-      gst_pct:r[11], cgst_pct:r[12], sgst_pct:r[13], igst_pct:r[14],
-      purchase_rate_per_qty_rs_exc_gst:r[15]
+      line_item_gross_total_exc_gst:r[9],
+      purchase_rate_per_qty_rs_exc_gst:r[10]
     }));
     const CHUNK=500; let done=0;
     for(let i=0;i<rows.length;i+=CHUNK){
