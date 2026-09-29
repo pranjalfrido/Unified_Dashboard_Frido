@@ -17,6 +17,7 @@ import courierAllocationHandler from './api/courier-allocation.js'
 import returnAnalysisHandler from './api/return-analysis.js'
 import logisticsHandler from './api/logistics.js'
 import customerHandler from './api/customer.js'
+import cogsContextHandler from './api/cogs-context.js'
 
 config()
 
@@ -306,6 +307,7 @@ app.post('/api/logistics', (req, res) => logisticsHandler(req, res))
 // Customer Intelligence. api/customer.js existed and the page called it, but the route was
 // never registered here — every request returned 404 and the whole tab rendered as an error.
 app.post('/api/customer', (req, res) => customerHandler(req, res))
+app.post('/api/cogs-context', (req, res) => cogsContextHandler(req, res))
 
 // ── OLD Supabase-based route (kept for reference, never reached) ─
 async function _legacyBqRoute(req, res) {

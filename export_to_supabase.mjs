@@ -41,9 +41,9 @@ async function run() {
         item_sku_code TEXT, facility TEXT, updated TIMESTAMPTZ, inventory FLOAT, inventory_blocked FLOAT,
         PRIMARY KEY (item_sku_code, facility)
       )`)
-    // rtd_invt/raw_invt: Vadgaon_OPS's shelf-substring-based RTD/Raw split (0 for every other
-    // facility, which keeps using computeRowInventory's pack-qty heuristic instead) — added
-    // after inv_snapshot's original creation, so migrate existing deployments.
+    // rtd_invt/raw_invt/raw_blocked_invt: Vadgaon_OPS's shelf-substring-based RTD/Raw split
+    // (0 for every other facility, which keeps using computeRowInventory's pack-qty heuristic
+    // instead) — added after inv_snapshot's original creation, so migrate existing deployments.
     await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS rtd_invt FLOAT`)
     await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS raw_invt FLOAT`)
     await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS raw_blocked_invt FLOAT`)
@@ -84,8 +84,8 @@ async function run() {
     ] = await Promise.all([
       bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
       bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')` }),
-      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt, RawBlockedInvt FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\`` }),
-      bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty FROM \`frido-429506.production.aggregated_uniware_sales_report\` WHERE order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 31 DAY) GROUP BY final_sku, Facility, state, channel, order_date` }),
+      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt, RawBlockedInvt FROM \`frido-429506.production.shelfwise_inventory_corrected\`` }),
+      bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\`` }),
       bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\`` }),
       bq.query({ query: `SELECT sku, available FROM \`frido-429506.production.inventory_shopify_hourly\`` }),
       bq.query({ query: `SELECT Facility, Facility2, Location, FCs_Status_for_Invt, FacilityType, Store_Location FROM \`frido-429506.inventory_sales_allocation.facility_master\`` }),

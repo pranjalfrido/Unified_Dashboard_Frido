@@ -444,9 +444,9 @@ export function SortableTh({ label, sortKey, sortState, onSort, width, onResize,
       onClick={() => onSort && onSort(sortKey)}
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px',
         whiteSpace: 'nowrap', width, minWidth: 50, boxSizing: 'border-box', position: 'relative',
-        cursor: onSort ? 'pointer' : 'default', userSelect: 'none', background: IC.surfaceHi,
+        cursor: onSort ? 'pointer' : 'default', userSelect: 'none', background: IC.surface,
       }}>
       {label}{arrow}
       {onResize && (
@@ -494,7 +494,7 @@ export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize
   // just the resize handle so dragging it rightward restores the column.
   if (isHidden) {
     return (
-      <th title="Drag to restore this column" style={{ width: 0, minWidth: 0, padding: 0, position: 'relative', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>
+      <th title="Drag to restore this column" style={{ width: 0, minWidth: 0, padding: 0, position: 'relative', background: IC.surface }}>
         <span onMouseDown={startResize}
           style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 6, cursor: 'col-resize', background: IC.accBorder }} />
       </th>
@@ -516,9 +516,9 @@ export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize
       title="Drag to reorder · click to sort · drag right edge to resize (drag to 0 to hide)"
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px',
         whiteSpace: 'nowrap', width, minWidth: MIN_VISIBLE_WIDTH, boxSizing: 'border-box', position: 'relative',
-        cursor: 'grab', userSelect: 'none', background: isDropTarget ? 'rgba(52,211,153,0.10)' : IC.surfaceHi,
+        cursor: 'grab', userSelect: 'none', background: isDropTarget ? 'rgba(52,211,153,0.10)' : IC.surface,
         opacity: isDragging ? 0.4 : 1,
         outline: isDropTarget ? `1px dashed ${IC.accBorder}` : 'none',
       }}>
