@@ -1802,7 +1802,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </div>
       )}
       </> : (
-        <OtherFacilitiesTable skus={data.skus} search={search} locationOrder={data.filterOptions.locations} allFacilities={data.filterOptions.facilities} />
+        <OtherFacilitiesTable skus={data.skus} search='' locationOrder={data.filterOptions.locations} allFacilities={data.filterOptions.facilities} />
       )}
       </div>
     </div>
