@@ -545,7 +545,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const locationStackedRows = useMemo(() => {
     if (!filteredData) return []
     const demandByLoc = new Map(filteredData.fillRateByWarehouse.map(w => [w.warehouse, w.demandQty]))
-    return filteredData.facilityAllocation.map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
+    return filteredData.facilityAllocation
+      .map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
+      .sort((a, b) => b.sales - a.sales)
   }, [filteredData])
 
   // Product-Wise Sales Matrix — server sends day-granularity cells only; week/month/
