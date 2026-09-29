@@ -1233,16 +1233,16 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
 
-  // Desktop table virtualization — use ref + RAF to avoid layout jitter from setState on
-  // every scroll pixel. The ref holds the latest scrollTop; RAF batches re-renders so spacer
-  // height changes happen once per frame rather than on every scroll event.
+  // Desktop table — no virtualization. Spacer-row virtualization caused scroll-position
+  // jumps when switching between table scroll and page scroll (spacer height changes shifted
+  // layout mid-scroll). 2,559 rows render fine without it.
   const tableScrollRef = useRef(null)
   const vScrollTopRef = useRef(0)
   const [vScrollTop, setVScrollTop] = useState(0)
   const rafRef = useRef(null)
   const ROW_H = 34
   const OVERSCAN = 5
-  const useVirtual = !expandedSku
+  const useVirtual = false
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
