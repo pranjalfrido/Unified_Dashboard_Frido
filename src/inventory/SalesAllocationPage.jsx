@@ -323,7 +323,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -332,8 +332,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   }, [])
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
-  const [categoryMetric, setCategoryMetric] = useState('rev') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
+  const [channelMetric, setChannelMetric] = useState('qty') // 'rev' | 'qty' — Channel-Wise Sales bar list
+  const [categoryMetric, setCategoryMetric] = useState('qty') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
   const [drasticLevel, setDrasticLevel] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
   const [drasticMode, setDrasticMode] = useState('day2') // 'day2' | 'day7'
   const [drasticMetric, setDrasticMetric] = useState('qty') // 'qty' | 'rev'
@@ -344,7 +344,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [matrixExpanded, setMatrixExpanded] = useState(new Set()) // expanded row paths ("cat" or "cat|sub")
   const [matrixSearch, setMatrixSearch] = useState('')
   const [matrixSort, setMatrixSort] = useState({ key: 'total', dir: 'desc' }) // key: 'total' | a bucketKey | 'name'
-  const [top20Metric, setTop20Metric] = useState('rev') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
+  const [top20Metric, setTop20Metric] = useState('qty') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
   const [top20Level, setTop20Level] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
 
   // Client-side filter: when static file has rawRows, filter instantly without API call
@@ -750,13 +750,27 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Mobile filter button */}
-        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
-          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
-        }}>
-          ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
-        </button>
+        {/* Mobile filter button + info lines row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+            display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+          }}>
+            ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
+          </button>
+          {asOf && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.3, marginLeft: 'auto' }}>
+              <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                Data source: Unicommerce &nbsp;·&nbsp; Snapshot {new Date(asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+              </span>
+              {lastSalesDate && (
+                <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                  Latest sales {new Date(lastSalesDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* KPI row */}
         <SaKpiCarousel>
