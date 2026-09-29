@@ -34,7 +34,17 @@ export const THEMES = [
 export const DEFAULT_THEME = 'forest'
 const STORAGE_KEY = 'frido.theme'
 
-export const isValidTheme = id => THEMES.some(t => t.id === id)
+// Themes a user can actually be on. Gold and Indigo are registered above — their CSS and
+// swatches still exist — but are not currently selectable.
+export const ENABLED_THEMES = ['forest']
+
+export const isThemeEnabled = id => ENABLED_THEMES.includes(id)
+
+// A theme is valid only if it is both known AND enabled. The picker blurs the disabled
+// options, but that is presentation only: without this check a value stored before they
+// were disabled keeps applying, which is how gold-tinted borders survived the switch to
+// Forest.
+export const isValidTheme = id => THEMES.some(t => t.id === id) && isThemeEnabled(id)
 
 // localStorage throws in private windows and when site data is blocked, so every
 // access is guarded; the dashboard must still render with the default theme.

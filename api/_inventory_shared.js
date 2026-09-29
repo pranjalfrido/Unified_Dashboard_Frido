@@ -20,11 +20,10 @@ export function sortByLocationOrder(items, getLocation = x => x) {
 
 // ── Reference lookups ────────────────────────────────────────────────────
 // Sourced from BigQuery `inventory_sales_allocation` (facility_master, state_region_nearest_wh,
-// uc_channel_desc), synced into Supabase by export_to_supabase.mjs. Callers with a live DB
+// uc_channel_desc). Run `npm run refresh-ref-data` (scripts/refresh-ref-data.mjs) to pull
+// fresh rows from BQ and update the api/data/ JSON snapshots. Callers with a live DB
 // connection (generate-inv-cache.mjs, api/inventory.js) should query Supabase and pass the rows
-// in directly. loadRefData() below reads the local JSON snapshot in api/data/ purely as a
-// fallback for contexts without a DB connection — that snapshot is not kept in sync and should
-// not be relied on as the source of truth.
+// in directly. loadRefData() below reads the local JSON snapshot in api/data/ as a fallback.
 let _facilityRows, _channelRows, _regionRows
 export function loadRefData() {
   if (!_facilityRows) _facilityRows = JSON.parse(readFileSync(join(DATA_DIR, 'facility_master.json'), 'utf8'))

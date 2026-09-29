@@ -49,7 +49,7 @@ async function swap(name, createSql, indexSql) {
   const t = Date.now()
   const c = await pool.connect()
   try {
-    await c.query('SET statement_timeout = 300000')
+    await c.query('SET statement_timeout = 900000')
     await c.query(`DROP TABLE IF EXISTS public.${name}_new`)
     await c.query(createSql.replace('__TARGET__', `public.${name}_new`))
     if (indexSql) await c.query(indexSql.replace('__IDX__', `idx_${name}_new`).replace('__TARGET__', `public.${name}_new`))
@@ -71,8 +71,24 @@ console.log('refreshing cost aggregates…')
 // Measure how each courier bills BEFORE building anything off it, and store the result so
 // the API request path can read it instead of re-measuring per call. Logged each run so a
 // newly dumped courier changing a classification is visible rather than silent.
-const PROFILES = await loadCourierProfiles(pool)
-await persistCourierProfiles(pool, PROFILES)
+// The pool's statement_timeout option is ignored: Supabase's pooler hands back a session at
+// its own 2-minute default, and only an explicit SET on a checked-out client raises it.
+// swap() already does that per table, but the profile helpers call pool.query() directly, so
+// each query got a fresh 2-minute session. Past ~14 lakh ledger rows that is no longer enough
+// and the whole refresh died on the first profile scan, leaving lc_cube stale.
+//
+// One checked-out client with a raised timeout, passed in as a pool-shaped object, fixes it
+// without touching courier-profiles.mjs, which other scripts share.
+const profileClient = await pool.connect()
+await profileClient.query('SET statement_timeout = 900000')
+const profilePool = { query: (...args) => profileClient.query(...args) }
+let PROFILES
+try {
+  PROFILES = await loadCourierProfiles(profilePool)
+  await persistCourierProfiles(profilePool, PROFILES)
+} finally {
+  profileClient.release()
+}
 
 // Add-on load per courier per month: (ex-GST total / freight) - 1. Derived from the total
 // rather than by summing the surcharge columns, which do not capture the whole gap —

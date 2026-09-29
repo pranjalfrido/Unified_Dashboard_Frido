@@ -36,6 +36,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-inv-cache.mjs
 
+      - name: Refresh facility/state/channel reference data from BQ
+        run: npm run refresh-ref-data
+
       - name: Generate static sales & allocation JSON
         run: node scripts/generate-sales-alloc-cache.mjs
 
@@ -58,6 +61,7 @@ jobs:
       - name: Generate static P&L JSON (MTD, no filters)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           NEON_URL: ${{ secrets.NEON_URL }}
         run: node scripts/generate-pnl-cache.mjs
 

@@ -22,7 +22,7 @@ import { perUnitWaterfall, rateForWeightGm } from './pnlUtils.js'
 // silently negative ROAS.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json').then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 

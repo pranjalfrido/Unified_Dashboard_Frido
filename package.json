@@ -8,7 +8,8 @@
     "server": "node server.js",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "refresh-ref-data": "node scripts/refresh-ref-data.mjs"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.3.1",

@@ -101,13 +101,20 @@ const FORMATS = {
     exportPrefix: "3pl_warehousing_costs",
     totalParts: ["operation_fee", "rental_fee", "other_fee"],
     totalField: "total_cost",
-    // One bill line per 3PL per warehouse per month, so a re-upload of the same
+    // One row per INVOICE per 3PL per warehouse per month, so a re-upload of the same
     // month corrects that month in place instead of doubling it.
+    //
     // Keyed on FACILITY_PINCODE, not a facility name: the pincode is what joins this ledger
     // to Clickpost's pickup_pincode, so per-parcel and per-kg costs depend on it being
     // present and correct. Names vary between the invoice and the tracking feed; a pincode
     // does not.
-    uniqueKey: "month_year,threepl_logistics_name,facility_pincode",
+    //
+    // invoice_number is part of the key because a partner can bill one facility-month
+    // across several invoices — operations on one, rental on another. Those are separate
+    // bills that must each survive, not duplicates to be summed. Without it a 47-line
+    // upload collapsed to 36 rows and the invoice trail was lost. This matches the
+    // logistics_costs_3pl_unique_key index on the table.
+    uniqueKey: "month_year,threepl_logistics_name,facility_pincode,invoice_number",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "threepl_logistics_name", label: "3PL_Logistics_Name", type: "text", req: true, w: 190, ex: "Delhivery FC", desc: "Name of the 3PL partner billing you" },
@@ -124,7 +131,7 @@ const FORMATS = {
     searchKeys: ["threepl_logistics_name", "facility_name", "facility_location", "facility_pincode", "invoice_number", "month_year"],
     notes: [
       "One row = one 3PL's charges for one facility for one month.",
-      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode UPDATES that row rather than adding a duplicate.",
+      "Re-uploading the same month_year + 3PL_Logistics_Name + Facility_Pincode + invoice_number UPDATES that row rather than adding a duplicate.",
       "Facility_Pincode must match the pickup pincode the courier records for that facility — it is what links this bill to the parcels shipped, and cost per parcel / per kg stay blank without it.",
       "month_year must be YYYY-MM (e.g. 2026-07).",
       "total_cost is computed as operation_fee + rental_fee + other_fee when left blank.",
@@ -230,12 +237,8 @@ const db = {
     let inserted = 0;
     for (let i = 0; i < rows.length; i += PAGE) {
       let chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
-      // Deduplicate within chunk — last row wins (matches upsert semantics)
-      if (fmt.uniqueKey) {
-        const seen = new Map();
-        for (const r of chunk) seen.set(keyOf(fmt, r), r);
-        chunk = [...seen.values()];
-      }
+      // Split invoice lines for one facility-month are summed, not overwritten.
+      chunk = mergeDuplicateRows(fmt, chunk);
       const q = fmt.uniqueKey
         ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
         : supabase.from(fmt.table).insert(chunk);
@@ -292,6 +295,47 @@ const num = (v) => { const n = Number(String(v ?? "").replace(/,/g, "")); return
 const numOrNull = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const numOrRaw = (v) => { if (v === "" || v == null) return ""; const n = Number(v); return Number.isFinite(n) ? n : v; };
 const sumParts = (fmt, r) => fmt.totalParts.reduce((s, k) => s + num(r[k]), 0);
+
+// Collapse rows that share an upsert key into one, summing the money columns.
+//
+// A partner can split one facility-month across several invoice lines — operations on one,
+// rental on another. Those share the key, so the old "last row wins" dedupe silently dropped
+// the earlier line: 13.14L of Gurgaon operations and 6.75L of Bangalore rental disappeared
+// on upload with no error anywhere.
+//
+// Money is additive, so totalParts are summed and the total recomputed from them. Invoice
+// numbers are joined so a merged row still traces back to every bill behind it, and
+// descriptive fields keep the first non-empty value rather than being overwritten by a
+// later line that happened to leave them blank.
+//
+// Used by BOTH upload paths. It lives here rather than inline precisely because the two
+// copies of the inline version had already drifted — one was fixed, the other was not, and
+// the unfixed one is what the UI actually calls.
+function mergeDuplicateRows(fmt, rows) {
+  if (!fmt.uniqueKey) return rows;
+  const seen = new Map();
+  for (const r of rows) {
+    const k = keyOf(fmt, r);
+    const prev = seen.get(k);
+    if (!prev) { seen.set(k, r); continue; }
+    for (const f of fmt.totalParts || []) prev[f] = num(prev[f]) + num(r[f]);
+    if (fmt.totalField) {
+      prev[fmt.totalField] = (fmt.totalParts || []).length
+        ? sumParts(fmt, prev)
+        : num(prev[fmt.totalField]) + num(r[fmt.totalField]);
+    }
+    if (r.invoice_number && prev.invoice_number !== r.invoice_number) {
+      prev.invoice_number = [prev.invoice_number, r.invoice_number].filter(Boolean).join(' + ');
+    }
+    for (const f of fmt.fields) {
+      const key = f.key;
+      if (f.type === 'num' || key === 'invoice_number') continue;
+      const cur = prev[key];
+      if ((cur === null || cur === undefined || cur === '') && r[key]) prev[key] = r[key];
+    }
+  }
+  return [...seen.values()];
+}
 const effectiveTotal = (fmt, r) => {
   const explicit = r[fmt.totalField];
   if (explicit !== "" && explicit != null) { const n = Number(explicit); if (Number.isFinite(n)) return n; }
@@ -515,6 +559,9 @@ export default function LogisticsLedgerPage() {
 
         // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
         let uploaded = 0, totalValid = 0;
+        // Every parsed row, held until the worker finishes so duplicates can be merged
+        // across the whole file rather than per streamed chunk.
+        const pendingRows = [];
         await new Promise((resolve, reject) => {
           const worker = new Worker("/xlsx-worker.js");
           // Queue of chunks waiting to be uploaded; we process sequentially
@@ -527,18 +574,11 @@ export default function LogisticsLedgerPage() {
             uploading = true;
             while (uploadQueue.length > 0) {
               const chunk = uploadQueue.shift();
-              let dbRows = chunk.map((r) => toDbRow(fmt, r));
-              // Deduplicate within chunk — last row wins
-              if (fmt.uniqueKey) {
-                const seen = new Map();
-                for (const r of dbRows) seen.set(keyOf(fmt, r), r);
-                dbRows = [...seen.values()];
-              }
-              const q = fmt.uniqueKey
-                ? supabase.from(fmt.table).upsert(dbRows, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
-                : supabase.from(fmt.table).insert(dbRows);
-              const { error } = await q;
-              if (error) { worker.terminate(); reject(error); return; }
+              // Collect only — the merge has to see the WHOLE file, not one chunk.
+              // The worker streams fixed-size batches, so two invoice lines sharing an
+              // upsert key routinely land in different chunks. Merging per chunk misses
+              // them and the unique index then drops one via ON CONFLICT.
+              for (const r of chunk) pendingRows.push(toDbRow(fmt, r));
               uploaded += chunk.length;
               setUploadProgress({ done: uploaded, total: totalValid || uploaded });
             }
@@ -563,7 +603,25 @@ export default function LogisticsLedgerPage() {
             } else if (msg.type === "done") {
               workerDone = true;
               worker.terminate();
-              if (!uploading && uploadQueue.length === 0) resolve();
+              // Everything is parsed: merge duplicates across the FULL set, then send.
+              const flush = async () => {
+                while (uploading) await new Promise((r) => setTimeout(r, 30));
+                try {
+                  const merged = mergeDuplicateRows(fmt, pendingRows);
+                  const PAGE = 500;
+                  for (let i = 0; i < merged.length; i += PAGE) {
+                    const page = merged.slice(i, i + PAGE);
+                    const q = fmt.uniqueKey
+                      ? supabase.from(fmt.table).upsert(page, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
+                      : supabase.from(fmt.table).insert(page);
+                    const { error } = await q;
+                    if (error) { reject(error); return; }
+                  }
+                  setUploadProgress({ done: totalValid || merged.length, total: totalValid || merged.length });
+                  resolve();
+                } catch (e) { reject(e); }
+              };
+              flush();
             }
           };
           worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };

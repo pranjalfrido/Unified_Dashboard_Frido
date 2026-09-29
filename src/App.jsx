@@ -4863,25 +4863,6 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           </FilterIconPopover>
         </div>
       )}
-      {page === 'inventory' && inventoryDateControl?.invFilterPanel && (
-        <div className="tnav-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {invTab === 'health' && inventoryDateControl.invHealthAsOf && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.2 }}>
-              <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
-                Snapshot {new Date(inventoryDateControl.invHealthAsOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
-              </span>
-              {inventoryDateControl.invHealthLastSales && (
-                <span style={{ fontSize: 10.5, color: C.t3, whiteSpace: 'nowrap' }}>
-                  Latest sales {new Date(inventoryDateControl.invHealthLastSales + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-              )}
-            </div>
-          )}
-          <FilterIconPopover activeCount={inventoryDateControl.invFilterCount}>
-            {inventoryDateControl.invFilterPanel}
-          </FilterIconPopover>
-        </div>
-      )}
       {page === 'inventory' && inventoryDateControl?.filters && (
         <div className="tnav-right">
           <DateRangePicker filters={inventoryDateControl.filters} setFilters={inventoryDateControl.setFilters} theme={INVENTORY_DATE_THEME} onRefresh={inventoryDateControl.onRefresh} />
@@ -5556,12 +5537,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             {/* Content-sized (not 1fr-stretched) so short values like "71,495" don't get spread
                 across the full card width with large gaps between them. */}
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
-                badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc} />
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
-              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
-                badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2} />
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
@@ -6832,7 +6811,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap: subCatDateMapProp = {}, channel = null }) {
   // Daily run rate divides by every day in the selected range, so each row uses the
   // same divisor and rows stay comparable. Without a range the column is hidden
   // rather than shown with a wrong or invented divisor.
@@ -6840,6 +6819,27 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const showDrr = drrDays > 0
   const isMob = useIsMobile()
   const [expandedSku, setExpandedSku] = useState({})
+  const [expandedDateCat, setExpandedDateCat] = useState({})
+  const toggleDateCat = cat => setExpandedDateCat(prev => ({ ...prev, [cat]: !prev[cat] }))
+  const [expandedDateSc, setExpandedDateSc] = useState({})
+  const [fetchedDateMap, setFetchedDateMap] = useState(null)
+  const [dateMapLoading, setDateMapLoading] = useState(false)
+  const subCatDateMap = fetchedDateMap || subCatDateMapProp
+  const API = import.meta.env.VITE_API_URL || ''
+  useEffect(() => { setFetchedDateMap(null); setExpandedDateSc({}) }, [rangeStart, rangeEnd, channel])
+  const toggleDateSc = async (key) => {
+    const willOpen = !expandedDateSc[key]
+    if (willOpen) setExpandedSku(prev => ({ ...prev, [key]: false }))
+    setExpandedDateSc(prev => ({ ...prev, [key]: !prev[key] }))
+    if (willOpen && channel && !fetchedDateMap && !dateMapLoading) {
+      setDateMapLoading(true)
+      try {
+        const res = await fetch(`${API}/api/cat-daily`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: rangeStart, end: rangeEnd, channel }) })
+        if (res.ok) { const json = await res.json(); setFetchedDateMap(json.subCatDateMap || {}) }
+      } catch (_) {}
+      finally { setDateMapLoading(false) }
+    }
+  }
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
@@ -6959,6 +6959,32 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   }
   const { Th } = table
 
+  const showDateExpand = (detailedReturns || simpleReturns || showReturnPct) && (channel != null || Object.keys(subCatDateMap).length > 0)
+  const getCatDateRows = (cat) => {
+    const scMap = subCatDateMap[cat] || {}
+    const dateAgg = {}
+    Object.values(scMap).forEach(dateMap => {
+      Object.entries(dateMap).forEach(([date, d]) => {
+        if (!dateAgg[date]) dateAgg[date] = { rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0 }
+        dateAgg[date].rev += d.rev; dateAgg[date].excRev += d.excRev; dateAgg[date].units += d.units
+        dateAgg[date].cancelRev += d.cancelRev; dateAgg[date].rtoRev += d.rtoRev
+        dateAgg[date].cirRev += d.cirRev; dateAgg[date].exchRev += d.exchRev
+      })
+    })
+    return Object.entries(dateAgg).sort(([a],[b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d }))
+  }
+  const getScDateRows = (cat, sc) => {
+    const dateMap = (subCatDateMap[cat] || {})[sc] || {}
+    return Object.entries(dateMap).sort(([a],[b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d }))
+  }
+  const fmtDate = (ds) => {
+    const parts = ds.split('-')
+    if (parts.length !== 3) return ds
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const m = months[parseInt(parts[1], 10) - 1] || parts[1]
+    return `${parseInt(parts[2], 10)} ${m}`
+  }
+
   // Column registry. The detailed-returns breakdown (Cancel/RTO/CIR/Exchange/Total Return%) is
   // treated as 5 separate reorderable columns when detailedReturns is on; the simple variant is
   // just 1 column (Total Return%) — both keyed 'totalReturnPct' plus the extra 4 when detailed,
@@ -6991,6 +7017,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>,
       total: () => <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td> },
     ...(showReturnPct && detailedReturns ? [
+      { id: 'cancelPct', label: 'Cancel %', sortKey: 'cancelPct', width: 7,
+        row: r => <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td> },
       { id: 'rtoPct', label: 'RTO %', sortKey: 'rtoPct', width: 7,
         row: r => <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
@@ -6999,18 +7029,14 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         row: r => <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td> },
-      { id: 'cancelPct', label: 'Cancel %', sortKey: 'cancelPct', width: 7,
-        row: r => <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td> },
-      { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 7,
-        row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
-        sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? C.red.tx : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
-        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: plainHeader ? 'inherit' : (pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? C.red.tx : 'inherit') }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
       { id: 'exchPct', label: 'Exchange %', sortKey: 'exchPct', width: 7,
         row: r => <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 7,
+        row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? C.red.tx : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: plainHeader ? 'inherit' : (pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? C.red.tx : 'inherit') }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
     ] : showReturnPct ? [
       { id: 'totalReturnPct', label: 'Return %', sortKey: 'totalReturnPct', width: 11,
         row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
@@ -7084,6 +7110,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
             {rows.map((r, i) => {
               const skuKey = `${r.cat}::${r.sc}`
               const isOpen = expandedSku[skuKey]
+              const isFirstOfCat = i === 0 || rows[i - 1].cat !== r.cat
+              const isLastOfCat = i === rows.length - 1 || rows[i + 1].cat !== r.cat
+              const isDateExpanded = expandedDateCat[r.cat]
               const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
@@ -7113,20 +7142,90 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                 )
               }
               const zebra = i % 2 === 1 ? C.hov : 'transparent'
+              const isScDateExpanded = expandedDateSc[skuKey]
+              const renderDateRows = (dateRows, indentDate = false) => {
+                if (!dateRows.length) return null
+                const colCount = ALL_COLUMNS.length + 2
+                const dateTdStyle = { fontSize: 11, padding: '5px 12px', textAlign: 'right', color: C.t2, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--num)', whiteSpace: 'nowrap' }
+                const dateTdStyleL = { ...dateTdStyle, fontFamily: 'inherit', textAlign: 'left' }
+                return (
+                  <tr>
+                    <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ maxHeight: 160, overflowY: 'auto', background: indentDate ? C.bg : `${C.acl}55` }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '11%' }} /><col style={{ width: '25%' }} />
+                            {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
+                          </colgroup>
+                          <tbody>
+                            {dateRows.map((d, di) => {
+                              const gross = d.rev
+                              const excRev = d.excRev
+                              const net = gross > 0 ? (gross - d.cancelRev - d.rtoRev - d.cirRev) * (excRev / gross) : 0
+                              const prevGross = di > 0 ? dateRows[di - 1].rev : null
+                              const asp = d.units > 0 ? gross / d.units : 0
+                              const cancelPct = gross > 0 ? d.cancelRev / gross * 100 : 0
+                              const rtoPct = gross > 0 ? d.rtoRev / gross * 100 : 0
+                              const cirPct = gross > 0 ? d.cirRev / gross * 100 : 0
+                              const exchPct = gross > 0 ? d.exchRev / gross * 100 : 0
+                              const totalReturnPct = gross > 0 ? (d.cancelRev + d.rtoRev + d.cirRev) / gross * 100 : 0
+                              return (
+                                <tr key={d.date} style={{ background: di % 2 === 0 ? 'transparent' : `${C.border}55` }}>
+                                  <td style={{ ...dateTdStyleL, fontStyle: 'italic', color: C.t3, paddingLeft: indentDate ? 24 : 12 }}>{fmtDate(d.date)}</td>
+                                  <td style={dateTdStyleL}></td>
+                                  {ALL_COLUMNS.map(c => {
+                                    if (c.id === 'gross') return <td key={c.id} style={dateTdStyle}>{fmt(gross)}</td>
+                                    if (c.id === 'net') return <td key={c.id} style={dateTdStyle}>{fmt(net)}</td>
+                                    if (c.id === 'prevGross') {
+                                      if (!prevGross || Math.abs(prevGross) < 1) return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                      const p = (gross - prevGross) / prevGross * 100
+                                      const pos = p >= 0
+                                      return <td key={c.id} style={dateTdStyle}><span style={{ fontSize: 10.5, color: pos ? C.green.tx : C.red.tx }}>{pos ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span></td>
+                                    }
+                                    if (c.id === 'units') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                    if (c.id === 'drr') return <td key={c.id} style={dateTdStyle}>{fmtN(d.units)}</td>
+                                    if (c.id === 'asp') return <td key={c.id} style={dateTdStyle}>₹{Math.round(asp).toLocaleString('en-IN')}</td>
+                                    if (c.id === 'cancelPct') return <td key={c.id} style={dateTdStyle}>{cancelPct > 0 ? `${cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'rtoPct') return <td key={c.id} style={dateTdStyle}>{rtoPct > 0 ? `${rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'cirPct') return <td key={c.id} style={dateTdStyle}>{cirPct > 0 ? `${cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'exchPct') return <td key={c.id} style={dateTdStyle}>{exchPct > 0 ? `${exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    if (c.id === 'totalReturnPct') return <td key={c.id} style={dateTdStyle}>{totalReturnPct > 0 ? <span style={{ color: totalReturnPct > 20 ? C.red.tx : 'inherit' }}>{totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                                    return <td key={c.id} style={dateTdStyle}><span style={{ color: C.t3 }}>—</span></td>
+                                  })}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default', background: zebra, transition: 'background .16s ease, box-shadow .16s ease' }}
                     onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
                     onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
-                    <td style={{ ...tdStyleL, color: C.t1 }}>{r.cat}</td>
+                    <td style={{ ...tdStyleL, color: C.t1 }}>
+                      {showDateExpand
+                        ? <span onClick={() => toggleDateSc(skuKey)} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 9, color: C.acm, display: 'inline-block', transform: isScDateExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
+                            {r.cat}
+                          </span>
+                        : r.cat}
+                    </td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
-                      <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span onClick={() => { if (hasSkus) { if (!isOpen) setExpandedDateSc(prev => ({ ...prev, [skuKey]: false })); toggleSku(skuKey) } }} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: plainHeader ? C.t3 : C.acm, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {r.sc}
                       </span>
                     </td>
                     {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                   </tr>
+                  {isScDateExpanded && (dateMapLoading
+                    ? <tr><td colSpan={ALL_COLUMNS.length + 2} style={{ padding: '10px 16px', fontSize: 11, color: C.t3, borderBottom: `1px solid ${C.border}` }}>Loading date data…</td></tr>
+                    : renderDateRows(getScDateRows(r.cat, r.sc), true))}
                   {isOpen && skus.map(sk => (
                     <tr key={sk.sku} style={{ background: C.bg, cursor: 'default', transition: 'box-shadow .12s, background .12s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }}
@@ -9073,7 +9172,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
             }
           })
         }
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9466,7 +9565,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns channel="ebo" />
       {/* Store-wise table */}
       {(() => {
         const rawStoreRows = ebo.storeRows || []
@@ -10046,7 +10145,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             const skuPrevMap = {}
             const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
             skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="amazon" />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -10413,7 +10512,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
           const parts = k.split('::')
           const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
         })
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="flipkart" />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -12285,7 +12384,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
       </div>
 
       {/* Category Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns channel="blinkit" />
 
       {/* Cities + States */}
       {(() => {
@@ -12457,7 +12556,7 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" />
 
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
@@ -12628,7 +12727,7 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" />
 
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
@@ -12915,7 +13014,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="cred" />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13172,7 +13271,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
         )
       })()}
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="firstcry" />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -13421,7 +13520,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct channel="myntra" />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -18537,6 +18636,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
+      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger') ? (!allowedTabs || allowedTabs.includes('documents')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -18717,7 +18817,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Fall back to live BQ only if date range doesn't match.
         const tryStatic = async () => {
           try {
-            const res = await fetch('/logistics-data.json')
+            const res = await fetch('/logistics-data.json', { cache: 'no-cache' })
             if (!res.ok) return false
             const json = await res.json()
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
@@ -18746,9 +18846,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // query cost. `page` is in this same dependency array below so navigating INTO Overview
       // (without also changing the date range) still triggers the fetch.
       if (page === 'overview') {
-        fetch('/logistics-cost-data.json').then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
-        fetch('/sales-alloc-data.json').then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
-        fetch('/inv-data-7d.json').then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
+        fetch('/logistics-cost-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
+        fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
+        fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
         fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
           .then(r => r.ok ? r.json() : null)
           .then(j => setOverviewCustData(j))
@@ -18998,7 +19098,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={loading || fetchPending} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>

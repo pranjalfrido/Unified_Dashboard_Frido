@@ -27,13 +27,12 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// 180-day window — 6 months of data for client-side date range filtering
-// (extended from 60d so Apr–Aug date ranges work without hitting the API,
-// which times out on Vercel's 60s limit for large date ranges)
+// Indian financial year (Apr 1 → Mar 31) — fixed start so Apr 1 is always included
+// regardless of when CI runs. Prior rolling 180-day window started Apr 3 by Sep 29.
 const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
-const startD = new Date(end)
-startD.setDate(startD.getDate() - 179) // 180 days inclusive
+const fyYear = end.getUTCMonth() >= 3 ? end.getUTCFullYear() : end.getUTCFullYear() - 1
+const startD = new Date(Date.UTC(fyYear, 3, 1)) // Apr 1 of current FY
 const startStr = startD.toISOString().slice(0, 10)
 // Widen fetch for momentum (7d lookback) and top movers (7d lookback from end)
 const fetchStart = new Date(startD)
@@ -79,7 +78,7 @@ const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows], [facilityRows
 
 const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
 const skuMap = buildSkuMap(skuMappingRows)
-const daysInRange = 180
+const daysInRange = Math.round((new Date(endStr) - startD) / 86400000) + 1
 
 const itemMaster = new Map()
 for (const r of itemMasterRows) {
