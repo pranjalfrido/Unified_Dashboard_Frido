@@ -1217,7 +1217,7 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   )
 }
 
-const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -1493,7 +1493,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Toggle row: facility toggle on left, Filters popover button on right (desktop only) */}
+        {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
@@ -1503,7 +1503,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               setFilters(f => ({ ...f, facility: [] }))
             }}
           />
-          <InvFilterPopover filters={filters} setFilters={setFilters} data={data} sidebarTop={sidebarTop} facilityView={facilityView} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {asOf && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.3 }}>
+                <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                  Snapshot {new Date(asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+                </span>
+                {lastSalesDate && (
+                  <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                    Latest sales {new Date(lastSalesDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
+            )}
+            <InvFilterPopover filters={filters} setFilters={setFilters} data={data} sidebarTop={sidebarTop} facilityView={facilityView} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+          </div>
         </div>
 
         {facilityView === 'regular' ? <>
@@ -1755,7 +1769,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   )
 })
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp }) {
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
@@ -1763,6 +1777,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       data={data} filters={filters} setFilters={setFilters}
       sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
       facilityViewProp={facilityViewProp} setFacilityViewProp={setFacilityViewProp}
+      asOf={asOf} lastSalesDate={lastSalesDate}
     />
   )
 }
