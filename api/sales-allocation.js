@@ -463,7 +463,11 @@ export default async function salesAllocationHandler(req, res) {
       const qty = Number(r.qty || 0)
       exactTotalQty += qty
       whDemand.set(nearestWH, (whDemand.get(nearestWH) || 0) + qty)
-      if (location === nearestWH) {
+      // PNQ and MUM are interchangeable (both West zone) — matches email WH Fit % logic
+      const isCorrect = (location === 'PNQ' || location === 'MUM')
+        ? (nearestWH === 'PNQ' || nearestWH === 'MUM')
+        : location === nearestWH
+      if (isCorrect) {
         exactCorrectQty += qty
         whCorrect.set(nearestWH, (whCorrect.get(nearestWH) || 0) + qty)
       }
