@@ -1233,29 +1233,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
 
-  // Desktop table virtualization — passive scroll listener via useEffect avoids the
-  // onScroll-prop jump bug (where switching table↔page scroll mid-scroll caused spacer
-  // height changes to shift layout). RAF batches re-renders to once per frame.
   const tableScrollRef = useRef(null)
   const vScrollTopRef = useRef(0)
   const [vScrollTop, setVScrollTop] = useState(0)
   const rafRef = useRef(null)
   const ROW_H = 34
   const OVERSCAN = 15
-  const useVirtual = !expandedSku
-  useEffect(() => {
-    const el = tableScrollRef.current
-    if (!el) return
-    const onScroll = () => {
-      vScrollTopRef.current = el.scrollTop
-      if (!rafRef.current) rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null
-        setVScrollTop(vScrollTopRef.current)
-      })
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => { el.removeEventListener('scroll', onScroll); if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null } }
-  }, [])
+  const useVirtual = false
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -1656,7 +1640,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
                     <tr onClick={() => toggleExpandedSku(s.skuKey)}
-                      style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34 }}
+                      style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34, contentVisibility: 'auto', containIntrinsicSize: '0 34px' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       {colOrder.map(key => {
