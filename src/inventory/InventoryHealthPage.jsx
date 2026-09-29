@@ -1420,8 +1420,17 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const filteredPivot = useMemo(() => {
     const keySet = new Set(filteredSkus.map(s => s.sku))
     const locSet = filters.location?.length ? new Set(filters.location) : null
-    const locations = locSet ? data.pivot.locations.filter(l => locSet.has(l)) : data.pivot.locations
     const rows = data.pivot.rows.filter(r => keySet.has(r.sku))
+    let locations = locSet ? data.pivot.locations.filter(l => locSet.has(l)) : data.pivot.locations
+    // Drop locations that have zero inventory under the Regular facility type filter —
+    // e.g. DEL only has a Frido Store, so it should not appear as a column in the Regular tab.
+    locations = locations.filter(loc =>
+      rows.some(r => {
+        const cell = r.byLocation[loc]
+        if (!cell) return false
+        return (cell.byFacilityType?.['Regular'] || 0) > 0
+      })
+    )
     return { locations, rows }
   }, [data, filteredSkus, filters.location])
 
