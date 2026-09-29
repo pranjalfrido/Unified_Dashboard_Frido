@@ -1419,8 +1419,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // it, instead of always showing the full company-wide pivot regardless of what's filtered.
   const filteredPivot = useMemo(() => {
     const keySet = new Set(filteredSkus.map(s => s.sku))
+    // Only show warehouse locations (Regular/3PL) — filterOptions.locations is derived from
+    // live Regular facilities, so non-warehouse locations like DEL (Frido Store only) are
+    // naturally excluded here, matching what Warehouse Health shows.
+    const warehouseLocSet = new Set(data.filterOptions.locations)
     const locSet = filters.location?.length ? new Set(filters.location) : null
-    const locations = locSet ? data.pivot.locations.filter(l => locSet.has(l)) : data.pivot.locations
+    const locations = data.pivot.locations.filter(l =>
+      warehouseLocSet.has(l) && (!locSet || locSet.has(l))
+    )
     const rows = data.pivot.rows.filter(r => keySet.has(r.sku))
     return { locations, rows }
   }, [data, filteredSkus, filters.location])
