@@ -1379,10 +1379,6 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       const locSet = new Set(filters.location)
       rows = rows.filter(r => (r.facilities || []).some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0))
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      rows = rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q))
-    }
     const { key, dir } = sort
     const sign = dir === 'asc' ? 1 : -1
     rows = [...rows].sort((a, b) => {
@@ -1394,14 +1390,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       return sign * (av - bv)
     })
     return rows
-  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, search, sort])
+  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, sort])
+
+  // Search applies only to Inventory Detail table — not to pivot/slow-moving/dead-stock
+  const detailSkus = useMemo(() => {
+    if (!search.trim()) return filteredSkus
+    const q = search.trim().toLowerCase()
+    return filteredSkus.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q))
+  }, [filteredSkus, search])
 
   // Footer totals for the Inventory Detail table — sums the measure columns across
   // whatever's currently visible (search + slicers applied), so it reads as "total for
   // what I'm looking at," not the whole unfiltered dataset.
   const tableTotals = useMemo(() => {
     const t = { rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, totalInvt: 0, avgSale: 0, orderAllocation: 0 }
-    for (const s of filteredSkus) {
+    for (const s of detailSkus) {
       t.rtdInvt += s.rtdInvt
       t.rawInvt += s.rawInvt
       t.rawBlockedInvt += s.rawBlockedInvt
@@ -1412,7 +1415,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     const denominator = Math.ceil(Math.max(t.avgSale, t.orderAllocation))
     t.doi = denominator > 0 ? Math.floor(t.totalInvt / denominator) : null
     return t
-  }, [filteredSkus])
+  }, [detailSkus])
 
   // Location-Wise Inventory pivot — restricted to whatever SKUs survive filteredSkus (Regular
   // scope + every sidebar filter), so this table respects the same Category/Sub-category/
@@ -1503,7 +1506,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // Inventory Detail export: one row per (SKU, location) — mirrors the on-screen table's
   // expand-to-locations view, but flattened for CSV instead of collapsed by default.
   const inventoryDetailExportRows = useMemo(() => {
-    return filteredSkus.flatMap(s =>
+    return detailSkus.flatMap(s =>
       s.locations
         .filter(l => l.totalInvt > 0 || l.avgSale > 0)
         .map(l => ({
@@ -1513,7 +1516,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           websiteStatus: s.websiteStatus,
         }))
     )
-  }, [filteredSkus])
+  }, [detailSkus])
 
   if (!data) return null
 
@@ -1577,7 +1580,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         {/* Main inventory table */}
         <div className="inv-detail-card"><GlassCard
           title="Inventory Detail"
-          note={<span className="inv-detail-desktop-only">{`${fmtInt(filteredSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}</span>}
+          note={<span className="inv-detail-desktop-only">{`${fmtInt(detailSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}</span>}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
@@ -1605,7 +1608,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           }
         >
         {/* Mobile table: sticky Product ID + 6 scrollable cols */}
-        <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
+        <MobDetailTable filteredSkus={detailSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
         {/* Desktop table */}
         <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
@@ -1628,13 +1631,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               {(() => {
                 const containerH = tableScrollRef.current ? tableScrollRef.current.clientHeight : window.innerHeight * 0.58
                 const startIdx = useVirtual ? Math.max(0, Math.floor(vScrollTop / ROW_H) - OVERSCAN) : 0
-                const endIdx = useVirtual ? Math.min(filteredSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : filteredSkus.length
+                const endIdx = useVirtual ? Math.min(detailSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : detailSkus.length
                 const topSpacerH = useVirtual ? startIdx * ROW_H : 0
-                const bottomSpacerH = useVirtual ? (filteredSkus.length - endIdx) * ROW_H : 0
+                const bottomSpacerH = useVirtual ? (detailSkus.length - endIdx) * ROW_H : 0
                 return (
                   <>
                     {topSpacerH > 0 && <tr style={{ height: topSpacerH }}><td colSpan={colOrder.length} /></tr>}
-                    {filteredSkus.slice(startIdx, endIdx).map((s, relIdx) => {
+                    {detailSkus.slice(startIdx, endIdx).map((s, relIdx) => {
                 const i = startIdx + relIdx
                 const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
@@ -1722,7 +1725,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                   const cellStyle = { padding: '7px 10px', textAlign: def.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700, color: IC.t1 }
                   if (key === 'category') return <td key={key} style={cellStyle}>Total</td>
                   if (key === 'subCategory') return <td key={key} style={cellStyle} />
-                  if (key === 'sku') return <td key={key} style={{ ...cellStyle, fontSize: 11, color: IC.t3, fontWeight: 500 }}>{filteredSkus.length} SKUs</td>
+                  if (key === 'sku') return <td key={key} style={{ ...cellStyle, fontSize: 11, color: IC.t3, fontWeight: 500 }}>{detailSkus.length} SKUs</td>
                   if (key === 'rtdInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rtdInvt)}</td>
                   if (key === 'rawInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rawInvt)}</td>
                   if (key === 'rawBlockedInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rawBlockedInvt)}</td>
