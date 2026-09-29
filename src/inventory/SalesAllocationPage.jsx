@@ -346,6 +346,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [matrixSort, setMatrixSort] = useState({ key: 'total', dir: 'desc' }) // key: 'total' | a bucketKey | 'name'
   const [top20Metric, setTop20Metric] = useState('qty') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
   const [top20Level, setTop20Level] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
+  const [top20Channel, setTop20Channel] = useState([]) // channel filter local to Top Products card
 
   // Client-side filter: when static file has rawRows, filter instantly without API call
   const filteredData = useMemo(() => {
@@ -726,23 +727,39 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     : _drasticRowsRaw
 
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
-  // Sales Change. Level toggle picks which server-computed rollup to rank: SKU-level uses
-  // productSales (name = sku), Sub-category/Category reuse the same rollups already powering
-  // Category Contribution / the Matrix — re-sorted here so both metrics rank correctly.
-  const topProductsSource = !filteredData ? [] : top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
-    : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
-    : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
-  // deduplicate by name (merge duplicates), filter zero-sales rows, then sort
-  const _deduped = new Map()
-  for (const r of topProductsSource) {
-    if (!r.name) continue
-    const ex = _deduped.get(r.name)
-    if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
-    else _deduped.set(r.name, { ...r })
-  }
-  const topProductsRows = [..._deduped.values()]
-    .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
-    .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
+  // Sales Change. When top20Channel is active, re-aggregate from rawRows filtered by channel
+  // instead of using the pre-aggregated rollups (which don't have a per-channel breakdown).
+  const topProductsRows = useMemo(() => {
+    if (!filteredData) return []
+    let source
+    if (top20Channel.length > 0) {
+      const chRows = filteredData.rawRows.filter(r => top20Channel.includes(r.channel2) || top20Channel.includes(r.channel))
+      const m = new Map()
+      for (const r of chRows) {
+        const key = top20Level === 'sku' ? r.sku : top20Level === 'subCategory' ? r.subCategory : r.category
+        if (!key) continue
+        const ex = m.get(key)
+        if (ex) { ex.qty += r.qty; ex.rev += r.rev }
+        else m.set(key, { name: key, qty: r.qty, rev: r.rev })
+      }
+      source = [...m.values()]
+    } else {
+      const raw = top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
+        : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
+        : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
+      const m = new Map()
+      for (const r of raw) {
+        if (!r.name) continue
+        const ex = m.get(r.name)
+        if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
+        else m.set(r.name, { ...r })
+      }
+      source = [...m.values()]
+    }
+    return source
+      .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
+      .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
+  }, [filteredData, top20Level, top20Metric, top20Channel])
 
   if (!data) return null
   const revenueAvailable = filteredData.summary.totalRevenue > 0
@@ -896,6 +913,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                   options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' }]} />
                 <PillToggle size="sm" value={top20Metric} onChange={setTop20Metric}
                   options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
+                {!isMobile && <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={top20Channel} onChange={setTop20Channel} width={110} height={25} />}
               </div>
             }>
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
