@@ -18,7 +18,7 @@ export function sortByLocationOrder(items, getLocation = x => x) {
   })
 }
 
-// ── Reference lookups (SharePoint Excel exports, pending GCP sync) ──────────
+// ── Reference lookups (synced from BQ `inventory_sales_allocation` via scripts/refresh-ref-data.mjs) ──
 let _facilityRows, _channelRows, _regionRows
 export function loadRefData() {
   if (!_facilityRows) _facilityRows = JSON.parse(readFileSync(join(DATA_DIR, 'facility_master.json'), 'utf8'))
