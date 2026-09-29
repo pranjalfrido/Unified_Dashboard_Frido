@@ -414,7 +414,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       // fillRate
       if (r.nearestWH) {
         whDemand.set(r.nearestWH, (whDemand.get(r.nearestWH) || 0) + r.qty)
-        if (r.location === r.nearestWH) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
+        const isCorrect = (r.location === 'PNQ' || r.location === 'MUM')
+          ? (r.nearestWH === 'PNQ' || r.nearestWH === 'MUM')
+          : r.location === r.nearestWH
+        if (isCorrect) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
       }
       // facility allocation
       if (r.location && r.location !== 'Unmapped') {
@@ -426,7 +429,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
     const days = daily.length || 1
     const exactTotal = rows.reduce((s, r) => s + r.qty, 0)
-    const exactCorrect = rows.filter(r => r.nearestWH && r.location === r.nearestWH).reduce((s, r) => s + r.qty, 0)
+    const exactCorrect = rows.filter(r => {
+      if (!r.nearestWH) return false
+      return (r.location === 'PNQ' || r.location === 'MUM')
+        ? (r.nearestWH === 'PNQ' || r.nearestWH === 'MUM')
+        : r.location === r.nearestWH
+    }).reduce((s, r) => s + r.qty, 0)
 
     // weekly/monthly rollup
     const weekKey = d => { const dt = new Date(d + 'T00:00:00Z'); const day = (dt.getUTCDay() + 6) % 7; dt.setUTCDate(dt.getUTCDate() - day); return dt.toISOString().slice(0, 10) }
@@ -476,6 +484,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const matrixSkuList = [...matrixSkuMetaMap.entries()].map(([key, meta]) => ({ skuKey: key, ...meta }))
     const matrixDates = [...matrixDatesSet].sort()
 
+    const firstDayQty = daily[0]?.qty || 0
+    const lastDayQty = daily[daily.length - 1]?.qty || 0
+    const momentumPct = firstDayQty > 0 ? ((lastDayQty - firstDayQty) / firstDayQty) * 100 : null
+
     return {
       ...data,
       rawRows: data.rawRows,
@@ -487,6 +499,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         avgDailyUnits: Math.round(totalQty / days),
         avgSellingPrice: totalQty > 0 ? Math.round(totalRev / totalQty) : 0,
         exactFillRate: exactTotal > 0 ? exactCorrect / exactTotal : null,
+        momentumPct,
       },
       daily,
       weekly: rollup(weekKey),
