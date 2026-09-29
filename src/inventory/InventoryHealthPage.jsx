@@ -1233,9 +1233,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
 
-  // Desktop table virtualization
+  // Desktop table virtualization — use ref + RAF to avoid layout jitter from setState on
+  // every scroll pixel. The ref holds the latest scrollTop; RAF batches re-renders so spacer
+  // height changes happen once per frame rather than on every scroll event.
   const tableScrollRef = useRef(null)
+  const vScrollTopRef = useRef(0)
   const [vScrollTop, setVScrollTop] = useState(0)
+  const rafRef = useRef(null)
   const ROW_H = 34
   const OVERSCAN = 5
   const useVirtual = !expandedSku
@@ -1607,7 +1611,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
         {/* Desktop table */}
         <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}
-          onScroll={e => setVScrollTop(e.currentTarget.scrollTop)}>
+          onScroll={e => {
+            vScrollTopRef.current = e.currentTarget.scrollTop
+            if (!rafRef.current) rafRef.current = requestAnimationFrame(() => { rafRef.current = null; setVScrollTop(vScrollTopRef.current) })
+          }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surface }}>
               <tr>
