@@ -70,7 +70,7 @@ export default async function salesAllocationHandler(req, res) {
     const queries = [
       bq.query({
         query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty, SUM(total_revenue) AS rev
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${fetchStartStr}' AND '${end}'
                 GROUP BY final_sku, Facility, state, channel, order_date`,
         maximumBytesBilled: '5000000000',
@@ -110,7 +110,7 @@ export default async function salesAllocationHandler(req, res) {
     if (comparePrevious) {
       queries.push(bq.query({
         query: `SELECT SUM(total_quantity) AS qty, SUM(total_revenue) AS rev
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${prevStartStr}' AND '${prevEndStr}'`,
         maximumBytesBilled: '5000000000',
       }))
@@ -131,8 +131,7 @@ export default async function salesAllocationHandler(req, res) {
     }
     let lastSalesDateConsidered = null
     if (maxSalesDate) {
-      const d = new Date(maxSalesDate); d.setDate(d.getDate() - 1)
-      lastSalesDateConsidered = d.toISOString().slice(0, 10)
+      lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
     }
 
     const itemMaster = new Map()

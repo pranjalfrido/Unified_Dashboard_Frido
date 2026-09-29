@@ -1,10 +1,49 @@
-import { useMemo, useState, useEffect, useRef, useLayoutEffect, Fragment } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import {
-  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton,
+  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
+
+function SaKpiCarousel({ children }) {
+  const count = Children.count(children)
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const cardW = 160 + 10
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / cardW)))
+  }, [count])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+  return (
+    <>
+      <div className="inv-kpi-carousel-wrap" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: IC.t1 }}>Key Metrics</span>
+          <span style={{ fontSize: 11, color: IC.t3 }}>{count} tiles · swipe →</span>
+        </div>
+        <div ref={scrollRef} className="inv-kpi-grid" style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+          {children}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      <div className="inv-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: 10, alignItems: 'stretch' }}>
+        {children}
+      </div>
+    </>
+  )
+}
 
 const SLICER_HEIGHT = 32
 const SIDEBAR_WIDTH = 220
@@ -60,85 +99,82 @@ function ChangeBadge({ pct }) {
 
 // ── Tiny inline sparkline (single series, no axes/legend — the mark IS the label) ──
 // ── Left filter sidebar — same pattern/component set as Inventory Health, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, popover}) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable: if the page had already been scrolled when
-  // this component mounted (or before its content, e.g. sidebarTop's "Latest sales" line
-  // which only appears once data arrives, finished growing to full height), the captured
-  // top/left baked in a stale, already-scrolled offset that never corrected itself,
-  // leaving the fixed sidebar pinned in the wrong place with its top content clipped.
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
+  const filterContent = (isMobileCtx) => (
+    <>
+      {!isMobileCtx && sidebarTop}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
+        <div style={{ width: 3, height: 12, borderRadius: 2, background: IC.accBorder, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>Filters</span>
+      </div>
+      <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Product ID" options={opts.skus} selected={filters.sku || []} onChange={v => set('sku', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <SearchableMultiSelect label="Channel" options={opts.channels} selected={filters.channel || []} onChange={v => set('channel', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Sales Type" options={opts.salesTypes} selected={filters.salesType || []} onChange={v => set('salesType', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)}
+        getKey={o => o.facility} getLabel={o => o.facility} width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Region" options={opts.regions} selected={filters.region || []} onChange={v => set('region', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: IC.t2, cursor: 'pointer' }}>
+        <input type="checkbox" checked={!!filters.comparePrevious} onChange={e => setFilters(f => ({ ...f, comparePrevious: e.target.checked }))} />
+        Compare to previous period
+      </label>
+      {anyActive && (
+        <button onClick={() => setFilters(f => ({ comparePrevious: f.comparePrevious, momentumWindow: f.momentumWindow }))}
+          style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
+          ✕ Clear all filters
+        </button>
+      )}
+    </>
+  )
+
+  if (isMobile) {
+    if (!open) return null
+    return (
+      <>
+        <div className="inv-filter-backdrop" onClick={onClose} />
+        <div className="inv-filter-drawer" style={{ background: '#FAFBFF', borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 12px 16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            {sidebarTop}
+            <button onClick={onClose} style={{ background: '#F0F2F5', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '4px 8px', lineHeight: 1, borderRadius: 8 }}>✕</button>
+          </div>
+          {filterContent(true)}
+        </div>
+      </>
+    )
+  }
 
   return (
-    <div ref={anchorRef} style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer anchor div only reserves
-      // width in the flex row (its child becomes position:fixed once measured), but it still
-      // occupies real vertical space at its own top offset (pushed down by the page's own
-      // padding). Without a matching background here, that offset shows through as a grey
-      // gap between the top bar and where the fixed white sidebar visually begins.
-      background: IC.surface,
+      overflow: 'hidden', flexShrink: 0,
+      // Width-reserver only: its child is position:fixed. Deliberately transparent so the
+      // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
+          position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)',
+          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
-        {sidebarTop}
-        <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
-        <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Product ID" options={opts.skus} selected={filters.sku || []} onChange={v => set('sku', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <SearchableMultiSelect label="Channel" options={opts.channels} selected={filters.channel || []} onChange={v => set('channel', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Sales Type" options={opts.salesTypes} selected={filters.salesType || []} onChange={v => set('salesType', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)}
-          getKey={o => o.facility} getLabel={o => o.facility} width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Region" options={opts.regions} selected={filters.region || []} onChange={v => set('region', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: IC.t2, cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!filters.comparePrevious} onChange={e => setFilters(f => ({ ...f, comparePrevious: e.target.checked }))} />
-          Compare to previous period
-        </label>
-        {anyActive && (
-          <button onClick={() => setFilters(f => ({ comparePrevious: f.comparePrevious, momentumWindow: f.momentumWindow }))}
-            style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
-            ✕ Clear all
-          </button>
-        )}
+        {filterContent(false)}
       </div>
     </div>
   )
@@ -182,7 +218,7 @@ function RankedBarList({ rows, total, height, nameWidth = 90, metric = 'qty' }) 
 // the #1 row always reads as a full bar. The %-of-total column is against total sales for
 // the WHOLE period (grandTotal), not the sum of visible rows — so percentages don't
 // silently re-normalize as you scroll.
-function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140 }) {
+function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140, isMobile = false }) {
   const maxVal = Math.max(1, ...rows.map(r => r[metric]))
   const ROW_HEIGHT = 25 // explicit fixed row height — no layout-dependent sizing.
   // This element only fills its parent (height: 100%) — the actual fixed pixel height is
@@ -190,22 +226,25 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140 }) {
   // had its own independent `height: 270px`, nested inside an outer 270px `overflow:hidden`
   // wrapper — two separately-set fixed heights that could drift apart by a subpixel under
   // real (non-synthetic) scroll/layout, leaving a blank gap below the last visible row.
+  // When rows are few enough to fit without scrolling (e.g. Category level, ~6-8 rows),
+  // stretch them to fill the box edge-to-edge instead of leaving blank space below the
+  // last row — same fill-vs-scroll split used for Category Revenue/Geography on the Sales tab.
   return (
-    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto' }}>
+    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column' }}>
       {rows.map((r, i) => {
         const val = r[metric]
         const pctOfTotal = grandTotal > 0 ? (val / grandTotal) * 100 : 0
         return (
-          <div key={r.name} style={{ height: ROW_HEIGHT, boxSizing: 'border-box', display: 'grid', gridTemplateColumns: `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
-            <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>
-            <span title={r.name} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+          <div key={r.name + i} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: isMobile ? `${nameWidth}px 1fr 66px 52px` : `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
+            {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
+            <span title={r.name} style={{ fontSize: isMobile ? 9.2 : 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
             <div style={{ height: 10, borderRadius: 4, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
               <div style={{ width: `${(val / maxVal) * 100}%`, height: '100%', background: IC.acc, borderRadius: 4 }} />
             </div>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(val) : fmtInt(val)}
             </span>
-            <span style={{ fontSize: 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pctOfTotal.toFixed(1)}%</span>
+            <span style={{ fontSize: isMobile ? 8.4 : 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pctOfTotal.toFixed(1)}%</span>
           </div>
         )
       })}
@@ -231,18 +270,17 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
         const pctColor = pct == null ? IC.t3 : pct < 0.7 ? IC.status.Critical.c : pct < 0.9 ? IC.status.Low.c : IC.positive
         const pctOfTotal = totalAllocation > 0 ? (r.allocation / totalAllocation) * 100 : 0
         return (
-          <div key={r.location} style={{ display: 'grid', gridTemplateColumns: `${nameWidth}px 1fr 90px 56px 56px`, alignItems: 'center', gap: 8 }}>
+          <div key={r.location} style={{ display: 'grid', gridTemplateColumns: `${nameWidth}px 1fr 90px 56px`, alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.location}</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                 <div style={{ width: `${(r.sales / maxVal) * 100}%`, height: '100%', background: IC.acc, borderRadius: 3 }} />
               </div>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                <div style={{ width: `${(r.allocation / maxVal) * 100}%`, height: '100%', background: IC.categorical[0], borderRadius: 3 }} />
+                <div style={{ width: `${(r.allocation / maxVal) * 100}%`, height: '100%', background: IC.secondary, borderRadius: 3 }} />
               </div>
             </div>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.sales)} / {fmtInt(r.allocation)}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: pctColor, textAlign: 'right' }}>{pct != null ? `${Math.round(pct * 100)}%` : '—'}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtInt(r.sales)} / {fmtInt(r.allocation)}</span>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: IC.t3, textAlign: 'right' }}>{pctOfTotal.toFixed(1)}%</span>
           </div>
         )
@@ -255,27 +293,27 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
 // works across all 3 levels since the API already labels each row with the right fields
 // (sku+category+subCategory, or subCategory+category, or just category). No sub-label
 // under the name — level is already stated in the toggle above, so it'd just repeat.
-function DrasticMoversTable({ rows, metric, level }) {
+function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
-      {rows.length === 0 && <div style={{ fontSize: 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 10 }}>
+      {rows.length === 0 && <div style={{ fontSize: isMobile ? 9.6 : 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
       {rows.map((r, i) => {
         const label = level === 'sku' ? r.sku : level === 'subCategory' ? r.subCategory : r.category
         const up = r.pctChange >= 0
         return (
           <div key={i} style={{
-            display: 'grid', gridTemplateColumns: '16px 1fr 60px 60px 68px', alignItems: 'center', gap: 8, padding: '3.5px 0',
+            display: 'grid', gridTemplateColumns: isMobile ? '1fr 44px 44px 62px' : '16px 1fr 60px 60px 68px', alignItems: 'center', gap: isMobile ? 4 : 8, padding: '3.5px 0',
             borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none',
           }}>
-            <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>
-            <span title={label} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-            <span style={{ fontSize: 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
+            <span title={label} style={{ fontSize: isMobile ? 9.2 : 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ fontSize: isMobile ? 8.4 : 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(r.compareVal) : fmtInt(r.compareVal)}
             </span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(r.lastVal) : fmtInt(r.lastVal)}
             </span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: up ? IC.positive : IC.status.Critical.c, textAlign: 'right' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: up ? IC.positive : IC.status.Critical.c, textAlign: 'right' }}>
               {up ? '▲' : '▼'} {Math.abs(r.pctChange).toFixed(0)}%
             </span>
           </div>
@@ -285,15 +323,22 @@ function DrasticMoversTable({ rows, metric, level }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
   const [categoryMetric, setCategoryMetric] = useState('rev') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
   const [drasticLevel, setDrasticLevel] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
   const [drasticMode, setDrasticMode] = useState('day2') // 'day2' | 'day7'
   const [drasticMetric, setDrasticMetric] = useState('qty') // 'qty' | 'rev'
   const [drasticDirection, setDrasticDirection] = useState('risers') // 'risers' | 'fallers'
+  const [drasticSearch, setDrasticSearch] = useState('')
   const [matrixMetric, setMatrixMetric] = useState('qty') // 'qty' | 'rev'
   const [matrixGranularity, setMatrixGranularity] = useState('date') // 'date' | 'week' | 'month' | 'quarter' | 'year'
   const [matrixExpanded, setMatrixExpanded] = useState(new Set()) // expanded row paths ("cat" or "cat|sub")
@@ -302,19 +347,180 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [top20Metric, setTop20Metric] = useState('rev') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
   const [top20Level, setTop20Level] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
 
+  // Client-side filter: when static file has rawRows, filter instantly without API call
+  const filteredData = useMemo(() => {
+    if (!data?.rawRows) return data
+    const hasFilter = (arr) => arr?.length > 0
+    const anyActive = hasFilter(filters.category) || hasFilter(filters.subCategory) ||
+      hasFilter(filters.sku) || hasFilter(filters.channel) || hasFilter(filters.salesType) ||
+      hasFilter(filters.facility) || hasFilter(filters.region)
+    const dateStart = dateFilters?.start
+    const dateEnd = dateFilters?.end
+    const matrixCh = filters.matrixChannel || []
+    // Check if date range matches the cache's pre-computed range (no need to re-filter)
+    const cacheRange = data.dateRange
+    const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
+    if (!anyActive && dateMatchesCache && matrixCh.length === 0 && data.matrixCellRows) return data
+
+    const rows = data.rawRows.filter(r => {
+      if (dateStart && r.date < dateStart) return false
+      if (dateEnd && r.date > dateEnd) return false
+      if (hasFilter(filters.category) && !filters.category.includes(r.category)) return false
+      if (hasFilter(filters.subCategory) && !filters.subCategory.includes(r.subCategory)) return false
+      if (hasFilter(filters.sku) && !filters.sku.includes(r.sku)) return false
+      if (hasFilter(filters.channel) && !filters.channel.includes(r.channel) && !filters.channel.includes(r.channel2)) return false
+      if (hasFilter(filters.salesType) && !filters.salesType.includes(r.salesType)) return false
+      if (hasFilter(filters.facility) && !filters.facility.includes(r.facility)) return false
+      if (hasFilter(filters.region) && !filters.region.includes(r.region)) return false
+      return true
+    })
+
+    // Re-aggregate from filtered rows
+    const dailyMap = new Map()
+    const catMap = new Map()
+    const subCatMap = new Map()
+    const chMap = new Map()
+    const ch2Map = new Map()
+    const typeMap = new Map()
+    const skuMap2 = new Map()
+    const whDemand = new Map(), whCorrect = new Map()
+    const facMap = new Map(), facRevMap = new Map()
+    let totalQty = 0, totalRev = 0
+
+    for (const r of rows) {
+      totalQty += r.qty; totalRev += r.rev
+      // daily
+      if (!dailyMap.has(r.date)) dailyMap.set(r.date, { date: r.date, qty: 0, rev: 0 })
+      const d = dailyMap.get(r.date); d.qty += r.qty; d.rev += r.rev
+      // category
+      if (!catMap.has(r.category)) catMap.set(r.category, { category: r.category, qty: 0, rev: 0 })
+      const c = catMap.get(r.category); c.qty += r.qty; c.rev += r.rev
+      // subCategory
+      const sk = `${r.category}|${r.subCategory}`
+      if (!subCatMap.has(sk)) subCatMap.set(sk, { category: r.category, subCategory: r.subCategory, qty: 0, rev: 0 })
+      const sc = subCatMap.get(sk); sc.qty += r.qty; sc.rev += r.rev
+      // channel
+      if (!chMap.has(r.channel)) chMap.set(r.channel, { channel: r.channel, qty: 0, rev: 0 })
+      const ch = chMap.get(r.channel); ch.qty += r.qty; ch.rev += r.rev
+      // channel2
+      if (!ch2Map.has(r.channel2)) ch2Map.set(r.channel2, { channel: r.channel2, qty: 0, rev: 0 })
+      const c2 = ch2Map.get(r.channel2); c2.qty += r.qty; c2.rev += r.rev
+      // salesType
+      if (!typeMap.has(r.salesType)) typeMap.set(r.salesType, { type: r.salesType, qty: 0, rev: 0 })
+      const ct = typeMap.get(r.salesType); ct.qty += r.qty; ct.rev += r.rev
+      // sku
+      if (!skuMap2.has(r.sku)) skuMap2.set(r.sku, { sku: r.sku, category: r.category, subCategory: r.subCategory, qty: 0, rev: 0 })
+      const s = skuMap2.get(r.sku); s.qty += r.qty; s.rev += r.rev
+      // fillRate
+      if (r.nearestWH) {
+        whDemand.set(r.nearestWH, (whDemand.get(r.nearestWH) || 0) + r.qty)
+        if (r.location === r.nearestWH) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
+      }
+      // facility allocation
+      if (r.location && r.location !== 'Unmapped') {
+        facMap.set(r.location, (facMap.get(r.location) || 0) + r.qty)
+        facRevMap.set(r.location, (facRevMap.get(r.location) || 0) + r.rev)
+      }
+    }
+
+    const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
+    const days = daily.length || 1
+    const exactTotal = rows.reduce((s, r) => s + r.qty, 0)
+    const exactCorrect = rows.filter(r => r.nearestWH && r.location === r.nearestWH).reduce((s, r) => s + r.qty, 0)
+
+    // weekly/monthly rollup
+    const weekKey = d => { const dt = new Date(d + 'T00:00:00Z'); const day = (dt.getUTCDay() + 6) % 7; dt.setUTCDate(dt.getUTCDate() - day); return dt.toISOString().slice(0, 10) }
+    const rollup = (keyFn) => {
+      const m = new Map()
+      for (const d of daily) {
+        const k = keyFn(d.date)
+        if (!m.has(k)) m.set(k, { date: k, qty: 0, rev: 0 })
+        const a = m.get(k); a.qty += d.qty; a.rev += d.rev
+      }
+      return [...m.values()].sort((a, b) => a.date.localeCompare(b.date))
+    }
+
+    const fillRateByWarehouse = [...whDemand.entries()].map(([wh, demand]) => {
+      const correct = whCorrect.get(wh) || 0
+      return { warehouse: wh, demandQty: Math.round(demand), demandQtyPerDay: Math.round(demand / days), correctQty: Math.round(correct), correctQtyPerDay: Math.round(correct / days), fillRate: demand > 0 ? correct / demand : null }
+    })
+
+    const facilityAllocation = [...facMap.entries()].map(([location, qty]) => {
+      const rev = facRevMap.get(location) || 0
+      const demand = [...whDemand.entries()].find(([wh]) => wh === location)?.[1] || 0
+      return { location, qty: Math.round(qty), qtyPerDay: Math.round(qty / days), rev: Math.round(rev), revPerDay: Math.round(rev / days), asp: qty > 0 ? Math.round(rev / qty) : null, sharePct: totalQty > 0 ? qty / totalQty : null, allocationPct: demand > 0 ? Math.min(1, qty / demand) : null, skuCount: 0, region: null }
+    })
+
+    // Re-derive Product-Wise Sales Matrix from filtered rows (+ optional matrixChannel filter)
+    const MSEP = '\x1f'
+    const matrixCells = new Map()
+    const matrixDatesSet = new Set()
+    const matrixSkuMetaMap = new Map()
+    const matrixRows = matrixCh.length ? rows.filter(r => matrixCh.includes(r.channel2) || matrixCh.includes(r.channel)) : rows
+    for (const r of matrixRows) {
+      matrixDatesSet.add(r.date)
+      if (!matrixSkuMetaMap.has(r.sku)) matrixSkuMetaMap.set(r.sku, { sku: r.sku, category: r.category, subCategory: r.subCategory })
+      const addCell = (cat, sub, skuKey) => {
+        const cellKey = `${cat}${MSEP}${sub}${MSEP}${skuKey}${MSEP}${r.date}`
+        if (!matrixCells.has(cellKey)) matrixCells.set(cellKey, { qty: 0, rev: 0 })
+        const c = matrixCells.get(cellKey); c.qty += r.qty; c.rev += r.rev
+      }
+      addCell(r.category, '', '')
+      addCell(r.category, r.subCategory, '')
+      addCell(r.category, r.subCategory, r.sku)
+    }
+    const matrixCellRows = [...matrixCells.entries()].map(([k, v]) => {
+      const [cat, sub, skuKey, date] = k.split(MSEP)
+      return { path: `${cat}${MSEP}${sub}${MSEP}${skuKey}`, date, qty: Math.round(v.qty), rev: Math.round(v.rev) }
+    })
+    const matrixSkuList = [...matrixSkuMetaMap.entries()].map(([key, meta]) => ({ skuKey: key, ...meta }))
+    const matrixDates = [...matrixDatesSet].sort()
+
+    return {
+      ...data,
+      rawRows: data.rawRows,
+      summary: {
+        ...data.summary,
+        totalUnits: Math.round(totalQty),
+        totalRevenue: Math.round(totalRev),
+        avgDailyRevenue: Math.round(totalRev / days),
+        avgDailyUnits: Math.round(totalQty / days),
+        avgSellingPrice: totalQty > 0 ? Math.round(totalRev / totalQty) : 0,
+        exactFillRate: exactTotal > 0 ? exactCorrect / exactTotal : null,
+      },
+      daily,
+      weekly: rollup(weekKey),
+      monthly: rollup(d => d.slice(0, 7)),
+      categorySales: [...catMap.values()].sort((a, b) => b.rev - a.rev),
+      subCategorySales: [...subCatMap.values()].sort((a, b) => b.rev - a.rev),
+      channelSales: [...chMap.values()].sort((a, b) => b.rev - a.rev),
+      channelSales2: [...ch2Map.values()].sort((a, b) => b.rev - a.rev),
+      channelTypeSales: [...typeMap.values()].sort((a, b) => b.rev - a.rev),
+      productSales: [...skuMap2.values()].sort((a, b) => b.rev - a.rev),
+      fillRateByWarehouse,
+      facilityAllocation,
+      matrixCellRows,
+      matrixSkuList,
+      matrixDates,
+    }
+  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region, filters.matrixChannel, dateFilters?.start, dateFilters?.end])
+
   const dailyChart = useMemo(() => {
-    if (!data) return []
-    const series = data[trendGranularity] || data.daily
-    return series.map(d => {
+    if (!filteredData) return []
+    const series = filteredData[trendGranularity] || filteredData.daily
+    const filtered = (dateFilters?.start && dateFilters?.end && trendGranularity === 'daily')
+      ? series.filter(d => d.date >= dateFilters.start && d.date <= dateFilters.end)
+      : series
+    return filtered.map(d => {
       const label = trendGranularity === 'monthly' ? d.date : d.date.slice(5)
       return { date: label, qty: d.qty, rev: d.rev, asp: d.qty > 0 ? Math.round(d.rev / d.qty) : null }
     })
-  }, [data, trendGranularity])
+  }, [filteredData, trendGranularity, dateFilters])
 
   const categoryRollup = useMemo(() => {
-    if (!data) return []
-    return data.categorySales.slice(0, 12).map(c => ({ name: c.category, qty: c.qty, rev: c.rev }))
-  }, [data])
+    if (!filteredData) return []
+    return filteredData.categorySales.slice(0, 12).map(c => ({ name: c.category, qty: c.qty, rev: c.rev }))
+  }, [filteredData])
 
   // Ranked by whichever metric is active — a single-series bar list reads share/rank far
   // more clearly than a donut's angle comparisons, especially past ~6 slices.
@@ -326,9 +532,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // Channel-wise sales (unified_channel2 grouping — B2C/B2B/Purchase-Order only, coarser
   // than the Channel-Wise Sales table further down which uses unified_channel).
   const channelDonutSorted = useMemo(() => {
-    if (!data) return []
-    return [...data.channelSales2].map(c => ({ name: c.channel, value: c[channelMetric] })).sort((a, b) => b.value - a.value)
-  }, [data, channelMetric])
+    if (!filteredData) return []
+    return [...filteredData.channelSales2].map(c => ({ name: c.channel, value: c[channelMetric] })).sort((a, b) => b.value - a.value)
+  }, [filteredData, channelMetric])
   const channelDonutTotal = useMemo(() => channelDonutSorted.reduce((s, c) => s + c.value, 0), [channelDonutSorted])
 
   // Location-Wise Sales vs Allocation — Sales = demand from the STATE side: units ordered
@@ -337,10 +543,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // units actually shipped from facilities mapped to this location (facilityAllocation.qty).
   // Same location order both come from (sortByLocationOrder, applied server-side already).
   const locationStackedRows = useMemo(() => {
-    if (!data) return []
-    const demandByLoc = new Map(data.fillRateByWarehouse.map(w => [w.warehouse, w.demandQty]))
-    return data.facilityAllocation.map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
-  }, [data])
+    if (!filteredData) return []
+    const demandByLoc = new Map(filteredData.fillRateByWarehouse.map(w => [w.warehouse, w.demandQty]))
+    return filteredData.facilityAllocation.map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
+  }, [filteredData])
 
   // Product-Wise Sales Matrix — server sends day-granularity cells only; week/month/
   // quarter/year are re-bucketed here so switching granularity is instant, no refetch.
@@ -362,16 +568,16 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   }
 
   const matrixColumns = useMemo(() => {
-    if (!data) return []
-    return [...new Set(data.matrixDates.map(d => matrixBucketKeyFor(matrixGranularity, d)))].sort()
-  }, [data, matrixGranularity])
+    if (!filteredData) return []
+    return [...new Set(filteredData.matrixDates.map(d => matrixBucketKeyFor(matrixGranularity, d)))].sort()
+  }, [filteredData, matrixGranularity])
 
   // cellsByPath: "cat|sub|skuKey" -> Map(bucketKey -> {qty, rev}), re-bucketed from the raw
   // daily cells whenever granularity changes.
   const matrixCellsByPath = useMemo(() => {
-    if (!data) return new Map()
+    if (!filteredData) return new Map()
     const m = new Map()
-    for (const c of data.matrixCellRows) {
+    for (const c of filteredData.matrixCellRows) {
       const bucketKey = matrixBucketKeyFor(matrixGranularity, c.date)
       if (!m.has(c.path)) m.set(c.path, new Map())
       const perBucket = m.get(c.path)
@@ -381,12 +587,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       cell.rev += c.rev
     }
     return m
-  }, [data, matrixGranularity])
+  }, [filteredData, matrixGranularity])
 
   // Row total (sum across all visible bucket columns) per path — used for the Total column
   // and for "sort by Total".
   const matrixRowTotal = useMemo(() => {
-    if (!data) return new Map()
+    if (!filteredData) return new Map()
     const totals = new Map() // path -> {qty, rev}
     for (const [path, perBucket] of matrixCellsByPath) {
       let qty = 0, rev = 0
@@ -398,10 +604,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
 
   // Grand-total row: sum across ALL products for each bucket column, plus the overall total.
   const matrixGrandTotal = useMemo(() => {
-    if (!data) return { perBucket: new Map(), total: { qty: 0, rev: 0 } }
+    if (!filteredData) return { perBucket: new Map(), total: { qty: 0, rev: 0 } }
     const perBucket = new Map()
     let qty = 0, rev = 0
-    for (const cat of data.matrixSkuList.length ? [...new Set(data.matrixSkuList.map(s => s.category))] : []) {
+    for (const cat of filteredData.matrixSkuList.length ? [...new Set(filteredData.matrixSkuList.map(s => s.category))] : []) {
       const cells = matrixCellsByPath.get(`${cat}${MSEP}${MSEP}`)
       if (!cells) continue
       for (const [bucketKey, c] of cells) {
@@ -414,7 +620,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       }
     }
     return { perBucket, total: { qty, rev } }
-  }, [data, matrixCellsByPath])
+  }, [filteredData, matrixCellsByPath])
 
   // Sort comparator shared by all 3 levels — sorts by a specific bucket column, the Total
   // column, or the name itself. Metric (qty vs rev) follows the active matrixMetric toggle.
@@ -438,10 +644,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // sorted independently by the active matrixSort, so expanding a category re-sorts its
   // sub-categories the same way the top-level categories are sorted.
   const matrixCategoryTree = useMemo(() => {
-    if (!data) return []
+    if (!filteredData) return []
     const q = matrixSearch.trim().toLowerCase()
     const cats = new Map() // category -> Map(subCategory -> Set(skuKey))
-    for (const s of data.matrixSkuList) {
+    for (const s of filteredData.matrixSkuList) {
       if (!cats.has(s.category)) cats.set(s.category, new Map())
       const subs = cats.get(s.category)
       if (!subs.has(s.subCategory)) subs.set(s.subCategory, [])
@@ -473,7 +679,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         .filter(Boolean)
     }
     return sortMatrixItems(tree, c => `${c.category}${MSEP}${MSEP}`, c => c.category)
-  }, [data, matrixSort, matrixMetric, matrixCellsByPath, matrixRowTotal, matrixSearch])
+  }, [filteredData, matrixSort, matrixMetric, matrixCellsByPath, matrixRowTotal, matrixSearch])
 
   // Auto-expand every category/sub-category row while searching so matches are visible
   // without the user needing to manually click into each branch.
@@ -495,84 +701,115 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     return next
   })
 
-  const drasticBucket = data?.topMovers?.[drasticLevel]?.[drasticMode]?.[drasticMetric]
-  const drasticRows = drasticBucket ? (drasticDirection === 'risers' ? drasticBucket.risers : drasticBucket.fallers) : []
+  const drasticBucket = filteredData?.topMovers?.[drasticLevel]?.[drasticMode]?.[drasticMetric]
+  const _drasticRowsRaw = drasticBucket ? (drasticDirection === 'risers' ? drasticBucket.risers : drasticBucket.fallers) : []
+  const drasticRows = drasticSearch.trim()
+    ? _drasticRowsRaw.filter(r => {
+        const nameVal = (r.sku || r.subCategory || r.category || '').toLowerCase()
+        return nameVal.includes(drasticSearch.trim().toLowerCase())
+      })
+    : _drasticRowsRaw
 
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
   // Sales Change. Level toggle picks which server-computed rollup to rank: SKU-level uses
   // productSales (name = sku), Sub-category/Category reuse the same rollups already powering
   // Category Contribution / the Matrix — re-sorted here so both metrics rank correctly.
-  const topProductsSource = !data ? [] : top20Level === 'sku' ? data.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
-    : top20Level === 'subCategory' ? data.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
-    : data.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
-  const topProductsRows = [...topProductsSource].sort((a, b) => b[top20Metric] - a[top20Metric])
+  const topProductsSource = !filteredData ? [] : top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
+    : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
+    : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
+  // deduplicate by name (merge duplicates), filter zero-sales rows, then sort
+  const _deduped = new Map()
+  for (const r of topProductsSource) {
+    if (!r.name) continue
+    const ex = _deduped.get(r.name)
+    if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
+    else _deduped.set(r.name, { ...r })
+  }
+  const topProductsRows = [..._deduped.values()]
+    .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
+    .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
 
   if (!data) return null
-  const revenueAvailable = data.summary.totalRevenue > 0
+  const revenueAvailable = filteredData.summary.totalRevenue > 0
   const salesTypeMix = (() => {
     const metricKey = revenueAvailable ? 'rev' : 'qty'
-    const total = data.channelTypeSales.reduce((s, t) => s + t[metricKey], 0)
+    const total = filteredData.channelTypeSales.reduce((s, t) => s + t[metricKey], 0)
     if (total <= 0) return null
-    const pct = type => Math.round(((data.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
+    const pct = type => Math.round(((filteredData.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
     return { b2c: pct('B2C Order'), b2b: pct('B2B Order'), po: pct('Purchase Order') }
   })()
 
+  // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
+  // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0, position: 'sticky', top: 4,
-      }}>
-        {sidebarOpen ? '‹' : '›'}
-      </button>
+      {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />}
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
+
+        {/* Mobile filter button */}
+        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+        }}>
+          ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
+        </button>
 
         {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiTile label="Revenue" value={revenueAvailable ? fmtCurrency(data.summary.totalRevenue) : '—'}
-            sub={revenueAvailable ? `Avg ${fmtCurrency(data.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="₹" />
-          <KpiTile label="Units Sold" value={fmtNum(data.summary.totalUnits)} unit="units"
-            sub={`Avg ${fmtNum(data.summary.avgDailyUnits)}/day`} icon="📦" />
-          <KpiTile label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(data.summary.avgSellingPrice) : '—'} icon="🏷" />
-          <KpiTile label="Fill Rate" value={data.summary.exactFillRate != null ? `${Math.round(data.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={data.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="⚖" />
-          <KpiTile label="Momentum" value={data.summary.momentumPct != null ? `${data.summary.momentumPct > 0 ? '+' : ''}${data.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={data.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon={data.summary.momentumPct >= 0 ? '↗' : '↘'} />
-          <KpiTile label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
-            sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="🔀" />
-        </div>
-        {data.previousPeriod && (
+        <SaKpiCarousel>
+          <KpiTile compact label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
+            sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="/sa-icon-revenue.jpg" />
+          <KpiTile compact label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
+            sub={`Avg ${fmtNum(filteredData.summary.avgDailyUnits)}/day`} icon="/sa-icon-units.png" />
+          <KpiTile compact label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(filteredData.summary.avgSellingPrice) : '—'} icon="/sa-icon-asp.png" />
+          <KpiTile compact label="Fill Rate" value={filteredData.summary.exactFillRate != null ? `${Math.round(filteredData.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={filteredData.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="/sa-icon-fillrate.png" />
+          <KpiTile compact label="Momentum" value={filteredData.summary.momentumPct != null ? `${filteredData.summary.momentumPct > 0 ? '+' : ''}${filteredData.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={filteredData.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon="/sa-icon-momentum.png" />
+          <KpiTile compact label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
+            sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="/sa-icon-salesmix.png" />
+        </SaKpiCarousel>
+        {filteredData.previousPeriod && (
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: IC.t3, marginTop: -6 }}>
-            <span>Revenue vs previous period: <ChangeBadge pct={data.previousPeriod.revenueChangePct} /></span>
-            <span>Units vs previous period: <ChangeBadge pct={data.previousPeriod.unitsChangePct} /></span>
+            <span>Revenue vs previous period: <ChangeBadge pct={filteredData.previousPeriod.revenueChangePct} /></span>
+            <span>Units vs previous period: <ChangeBadge pct={filteredData.previousPeriod.unitsChangePct} /></span>
           </div>
         )}
 
         {/* Sales trend */}
-        <GlassCard title="Sales Trend" note={`${trendGranularity} units & revenue`}
+        <GlassCard title={isMobile ? <span style={{ marginLeft: 8 }}>Sales Trend</span> : "Sales Trend"} note={isMobile ? null : `${trendGranularity} units & revenue`}
+          style={isMobile ? { paddingLeft: 6, paddingRight: 6 } : undefined}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
-                  <button key={g.k} onClick={() => setTrendGranularity(g.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-              <ExportButton filename="sales_trend.csv" rows={data[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
+              {isMobile ? (
+                <PillToggle size="sm" value={trendGranularity} onChange={setTrendGranularity}
+                  options={[{ value: 'daily', label: 'D' }, { value: 'weekly', label: 'W' }, { value: 'monthly', label: 'M' }]} />
+              ) : (
+                <>
+                  <PillToggle value={trendGranularity} onChange={setTrendGranularity}
+                    options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
+                  <ExportButton filename="sales_trend.csv" rows={filteredData[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
+                </>
+              )}
             </div>
           }>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={dailyChart} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+            <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 10 : 12, bottom: 0, left: isMobile ? 20 : 0 }}>
+              <defs>
+                <linearGradient id="saTrendGold" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={IC.acc} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={IC.acc} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
               <CartesianGrid stroke={IC.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false} />
-              <YAxis yAxisId="qty" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={44} />
-              {revenueAvailable && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false}
+                {...(isMobile && dailyChart?.length ? {
+                  ticks: [dailyChart[0].date, ...dailyChart.filter((_, i) => i > 0 && i < dailyChart.length - 1 && i % Math.ceil(dailyChart.length / 6) === 0).map(d => d.date), dailyChart[dailyChart.length - 1].date]
+                } : {})} />
+              <YAxis yAxisId="qty" tick={isMobile ? false : { fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={isMobile ? 0 : 44} />
+              {revenueAvailable && !isMobile && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
               <Tooltip content={<SalesTrendTip />} />
-              <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="rgba(255,214,0,0.14)" stroke={IC.acc} strokeWidth={2} />
-              {revenueAvailable && <Line yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke={IC.categorical[0]} strokeWidth={2} dot={false} />}
+              <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="url(#saTrendGold)" stroke={IC.acc} strokeWidth={2} />
+              {revenueAvailable && <Line yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke={IC.secondary} strokeWidth={2} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
         </GlassCard>
@@ -580,48 +817,35 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         {/* Location-wise sold vs allocation + channel-wise split + category-wise split —
             fixed, matched heights so no card's content area grows/shrinks with row count
             or toggle state. Same RankedBarList sizing/fonts across all three. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1fr', gap: 14, alignItems: 'stretch' }}>
+        <div className="inv-3col-row" style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1fr', gap: 14, alignItems: 'stretch' }}>
           <GlassCard title="Location-Wise Sales vs Allocation"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'grid', gridTemplateColumns: `90px 56px`, gap: 8 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right' }}>Allocation %</span>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right' }}>% of total</span>
+              <div style={{ display: 'grid', gridTemplateColumns: `56px`, gap: 8 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right', whiteSpace: 'nowrap' }}>% of total</span>
               </div>
             }>
             <LocationClusteredBarList rows={locationStackedRows} height={MOVERS_CARD_HEIGHT} />
             <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10.5, color: IC.t3, flexShrink: 0 }}>
               <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.acc, borderRadius: 2, marginRight: 5 }} />Sales (region demand)</span>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.categorical[0], borderRadius: 2, marginRight: 5 }} />Allocation (shipped from here)</span>
+              <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.secondary, borderRadius: 2, marginRight: 5 }} />Allocation (shipped from here)</span>
             </div>
           </GlassCard>
 
-          <GlassCard title="Channel-Wise Sales" note={`ranked by ${channelMetric === 'rev' ? 'revenue' : 'units'} share`}
+          <GlassCard title="Channel-Wise Sales"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setChannelMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: channelMetric === m.k ? IC.accDim : IC.surface, color: channelMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${channelMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={channelMetric} onChange={setChannelMetric}
+                options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
             }>
             <RankedBarList rows={channelDonutSorted} total={channelDonutTotal} height={MOVERS_CARD_HEIGHT} metric={channelMetric} />
           </GlassCard>
 
-          <GlassCard title="Category Contribution" note={`ranked by ${categoryMetric === 'rev' ? 'revenue' : 'units'} share`}
+          <GlassCard title="Category Contribution"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setCategoryMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: categoryMetric === m.k ? IC.accDim : IC.surface, color: categoryMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${categoryMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={categoryMetric} onChange={setCategoryMetric}
+                options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
             }>
             <RankedBarList rows={categoryDonutSorted} total={categoryDonutTotal} height={MOVERS_CARD_HEIGHT} metric={categoryMetric} />
           </GlassCard>
@@ -633,102 +857,93 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             Products' and can be taller) — the list below fills whatever space remains via
             flex:1/minHeight:0 and scrolls internally, so neither card grows past the fixed
             total height and neither list is forced to match the other's size. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
+        <div className="sa-movers-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
           <GlassCard title="Top Products"
-            note={`${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
-            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
+            note={isMobile ? null : `${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
+            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
             action={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }].map(l => (
-                    <button key={l.k} onClick={() => setTop20Level(l.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: top20Level === l.k ? IC.accDim : IC.surface, color: top20Level === l.k ? IC.t1 : IC.t3, border: `1px solid ${top20Level === l.k ? IC.accBorder : IC.border}` }}>
-                      {l.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                    <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setTop20Metric(m.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: top20Metric === m.k ? IC.accDim : IC.surface, color: top20Metric === m.k ? IC.t1 : IC.t3, border: `1px solid ${top20Metric === m.k ? IC.accBorder : IC.border}` }}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PillToggle size="sm" value={top20Level} onChange={setTop20Level}
+                  options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' }]} />
+                <PillToggle size="sm" value={top20Metric} onChange={setTop20Metric}
+                  options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
               </div>
             }>
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <TopProductsBarList rows={topProductsRows} metric={top20Metric}
-                grandTotal={top20Metric === 'rev' ? data.summary.totalRevenue : data.summary.totalUnits}
-                nameWidth={top20Level === 'sku' ? 150 : 220} />
+                grandTotal={top20Metric === 'rev' ? filteredData.summary.totalRevenue : filteredData.summary.totalUnits}
+                nameWidth={top20Level === 'sku' ? (isMobile ? 130 : 150) : (isMobile ? 160 : 220)}
+                isMobile={isMobile} />
             </div>
           </GlassCard>
 
-          <GlassCard title="Drastic Sales Change" note="biggest movers"
-            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
-            action={
-              <ExportButton filename="drastic_movers.csv" rows={drasticRows}
-                columns={[
-                  { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
-                  { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
-                ]} />
+          <GlassCard title="Drastic Sales Change" note={isMobile ? null : "biggest movers"}
+            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
+            action={isMobile
+              ? <input type="text" value={drasticSearch} onChange={e => setDrasticSearch(e.target.value)} placeholder="Search…"
+                  style={{ width: 110, padding: '4px 8px', fontSize: 11, borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.surface, color: IC.t1, outline: 'none' }} />
+              : <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input type="text" value={drasticSearch} onChange={e => setDrasticSearch(e.target.value)} placeholder="Search…"
+                    style={{ width: 110, padding: '4px 8px', fontSize: 11, borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.surface, color: IC.t1, outline: 'none' }} />
+                  <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))} width={110} height={25} />
+                  <ExportButton filename="drastic_movers.csv" rows={drasticRows}
+                    columns={[
+                      { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
+                      { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
+                    ]} />
+                </div>
             }>
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {isMobile ? (
+                <>
+                  <PillToggle size="sm" value={[drasticLevel, drasticDirection].find(v => ['sku','subCategory','category','risers','fallers'].includes(v))}
+                    onChange={v => (v === 'risers' || v === 'fallers') ? setDrasticDirection(v) : setDrasticLevel(v)}
+                    options={[
+                      { value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' },
+                      { value: 'risers', label: '▲ Risers' }, { value: 'fallers', label: '▼ Fallers', activeColor: IC.status.Critical.c },
+                    ]} />
+                  <PillToggle size="sm" value={[drasticMetric, drasticMode].find(v => ['qty','rev','day2','day7'].includes(v))}
+                    onChange={v => (v === 'day2' || v === 'day7') ? setDrasticMode(v) : setDrasticMetric(v)}
+                    options={[
+                      { value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable },
+                      { value: 'day2', label: 'Lst vs 2nd' }, { value: 'day7', label: 'Lst vs 7th' },
+                    ]} />
+                </>
+              ) : (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-category' }, { k: 'category', label: 'Category' }].map(l => (
-                  <button key={l.k} onClick={() => setDrasticLevel(l.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticLevel === l.k ? IC.accDim : IC.surface, color: drasticLevel === l.k ? IC.t1 : IC.t3, border: `1px solid ${drasticLevel === l.k ? IC.accBorder : IC.border}` }}>
-                    {l.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticLevel} onChange={setDrasticLevel}
+                  options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-category' }, { value: 'category', label: 'Category' }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                {[{ k: 'risers', label: '▲ Risers' }, { k: 'fallers', label: '▼ Fallers' }].map(d => (
-                  <button key={d.k} onClick={() => setDrasticDirection(d.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticDirection === d.k ? IC.accDim : IC.surface, color: drasticDirection === d.k ? (d.k === 'risers' ? IC.positive : IC.status.Critical.c) : IC.t3, border: `1px solid ${drasticDirection === d.k ? IC.accBorder : IC.border}` }}>
-                    {d.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticDirection} onChange={setDrasticDirection}
+                  options={[{ value: 'risers', label: '▲ Risers', activeColor: IC.positive }, { value: 'fallers', label: '▼ Fallers', activeColor: IC.status.Critical.c }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setDrasticMetric(m.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: drasticMetric === m.k ? IC.accDim : IC.surface, color: drasticMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticMetric} onChange={setDrasticMetric}
+                  options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
-                  {[{ k: 'day2', label: 'Last vs 2nd-last day' }, { k: 'day7', label: 'Last vs 7th-last day' }].map(m => (
-                    <button key={m.k} onClick={() => setDrasticMode(m.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticMode === m.k ? IC.accDim : IC.surface, color: drasticMode === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMode === m.k ? IC.accBorder : IC.border}`, whiteSpace: 'nowrap' }}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))}
-                  width={130} height={25} />
+                <PillToggle size="sm" value={drasticMode} onChange={setDrasticMode}
+                  options={[{ value: 'day2', label: 'Last vs 2nd-last day' }, { value: 'day7', label: 'Last vs 7th-last day' }]} />
               </div>
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {drasticRows.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '16px 1fr 60px 60px 68px', gap: 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
-                  <span />
-                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3 }}>
-                    {drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category'}
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 44px 44px 62px' : '16px 1fr 60px 60px 68px', gap: isMobile ? 4 : 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
+                  {!isMobile && <span />}
+                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3, whiteSpace: 'nowrap' }}>
+                    {drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-cat' : 'Category'}
                   </span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Before</span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Now</span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Change</span>
                 </div>
               )}
-              <DrasticMoversTable rows={drasticRows} metric={drasticMetric} level={drasticLevel} />
+              <DrasticMoversTable rows={drasticRows} metric={drasticMetric} level={drasticLevel} isMobile={isMobile} />
             </div>
           </GlassCard>
         </div>
 
-        {/* Product-Wise Sales Matrix — Category → Sub-category → SKU rows, time-bucketed
-            columns. Own Channel filter, independent of the sidebar. */}
-        <GlassCard title="Product-Wise Sales Matrix" note="click a row to expand — category → sub-category → SKU"
+        {/* Product-Wise Sales Matrix — hidden on mobile */}
+        {!isMobile && <GlassCard title="Product-Wise Sales Matrix" note="click a row to expand — category → sub-category → SKU"
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <input type="text" value={matrixSearch} onChange={e => setMatrixSearch(e.target.value)}
@@ -736,22 +951,45 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border}`, width: 190, height: SLICER_HEIGHT, boxSizing: 'border-box' }} />
               <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.matrixChannel || []} onChange={v => setFilters(f => ({ ...f, matrixChannel: v }))}
                 width={150} height={SLICER_HEIGHT} />
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setMatrixMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: matrixMetric === m.k ? IC.accDim : IC.surface, color: matrixMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${matrixMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'date', label: 'Date' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }].map(g => (
-                  <button key={g.k} onClick={() => { setMatrixGranularity(g.k); setMatrixSort({ key: 'total', dir: 'desc' }) }}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: matrixGranularity === g.k ? IC.accDim : IC.surface, color: matrixGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${matrixGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={matrixMetric} onChange={setMatrixMetric}
+                options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
+              <PillToggle value={matrixGranularity} onChange={g => { setMatrixGranularity(g); setMatrixSort({ key: 'total', dir: 'desc' }) }}
+                options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+              <button
+                onClick={() => {
+                  const raw = filteredData?.rawRows || data?.rawRows || []
+                  const ds = dateFilters?.start, de = dateFilters?.end
+                  const mch = filters.matrixChannel || []
+                  const subset = raw.filter(r => {
+                    if (ds && r.date < ds) return false
+                    if (de && r.date > de) return false
+                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
+                    return true
+                  })
+                  const map = new Map()
+                  for (const r of subset) {
+                    const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
+                    if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
+                    const e = map.get(k); e.qty += r.qty; e.rev += r.rev
+                  }
+                  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
+                  exportCsv(
+                    `sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
+                    [
+                      { label: 'Date', key: 'date' },
+                      { label: 'Category', key: 'category' },
+                      { label: 'Sub-Category', key: 'subCategory' },
+                      { label: 'SKU', key: 'sku' },
+                      { label: 'Channel', key: 'channel' },
+                      { label: 'Units', key: 'qty' },
+                      { label: 'Revenue', key: 'rev' },
+                    ],
+                    rows
+                  )
+                }}
+                style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
+                ⭳ Export CSV
+              </button>
             </div>
           }>
           <div style={{ maxHeight: 480, overflow: 'auto' }}>
@@ -785,19 +1023,19 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                       <tr onClick={() => toggleMatrixExpanded(category)} style={{ cursor: 'pointer', borderBottom: `1px solid ${IC.border}` }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <td style={{ position: 'sticky', left: 0, background: IC.surface, padding: '6px 10px', fontWeight: 700, color: IC.t1 }}>
+                        <td style={{ position: 'sticky', left: 0, background: IC.surface, padding: '8px 12px', fontWeight: 700, color: IC.t1 }}>
                           <span style={{ display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s', marginRight: 6, color: IC.t3, fontSize: 9 }}>›</span>
                           {category}
                         </td>
                         {matrixColumns.map(col => {
                           const v = catCells?.get(col)
                           return (
-                            <td key={col} style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>
+                            <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>
                               {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                             </td>
                           )
                         })}
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
                           {catTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(catTotal.rev) : '—') : fmtInt(catTotal.qty)) : '—'}
                         </td>
                       </tr>
@@ -819,12 +1057,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                               {matrixColumns.map(col => {
                                 const v = subCells?.get(col)
                                 return (
-                                  <td key={col} style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>
+                                  <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>
                                     {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                                   </td>
                                 )
                               })}
-                              <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t2, borderLeft: `1px solid ${IC.border2}` }}>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t2, borderLeft: `1px solid ${IC.border2}` }}>
                                 {subTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(subTotal.rev) : '—') : fmtInt(subTotal.qty)) : '—'}
                               </td>
                             </tr>
@@ -840,12 +1078,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                                   {matrixColumns.map(col => {
                                     const v = skuCells?.get(col)
                                     return (
-                                      <td key={col} style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3, fontSize: 11 }}>
+                                      <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3, fontSize: 11 }}>
                                         {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                                       </td>
                                     )
                                   })}
-                                  <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t3, fontSize: 11, borderLeft: `1px solid ${IC.border2}` }}>
+                                  <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t3, fontSize: 11, borderLeft: `1px solid ${IC.border2}` }}>
                                     {skuTotal ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(skuTotal.rev) : '—') : fmtInt(skuTotal.qty)) : '—'}
                                   </td>
                                 </tr>
@@ -860,24 +1098,27 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               </tbody>
               <tfoot>
                 <tr style={{ position: 'sticky', bottom: 0, background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}` }}>
-                  <td style={{ position: 'sticky', left: 0, background: IC.surfaceHi, padding: '7px 10px', fontWeight: 700, color: IC.t1 }}>Grand Total</td>
+                  <td style={{ position: 'sticky', left: 0, background: IC.surfaceHi, padding: '8px 12px', fontWeight: 700, color: IC.t1 }}>Grand Total</td>
                   {matrixColumns.map(col => {
                     const v = matrixGrandTotal.perBucket.get(col)
                     return (
-                      <td key={col} style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
+                      <td key={col} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>
                         {v ? (matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(v.rev) : '—') : fmtInt(v.qty)) : '—'}
                       </td>
                     )
                   })}
-                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: IC.t1, borderLeft: `1px solid ${IC.border2}` }}>
                     {matrixMetric === 'rev' ? (revenueAvailable ? fmtCurrency(matrixGrandTotal.total.rev) : '—') : fmtInt(matrixGrandTotal.total.qty)}
                   </td>
                 </tr>
               </tfoot>
             </table>
           </div>
-        </GlassCard>
+        </GlassCard>}
       </div>
     </div>
   )
 }
+
+// Exported so InventoryPage can render this panel inside the top-bar Filters popover.
+export { FilterSidebar as SalesFilterSidebar }

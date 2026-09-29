@@ -2,28 +2,39 @@
 // used by the rest of the app shell (Logistics/Sales/Overview, see utils.js's `C`).
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { cssVar } from '../theme.js'
 
 export const IC = {
-  page: '#F2F1EF',
-  surface: '#fff',
-  surfaceHi: '#fff',
-  border: '#E4E4E7',
-  border2: '#C7C7CE',
-  // Subtle hover fill for slicer/toggle controls — a touch darker than `surface` (white) so
-  // hovering a dropdown or tile gives visible feedback without looking like an active/
-  // selected state (that's still accDim/accBorder).
-  hoverBg: '#F5F5F6',
-  t1: '#1F1F23',
-  t2: '#5B5B62',
-  t3: '#8B8B92',
-  acc: '#FFD600',
-  accDim: '#FFF9CC',
-  accBorder: '#E6C200',
-  // Positive/negative delta color — separate from `acc` (the yellow brand accent used for
-  // active-toggle highlighting) since yellow doesn't read as "good" the way the app shell's
-  // green/red delta badges do (see App.jsx's HeroKPICard `chg` badge).
-  positive: '#286010',
-  negative: '#7A1A1A',
+  // Chrome colours read live from the CSS custom properties in index.css, so the
+  // Inventory pages follow a theme switch with the rest of the app. See src/theme.js.
+  // Fallbacks are the gold (default) values, used before first paint only.
+  get page(){ return cssVar("--bg", "#EDF1EF") },
+  get surface(){ return cssVar("--card","#fff") },
+  get surfaceHi(){ return cssVar("--card","#fff") },
+  get border(){ return cssVar("--b1", "#E2E9E6") },
+  get border2(){ return cssVar("--b2", "#CBD8D3") },
+  // Subtle hover fill for slicer/toggle controls — a touch off surface (white) so
+  // hovering a dropdown or tile gives visible feedback without looking like an
+  // active/selected state (that is still accDim/accBorder).
+  get hoverBg(){ return cssVar("--hov", "#F2F6F4") },
+  get t1(){ return cssVar("--t1", "#16211D") },
+  get t2(){ return cssVar("--t2", "#42544E") },
+  get t3(){ return cssVar("--t3", "#72847E") },
+  get acc(){ return cssVar("--acc", "#1F6F5C") },
+  get accDim(){ return cssVar("--acl", "#E6F2EE") },
+  get accBorder(){ return cssVar("--acm", "#175A4A") },
+  // Matches C.acs — the solid-but-soft accent fill used by the app-wide divider-pill
+  // toggle pattern (segmented switchers separated by thin dividers, no per-button borders).
+  get acs(){ return cssVar("--acs", "#A8D5C8") },
+  // Divider line between adjacent options in a divider-pill toggle — matches C.border2.
+  get divider(){ return cssVar("--b2", "#CBD8D3") },
+  // The app-wide "second series next to the accent" colour (matches C.blue.tx), used
+  // wherever a chart needs exactly two distinguishable series and one is the accent.
+  get secondary(){ return cssVar("--Bt", "#1B4B84") },
+  // Positive/negative delta colour — separate from the accent, since an accent hue does
+  // not read as "good" the way the app shell green/red delta badges do.
+  get positive(){ return cssVar("--Gt", "#1B6B33") },
+  get negative(){ return cssVar("--Rt", "#A82A2A") },
   status: {
     'Critical':       { c: '#d03b3b', label: 'Critical' },
     'Low':            { c: '#c98500', label: 'Low' },
@@ -37,7 +48,45 @@ export const IC = {
   categorical: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
 }
 
-export const PAGE_BACKGROUND = '#F2F1EF'
+// NOTE: no PAGE_BACKGROUND constant. A module-level `const x = IC.page` would freeze
+// the colour at import time and stop following theme switches; read IC.page at the
+// call site instead, inside render.
+
+// ── Laptop-width scaling ──────────────────────────────────────────────────────
+// The Inventory tab was built and tuned against a large desktop monitor. On a laptop screen
+// (1366-1440px-class, common corporate laptop resolutions) the request is specifically for
+// the WHOLE tab — every box, font, heading, the sidebar, everything — to shrink together in
+// exact proportion, the same way remote-desktop's own screen scaling or a browser zoom-out
+// looks: nothing reflows or resizes independently, the entire page is just uniformly
+// smaller. CSS `zoom` on one top-level wrapper does exactly this in one step (unlike
+// `transform: scale`, it doesn't require manual overflow/dimension compensation and doesn't
+// break `position: fixed` descendants like the sidebar) — far more reliable than manually
+// multiplying hundreds of individual pixel values across every component, which risks
+// missing spots and drifting out of proportion with each other.
+const ZOOM_BREAKPOINTS = [
+  { minWidth: 1600, zoom: 1 },
+  { minWidth: 1440, zoom: 0.9 },
+  { minWidth: 1280, zoom: 0.8 },
+  { minWidth: 769, zoom: 0.72 },
+  { minWidth: 0, zoom: 1 }, // no zoom on mobile — CSS responsive layout takes over
+]
+function zoomForWidth(width) {
+  for (const bp of ZOOM_BREAKPOINTS) if (width >= bp.minWidth) return bp.zoom
+  return 1
+}
+
+// Hook: returns the current zoom factor, updating on window resize. Used once at the top of
+// the Inventory tab (InventoryPage.jsx) to set `zoom` on the whole page's outer container.
+export function useUIScale() {
+  const [zoom, setZoomState] = useState(() => (typeof window === 'undefined' ? 1 : zoomForWidth(window.innerWidth)))
+  useEffect(() => {
+    const onResize = () => setZoomState(zoomForWidth(window.innerWidth))
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return zoom
+}
 
 export function fmtNum(n) {
   if (n == null || Number.isNaN(n) || n === 0) return '—'
@@ -71,21 +120,31 @@ export function fmtCurrency(n) {
 }
 
 export function getDefaultDates() {
+  const toLocal = d => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
   const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - 6)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocal(start), end: toLocal(end) }
 }
 
 // ── Shared building blocks ─────────────────────────────────────────────────
 export function GlassCard({ title, note, action, children, style }) {
   return (
-    <div style={{
+    <div className="card-hoverable" style={{
       background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: 16,
       padding: '18px 20px',
-      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
+      // A wide table/chart inside can otherwise grow this card past its allotted flex
+      // width instead of respecting it — the card's own overflow:auto wrapper around such
+      // content only actually clips/scrolls if THIS box is itself constrained; without
+      // minWidth:0 here, a flex/grid parent lets this card size to its content instead of
+      // shrinking to fit, and the resulting overflow pushes the whole page wider than the
+      // viewport (visible as the entire window gaining horizontal scroll).
+      minWidth: 0,
       ...style,
     }}>
       {(title || note || action) && (
@@ -107,34 +166,35 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
   const labelSize = compact ? 9.5 : 10.5
   const valueSize = compact ? 20 : 24
   const unitSize = compact ? 11 : 12
-  const iconSize = compact ? 22 : 24
+  const iconSize = compact ? 24 : 26
   const radius = compact ? 12 : 16
   return (
-    <div style={{
+    <div className="card-hoverable" style={{
       background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: radius,
       padding: pad,
-      display: 'flex', flexDirection: 'column', gap: compact ? 5 : 5,
-      position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', gap: 5,
+      position: 'relative',
       minHeight: compact ? 78 : undefined,
       height: compact ? '100%' : undefined,
-      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
         <span style={{ fontSize: labelSize, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: IC.t3, lineHeight: 1.2 }}>{label}</span>
         {icon && (
-          <span style={{
-            width: iconSize, height: iconSize, borderRadius: compact ? 6 : 8, background: IC.accDim, border: `1px solid ${IC.accBorder}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 11 : 13, color: IC.acc, flexShrink: 0,
-          }}>{icon}</span>
+          typeof icon === 'string' && icon.startsWith('/')
+            ? <img src={icon} alt="" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flexShrink: 0, mixBlendMode: 'multiply' }} />
+            : <span style={{
+                width: iconSize, height: iconSize, borderRadius: compact ? 6 : 8, background: IC.accDim, border: `1px solid ${IC.accBorder}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 11 : 13, color: IC.acc, flexShrink: 0,
+              }}>{icon}</span>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flex: 1 }}>
         <span style={{ fontSize: valueSize, fontWeight: 700, letterSpacing: '-.02em', color: accent || IC.t1, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{value}</span>
         {unit && <span style={{ fontSize: unitSize, color: IC.t3 }}>{unit}</span>}
       </div>
-      {!compact && sub && <span style={{ fontSize: 11.5, color: IC.t3 }}>{sub}</span>}
+      {sub && <span className="kpi-tile-sub" style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
     </div>
   )
 }
@@ -212,23 +272,6 @@ export function ExportButton({ filename, columns, rows }) {
       style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
       ⭳ Export CSV
     </button>
-  )
-}
-
-// ── Simple single-select dropdown filter (kept for the Sales & Allocation page) ──
-export function MultiSelectFilter({ label, options, selected, onChange }) {
-  return (
-    <select
-      multiple={false}
-      value={selected[0] || ''}
-      onChange={e => onChange(e.target.value ? [e.target.value] : [])}
-      style={{
-        background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px',
-        color: selected.length ? IC.t1 : IC.t3, fontSize: 12, minWidth: 130, cursor: 'pointer',
-      }}>
-      <option value="">{label}</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
   )
 }
 
@@ -503,6 +546,40 @@ export function TileMultiSelect({ items, selected, onToggle, renderTile }) {
               transition: 'border-color .12s, background .12s',
             }}>
             {renderTile(item, isSel)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Divider-pill segmented toggle — the app-wide standard toggle shape (see App.jsx's
+// D2CSubChannelToggle / Courier-wise Breakdown view switcher): a flat row of text options
+// separated by thin vertical divider lines, NO individual button borders, active option gets
+// a solid IC.acs fill + IC.t1 text, inactive stays plain IC.t3 text on transparent. Replaces
+// the older per-button-bordered pill pattern (IC.accDim fill + IC.accBorder border on each
+// button) that several toggles on this page used before being brought in line with Sales/
+// Logistics's established convention.
+export function PillToggle({ options, value, onChange, size = 'md' }) {
+  const fontSize = size === 'sm' ? 10.5 : 11
+  const padding = size === 'sm' ? '3px 9px' : '4px 10px'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+      {options.map((opt, i) => {
+        const active = opt.value === value
+        const disabled = !!opt.disabled
+        return (
+          <div key={opt.value} style={{ display: 'flex', alignItems: 'center' }}>
+            {i > 0 && <div style={{ width: 1, height: 14, background: IC.divider, margin: '0 4px' }} />}
+            <button onClick={() => !disabled && onChange(opt.value)} disabled={disabled} style={{
+              fontSize, fontWeight: active ? 700 : 500, padding, borderRadius: 6,
+              border: 'none', outline: 'none', background: active ? IC.acs : 'transparent',
+              color: disabled ? IC.t3 : active ? (opt.activeColor || IC.t1) : IC.t3,
+              cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+              whiteSpace: 'nowrap', textAlign: 'center',
+            }}>
+              {opt.label}
+            </button>
           </div>
         )
       })}

@@ -1,0 +1,5762 @@
+import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
+import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import LoadingOverlay from './LoadingOverlay.jsx'
+import {
+  Card, Badge, DataTable, ChartTooltip,
+  BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, chartLegendProps, BarGradient } from './components.jsx'
+
+// Page-local palette. Identical to the shared one except for `t3`, the secondary grey used
+// by card titles, sub-lines, section notes and slicer labels.
+//
+// The shared #94939F measures 3.03:1 on a white card, which fails WCAG AA for normal-size
+// text — at the 9.5-11px these labels run at, they were genuinely hard to read. #75747F is
+// 4.60:1, so it passes AA while staying clearly secondary to t2 (7.90:1): a step darker,
+// not a promotion to body text. Same cool, slightly blue-leaning hue family, so it still
+// reads as part of the palette.
+//
+// Shadowed here rather than changed in utils.js because that token has ~383 uses across
+// every tab, and this change was scoped to the three Logistics Cost tabs.
+const C = { ...BASE_C, t3: '#75747F' }
+
+// ── Logistics Cost Analytics ──────────────────────────────────
+// Reads the manually-dumped invoice ledgers (logistics_invoices_b2c / _b2b).
+// Read-only: this page never writes to Supabase.
+
+const B2C = 'logistics_invoices_b2c'
+const ZONES = ['A', 'B', 'C', 'D', 'E']
+
+// ── Palette ───────────────────────────────────────────────────
+// Validated with the dataviz validator against this app's white card surface
+// (#ffffff), light mode only — the app ships no dark theme.
+//
+// Zones and weight slabs are ORDERED categories, so they take a single-hue ordinal
+// blue ramp (light→dark) rather than categorical hues: colouring an ordered scale
+// with unrelated hues throws away the ordering the reader needs. Validated with
+// --ordinal: monotone lightness, all adjacent ΔL ≥ 0.06, light end clears the surface.
+// Ordinal weight bands: the theme's sequential ramp, reversed so the light end leads
+// (light = low band). Read through a getter so it follows a theme switch.
+const ORD = { get BLUE(){ return [...C.ramp].reverse() } }
+
+// Shipment mode — categorical, drawn from the theme's series palette. The lead hue is
+// the theme accent; the rest are fixed so they stay distinguishable beside either accent.
+const SERIES_BASE = { orange: '#F2724F', aqua: '#2BB3A3', yellow: '#F0B429' }
+const SER = {
+  get blue(){ return C.acc },
+  get orange(){ return SERIES_BASE.orange },
+  get aqua(){ return SERIES_BASE.aqua },
+  get yellow(){ return SERIES_BASE.yellow },
+}
+// Overview trend: one shade per spend stream, stepped far enough apart in LIGHTNESS to be
+// told apart at 2px on a white card.
+//
+// The three accent tokens alone cannot do this. Forest ships acc #1F6F5C, acm #175A4A and
+// acd #0E3F34 — all mid-to-dark greens within a narrow lightness band, so three lines drawn
+// from them read as one colour repeated. (The chart was worse still: B2C and FTL/PTL were
+// literally both C.acm.)
+//
+// So the ramp keeps the two theme tokens at the dark end and adds a genuinely light green
+// at the top. #4FA88E is the theme's own hue, lightened: 2.9:1 on white, which is thin for
+// text but correct for a 2px stroke, and a clear step above acc. Fixed rather than
+// tokenised because only this chart needs a four-step green ramp; the shared tokens stay
+// the source of truth for everything else.
+const OV_SERIES = {
+  get b2c(){ return '#4FA88E' },   // lightest — the largest stream, so it reads first
+  get b2b(){ return C.acc },      // mid
+  get tpl(){ return C.acd },      // deepest
+}
+
+// Forward / Reverse / RTO — distinct states drawn from the theme's green family so all
+// three read as on-theme. acm (mid accent) and acd (deep accent) step darker than acc;
+// acl is reserved for fills, not lines, so only the two deeper tokens are used here.
+const MODE = {
+  get Forward(){ return C.acc },
+  get Reverse(){ return C.acm },
+  get RTO(){ return C.acd },
+}
+
+// Courier trend lines — all greens/teals so the chart reads as one family.
+// Six steps spaced across light→dark so lines stay apart even on greyscale/CVD.
+const DRIFT = { get colors(){ return [C.acc, '#2BB3A3', C.acm, '#57C4A8', C.acd, '#A8D5C8'] } }
+
+// Chart chrome — recessive hairlines, muted axis ink.
+// Per-unit rates, to one decimal. fmt() compacts to lakhs/crores, which is right for spend
+// but wrong for a 45-rupee-per-parcel figure — it would render as "₹45" and lose the
+// precision the whole comparison turns on.
+const money1 = v => (v == null || !isFinite(v) ? '—' : '₹' + Number(v).toFixed(1))
+
+const VIZ = {
+  grid: '#e1e0d9',
+  axis: '#c3c2b7',
+  muted: '#898781',
+  surface: '#ffffff',
+}
+
+const zoneColor = (zone, ordered) => {
+  const i = ordered.indexOf(zone)
+  return i === -1 ? VIZ.muted : ORD.BLUE[Math.min(i, ORD.BLUE.length - 1)]
+}
+
+// Weight slabs mirror how courier rate cards actually step, so a slab filter answers
+// "which slab is bleeding money" rather than an arbitrary cut.
+//
+// The old top band was "10 kg +", which buried everything heavy in one bucket worth ₹174 L.
+// Split on where the volume and the money actually sit (B2C, all months):
+//   10-15 kg  16,910 shp  ₹42.01 L      15-20 kg   3,134 shp  ₹10.34 L
+//   20-30 kg  10,900 shp  ₹50.58 L      30-50 kg   1,295 shp  ₹ 9.72 L
+//   50 kg +    4,303 shp  ₹61.48 L
+//
+// 50 kg + is the reason for the change: 0.64% of shipments but 8.79% of cost. As part of a
+// 10+ bucket it was invisible; on its own it is the most expensive slab in the book.
+const WEIGHT_BANDS = [
+  { key: '0-1', label: '0 – 1 kg', min: 0, max: 1 },
+  { key: '1-2', label: '1 – 2 kg', min: 1, max: 2 },
+  { key: '2-5', label: '2 – 5 kg', min: 2, max: 5 },
+  { key: '5-10', label: '5 – 10 kg', min: 5, max: 10 },
+  { key: '10-15', label: '10 – 15 kg', min: 10, max: 15 },
+  { key: '15-20', label: '15 – 20 kg', min: 15, max: 20 },
+  { key: '20-30', label: '20 – 30 kg', min: 20, max: 30 },
+  { key: '30-50', label: '30 – 50 kg', min: 30, max: 50 },
+  { key: '50+', label: '50 kg +', min: 50, max: null },
+]
+
+// The three reporting scopes. B2C is the default because it is where the detail
+// (and the recoverable money) lives.
+// Courier name with its mark. The logo is decorative — alt is empty so a screen reader
+// reads the name once, not twice — and a broken file hides the img rather than showing a
+// torn-image glyph, so an unmapped courier degrades to plain text instead of visible damage.
+function CourierCell({ name }) {
+  const [bad, setBad] = useState(false)
+  const logo = COURIER_LOGOS[name]
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+      {logo && !bad
+        ? <img src={logo} alt="" onError={() => setBad(true)}
+            style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3,
+                     flexShrink: 0, background: '#fff' }} />
+        // No logo: the initials badge, matching the sidebar so a carrier looks identical
+        // wherever it appears. Fixed width either way, so names stay aligned down the column.
+        : <span style={{
+            width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+            background: COURIER_COLORS[name] || '#94a3b8',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 8, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22)',
+          }}>{initials(name)}</span>}
+      {name}
+    </span>
+  )
+}
+
+// Cube rows carry the short band key; this maps them to the display label. Derived from
+// WEIGHT_BANDS rather than restated, so a new band cannot be added in one place and forgotten
+// here — an unmapped key falls through to the raw string and reads as a bug.
+// Vehicle type as the charts key it: "20 FT", "20FT" and "20 Ft" are one vehicle, not three.
+// Mirrors vehicleKey() in scripts/b2b-rate-card.mjs — duplicated rather than imported because
+// that module pulls in xlsx and pg, which have no business in a browser bundle. If the rule
+// changes, change it in both places.
+function vehicleKeyOf(vt) {
+  const s = String(vt || '').toUpperCase().replace(/\s+/g, '')
+  // Pickup BEFORE the footage pattern: "Pickup/10 Ft" is a pickup, and the digits inside it
+  // would otherwise capture it as a 10FT truck — a much dearer vehicle.
+  if (/ACE/.test(s)) return 'TATA ACE'
+  if (/PICK/.test(s)) return 'PICKUP'
+  if (/7\.?5T?/.test(s)) return '7.5T'
+  if (/10MT|10T\b/.test(s)) return '10MT'
+  const m = s.match(/(\d+)\s*FT/)
+  return m ? m[1] + 'FT' : (vt || '—')
+}
+
+const BAND_LABEL = Object.fromEntries(WEIGHT_BANDS.map(b => [b.key, b.label]))
+
+const SCOPES = [
+  { id: 'all', label: 'Overview', hint: 'FTL/PTL + B2C combined summary' },
+  { id: 'b2c', label: 'B2C', hint: 'Courier / parcel shipments' },
+  { id: 'b2b', label: 'FTL/PTL', hint: 'Full / part truckload freight, lane-wise' },
+  { id: 'tpl', label: '3PL', hint: 'Warehousing — storage and handling, per site' },
+]
+
+const EMPTY_FILTERS = {
+  months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [],
+  accountTypes: [], band: null, destCity: null, originCity: null, exactSlab: null, billing: 'all',
+  // 3PL warehousing. Its own keys rather than reusing `couriers`: the 3PL aggregates come
+  // from the server's filter-independent refCache and are narrowed on the client, so these
+  // must never reach the API's filter key or they would trigger a needless full rebuild.
+  tplPartners: [], tplSites: [], tplLocations: [],
+}
+
+const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
+
+// Weight units are inconsistent between uploads: some couriers bill in kilograms,
+// others in grams. The API detects this per courier and normalises to kg before
+// aggregating; the list of affected couriers comes back in the response so the UI
+// can disclose it. The stored data is never modified.
+// Currency uses the app-wide fmt() (₹x.xx Cr / L / K) so this tab matches Sales.
+// Per-shipment figures deliberately stay exact below — "₹0.00 K" would be useless.
+
+// Weight totals stay in kilograms, compacted with the same Cr/L/K scale as currency.
+// An earlier version rendered tonnes ("169 t"), but a bare "t" beside rupee and percent
+// tiles reads as cryptic rather than as a unit — the ledger is denominated in kg, so the
+// tiles say kg.
+const fmtKg = v => `${fmtBig(num(v))} kg`
+
+// Cost-per-kg is meaningless when the weight denominator is ~0, so guard it.
+const perKg = (cost, wt) => (num(wt) > 0.001 ? num(cost) / num(wt) : null)
+
+// Billable slab (implemented in SQL, api/logistics-cost.js): 0.5 kg minimum, else
+// round up to the next whole kg. The spec arrived as IF(wt > 0.5, 0.5, CEILING(wt,1)),
+// which inverts — it would bill a 3 kg parcel at 0.5 kg while rounding 0.4 kg UP to 1.
+// Tested against what Bluedart actually charged, the flipped "< 0.5" form matches
+// 26.7% of rows vs 4.7% for the literal reading, so that is the real rate card.
+
+function cubeToByCourierMonth(cube) {
+  if (!cube?.length) return []
+  const map = {}
+  for (const r of cube) {
+    if (!r.courier_name || !r.month) continue
+    const key = `${r.courier_name}|${r.month}`
+    if (!map[key]) map[key] = { key, n: 0, cost: 0, wt: 0 }
+    map[key].n += Number(r.n) || 0
+    map[key].cost += Number(r.cost) || 0
+    map[key].wt += Number(r.wt) || 0
+  }
+  return Object.values(map)
+}
+
+// Maps the API's row-per-group payload into the keyed shape the rest of this page
+// already renders from, so the aggregation move stayed confined to data loading.
+function shapeResponse(j) {
+  const t = j.totals || {}
+  const toMap = rows => {
+    const out = {}
+    for (const r of rows || []) {
+      out[r.key] = {
+        n: Number(r.n) || 0,
+        cost: Number(r.cost) || 0,
+        wt: Number(r.wt) || 0,
+        declWt: Number(r.decl_wt) || 0,
+        value: Number(r.value) || 0,
+        overN: Number(r.over_n) || 0,
+        overKg: Number(r.over_kg) || 0,
+        recInfl: Number(r.rec_infl) || 0,
+        recAdmit: Number(r.rec_admit) || 0,
+        recAdmitN: Number(r.rec_admit_n) || 0,
+        recUnexp: Number(r.rec_unexp) || 0,
+        reverseN: Number(r.reverse_n) || 0,
+        claimableRs: Number(r.claimable_rs) || 0,
+        claimableN: Number(r.claimable_n) || 0,
+      }
+    }
+    return out
+  }
+  return {
+    n: Number(t.n) || 0,
+    cost: Number(t.cost) || 0,
+    chargedWt: Number(t.charged_wt) || 0,
+    declaredWt: Number(t.declared_wt) || 0,
+    shipValue: Number(t.ship_value) || 0,
+    surcharge: Number(t.surcharge) || 0,
+    overbilledRows: Number(t.overbilled_rows) || 0,
+    overbilledKg: Number(t.overbilled_kg) || 0,
+    overbilledCostEst: Number(t.overbilled_cost) || 0,
+    slabRows: Number(t.slab_rows) || 0,
+    slabExcessKg: Number(t.slab_excess_kg) || 0,
+    slabExcessCost: Number(t.slab_excess_cost) || 0,
+    // Rate-card pricing (see api/logistics-cost.js).
+    rcEntitled: Number(t.rc_entitled) || 0,
+    rcCarrier: Number(t.rc_carrier) || 0,
+    // All-in: card rate grossed up by each courier's own monthly surcharge + other-charge
+    // rate, so the entitlement is comparable with the full invoice rather than with base
+    // freight alone. Base-only figures are kept for the claim tiers, which are argued on
+    // freight.
+    rcEntitledAllin: Number(t.rc_entitled_allin) || 0,
+    rcCarrierAllin: Number(t.rc_carrier_allin) || 0,
+    rcEntitledSurcharge: Number(t.rc_entitled_surcharge) || 0,
+    invAddons: Number(t.inv_addons) || 0,
+    rcTotal: Number(t.rc_total) || 0,
+    invFreight: Number(t.inv_freight) || 0,
+    rcPriced: Number(t.rc_priced) || 0,
+    rcOverN: Number(t.rc_over_n) || 0,
+    rcOverCost: Number(t.rc_over_cost) || 0,
+    rcInflN: Number(t.rc_infl_n) || 0,
+    rcInflCost: Number(t.rc_infl_cost) || 0,
+    rcAdmitN: Number(t.rc_admit_n) || 0,
+    rcAdmitCost: Number(t.rc_admit_cost) || 0,
+    claimableN: Number(t.claimable_n) || 0,
+    claimableRs: Number(t.claimable_rs) || 0,
+    marginKillerN: Number(t.margin_killer_n) || 0,
+    marginKillerCost: Number(t.margin_killer_cost) || 0,
+    // Derived-card pricing at their weight vs ours, on the identical population.
+    dcOurs: Number(t.dc_ours) || 0,
+    dcTheirs: Number(t.dc_theirs) || 0,
+    dcInvoiced: Number(t.dc_invoiced) || 0,
+    dcN: Number(t.dc_n) || 0,
+    dcWeightN: Number(t.dc_weight_n) || 0,
+    dcRateN: Number(t.dc_rate_n) || 0,
+    // TOTAL-cost basis (freight + that cell's own surcharge), used by Billing Accuracy.
+    // The ledger has no Frido total cost, so it is derived from the rate card.
+    dtOurs: Number(t.dt_ours) || 0,
+    dtTheirs: Number(t.dt_theirs) || 0,
+    dtInvoiced: Number(t.dt_invoiced) || 0,
+    dtN: Number(t.dc_n) || 0,
+    // Per-ROW clamped claim figures. The netted dt_theirs/dt_ours difference is the net
+    // commercial position; these are what can actually be invoiced back.
+    dtWeightClaim: Number(t.dt_weight_claim) || 0,
+    dtRateClaim: Number(t.dt_rate_claim) || 0,
+    dtWeightN: Number(t.dt_weight_n) || 0,
+    dtRateN: Number(t.dt_rate_n) || 0,
+    skipped: Number(j.skipped) || 0,
+    health: j.health || null,
+    claims: j.claims || [],
+    byZone: toMap(j.byZone),
+    byMode: toMap(j.byMode),
+    byMonth: toMap(j.byMonth),
+    byCourier: toMap(j.byCourier),
+    byPay: toMap(j.byPay),
+    byAcct: toMap(j.byAcct),
+    byBand: toMap(j.byBand),
+    byLane: toMap(j.byLane),
+    likeForLike: j.likeForLike || [],
+    rateDrift: j.rateDrift || [],
+    byProduct: j.byProduct || [],
+    rateGrid: j.rateGrid || [],
+    courierDisputes: j.courierDisputes || [],
+    slabCosts: j.slabCosts || [],
+    // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
+    // round trip — see the zone slicer below.
+    subCube: j.subCube || [],
+    trendAll: j.trendAll || [],
+    byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
+  }
+}
+
+function monthLabel(my) {
+  if (!my) return '—'
+  const [y, m] = String(my).split('-')
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const i = parseInt(m, 10) - 1
+  return names[i] ? `${names[i]} ${y}` : my
+}
+
+// ── Small presentational helpers ──────────────────────────────
+// Compact KPI tile for the hero grid — matches the Sales page's "hero + rows of 4"
+// layout so the two tabs read as one product.
+function Tile({ label, value, sub, badge, accent }) {
+  return (
+    // Fixed three-band layout so every tile in a grid reads identically.
+    //
+    // Was `justifyContent: center` with no reserved space for the sub, which meant a tile
+    // whose sub wrapped to two lines pushed its label and value up relative to its
+    // neighbours — the label row, value row and sub row all sat at different heights across
+    // the grid. Now the label pins to the top, the value sits directly under it, and the sub
+    // is pushed to the bottom by `marginTop: auto`, so the three bands line up across every
+    // card regardless of how long any one sub is.
+    <div className="kpi-card" style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div className="kpi-label">{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+        <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
+        {badge}
+      </div>
+      {/* minHeight reserves two lines, so a one-line sub does not make its card shorter
+          than a two-line neighbour and shift the value row. */}
+      {/* Single line always: subs are kept short enough to fit, and ellipsis catches any
+        that a long formatted value pushes over. A wrapping sub was what made card heights
+        and label positions differ across the grid. */}
+      <div className="kpi-sub" style={{
+        marginTop: 'auto', paddingTop: 4,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }} title={typeof sub === 'string' ? sub : undefined}>{sub}</div>
+    </div>
+  )
+}
+
+// The one number this tab exists to report, at display size. Proportional figures
+// (no tabular-nums) — equal-width digits read loose at this scale.
+function Hero({ label, value, sub, deltas, children, sparkMin }) {
+  return (
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+      <div className="kpi-label" style={{ fontSize: 13 }}>{label}</div>
+      {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
+          the eye finds every MoM figure in the same place down the row. space-between rather
+          than a gap, so the badge tracks the card edge instead of the value's width. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div className="kpi-value" style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.02em' }}>{value}</div>
+        {deltas?.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+            {deltas.map(d => (
+              <span key={d.note} style={{
+                fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
+                background: d.good ? C.green.bg : C.red.bg,
+                color: d.good ? C.green.tx : C.red.tx, whiteSpace: 'nowrap',
+              }}>
+                {d.up ? '▲' : '▼'} {Math.abs(d.pct).toFixed(1)}%
+                <span style={{ fontWeight: 400, opacity: 0.7 }}> {d.note}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {sub && <div className="kpi-sub" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{sub}</div>}
+      {children && <div style={{ flex: 1, minHeight: sparkMin ?? 30, paddingTop: 4 }}>{children}</div>}
+    </div>
+  )
+}
+
+// Section header. Collapsible when given onToggle — the caret and whole-row click match
+// the Logistics Performance tab, so the two tabs behave the same way.
+function SectionHdr({ title, note, collapsed, onToggle }) {
+  const clickable = typeof onToggle === 'function'
+  return (
+    <div onClick={clickable ? onToggle : undefined}
+      style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '22px 0 11px',
+               cursor: clickable ? 'pointer' : 'default', userSelect: clickable ? 'none' : undefined }}>
+      {clickable && (
+        <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', flexShrink: 0,
+                       transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>
+      )}
+      <span style={{ fontSize: 12, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase' }}>{title}</span>
+      {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
+      <div style={{ flex: 1, height: 1, background: C.border }} />
+    </div>
+  )
+}
+
+// Courier row with its logo — the same treatment as the Logistics Performance
+// sidebar, so a courier looks identical on both tabs. Falls back to a coloured
+// initial when the logo asset is missing or fails to load.
+// Initials for a carrier with no logo. TWO letters, not one: the FTL/PTL transporters gave
+// A / J / K / R / V, which carry almost no identity and would collide the moment a second
+// carrier shares a first letter. First letters of the first two words where there are two,
+// otherwise the first two characters — ARB Logistic -> AL, Jopadevi -> JO.
+function initials(name) {
+  const words = String(name || '').replace(/[^A-Za-z ]/g, ' ').split(/s+/).filter(Boolean)
+  const s = words.length > 1
+    ? words[0][0] + words[1][0]
+    : String(name || '').replace(/[^A-Za-z]/g, '').slice(0, 2)
+  return s.toUpperCase()
+}
+
+function CourierRow({ label, active, onClick }) {
+  const [imgErr, setImgErr] = useState(false)
+  const logo = COURIER_LOGOS[label]
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '6px 8px', borderRadius: 7, border: 'none',
+      background: active ? '#EFEFEF' : 'transparent',
+      color: active ? '#1a1a1a' : C.t2,
+      fontSize: 12, fontWeight: active ? 700 : 500,
+      cursor: 'pointer', fontFamily: 'var(--font)',
+      width: '100%', textAlign: 'left', transition: 'all .15s',
+      borderLeft: active ? '3px solid #888' : '3px solid transparent',
+    }}>
+      {logo && !imgErr
+        ? <img src={logo} alt="" onError={() => setImgErr(true)}
+            style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', padding: 1 }} />
+        : <span style={{
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+            background: COURIER_COLORS[label] || '#64748b',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9.5, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 1px rgba(0,0,0,.06)',
+          }}>{initials(label)}</span>
+      }
+      {label}
+    </button>
+  )
+}
+
+// Two-up segmented control in the boxed style the Performance sidebar uses for
+// Courier Direction. Clicking the active option clears it back to "all".
+// Multi-select pill row, for dimensions with 3+ options that don't fit a SegPair.
+function ChipRow({ options, selected, onToggle, small }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: small ? 3 : 5 }}>
+      {(options || []).map(o => {
+        const on = (selected || []).includes(o)
+        return (
+          <button key={o} onClick={() => onToggle(o)}
+            style={{
+              border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer',
+              background: on ? C.acl : C.card, color: C.t1,
+              fontSize: small ? 12 : 11, fontWeight: on ? 700 : 500, padding: small ? '4px 9px' : '5px 11px',
+              borderRadius: small ? 6 : 7, fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+            }}>
+            {o}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// The billing-period chip, which doubles as its own month slicer.
+//
+// It began as a read-only label. Making it clickable means the number a reader is looking
+// at is also the control that changes it — on the Overview scope especially, where the eye
+// lands on this chip long before the sidebar.
+//
+// Deliberately NOT a SearchSelect: that renders a full-width labelled control sized for the
+// 220px sidebar, and this has to stay a compact chip in a horizontal bar. It also has to
+// keep its two-part closed appearance (range | qualifier), which SearchSelect has no notion
+// of. The month list is short enough that a search box would be noise.
+// Export the tables on screen to CSV.
+//
+// Sits beside the period chip because what it exports is exactly what the chip and the
+// slicers have narrowed to — the two controls belong together. Golden so it reads as the
+// one action on a bar that is otherwise all state.
+//
+// Charts are NOT exported as images: a CSV of the chart's own series is more useful than a
+// PNG, and every chart here is backed by a table or row array, so the data is the export.
+function ExportMenu({ items, suffix }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+
+  // Only offer what actually has rows: a menu entry that downloads an empty file is worse
+  // than no entry.
+  const ready = (items || []).filter(it => (it.rows?.length || 0) > 0)
+  if (!ready.length) return null
+
+  const run = it => {
+    // suffix carries the active period and scope, so a file on disk still says what it
+    // was filtered to. Without it, three exports of the same table are indistinguishable.
+    exportCSV(it.rows, `frido_${it.file}${suffix ? `_${suffix}` : ''}.csv`)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        title="Download the tables on screen as CSV"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 11.5, fontWeight: 600, fontFamily: 'var(--font)',
+          padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
+          background: C.acc, color: C.onAcc,
+          border: `1px solid ${C.acm}`,
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : 'none',
+          transition: 'box-shadow .15s',
+        }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.onAcc} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12M7 12l5 5 5-5M4 21h16" />
+        </svg>
+        Export
+        <span style={{ fontSize: 7, opacity: .7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 232, overflow: 'hidden',
+        }}>
+          <div style={{ padding: '7px 11px', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            Export as CSV
+          </div>
+          <div style={{ maxHeight: 300, overflowY: 'auto', padding: '4px 0' }}>
+            {ready.map(it => (
+              <div key={it.file} onClick={() => run(it)}
+                style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '7px 11px', fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                <span>{it.label}</span>
+                {/* Row count up front: it sets the expectation before the file lands. */}
+                <span style={{ fontSize: 10, color: C.t3, fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                  {fmtN(it.rows.length)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {ready.length > 1 && (
+            <div onClick={() => { ready.forEach(run); setOpen(false) }}
+              style={{
+                padding: '8px 11px', borderTop: `1px solid ${C.border}`, cursor: 'pointer',
+                fontSize: 11.5, fontWeight: 700, color: C.t1, background: C.bg,
+              }}>
+              Export all {ready.length} tables
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// What the data behind the numbers COVERS, on hover.
+//
+// Deliberately descriptive, not diagnostic: months held, volume, and how much carries a
+// product category or a priced rate card. Exclusion and error counts (bad zones, zero-cost
+// rows, unpriced trips) are intentionally NOT here — a reader opening this wants to know
+// the scope of what they are looking at, and a defect list buried in a hover panel is both
+// alarming and the wrong place to act on it.
+//
+// Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
+// not click: this is reference material, not an action. The panel carries pointerEvents
+// none so it can never swallow a click meant for the chip beside it.
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters }) {
+  const [open, setOpen] = useState(false)
+  const h = health || {}
+  const scoped = Number(h.scoped) || 0
+
+  const monthRange = list => {
+    const s = [...(list || [])].sort()
+    if (!s.length) return null
+    const lab = m => {
+      const [y, mo] = String(m).split('-')
+      const d = new Date(Number(y), Number(mo) - 1, 1)
+      return Number.isFinite(d.getTime()) ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }) : String(m)
+    }
+    return { n: s.length, text: s.length === 1 ? lab(s[0]) : `${lab(s[0])} – ${lab(s[s.length - 1])}` }
+  }
+
+  const b2cRange = monthRange(months)
+  const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+
+  // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
+  const sections = []
+
+  if (scope !== 'b2b') {
+    sections.push({
+      title: 'B2C courier ledger',
+      rows: [
+        b2cRange && ['Months of data', `${b2cRange.n} · ${b2cRange.text}`],
+        (couriers || []).length > 0 && ['Couriers', fmtN((couriers || []).length)],
+        ['Shipments', fmtN(scoped)],
+      ].filter(Boolean),
+    })
+  }
+
+  if (scope !== 'b2c') {
+    const bt = b2bTotals || {}
+    sections.push({
+      title: 'FTL/PTL freight ledger',
+      rows: [
+        b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
+        // This ledger counts transporters, not couriers — the label differs from B2C
+        // because the underlying unit does.
+        (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
+          ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
+      ].filter(Boolean),
+    })
+  }
+
+  if (!sections.length) return null
+
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <span
+        role="img"
+        aria-label="Data information"
+        style={{
+          width: 16, height: 16, borderRadius: '50%', cursor: 'help',
+          border: `1px solid ${open ? C.acm : C.border2}`,
+          background: open ? C.acl : C.card,
+          color: open ? C.t1 : C.t3, fontSize: 10, fontWeight: 800,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font)', transition: 'background .15s, border-color .15s, color .15s',
+        }}>i</span>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 7px)', left: 0, zIndex: 600,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.17)', padding: '10px 12px',
+          width: 330, pointerEvents: 'none', textAlign: 'left',
+        }}>
+          {sections.map((sec, si) => (
+            <div key={sec.title} style={{ marginTop: si ? 10 : 0 }}>
+              <div style={{
+                fontSize: 9.5, fontWeight: 800, letterSpacing: '.05em',
+                textTransform: 'uppercase', color: C.t3, marginBottom: 5,
+                paddingBottom: 4, borderBottom: `1px solid ${C.border}`,
+              }}>{sec.title}</div>
+              {sec.rows.map(([label, value, kind]) => (
+                <div key={label} style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '2px 0', fontSize: 11,
+                }}>
+                  <span style={{ color: C.t2 }}>{label}</span>
+                  <span style={{
+                    color: kind === 'warn' ? C.amber.tx : C.t1,
+                    fontWeight: kind === 'warn' ? 700 : 600,
+                    fontFamily: 'var(--mono)', fontSize: 10.5, textAlign: 'right',
+                  }}>{value}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
+function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+  if (!win) return null
+
+  const label = m => {
+    const [y, mo] = String(m).split('-')
+    const d = new Date(Number(y), Number(mo) - 1, 1)
+    return Number.isFinite(d.getTime())
+      ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+      : String(m)
+  }
+  const sel = selected || []
+  // Empty selection means "everything" everywhere else in this page, so the checkmarks
+  // have to show every month ticked rather than none.
+  const isOn = m => (sel.length ? sel.includes(m) : true)
+  const suffix = win.kind === 'all-short' || win.kind === 'all'
+    ? `all ${win.total} months`
+    : win.kind === 'default'
+      ? `last ${win.count} months`
+      : `${win.count} of ${win.total}`
+
+  const activePreset = win.kind === 'default' ? win.count : (win.kind === 'all' || win.kind === 'all-short') ? 999 : null
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {/* Button 1: date range — same style as chart toggle buttons */}
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          fontSize: 10.5, fontWeight: 500, color: C.t1, fontFamily: 'var(--font)',
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 6,
+          padding: '4px 9px', whiteSpace: 'nowrap',
+        }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" />
+          </svg>
+          {win.range}
+        </span>
+        {/* Button 2: preset dropdown — active state matches selected chart button */}
+        <button onClick={() => setOpen(o => !o)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 10.5, fontWeight: open ? 700 : 500, color: C.t1, fontFamily: 'var(--font)',
+            background: open ? C.acl : C.card,
+            border: `1px solid ${open ? C.acm : C.border2}`, borderRadius: 6,
+            padding: '4px 9px', whiteSpace: 'nowrap', cursor: 'pointer',
+            transition: 'background .15s, border-color .15s',
+          }}>
+          {suffix}
+          <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+        </button>
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
+        }}>
+          <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
+            <button onClick={() => { onRecent(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>Last {defaultCount}</button>
+            <button onClick={() => { onAll(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>All {months.length}</button>
+          </div>
+          {/* Newest first: the recent months are the ones anyone reaches for. */}
+          <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
+            {[...months].reverse().map(m => {
+              const on = isOn(m)
+              return (
+                <div key={m} onClick={() => onToggle(m)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 11px',
+                    fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                    fontWeight: on ? 600 : 400, background: on ? C.acl : 'transparent',
+                  }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+                  <span style={{
+                    width: 13, height: 13, borderRadius: 3, flexShrink: 0,
+                    border: `1.5px solid ${on ? C.acm : C.border2}`,
+                    background: on ? C.acc : C.card,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, color: C.onAcc, lineHeight: 1,
+                  }}>{on ? '✓' : ''}</span>
+                  {label(m)}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SlabDropdown({ value, onChange, slabs }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler) }
+  }, [open])
+  const label = value === '' ? 'All' : `${value} kg`
+  const active = value !== ''
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ fontFamily: 'var(--font)', fontSize: 12, fontWeight: 500, padding: '4px 9px', borderRadius: 6, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acl : C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+        {label} <span style={{ fontSize: 9, color: C.t3 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 999, background: C.card, border: `1.5px solid ${C.border2}`, borderRadius: 8, marginTop: 4, minWidth: 90, maxHeight: 160, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+          {[{ label: 'All slabs', value: '' }, ...slabs.map(sv => ({ label: `${sv} kg`, value: sv }))].map(opt => (
+            <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false) }}
+              style={{ padding: '5px 12px', fontSize: 12, fontWeight: opt.value === value ? 700 : 400, color: C.t1, background: opt.value === value ? '#e5e7eb' : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SegPair({ options, value, onChange }) {
+  return (
+    // flexShrink: 0 — the sidebar is a flex column, so without it this control gets
+    // squeezed to a hairline when the column runs short of space (which is exactly what
+    // happened to Billing Status: the heading showed but the buttons collapsed).
+    <div style={{ display: 'flex', flexShrink: 0, minHeight: 34, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+      {options.map((o, i) => {
+        const on = value === o.value
+        return (
+          <button key={o.value} onClick={() => onChange(on ? null : o.value)}
+            style={{
+              flex: 1, padding: '7px 0', border: 'none',
+              borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
+              background: on ? C.t1 : 'transparent',
+              color: on ? '#fff' : C.t2,
+              fontSize: 11.5, fontWeight: on ? 700 : 500,
+              cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+              transition: 'all .15s',
+            }}>
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Searchable single-select for high-cardinality dimensions (415 destination cities).
+// Full-width labelled dropdown, styled like the Performance sidebar's FILTERS block.
+// Handles both single-select (destination city) and multi-select (zone, mode, payment)
+// so every filter in that block looks the same regardless of arity.
+function SearchSelect({ label, options, value, onChange, multi, selected }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [staged, setStaged] = useState([])
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const list = options || []
+  const sel = multi ? (selected || []) : []
+  const active = multi ? sel.length > 0 : !!value
+  const searchable = list.length > 8
+  const filtered = list.filter(o => o.toLowerCase().includes(search.toLowerCase())).slice(0, 200)
+  const allSelected = filtered.length > 0 && filtered.every(o => staged.includes(o))
+
+  const summary = multi
+    ? (sel.length === 0 ? label : sel.length === 1 ? sel[0] : `${label} · ${sel.length}`)
+    : (value || label)
+
+  const handleOpen = () => { setStaged([...sel]); setSearch(''); setOpen(true) }
+  const handleApply = () => { onChange(staged.length ? staged : null); setOpen(false); setSearch('') }
+  const handleClear = () => setStaged([])
+  const toggleStaged = o => setStaged(s => s.includes(o) ? s.filter(x => x !== o) : [...s, o])
+  const toggleAll = () => setStaged(s => allSelected ? s.filter(x => !filtered.includes(x)) : [...new Set([...s, ...filtered])])
+
+  const isOn = o => multi ? staged.includes(o) : o === value
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={handleOpen}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+          border: `1.5px solid ${active ? C.acm : C.border2}`, borderRadius: 8,
+          background: active ? C.acl : C.card, cursor: 'pointer', fontFamily: 'var(--font)',
+          fontSize: 11.5, color: active ? C.t1 : C.t2, fontWeight: active ? 600 : 400,
+          width: '100%', whiteSpace: 'nowrap', boxSizing: 'border-box',
+        }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{summary}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
+        }}>
+          {searchable && (
+            <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+                style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
+            </div>
+          )}
+          {multi && filtered.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 7px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.t1, borderBottom: `1px solid ${C.border}` }}>
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ accentColor: C.acm }} />
+              <span>Select all</span>
+            </label>
+          )}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {!multi && (
+              <div onClick={() => { onChange(null); setOpen(false); setSearch('') }}
+                style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
+                All {label}
+              </div>
+            )}
+            {filtered.map(o => {
+              const on = isOn(o)
+              return (
+                <div key={o} onClick={() => { if (multi) toggleStaged(o); else { onChange(o); setOpen(false); setSearch('') } }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: on ? C.t1 : C.t2, fontWeight: on ? 700 : 400, background: on ? C.acl : 'transparent' }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+                  {multi && (
+                    <span style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${on ? C.acm : C.border2}`, background: on ? C.acm : C.card, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: C.onAcc, fontWeight: 900 }}>
+                      {on ? '✓' : ''}
+                    </span>
+                  )}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{o}</span>
+                </div>
+              )
+            })}
+            {!filtered.length && <div style={{ padding: '10px 12px', fontSize: 11.5, color: C.t3 }}>No match</div>}
+          </div>
+          {multi && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <button onClick={handleClear} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500 }}>Clear</button>
+              <button onClick={handleApply} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: 'none', background: C.acm, color: '#1a1400', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 700 }}>Apply</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Inline magnitude bar for a table cell — gives share-of-total a visual shape
+// without spending a whole chart on it. Single hue: one series, one colour.
+function ShareBar({ pct, children }) {
+  const w = Math.max(0, Math.min(100, num(pct)))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{children}</span>
+      <span aria-hidden="true" style={{ width: 46, height: 5, borderRadius: 3, background: C.bg, flexShrink: 0, overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: w + '%', height: '100%', borderRadius: 3, background: SER.blue }} />
+      </span>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────
+// Sum a set of cube rows into a totals object matching the API's `totals` shape.
+function sumCube(rows) {
+  const t = {}
+  const add = (k, v) => { t[k] = (t[k] || 0) + (Number(v) || 0) }
+  for (const r of rows) {
+    add('n', r.n); add('cost', r.cost); add('charged_wt', r.wt); add('declared_wt', r.decl_wt)
+    add('ship_value', r.value); add('surcharge', r.surcharge)
+    add('overbilled_rows', r.over_n); add('overbilled_kg', r.over_kg); add('overbilled_cost', r.over_cost)
+    add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('reverse_n', r.reverse_n)
+    add('rec_admit', r.rec_admit); add('rec_admit_n', r.rec_admit_n)
+    add('slab_rows', r.slab_n); add('slab_excess_kg', r.slab_kg); add('slab_excess_cost', r.slab_cost)
+    add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier); add('rc_total', r.rc_total)
+    add('rc_entitled_allin', r.rc_entitled_allin); add('rc_carrier_allin', r.rc_carrier_allin)
+    add('rc_entitled_surcharge', r.rc_entitled_surcharge); add('inv_addons', r.inv_addons)
+    add('inv_freight', r.inv_freight); add('rc_priced', r.rc_priced)
+    add('rc_over_n', r.rc_over_n); add('rc_over_cost', r.rc_over_cost)
+    add('rc_infl_n', r.rc_infl_n); add('rc_infl_cost', r.rc_infl_cost)
+    add('claimable_n', r.claimable_n); add('claimable_rs', r.claimable_rs)
+    add('margin_killer_n', r.margin_killer_n); add('margin_killer_cost', r.margin_killer_cost)
+  }
+  return t
+}
+
+// Re-derive the byZone / byMode / byMonth / byCourier / byPay breakdown arrays
+// from the cube rows, so charts still work after a client-side filter.
+function cubeToBreakdowns(rows) {
+  const acc = (map, key, r) => {
+    if (!map[key]) map[key] = {}
+    const add = (k, v) => { map[key][k] = (map[key][k] || 0) + (Number(v) || 0) }
+    add('n', r.n); add('cost', r.cost); add('wt', r.wt); add('decl_wt', r.decl_wt)
+    add('value', r.value); add('surcharge', r.surcharge)
+    add('over_n', r.over_n); add('over_kg', r.over_kg); add('over_cost', r.over_cost)
+    add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('rec_admit', r.rec_admit)
+    add('rec_admit_n', r.rec_admit_n); add('reverse_n', r.reverse_n)
+    add('claimable_n', r.claimable_n); add('claimable_rs', r.claimable_rs)
+    add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier)
+  }
+  const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}, byCourierMonth = {}
+  const bySlab = {}, byBand = {}
+  for (const r of rows) {
+    if (r.zone)    acc(byZone,    r.zone,    r)
+    if (r.mode)    acc(byMode,    r.mode,    r)
+    if (r.month)   acc(byMonth,   r.month,   r)
+    if (r.courier_name) acc(byCourier, r.courier_name, r)
+    if (r.payment) acc(byPay,     r.payment, r)
+    if (r.courier_name && r.month) acc(byCourierMonth, `${r.courier_name}|${r.month}`, r)
+    if (r.slab != null) {
+      const sk = String(r.slab)
+      acc(bySlab, sk, r)
+      // track per-mode cost/n for fwd/rev/rto averages
+      if (!bySlab[sk]._mode) bySlab[sk]._mode = {}
+      const md = bySlab[sk]._mode
+      md[r.mode] = md[r.mode] || { n: 0, cost: 0 }
+      md[r.mode].n += Number(r.n) || 0
+      md[r.mode].cost += Number(r.cost) || 0
+    }
+    if (r.band) {
+      acc(byBand, r.band, r)
+      if (!byBand[r.band].dim) byBand[r.band].dim = 'band'
+    }
+  }
+  const toArr = (map) => Object.entries(map).map(([key, v]) => ({ key, ...v }))
+  // Shape slabCosts to match the format slabRows expects
+  const slabCosts = Object.entries(bySlab).map(([slab, v]) => {
+    const md = v._mode || {}
+    const fwd = md['Forward'] || { n: 0, cost: 0 }
+    const rev = md['Reverse'] || { n: 0, cost: 0 }
+    const rto = md['RTO'] || { n: 0, cost: 0 }
+    return {
+      slab: Number(slab),
+      n: v.n,
+      cost: v.cost,
+      avg_cost: v.n ? v.cost / v.n : 0,
+      cpk: v.wt ? v.cost / v.wt : 0,
+      fwd_avg: fwd.n ? fwd.cost / fwd.n : 0,
+      rev_avg: rev.n ? rev.cost / rev.n : 0,
+      rto_avg: rto.n ? rto.cost / rto.n : 0,
+      claim_rs: v.claimable_rs || 0,
+      claim_n: v.claimable_n || 0,
+    }
+  }).sort((a, b) => a.slab - b.slab)
+  const byBandArr = toArr(byBand).map(r => ({ ...r, key: BAND_LABEL[r.key] || r.key }))
+  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay), byCourierMonth: toArr(byCourierMonth), slabCosts, byBand: byBandArr }
+}
+
+// Filters that can be satisfied purely from the cube (no API needed).
+function isCubeFilter(f, scope) {
+  // originCity and exactSlab are NOT in the cube (it carries no origin_city column and is
+  // pre-aggregated by band, not by exact slab), so either one must force an API request.
+  // Omitting them here would serve stale cube rows and the filter would silently no-op.
+  //
+  // The FTL/PTL slicers are the same case: the cube is built from the B2C ledger and has
+  // no freight_type or vehicle column, and its courier_name never matches a freight
+  // transporter, so slicing it for those filtered the wrong rows by the wrong column.
+  // The freight tab never uses the cube: every figure on it comes from the two B2B
+  // tables, and `couriers` means transporter_name there rather than courier_name.
+  if (scope === 'b2b') return false
+  return !f.band && !f.destCity && !f.originCity && f.exactSlab == null
+    && !f.freightTypes?.length && !f.vehicleTypes?.length
+}
+
+// Apply cube-compatible filters to cube rows.
+function filterCube(cube, f) {
+  return cube.filter(r => {
+    if (f.couriers?.length && !f.couriers.includes(r.courier_name)) return false
+    if (f.zones?.length && !f.zones.includes(r.zone)) return false
+    if (f.modes?.length && !f.modes.includes(r.mode)) return false
+    if (f.months?.length && !f.months.includes(r.month)) return false
+    if (f.payments?.length && !f.payments.includes(r.payment)) return false
+    if (f.billing === 'overbilled' && !r.is_overbilled) return false
+    if (f.billing === 'clean' && r.is_overbilled) return false
+    return true
+  })
+}
+
+// Mobile-only swipe carousel for hero KPI tiles — hidden on desktop via CSS class.
+function CostKpiCarousel({ children }) {
+  const count = Children.count(children)
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / (el.offsetWidth * 0.72 + 10))))
+  }, [count])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+  return (
+    <>
+      {/* Mobile carousel */}
+      <div className="cost-kpi-carousel-wrap" style={{ display: 'none' }}>
+        <div ref={scrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}
+          className="cost-kpi-carousel-inner">
+          {children}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? C.acc : C.border2, transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      {/* Desktop grid — hidden on mobile */}
+      <div className="cost-kpi-desktop-grid">
+        {children}
+      </div>
+    </>
+  )
+}
+
+export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation } = {}) {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
+  const [agg, setAgg] = useState(null)
+  const [b2bRows, setB2bRows] = useState(null)
+  // B2B aggregates (lanes, transporters, months, freight types) for the B2B tab.
+  const [b2b, setB2b] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const API = import.meta.env.VITE_API_URL || ''
+  const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
+  // The SHARED filter object (courier, zone, payment, ...). Months are layered per scope
+  // below — see the note there.
+  const sharedFilters = externalFilters || internalFilters
+  const setSharedFilters = setExternalFilters || setInternalFilters
+  // Month selection is PER SCOPE. Without this, a month picked on B2C also applied to
+  // Overview and FTL/PTL because all three read this same object — which also made the
+  // period chip look stuck when switching tabs. The three tabs report on different ledgers
+  // with different uploaded months, so each keeps its own period.
+  const [monthsByScope, setMonthsByScope] = useState({})
+  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
+  const [scope, setScope] = useState(() => {
+    if (!allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all')) return 'all'
+    if (allowedTabs.includes('logistics:cost:b2c')) return 'b2c'
+    if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
+    return 'all'
+  })
+  // Scroll to top when switching scope tabs so content doesn't jump
+  useEffect(() => {
+    document.querySelector('.page-scroll')?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [scope])
+
+  // Effective filters: the shared object with THIS scope's months layered on. Everything
+  // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
+  const filters = useMemo(
+    () => ({ ...sharedFilters, months: monthsByScope[scope] ?? sharedFilters.months ?? [] }),
+    [sharedFilters, monthsByScope, scope],
+  )
+
+  // A write touching `months` lands in this scope's slot; anything else goes to the shared
+  // object, so courier/zone/payment keep applying across tabs as they did before.
+  const setFilters = useCallback(next => {
+    const applied = typeof next === 'function' ? next(filters) : next
+    if (applied && Object.prototype.hasOwnProperty.call(applied, 'months')) {
+      const { months, ...rest } = applied
+      setMonthsByScope(m => ({ ...m, [scope]: months }))
+      if (Object.keys(rest).length) setSharedFilters(f => ({ ...f, ...rest }))
+      return
+    }
+    setSharedFilters(next)
+  }, [filters, scope, setSharedFilters])
+
+  const [reloadKey] = useState(0)
+
+  // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
+  const [baseData, setBaseData] = useState(null)
+  // b2b never uses the cube so we can't store its data in baseData (that would re-trigger the
+  // effect on every load). Track "already served from static" with a ref instead.
+  const b2bStaticServed = useRef(false)
+
+  // The API request key. tplPartners/tplSites are stripped: 3PL aggregates arrive from the
+  // server's filter-independent refCache and are narrowed on the client, so including them
+  // here would refetch the entire cost ledger every time a warehousing chip is clicked and
+  // come back with identical data.
+  const filterKey = useMemo(() => {
+    const { tplPartners: _tp, tplSites: _ts, tplLocations: _tl, ...apiFilters } = filters
+    // scope rides along so the API can skip the heavy B2C detail queries when a tab does not
+    // display them. It is part of the key on purpose: two scopes return different payloads,
+    // so they must not share a cache entry.
+    return JSON.stringify({ ...apiFilters, scope })
+  }, [filters, scope])
+  const scanRef = useRef(0)
+
+  useEffect(() => {
+    const ctl = new AbortController()
+    const myRun = ++scanRef.current
+    const f = JSON.parse(filterKey)
+
+    // If the base data is loaded AND the filter can be handled by the cube, skip the API.
+    if (baseData?.cube && isCubeFilter(f, scope)) {
+      const filtered = filterCube(baseData.cube, f)
+      const totals = sumCube(filtered)
+      // dt_*/dc_* come from refCache and are filter-independent — they are not in the cube
+      // rows, so they must be carried over from the unfiltered base or they read as zero.
+      const BASE_TOTALS = baseData.totals || {}
+      const FILTER_INDEPENDENT_KEYS = ['dc_n', 'dc_ours', 'dc_theirs', 'dc_invoiced',
+        'dc_weight_n', 'dc_rate_n', 'dt_ours', 'dt_theirs', 'dt_invoiced', 'dt_weight_n',
+        'dt_rate_n', 'dt_weight_claim', 'dt_rate_claim']
+      FILTER_INDEPENDENT_KEYS.forEach(k => { if (BASE_TOTALS[k] != null) totals[k] = BASE_TOTALS[k] })
+      const breakdowns = cubeToBreakdowns(filtered)
+      // Merge totals + breakdowns into the base response shape, preserving filter-independent fields.
+      const merged = {
+        ...baseData,
+        totals,
+        byZone: breakdowns.byZone,
+        byMode: breakdowns.byMode,
+        byMonth: breakdowns.byMonth,
+        byCourier: breakdowns.byCourier,
+        byPay: breakdowns.byPay,
+        byCourierMonth: breakdowns.byCourierMonth,
+        slabCosts: breakdowns.slabCosts,
+        byBand: breakdowns.byBand,
+      }
+      setAgg(shapeResponse(merged))
+      setLoading(false)
+      return
+    }
+
+    // FTL/PTL and 3PL: filter b2b/tpl arrays client-side from baseData — no API call needed.
+    if (baseData && (scope === 'b2b' || scope === 'tpl')) {
+      const months = f.months?.length ? new Set(f.months) : null
+      const transporters = f.transporters?.length ? new Set(f.transporters) : null
+      const vehicleTypes = f.vehicleTypes?.length ? new Set(f.vehicleTypes) : null
+      const freightTypes = f.freightTypes?.length ? new Set(f.freightTypes) : null
+      const tplPartners = f.tplPartners?.length ? new Set(f.tplPartners) : null
+      const tplSites = f.tplSites?.length ? new Set(f.tplSites) : null
+
+      // baseData.b2b holds raw invoice rows, which DO use transporter_name / vehicle_type.
+      // The aggregated arrays below use shorter names and are filtered separately.
+      const b2bFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!transporters || transporters.has(r.transporter_name)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle_type)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+
+      // Field names follow the API payload: tplWhMonths carries `partner` and `warehouse`
+      // (not logistics_partner / warehouse_name), and rows are keyed by `month_year`.
+      const tplFilter = r =>
+        (!months || months.has(r.month_year || r.key || r.month)) &&
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.warehouse))
+
+      const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
+      // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
+      // a name — so there is nothing on it to filter by, and testing a name dropped all 51
+      // lanes to zero. b2bLaneVeh is the finer grain that does carry `transporter`, so the
+      // lane table is rebuilt from it whenever a carrier-level slicer is active.
+      const laneNarrowed = transporters || vehicleTypes || freightTypes || months
+      const filteredB2bLanes = !laneNarrowed
+        ? (baseData.b2bLanes || [])
+        : Object.values((baseData.b2bLaneVeh || [])
+            .filter(r =>
+              (!months || months.has(r.month_year)) &&
+              (!transporters || transporters.has(r.transporter)) &&
+              (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+              (!freightTypes || freightTypes.has(r.freight_type)))
+            .reduce((acc, r) => {
+              const a = acc[r.lane] || (acc[r.lane] = {
+                lane: r.lane, origin_location: r.origin, destination_location: r.dest,
+                trips: 0, cost: 0, min_cost: Infinity, max_cost: 0,
+                _carriers: new Set(), card_cost: 0, variance: 0, priced_trips: 0,
+              })
+              a.trips += r.trips || 0
+              a.cost += r.cost || 0
+              // Extremes across the surviving rows, so min/max still answer "cheapest and
+              // dearest this lane was billed at" for the current selection.
+              if (r.min_cost != null) a.min_cost = Math.min(a.min_cost, r.min_cost)
+              if (r.max_cost != null) a.max_cost = Math.max(a.max_cost, r.max_cost)
+              a._carriers.add(r.transporter)
+              a.card_cost += r.card_cost || 0
+              a.variance += r.variance || 0
+              a.priced_trips += r.priced_trips || 0
+              return acc
+            }, {}))
+            .map(a => ({
+              ...a,
+              avg_cost: a.trips ? a.cost / a.trips : 0,
+              min_cost: a.min_cost === Infinity ? 0 : a.min_cost,
+              transporters: a._carriers.size,
+              _carriers: undefined,
+            }))
+            .sort((x, y) => y.cost - x.cost)
+      const filteredB2bTrans = (baseData.b2bTrans || []).filter(r =>
+        (!transporters || transporters.has(r.key || r.transporter_name))
+      )
+      // b2bMonths is aggregated ACROSS transporters, vehicles and freight types, so filtering
+      // it by month alone left the monthly series — and b2bTotals, which is summed from it —
+      // reporting every carrier no matter what was selected: picking Jopadevi still showed
+      // 3,62,55,450 rather than its own 2,63,35,600.
+      //
+      // b2bTransMonths carries the same measure at (month, transporter, vehicle,
+      // freight_type) grain, so the series is rebuilt from it whenever one of those slicers
+      // is active. Note the column is `billed` there and `cost` here.
+      const monthsNarrowed = transporters || vehicleTypes || freightTypes
+      const filteredB2bMonths = !monthsNarrowed
+        ? (baseData.b2bMonths || []).filter(r => !months || months.has(r.key || r.month_year))
+        : Object.values((baseData.b2bTransMonths || [])
+            .filter(r =>
+              (!months || months.has(r.month)) &&
+              (!transporters || transporters.has(r.transporter)) &&
+              (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+              (!freightTypes || freightTypes.has(r.freight_type)))
+            .reduce((acc, r) => {
+              const a = acc[r.month] || (acc[r.month] = { key: r.month, trips: 0, cost: 0 })
+              a.trips += r.trips || 0
+              a.cost += r.billed || 0
+              return acc
+            }, {}))
+            .sort((x, y) => String(x.key).localeCompare(String(y.key)))
+      const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
+        (!months || months.has(r.month || r.month_year || r.key)) &&
+        (!transporters || transporters.has(r.transporter)) &&
+        (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+        (!freightTypes || freightTypes.has(r.freight_type))
+      )
+      // tplMonths is pre-aggregated ACROSS partners and warehouses — it has no partner or
+      // warehouse column to test, so a partner filter applied to it matched nothing and
+      // zeroed the tab. When either of those slicers is active the month series has to be
+      // rebuilt from tplWhMonths, which is the finest grain that still carries them.
+      const tplMonthsSrc = (baseData.tplWhMonths || []).filter(tplFilter)
+      const filteredTplMonths = (tplPartners || tplSites)
+        ? Object.values(tplMonthsSrc.reduce((acc, r) => {
+            const k = r.month_year
+            const a = acc[k] || (acc[k] = { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0 })
+            a.cost += r.cost || 0
+            a.operation_fee += r.operation_fee || 0
+            a.rental_fee += r.rental_fee || 0
+            a.other_fee += r.other_fee || 0
+            a.shipments += r.shipments || 0
+            a.weight_kg += r.weight_kg || 0
+            return acc
+          }, {})).sort((x, y) => String(x.key).localeCompare(String(y.key)))
+        : (baseData.tplMonths || []).filter(r => !months || months.has(r.key || r.month_year))
+      // tplWarehouses names the site in `key` and the partner in `partner`.
+      const filteredTplWarehouses = (baseData.tplWarehouses || []).filter(r =>
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.key))
+      )
+      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilter)
+
+      // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
+      const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
+        trips: acc.trips + (r.trips || 0),
+        cost: acc.cost + (r.cost || 0),
+      }), { trips: 0, cost: 0 })
+      const b2bTotals = {
+        ...baseData.b2bTotals,
+        trips: b2bTotalsAgg.trips,
+        cost: b2bTotalsAgg.cost,
+        avg_cost: b2bTotalsAgg.trips > 0 ? b2bTotalsAgg.cost / b2bTotalsAgg.trips : 0,
+        transporters: filteredB2bTrans.length,
+        lanes: filteredB2bLanes.length,
+      }
+
+      // Recompute tplTotals from filtered tplMonths
+      const tplTotals = filteredTplMonths.reduce((acc, r) => ({
+        rows: (acc.rows || 0) + (r.rows || 1),
+        partners: acc.partners,
+        warehouses: acc.warehouses,
+        months: acc.months,
+        cost: (acc.cost || 0) + (r.cost || 0),
+        operation_fee: (acc.operation_fee || 0) + (r.operation_fee || 0),
+        rental_fee: (acc.rental_fee || 0) + (r.rental_fee || 0),
+        other_fee: (acc.other_fee || 0) + (r.other_fee || 0),
+      }), { rows: 0, partners: baseData.tplTotals?.partners || 0, warehouses: baseData.tplTotals?.warehouses || 0, months: filteredTplMonths.length, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0 })
+
+      setAgg(shapeResponse(baseData))
+      setB2bRows(filteredB2b)
+      setB2b({
+        lanes: filteredB2bLanes,
+        totals: b2bTotals,
+        transporters: filteredB2bTrans,
+        months: filteredB2bMonths,
+        types: (baseData.b2bTypes || []).filter(r => (!freightTypes || freightTypes.has(r.key))),
+        variance: baseData.b2bVar || null,
+        varMonths: (baseData.b2bVarMonths || []).filter(r =>
+          (!months || months.has(r.month || r.month_year)) &&
+          (!transporters || transporters.has(r.transporter)) &&
+          (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
+          (!freightTypes || freightTypes.has(r.freight_type))
+        ),
+        transMonths: filteredB2bTransMonths,
+        vehicles: (baseData.b2bVehicles || []).filter(r => (!months || months.has(r.month_year)) && (!vehicleTypes || vehicleTypes.has(r.vehicle))),
+        laneVeh: baseData.b2bLaneVeh || [],
+        rateCmp: baseData.b2bRateCmp || [],
+        sole: baseData.b2bSole || null,
+        fixedVeh: baseData.fixedVeh || null,
+        fixedVehMonths: (baseData.fixedVehMonths || []).filter(r => !months || months.has(r.month_year)),
+        tplTotals,
+        tplPartners: (baseData.tplPartners || []).filter(r => !tplPartners || tplPartners.has(r.key)),
+        tplMonths: filteredTplMonths,
+        tplWarehouses: filteredTplWarehouses,
+        tplWhMonths: filteredTplWhMonths,
+      })
+      setLoading(false)
+      return
+    }
+
+    ;(async () => {
+      setLoading(true); setError(null)
+      try {
+        let j
+        // Try CDN static file on first load. months is excluded from this check because the
+        // static JSON carries ALL months and b2b/tpl data is filtered client-side — the
+        // auto-selected last-N months should never force a live BQ call.
+        const isDefaultFilters = !f.zones?.length && !f.modes?.length &&
+          !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
+          !f.band && !f.destCity && !f.originCity && f.exactSlab == null &&
+          (!f.billing || f.billing === 'all') &&
+          !f.transporters?.length && !f.vehicleTypes?.length && !f.freightTypes?.length
+
+        const wantsStatic = isDefaultFilters && !baseData
+        if (wantsStatic) {
+          const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
+          if (staticRes?.ok) {
+            const data = await staticRes.json()
+            const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
+            if (age < 48 * 60 * 60 * 1000) { j = data }
+          }
+        }
+
+        if (!j) {
+          const res = await fetch(`${API}/api/logistics-cost`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: filterKey,
+            signal: ctl.signal,
+          })
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error || `Server returned ${res.status}`)
+          }
+          j = await res.json()
+        }
+
+        if (scanRef.current !== myRun) return
+
+        // Cache the full base response so future filters (cube for B2C, raw arrays for b2b/tpl) are instant.
+        if (isDefaultFilters && j.cube) setBaseData(j)
+
+        setAgg(shapeResponse(j))
+        setB2bRows(j.b2b || [])
+        setB2b({
+          lanes: j.b2bLanes || [],
+          totals: j.b2bTotals || { trips: 0, cost: 0 },
+          transporters: j.b2bTrans || [],
+          months: j.b2bMonths || [],
+          types: j.b2bTypes || [],
+          // Contract variance against the signed rate card, plus the coverage gap that
+          // bounds it. Kept on the b2b object so every FTL/PTL view reads one source.
+          variance: j.b2bVar || null,
+          varMonths: j.b2bVarMonths || [],
+          transMonths: j.b2bTransMonths || [],
+          vehicles: j.b2bVehicles || [],
+          laneVeh: j.b2bLaneVeh || [],
+          rateCmp: j.b2bRateCmp || [],
+          sole: j.b2bSole || null,
+          // Vehicles on a standing monthly charge. Separate from totals on purpose —
+          // these have no trips or lanes, so they must not reach any per-trip figure.
+          fixedVeh: j.fixedVeh || null,
+          fixedVehMonths: j.fixedVehMonths || [],
+          // 3PL warehousing. Carried here so one fetch serves every scope, but kept as
+          // its own block: warehousing bills per site per month, not per shipment, so it
+          // shares no denominator with the freight or parcel figures.
+          tplTotals: j.tplTotals || null,
+          tplPartners: j.tplPartners || [],
+          tplMonths: j.tplMonths || [],
+          tplWarehouses: j.tplWarehouses || [],
+          // Per-site, per-month rates for the Warehouse Trend chart. Easy to miss: this
+          // object is an explicit field list, so a key added to the API response but not
+          // here arrives as undefined and the chart renders its axes and legend with no
+          // lines — which is exactly how this one failed.
+          tplWhMonths: j.tplWhMonths || [],
+        })
+        if (j.options) {
+          setOpts({
+            months: j.options.months || [],
+            zones: j.options.zones || [],
+            modes: j.options.modes || [],
+            payments: j.options.payments || [],
+            couriers: j.options.couriers || [],
+            transporters: j.options.transporters || [],
+            vehicleTypes: j.options.vehicle_types || [],
+            freightTypes: j.options.freight_types || [],
+            accountTypes: j.options.account_types || [],
+            cities: j.options.cities || [],
+            // Pickup cities and exact slabs. This object is rebuilt from scratch on every
+            // response, so a key omitted here is dropped even when the API sends it.
+            originCities: j.options.originCities || [],
+            slabs: j.options.slabs || [],
+          })
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return
+        if (scanRef.current === myRun) setError(e.message || String(e))
+      } finally {
+        if (scanRef.current === myRun) setLoading(false)
+      }
+    })()
+
+    return () => ctl.abort()
+  }, [filterKey, API, reloadKey, baseData, scope])
+
+  // ── Derived views ──
+  const kpis = useMemo(() => {
+    if (!agg || !agg.n) return null
+    const avgCost = agg.cost / agg.n
+    const cpk = perKg(agg.cost, agg.chargedWt)
+    const costPctValue = agg.shipValue > 0 ? (agg.cost / agg.shipValue) * 100 : null
+    return {
+      total: agg.cost,
+      shipments: agg.n,
+      avgCost,
+      cpk,
+      costPctValue,
+      chargedWt: agg.chargedWt,
+      weightGap: agg.chargedWt - agg.declaredWt,
+      overbilledPct: (agg.overbilledRows / agg.n) * 100,
+      overbilledCost: agg.overbilledCostEst,
+      slabPct: (agg.slabRows / agg.n) * 100,
+      slabExcessKg: agg.slabExcessKg,
+      slabExcessCost: agg.slabExcessCost,
+      slabBillable: agg.slabBillable,
+      // No separate RTO figure: RTO now reports inside the Reverse bucket, so the
+      // "Wasted Freight (Returns)" tile covers it via reverseBurden.
+      surchargePct: agg.cost > 0 ? (agg.surcharge / agg.cost) * 100 : 0,
+    }
+  }, [agg])
+
+  const monthSeries = useMemo(() => {
+    if (!agg) return []
+    const rows = Object.entries(agg.byMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([m, b]) => ({
+        month: monthLabel(m),
+        raw: m,
+        cost: b.cost,
+        shipments: b.n,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt) ?? 0,
+        wt: b.wt,
+        pctGmv: b.value > 0 ? (b.cost / b.value) * 100 : null,
+        claim: b.claimableRs || 0,
+        surchargePct: b.cost > 0 ? (b.surcharge / b.cost) * 100 : 0,
+      }))
+    // No indexing: the trend chart plots native ₹, so there is nothing to normalise.
+    return rows
+  }, [agg])
+
+  // Window for the Monthly Trend chart: 1, 3 or 6 months back, or everything.
+  const [trendMonths, setTrendMonths] = useState(6)
+
+  const trendRows = useMemo(() => monthSeries, [monthSeries])
+
+  // The chart and its table both read this — the last N periods of the filtered series.
+  const trendWindow = useMemo(
+    () => (trendMonths >= 999 ? trendRows : trendRows.slice(-trendMonths)),
+    [trendRows, trendMonths]
+  )
+
+  // Ordered zone axis, so the ordinal ramp maps light→dark onto A→E consistently.
+  const zoneOrder = useMemo(() => {
+    if (!agg) return []
+    return Object.keys(agg.byZone).sort((a, b) => {
+      const ia = ZONES.indexOf(a), ib = ZONES.indexOf(b)
+      if (ia === -1 && ib === -1) return a.localeCompare(b)
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+  }, [agg])
+
+  // ── Zone slicer: sub-category ──
+  // Answers "zone costs for Cushions, now for Orthotics" instantly. The cube is already in
+  // memory, so this is a client-side re-aggregate rather than a refetch — the whole reason
+  // it is a separate lean cube (5,400 rows) instead of a dimension on the main one.
+  const [zoneSub, setZoneSub] = useState('')
+
+  // Options ordered by spend, not alphabetically: with 225 sub-categories the ones worth
+  // slicing are the expensive ones, and they should not be buried under an alphabetical A.
+  const zoneSubOptions = useMemo(() => {
+    const cube = agg?.subCube || []
+    if (!cube.length) return []
+    const spend = new Map()
+    for (const r of cube) {
+      // Respect the Billing Period selection so the list never offers a sub-category that
+      // has no rows in the months on screen.
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
+    }
+    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [agg, filters.months])
+
+  // Zone rows for the selected sub-category, or null when nothing is selected so the
+  // section falls back to the full byZone breakdown (which carries overbilled counts the
+  // cube does not).
+  const zoneSubRows = useMemo(() => {
+    if (!zoneSub) return null
+    const cube = agg?.subCube || []
+    const byZone = new Map()
+    let total = 0
+    for (const r of cube) {
+      if (r.sub !== zoneSub) continue
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      const z2 = byZone.get(r.zone) || { n: 0, cost: 0, wt: 0 }
+      z2.n += Number(r.n || 0)
+      z2.cost += Number(r.cost || 0)
+      z2.wt += Number(r.wt || 0)
+      byZone.set(r.zone, z2)
+      total += Number(r.cost || 0)
+    }
+    return [...byZone.entries()]
+      .map(([zone, b]) => ({
+        zone,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        avgWt: b.n ? b.wt / b.n : 0,
+        // The cube has no overbilled flag, so this column is not meaningful when sliced.
+        // null renders as an em-dash rather than a fabricated 0%.
+        overPct: null,
+        share: total ? (b.cost / total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const ia = ZONES.indexOf(a.zone), ib = ZONES.indexOf(b.zone)
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
+  }, [agg, zoneSub, filters.months])
+
+  const zoneRows = useMemo(() => {
+    if (!agg) return []
+    return Object.entries(agg.byZone)
+      .map(([zone, b]) => ({
+        zone,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        avgWt: b.n ? b.wt / b.n : 0,
+        overPct: b.n ? (b.overN / b.n) * 100 : 0,
+        share: agg.cost ? (b.cost / agg.cost) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const ia = ZONES.indexOf(a.zone), ib = ZONES.indexOf(b.zone)
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
+  }, [agg])
+
+  // What the zone chart and table actually render: the sliced rows when a sub-category is
+  // chosen, otherwise the full breakdown. Declared AFTER zoneRows — referencing a const
+  // before its initialiser is a temporal dead zone ReferenceError that the build does not
+  // catch, only the browser.
+  const zoneRowsShown = zoneSubRows || zoneRows
+
+  const modeRows = useMemo(() => {
+    if (!agg) return []
+    return Object.entries(agg.byMode)
+      .map(([mode, b]) => ({
+        mode, shipments: b.n, cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        share: agg.cost ? (b.cost / agg.cost) * 100 : 0,
+      }))
+      .sort((a, b) => b.cost - a.cost)
+  }, [agg])
+
+  const courierRows = useMemo(() => {
+    if (!agg) return []
+    // Claimable weight overbilling per courier, keyed for lookup below.
+    const claimBy = new Map((agg.courierDisputes || []).map(d => [d.courier_name, d]))
+    return Object.entries(agg.byCourier)
+      .map(([courier, b]) => ({
+        courier, shipments: b.n, cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        overPct: b.n ? (b.overN / b.n) * 100 : 0,
+        // Recoverable split by cause — the two need different remedies.
+        recInfl: b.recInfl, recUnexp: b.recUnexp,
+        // Subset of recInfl the courier has conceded in writing — never added on top.
+        recAdmit: b.recAdmit, recAdmitN: b.recAdmitN,
+        recTotal: b.recInfl + b.recUnexp,
+        // Reverse-leg share: an operational-quality signal, not a cost one.
+        reversePct: b.n ? (b.reverseN / b.n) * 100 : 0,
+        // Weight-only claim on the total-cost basis, so this column reconciles with the
+        // headline figure. recInfl above is base freight and stays for the stacked chart.
+        claimRs: Number(claimBy.get(courier)?.weight_rs) || 0,
+      }))
+      .sort((a, b) => b.cost - a.cost)
+  }, [agg])
+
+  // ── Rate drift ──
+  // Pivot (month, courier, cpk) into one row per month with a column per courier, which
+  // is the shape a multi-line chart needs. Couriers are ordered by spend so the biggest
+  // ones take the leading colour slots.
+  // Rate drift derived from byCourierMonth — filter-responsive.
+  const driftCouriers = useMemo(() => {
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
+    const spend = {}
+    for (const r of rows) {
+      const courier = r.key.split('|')[0]
+      spend[courier] = (spend[courier] || 0) + (Number(r.n) || 0)
+    }
+    return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT.colors.length)
+  }, [agg])
+
+  const driftSeries = useMemo(() => {
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
+    const byMonth = {}
+    for (const r of rows) {
+      const [courier, month] = r.key.split('|')
+      if (!driftCouriers.includes(courier)) continue
+      const cpk = r.wt ? r.cost / r.wt : 0
+      byMonth[month] ??= { month: monthLabel(month), raw: month }
+      byMonth[month][courier] = cpk
+    }
+    return Object.values(byMonth).sort((a, b) => a.raw.localeCompare(b.raw))
+  }, [agg, driftCouriers])
+
+  const driftRows = useMemo(() => {
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
+    const by = {}
+    for (const r of rows) {
+      const [courier, month] = r.key.split('|')
+      const cpk = r.wt ? r.cost / r.wt : 0;
+      (by[courier] ??= []).push({ m: month, cpk })
+    }
+    return Object.entries(by)
+      .map(([courier, pts]) => {
+        pts.sort((a, b) => a.m.localeCompare(b.m))
+        const first = pts[0].cpk, last = pts[pts.length - 1].cpk
+        return {
+          courier, first, last, months: pts.length,
+          drift: first ? ((last - first) / first) * 100 : 0,
+        }
+      })
+      .sort((a, b) => b.drift - a.drift)
+  }, [agg])
+
+  // Couriers ranked by what is recoverable from them, for the cause-split chart.
+  // Pre-computed per-slab costs. Filter-independent, like the trend and the rate grid, so it
+  // reads straight from the payload rather than re-aggregating on every render.
+  // share is computed against the slab table's OWN total, not agg.cost: this table lists
+  // every slab including reverse and RTO legs, so its sum is the right denominator for
+  // "share of the spend shown here". Using the page total would make the column sum to
+  // less than 100% with no visible reason.
+  const slabRows = useMemo(() => {
+    const rows = (agg?.slabCosts || []).map(r => ({
+      slab: Number(r.slab),
+      n: num(r.n),
+      cost: num(r.cost),
+      avgCost: num(r.avg_cost),
+      cpk: num(r.cpk),
+      fwdAvg: num(r.fwd_avg),
+      revAvg: num(r.rev_avg),
+      rtoAvg: num(r.rto_avg),
+      claimRs: num(r.claim_rs),
+      claimN: num(r.claim_n),
+    }))
+    const total = rows.reduce((a, r) => a + r.cost, 0)
+    return rows.map(r => ({ ...r, share: total ? (r.cost / total) * 100 : 0 }))
+  },
+  // Every slab, no threshold. A cost table should account for all the spend: an n>=1000
+  // filter hid 120 of 139 slabs and 13% of it, including a 104 kg slab worth ₹10.45 L. The
+  // card scrolls, so extra rows are cheap; a silently missing row is not.
+  [agg])
+
+  // Courier spend with claim intensity — derived from byCourier (filter-responsive).
+  const courierSpendRows = useMemo(() => {
+    return Object.entries(agg?.byCourier || {})
+      .map(([courier, b]) => {
+        const spend = num(b.cost)
+        const cl = num(b.rec_infl)
+        return { courier, spend, claim: cl, claimPct: spend ? (cl / spend) * 100 : 0 }
+      })
+      .sort((a, b) => b.spend - a.spend)
+  }, [agg])
+
+  // Escalation priority derived from byCourier (filter-responsive).
+  const recoverRows = useMemo(
+    () => Object.entries(agg?.byCourier || {})
+      .map(([courier, b]) => {
+        const recInfl = num(b.rec_infl)
+        const recUnexp = num(b.rec_unexp)
+        const recAdmit = num(b.rec_admit)
+        const recTotal = recInfl + recUnexp
+        const shipments = num(b.n)
+        const disputedN = num(b.claimable_n)
+        return {
+          courier,
+          recInfl, recUnexp, recAdmit, recTotal,
+          shipments, disputedN,
+          recPerShipment: disputedN ? recInfl / disputedN : 0,
+          recPctFreight: num(b.cost) ? (recInfl / num(b.cost)) * 100 : 0,
+        }
+      })
+      .filter(r => r.recInfl > 0 || r.recUnexp > 0)
+      .sort((a, b) => b.recInfl - a.recInfl),
+    [agg]
+  )
+
+  // Section totals, so the header states the prize before the reader parses eight rows.
+  const recoverTotals = useMemo(() => {
+    const s = recoverRows.reduce((a, r) => ({
+      infl: a.infl + r.recInfl, unexp: a.unexp + r.recUnexp,
+      admit: a.admit + r.recAdmit, total: a.total + r.recTotal,
+    }), { infl: 0, unexp: 0, admit: 0, total: 0 })
+    // Concentration: how much of the claim sits with the top two partners. Two
+    // conversations recovering most of the money is the practical plan.
+    const top2 = recoverRows.slice(0, 2).reduce((a, r) => a + r.recTotal, 0)
+    return { ...s, top2, top2Pct: s.total ? (top2 / s.total) * 100 : 0 }
+  }, [recoverRows])
+
+  // Like-for-like: pick one (zone, slab) cell and compare couriers inside it. Holding
+  // both constant is the only fair basis for a switching decision — a raw per-shipment
+  // average just reflects whose parcels are heavier.
+  // ── Like-for-like: three independent multi-select filters ──
+  // Replaces a single dropdown over pre-joined (zone · band) cells. That forced the
+  // comparison into exactly one zone and one slab, so questions like "cheapest across all
+  // metro zones for parcels under 2 kg" were unanswerable.
+  const lflOptions = useMemo(() => {
+    const z = new Set(), b = new Set(), l = new Set(), sl = new Set()
+    for (const r of agg?.likeForLike || []) {
+      z.add(r.zone); b.add(r.band); l.add(r.leg)
+      if (r.slab != null) sl.add(Number(r.slab))
+    }
+    // Bands are weight ranges, so they must sort by weight and not as text.
+    const bandOrder = WEIGHT_BANDS.map(b => b.label)
+    // Legs follow the shipment's lifecycle, not the alphabet — alphabetical would read
+    // Forward, RTO, Reverse and put the undelivered return before the customer return.
+    const legOrder = ['Forward', 'Reverse', 'RTO']
+    return {
+      zones: [...z].sort(),
+      bands: [...b].sort((x, y) => bandOrder.indexOf(x) - bandOrder.indexOf(y)),
+      legs: [...l].sort((x, y) => {
+        const ix = legOrder.indexOf(x), iy = legOrder.indexOf(y)
+        return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy)
+      }),
+      // Exact billable slabs, numeric-sorted. Far too many to expose as chips, which is
+      // why this one is a dropdown while the coarse bands stay as chips.
+      slabs: [...sl].sort((x, y) => x - y),
+    }
+  }, [agg])
+
+  const [lflZones, setLflZones] = useState([])
+  const [lflBands, setLflBands] = useState([])
+  const [lflLegs, setLflLegs] = useState([])
+  const [lflSlab, setLflSlab] = useState('')
+  const [subQuery, setSubQuery] = useState('')
+  // Collapsed sections, persisted so the layout a user settles on survives a reload.
+  const [slabSearch, setSlabSearch] = useState('')
+  const [catTooltip, setCatTooltip] = useState('')
+  const [secHid, setSecHid] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lc-sections') || '{}') } catch { return {} }
+  })
+  const toggleSec = key => setSecHid(prev => {
+    const next = { ...prev, [key]: !prev[key] }
+    try { localStorage.setItem('lc-sections', JSON.stringify(next)) } catch { /* private mode */ }
+    return next
+  })
+
+  // Empty selection means "all", so the card renders something on first paint instead of
+  // an empty state that looks broken.
+  const pick = (sel, all) => (sel.length ? sel : all)
+
+  const activeCell = useMemo(() => {
+    const rows = agg?.likeForLike || []
+    if (!rows.length) return { rows: [], comparable: false, n: 0, zones: [], bands: [], legs: [] }
+    const zs = pick(lflZones, lflOptions.zones)
+    const bs = pick(lflBands, lflOptions.bands)
+    const ls = pick(lflLegs, lflOptions.legs)
+
+    // Re-aggregate across every selected cell rather than reading one pre-built cell.
+    // Weighted by shipment count: a straight mean of cell averages would let a 60-shipment
+    // cell pull the number as hard as a 60,000-shipment one.
+    const byCourier = new Map()
+    for (const r of rows) {
+      if (!zs.includes(r.zone) || !bs.includes(r.band) || !ls.includes(r.leg)) continue
+      // An exact slab overrides the coarse band when one is picked. '' means unset, so
+      // the band chips keep working on their own.
+      if (lflSlab !== '' && Number(r.slab) !== Number(lflSlab)) continue
+      const n = Number(r.n) || 0
+      const c = byCourier.get(r.courier_name)
+        || { courier: r.courier_name, n: 0, cost: 0, kg: 0 }
+      c.n += n
+      c.cost += (Number(r.avg_cost) || 0) * n
+      // cpk is cost/kg, so cost/cpk recovers the kilograms behind it — needed to re-derive
+      // a weighted ₹/kg across cells without the API returning raw weight.
+      const cpk = Number(r.cpk) || 0
+      if (cpk > 0) c.kg += ((Number(r.avg_cost) || 0) * n) / cpk
+      byCourier.set(r.courier_name, c)
+    }
+
+    const out = [...byCourier.values()]
+      .filter(c => c.n > 0)
+      .map(c => ({ courier: c.courier, n: c.n, avgCost: c.cost / c.n, cpk: c.kg > 0 ? c.cost / c.kg : 0 }))
+      .sort((a, b) => a.avgCost - b.avgCost)
+
+    // A single courier is still worth showing — it just is not a comparison.
+    const comparable = out.length >= 2
+    return {
+      rows: out,
+      comparable,
+      n: out.reduce((s, c) => s + c.n, 0),
+      zones: zs, bands: bs, legs: ls,
+      slab: lflSlab,
+      allZones: zs.length === lflOptions.zones.length,
+      allBands: bs.length === lflOptions.bands.length,
+      allLegs: ls.length === lflOptions.legs.length,
+    }
+  }, [agg, lflZones, lflBands, lflLegs, lflSlab, lflOptions])
+
+  // ── Cost by product ──
+  // Categories are collapsed by default: 15 categories expand to ~200 sub-category rows,
+  // which buries the signal. Expanding is per-category and additive.
+  const [openCats, setOpenCats] = useState(() => new Set())
+  const toggleCat = useCallback(name => setOpenCats(prev => {
+    const next = new Set(prev)
+    next.has(name) ? next.delete(name) : next.add(name)
+    return next
+  }), [])
+
+  // Cost to serve one product: forward + reverse + RTO, each scaled by how often it happens
+  // (return count ÷ forward count). Forward is the denominator because every order has one;
+  // returns are the exception at 3-21% depending on the category.
+  // A missing leg contributes 0 rather than nulling the whole figure — a category with no
+  // RTO history genuinely costs nothing in RTO.
+  // useCallback so productRows' useMemo has a stable dependency — a fresh function each
+  // render would defeat the memo and rebuild ~200 rows on every keystroke elsewhere.
+  const costToServe = useCallback(c => {
+    const f = num(c.fwd_avg), r = num(c.rev_avg), t = num(c.rto_avg)
+    const fn = num(c.fwd_n), rn = num(c.rev_n), tn = num(c.rto_n)
+    if (!(f > 0)) return { ctsReal: null }
+    return { ctsReal: fn > 0 ? f + r * (rn / fn) + t * (tn / fn) : null }
+  }, [])
+
+  // Flat row list with the open sub-categories spliced in beneath their parent, so one
+  // DataTable renders the whole tree.
+  const productRows = useMemo(() => {
+    // A matching sub-category must surface even when its parent is collapsed, so the
+    // search expands the parent rather than filtering rows after the fact.
+    const sq = subQuery.trim().toLowerCase()
+    const hit = s => String(s?.sub ?? '').toLowerCase().includes(sq)
+    const out = []
+    for (const c of agg?.byProduct || []) {
+      const fwd = num(c.fwd_avg)
+      const kids = c.children || []
+      // Resolve the search first: the parent header must not be emitted for a category
+      // with no matching child, or the filtered list still shows all ~30 categories.
+      const kidHits = sq ? kids.filter(hit) : null
+      const catHit = sq ? String(c.cat).toLowerCase().includes(sq) : false
+      if (sq && !catHit && !kidHits.length) continue
+      out.push({
+        label: c.cat, isSub: false, hasKids: kids.length > 0, open: openCats.has(c.cat),
+        n: num(c.n), fwd, rev: num(c.rev_avg), rto: num(c.rto_avg),
+        ...costToServe(c),
+        cw: num(c.cw_slab_avg), masterKg: num(c.master_kg), masterSlab: num(c.master_slab),
+        vw: num(c.vw_avg), cost: num(c.cost),
+      })
+      // A category matched by name shows all its children; otherwise only the matching
+      // ones. With no search active, honour the manual open/closed state.
+      if (!sq && !openCats.has(c.cat)) continue
+      for (const s of [...(catHit ? kids : (kidHits || kids))].sort((a, b) => num(b.cost) - num(a.cost))) {
+        const sf = num(s.fwd_avg)
+        out.push({
+          label: s.sub, isSub: true, hasKids: false,
+          n: num(s.n), fwd: sf, rev: num(s.rev_avg), rto: num(s.rto_avg),
+          ...costToServe(s),
+          cw: num(s.cw_slab_avg), masterKg: num(s.master_kg), masterSlab: num(s.master_slab),
+          vw: num(s.vw_avg), cost: num(s.cost),
+        })
+      }
+    }
+    return out
+  }, [agg, openCats, costToServe, subQuery])
+
+  // Weight slab is where rate-card leakage usually hides — a slab whose ₹/kg is
+  // out of line with its neighbours is a rounding or slab-boundary problem.
+  const bandRows = useMemo(() => {
+    if (!agg) return []
+    const order = WEIGHT_BANDS.map(b => b.label)
+    return Object.entries(agg.byBand)
+      .map(([band, b]) => ({
+        band,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        overPct: b.n ? (b.overN / b.n) * 100 : 0,
+        share: agg.cost ? (b.cost / agg.cost) * 100 : 0,
+      }))
+      .sort((a, b) => order.indexOf(a.band) - order.indexOf(b.band))
+  }, [agg])
+
+  const mom = useMemo(() => {
+    if (monthSeries.length < 2) return null
+    return { curr: monthSeries[monthSeries.length - 1], prev: monthSeries[monthSeries.length - 2] }
+  }, [monthSeries])
+
+  // Stacked deltas on the hero, like the Sales page's WoW/MoM/YoY badges. Freight cost
+  // is a cost, so DOWN is good — the colour follows that, not the arrow direction.
+  const heroDeltas = useMemo(() => {
+    const out = []
+    const push = (curr, prev, note) => {
+      if (prev == null || !prev || curr == null) return
+      const pct = ((curr - prev) / Math.abs(prev)) * 100
+      if (!isFinite(pct)) return
+      out.push({ pct, up: pct > 0, good: pct < 0, note })
+    }
+    if (mom) push(mom.curr.cost, mom.prev.cost, 'MoM')
+    // Same month a year earlier, when the ledger reaches back that far.
+    if (mom) {
+      const [y, m] = String(mom.curr.raw).split('-')
+      const yoyKey = `${Number(y) - 1}-${m}`
+      const yoy = monthSeries.find(s => s.raw === yoyKey)
+      if (yoy) push(mom.curr.cost, yoy.cost, 'YoY')
+    }
+    return out
+  }, [mom, monthSeries])
+
+  // Reverse legs (RTO + Reverse/RVP/DTO) carry cost with no revenue against them, so
+  // management reads them as one burden rather than two separate modes.
+  const reverseBurden = useMemo(() => {
+    if (!agg) return { cost: 0, pct: 0, n: 0 }
+    let cost = 0, n = 0
+    for (const [mode, b] of Object.entries(agg.byMode)) {
+      if (mode === 'Forward') continue
+      cost += b.cost; n += b.n
+    }
+    return { cost, n, pct: agg.cost ? (cost / agg.cost) * 100 : 0 }
+  }, [agg])
+
+  // Billing Accuracy runs on TOTAL COST. The ledger has the courier's total_cost but no
+  // Frido equivalent, so the entitlement comes from the derived rate card: each cell's
+  // freight grossed up by that cell's own measured surcharge rate.
+  // GREATEST(...,0) on each leg — a courier billing BELOW its own card is not an overcharge,
+  // and letting it go negative would net off real overbilling elsewhere.
+  const billingGap = useMemo(() => {
+    // WEIGHT ONLY is the claim. The rate component — the courier billing above its own
+    // card — is measured against a card DERIVED from those same invoices, so it detects
+    // inconsistency with their own average behaviour rather than a breach of the signed
+    // contract. It is not invoiceable, so it is reported separately as a diagnostic and
+    // never summed into the claimable figure.
+    //
+    // Per-ROW clamped: clamping the grand total would let shipments billed BELOW card
+    // cancel those billed above it, a netting no courier would accept since the
+    // under-billed parcels cannot be claimed back.
+    const weight = agg?.dtWeightClaim || 0
+    const rate = agg?.dtRateClaim || 0
+    const billed = agg?.dtInvoiced || 0
+    return {
+      weight,
+      rate,
+      total: weight,
+      pctOfBilled: billed ? (weight / billed) * 100 : 0,
+    }
+  }, [agg])
+
+  // ── B2B derived views ──
+
+  // The FTL/PTL slicers, as ONE predicate. The aggregates come from the server's shared
+  // refCache, which is filter-independent by design (filtering there would leak one
+  // request's selection into the next), so narrowing happens on the client. Returning a
+  // single function keeps the rule in one place rather than repeated in six memos.
+  const fixedVeh = b2b?.fixedVeh || null
+  // 3PL, narrowed on the client. The server sends these aggregates unfiltered (they come
+  // from refCache, which is shared across requests by design), so partner, site and month
+  // selections are applied here instead.
+  //
+  // Everything is rebuilt from tplWhMonths — the one table at full (site, month) grain —
+  // rather than filtering the pre-rolled partner and warehouse rows. Those carry totals
+  // that are already summed across months, so a month filter could not narrow them and
+  // would leave the cards contradicting the charts beside them.
+  const tpl = useMemo(() => {
+    if (!b2b) return null
+    const allWh = b2b.tplWarehouses || []
+    const allPartners = b2b.tplPartners || []
+    const selP = filters.tplPartners || [], selS = filters.tplSites || [], selM = filters.months || []
+    const selL = filters.tplLocations || []
+    // tplWhMonths carries pincode, not location, so the city filter resolves through the
+    // warehouse list.
+    const locByPin = new Map(allWh.map(w => [String(w.pincode ?? ''), w.location]))
+    const anyFilter = selP.length || selS.length || selM.length || selL.length
+    if (!anyFilter) {
+      return {
+        totals: b2b.tplTotals, partners: allPartners,
+        months: b2b.tplMonths || [], warehouses: allWh,
+        whMonths: b2b.tplWhMonths || [],
+      }
+    }
+
+    // Matched on each row's OWN partner, not on the site's partner list. Hyderabad is
+    // billed by Losung and WareIQ together, so a site-level test would hand all of that
+    // site's spend to whichever of the two was selected — 33.94L instead of WareIQ's real
+    // 25.43L. The row-level partner keeps the two contracts separate.
+    const rowOk = r => (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selM.length || selM.includes(r.month_year))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? ''))))
+
+
+    const rows = (b2b.tplWhMonths || []).filter(rowOk)
+    const add = (map, k, r) => {
+      const e = map.get(k) || {
+        cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0,
+        shipments: 0, weight_kg: 0, months: new Set(), sites: new Set(),
+      }
+      e.cost += Number(r.cost) || 0
+      // The fee split has to be summed here too, or the monthly trend's stacked areas get
+      // undefined for every series the moment a slicer is active and draw nothing.
+      e.operation_fee += Number(r.operation_fee) || 0
+      e.rental_fee += Number(r.rental_fee) || 0
+      e.other_fee += Number(r.other_fee) || 0
+      // Volume stays null-safe: a month with no matched parcels contributes cost but not a
+      // denominator, which is what keeps a filtered rate honest rather than inflated.
+      if (r.shipments > 0) { e.shipments += Number(r.shipments); e.weight_kg += Number(r.weight_kg) || 0 }
+      e.months.add(r.month_year); e.sites.add(r.warehouse)
+      map.set(k, e)
+      return e
+    }
+
+    const byMonth = new Map(), bySite = new Map()
+    for (const r of rows) { add(byMonth, r.month_year, r); add(bySite, r.warehouse, r) }
+
+    const fin = (k, e, extra = {}) => ({
+      key: k, cost: e.cost,
+      operation_fee: e.operation_fee, rental_fee: e.rental_fee, other_fee: e.other_fee,
+      shipments: e.shipments || null,
+      weight_kg: e.weight_kg || null, months: e.months.size, ...extra,
+    })
+    const warehouses = [...bySite.entries()].map(([k, e]) => {
+      const src = allWh.find(w => w.key === k) || {}
+      // Spread the source row rather than naming fields: the measures below are recomputed
+      // from the filtered rows, but the descriptive ones (pincode, location, partner) are
+      // properties of the facility and do not change with a filter. Listing them by hand is
+      // what left Pincode and Location blank whenever any slicer was active — a field added
+      // to the API but not to that list silently became a dash.
+      return { ...src, ...fin(k, e) }
+    }).sort((a, c) => c.cost - a.cost)
+
+    // Partner rows are recomputed from the sites each partner bills, so a site filter
+    // narrows a partner's cost rather than dropping the partner entirely.
+    const byPartner = new Map()
+    for (const r of rows) add(byPartner, r.partner, r)
+    const partners = [...byPartner.entries()].map(([k, e]) => {
+      const src = allPartners.find(pp => pp.key === k) || {}
+      return {
+        ...src, key: k, cost: e.cost,
+        operation_fee: e.operation_fee, rental_fee: e.rental_fee, other_fee: e.other_fee,
+        shipments: e.shipments || null, weight_kg: e.weight_kg || null,
+        warehouses: e.sites.size, months: e.months.size,
+      }
+    }).sort((a, c) => c.cost - a.cost)
+
+    const months = [...byMonth.entries()].map(([k, e]) => fin(k, e))
+      .sort((a, c) => String(a.key).localeCompare(String(c.key)))
+
+    const totalCost = rows.reduce((a, r) => a + (Number(r.cost) || 0), 0)
+    return {
+      totals: {
+        rows: rows.length, cost: totalCost,
+        partners: partners.length, warehouses: warehouses.length, months: byMonth.size,
+        // Summed from the filtered rows now that the fee split is carried at (site, month)
+        // grain. This replaces apportioning the unfiltered totals by share of spend, which
+        // was an estimate that could not reflect a filter selecting months whose mix
+        // differed from the average.
+        operation_fee: rows.reduce((a, r) => a + (Number(r.operation_fee) || 0), 0),
+        rental_fee: rows.reduce((a, r) => a + (Number(r.rental_fee) || 0), 0),
+        other_fee: rows.reduce((a, r) => a + (Number(r.other_fee) || 0), 0),
+      },
+      partners, months, warehouses, whMonths: rows,
+    }
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations, filters.months])
+
+  // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
+  // in a month with no shipment data so the line breaks instead of diving to the axis.
+  const tplTrend = useMemo(() => (tpl?.months || []).map(m => ({
+    ...m,
+    per_ship: m.shipments > 0 ? m.cost / m.shipments : null,
+    per_kg: m.weight_kg > 0 ? m.cost / m.weight_kg : null,
+  })), [tpl?.months])
+
+  // Per-site rate over time, pivoted to one column per warehouse for a multi-line chart.
+  // Sites are ordered by total spend so the biggest site keeps the first colour as months
+  // come and go.
+  const tplWhNames = useMemo(() =>
+    (tpl?.warehouses || []).map(w => w.key).filter(Boolean), [tpl?.warehouses])
+  const tplWhTrend = useMemo(() => {
+    const rows = tpl?.whMonths || []
+    if (!rows.length) return []
+    const byMonth = new Map()
+    for (const r of rows) {
+      if (!byMonth.has(r.month_year)) byMonth.set(r.month_year, { key: r.month_year })
+      // Left undefined where the month has no volume, which is what makes the gap appear.
+      if (r.shipments > 0) byMonth.get(r.month_year)[r.warehouse] = r.cost / r.shipments
+    }
+    return [...byMonth.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)))
+  }, [tpl?.whMonths])
+
+  // Sites ranked by cost per parcel. Sites with no matched volume are dropped rather than
+  // plotted at zero, which would read as "free" instead of "unknown".
+  // Both rate charts are keyed by PARTNER, not facility. The partner is who the contract is
+  // with and who a rate is renegotiated against; a partner running several sites is judged
+  // on its blended rate across them. Facility-level detail stays in the table and the
+  // Warehouse Trend chart below.
+  const tplRateBySite = useMemo(() => (tpl?.partners || [])
+    .filter(p => p.shipments > 0)
+    .map(p => ({ key: p.key, per_ship: p.cost / p.shipments }))
+    .sort((a, b) => b.per_ship - a.per_ship), [tpl?.partners])
+
+  // Share of spend against share of parcels, per partner. Equal shares mean a partner costs
+  // what its volume implies; a spend bar taller than its parcel bar is a partner charging
+  // above the blended rate. Both are percentages of the MATCHED totals, so the two sets are
+  // comparable — using total spend (which includes unmatched months) against matched
+  // parcels would bias every partner's cost share upward.
+  const tplShareBySite = useMemo(() => {
+    const rated = (tpl?.partners || []).filter(p => p.shipments > 0)
+    const tc = rated.reduce((a, p) => a + Number(p.cost || 0), 0)
+    const ts = rated.reduce((a, p) => a + Number(p.shipments || 0), 0)
+    if (!tc || !ts) return []
+    return rated
+      .map(p => ({ key: p.key, cost_pct: (p.cost / tc) * 100, ship_pct: (p.shipments / ts) * 100 }))
+      .sort((a, b) => b.cost_pct - a.cost_pct)
+  }, [tpl?.partners])
+  const b2bPick = useMemo(() => {
+    const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
+    const mo = filters.months || []
+    if (!tr.length && !vh.length && !ft.length && !mo.length) return null
+    const T = tr.length ? new Set(tr) : null
+    const V = vh.length ? new Set(vh) : null
+    const F = ft.length ? new Set(ft) : null
+    const M = mo.length ? new Set(mo) : null
+    // An empty selection in a row means ALL of that row, matching every other slicer here.
+    return r => (!T || T.has(r.transporter))
+      && (!V || V.has(r.vehicle))
+      && (!F || F.has(r.freight_type))
+      && (!M || M.has(r.month_year || r.month))
+  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes, filters.months])
+
+  const b2bTransRows = useMemo(() => {
+    if (!b2b) return []
+    // Built from b2b.vehicles rather than b2b.transporters: that row set carries transporter,
+    // vehicle AND freight_type, so all three slicers apply. Using the transporter-only
+    // aggregate meant a vehicle selection emptied this table rather than narrowing it.
+    const by = new Map()
+    for (const v of b2b.vehicles || []) {
+      if (b2bPick && !b2bPick(v)) continue
+      const k = v.transporter
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(v.trips); a.cost += num(v.billed)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s2, r) => s2 + r.cost, 0)
+    return rows.map(r => ({
+      key: r.key, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      share: total ? (r.cost / total) * 100 : 0,
+    })).sort((a, b3) => b3.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  const b2bTypeRows = useMemo(() => {
+    if (!b2b) return []
+    // Re-aggregate from varMonths so transporter/vehicle/month slicers apply.
+    // Falls back to the static b2b.types when no filters are active (b2bPick === null).
+    if (!b2bPick) {
+      const total = Number(b2b.totals?.cost) || 0
+      return (b2b.types || []).map(t => ({
+        key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
+        avgCost: Number(t.avg_cost) || 0,
+        share: total ? (Number(t.cost) / total) * 100 : 0,
+      })).sort((a, b2) => b2.cost - a.cost)
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.freight_type || 'Unknown'
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s, r) => s + r.cost, 0)
+    return rows.map(r => ({
+      key: r.key, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      share: total ? (r.cost / total) * 100 : 0,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  const b2bMonthRows = useMemo(() => {
+    if (!b2b) return []
+    // Re-aggregate from varMonths so transporter/vehicle/freight slicers apply.
+    if (!b2bPick) {
+      return (b2b.months || []).map(m => ({
+        month: monthLabel(m.key), raw: m.key,
+        trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
+      }))
+    }
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (!b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.cost += num(m.billed)
+    }
+    return [...by.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
+  }, [b2b, b2bPick])
+
+  // Freight as a share of goods value — the only figure this tab still takes from the
+  // priced table. Rate-card variance is deliberately not shown on FTL/PTL.
+  const b2bVariance = useMemo(() => {
+    const v = b2b?.variance
+    if (!v) return null
+    const billedAll = num(v.billed_all)
+    const value = v.value_total == null ? null : num(v.value_total)
+    return { freightPctValue: value ? (billedAll / value) * 100 : null }
+  }, [b2b, b2bPick])
+
+  // Monthly spend. The server now returns one row per month PER TRANSPORTER so the sidebar
+  // filter can bite, which means the client re-aggregates. Sums, not averages — a weighted
+  // mean of per-transporter medians would not be the month's real cost.
+  const b2bVarMonthRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (b2bPick && !b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, billedPriced: 0, card: 0, variance: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.billed += num(m.billed)
+      a.billedPriced += num(m.billed_priced); a.card += num(m.card_total)
+      a.variance += num(m.variance)
+    }
+    return [...by.values()]
+      .map(a => ({ ...a, variancePct: a.card ? (a.billedPriced / a.card - 1) * 100 : 0 }))
+      .sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
+  }, [b2b, b2bPick])
+
+  // ── FTL/PTL monthly trend ──
+  //
+  // Mirrors the B2C "Freight spend and unit cost" chart: bars carry total spend on the left
+  // axis, lines carry unit cost on the right. Two axes because spend is in crores and unit
+  // cost in hundreds — on one scale the unit-cost line would sit flat on the floor.
+  //
+  // There is no weight column on this ledger: freight is billed per TRIP, not per kg, so
+  // the B2C cost-per-kg line has no equivalent here. The second line is FTL share of spend
+  // instead, which is what actually moves the blended rate — a month that shifts toward
+  // part-load shows a falling cost per trip that is a mix change, not a rate win.
+  const b2bTrendRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (b2bPick && !b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, ftlBilled: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips)
+      a.billed += num(m.billed)
+      // FTL only — PT/FTL is a part-load sharing a full-truck vehicle, so folding it in
+      // would report a full-truck share the book does not have.
+      if (String(m.freight_type || '').toUpperCase() === 'FTL') a.ftlBilled += num(m.billed)
+    }
+    const rows = [...by.values()].sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
+    const grand = rows.reduce((t, r) => t + r.billed, 0)
+    return rows.map(r => ({
+      ...r,
+      perTrip: r.trips ? r.billed / r.trips : 0,
+      ftlShare: r.billed ? (r.ftlBilled / r.billed) * 100 : 0,
+      shareOfSpend: grand ? (r.billed / grand) * 100 : 0,
+    }))
+  }, [b2b, b2bPick])
+
+  // Range applies to this chart only, same as the B2C trend.
+  const [b2bTrendMonths, setB2bTrendMonths] = useState(6)
+  const b2bTrendWindow = useMemo(
+    () => (b2bTrendMonths >= 999 ? b2bTrendRows : b2bTrendRows.slice(-b2bTrendMonths)),
+    [b2bTrendRows, b2bTrendMonths]
+  )
+
+  // Vehicle type analysis, re-aggregated across the selected transporters. `lanes` and
+  // `transporters` are counted from the surviving rows rather than summed — summing distinct
+  // counts across transporters would double-count a lane both of them serve.
+  const b2bVehicleRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const v of b2b.vehicles || []) {
+      if (b2bPick && !b2bPick(v)) continue
+      const k = v.vehicle || '—'
+      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: new Set(), carriers: new Set(), priced: 0, variance: 0 })
+      const a = by.get(k)
+      a.trips += num(v.trips); a.cost += num(v.billed)
+      a.carriers.add(v.transporter)
+      a.priced += num(v.priced_trips); a.variance += num(v.variance)
+    }
+    // Count distinct lanes per vehicle from the lane-detail rows (same filter applied).
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const a = by.get(r.vehicle || '—')
+      if (a) a.lanes.add(r.lane)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s, r) => s + r.cost, 0)
+    return rows.map(r => ({
+      vehicle: r.vehicle, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      lanes: r.lanes.size, transporters: r.carriers.size,
+      variance: r.priced ? r.variance : null,
+      share: total ? (r.cost / total) * 100 : 0,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  // Lane x vehicle, re-aggregated. min/max are true extremes across the selected carriers,
+  // so they still answer "what is the cheapest and dearest this lane was billed at".
+  const b2bLaneVehRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const k = r.lane + '|' + (r.vehicle || '—')
+      if (!by.has(k)) by.set(k, {
+        lane: r.lane, origin: r.origin, dest: r.dest, vehicle: r.vehicle || '—',
+        trips: 0, cost: 0, minCost: Infinity, maxCost: 0,
+        carriers: new Set(), priced: 0, card: 0, variance: 0,
+      })
+      const a = by.get(k)
+      a.trips += num(r.trips); a.cost += num(r.cost)
+      a.minCost = Math.min(a.minCost, num(r.min_cost))
+      a.maxCost = Math.max(a.maxCost, num(r.max_cost))
+      a.carriers.add(r.transporter)
+      a.priced += num(r.priced_trips); a.card += num(r.card_cost); a.variance += num(r.variance)
+    }
+    return [...by.values()].map(a => ({
+      lane: a.lane, origin: a.origin, dest: a.dest, vehicle: a.vehicle,
+      trips: a.trips, cost: a.cost,
+      avgCost: a.trips ? a.cost / a.trips : 0,
+      minCost: a.minCost === Infinity ? 0 : a.minCost,
+      maxCost: a.maxCost,
+      transporters: a.carriers.size,
+      card: a.priced ? a.card : null,
+      variance: a.priced ? a.variance : null,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  // Single-sourcing: share of spend on lanes served by exactly one transporter. A commercial
+  // risk rather than a cost — there is no fallback and no competitive reference price.
+  const b2bSole = useMemo(() => {
+    const s = b2b?.sole
+    if (!s) return null
+    return {
+      lanes: num(s.sole_lanes), totalLanes: num(s.lanes),
+      spend: num(s.sole_spend),
+      pct: num(s.total_spend) ? (num(s.sole_spend) / num(s.total_spend)) * 100 : 0,
+    }
+  }, [b2b, b2bPick])
+  // Rate comparison: the same vehicle priced by different carriers. The only view on this
+  // tab that names a cheaper alternative rather than describing what was spent.
+  //
+  // Grouped by VEHICLE, not lane+vehicle: only 3 lane cells have a comparable second carrier
+  // where 4 vehicles do, so the finer grain would render as almost no data. That does mean a
+  // cheaper carrier here might be running easier lanes — the note on the card says so.
+  // ── Rate consistency: what the SAME lane and vehicle actually cost, trip to trip ──
+  // Replaces a carrier-vs-carrier comparison that almost never had data: it needed one
+  // vehicle with two carriers at 8+ trips each, which no vehicle met, so the card sat empty.
+  //
+  // This asks a question the ledger can always answer — the same route, the same vehicle
+  // size, how far apart is the cheapest trip from the dearest. Holding vehicle constant
+  // matters: a lane's spread is otherwise just its vehicle mix, not a pricing problem.
+  // Nashik-Pune on a 7.5T runs 250 to 14,100 across 105 trips, which is a rate question
+  // rather than a mix artefact.
+  //
+  // Ranked by rupees at stake (spread x trips), not by percentage: a 300% gap on two trips
+  // matters less than a smaller gap repeated two hundred times.
+  const b2bSpreadRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const trips = num(r.trips)
+      const lo = num(r.min_cost), hi = num(r.max_cost)
+      if (!trips || !(lo > 0) || !(hi > lo)) continue
+      const k = `${r.lane} · ${r.vehicle}`
+      const e = by.get(k) || { key: k, lane: r.lane, vehicle: r.vehicle, trips: 0, lo: Infinity, hi: 0, cost: 0 }
+      e.trips += trips
+      e.lo = Math.min(e.lo, lo)
+      e.hi = Math.max(e.hi, hi)
+      e.cost += num(r.cost)
+      by.set(k, e)
+    }
+    return [...by.values()]
+      // Below ~8 trips a min/max range is two outliers, not a rate pattern.
+      .filter(e => e.trips >= 8 && e.hi > e.lo)
+      .map(e => ({
+        ...e,
+        spread: e.hi - e.lo,
+        spreadPct: e.lo > 0 ? ((e.hi - e.lo) / e.lo) * 100 : 0,
+        avg: e.trips > 0 ? e.cost / e.trips : 0,
+        // Bar base and height, so a stacked bar draws as a floating lo-to-hi range.
+        band: e.hi - e.lo,
+      }))
+      .sort((a, b) => (b.spread * b.trips) - (a.spread * a.trips))
+      .slice(0, 8)
+  }, [b2b, b2bPick])
+
+
+  // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
+  // the whole block responds to the sidebar selection, not just the charts below it.
+  const b2bHead = useMemo(() => {
+    if (!b2b) return null
+    const months = b2bVarMonthRows
+    const last = months[months.length - 1], prev = months[months.length - 2]
+    const spend = months.reduce((s, m) => s + m.billed, 0)
+    const trips = months.reduce((s, m) => s + m.trips, 0)
+    // Lane concentration: how much of the book rides on its three busiest lanes. A high
+    // figure is an operational dependency, not an error — but it is worth knowing.
+    const byLane = new Map()
+    for (const r of b2bLaneVehRows) byLane.set(r.lane, (byLane.get(r.lane) || 0) + r.cost)
+    const top3 = [...byLane.values()].sort((a, b3) => b3 - a).slice(0, 3).reduce((s, v) => s + v, 0)
+    return {
+      spend, trips,
+      lanes: byLane.size,
+      avgTrip: trips ? spend / trips : 0,
+      tripsPerMonth: months.length ? Math.round(trips / months.length) : 0,
+      // MoM on the latest complete period. null with one period — a change needs two points.
+      momPct: last && prev && prev.billed ? (last.billed / prev.billed - 1) * 100 : null,
+      momTrips: last && prev && prev.trips ? (last.trips / prev.trips - 1) * 100 : null,
+      top3Pct: spend ? (top3 / spend) * 100 : 0,
+    }
+  }, [b2b, b2bVarMonthRows, b2bLaneVehRows])
+
+  // Transporter spend by month, pivoted for a multi-series line. Each transporter becomes a
+  // key on every row so Recharts can draw one line per carrier.
+  //
+  // A month a transporter did not bill is left UNDEFINED, not zero: VS Transport and
+  // KM-Logistic have no July trips, and a zero would draw a line collapsing to the axis —
+  // reading as "spend fell to nothing" when the truth is "no invoice was raised". Undefined
+  // leaves a gap, which is the honest mark.
+  const b2bTransTrendRows = useMemo(() => {
+    if (!b2b) return []
+    const byMonth = new Map()
+    for (const r of b2b.transMonths || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const k = r.month
+      if (!byMonth.has(k)) byMonth.set(k, { month: monthLabel(k), raw: k })
+      const row = byMonth.get(k)
+      row[r.transporter] = (row[r.transporter] || 0) + num(r.billed)
+    }
+    return [...byMonth.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
+  }, [b2b, b2bPick])
+
+  // Which transporters to draw, biggest first, so colour assignment is stable as the filter
+  // changes and the legend order matches the visual order.
+  const b2bTransKeys = useMemo(() => {
+    if (!b2b) return []
+    const tot = new Map()
+    for (const r of b2b.transMonths || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      tot.set(r.transporter, (tot.get(r.transporter) || 0) + num(r.billed))
+    }
+    return [...tot.entries()].sort((a, b2) => b2[1] - a[1]).map(([k]) => k)
+  }, [b2b, b2bPick])
+
+  // ── Overall: B2C + B2B side by side ──
+  // Deliberately additive only. The two ledgers bill on different units (parcels vs
+  // trips), so a blended "cost per shipment" across both would be meaningless — the
+  // summary reports each stream and their sum, never a fake combined unit rate.
+  const overall = useMemo(() => {
+    if (!agg || !b2b) return null
+    const b2cCost = agg.cost
+    const b2bCost = Number(b2b.totals.cost) || 0
+    // Warehousing. Part of the cost of moving the same goods, so it counts toward the total
+    // logistics spend rather than sitting outside it — the hero would otherwise understate
+    // what logistics actually costs by the whole 3PL book.
+    const tplCost = Number(b2b.tplTotals?.cost) || 0
+    const total = b2cCost + b2bCost + tplCost
+    return {
+      total,
+      b2cCost, b2bCost, tplCost,
+      tplSites: Number(b2b.tplTotals?.warehouses) || 0,
+      tplPartners: Number(b2b.tplTotals?.partners) || 0,
+      b2cUnits: agg.n,
+      b2bUnits: Number(b2b.totals.trips) || 0,
+      b2bLanes: Number(b2b.totals.lanes) || 0,
+      b2bTransporters: Number(b2b.totals.transporters) || 0,
+      // Carriers across BOTH ledgers. Counted as a union of names rather than summed, so a
+      // carrier appearing in both books is one partner, not two.
+      carriers: new Set([
+        ...(agg.byCourier ? Object.keys(agg.byCourier) : []),
+        ...b2bTransRows.map(t => t.key),
+      ]).size,
+      b2cCarriers: agg.byCourier ? Object.keys(agg.byCourier).length : 0,
+      b2bCarriers: b2bTransRows.length,
+      // Goods value. B2C carries shipment_value; the FTL/PTL column is mid-rollout, so the
+      // total is B2C-only until it lands and the ratio below is labelled accordingly.
+      shipValue: num(agg.shipValue),
+      b2bValue: b2bVariance?.value_total == null ? null : num(b2bVariance.value_total),
+      // Logistics cost as a share of the goods it moved. Uses TOTAL logistics cost over the
+      // value we can measure — stated on the tile, since mixing an all-streams numerator
+      // with a B2C-only denominator would otherwise read as a like-for-like ratio.
+      logisticsPct: num(agg.shipValue) ? (total / num(agg.shipValue)) * 100 : null,
+      b2cLogisticsPct: num(agg.shipValue) ? (b2cCost / num(agg.shipValue)) * 100 : null,
+    }
+  }, [agg, b2b, b2bTransRows, b2bVariance])
+
+  // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
+  const overallMonths = useMemo(() => {
+    const tplRows = tpl?.months || []
+    if (!monthSeries.length && !b2bMonthRows.length && !tplRows.length) return []
+    const keys = [...new Set([
+      ...monthSeries.map(m => m.raw),
+      ...b2bMonthRows.map(m => m.raw),
+      ...tplRows.map(m => m.key),
+    ])].sort()
+    const b2cBy = Object.fromEntries(monthSeries.map(m => [m.raw, m.cost]))
+    const b2bBy = Object.fromEntries(b2bMonthRows.map(m => [m.raw, m.cost]))
+    // 3PL keys its months as `key` (YYYY-MM) rather than `raw`, matching the other two.
+    const tplBy = Object.fromEntries(tplRows.map(m => [m.key, Number(m.cost) || 0]))
+    return keys.map(k => ({
+      month: monthLabel(k), raw: k,
+      b2c: b2cBy[k] || 0,
+      b2b: b2bBy[k] || 0,
+      tpl: tplBy[k] || 0,
+      // Warehousing is a third cost of moving the same goods, so it belongs in the total
+      // rather than beside it: a month's true logistics spend is freight plus storage.
+      total: (b2cBy[k] || 0) + (b2bBy[k] || 0) + (tplBy[k] || 0),
+    }))
+  }, [monthSeries, b2bMonthRows, tpl?.months])
+
+  // ── Overview: carrier cards ──
+  // One card per partner, both ledgers, with the few figures that actually differentiate a
+  // carrier: what we spend, how much of the book that is, the unit rate, and — for B2C —
+  // logistics cost as a share of the goods it moved. Sorted by spend so the cards read in
+  // order of how much they matter.
+  const overviewB2cCards = useMemo(() => {
+    if (!agg) return []
+    const total = agg.cost || 0
+    return Object.entries(agg.byCourier || {}).map(([key, b]) => ({
+      key,
+      cost: num(b.cost),
+      shipments: num(b.n),
+      share: total ? (num(b.cost) / total) * 100 : 0,
+      avgCost: num(b.n) ? num(b.cost) / num(b.n) : 0,
+      // Freight as a share of the goods value this carrier moved. Per-carrier rather than
+      // blended, because a courier used for high-value parcels looks cheap on this measure
+      // even at a poor rate — and the reverse.
+      pctValue: num(b.value) ? (num(b.cost) / num(b.value)) * 100 : null,
+      cpk: num(b.wt) ? num(b.cost) / num(b.wt) : null,
+      // Weight-overbilling already established elsewhere on the page; carried here so a card
+      // shows whether this partner has an open claim against it.
+      claimable: num(b.claimable_rs),
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [agg])
+
+  // FTL/PTL partner cards. No shipment value or weight in that ledger, so the comparable
+  // figures are spend, share, trips and cost per trip — stating less rather than padding the
+  // card with metrics the data cannot support.
+  const overviewB2bCards = useMemo(() => {
+    if (!b2b) return []
+    const total = b2bTransRows.reduce((s, t) => s + t.cost, 0)
+    return b2bTransRows.map(t => ({
+      key: t.key,
+      cost: t.cost,
+      trips: t.trips,
+      share: total ? (t.cost / total) * 100 : 0,
+      avgCost: t.avgCost,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bTransRows])
+
+  // Combined monthly trend, windowed. Six periods by default: long enough to show a
+  // direction, short enough that a year of history does not compress the recent months into
+  // illegibility. Clamped to what exists so a 4-month ledger is not padded with empty slots.
+  const [ovTrendMonths, setOvTrendMonths] = useState(6)
+  const ovTrendWindow = useMemo(
+    () => (ovTrendMonths >= 999 ? overallMonths : overallMonths.slice(-ovTrendMonths)),
+    [overallMonths, ovTrendMonths]
+  )
+
+  const toggleIn = (key, val) => {
+    if (Array.isArray(val)) { setOne(key, val); return }
+    setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
+  }
+  const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
+
+  // ── Default billing period: the most recent 6 months ──
+  //
+  // Applied once, when the month list first arrives from the API — not on every render,
+  // or a user clearing the filter would have it immediately reimposed and the control
+  // would look broken.
+  //
+  // The ledger holds FEWER than 6 months today (Apr-Jul 2026, so 4). slice(-6) takes
+  // whatever exists rather than padding, and `monthWindow` below reports what was
+  // actually selected so the page never implies six months of data it does not have.
+  const DEFAULT_MONTH_COUNT = 6
+  // Months that actually exist in the ledger THIS SCOPE reports on.
+  //
+  // opts.months comes from the B2C invoice ledger (Jan-Jul). The freight ledger holds only
+  // Apr-Jul, so on FTL/PTL the chip was claiming "last 6 months" and offering Jan-Mar in
+  // the picker — months with no freight rows at all. Overview spans both ledgers, so it
+  // keeps the full B2C-derived list.
+  // 3PL slicer options. Read from the raw b2b response, never from the filtered `tpl`
+  // object — deriving them from filtered data would make each selection delete the other
+  // options and strand the user with no way back.
+  const tplPartnerOpts = useMemo(
+    () => (b2b?.tplPartners || []).map(p => p.key).filter(Boolean),
+    [b2b?.tplPartners])
+  const tplSiteOpts = useMemo(
+    () => (b2b?.tplWarehouses || []).map(w => w.key).filter(Boolean).sort(),
+    [b2b?.tplWarehouses])
+  // City the facility sits in. Several partners run more than one site and several cities
+  // host more than one partner, so this is a genuinely independent cut rather than a
+  // rename of either existing slicer.
+  const tplLocationOpts = useMemo(
+    () => [...new Set((b2b?.tplWarehouses || []).map(w => w.location).filter(Boolean))].sort(),
+    [b2b?.tplWarehouses])
+
+  const scopeMonths = useMemo(() => {
+    // 3PL bills its own months — offering the parcel ledger's list would show periods the
+    // warehousing ledger has no rows for, which filter to an empty tab.
+    if (scope === 'tpl') {
+      const tm = [...new Set((b2b?.tplMonths || []).map(m => m.key).filter(Boolean))].sort()
+      return tm.length ? tm : (opts.months || [])
+    }
+    if (scope !== 'b2b') return opts.months || []
+    const bm = [...new Set((b2b?.months || [])
+      .map(r => r.month_year || r.key || r.month)
+      .filter(Boolean))].sort()
+    // Fall back to the shared list rather than rendering nothing if the freight month
+    // query has not landed yet.
+    return bm.length ? bm : (opts.months || [])
+  }, [scope, opts.months, b2b])
+
+  // Per SCOPE, not once globally: months are now scope-specific, so a single flag would
+  // have defaulted only the first tab visited and left the other two showing nothing.
+  const monthsDefaulted = useRef({})
+  useEffect(() => {
+    if (monthsDefaulted.current[scope]) return
+    const all = scopeMonths
+    if (!all.length) return
+    monthsDefaulted.current[scope] = true
+    // Respect a selection already in place for this scope (a shared URL, or an external
+    // filter object supplied by the parent).
+    if ((filters.months || []).length) return
+    setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
+    // filters.months is deliberately NOT a dependency: this must fire when the options
+    // arrive or the scope changes, never in response to the user editing the selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeMonths, scope])
+
+  // What the period note renders. Derived from the SELECTED months, not from the default,
+  // so it stays truthful when the user narrows or widens the range.
+  // What the Export button offers, per scope.
+  //
+  // Reuses the row arrays the tables already render, so an export is exactly what is on
+  // screen — same filters, same period, same slicers. Deriving a separate query would let
+  // the file drift from the view.
+  //
+  // Numbers are exported RAW, not formatted: "₹1.74 Cr" is useless in a spreadsheet, and
+  // exportCSV JSON-stringifies each value so a raw number survives as a number.
+  const exportItems = useMemo(() => {
+    const round = (v, d = 2) => (v == null || Number.isNaN(Number(v)) ? '' : Number(Number(v).toFixed(d)))
+
+    if (scope === 'b2b') {
+      return [
+        {
+          label: 'Lane detail', file: 'ftl_ptl_lanes',
+          rows: (b2b?.lanes || []).map(r => ({
+            lane: r.lane, origin: r.origin_location, destination: r.destination_location,
+            trips: r.trips, spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+            transporters: r.transporters, vehicle: r.vehicle,
+          })),
+        },
+        {
+          label: 'Transporters', file: 'ftl_ptl_transporters',
+          rows: (b2b?.transporters || []).map(r => ({
+            transporter: r.transporter_name, trips: r.trips,
+            spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+          })),
+        },
+        {
+          label: 'Freight type', file: 'ftl_ptl_freight_type',
+          rows: (b2b?.types || []).map(r => ({
+            freight_type: r.freight_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Vehicle size', file: 'ftl_ptl_vehicles',
+          rows: (b2b?.vehicles || []).map(r => ({
+            vehicle: r.vehicle_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Monthly trend', file: 'ftl_ptl_monthly',
+          rows: (b2bMonthRows || []).map(r => ({
+            month: r.month, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+      ]
+    }
+
+    if (scope === 'all') {
+      return [
+        {
+          label: 'Monthly trend (all ledgers)', file: 'overview_monthly',
+          // tpl included so the exported columns still sum to `total`; without it the
+          // spreadsheet would show a total that does not reconcile with its parts.
+          rows: (ovTrendWindow || []).map(r => ({
+            month: r.month, total: round(r.total), b2c: round(r.b2c), b2b: round(r.b2b),
+            tpl: round(r.tpl),
+          })),
+        },
+        {
+          label: '3PL warehousing partners', file: 'overview_3pl_partners',
+          rows: (tpl?.partners || []).map(r => ({
+            partner: r.key, sites: r.warehouses, months: r.months, cost: round(r.cost),
+            operations: round(r.operation_fee), rental: round(r.rental_fee),
+            per_month: r.months > 0 ? round(r.cost / r.months) : null,
+          })),
+        },
+        {
+          label: 'B2C courier partners', file: 'overview_b2c_couriers',
+          rows: (overviewB2cCards || []).map(r => ({
+            courier: r.key, shipments: r.shipments, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_shipment: round(r.avgCost),
+            cost_per_kg: round(r.cpk, 1), claimable: round(r.claimable),
+          })),
+        },
+        {
+          label: 'FTL/PTL transport partners', file: 'overview_ftl_ptl_partners',
+          rows: (overviewB2bCards || []).map(r => ({
+            transporter: r.key, trips: r.trips, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_trip: round(r.avgCost),
+          })),
+        },
+      ]
+    }
+
+    // B2C
+    return [
+      {
+        label: 'By courier', file: 'b2c_couriers',
+        rows: (courierRows || []).map(r => {
+          const tot = (courierRows || []).reduce((a, x) => a + (Number(x.cost) || 0), 0)
+          return {
+            courier: r.courier, shipments: r.shipments, cost: round(r.cost),
+            avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+            avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+            // Matches the on-screen column, so an exported sheet reconciles with the tab.
+            share_of_spend_pct: tot > 0 ? round((Number(r.cost) || 0) / tot * 100, 1) : null,
+          }
+        }),
+      },
+      {
+        label: zoneSub ? `Cost by zone (${zoneSub})` : 'Cost by zone', file: 'b2c_zones',
+        rows: (zoneRowsShown || []).map(r => ({
+          zone: r.zone, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Weight slab detail', file: 'b2c_weight_slabs',
+        rows: (slabRows || []).map(r => ({
+          slab_kg: r.slab, shipments: r.n, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          forward: round(r.fwdAvg), reverse: round(r.revAvg), rto: round(r.rtoAvg),
+          share_pct: round(r.share, 1), claimable: round(r.claimRs),
+        })),
+      },
+      {
+        label: 'Shipment leg', file: 'b2c_legs',
+        rows: (modeRows || []).map(r => ({
+          leg: r.mode, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Cost by product', file: 'b2c_products',
+        // Flattened: a CSV has no notion of the expandable category/sub-category tree, so
+        // each row carries its own category and a level marker instead.
+        rows: (productRows || []).flatMap(c => [
+          {
+            level: 'category', category: c.cat, sub_category: '',
+            shipments: c.n, cost: round(c.cost), avg_logistics_cost: round(c.ctsReal),
+            billable_slab_kg: round(c.masterSlab ?? c.cw, 2), actual_weight_kg: round(c.masterKg, 3),
+          },
+          ...(c.children || []).map(s => ({
+            level: 'sub_category', category: c.cat, sub_category: s.sub,
+            shipments: s.n, cost: round(s.cost), avg_logistics_cost: round(s.ctsReal),
+            billable_slab_kg: round(s.masterSlab ?? s.cw, 2), actual_weight_kg: round(s.masterKg, 3),
+          })),
+        ]),
+      },
+    ]
+  }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      tpl?.partners,
+      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
+
+  // Filename suffix so a file on disk still says what it was filtered to.
+  const exportSuffix = useMemo(() => {
+    const sel = [...(filters.months || [])].sort()
+    const period = sel.length ? (sel.length === 1 ? sel[0] : `${sel[0]}_to_${sel[sel.length - 1]}`) : 'all_months'
+    return `${scope}_${period}`
+  }, [scope, filters.months])
+
+  const monthWindow = useMemo(() => {
+    const all = scopeMonths
+    const sel = (filters.months || []).length ? [...filters.months].sort() : all
+    if (!sel.length) return null
+    const label = m => {
+      const [y, mo] = String(m).split('-')
+      const d = new Date(Number(y), Number(mo) - 1, 1)
+      return Number.isFinite(d.getTime())
+        ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+        : String(m)
+    }
+    const first = sel[0], last = sel[sel.length - 1]
+    // Four genuinely different situations, each needing its own wording. Two booleans were
+    // not enough and mislabelled two of them: with 9 months uploaded and the 6-month
+    // default it read "6 of 9 months" (sounds like the USER narrowed it), and with every
+    // month selected it read "last 9 months" (not what "last N" means).
+    //   all-short  every uploaded month is shown and there are fewer than the 6 we default
+    //              to — say so, so nobody reads the total as six months of data
+    //   all        every uploaded month is shown, and there are 6 or more
+    //   default    exactly the 6-month default out of a longer history
+    //   custom     the user picked something else
+    const isAll = sel.length === all.length
+    const isDefaultWindow = sel.length === DEFAULT_MONTH_COUNT
+      && sel.join() === all.slice(-DEFAULT_MONTH_COUNT).join()
+    const kind = isAll
+      ? (all.length < DEFAULT_MONTH_COUNT ? 'all-short' : 'all')
+      : (isDefaultWindow ? 'default' : 'custom')
+    return {
+      kind,
+      count: sel.length,
+      total: all.length,
+      range: first === last ? label(first) : `${label(first)} – ${label(last)}`,
+    }
+  }, [scopeMonths, filters.months])
+
+  // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
+  // that way). SearchSelect matches on the label string and echoes it into the closed
+  // button, so the label stays just the weight — appending the shipment count would make
+  // the button read "2 kg - 127,312 shipments" once selected.
+  //
+  // slabLabelOf is shared by the option list and the selected-value lookup so both always
+  // produce the same string; two separate format calls would drift and the dropdown would
+  // show nothing as selected.
+  const slabLabelOf = s => `${s} kg`
+  const slabOptions = useMemo(
+    () => (opts.slabs || []).map(s => slabLabelOf(s.slab)),
+    [opts.slabs]
+  )
+
+  const activeCount =
+    filters.months.length + filters.zones.length + filters.modes.length +
+    filters.payments.length + filters.couriers.length + filters.accountTypes.length +
+    (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0) +
+    (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
+    (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
+    (filters.freightTypes?.length || 0) +
+    (filters.tplPartners?.length || 0) + (filters.tplSites?.length || 0) + (filters.tplLocations?.length || 0)
+
+  // ── Render ──
+  // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
+  // its own tile, but it is a property of total cost — reading it beside the rupee figure
+  // it divides is clearer than as a standalone number.
+  // Two lines, GMV share first: it is the ratio that judges the rupee figure above it, so it
+  // earns its own line. Volume and weight are supporting counts and sit together below.
+  const heroSub = !kpis ? null : (
+    <>
+      {kpis.costPctValue != null && <div>{kpis.costPctValue.toFixed(2)}% of GMV</div>}
+      <div>{fmtBig(kpis.shipments)} invoices · {fmtKg(kpis.chargedWt)} billed</div>
+    </>
+  )
+
+  const sidebar = (
+    <div style={{ width: sidebarOpen ? 220 : 0, minWidth: sidebarOpen ? 220 : 0, transition: 'width .25s ease, min-width .25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+      {/* The column scrolls, so nothing inside it should ever be compressed to fit —
+          `> * { flex-shrink: 0 }` keeps every control at its natural height instead of
+          letting the last ones collapse into slivers. */}
+      <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 9, overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}
+        className="lc-slicers">
+
+        {/* Carrier list follows the ACTIVE LEDGER: B2C couriers on the parcel tabs,
+            FTL/PTL transporters on the freight tab. Showing Bluedart and Delhivery while
+            the freight ledger is on screen invited a filter that could only ever return
+            nothing, because those carriers do not appear in it. */}
+        {/* 3PL has no carriers at all — it bills warehousing partners, and the B2C courier
+            list shown here previously offered filters that could only ever return nothing.
+            Plain rows rather than CourierRow: these partners have no logo assets. */}
+        {scope === 'tpl' ? (<>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>3PL Partner</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {tplPartnerOpts.map(c => {
+            const on = (filters.tplPartners || []).includes(c)
+            return (
+              <button key={c} onClick={() => toggleIn('tplPartners', c)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
+                  fontSize: 11.5, fontWeight: on ? 700 : 500, textAlign: 'left',
+                  borderRadius: 7, cursor: 'pointer', fontFamily: 'var(--font)',
+                  border: `1px solid ${on ? C.acm : 'transparent'}`,
+                  background: on ? C.acl : 'transparent', color: C.t1,
+                }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0,
+                  background: on ? C.acm : C.border2 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c}</span>
+              </button>
+            )
+          })}
+          {(filters.tplPartners || []).length > 0 && (
+            <button onClick={() => setOne('tplPartners', [])}
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', marginTop: 4 }}>
+              ✕ Clear
+            </button>
+          )}
+        </div>
+        </>) : (<>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>{scope === 'b2b' ? 'Transporter' : 'Courier Partner'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {(scope === 'b2b' ? opts.transporters : opts.couriers).map(c => (
+            <CourierRow key={c} label={c} active={filters.couriers.includes(c)} onClick={() => toggleIn('couriers', c)} />
+          ))}
+          {filters.couriers.length > 0 && (
+            <button onClick={() => setOne('couriers', [])}
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', marginTop: 4 }}>
+              ✕ Clear
+            </button>
+          )}
+        </div>
+        </>)}
+
+        <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+
+        {/* FTL/PTL-only slicers, in the same slot the parcel tabs use for Shipment Leg and
+            Billing Status. Freight Type is a chip row (3 options, visible without opening);
+            Vehicle Size is a dropdown (11 options would wrap to three rows of chips). */}
+        {scope === 'b2b' && (<>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Freight Type</div>
+        <ChipRow options={opts.freightTypes} selected={filters.freightTypes}
+          onToggle={v => toggleIn('freightTypes', v)} />
+
+        {/* Dropdown rather than chips: 11 vehicle sizes wrapped to three rows and took more
+            sidebar height than every other slicer combined. Same multi-select behaviour, and
+            SearchSelect adds a search box which earns its place at this many options.
+            Freight Type above stays as chips — 3 options fit one line and read at a glance. */}
+        <SearchSelect label="Vehicle Size" options={opts.vehicleTypes} multi
+          selected={filters.vehicleTypes}
+          onChange={v => (v === null ? setOne('vehicleTypes', []) : toggleIn('vehicleTypes', v))} />
+
+        <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+        </>)}
+
+        {scope !== 'b2b' && scope !== 'tpl' && (<>
+        {/* Two-up segmented pairs, the same treatment as Courier Direction. */}
+        {/* Two separate filters, so two separate headings — one block labelled
+            "Shipment Direction" was covering both direction AND billing status.
+            The mode pair also offered only Forward/RTO, which silently excluded the
+            40,284 Reverse shipments; it now uses the same three collapsed legs the
+            chart shows, as a chip row since there are three options rather than two. */}
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Shipment Leg</div>
+        <ChipRow options={opts.modes} selected={filters.modes} onToggle={v => toggleIn('modes', v)} />
+
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Billing Status</div>
+        <SegPair
+          value={filters.billing === 'all' ? null : filters.billing}
+          onChange={v => setOne('billing', v || 'all')}
+          options={[{ value: 'over', label: 'Overbilled' }, { value: 'ok', label: 'Clean' }]} />
+        </>)}
+
+        <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+
+        {/* Everything else as full-width labelled dropdowns under one FILTERS heading. */}
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+
+        <SearchSelect label="Billing Period" options={scopeMonths} multi
+          selected={filters.months}
+          onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
+
+        {scope === 'tpl' && (<>
+          <SearchSelect label="Warehouse" options={tplSiteOpts} multi
+            selected={filters.tplSites || []}
+            onChange={v => (v === null ? setOne('tplSites', []) : toggleIn('tplSites', v))} />
+
+          {/* City, independent of both slicers above: a partner can run several cities and
+              a city can host several partners, so neither one implies this. */}
+          <SearchSelect label="Location" options={tplLocationOpts} multi
+            selected={filters.tplLocations || []}
+            onChange={v => (v === null ? setOne('tplLocations', []) : toggleIn('tplLocations', v))} />
+
+        </>)}
+
+        {scope !== 'b2b' && scope !== 'tpl' && (<>
+        <SearchSelect label="Zone" options={opts.zones} multi
+          selected={filters.zones}
+          onChange={v => (v === null ? setOne('zones', []) : toggleIn('zones', v))} />
+
+        <SearchSelect label="Payment" options={opts.payments} multi
+          selected={filters.payments}
+          onChange={v => (v === null ? setOne('payments', []) : toggleIn('payments', v))} />
+
+        <SearchSelect label="Service Type" options={opts.accountTypes} multi
+          selected={filters.accountTypes}
+          onChange={v => (v === null ? setOne('accountTypes', []) : toggleIn('accountTypes', v))} />
+
+        {/* No "Shipment Mode" dropdown here — the Shipment Leg chips above are the same
+            filter, and two controls writing one piece of state is a bug waiting to
+            confuse someone. */}
+        <SearchSelect label="Weight Slab" options={WEIGHT_BANDS.map(b => b.label)}
+          value={filters.band ? WEIGHT_BANDS.find(b => b.key === filters.band)?.label : null}
+          onChange={label => {
+            if (label === null) return setOne('band', null)
+            const b = WEIGHT_BANDS.find(x => x.label === label)
+            setOne('band', b ? b.key : null)
+          }} />
+
+        {/* Exact billable slab, distinct from the Weight Slab band above: that one covers a
+            range (2-5 kg), this one isolates a single billed step (exactly 2 kg). Both can be
+            set; the API ANDs them, which is how you ask "the 2 kg slab within 2-5 kg".
+
+            Only slabs that actually occur are listed, so the dropdown never offers an empty
+            one. 119 exist (0.5 to 500 kg) and 95% of volume sits at or below 10 kg, so the
+            long tail is real but rarely wanted — hence the search box. */}
+        <SearchSelect label="Exact Weight Slab" options={slabOptions}
+          value={filters.exactSlab != null ? slabLabelOf(filters.exactSlab) : null}
+          onChange={label => {
+            if (label === null) return setOne('exactSlab', null)
+            const hit = (opts.slabs || []).find(s => slabLabelOf(s.slab) === label)
+            setOne('exactSlab', hit ? hit.slab : null)
+          }} />
+
+        {/* Origin before destination, so the two city filters read as a lane. */}
+        <SearchSelect label="Pickup City" options={opts.originCities}
+          value={filters.originCity} onChange={v => setOne('originCity', v)} />
+
+        <SearchSelect label="Drop City" options={opts.cities}
+          value={filters.destCity} onChange={v => setOne('destCity', v)} />
+        </>)}
+
+        {activeCount > 0 && (
+          <button onClick={() => setFilters(EMPTY_FILTERS)}
+            style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: 'var(--font)', marginTop: 2 }}>
+            ✕ Clear All ({activeCount})
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
+  let content
+  if (error) {
+    content = (
+      <Card title="Could not load cost ledger">
+        <div style={{ fontSize: 12.5, color: C.red.tx, marginBottom: 8 }}>{error}</div>
+        <div style={{ fontSize: 12, color: C.t3 }}>
+          This tab reads <code>{B2C}</code> from Supabase. Check that the table exists and is readable.
+        </div>
+      </Card>
+    )
+  } else if (loading && !agg) {
+    content = (
+      <Card title="Loading cost ledger…" note="aggregating on the server">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} style={{ height: 74, borderRadius: 11, background: C.bg }} />
+          ))}
+        </div>
+      </Card>
+    )
+  } else if ((!agg || !agg.n) && scope !== 'b2b') {
+    // The B2B tab reads a different table, so an empty B2C result must not blank it.
+    content = (
+      <Card title="No matching invoices">
+        <div style={{ fontSize: 12.5, color: C.t2 }}>
+          {activeCount > 0
+            ? 'No rows match the current slicers. Try clearing one or more filters.'
+            : <>Nothing has been uploaded to <code>{B2C}</code> yet. Add bills from the <strong>Logistics Bill Ledger</strong> page and they will appear here.</>}
+        </div>
+        {activeCount > 0 && (
+          <button onClick={() => setFilters(EMPTY_FILTERS)}
+            style={{ marginTop: 10, fontSize: 11.5, background: C.acc, border: 'none', borderRadius: 7, padding: '6px 14px', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
+            Clear all filters
+          </button>
+        )}
+      </Card>
+    )
+  } else if (scope === 'all') {
+    // ── OVERALL: B2B + B2C combined ──
+    content = !overall ? <Card title="Loading summary…" /> : (
+      <>
+        {/* No header here — the scope toggle above already says Overview. The spacer stands
+            in for the SectionHdr margin the block used to get. */}
+        <div style={{ height: 12 }} />
+        {/* Hero plus a 3x2 tile grid, then the combined trend, then a card per carrier. Same
+            hero + tile geometry as the other two tabs so the three read as one dashboard. */}
+        <div className="ov-hero cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 12, alignItems: 'stretch' }}>
+          <Hero sparkMin={22}
+            label="Total Logistics Cost"
+            value={fmt(overall.total)}
+            sub={(
+              <>
+                {overall.logisticsPct != null && (
+                  <div>{overall.logisticsPct.toFixed(2)}% of shipment value</div>
+                )}
+                <div>{fmtBig(overall.b2cUnits)} parcels · {fmtN(overall.b2bUnits)} freight trips</div>
+              </>
+            )}
+          >
+            {ovTrendWindow.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ovTrendWindow} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="ovHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={C.acc} stopOpacity={0.34} />
+                      <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  {/* Hidden axis bound to month, or Recharts labels the tooltip by array
+                      index and the hover reads "1" instead of "Apr 2026". */}
+                  <XAxis dataKey="month" hide />
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Area type="monotone" dataKey="total" name="Total" stroke={C.acm}
+                    strokeWidth={2} fill="url(#ovHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          {/* 3x3 beside the hero. Three groups of three, read left to right: carrier counts,
+              then cost by stream, then goods value by stream — so each row answers one
+              question rather than mixing units across the row. Nine fills the height the hero
+              sets, which is why the earlier three-across row left dead space below it. */}
+          <div className="ov-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 8 }}>
+            {/* Row 1 — cost, with the carrier count at the end. The two cost figures lead
+                because they are what the row is about; the count is context, so it sits
+                top-right rather than interrupting the pair. Share is on the sub-line rather
+                than in its own tile: a percentage of a number shown beside it needs no card. */}
+            <Tile label="B2C Courier Cost" value={fmt(overall.b2cCost)}
+              sub={`${(overall.total ? (overall.b2cCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
+            <Tile label="FTL/PTL Freight Cost" value={fmt(overall.b2bCost)}
+              sub={`${(overall.total ? (overall.b2bCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
+            {/* The third cost stream, sitting with the other two so the row reads as the
+                full split of the hero's total rather than two streams and a stray count. */}
+            <Tile label="3PL Warehousing Cost"
+              value={overall.tplCost > 0 ? fmt(overall.tplCost) : '—'}
+              sub={overall.tplCost > 0
+                ? `${(overall.total ? (overall.tplCost / overall.total) * 100 : 0).toFixed(1)}% of spend`
+                : 'no warehousing bills'} />
+
+            {/* Row 2 — the partner estate, then goods value and the ratio it supports. */}
+            {/* Carriers across both freight ledgers, plus the warehousing partners, so the
+                tile covers every logistics relationship rather than only the moving ones. */}
+            <Tile label="Partners"
+              value={fmtN(overall.carriers + overall.tplPartners)}
+              sub={`${fmtN(overall.carriers)} carriers · ${fmtN(overall.tplPartners)} 3PL · ${fmtN(overall.tplSites)} sites`} />
+            <Tile label="B2C Shipment Value" value={fmt(overall.shipValue)}
+              sub="goods moved by courier" />
+            {overall.b2bValue == null
+              ? (
+                <Tile label="Logistics % of Value"
+                  value={overall.b2cLogisticsPct != null ? overall.b2cLogisticsPct.toFixed(2) + '%' : '—'}
+                  sub="B2C basis · freight value pending" />
+              )
+              : (
+                <Tile label="Logistics % of Value"
+                  value={overall.logisticsPct != null ? overall.logisticsPct.toFixed(2) + '%' : '—'}
+                  sub="all cost ÷ all shipment value" />
+              )}
+
+          </div>
+        </div>
+        {/* Mobile carousel */}
+        <div className="cost-kpi-carousel-wrap" style={{ display: 'none' }}>
+          <CostKpiCarousel>
+            {[
+              { label: 'Total Logistics Cost', value: fmt(overall.total), sub: `${fmtBig(overall.b2cUnits)} parcels` },
+              { label: 'B2C Courier Spend', value: fmt(overall.b2cCost), sub: overall.total > 0 ? `${(overall.b2cCost / overall.total * 100).toFixed(1)}% of total` : '' },
+              { label: 'B2B Freight Spend', value: fmt(overall.b2bCost), sub: overall.total > 0 ? `${(overall.b2bCost / overall.total * 100).toFixed(1)}% of total` : '' },
+              { label: '3PL Warehousing', value: fmt(overall.tplCost), sub: overall.total > 0 ? `${(overall.tplCost / overall.total * 100).toFixed(1)}% of total` : '' },
+              { label: 'B2C Shipments', value: fmtBig(overall.b2cUnits), sub: 'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel' },
+              { label: 'B2B Trips', value: fmtN(overall.b2bUnits), sub: 'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip' },
+              { label: 'Recoverable (B2C)', value: fmt(kpis.overbilledCost), sub: 'weight overbilling', accent: C.red.tx },
+              { label: 'Freight as % of GMV', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', sub: 'B2C declared value' },
+              { label: 'B2B Lanes', value: fmtN(overall.b2bLanes), sub: `${overall.b2bTransporters} transporters` },
+            ].map(t => (
+              <div key={t.label} style={{ minWidth: '70vw', maxWidth: '70vw', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', boxSizing: 'border-box', scrollSnapAlign: 'start', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>{t.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: t.accent || C.t1, lineHeight: 1.15 }}>{t.value}</div>
+                {t.sub && <div style={{ fontSize: 11, color: C.t3 }}>{t.sub}</div>}
+              </div>
+            ))}
+          </CostKpiCarousel>
+        </div>
+
+        {/* ── Combined monthly trend ── */}
+        <SectionHdr title="Monthly Trend" note="both ledgers bill in rupees, so one axis is fair" collapsed={secHid['ov-trend']} onToggle={() => toggleSec('ov-trend')} />
+        <Card style={secHid['ov-trend'] ? { display: 'none' } : undefined}
+          action={(
+            /* Range applies to this chart only. Options beyond the available history are
+               disabled rather than hidden, so the reader can see how much data exists. */
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ n: 3, label: '3M' }, { n: 6, label: '6M' }, { n: 12, label: '12M' }, { n: 999, label: 'All' }].map(o => {
+                const on = ovTrendMonths === o.n
+                const short = o.n !== 999 && !on && o.n > overallMonths.length
+                  && overallMonths.length <= Math.max(...[3, 6, 12].filter(v => v < o.n), 0)
+                return (
+                  <button key={o.n} onClick={() => setOvTrendMonths(o.n)}
+                    title={short ? `only ${overallMonths.length} periods uploaded` : undefined}
+                    style={{
+                      fontSize: 10.5, fontWeight: on ? 700 : 500, padding: '4px 9px',
+                      borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font)',
+                      border: `1px solid ${on ? C.acm : C.border2}`,
+                      background: on ? C.acl : C.card,
+                      color: short ? C.t3 : C.t1,
+                    }}>{o.label}</button>
+                )
+              })}
+            </div>
+          )}>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={ovTrendWindow} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                {/* Vertical accent ramp for the magnitude bars. Built from the theme's own
+                    accent tokens (acc -> acm -> acd, light to dark) rather than a literal
+                    colour, so the bars follow a palette switch like everything else — in the
+                    forest theme that reads as a green gradient, in gold as a gold one.
+                    Darker at the base gives the bar a defined foot against the axis; the
+                    lighter top keeps the two trend lines in front of it. */}
+                <BarGradient id="ovTotalBar" />
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmt(v)} />
+                <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)', minWidth: 160 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 7 }}>{label}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 5, borderBottom: `1px solid ${C.border2}`, paddingBottom: 5 }}>
+                          <span><span style={{ color: C.acm, fontWeight: 700 }}>■</span> Total</span>
+                          <span>{fmt(r.total)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
+                          <span><span style={{ color: OV_SERIES.b2c, fontWeight: 700 }}>■</span> B2C</span>
+                          <span>{fmt(r.b2c)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
+                          <span><span style={{ color: OV_SERIES.b2b, fontWeight: 700 }}>■</span> FTL/PTL</span>
+                          <span>{fmt(r.b2b)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
+                          <span><span style={{ color: OV_SERIES.tpl, fontWeight: 700 }}>■</span> 3PL</span>
+                          <span>{fmt(r.tpl)}</span>
+                        </div>
+                      </div>
+                    )
+                  }} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                {/* Total as a bar, the two streams as lines on top. The bar carries the
+                    magnitude — how much was spent in the period — and the lines carry the
+                    trends that compose it.
+                    ONE axis throughout: all three series are rupees, so a second scale would
+                    misrepresent them. The bar is deliberately pale so it reads as the ground
+                    the lines sit on rather than competing with them for attention. */}
+                {/* Frido brand yellow — the app accent (C.acc), so the chart uses the same
+                    yellow as the rest of the UI rather than a second one.
+                    Held pale so the two lines stay the foreground. At 1.38:1 against the white
+                    card the fill alone is too faint to hold an edge, so it carries a stroke in
+                    the deeper accent (C.acm) to define the bar. Hue clash is not a concern
+                    here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
+                <Bar dataKey="total" name="Total" fill="url(#ovTotalBar)"
+                  radius={[4, 4, 0, 0]} maxBarSize={56} />
+                {/* One shade per stream, stepped by lightness — see OV_SERIES. A white dot
+                    ring lifts each marker off the bar behind it, which is the same green
+                    family and would otherwise swallow the dots. */}
+                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={OV_SERIES.b2c}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.b2c, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.b2c, stroke: VIZ.surface, strokeWidth: 2 }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={OV_SERIES.b2b}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.b2b, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.b2b, stroke: VIZ.surface, strokeWidth: 2 }} />
+                <Line type="monotone" dataKey="tpl" name="3PL warehousing" stroke={OV_SERIES.tpl}
+                  strokeWidth={2.5} dot={{ r: 3.5, fill: OV_SERIES.tpl, stroke: VIZ.surface, strokeWidth: 1.5 }}
+                  activeDot={{ r: 6, fill: OV_SERIES.tpl, stroke: VIZ.surface, strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* ── Carrier cards ──
+            One card per partner. B2C carries weight and goods value so those cards can show
+            ₹/kg and freight-as-%-of-value; the freight ledger has neither, so those cards
+            state less rather than padding with metrics the data cannot support. */}
+        <SectionHdr title="B2C Courier Partners"
+          note={`${fmtN(overviewB2cCards.length)} partners · ${fmt(overall.b2cCost)}`} collapsed={secHid['ov-b2c-cards']} onToggle={() => toggleSec('ov-b2c-cards')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2c-cards'] ? { display: 'none' } : {}) }}>
+          {overviewB2cCards.map(c => (
+            <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CourierCell name={c.key} />
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {c.share.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(c.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtBig(c.shipments)} shipments</span>
+                <span style={{ textAlign: 'right' }}>₹{c.avgCost.toFixed(0)} / shpmt</span>
+                <span>{c.cpk != null ? '₹' + c.cpk.toFixed(1) + ' / kg' : '—'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {c.pctValue != null ? c.pctValue.toFixed(2) + '% of value' : '—'}
+                </span>
+              </div>
+              {c.claimable > 0 && (
+                <div style={{ fontSize: 10.5, color: C.red.tx, fontWeight: 700 }}>
+                  {fmt(c.claimable)} claimable
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <SectionHdr title="FTL/PTL Transport Partners"
+          note={`${fmtN(overviewB2bCards.length)} partners · ${fmt(overall.b2bCost)}`} collapsed={secHid['ov-b2b-cards']} onToggle={() => toggleSec('ov-b2b-cards')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2b-cards'] ? { display: 'none' } : {}) }}>
+          {overviewB2bCards.map(c => (
+            <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CourierCell name={c.key} />
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {c.share.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(c.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(c.trips)} trips</span>
+                <span style={{ textAlign: 'right' }}>
+                  ₹{Math.round(c.avgCost).toLocaleString('en-IN')} / trip
+                </span>
+              </div>
+            </div>
+          ))}
+          {/* Fixed rentals sit with the partners because that is what they are — a
+              transporter relationship — but they are billed monthly rather than per
+              trip, so the card shows a monthly charge where the others show ₹/trip.
+              Its cost is never added to the freight total above. */}
+          {fixedVeh && fixedVeh.cost > 0 && (
+            <div className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Rental Fixed Vehicle</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>fixed</span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(fixedVeh.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(fixedVeh.distinct_vehicles)} vehicles</span>
+                <span style={{ textAlign: 'right' }}>
+                  {fixedVeh.months > 0 ? `${fmt(fixedVeh.cost / fixedVeh.months)} / month` : '—'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── 3PL warehousing partners ──
+            A separate section from the carriers above, because these are not carriers: they
+            store and handle goods rather than move them, and are billed per site per month.
+            The card therefore shows sites and a monthly charge where a carrier card shows
+            trips and a per-trip rate. Cost per parcel appears where the site's volume could
+            be matched to the Clickpost pickup data — see the 3PL tab for the full detail. */}
+        {tpl?.partners?.length > 0 && (
+          <>
+            <SectionHdr title="3PL Warehousing Partners"
+              note={`${fmtN(tpl.partners.length)} partners · ${fmtN(overall.tplSites)} sites · ${fmt(overall.tplCost)}`}
+              collapsed={secHid['ov-tpl-cards']} onToggle={() => toggleSec('ov-tpl-cards')} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12,
+              ...(secHid['ov-tpl-cards'] ? { display: 'none' } : {}) }}>
+              {tpl.partners.map(pp => {
+                const pct = overall.tplCost > 0 ? (pp.cost / overall.tplCost) * 100 : 0
+                return (
+                  <div key={pp.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, overflow: 'hidden',
+                        textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pp.key}>{pp.key}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(pp.cost)}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                      <span>{fmtN(pp.warehouses)} site{pp.warehouses === 1 ? '' : 's'}</span>
+                      <span style={{ textAlign: 'right' }}>
+                        {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / month` : '—'}
+                      </span>
+                      {/* Per-unit rates, on their own row so they line up across cards. A
+                          dash where the partner's billed months have no matched parcels —
+                          never a zero, which would read as "free" rather than "unknown". */}
+                      <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                      <span style={{ textAlign: 'right' }}>
+                        {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </>
+    )
+  } else if (scope === 'b2b') {
+    // ── B2B: lane-wise cost analysis ──
+    content = !b2b ? <Card title="Loading FTL/PTL freight…" /> : !b2b.totals.trips ? (
+      <Card title="No FTL/PTL freight invoices yet">
+        <div style={{ fontSize: 12.5, color: C.t2 }}>
+          Add transporter bills from the <strong>Logistics Bill Ledger</strong> page (B2B · Freight format)
+          and lane analysis will appear here.
+        </div>
+      </Card>
+    ) : (
+      <>
+        {/* No header on this block — the cards are self-describing. The spacer keeps the
+            vertical rhythm the SectionHdr used to provide. */}
+        <div style={{ height: 12 }} />
+        {b2b.totals?.unpriced_rows > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 0 12px',
+            padding: '10px 14px', borderRadius: 10,
+            background: C.amber.bg, border: `1px solid ${C.amber.bd}`, color: C.amber.tx,
+            fontSize: 12, lineHeight: 1.5,
+          }}>
+            <span style={{ fontWeight: 700 }}>⚠</span>
+            <span>
+              <strong>{fmtN(b2b.totals.unpriced_rows)} invoice lines ({fmt(b2b.totals.unpriced_cost)})</strong>
+              {' '}are uploaded but not yet priced, so they are missing from every figure on this tab.
+              {' '}Run <code style={{ fontSize: 11.5 }}>node -r dotenv/config scripts/build-b2b-variance.mjs</code>{' '}
+              after a B2B upload to include them.
+            </span>
+          </div>
+        )}
+        {/* Hero plus a 4x2 tile grid, the same arrangement and gap as the B2C tab so the two
+            tabs read as one dashboard. Every figure derives from b2bHead, which is built off
+            the per-transporter rows — so the whole block responds to the sidebar selection
+            rather than only the charts below it. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 14, alignItems: 'stretch' }}>
+          <Hero
+            label="Total Freight Cost"
+            value={fmt(b2bHead ? b2bHead.spend : b2b.totals.cost)}
+            deltas={b2bHead && b2bHead.momPct != null
+              ? [{ pct: b2bHead.momPct, up: b2bHead.momPct > 0, good: b2bHead.momPct < 0, note: 'MoM' }]
+              : []}
+            sub={(
+              <>
+                {b2bVariance?.freightPctValue != null && (
+                  <div>{b2bVariance.freightPctValue.toFixed(2)}% of shipment value</div>
+                )}
+                <div>{fmtN(b2bHead ? b2bHead.trips : b2b.totals.trips)} trips · {fmtN(b2bHead ? b2bHead.lanes : b2b.totals.lanes)} lanes</div>
+              </>
+            )}
+          >
+            {b2bVarMonthRows.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={b2bVarMonthRows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="ftlHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  {/* Hidden axis bound to month: without it Recharts labels the tooltip by
+                      array index and the hover reads "1" instead of "Apr 2026". */}
+                  <XAxis dataKey="month" hide />
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Area type="monotone" dataKey="billed" name="Freight" stroke={SER.blue}
+                    strokeWidth={2} fill="url(#ftlHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14 }}>
+            {/* Row 1 — unit economics */}
+            <Tile label="Avg Cost / Trip"
+              value={'₹' + Math.round(b2bHead ? b2bHead.avgTrip : b2b.totals.avg_cost).toLocaleString('en-IN')}
+              sub={b2bHead ? `across ${fmtN(b2bHead.lanes)} lanes` : null} />
+            <Tile label="Rental Fixed Vehicle"
+              value={fixedVeh && fixedVeh.months > 0
+                ? fmt(fixedVeh.cost / fixedVeh.months)
+                : '—'}
+              sub={fixedVeh && fixedVeh.vehicles > 0
+                ? `${fmtN(fixedVeh.distinct_vehicles)} vehicles · ${fmt(fixedVeh.cost)} total`
+                : 'no fixed rentals uploaded'} />
+            <Tile label="Vehicle Types" value={fmtN(b2bVehicleRows.length)}
+              sub={b2bVehicleRows[0] ? `${b2bVehicleRows[0].vehicle} leads · ${fmt(b2bVehicleRows[0].cost)}` : null} />
+            <Tile label="Dearest Vehicle"
+              value={b2bVehicleRows.length
+                ? '₹' + Math.round(Math.max(...b2bVehicleRows.map(v => v.avgCost))).toLocaleString('en-IN')
+                : '—'}
+              sub={b2bVehicleRows.length
+                ? `${b2bVehicleRows.reduce((a, v) => (v.avgCost > a.avgCost ? v : a)).vehicle} per trip`
+                : null} />
+            {/* Row 2 — concentration and dependency. These are risk figures rather than cost
+                ones: none of them is wrong on its own, but each says how exposed the book is
+                if one carrier or one lane stops working. */}
+            <Tile label="Top Transporter Share"
+              value={b2bTransRows[0] ? b2bTransRows[0].share.toFixed(1) + '%' : '—'}
+              sub={b2bTransRows[0] ? `${b2bTransRows[0].key} · ${fmt(b2bTransRows[0].cost)}` : null}
+              accent={b2bTransRows[0] && b2bTransRows[0].share > 60 ? C.red.tx : undefined} />
+            <Tile label="Top 3 Lane Share"
+              value={b2bHead ? b2bHead.top3Pct.toFixed(1) + '%' : '—'}
+              sub="of total freight spend" />
+            <Tile label="Single-Sourced Spend"
+              value={b2bSole ? b2bSole.pct.toFixed(1) + '%' : '—'}
+              sub={b2bSole ? `${fmtN(b2bSole.lanes)} of ${fmtN(b2bSole.totalLanes)} lanes, one carrier` : null} />
+            <Tile label="Transporters" value={fmtN(b2bTransRows.length)}
+              sub={b2bTransRows.length > 1
+                ? `${fmt(b2bTransRows[b2bTransRows.length - 1].cost)} on the smallest`
+                : 'single carrier'} />
+          </div>
+        </div>
+
+        {/* ── Monthly trend, full width ──
+            Matches the B2C "Freight spend and unit cost" chart: bars carry period spend on
+            the left axis, lines carry unit cost on the right. Two axes because spend runs in
+            crores while cost per trip runs in tens of thousands — on a single scale the
+            rate lines would flatten onto the floor and read as no change at all.
+
+            The second line is FTL SHARE, not a cost-per-kg twin: this ledger bills per trip
+            and carries no weight column, so there is no per-kg figure to plot. Share matters
+            because it explains the first line — a month tilting toward part-load shows a
+            falling cost per trip that is a mix shift, not a negotiated win. */}
+        <SectionHdr title="Monthly Trend" note="freight spend, cost per trip and full-truck share per billing period" collapsed={secHid['ftl-trend']} onToggle={() => toggleSec('ftl-trend')} />
+        <Card style={secHid['ftl-trend'] ? { display: 'none' } : undefined}
+          title={isMobile ? <span style={{ fontSize: 15 }}>Freight spend and cost per trip</span> : "Freight spend and cost per trip"}
+          note={isMobile ? "" : "bars = total spend (left axis) · lines = cost per trip and FTL share (right axis)"}
+          action={
+            // Range applies to THIS chart only. Options beyond the available history are
+            // dimmed rather than hidden, so the reader can see how much data exists.
+            isMobile ? (
+              <select value={b2bTrendMonths} onChange={e => setB2bTrendMonths(Number(e.target.value))}
+                style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, fontFamily: 'var(--font)', border: `1.5px solid ${C.acm}`, background: '#fff', color: C.t1, cursor: 'pointer' }}>
+                {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => (
+                  <option key={o.l} value={o.n}>{o.l}</option>
+                ))}
+              </select>
+            ) : (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => {
+                const on = b2bTrendMonths === o.n
+                const short = o.n !== 999 && !on && o.n > b2bTrendRows.length
+                return (
+                  <button key={o.l} onClick={() => !short && setB2bTrendMonths(o.n)} disabled={short}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 6,
+                      fontFamily: 'var(--font)',
+                      border: `1.5px solid ${on ? C.acm : C.border2}`,
+                      background: on ? C.acl : C.card,
+                      color: short ? C.t3 : C.t1,
+                      cursor: short ? 'default' : 'pointer', opacity: short ? 0.45 : 1,
+                    }}>
+                    {o.l}
+                  </button>
+                )
+              })}
+            </div>
+            )
+          }>
+          <div style={{ height: 210, marginTop: isMobile ? 20 : 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={b2bTrendWindow} margin={{ top: 12, right: isMobile ? -28 : 14, left: isMobile ? -4 : 4, bottom: 4 }}>
+                {/* Its own gradient id: two SVG gradients sharing one id resolve to whichever
+                    mounted last, which silently blanks one chart's bars. */}
+                <BarGradient id="ftlTrendBar" />
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+                {/* Cost per trip and FTL share share this axis but not a unit, so it is
+                    formatted bare. The tooltip prints both with their real units. */}
+                <YAxis yAxisId="unit" orientation="right" tick={{ fontSize: 11, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={v => (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : String(Math.round(v)))} />
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.billed)}</div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                          {fmtN(r.trips)} trips
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.acm, marginTop: 5, fontWeight: 600 }}>
+                          ₹{Math.round(r.perTrip).toLocaleString('en-IN')} / trip
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#2BB3A3', fontWeight: 600 }}>
+                          {r.ftlShare.toFixed(1)}% full-truck
+                        </div>
+                      </div>
+                    )
+                  }} />
+                <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                <Bar yAxisId="spend" dataKey="billed" name="Total freight spend"
+                  fill="url(#ftlTrendBar)" radius={[4, 4, 0, 0]} maxBarSize={64} />
+                <Line yAxisId="unit" type="monotone" dataKey="perTrip" name="Cost / trip"
+                  stroke={C.acm} strokeWidth={2.5}
+                  dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }} />
+                {/* Dashed so it reads as a share, not a second rupee series sharing the axis. */}
+                <Line yAxisId="unit" type="monotone" dataKey="ftlShare" name="FTL share %"
+                  stroke="#2BB3A3" strokeWidth={2.5} strokeDasharray="4 3"
+                  dot={{ r: 3.5, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Table twin — the real rupees and counts behind the chart. */}
+          <div style={{ marginTop: 12 }}>
+            <DataTable
+              columns={[
+                { key: 'month', label: 'Period' },
+                { key: 'billed', label: 'Freight Cost', align: 'center', render: (_, r) => fmt(r.billed) },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'perTrip', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.perTrip).toLocaleString('en-IN') },
+                { key: 'ftlShare', label: 'FTL Share', align: 'center', render: (_, r) => r.ftlShare.toFixed(1) + '%' },
+                // Share of the VISIBLE window, not of all time: the range buttons change
+                // what is on screen, and a share of a total the table does not show would
+                // never sum to 100 and would quietly change meaning as the range changes.
+                { key: 'shareOfSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+                  const tot = b2bTrendWindow.reduce((a, x) => a + (Number(x.billed) || 0), 0)
+                  const pct = tot > 0 ? (Number(r.billed) || 0) / tot * 100 : 0
+                  return <ShareBar pct={pct}>{pct.toFixed(1) + '%'}</ShareBar>
+                } },
+              ]}
+              rows={b2bTrendWindow}
+            />
+          </div>
+        </Card>
+
+        {/* ── Transporter trend ──
+            One line per carrier. A month a transporter did not bill is a GAP, not a zero:
+            VS Transport and KM-Logistic stopped billing in July, and a line dropping to the
+            axis would read as "spend collapsed" instead of "no invoice raised". */}
+        <SectionHdr title="Transporter Trend" note="freight spend per carrier, per billing period" collapsed={secHid['ftl-transporters']} onToggle={() => toggleSec('ftl-transporters')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-transporters'] ? { display: 'none' } : {}) }}>
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend by transporter"
+            note="a gap means no invoice was raised that period">
+            <div style={{ flex: 1, minHeight: 210 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={b2bTransTrendRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => fmt(v)} />
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Legend {...chartLegendProps({ fontSize: 10.5 })} />
+                  {/* Colour follows the CARRIER, taken from a fixed order by total spend, so a
+                      transporter keeps its colour even as the series count changes. */}
+                  {b2bTransKeys.map((k, idx) => (
+                    <Line key={k} type="monotone" dataKey={k} name={k}
+                      stroke={DRIFT.colors[idx % DRIFT.colors.length]} strokeWidth={2}
+                      dot={{ r: 3 }} connectNulls={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Transporter share"
+            note="spend, unit cost and share of the freight book">
+            <DataTable
+              columns={[
+                { key: 'key', label: 'Transporter' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              ]}
+              rows={b2bTransRows}
+            />
+          </Card>
+        </div>
+
+        {/* ── Vehicle type ──
+            Unit economics per vehicle. Total spend only says how often a vehicle was used;
+            avg cost per trip is the comparable figure, so both are shown and the table
+            carries lane reach — a vehicle used on 28 lanes is a different commercial
+            proposition from one used on 2. */}
+        <SectionHdr title="Vehicle Type Analysis"
+          note={`${b2bVehicleRows.length} vehicle types across the freight book`} collapsed={secHid['ftl-vehicles']} onToggle={() => toggleSec('ftl-vehicles')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-vehicles'] ? { display: 'none' } : {}) }}>
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend by vehicle type"
+            note="total freight per vehicle">
+            <div style={{ flex: 1, minHeight: 210 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={b2bVehicleRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                  <BarGradient id="gVehSpend" />
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  <XAxis dataKey="vehicle" tick={{ fontSize: 10, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                    angle={-30} textAnchor="end" height={52} />
+                  <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => fmt(v)} />
+                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                            {fmtN(r.trips)} trips · ₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip
+                          </div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                            {r.lanes} lanes · {r.transporters} transporter{r.transporters === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Bar dataKey="cost" name="Freight spend" fill="url(#gVehSpend)"
+                    radius={[4, 4, 0, 0]} maxBarSize={38} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost per trip by vehicle"
+            note="the comparable unit rate — total spend only reflects how often it was used">
+            <div style={{ flex: 1, minHeight: 210 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={b2bVehicleRows} layout="vertical"
+                  margin={{ top: 6, right: 62, left: 8, bottom: 4 }}>
+                  {/* Horizontal bars, so the ramp runs left-to-right rather than top-down. */}
+                  <BarGradient id="gVehRate" horizontal />
+                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
+                    tickLine={false} tickFormatter={v => fmt(v)} />
+                  <YAxis type="category" dataKey="vehicle" width={72}
+                    tick={{ fontSize: 10, fill: VIZ.muted }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{r.vehicle}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>{fmtN(r.trips)} trips · {fmt(r.cost)} total</div>
+                        </div>
+                      )
+                    }} />
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill="url(#gVehRate)"
+                    radius={[0, 4, 4, 0]} maxBarSize={16}>
+                    <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
+                      style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        <div style={{ marginTop: 14 , ...(secHid['ftl-vehicles'] ? { display: 'none' } : {}) }}>
+          <Card>
+            <DataTable
+              columns={[
+                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+                { key: 'lanes', label: 'Lanes', align: 'center', render: (_, r) => fmtN(r.lanes) },
+                { key: 'transporters', label: 'Transporters', align: 'center', render: (_, r) => fmtN(r.transporters) },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              ]}
+              rows={b2bVehicleRows}
+            />
+          </Card>
+        </div>
+
+        <SectionHdr title="Lane Detail" note="one row per lane and vehicle size — the grain a freight rate is quoted at" collapsed={secHid['ftl-lanes']} onToggle={() => toggleSec('ftl-lanes')} />
+        <div style={{ marginTop: 14 , ...(secHid['ftl-lanes'] ? { display: 'none' } : {}) }}>
+          <Card>
+            <DataTable
+              columns={[
+                { key: 'lane', label: 'Lane' },
+                { key: 'vehicle', label: 'Vehicle', align: 'center' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+                { key: 'minCost', label: 'Min', align: 'center', render: (_, r) => fmt(r.minCost) },
+                { key: 'maxCost', label: 'Max', align: 'center', render: (_, r) => fmt(r.maxCost) },
+                { key: 'transporters', label: 'Carriers', align: 'center', render: (_, r2) => fmtN(r2.transporters) },
+              ]}
+              rows={b2bLaneVehRows}
+              search searchKeys={['lane', 'vehicle']} searchPlaceholder="Find a lane or vehicle…"
+              maxRows={120}
+              maxHeight={420}
+            />
+          </Card>
+        </div>
+
+        <SectionHdr title="Freight Type & Carrier Rates" note="FTL = full truck, PTL = part load" collapsed={secHid['ftl-types']} onToggle={() => toggleSec('ftl-types')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-types'] ? { display: 'none' } : {}) }}>
+          {/* Freight type is a genuine composition — the three types sum to total freight spend —
+              so a donut reads it faster than a table. The table stays beneath it: FTL is 95.2%,
+              which makes PT/FTL and PTL slivers too thin to read an angle from, and the numbers
+              are what a reader actually needs for those two. */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Freight type mix"
+            note="share of total freight spend">
+            <div style={{ height: 168 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{r.key}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                            {r.share.toFixed(1)}% of spend · {fmtN(r.trips)} trips
+                          </div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                            ₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Pie data={b2bTypeRows} dataKey="cost" nameKey="key" cx="50%" cy="50%"
+                    innerRadius={40} outerRadius={64} paddingAngle={2}
+                    stroke={VIZ.surface} strokeWidth={2} label={false} labelLine={false}>
+                    {/* Fixed order by spend, so a type keeps its colour as the filter changes. */}
+                    {b2bTypeRows.map((r, i) => (
+                      <Cell key={r.key} fill={[SER.blue, SER.orange, SER.aqua][i % 3]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend as text rather than Recharts': at 0.8% the PTL slice is a hairline, so its
+                identity has to come from a labelled row, not from the wedge. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', justifyContent: 'center', marginTop: 2, marginBottom: 8 }}>
+              {b2bTypeRows.map((r, i) => (
+                <span key={r.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: [SER.blue, SER.orange, SER.aqua][i % 3], flexShrink: 0 }} />
+                  {r.key} <strong style={{ color: C.t1 }}>{r.share.toFixed(1)}%</strong>
+                </span>
+              ))}
+            </div>
+            <DataTable
+              columns={[
+                { key: 'key', label: 'Type' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+              ]}
+              rows={b2bTypeRows}
+            />
+          </Card>
+
+          {/* Same route, same vehicle size — how far apart the cheapest and dearest trip
+              were. Holding vehicle constant is the point: a lane's raw spread is otherwise
+              just its vehicle mix rather than a pricing inconsistency. Ranked by rupees at
+              stake (spread x trips), so a wide gap on two trips does not outrank a smaller
+              one repeated two hundred times. */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Rate consistency by lane"
+            note="cheapest to dearest trip on the same lane and vehicle · min 8 trips">
+            {b2bSpreadRows.length ? (
+              <>
+                <div style={{ flex: 1, minHeight: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    {/* A floating band: `lo` is stacked first with a transparent fill and the
+                        visible bar sits on top of it, so each bar spans min to max. Recharts
+                        has no native range bar. */}
+                    <BarChart data={b2bSpreadRows} layout="vertical"
+                      margin={{ top: 6, right: 58, left: 4, bottom: 4 }}>
+                      <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                        axisLine={false} tickLine={false}
+                        tickFormatter={v => '₹' + Math.round(v / 1000) + 'k'} />
+                      <YAxis type="category" dataKey="key" width={158}
+                        tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false}
+                        tickFormatter={v => (String(v).length > 24 ? String(v).slice(0, 23) + '…' : v)} />
+                      <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null
+                          const r = payload[0].payload
+                          return (
+                            <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)', minWidth: 190 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 6 }}>{r.lane}</div>
+                              <div style={{ fontSize: 10.5, color: C.t3, marginBottom: 6 }}>{r.vehicle} · {fmtN(r.trips)} trips</div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2 }}>
+                                <span>Cheapest</span><span>{fmt(r.lo)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2 }}>
+                                <span>Average</span><span>{fmt(r.avg)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, color: C.t2, marginBottom: 5 }}>
+                                <span>Dearest</span><span>{fmt(r.hi)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1px solid ${C.border2}`, paddingTop: 5 }}>
+                                <span>Spread</span><span>{fmt(r.spread)} ({r.spreadPct.toFixed(0)}%)</span>
+                              </div>
+                            </div>
+                          )
+                        }} />
+                      <Bar dataKey="lo" stackId="s" fill="transparent" isAnimationActive={false} />
+                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={13}>
+                        <LabelList dataKey="spreadPct" position="right"
+                          formatter={v => '+' + Math.round(v) + '%'}
+                          style={{ fontSize: 10, fill: C.t2, fontWeight: 600 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
+                  Each bar runs from the cheapest to the dearest trip billed on that lane and
+                  vehicle. A wide band means the same journey is being priced inconsistently —
+                  worth checking against the rate card before assuming the average is the rate.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12.5, color: C.t2 }}>
+                No lane has 8+ trips on one vehicle size yet, so there is no rate pattern to
+                read — only individual quotes.
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* The raw invoice table, moved here from the B2C tab where it didn't belong. */}
+        <SectionHdr title="Transporter Invoices" note="most recent 500 bills" collapsed={secHid['ftl-invoices']} onToggle={() => toggleSec('ftl-invoices')} />
+        <Card style={secHid['ftl-invoices'] ? { display: 'none' } : undefined}>
+          {b2bRows && b2bRows.length ? (
+            <DataTable
+              columns={[
+                { key: 'month_year', label: 'Period', render: (_, r) => monthLabel(r.month_year) },
+                { key: 'transporter_name', label: 'Transporter' },
+                { key: 'origin_location', label: 'Origin' },
+                { key: 'destination_location', label: 'Destination' },
+                { key: 'vehicle_type', label: 'Vehicle', align: 'center',
+                  // Normalised to the same key the charts group on, so "20 FT", "20FT" and
+                  // "20 Ft" read as one vehicle here too rather than three.
+                  render: (_, r) => vehicleKeyOf(r.vehicle_type) },
+                { key: 'vehicle_number', label: 'Vehicle No.', align: 'center' },
+                { key: 'freight_type', label: 'Type', align: 'center' },
+                { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
+              ]}
+              rows={b2bRows}
+              maxRows={500}
+              maxHeight={382}
+            />
+          ) : (
+            <div style={{ fontSize: 12.5, color: C.t2 }}>No transporter invoices to show.</div>
+          )}
+        </Card>
+      </>
+    )
+  } else if (scope === 'tpl') {
+    // ── 3PL warehousing ──
+    // Storage and handling billed per site per month, against the shipment volume each site
+    // actually moved. Volume comes from the Clickpost tracking report via pickup_name
+    // (scripts/sync-3pl-shipments.mjs) — the ledger itself carries no parcel count, so
+    // without that join this tab could only report rupees.
+    content = !tpl ? <Card title="Loading 3PL warehousing…" /> : !tpl.totals?.rows ? (
+      <Card title="No 3PL invoices yet">
+        <div style={{ fontSize: 12.5, color: C.t2 }}>
+          Add warehousing bills from the <strong>Logistics Bill Ledger</strong> page (3PL · Warehousing format)
+          and the site breakdown will appear here.
+        </div>
+      </Card>
+    ) : (() => {
+      const t = tpl.totals
+      const perMonth = t.months > 0 ? t.cost / t.months : 0
+      const share = v => (t.cost > 0 ? (v / t.cost) * 100 : 0)
+
+      // Blended rate across every site that has volume. Costs from months with no shipment
+      // data are EXCLUDED from the numerator as well as the denominator — counting Haryana's
+      // unmatched May spend against April–August volume would overstate the rate for every
+      // site at once.
+      const rated = (tpl.warehouses || []).filter(w => w.shipments > 0)
+      const ratedCost = rated.reduce((a, w) => a + Number(w.cost || 0), 0)
+      const totalShip = rated.reduce((a, w) => a + Number(w.shipments || 0), 0)
+      const totalKg = rated.reduce((a, w) => a + Number(w.weight_kg || 0), 0)
+      const perShip = totalShip > 0 ? ratedCost / totalShip : null
+      const perKg = totalKg > 0 ? ratedCost / totalKg : null
+      const avgWt = totalShip > 0 ? totalKg / totalShip : null
+
+      // Rate movement, last billed month against the one before. Only months with volume on
+      // both sides can be compared, so months missing a denominator are skipped rather than
+      // treated as a drop to zero.
+      const mRates = (tplTrend || []).filter(m => m.per_ship != null)
+      const last = mRates[mRates.length - 1], prev = mRates[mRates.length - 2]
+      const rateDelta = last && prev && prev.per_ship > 0
+        ? ((last.per_ship - prev.per_ship) / prev.per_ship) * 100 : null
+
+      return (
+      <>
+        <div style={{ height: 12 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 14, alignItems: 'stretch' }}>
+          <Hero
+            label="Total Warehousing Cost"
+            value={fmt(t.cost)}
+            // Falling cost per parcel is good news, so `good` is the inverse of `up`.
+            deltas={rateDelta != null ? [{
+              pct: rateDelta, up: rateDelta > 0, good: rateDelta < 0, note: `₹/parcel vs ${prev.key}`,
+            }] : []}
+            sub={<div>{fmt(perMonth)} per month · {fmtN(t.partners)} partners · {fmtN(t.warehouses)} sites</div>}
+          >
+            {tpl.months.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={tpl.months} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="tplHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="cost" stroke={SER.blue}
+                    strokeWidth={2} fill="url(#tplHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14 }}>
+            {/* Row 1 — the unit economics. These are the figures a warehousing contract is
+                actually judged on; the composition split moved to row 2. */}
+            <Tile label="Cost / Parcel" value={perShip != null ? money1(perShip) : '—'}
+              accent={C.acc}
+              sub={perShip != null ? `across ${fmtN(totalShip)} parcels` : 'no volume matched'} />
+            <Tile label="Cost / kg" value={perKg != null ? money1(perKg) : '—'}
+              sub={perKg != null ? `${fmtN(Math.round(totalKg))} kg handled` : 'no weight matched'} />
+            <Tile label="Avg Parcel Weight" value={avgWt != null ? `${avgWt.toFixed(2)} kg` : '—'}
+              sub="shipped weight ÷ parcels" />
+            <Tile label="Cost / Site / Month"
+              value={t.warehouses > 0 && t.months > 0 ? fmt(t.cost / t.warehouses / t.months) : '—'}
+              sub={`${fmtN(t.warehouses)} sites · ${fmtN(t.months)} months`} />
+            {/* Row 2 — what the bill is made of, and how concentrated it is. Operations and
+                rental are negotiated separately, so they are never shown as one number. */}
+            <Tile label="Operations" value={fmt(t.operation_fee)}
+              sub={`${share(t.operation_fee).toFixed(1)}% of spend`} />
+            <Tile label="Rental" value={t.rental_fee > 0 ? fmt(t.rental_fee) : '—'}
+              sub={t.rental_fee > 0 ? `${share(t.rental_fee).toFixed(1)}% — fixed, volume-blind` : 'nothing billed'} />
+            <Tile label="Top Site Share"
+              value={tpl.warehouses.length ? `${share(tpl.warehouses[0].cost).toFixed(1)}%` : '—'}
+              sub={tpl.warehouses.length ? tpl.warehouses[0].key : null} />
+            <Tile label="Top Partner Share"
+              value={tpl.partners.length ? `${share(tpl.partners[0].cost).toFixed(1)}%` : '—'}
+              sub={tpl.partners.length ? tpl.partners[0].key : null} />
+          </div>
+        </div>
+
+        <SectionHdr title="3PL Partners" note={`${fmtN(tpl.partners.length)} partners · ${fmt(t.cost)}`}
+          collapsed={secHid['tpl-partners']} onToggle={() => toggleSec('tpl-partners')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12,
+          ...(secHid['tpl-partners'] ? { display: 'none' } : {}) }}>
+          {tpl.partners.map(pp => {
+            const pct = share(pp.cost)
+            return (
+            <div key={pp.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pp.key}>{pp.key}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {pct.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(pp.cost)}</div>
+              {/* Share bar: the ranking is the point of this grid, and a bar reads faster
+                  than comparing seven percentages. Width is share of the LARGEST partner,
+                  not of total, so the biggest bar fills the card and the rest scale against
+                  it — at 7 partners a share-of-total bar would leave every card nearly empty. */}
+              <div style={{ height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: SER.blue,
+                  width: `${tpl.partners[0]?.cost > 0 ? (pp.cost / tpl.partners[0].cost) * 100 : 0}%`,
+                }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(pp.warehouses)} site{pp.warehouses === 1 ? '' : 's'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / mo` : '—'}
+                </span>
+                <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
+                </span>
+              </div>
+            </div>
+          )})}
+        </div>
+
+        <SectionHdr title="Monthly Trend"
+          note="cost per parcel against spend — the rate is what the chart is for"
+          collapsed={secHid['tpl-trend']} onToggle={() => toggleSec('tpl-trend')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-trend'] ? { display: 'none' } : {}) }}><Card>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {/* Total spend as the bar, its components and the unit rate as lines.
+                  Stacked areas were the wrong call here: with Rental billed in only two of
+                  five months the bands crossed and overlapped, and the filled mass made the
+                  total impossible to read off. A bar carries the total unambiguously and the
+                  lines sit in front of it.
+
+                  Two axes on purpose — rupees and a per-parcel rate are different quantities,
+                  and a month can bill MORE in total while getting cheaper per parcel, which is
+                  exactly what this data does and what the chart is for. */}
+              <ComposedChart data={tplTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <BarGradient id="tplTotalBar" />
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis yAxisId="l" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
+                  tickLine={false} tickFormatter={v => fmt(v)} width={64} />
+                {/* From 0, not the data's own range. Recharts would otherwise start this axis
+                    near the lowest rate and make an 18-to-58 rupee move look like a collapse. */}
+                <YAxis yAxisId="r" orientation="right" domain={[0, 'auto']}
+                  tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} width={52} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                <Bar yAxisId="l" dataKey="cost" name="Total spend" fill="url(#tplTotalBar)"
+                  radius={[4, 4, 0, 0]} maxBarSize={54} />
+                {/* Components as lines over the bar. Not stacked — each is read against the
+                    same rupee axis as the total, so Rental sitting near zero in three months
+                    is visible as a fact rather than hidden inside a band. */}
+                <Line yAxisId="l" type="monotone" dataKey="operation_fee" name="Operations"
+                  stroke={SER.blue} strokeWidth={2} dot={{ r: 3, fill: SER.blue }} />
+                <Line yAxisId="l" type="monotone" dataKey="rental_fee" name="Rental"
+                  stroke={SER.orange} strokeWidth={2} dot={{ r: 3, fill: SER.orange }} />
+                <Line yAxisId="l" type="monotone" dataKey="other_fee" name="Other"
+                  stroke={SER.yellow} strokeWidth={2} dot={{ r: 3, fill: SER.yellow }} />
+                {/* Drawn last so the rate — the reason this chart exists — sits on top. */}
+                <Line yAxisId="r" type="monotone" dataKey="per_ship" name="₹ / parcel"
+                  stroke={SER.aqua} strokeWidth={2.5} connectNulls={false}
+                  dot={{ r: 3.5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card></div>
+
+        <SectionHdr title="Warehouse Detail"
+          note="per-unit costs are per SITE — one shipment stream cannot be split between contracts"
+          collapsed={secHid['tpl-sites']} onToggle={() => toggleSec('tpl-sites')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-sites'] ? { display: 'none' } : {}) }}><Card>
+          <DataTable
+            rows={tpl.warehouses}
+            columns={[
+              { key: 'key', label: 'Facility' },
+              // The join key to shipment volume, shown so a facility with no parcels can be
+              // traced to the pincode that failed to match rather than looking unexplained.
+              { key: 'pincode', label: 'Pincode', align: 'center',
+                render: (_, r) => r.pincode || '—' },
+              { key: 'location', label: 'Location', render: (_, r) => r.location || '—' },
+              { key: 'partner', label: 'Partner', render: (_, r) => (
+                  r.partner_n > 1
+                    ? <span title={r.partner}>{r.partner_n} contracts</span>
+                    : r.partner
+                ) },
+              { key: 'shipments', label: 'Parcels', align: 'center',
+                render: (_, r) => (r.shipments > 0 ? fmtN(r.shipments) : '—') },
+              { key: 'weight_kg', label: 'Weight', align: 'center',
+                render: (_, r) => (r.weight_kg > 0 ? fmtN(Math.round(r.weight_kg)) + ' kg' : '—') },
+              { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
+              // The two figures this tab exists to produce. Shown as a dash, never as zero
+              // or infinity, where the site billed a month that has no shipment data.
+              { key: 'per_ship', label: '₹ / Parcel', align: 'center',
+                render: (_, r) => (r.shipments > 0 ? money1(r.cost / r.shipments) : '—') },
+              { key: 'per_kg', label: '₹ / kg', align: 'center',
+                render: (_, r) => (r.weight_kg > 0 ? money1(r.cost / r.weight_kg) : '—') },
+            ]}
+            search searchKeys={['key', 'pincode', 'location', 'partner']} searchPlaceholder="Find a facility, pincode or partner…"
+            maxRows={120}
+            maxHeight={420}
+          />
+          {tpl.warehouses.some(w => !(w.shipments > 0)) && (
+            <div style={{ marginTop: 10, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
+              A dash means the site billed a month with no matching shipment data in the
+              tracking report, so there is no denominator to divide by. Those months still
+              count in Total.
+            </div>
+          )}
+        </Card></div>
+
+        <SectionHdr title="Rate by Partner" note="₹ per parcel — the ranking the contracts should be judged on"
+          collapsed={secHid['tpl-rate']} onToggle={() => toggleSec('tpl-rate')} />
+        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))',
+          gap: 14, ...(secHid['tpl-rate'] ? { display: 'none' } : {}) }}>
+          <Card title="Cost per parcel by partner" note="partners with no matched volume are omitted">
+            <div style={{ height: 275 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {/* Horizontal bars: site names are words, not dates, and reading them along
+                    a vertical axis beats rotating them under a column chart. */}
+                <BarChart data={tplRateBySite} layout="vertical"
+                  margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
+                  <BarGradient id="gTplRate" horizontal />
+                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                    axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} />
+                  {/* 150px, not 84: partner names are long enough that the shorter track
+                      clipped them mid-word ("areiq_HYD_item"). Truncation with an ellipsis
+                      is deliberate over wrapping — a wrapped label pushes the bars apart
+                      and the full name is in the tooltip. */}
+                  <YAxis type="category" dataKey="key" width={150}
+                    tick={{ fontSize: 11, fill: C.t2 }} axisLine={false} tickLine={false}
+                    tickFormatter={v => (String(v).length > 20 ? String(v).slice(0, 19) + '…' : v)} />
+                  <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
+                  <Bar dataKey="per_ship" name="₹ / parcel" fill="url(#gTplRate)" radius={[0, 4, 4, 0]} maxBarSize={26}>
+                    <LabelList dataKey="per_ship" position="right"
+                      formatter={v => money1(v)}
+                      style={{ fontSize: 10.5, fill: C.t2, fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+          <Card title="Spend vs volume" note="a taller spend bar means the partner charges above the blended rate">
+            <div style={{ height: 275 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                {/* Deliberately NOT a scatter plot: with six sites a labelled bar pair reads
+                    faster and needs no legend-hunting to tell which dot is which site. Share
+                    of spend against share of parcels — the gap between the two bars IS the
+                    story, so they sit adjacent rather than stacked. */}
+                <BarChart data={tplShareBySite} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                  {/* Only the spend series takes the ramp. This chart is read by comparing
+                      the two bars in each pair, so gradienting both would blur exactly the
+                      distinction it exists to show. */}
+                  <BarGradient id="gTplSpend" />
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  {/* Angled ticks need room reserved once, via the axis `height`. Setting a
+                      bottom margin as well double-counted it and left a dead band between
+                      the bars and the legend. interval={0} stays: dropping labels would
+                      leave bars no reader could identify. */}
+                  <XAxis dataKey="key" tick={{ fontSize: 10, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                    angle={-28} textAnchor="end" height={64}
+                    tickFormatter={v => (String(v).length > 18 ? String(v).slice(0, 17) + '…' : v)} />
+                  <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => v + '%'} />
+                  <Tooltip content={<ChartTooltip formatter={v => Number(v).toFixed(1) + '%'} />} />
+                  <Legend {...chartLegendProps({ fontSize: 10.5 })} />
+                  <Bar dataKey="cost_pct" name="% of spend" fill="url(#gTplSpend)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="ship_pct" name="% of parcels" fill={SER.aqua} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        <SectionHdr title="Warehouse Trend" note="cost per parcel by site, per billing month"
+          collapsed={secHid['tpl-whtrend']} onToggle={() => toggleSec('tpl-whtrend')} />
+        <div style={{ marginTop: 14, ...(secHid['tpl-whtrend'] ? { display: 'none' } : {}) }}><Card>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={tplWhTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => '₹' + Math.round(v)} width={56} />
+                <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                {/* connectNulls={false} so a month a site did not bill leaves a gap in its
+                    line rather than drawing a straight segment across it, which would read
+                    as a steady rate through a period with no data at all. */}
+                {tplWhNames.map((w, i) => (
+                  <Line key={w} type="monotone" dataKey={w} name={w} connectNulls={false}
+                    stroke={DRIFT.colors[i % DRIFT.colors.length]} strokeWidth={2} dot={{ r: 2.5 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card></div>
+      </>
+      )
+    })()
+  } else {
+    content = (
+      <>
+
+      {/* ── Cost overview: hero + 2 rows of 4 ── */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {[
+            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: monthSeries.map(d => d.cost || 0) },
+            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
+            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: monthSeries.map(d => d.shipments || 0) },
+            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: monthSeries.map(d => d.wt || 0), invertColor: true },
+            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: monthSeries.map(d => d.avgCost || 0), invertColor: true },
+            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
+            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
+          ].map(m => {
+            const pts = m.spark.slice(-14)
+            const min = Math.min(...pts), max = Math.max(...pts)
+            const range = max - min || 1
+            const W = 44, H = 22
+            const points = pts.map((v, i) => {
+              const x = pts.length === 1 ? W/2 : (i/(pts.length-1))*W
+              const y = H - ((v-min)/range)*H
+              return `${x.toFixed(1)},${y.toFixed(1)}`
+            }).join(' ')
+            const last2 = pts.slice(-2)
+            const isUp = last2.length === 2 ? last2[1] >= last2[0] : null
+            const lineColor = isUp === null ? C.acc : m.invertColor ? (isUp ? '#E53935' : C.acc) : (isUp ? C.acc : '#E53935')
+            return (
+              <div key={m.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{m.label}</div>
+                {pts.length > 1
+                  ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', flexShrink: 0 }}>
+                      <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                      <circle cx={points.split(' ').pop().split(',')[0]} cy={points.split(' ').pop().split(',')[1]} r="2.5" fill={lineColor} />
+                    </svg>
+                  : <div style={{ width: W, flexShrink: 0 }} />
+                }
+                <div style={{ width: 90, fontSize: 15, fontWeight: 800, color: m.accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{m.value}</div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+      <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 18, alignItems: 'stretch' }}>
+        <Hero
+          label="Total Logistics Cost"
+          value={fmt(kpis.total)}
+          deltas={heroDeltas}
+          sub={heroSub}
+        >
+          {monthSeries.length > 1 && (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthSeries} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="lcHero" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
+                    <stop offset="95%" stopColor={SER.blue} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="month" hide />
+                <Area type="monotone" dataKey="cost" name="Freight cost" stroke={SER.blue}
+                  strokeWidth={2} fill="url(#lcHero)" dot={false} />
+                <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </Hero>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14, alignItems: 'stretch' }}>
+          <Tile label="Total Shipment Value" value={fmt(agg.shipValue)}
+            sub="goods shipped" />
+          <Tile label="Cost per Kg" value={kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—'}
+            sub={`${fmtKg(kpis.chargedWt)} billed`} />
+          <Tile label="Avg Cost / Shipment" value={kpis.avgCost != null ? '₹' + kpis.avgCost.toFixed(2) : '—'}
+            sub="freight ÷ invoices" />
+          <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
+            sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
+          <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
+            sub="card × our weight" />
+          <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
+            sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
+            accent={C.red.tx} />
+          <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
+            sub={`${fmtN(reverseBurden.n)} legs · ${reverseBurden.pct.toFixed(1)}% of spend`}
+            accent={C.red.tx} />
+          {/* Fills the eighth slot the Claimable tile vacated. A RATE rather than a rupee
+              claim figure: how often the courier's charged weight exceeds our declared one,
+              which is the billing-accuracy signal. The rupee value of it lives in the
+              Recoverable section, where the claim workflow is. */}
+          <Tile label="Weight Disputes"
+            value={kpis.overbilledPct != null ? kpis.overbilledPct.toFixed(1) + '%' : '—'}
+            sub={`${fmtN(agg.overbilledRows)} of ${fmtN(kpis.shipments)} shipments`} />
+        </div>
+      </div>
+      )}
+
+      {/* ── Trend ── */}
+      {/* ONE chart carrying all four measures. Total spend is a BAR on the left axis
+          (₹ Cr, a monthly stock); avg/shipment and ₹/kg are LINES on the right axis
+          (₹ per unit). The two axes are unavoidable here — ₹1.6 Cr and ₹34 cannot share a
+          scale — but they are legible because bar-vs-line already separates the encodings,
+          so nothing has to be read against the wrong axis. Shipment count is not a fourth
+          series: it lives in the tooltip and the table, since a count is not rupees.
+
+          UNFILTERED BY DESIGN — reads trendAll, not the slicer-scoped monthSeries. "Is our
+          freight bill rising" must not change when someone filters to one courier. */}
+      <SectionHdr title="Monthly Trend"
+        note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'}`} collapsed={secHid['trend']} onToggle={() => toggleSec('trend')} />
+      <Card style={{ ...(secHid['trend'] ? { display: 'none' } : {}), ...(isMobile ? { paddingLeft: 8 } : {}) }} title={isMobile ? <span style={{ fontSize: 15 }}>Freight spend and unit cost</span> : "Freight spend and unit cost"}
+        note={isMobile ? "" : "bars = total spend (left axis) · lines = cost per unit (right axis)"}
+        action={
+          // Range applies to THIS chart only. Options above the available history are
+          // disabled rather than hidden, so the reader can see how much data exists.
+          isMobile ? (
+            <select value={trendMonths} onChange={e => setTrendMonths(Number(e.target.value))}
+              style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, fontFamily: 'var(--font)', border: `1.5px solid ${C.acm}`, background: '#fff', color: C.t1, cursor: 'pointer' }}>
+              {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => (
+                <option key={o.l} value={o.n}>{o.l}</option>
+              ))}
+            </select>
+          ) : (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => {
+              const on = trendMonths === o.n
+              const short = o.n !== 999 && !on && o.n > trendRows.length
+                && trendRows.length <= Math.max(...[1, 3, 6].filter(v => v < o.n))
+              return (
+                <button key={o.l} onClick={() => setTrendMonths(o.n)} disabled={short}
+                  title={short ? `only ${trendRows.length} periods uploaded` : undefined}
+                  style={{
+                    fontSize: 11, fontWeight: on ? 700 : 500, padding: '4px 10px',
+                    borderRadius: 6, fontFamily: 'var(--font)',
+                    border: `1.5px solid ${on ? C.acm : C.border2}`,
+                    background: on ? C.acl : C.card,
+                    color: short ? C.t3 : C.t1,
+                    cursor: short ? 'default' : 'pointer', opacity: short ? 0.45 : 1,
+                  }}>
+                  {o.l}
+                </button>
+              )
+            })}
+          </div>
+          )
+        }>
+        <div style={{ height: 200, marginTop: isMobile ? 20 : 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={trendWindow} margin={{ top: 12, right: isMobile ? -28 : 14, left: isMobile ? -4 : 4, bottom: 4 }}>
+              {/* Same accent ramp as the Overview trend — both bars carry period magnitude
+                  with a rate line in front, so they get the same treatment. Its own id: two
+                  SVG gradients sharing one id would resolve to whichever mounted last. */}
+              <BarGradient id="ftlTotalBar" />
+              <CartesianGrid stroke={VIZ.grid} vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
+                axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: VIZ.muted }}
+                axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+              <YAxis yAxisId="unit" orientation="right" tick={{ fontSize: 11, fill: VIZ.muted }}
+                axisLine={false} tickLine={false} tickFormatter={v => '₹' + v.toFixed(0)} />
+              <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const r = payload[0].payload
+                  return (
+                    <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                      <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                        {fmtN(r.shipments)} shipments · {fmtKg(r.wt)} billed
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.acm, marginTop: 5, fontWeight: 600 }}>
+                        ₹{r.avgCost.toFixed(2)} / shipment
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#2BB3A3', fontWeight: 600 }}>
+                        ₹{r.cpk.toFixed(2)} / kg
+                      </div>
+                    </div>
+                  )
+                }} />
+              <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+              <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
+                fill="url(#ftlTotalBar)" radius={[4, 4, 0, 0]} maxBarSize={64} />
+              <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
+                stroke={C.acm} strokeWidth={2.5}
+                dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }} />
+              <Line yAxisId="unit" type="monotone" dataKey="cpk" name="Cost per kg"
+                stroke="#2BB3A3" strokeWidth={2.5}
+                dot={{ r: 3.5, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Table twin — the real rupees, counts and weights behind the chart. */}
+        <div style={{ marginTop: 12 }}>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>FREIGHT COST</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>SHIPMENTS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>COST/KG</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>BILLED WT</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>% GMV</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>CLAIMABLE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trendWindow.map((r, i) => (
+                    <tr key={r.month} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.month}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtN(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.cpk.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtKg(r.wt)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>{r.claim > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'month', label: 'Period' },
+              { key: 'cost', label: 'Freight cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+              { key: 'wt', label: 'Billed wt', align: 'center', render: (_, r) => fmtKg(r.wt) },
+              { key: 'pctGmv', label: '% of GMV', align: 'center', render: (_, r) => (
+                r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'
+              ) },
+              // Share of the VISIBLE window, not of all time: the window is user-selectable
+              // (3/6/12 months), and a share of a total the table does not show would never
+              // sum to 100 and would silently change meaning with the range buttons.
+              { key: 'shareSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+                const tot = trendWindow.reduce((a, x) => a + (Number(x.cost) || 0), 0)
+                return tot > 0 ? ((Number(r.cost) || 0) / tot * 100).toFixed(1) + '%' : '—'
+              } },
+            ]}
+            rows={trendWindow}
+          />
+          )}
+        </div>
+      </Card>
+      {/* ── By courier ── */}
+      {/* The overbilled-% column here is the per-partner breakdown of the headline figure
+          in Billing Accuracy above. Prepaid vs COD follows it, since the COD premium is
+          read per courier once the partner table has set the context. */}
+      <SectionHdr title="By Courier Partner"
+        note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} collapsed={secHid['courier']} onToggle={() => toggleSec('courier')} />
+      <Card style={secHid['courier'] ? { display: 'none' } : undefined}>
+        {isMobile ? (
+          <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+              <thead>
+                <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                  <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 68, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 65, whiteSpace: 'nowrap' }}>Claimable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courierRows.map((r, i) => (
+                  <tr key={r.courier} style={{ borderBottom: i < courierRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <span style={{ color: r.overPct > 40 ? C.red.tx : C.t1, fontWeight: r.overPct > 40 ? 700 : undefined }}>{r.overPct.toFixed(1)}%</span>
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      {r.claimRs > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span> : <span style={{ color: C.t3 }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+        <DataTable
+          columns={[
+            { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+            { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+            { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+            { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+            { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+            { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
+              <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
+                {r.overPct.toFixed(1) + '%'}
+              </span>
+            ) },
+            // Share of spend across the partners listed here, so the column sums to 100%
+            // and stays consistent when a sidebar filter narrows the set. ShareBar is the
+            // same treatment the FTL/PTL transporter and vehicle tables use, so a share
+            // reads identically wherever it appears.
+            { key: 'shareSpend', label: 'Share of Spend', align: 'center', render: (_, r) => {
+              const tot = courierRows.reduce((a, x) => a + (Number(x.cost) || 0), 0)
+              if (!(tot > 0)) return '—'
+              const pct = (Number(r.cost) || 0) / tot * 100
+              return <ShareBar pct={pct}>{pct.toFixed(1) + '%'}</ShareBar>
+            } },
+          ]}
+          rows={courierRows}
+        />
+        )}
+        {courierRows.length === 1 && (
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 8 }}>
+            Courier-vs-courier comparison unlocks once bills from other partners are uploaded.
+          </div>
+        )}
+      </Card>
+
+      {/* ── Weight slab cost analysis ── */}
+      {/* Replaces the Prepaid-vs-COD donuts, which restated a KPI tile. Cost per billable
+          slab answers something nothing else on the page did: where the money sits by weight,
+          and which slabs carry the overbilling. Slab is the courier's charged weight rounded
+          how they bill it — 0.5 kg floor, then up to the next whole kg. */}
+      <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
+        <Card title="Weight slab detail"
+          note={isMobile ? "" : "spend, unit cost and leg split per billable slab"}
+          action={
+            <input
+              value={slabSearch} onChange={e => setSlabSearch(e.target.value)}
+              placeholder="Find a weight slab…"
+              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: isMobile ? 100 : 160 }}
+            />
+          }>
+          {isMobile ? (
+            <>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slabRows.filter(r => {
+                      const q = slabSearch.trim().toLowerCase()
+                      const label = `${r.slab} kg`.toLowerCase()
+                      return q === '' || label === q || (label.startsWith(q) && !q.includes('kg'))
+                    }).map((r, i, arr) => (
+                      <tr key={r.slab} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'slab', label: 'Weight Slab', render: (_, r) => (
+                <span style={{ fontWeight: 700 }}>{r.slab} kg</span>
+              ) },
+              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(0) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(1) },
+              { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
+              { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
+              { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
+              // Share of the spend this table accounts for. Fills the dead space the
+              // numeric columns left, and answers a question the table could not: the
+              // 0.5/1/2 kg slabs are together ~42% of all freight spend, which no
+              // per-slab figure reveals.
+              //
+              // Chosen over Claimable (populated on only 28 of 142 slabs, so it would be
+              // 80% em-dashes) and over the average weight gap (well populated, but
+              // negative values invite "why?" and need a legend this table has no room
+              // for). ShareBar is what the zone table below already uses for the same
+              // idea, so the two read consistently.
+              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => (
+                <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar>
+              ) },
+            ]}
+            rows={slabSearch.trim() ? slabRows.filter(r => String(r.slab ?? '').toLowerCase().includes(slabSearch.trim().toLowerCase())) : slabRows}
+            maxRows={200}
+            maxHeight={420}
+          />
+          )}
+        </Card>
+
+      {/* ── Recoverable, split by cause ── */}
+      </div>
+
+      {/* ── Zone + mode ── */}
+      <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
+        <Card title="Cost by zone"
+          note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
+          action={zoneSubOptions.length ? (
+            <SearchSelect label="All sub-categories" options={zoneSubOptions}
+              value={zoneSub || null}
+              onChange={v => setZoneSub(v || '')} />
+          ) : null}>
+          <div style={{ height: 200 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={zoneRowsShown} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmt(v)} />
+                <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>Zone {r.zone}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                          {r.share.toFixed(1)}% of total freight
+                        </div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                          {fmtN(r.shipments)} shipments · ₹{r.avgCost.toFixed(2)} per shipment
+                        </div>
+                      </div>
+                    )
+                  }} />
+                <Bar dataKey="cost" name="Cost" radius={[4, 4, 0, 0]} maxBarSize={44}
+                  onClick={d => d?.zone && ZONES.includes(d.zone) && toggleIn('zones', d.zone)}
+                  style={{ cursor: 'pointer' }}>
+                  {zoneRowsShown.map(r => (
+                    <Cell key={r.zone} fill={zoneColor(r.zone, zoneOrder)}
+                      opacity={filters.zones.length && !filters.zones.includes(r.zone) ? 0.35 : 1} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {!isMobile && <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a bar to filter by zone</div>}
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginTop: 8, marginLeft: -8, marginRight: -8 }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11, width: '100%' }}>
+                <thead>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>SHIPMENTS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>COST/KG</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 55 }}>SHARE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zoneRowsShown.map((r, i) => (
+                    <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1) + '%'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'zone', label: 'Zone', render: v => `Zone ${v}` },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+            ]}
+            rows={zoneRowsShown}
+          />
+          )}
+        </Card>
+
+        {/* Part-to-whole is valid here: the three legs are mutually exclusive and sum to
+            100% of freight spend, and three slices is well inside the ~6 slice limit.
+            Rendered as a donut with direct labels because Forward takes 316° of arc
+            while Reverse (28°) and RTO (15°) are thin wedges — the labels carry the
+            comparison that the angles cannot. RVP and DTO are folded into Reverse
+            upstream in api/logistics-cost.js; RTO is its own leg. */}
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost by leg" note={isMobile ? "" : "RVP and DTO count as reverse · RTO shown separately — both are cost with no revenue"}>
+          {isMobile ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div style={{ width: 150, height: 150, flexShrink: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const r = payload[0].payload
+                        return (
+                          <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                            <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>{r.share.toFixed(1)}% of spend</div>
+                          </div>
+                        )
+                      }} />
+                    <Pie data={modeRows} dataKey="cost" nameKey="mode" cx="50%" cy="50%"
+                      innerRadius={38} outerRadius={62} paddingAngle={2}
+                      stroke={VIZ.surface} strokeWidth={2}
+                      onClick={d => d?.mode && toggleIn('modes', d.mode)}
+                      style={{ cursor: 'pointer' }} label={false} labelLine={false}>
+                      {modeRows.map(r => (
+                        <Cell key={r.mode} fill={MODE[r.mode] || VIZ.muted}
+                          opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginLeft: 'auto' }}>
+                {modeRows.map(r => (
+                  <div key={r.mode} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: MODE[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, lineHeight: 1.2 }}>{r.mode} <span style={{ fontWeight: 400, color: C.t3 }}>{r.share.toFixed(1)}%</span></div>
+                      <div style={{ fontSize: 11, color: C.t3 }}>{fmt(r.cost)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                            <span style={{ width: 9, height: 9, borderRadius: 2, background: MODE[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{r.mode}</span>
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                            {fmtN(r.shipments)} shipments · ₹{r.avgCost.toFixed(2)} avg · {r.share.toFixed(1)}% of spend
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Pie
+                    data={modeRows}
+                    dataKey="cost"
+                    nameKey="mode"
+                    cx="50%" cy="50%"
+                    innerRadius={52} outerRadius={88}
+                    paddingAngle={2}
+                    stroke={VIZ.surface} strokeWidth={2}
+                    onClick={d => d?.mode && toggleIn('modes', d.mode)}
+                    style={{ cursor: 'pointer' }}
+                    label={({ mode, share, x, y, textAnchor }) => (
+                      <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central"
+                        fontSize={11} fontWeight={700} fill={C.t2}>
+                        {`${mode} ${share.toFixed(1)}%`}
+                      </text>
+                    )}
+                    labelLine={{ stroke: VIZ.axis, strokeWidth: 1 }}
+                  >
+                    {modeRows.map(r => (
+                      <Cell key={r.mode} fill={MODE[r.mode] || VIZ.muted}
+                        opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {!isMobile && <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a slice to filter by leg</div>}
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11.5 }}>
+                <thead>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modeRows.map((r, i) => (
+                    <tr key={r.mode} style={{ borderBottom: i < modeRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.mode}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'mode', label: 'Mode' },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+            ]}
+            rows={modeRows}
+          />
+          )}
+        </Card>
+      </div>
+
+      {/* ── Weight slab + service type ── */}
+      <SectionHdr title="Rate Card Exposure" note={isMobile ? "" : "cost behaviour across billing slabs"} collapsed={secHid['ratecard']} onToggle={() => toggleSec('ratecard')} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['ratecard'] ? { display: 'none' } : {}) }}>
+        {/* ONE chart, ONE axis, grouped bars.
+            The two series are avg cost PER SHIPMENT and cost PER KG — both are
+            per-shipment rupee figures on the same order of magnitude (₹44–₹415 and
+            ₹20–₹89), so a single ₹ axis carries them honestly with no second scale.
+            Total spend is deliberately NOT a series here: at ₹1.4 Cr it would render
+            ₹/kg at 0.0006% of the axis, i.e. invisible. Spend lives in the table
+            below and in the tooltip, where its own scale does it justice. */}
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title={isMobile ? "Cost Efficiency Across Weight Slabs" : "Cost per shipment vs cost per kg, by weight slab"}
+          note={isMobile ? "" : "both in ₹ on one axis — heavier slabs cost more per parcel but less per kg"}>
+          <div style={{ flex: 1, minHeight: 200 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={bandRows} margin={isMobile ? { top: 12, right: 10, left: -24, bottom: 4 } : { top: 12, right: 12, left: 4, bottom: 4 }} barGap={4}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="band" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => '₹' + v.toFixed(0)} />
+                <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 6 }}>{label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SER.blue, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>₹{r.avgCost.toFixed(2)}</span>
+                          <span style={{ fontSize: 11, color: C.t3 }}>per shipment</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 3 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 2, background: SER.orange, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>₹{r.cpk != null ? r.cpk.toFixed(2) : '—'}</span>
+                          <span style={{ fontSize: 11, color: C.t3 }}>per kg</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 5, paddingTop: 5, borderTop: `1px solid ${C.border}` }}>
+                          {fmt(r.cost)} total · {fmtN(r.shipments)} shipments · {r.share.toFixed(1)}% of spend
+                        </div>
+                      </div>
+                    )
+                  }} />
+                <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                <Bar dataKey="avgCost" name="Avg ₹ / shipment" fill={SER.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar dataKey="cpk" name="Cost / kg" fill={SER.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+                <thead>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 58, whiteSpace: 'nowrap' }}>Share</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 80, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bandRows.map((r, i) => (
+                    <tr key={r.band} style={{ borderBottom: i < bandRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.band}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.overPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'band', label: 'Slab' },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'cost', label: isMobile ? 'Cost' : 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'overPct', label: 'Overbilled', align: 'center', render: (_, r) => r.overPct.toFixed(1) + '%' },
+            ]}
+            rows={bandRows}
+            maxHeight={220}
+          />
+          )}
+        </Card>
+
+        {/* Note corrected: the old text claimed "express/NDD carries a premium over
+            surface", which the data contradicts — NDD averages ₹59/shipment against
+            Surface at ₹118, because NDD carries lighter parcels. The premium shows up
+            per KG, not per shipment. */}
+        {/* "By service type" removed. It listed 11 raw account_type values including
+            "Surface" and "SURFACE" as separate rows — the same service split by casing,
+            which made the table read as a data dump rather than analysis. Its useful
+            content (₹/kg by tier) is already covered by the weight-slab chart beside it.
+            Replaced with rate drift, which answers a question nobody could ask before:
+            is any courier quietly raising its effective rate? */}
+        <Card title="Effective rate drift by courier"
+          note={isMobile ? "" : "₹/kg per month — a rising line is a rate increase, not a heavier mix"}>
+          <div style={{ height: 200 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={driftSeries} margin={isMobile ? { top: 12, right: 16, left: -24, bottom: 4 } : { top: 12, right: 44, left: 4, bottom: 4 }}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => '₹' + v.toFixed(0)} />
+                <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
+                  content={<ChartTooltip formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} iconType="plainline" />
+                {driftCouriers.map((c, i) => (
+                  <Line key={c} type="monotone" dataKey={c} name={c}
+                    stroke={DRIFT.colors[i % DRIFT.colors.length]} strokeWidth={2}
+                    dot={{ r: 2.5 }} connectNulls />
+                ))}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>First</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Latest</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Drift</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Months</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {driftRows.map((r, i) => (
+                    <tr key={r.courier} style={{ borderBottom: i < driftRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}><CourierCell name={r.courier} /></td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.first.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.last.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                        {r.months < 2 ? <span style={{ color: C.t3 }}>—</span>
+                          : <span style={{ color: r.drift > 5 ? C.red.tx : r.drift < -5 ? C.green.tx : C.t1, fontWeight: Math.abs(r.drift) > 5 ? 700 : undefined }}>
+                              {(r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%'}
+                            </span>}
+                      </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtN(r.months)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+              { key: 'first', label: 'First', align: 'center', render: (_, r) => '₹' + r.first.toFixed(2) },
+              { key: 'last', label: 'Latest', align: 'center', render: (_, r) => '₹' + r.last.toFixed(2) },
+              { key: 'drift', label: 'Drift', align: 'center', render: (_, r) => (
+                r.months < 2 ? <span style={{ color: C.t3 }}>—</span>
+                  : <span style={{ color: r.drift > 5 ? C.red.tx : r.drift < -5 ? C.green.tx : undefined, fontWeight: Math.abs(r.drift) > 5 ? 700 : undefined }}>
+                      {(r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%'}
+                    </span>
+              ) },
+              { key: 'months', label: 'Months', align: 'center', render: (_, r) => fmtN(r.months) },
+            ]}
+            rows={driftRows}
+            maxHeight={220}
+          />
+          )}
+          {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+            Couriers with fewer than 500 shipments in a month are excluded, so a handful
+            of parcels can't fake a spike.
+          </div>}
+        </Card>
+      </div>
+
+      {/* Weight overbilling only — the courier charged for weight we did not ship, the one
+          dispute backed by our own declared figures rather than by a card inferred from
+          their invoices. Rate variance sits beside it as a diagnostic, never summed in. */}
+      {recoverRows.length > 0 && (
+        <>
+          <SectionHdr title="Recoverable"
+            note={`${fmt(recoverTotals.infl)} claimable on weight across ${recoverRows.length} partners · ${fmt(recoverTotals.unexp)} rate variance shown separately, not invoiceable`} collapsed={secHid['recover']} onToggle={() => toggleSec('recover')} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['recover'] ? { display: 'none' } : {}) }}>
+            <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend and claim by courier"
+              note="bars = total spend (left axis) · line = claim as % of that courier's spend (right axis)">
+              <div style={{ flex: 1, minHeight: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={courierSpendRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                    <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                    <XAxis dataKey="courier" tick={{ fontSize: 9.5, fill: VIZ.muted }}
+                      axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                      angle={-25} textAnchor="end" height={52} />
+                    <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: VIZ.muted }}
+                      axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+                    {/* Second axis is unavoidable: spend spans ₹1.5 L to ₹4.29 Cr while the
+                        claim rate spans 0-8%. Bar-vs-line separates the encodings so neither
+                        is read against the wrong scale. */}
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: VIZ.muted }}
+                      axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(0) + '%'} />
+                    <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const r = payload[0].payload
+                        return (
+                          <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.spend)}</div>
+                            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>total spend</div>
+                            <div style={{ fontSize: 11.5, color: C.red.tx, marginTop: 5, fontWeight: 600 }}>
+                              {fmt(r.claim)} claimable · {r.claimPct.toFixed(2)}% of their spend
+                            </div>
+                          </div>
+                        )
+                      }} />
+                    <Legend {...chartLegendProps({ fontSize: 11.5 })} />
+                    <Bar yAxisId="spend" dataKey="spend" name="Total spend" fill={SER.blue}
+                      fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={38} />
+                    <Line yAxisId="pct" type="monotone" dataKey="claimPct" name="Claim % of spend"
+                      stroke={SER.orange} strokeWidth={2.5}
+                      dot={{ r: 3.5, fill: SER.orange, stroke: VIZ.surface, strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: SER.orange, stroke: VIZ.surface, strokeWidth: 2 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <Card title="Escalation priority"
+              note="what each courier over-billed, and how concentrated it is">
+              <DataTable
+                columns={[
+                  { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+                  // Renamed from 'Total Claim': it is the over-billed amount, and saying so
+                  // removes the guesswork about what the number represents.
+                  { key: 'recInfl', label: 'Claimable (Weight)', align: 'center', render: (_, r) => (
+                    <span style={{ fontWeight: 700, color: C.red.tx }}>{fmt(r.recInfl)}</span>
+                  ) },
+                  // Rate variance kept visible but plainly separate: it is measured against
+                  // the courier own derived card, so it flags inconsistency, not a claim.
+                  { key: 'recUnexp', label: 'Rate Variance', align: 'center', render: (_, r) => (
+                    <span style={{ color: C.t2 }}>{r.recUnexp > 0 ? fmt(r.recUnexp) : '—'}</span>
+                  ) },
+                  // How many shipments it sits on, out of how many we could price. Without
+                  // this the per-shipment figure has no visible denominator.
+                  { key: 'disputedN', label: 'Shipments Affected', align: 'center', render: (_, r) => (
+                    <span>
+                      {fmtN(r.disputedN)}
+                      <span style={{ fontSize: 10.5, color: C.t3 }}> of {fmtN(r.shipments)}</span>
+                    </span>
+                  ) },
+                  { key: 'recPerShipment', label: 'Avg per Affected', align: 'center', render: (_, r) => (
+                    <span style={{ color: C.t2 }}>₹{r.recPerShipment.toFixed(0)}</span>
+                  ) },
+                  // Intensity: over-billing as a share of what we pay that courier. Ranks by
+                  // how wrong the billing is rather than by partner size.
+                  { key: 'recPctFreight', label: '% of Their Bill', align: 'center', render: (_, r) => (
+                    <span style={{ color: r.recPctFreight > 12 ? C.red.tx : undefined, fontWeight: r.recPctFreight > 12 ? 700 : undefined }}>
+                      {r.recPctFreight.toFixed(1)}%
+                    </span>
+                  ) },
+                ]}
+                rows={recoverRows}
+              />
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* ── Cost by product ── */}
+      <SectionHdr title="Cost by Product"
+        note={isMobile ? "" : "category → sub-category, per shipment by leg. RTO is the return leg only"} collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
+      <div style={secHid['product'] ? { display: 'none' } : undefined}>
+        <Card title="Category detail" note={isMobile ? "" : "click a category to open its sub-categories"}
+          action={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
+                placeholder={isMobile ? "Search…" : "Find a category or sub-category…"}
+                style={{
+                  fontFamily: 'var(--font)', fontSize: 11.5, padding: '5px 10px',
+                  width: isMobile ? 100 : 220,
+                  borderRadius: 7, border: `1.5px solid ${subQuery.trim() ? C.acm : C.border2}`,
+                  background: subQuery.trim() ? C.acl : C.card, color: C.t1, outline: 'none',
+                }} />
+              {subQuery.trim() && (
+                <button onClick={() => setSubQuery('')}
+                  style={{ border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>clear</button>
+              )}
+            </div>
+          }>
+          <DataTable
+            columns={[
+              // Left-aligned so the indented sub-category names still read as a hierarchy.
+              { key: 'label', label: isMobile ? 'Category' : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
+                isMobile && r.isSub ? null :
+                r.isSub
+                  ? <span onClick={e => { e.stopPropagation(); setCatTooltip(r.label) }} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'unset', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>{r.label}</span>
+                  : <span style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'unset', whiteSpace: isMobile ? 'nowrap' : 'normal' }}
+                      onClick={() => toggleCat(r.label)}>
+                      {!isMobile && <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
+                        {r.hasKids ? (r.open ? '−' : '+') : ''}
+                      </span>}{r.label}
+                    </span>
+              ) },
+              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: isMobile ? 'Spend' : 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'fwd', label: 'Forward', align: 'center', render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
+              { key: 'rev', label: 'Reverse', align: 'center', render: (_, r) => r.rev ? fmt(r.rev) : '—' },
+              { key: 'rto', label: 'RTO', align: 'center', render: (_, r) => r.rto ? fmt(r.rto) : '—' },
+              // Cost to serve one order: forward + reverse + RTO, each scaled by how often it
+              // actually happens (return count ÷ forward count). Forward is the denominator
+              // because every order has one; returns are the exception at 3-21%. A raw sum of
+              // the three averages would assume every shipment goes out, is picked up AND is
+              // RTO'd — overstating Footwear by ~2.5x (₹264 vs ₹103).
+              { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
+                r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
+              ) },
+              // Weight Slab: one real billable slab on sub-category rows, the
+              // shipment-weighted average across the category on category rows.
+              { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
+                // Sub-category rows: the ONE billable slab from the item master — a real
+                // value the courier charges on.
+                if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
+                // Category rows: the shipment-weighted AVERAGE billed slab across the
+                // category (AVG(cw_slab) server-side — verified equal to a manual
+                // shipment-weighted average of the children). Shown with a ~ and one
+                // decimal so it never reads as a real slab: a category spans products of
+                // different weights, so no single slab is true for all of them.
+                //
+                // Deliberately NOT masterKg, which is the actual product weight and now
+                // has its own column — repeating it here said nothing new.
+                if (r.cw > 0) return <span style={{ color: C.t2 }}>~{r.cw.toFixed(1)} kg</span>
+                return '—'
+              } },
+              // Actual product weight from the item master (Weight_gms / 1000 at sync), not
+              // the volumetric figure this column used to show. That one came from
+              // BigQuery's `total_weight`, which despite the name is L*B*H/5000 —
+              // dimensional weight, not what the product weighs. Coverage is 87.8%;
+              // an em-dash where the item master has no entry for that sub-category.
+              //
+              // Distinct from the Weight Slab column beside it: that shows the BILLABLE
+              // slab the courier charges on, this shows the true weight.
+              { key: 'masterKg', label: 'Actual Weight', align: 'center', render: (_, r) => (
+                r.masterKg > 0 ? r.masterKg.toFixed(2) + ' kg' : '—'
+              ) },
+            ]}
+            rows={productRows}
+            maxHeight={480}
+            maxRows={200}
+            style={isMobile ? { marginLeft: -8, marginRight: -8 } : undefined}
+          />
+          {isMobile && catTooltip ? (
+            <div onClick={() => setCatTooltip('')}
+              style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, padding: '12px 16px', maxWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 600, color: C.t1, textAlign: 'center' }}>
+                {catTooltip}
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>tap anywhere to close</div>
+              </div>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      {/* ── Like-for-like courier comparison ── */}
+      {activeCell && (
+        <>
+          <SectionHdr title="Like-for-Like Courier Cost"
+            note={isMobile ? "" : "same zone, same weight slab, same leg — the only fair comparison"} collapsed={secHid['lfl']} onToggle={() => toggleSec('lfl')} />
+          {/* Three independent multi-selects instead of one combined dropdown. Selecting
+              nothing in a row means ALL of it, so the card always has data to show. */}
+          {isMobile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Zone</span>
+                <ChipRow options={lflOptions.zones} selected={lflZones} small
+                  onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flexWrap: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28, flexShrink: 0 }}>Slab</span>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', flexShrink: 0 }}>
+                  {lflOptions.bands.map(b => {
+                    const on = lflBands.includes(b)
+                    return <button key={b} onClick={() => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])}
+                      style={{ border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer', background: on ? C.acl : C.card, color: C.t1, fontSize: 11, fontWeight: on ? 700 : 500, padding: '3px 6px', borderRadius: 6, fontFamily: 'var(--font)', whiteSpace: 'nowrap', flexShrink: 0 }}>{b}</button>
+                  })}
+                </div>
+                <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Leg</span>
+                <ChipRow options={lflOptions.legs} selected={lflLegs} small
+                  onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
+              </div>
+            </div>
+          ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12, ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
+            <div>
+              <div className="kpi-label" style={{ marginBottom: 6 }}>ZONE</div>
+              <ChipRow options={lflOptions.zones} selected={lflZones}
+                onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
+            </div>
+            <div>
+              <div className="kpi-label" style={{ marginBottom: 6 }}>WEIGHT SLAB</div>
+              <ChipRow options={lflOptions.bands} selected={lflBands}
+                onToggle={b => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])} />
+            </div>
+            <div>
+              <div className="kpi-label" style={{ marginBottom: 6 }}>SHIPMENT LEG</div>
+              <ChipRow options={lflOptions.legs} selected={lflLegs}
+                onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
+            </div>
+            <div>
+              <div className="kpi-label" style={{ marginBottom: 6 }}>SPECIFIC SLAB</div>
+              <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
+                style={{
+                  fontFamily: 'var(--font)', fontSize: 11, padding: '6px 9px',
+                  borderRadius: 7, border: `1.5px solid ${lflSlab !== '' ? C.acm : C.border2}`,
+                  background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer',
+                }}>
+                <option value="">All slabs</option>
+                {lflOptions.slabs.map(sv => (
+                  <option key={sv} value={sv}>{sv} kg</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          )}
+          <Card style={secHid['lfl'] ? { display: 'none' } : undefined}
+            title={[
+              activeCell.allZones ? 'All zones' : 'Zone ' + activeCell.zones.join(', '),
+              activeCell.slab !== '' ? activeCell.slab + ' kg slab'
+                : activeCell.allBands ? 'all weights' : activeCell.bands.join(', '),
+              activeCell.allLegs ? 'all legs' : activeCell.legs.join(', '),
+            ].join(' · ')}
+            note={activeCell.rows.length
+              ? (isMobile ? '' : `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`)
+              : 'no shipments match this combination'}
+          >
+          {/* Empty and single-courier results render an explanation instead of a blank
+              chart. Returning null from activeCell used to unmount this entire section —
+              zone E is served by one courier — leaving no filters to click back with. */}
+          {!activeCell.rows.length ? (
+            <div style={{ fontSize: 12.5, color: C.t2, padding: '16px 0' }}>
+              Nothing matches this combination. A courier needs 50+ shipments in the cell to
+              appear, so a narrow zone, slab and leg together can rule everything out —
+              widen any one of them.
+            </div>
+          ) : (
+          <>
+            {!activeCell.comparable && (
+              <div style={{ fontSize: 11.5, color: C.t2, marginBottom: 10 }}>
+                Only one courier ships this combination, so there is nothing to compare
+                against — the figures below are that courier alone.
+              </div>
+            )}
+            <div style={{ height: 200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={activeCell.rows} layout="vertical" margin={{ top: 10, right: 46, left: 8, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => '₹' + v.toFixed(0)} />
+                  <YAxis type="category" dataKey="courier" width={82} tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      const best = activeCell.rows[0]
+                      const delta = r.avgCost - best.avgCost
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{r.courier}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>₹{r.avgCost.toFixed(2)}</div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                            {fmtN(r.n)} shipments · ₹{r.cpk.toFixed(2)}/kg
+                            {delta > 0.01 && <><br />₹{delta.toFixed(2)} above {best.courier}</>}
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Bar dataKey="avgCost" name="Avg ₹ / shipment" radius={[0, 4, 4, 0]} maxBarSize={26}>
+                    {activeCell.rows.map((r, i) => (
+                      // Cheapest in the cell is highlighted; the rest recede.
+                      <Cell key={r.courier} fill={i === 0 ? SER.aqua : SER.blue} fillOpacity={i === 0 ? 1 : 0.55} />
+                    ))}
+                    <LabelList dataKey="avgCost" position="right" offset={8} fontSize={10.5}
+                      fontWeight={700} fill={C.t2} formatter={v => '₹' + num(v).toFixed(0)} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {isMobile ? (
+              <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ background: C.acl, borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', left: 0, background: C.acl, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 50, whiteSpace: 'nowrap' }}>Shipments</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 48, whiteSpace: 'nowrap' }}>Avg ₹</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 44, whiteSpace: 'nowrap' }}>₹/kg</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Vs Cheap</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeCell.rows.map((r, i) => {
+                      const d = r.avgCost - activeCell.rows[0].avgCost
+                      return (
+                        <tr key={r.courier} style={{ borderBottom: i < activeCell.rows.length - 1 ? `1px solid ${C.border2}` : 'none' }}>
+                          <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(2)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>{d < 0.01 ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheap</span> : <span style={{ color: C.red.tx }}>{'+₹' + d.toFixed(2)}</span>}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+            <DataTable
+              columns={[
+                { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+                { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+                { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+                { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+                { key: 'vs', label: 'vs cheapest', align: 'center', render: (_, r) => {
+                  const d = r.avgCost - activeCell.rows[0].avgCost
+                  return d < 0.01
+                    ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheapest</span>
+                    : <span style={{ color: C.red.tx }}>{'+₹' + d.toFixed(2)}</span>
+                } },
+              ]}
+              rows={activeCell.rows}
+            />
+            )}
+            {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+              Cost only — this does not account for SLA, coverage or damage rates. Confirm
+              service levels are comparable before shifting volume.
+            </div>}
+          </>
+          )}
+          </Card>
+        </>
+      )}
+
+      {/* Top Lanes removed from this tab. The B2C origin/destination columns are not
+          clean enough to lane-analyse: 75,539 rows have no origin city (rendered as
+          "?") and city casing is inconsistent (Mumbai / MUMBAI / mumbai), so one real
+          lane was being split across several rows and counted separately. Restore this
+          once cities are normalised at upload — the FTL/PTL tab carries lane analysis on
+          data that does support it.
+
+          The FTL/PTL invoice table also moved: it now lives on the FTL/PTL tab. */}
+      </>
+    )
+  }
+
+  return (
+    <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading costs" />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {!isMobile && scope !== 'all' && sidebar}
+
+        {/* Sidebar collapse handle — desktop only, and not on Overview where there is no
+            sidebar to collapse. */}
+        {!isMobile && scope !== 'all' && (
+          <button onClick={() => setSidebarOpen(o => !o)}
+            className="sb-toggle" style={{ width: 16, alignSelf: 'flex-start', marginTop: 12, marginLeft: 0, height: 40, border: '1px solid transparent', borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 9px 9px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+            {sidebarOpen ? '‹' : '›'}
+          </button>
+        )}
+
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 24px 40px 14px' }}>
+          {/* Scope tabs: which ledger this page is reporting on. Sits above everything
+              it scopes, alongside the filter summary. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
+            <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
+              {SCOPES.filter(sc => !allowedTabs || allowedTabs.includes(`logistics:cost:${sc.id}`) || allowedTabs.includes('logistics:cost')).map(sc => {
+                const on = scope === sc.id
+                return (
+                  <button key={sc.id} onClick={() => setScope(sc.id)}
+                    title={sc.hint}
+                    style={{
+                      border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
+                      fontSize: 12, fontWeight: on ? 700 : 500,
+                      padding: '6px 0', borderRadius: 7, width: 80, textAlign: 'center',
+                      background: on ? C.acc : 'transparent',
+                      color: on ? C.onAcc : C.t1,
+                      transition: 'all .15s',
+                    }}>
+                    {sc.label}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Billing period actually in view. Styled as a quiet pill rather than a
+                warning: it is normal information, not a problem, and it has to sit beside
+                the scope toggle on all three tabs without competing with the KPIs.
+
+                The wording follows the data. When the ledger holds fewer than the 6-month
+                default it says so explicitly ("all 4 months available") instead of letting
+                the reader assume a 6-month figure — the honesty this needs is the whole
+                point of showing it. */}
+            {/* Right-hand cluster: billing period, filter count, refresh state.
+                marginLeft:auto claims the gap so this pins to the far right of the bar
+                while the scope toggle stays hard left. */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {loading && (
+                <span style={{ fontSize: 11, color: C.t3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {/* Pulsing dot rather than the word alone — reads as activity at a glance
+                      and takes less room than "Refreshing…" on a narrow bar. */}
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.acm, animation: 'lcPulse 1s ease-in-out infinite' }} />
+                  Refreshing
+                </span>
+              )}
+              {activeCount > 0 && scope !== 'all' && (
+                <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'}</Badge>
+              )}
+              {/* Data caveats, to the LEFT of the chip because they qualify everything to
+                  its right. Overview shows both ledgers; B2C and FTL/PTL show their own. */}
+              <DataInfo
+                scope={scope}
+                health={agg?.health}
+                months={scopeMonths}
+                b2bMonths={b2b?.months}
+                b2bTotals={b2b?.totals}
+                couriers={opts.couriers}
+                transporters={opts.transporters}
+              />
+              {/* B2C only: the simulator reallocates parcel volume between couriers by
+                  weight slab, and neither Overview nor FTL/PTL has that shape — freight is
+                  priced per trip against transporters, not per shipment against couriers. */}
+              {scope === 'b2c' && onOpenAllocation && (
+                <button
+                  onClick={onOpenAllocation}
+                  title="Courier Allocation Simulator — best courier per weight slab on cost, RTO and speed"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
+                    padding: '5px 10px', cursor: 'pointer', fontFamily: 'var(--font)',
+                    fontSize: 11.5, fontWeight: 700, color: C.t2, whiteSpace: 'nowrap',
+                    transition: 'border-color .15s, color .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.acm; e.currentTarget.style.color = C.t1 }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.t2 }}>
+                  <span aria-hidden style={{ fontSize: 12 }}>⚖</span>
+                  Allocation
+                </button>
+              )}
+              {/* The chip IS the month slicer. Selecting nothing means "all months"
+                  everywhere else on this page, so onAll clears rather than listing every
+                  month — that keeps the request on the prewarmed {billing:"all"} cache key
+                  instead of minting a new one for an equivalent selection. */}
+              <PeriodChip
+                window={monthWindow}
+                months={scopeMonths}
+                selected={filters.months}
+                onToggle={m => setFilters(f => {
+                  const all = scopeMonths
+                  const cur = (f.months || []).length ? f.months : all
+                  const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
+                  return { ...f, months: next.length === all.length || !next.length ? [] : next }
+                })}
+                onAll={() => setOne('months', [])}
+                onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
+                onOne={n => setOne('months', (scopeMonths).slice(-n))}
+                defaultCount={DEFAULT_MONTH_COUNT}
+              />
+              {/* Export sits to the RIGHT of the chip: the chip says what period is in
+                  view, and this exports exactly that. Last in the cluster so it reads as
+                  the action after the state. */}
+              <ExportMenu items={exportItems} suffix={exportSuffix} />
+            </div>
+            {/* The Lanes toggle went with the Top Lanes table it controlled. */}
+          </div>
+          {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
+              no layout jump, per the interaction rules. */}
+          <div style={{ opacity: loading && agg ? 0.55 : 1, transition: 'opacity .18s ease' }}>
+            {content}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,82 @@
+name: Precompute Inventory Cache
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # hourly — matches Shelfwise's own sync cadence in GCP
+  workflow_dispatch:        # manual trigger from GitHub UI
+
+jobs:
+  precompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write GCP service account key
+        run: echo '${{ secrets.GCP_SA_KEY }}' > sa_key.json
+
+      - name: Refresh corrected Shelfwise-based inventory snapshot (BigQuery)
+        run: node scripts/refresh_inventory_snapshot_hourly.mjs
+
+      - name: Sync raw tables to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node export_to_supabase.mjs
+
+      - name: Generate static inventory JSON (7d / 15d / 30d)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/generate-inv-cache.mjs
+
+      - name: Generate static sales & allocation JSON
+        run: node scripts/generate-sales-alloc-cache.mjs
+
+      - name: Generate static inward JSON
+        run: node scripts/generate-inward-cache.mjs
+
+      - name: Generate static logistics JSON
+        run: node scripts/generate-logistics-cache.mjs
+
+      - name: Generate static logistics cost JSON
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/generate-logistics-cost-cache.mjs
+
+      - name: Generate static ads JSON
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/generate-ads-cache.mjs
+
+      - name: Generate static P&L JSON (MTD, no filters)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: node scripts/generate-pnl-cache.mjs
+
+      - name: Commit and push static data files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp -r public /tmp/public_generated
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/public_generated/*.json public/
+          git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
+                  public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
+                  public/logistics-data-cod.json public/logistics-data-prepaid.json \
+                  public/logistics-data-forward.json public/logistics-data-reverse.json \
+                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json \
+                  public/logistics-data-forward-cod.json public/logistics-data-forward-prepaid.json \
+                  public/logistics-data-reverse-cod.json public/logistics-data-reverse-prepaid.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "chore: update static data cache"
+          git push origin main

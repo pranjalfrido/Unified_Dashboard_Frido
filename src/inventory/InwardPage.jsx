@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useLayoutEffect } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -25,47 +25,28 @@ const SLICER_HEIGHT = 32
 const SIDEBAR_WIDTH = 220
 
 // ── Left filter sidebar — same pattern as the other two tabs, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, sidebarTop, popover}) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'facility', 'vendor'].some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable across scroll timing / late-arriving
-  // sidebarTop content (see SalesAllocationPage.jsx's FilterSidebar for the full writeup).
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
-
+  // position: fixed, positioned using the app shell's own known CSS variables (--sb, --nav)
+  // instead of a live getBoundingClientRect() measurement (see InventoryHealthPage.jsx's
+  // FilterSidebar for the full writeup on why the measured approach could drift).
   return (
-    <div ref={anchorRef} style={{
+    <div style={popover ? { display: 'contents' } : {
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — without this, the app shell's grey
-      // shows through where the anchor's own box sits before the fixed panel visually begins.
-      background: IC.surface,
+      overflow: 'hidden', flexShrink: 0,
+      // Width-reserver only: its child is position:fixed. Deliberately transparent so the
+      // page ground shows around the floating panel card.
     }}>
       <div style={{
-        width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
+        width: popover ? 248 : SIDEBAR_WIDTH, padding: popover ? 0 : '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
+        ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
+        ...(!popover && open ? {
+          position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)', zIndex: 50,
+          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
         {sidebarTop}
@@ -122,9 +103,82 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
   const [skuSearch, setSkuSearch] = useState('')
   const [skuSort, setSkuSort] = useState({ key: 'qtyReceived', dir: 'desc' })
 
+  // Client-side filter: when static file has rawRows, filter instantly without API call
+  const filteredData = useMemo(() => {
+    if (!data?.rawRows) return data
+    const hasFilter = arr => arr?.length > 0
+    const anyActive = hasFilter(filters.category) || hasFilter(filters.subCategory) ||
+      hasFilter(filters.sku) || hasFilter(filters.facility) || hasFilter(filters.vendor)
+    if (!anyActive && !filters.includeUnmapped) return data
+
+    const rows = data.rawRows.filter(r => {
+      if (!filters.includeUnmapped && r.category === 'Unmapped') return false
+      if (hasFilter(filters.category) && !filters.category.includes(r.category)) return false
+      if (hasFilter(filters.subCategory) && !filters.subCategory.includes(r.subCategory)) return false
+      if (hasFilter(filters.sku) && !filters.sku.includes(r.sku)) return false
+      if (hasFilter(filters.facility) && !filters.facility.includes(r.facility)) return false
+      if (hasFilter(filters.vendor) && !filters.vendor.includes(r.vendor)) return false
+      return true
+    })
+
+    // Re-aggregate from filtered rows
+    const dailyMap = new Map()
+    const catMap = new Map(), subCatMap = new Map(), vendorMap = new Map(), facilityMap = new Map(), reasonMap = new Map(), skuMap2 = new Map()
+    let totalReceived = 0, totalRejected = 0, leadTimes = [], grnSet = new Set(), poSet = new Set(), vendorSet = new Set(), skuSet = new Set()
+
+    for (const r of rows) {
+      totalReceived += r.qtyReceived; totalRejected += r.qtyRejected
+      if (r.leadTimeHours != null && r.leadTimeHours >= 0) leadTimes.push(r.leadTimeHours)
+      if (r.grnCode) grnSet.add(r.grnCode)
+      vendorSet.add(r.vendor); skuSet.add(r.skuKey)
+      if (r.date) {
+        if (!dailyMap.has(r.date)) dailyMap.set(r.date, { date: r.date, qtyReceived: 0, qtyRejected: 0 })
+        const d = dailyMap.get(r.date); d.qtyReceived += r.qtyReceived; d.qtyRejected += r.qtyRejected
+      }
+      if (!catMap.has(r.category)) catMap.set(r.category, { category: r.category, qtyReceived: 0, qtyRejected: 0 })
+      const c = catMap.get(r.category); c.qtyReceived += r.qtyReceived; c.qtyRejected += r.qtyRejected
+      const sk = `${r.category}|${r.subCategory}`
+      if (!subCatMap.has(sk)) subCatMap.set(sk, { category: r.category, subCategory: r.subCategory, qtyReceived: 0, qtyRejected: 0 })
+      const sc = subCatMap.get(sk); sc.qtyReceived += r.qtyReceived; sc.qtyRejected += r.qtyRejected
+      if (!vendorMap.has(r.vendor)) vendorMap.set(r.vendor, { vendor: r.vendor, qtyReceived: 0, qtyRejected: 0, grns: new Set() })
+      const v = vendorMap.get(r.vendor); v.qtyReceived += r.qtyReceived; v.qtyRejected += r.qtyRejected; if (r.grnCode) v.grns.add(r.grnCode)
+      if (!facilityMap.has(r.location)) facilityMap.set(r.location, { location: r.location, qtyReceived: 0, qtyRejected: 0 })
+      const f = facilityMap.get(r.location); f.qtyReceived += r.qtyReceived; f.qtyRejected += r.qtyRejected
+      if (r.rejectionReason && r.qtyRejected > 0) reasonMap.set(r.rejectionReason, (reasonMap.get(r.rejectionReason) || 0) + r.qtyRejected)
+      if (!skuMap2.has(r.skuKey)) skuMap2.set(r.skuKey, { sku: r.sku, category: r.category, subCategory: r.subCategory, qtyReceived: 0, qtyRejected: 0 })
+      const s = skuMap2.get(r.skuKey); s.qtyReceived += r.qtyReceived; s.qtyRejected += r.qtyRejected
+    }
+
+    const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
+    const weekKey = d => { const dt = new Date(d + 'T00:00:00Z'); const day = (dt.getUTCDay() + 6) % 7; dt.setUTCDate(dt.getUTCDate() - day); return dt.toISOString().slice(0, 10) }
+    const rollup = keyFn => { const m = new Map(); for (const d of daily) { const k = keyFn(d.date); if (!m.has(k)) m.set(k, { date: k, qtyReceived: 0, qtyRejected: 0 }); const a = m.get(k); a.qtyReceived += d.qtyReceived; a.qtyRejected += d.qtyRejected } return [...m.values()].sort((a, b) => a.date.localeCompare(b.date)) }
+    const rejPct = (totalReceived + totalRejected) > 0 ? (totalRejected / (totalReceived + totalRejected)) * 100 : 0
+    const avgLeadTimeHours = leadTimes.length > 0 ? leadTimes.reduce((s, v) => s + v, 0) / leadTimes.length : null
+
+    // Merge skuTable with existing data (inventory + avgSale come from pre-computed skuTable)
+    const skuTableBase = new Map((data.skuTable || []).map(s => [s.sku, s]))
+    const skuTable = [...skuMap2.values()].map(s => {
+      const base = skuTableBase.get(s.sku) || {}
+      return { ...base, sku: s.sku, category: s.category, subCategory: s.subCategory, qtyReceived: Math.round(s.qtyReceived), qtyRejected: Math.round(s.qtyRejected) }
+    }).sort((a, b) => b.qtyReceived - a.qtyReceived)
+
+    return {
+      ...data,
+      rawRows: data.rawRows,
+      summary: { ...data.summary, totalReceived: Math.round(totalReceived), totalRejected: Math.round(totalRejected), rejectionPct: rejPct, distinctGrns: grnSet.size, distinctVendors: vendorSet.size, distinctSkus: skuSet.size, avgLeadTimeHours, inwardCoverageRatio: data.summary.totalSoldQty > 0 ? totalReceived / data.summary.totalSoldQty : null },
+      daily, weekly: rollup(weekKey), monthly: rollup(d => d.slice(0, 7)),
+      categoryBreakdown: [...catMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived),
+      subCategoryBreakdown: [...subCatMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived),
+      vendorPerformance: [...vendorMap.values()].map(v => ({ vendor: v.vendor, qtyReceived: v.qtyReceived, qtyRejected: v.qtyRejected, rejectionPct: (v.qtyReceived + v.qtyRejected) > 0 ? (v.qtyRejected / (v.qtyReceived + v.qtyRejected)) * 100 : 0, grnCount: v.grns.size })).sort((a, b) => b.qtyReceived - a.qtyReceived),
+      facilityBreakdown: [...facilityMap.values()].filter(f => f.location !== 'Unmapped').sort((a, b) => b.qtyReceived - a.qtyReceived),
+      rejectionReasons: [...reasonMap.entries()].map(([reason, qty]) => ({ reason, qty })).sort((a, b) => b.qty - a.qty),
+      skuTable,
+    }
+  }, [data, filters.category, filters.subCategory, filters.sku, filters.facility, filters.vendor, filters.includeUnmapped])
+
   const trendChart = useMemo(() => {
-    if (!data) return []
-    const series = data[trendGranularity] || data.daily
+    if (!filteredData) return []
+    const series = filteredData[trendGranularity] || filteredData.daily
     return series.map((d, i, arr) => {
       const windowStart = Math.max(0, i - 6)
       const windowArr = arr.slice(windowStart, i + 1)
@@ -135,13 +189,13 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
   }, [data, trendGranularity])
 
   const categoryChart = useMemo(() => {
-    if (!data) return []
-    return data.categoryBreakdown.slice(0, 12).map(c => ({ name: c.category, qtyReceived: c.qtyReceived }))
-  }, [data])
+    if (!filteredData) return []
+    return filteredData.categoryBreakdown.slice(0, 12).map(c => ({ name: c.category, qtyReceived: c.qtyReceived }))
+  }, [filteredData])
 
   const skuTableRows = useMemo(() => {
-    if (!data) return []
-    let rows = data.skuTable
+    if (!filteredData) return []
+    let rows = filteredData.skuTable
     if (skuSearch.trim()) {
       const q = skuSearch.trim().toLowerCase()
       rows = rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q))
@@ -157,46 +211,53 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
       return sign * (av - bv)
     })
     return rows
-  }, [data, skuSearch, skuSort])
+  }, [filteredData, skuSearch, skuSort])
 
   const onSkuSort = key => setSkuSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
 
-  if (!data) return null
+  if (!filteredData) return null
 
-  const maxVendorQty = Math.max(1, ...data.vendorPerformance.map(v => v.qtyReceived))
-  const maxSubCatQty = Math.max(1, ...data.subCategoryBreakdown.map(sc => sc.qtyReceived))
-  const maxReasonQty = Math.max(1, ...data.rejectionReasons.map(r => r.qty))
+  const maxVendorQty = Math.max(1, ...filteredData.vendorPerformance.map(v => v.qtyReceived))
+  const maxSubCatQty = Math.max(1, ...filteredData.subCategoryBreakdown.map(sc => sc.qtyReceived))
+  const maxReasonQty = Math.max(1, ...filteredData.rejectionReasons.map(r => r.qty))
 
+  // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
+  // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0, position: 'sticky', top: 4,
+        width: 16, height: 40, border: '1px solid transparent', borderLeft: 'none',
+        background: IC.surface, cursor: 'pointer', borderRadius: '0 9px 9px 0', display: 'flex', alignItems: 'center',
+        boxShadow: '3px 0 6px -2px rgba(26,28,35,.10)',
+        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
+        position: 'fixed', top: 'calc(var(--nav) + 24px)',
+        left: sidebarOpen ? `calc(var(--sb) + 10px + ${SIDEBAR_WIDTH}px)` : 'calc(var(--sb) + 10px)',
+        zIndex: 30, transition: 'left .2s ease, box-shadow .18s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiTile label="Total Inward Qty" value={fmtNum(data.summary.totalReceived)} unit="units" icon="📥" />
-          <KpiTile label="Total Sold Qty" value={fmtNum(data.summary.totalSoldQty)} unit="units" sub="same period" icon="🛒" />
-          <KpiTile label="Inward Coverage Ratio" value={data.summary.inwardCoverageRatio != null ? `${data.summary.inwardCoverageRatio.toFixed(2)}×` : '—'}
-            sub="inward ÷ sold" accent={data.summary.inwardCoverageRatio != null && data.summary.inwardCoverageRatio < 1 ? IC.status.Critical.c : IC.positive} icon="⚖" />
-          <KpiTile label="Units Rejected" value={fmtNum(data.summary.totalRejected)} unit="units" sub={`${data.summary.rejectionPct.toFixed(1)}% rejection rate`}
-            accent={data.summary.rejectionPct > 5 ? IC.status.Critical.c : IC.positive} icon="⛔" />
-          <KpiTile label="Vendors" value={fmtNum(data.summary.distinctVendors)} icon="🏭" />
-          <KpiTile label="SKUs" value={fmtNum(data.summary.distinctSkus)} icon="🏷" />
+          <KpiTile label="Total Inward Qty" value={fmtNum(filteredData.summary.totalReceived)} unit="units" icon="📥" />
+          <KpiTile label="Total Sold Qty" value={fmtNum(filteredData.summary.totalSoldQty)} unit="units" sub="same period" icon="🛒" />
+          <KpiTile label="Inward Coverage Ratio" value={filteredData.summary.inwardCoverageRatio != null ? `${filteredData.summary.inwardCoverageRatio.toFixed(2)}×` : '—'}
+            sub="inward ÷ sold" accent={filteredData.summary.inwardCoverageRatio != null && filteredData.summary.inwardCoverageRatio < 1 ? IC.status.Critical.c : IC.positive} icon="⚖" />
+          <KpiTile label="Units Rejected" value={fmtNum(filteredData.summary.totalRejected)} unit="units" sub={`${filteredData.summary.rejectionPct.toFixed(1)}% rejection rate`}
+            accent={filteredData.summary.rejectionPct > 5 ? IC.status.Critical.c : IC.positive} icon="⛔" />
+          <KpiTile label="Vendors" value={fmtNum(filteredData.summary.distinctVendors)} icon="🏭" />
+          <KpiTile label="SKUs" value={fmtNum(filteredData.summary.distinctSkus)} icon="🏷" />
         </div>
 
         {/* SKU-level inward detail — received/rejected for this period, plus current
             inventory and trailing Avg Sale/DOI so it reads as "is this matched by demand." */}
         <GlassCard
           title="Inward Detail"
-          note={`${fmtInt(skuTableRows.length)} of ${fmtInt(data.skuTable.length)} SKUs — Avg Sale/DOI as of ${data.avgSaleWindow?.end ? new Date(data.avgSaleWindow.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}`}
+          note={`${fmtInt(skuTableRows.length)} of ${fmtInt(filteredData.skuTable.length)} SKUs — Avg Sale/DOI as of ${filteredData.avgSaleWindow?.end ? new Date(filteredData.avgSaleWindow.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}`}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input placeholder="Quick search…" value={skuSearch} onChange={e => setSkuSearch(e.target.value)}
@@ -227,16 +288,16 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
                   <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding: '7px 10px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
-                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
-                    <td style={{ padding: '7px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.qtyReceived)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.soldQty)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.qtyRejected > 0 ? IC.status.Critical.c : IC.t2 }}>{fmtInt(r.qtyRejected)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(r.totalInvt)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.avgSale)}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
+                    <td style={{ padding: '8px 12px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
+                    <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
+                    <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.qtyReceived)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.soldQty)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.qtyRejected > 0 ? IC.status.Critical.c : IC.t2 }}>{fmtInt(r.qtyRejected)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t1 }}>{fmtInt(r.totalInvt)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtInt(r.avgSale)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtDays(r.doi)}d</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -256,7 +317,7 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
                   </button>
                 ))}
               </div>
-              <ExportButton filename="inward_trend.csv" rows={data[trendGranularity]}
+              <ExportButton filename="inward_trend.csv" rows={filteredData[trendGranularity]}
                 columns={[{ label: 'Date', key: 'date' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }]} />
             </div>
           }>
@@ -275,7 +336,7 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
         {/* Category breakdown + facility-wise inward */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 14 }}>
           <GlassCard title="Category Breakdown" note="units received, top 12"
-            action={<ExportButton filename="category_breakdown.csv" rows={data.categoryBreakdown}
+            action={<ExportButton filename="category_breakdown.csv" rows={filteredData.categoryBreakdown}
               columns={[{ label: 'Category', key: 'category' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }]} />}>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={categoryChart} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 0 }}>
@@ -290,10 +351,10 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
 
           <GlassCard title="Facility-Wise Inward" note="units received by warehouse location">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {data.facilityBreakdown.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
-              {data.facilityBreakdown.map(f => (
+              {filteredData.facilityBreakdown.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
+              {filteredData.facilityBreakdown.map(f => (
                 <BreakdownBar key={f.location} label={f.location} value={f.qtyReceived} rejected={f.qtyRejected}
-                  maxValue={Math.max(1, ...data.facilityBreakdown.map(x => x.qtyReceived))} />
+                  maxValue={Math.max(1, ...filteredData.facilityBreakdown.map(x => x.qtyReceived))} />
               ))}
             </div>
           </GlassCard>
@@ -301,11 +362,11 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
 
         {/* Sub-category breakdown table */}
         <GlassCard title="Sub-Category Breakdown" note="units received, top 20"
-          action={<ExportButton filename="subcategory_breakdown.csv" rows={data.subCategoryBreakdown}
+          action={<ExportButton filename="subcategory_breakdown.csv" rows={filteredData.subCategoryBreakdown}
             columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }]} />}>
-          <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {data.subCategoryBreakdown.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
-            {data.subCategoryBreakdown.slice(0, 20).map((sc, i) => (
+          <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filteredData.subCategoryBreakdown.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
+            {filteredData.subCategoryBreakdown.slice(0, 20).map((sc, i) => (
               <BreakdownBar key={i} label={sc.subCategory} sub={sc.category} value={sc.qtyReceived} rejected={sc.qtyRejected} maxValue={maxSubCatQty} />
             ))}
           </div>
@@ -314,11 +375,11 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
         {/* Vendor performance + rejection reasons */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 14 }}>
           <GlassCard title="Vendor Performance" note="units received & rejection rate, top by volume"
-            action={<ExportButton filename="vendor_performance.csv" rows={data.vendorPerformance}
+            action={<ExportButton filename="vendor_performance.csv" rows={filteredData.vendorPerformance}
               columns={[{ label: 'Vendor', key: 'vendor' }, { label: 'Units Received', key: 'qtyReceived' }, { label: 'Units Rejected', key: 'qtyRejected' }, { label: 'Rejection %', key: 'rejectionPct' }, { label: 'GRN Count', key: 'grnCount' }]} />}>
-            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {data.vendorPerformance.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
-              {data.vendorPerformance.slice(0, 20).map((v, i) => (
+            <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {filteredData.vendorPerformance.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No data for this period.</div>}
+              {filteredData.vendorPerformance.slice(0, 20).map((v, i) => (
                 <BreakdownBar key={i} label={v.vendor} sub={`${v.grnCount} GRNs · ${v.rejectionPct.toFixed(1)}% rejected`}
                   value={v.qtyReceived} maxValue={maxVendorQty}
                   color={v.rejectionPct > 5 ? IC.status.Critical.c : IC.positive} />
@@ -328,8 +389,8 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
 
           <GlassCard title="Rejection Reasons" note="units rejected by reason">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {data.rejectionReasons.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No rejections in this period.</div>}
-              {data.rejectionReasons.slice(0, 10).map((r, i) => (
+              {filteredData.rejectionReasons.length === 0 && <div style={{ fontSize: 12, color: IC.t3 }}>No rejections in this period.</div>}
+              {filteredData.rejectionReasons.slice(0, 10).map((r, i) => (
                 <BreakdownBar key={i} label={r.reason} value={r.qty} maxValue={maxReasonQty} color={IC.status.Critical.c} />
               ))}
             </div>

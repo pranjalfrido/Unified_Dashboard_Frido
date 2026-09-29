@@ -1,0 +1,964 @@
+// Runs in GitHub Actions — runs the logistics BQ query with NO courier/category
+// WHERE filters (so all couriers and categories are included), writes
+// public/logistics-data.json for CDN delivery. The frontend filters client-side.
+
+import { writeFileSync } from 'fs'
+import { BigQuery } from '@google-cloud/bigquery'
+
+const bq = new BigQuery({ keyFilename: 'sa_key.json' })
+
+// Match dashboard default: 1st of current month → yesterday (or use --start/--end args)
+const fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+const argStart = process.argv.find(a => a.startsWith('--start='))?.split('=')[1]
+const argEnd   = process.argv.find(a => a.startsWith('--end='))?.split('=')[1]
+const endD = argEnd ? new Date(argEnd) : new Date(); if (!argEnd) endD.setDate(endD.getDate() - 1)
+const end = argEnd || fmtLocal(endD)
+const startD = argStart ? new Date(argStart) : new Date(endD.getFullYear(), endD.getMonth(), 1)
+const start = argStart || fmtLocal(startD)
+const days = Math.round((endD - startD) / 86400000) + 1
+
+// Previous period: same number of days immediately preceding
+const prevEnd = new Date(startD); prevEnd.setDate(prevEnd.getDate() - 1)
+const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
+const prevStartStr = fmtLocal(prevStart)
+const prevEndStr = fmtLocal(prevEnd)
+
+const splitNDD = true
+
+// Same query as api/logistics.js but with NO courier/category/subCategory WHERE filters
+function buildQuery(startDate, endDate, paymentMode = null, shipmentType = null) {
+  return `
+WITH base AS (
+  SELECT
+    c.awb,
+    c.courier_partner,
+    c.shipment_type,
+    c.payment_mode,
+    c.zone,
+    COALESCE(c.zone, 'C') AS zone_by_frido,
+    c.pickup_city,
+    c.pickup_state,
+    c.drop_city,
+    c.drop_state,
+    c.clickpost_unified_status,
+    CASE
+      WHEN c.clickpost_unified_status = 'Delivered' THEN 'Delivered'
+      WHEN c.clickpost_unified_status = 'NoStatusExist' AND LOWER(c.latest_remark) LIKE '%delivered%' THEN 'Delivered'
+      WHEN c.clickpost_unified_status IN ('RTO-Marked','RTO-ShipmentDelay','RTO-InTransit','RTO-Delivered','RTO-Requested','RTO-ContactCustomerCare','RTO-OutForDelivery','RTO-Failed') THEN 'RTO'
+      WHEN c.clickpost_unified_status = 'NoStatusExist' AND LOWER(c.latest_remark) LIKE '%rto%' THEN 'RTO'
+      WHEN c.clickpost_unified_status IN ('PickupFailed','OutForPickup','PickupPending','OrderPlaced') THEN 'Pickup Pending'
+      WHEN c.clickpost_unified_status IN ('ShipmentHeld','ContactCustomerCare','InTransit','DestinationHubIn','FailedDelivery','ShipmentDelayed','PickedUp','OutForDelivery','OriginCityOut','OriginCityIn') THEN 'Intransit'
+      WHEN c.clickpost_unified_status = 'Cancelled' THEN 'Cancelled'
+      WHEN c.clickpost_unified_status = 'Lost' THEN 'Lost'
+      WHEN c.clickpost_unified_status = 'Damaged' THEN 'Damaged'
+      WHEN c.clickpost_unified_status = 'NoStatusExist' THEN 'Undelivered'
+      WHEN c.clickpost_unified_status = 'ReShippedOnNewWaybill' THEN 'Reshipped'
+      WHEN c.clickpost_unified_status = 'NotServiceable' THEN 'Non-Serviceable'
+      ELSE 'Others'
+    END AS unified_status,
+    CASE
+      WHEN LOWER(c.courier_partner) LIKE '%bluedart%' THEN 'Bluedart'
+      WHEN LOWER(c.courier_partner) LIKE '%ekart%' THEN 'Ekart'
+      WHEN LOWER(c.courier_partner) LIKE '%elastic%' THEN 'ElasticRun'
+      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448' AND ${splitNDD} THEN 'Delhivery NDD'
+      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' THEN 'Delhivery'
+      WHEN LOWER(c.courier_partner) LIKE '%safexpress%' THEN 'Safexpress'
+      WHEN LOWER(c.courier_partner) LIKE '%shadowfax%' THEN 'Shadowfax'
+      WHEN LOWER(c.courier_partner) LIKE '%shiprocket%' THEN 'Shiprocket'
+      WHEN LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%' THEN 'Skye Air'
+      WHEN LOWER(c.courier_partner) LIKE '%swift%' THEN 'Swift'
+      WHEN LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%' THEN 'Urbane Bolt'
+      WHEN LOWER(c.courier_partner) LIKE '%wareiq%' THEN 'WareIQ'
+      WHEN LOWER(c.courier_partner) LIKE '%zippee%' THEN 'Zippee'
+      ELSE c.courier_partner
+    END AS courier_group,
+    SAFE_CAST(c.invoice_value AS FLOAT64) AS invoice_value,
+    SAFE_CAST(c.committed_sla AS FLOAT64) AS committed_sla,
+    SAFE_CAST(c.out_for_delivery_attempts AS INT64) AS ofd_attempts,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.created_at, 1, 10)) AS created_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.delivery_date, 1, 10)) AS delivery_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.expected_delivery_date_by_courier_partner, 1, 10)) AS edd,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.pickup_date, 1, 10)) AS pickup_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.rto_mark_date, 1, 10)) AS rto_mark_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.out_for_delivery_1st_attempt, 1, 10)) AS ofd1_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.order_date, 1, 10)) AS order_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.latest_timestamp, 1, 10)) AS latest_ts_date,
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.created_at, 1, 19)) AS created_ts,
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.pickup_date, 1, 19)) AS pickup_ts,
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.delivery_date, 1, 19)) AS delivery_ts,
+    c.reason_for_last_failed_delivery,
+    c.latest_remark,
+    c.channel_name,
+    COALESCE(im.Category_Name, 'Others') AS category,
+    COALESCE(im.Sub_category, 'Mixed Shipments') AS sub_category,
+    SAFE_CAST(REGEXP_REPLACE(TRIM(c.shipment_weight), r'[^0-9.]', '') AS FLOAT64) AS weight_g
+  FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` skm
+    ON TRIM(c.product_sku_code) = TRIM(skm.productid)
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im
+    ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
+  WHERE DATE(c.created_at) BETWEEN '${startDate}' AND '${endDate}'
+  ${paymentMode ? `AND LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'` : ''}
+  ${shipmentType ? `AND LOWER(TRIM(c.shipment_type)) = '${shipmentType.toLowerCase()}'` : ''}
+),
+kpis AS (
+  SELECT
+    COUNT(awb) AS total_shipments,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status = 'Delivered') AS delivered,
+    COUNTIF(unified_status = 'RTO') AS rto,
+    COUNTIF(unified_status = 'Intransit') AS in_transit,
+    COUNTIF(unified_status = 'Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status = 'Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    COUNTIF(edd IS NOT NULL AND edd < DATE_SUB(CURRENT_DATE(), INTERVAL 5 DAY) AND delivery_date IS NULL AND unified_status = 'Intransit') AS critical_stuck,
+    COUNTIF(rto_mark_date IS NOT NULL AND clickpost_unified_status NOT IN ('RTO-Delivered','Delivered') AND DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY) > 10) AS rto_10plus,
+    COUNTIF(clickpost_unified_status NOT IN ('Delivered','RTO-Delivered') AND pickup_date IS NOT NULL AND edd IS NOT NULL AND CURRENT_DATE() > edd) AS edd_breached,
+    COUNTIF(unified_status = 'RTO' AND COALESCE(ofd_attempts, 0) = 0) AS z_rto,
+    COUNTIF(ofd_attempts = 1 AND unified_status = 'Delivered') AS delivered_1attempt,
+    COUNTIF(ofd_attempts > 1 AND unified_status = 'Delivered') AS delivered_multi,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS total_ofd_attempts,
+    COUNTIF(unified_status = 'RTO' AND clickpost_unified_status NOT IN ('RTO-Delivered')) AS rto_undelivered,
+    COUNTIF(ofd_attempts > 1 AND unified_status = 'RTO') AS delivered_2attempt_rto,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 1) AS avg_fulfilment,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS avg_rto_tat,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 1) AS avg_s2a,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 1) AS avg_processing,
+    ROUND(AVG(committed_sla), 1) AS avg_sla,
+    -- SLA thresholds
+    COUNTIF(order_date IS NOT NULL) AS orders_with_order_date,
+    COUNTIF(pickup_date IS NOT NULL) AS orders_picked_up,
+    COUNTIF(delivery_date IS NOT NULL) AS orders_delivered_total,
+    COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) <= 1) AS processed_within_24h,
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, HOUR) <= 24) AS picked_up_within_24h,
+    COUNTIF(delivery_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 3) AS delivered_within_3d_of_pickup,
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) <= 5) AS delivered_within_5d_of_order,
+    -- NDR
+    COUNTIF(ofd_attempts >= 1) AS ndr_denom_attempted,
+    COUNTIF(ofd_attempts >= 2) AS ndr_count,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'Delivered') AS ndr_resolved_delivered,
+    -- RTO thresholds
+    COUNTIF(unified_status = 'RTO' AND clickpost_unified_status = 'RTO-Delivered') AS rto_completed,
+    COUNTIF(clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 5) AS rto_delivered_within_5d_of_mark,
+    COUNTIF(clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 10) AS rto_delivered_within_10d_of_mark,
+    -- RVP
+    COUNTIF(shipment_type = 'Reverse' AND created_date IS NOT NULL) AS rvp_created,
+    COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL) AS rvp_done,
+    COUNTIF(shipment_type = 'Reverse' AND delivery_date IS NOT NULL) AS rvp_delivered,
+    COUNTIF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) <= 2) AS rvp_done_within_2d_of_created,
+    COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 5) AS rvp_delivered_within_5d_of_done,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 15, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 1) AS avg_rvp_created_to_pickup,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 1) AS avg_rvp_pickup_to_delivery,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat
+  FROM base
+),
+by_courier AS (
+  SELECT
+    courier_group,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS delivered_1attempt,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS delivered_multi,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS total_ofd_attempts,
+    COUNTIF(unified_status='RTO' AND clickpost_unified_status NOT IN ('RTO-Delivered')) AS rto_undelivered,
+    COUNTIF(ofd_attempts > 1 AND unified_status='RTO') AS delivered_2attempt_rto,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    COUNTIF(edd IS NOT NULL AND edd < DATE_SUB(CURRENT_DATE(), INTERVAL 5 DAY) AND delivery_date IS NULL AND unified_status = 'Intransit') AS critical_stuck,
+    COUNTIF(rto_mark_date IS NOT NULL AND clickpost_unified_status NOT IN ('RTO-Delivered','Delivered') AND DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY) > 10) AS rto_10plus,
+    COUNTIF(clickpost_unified_status NOT IN ('Delivered','RTO-Delivered') AND pickup_date IS NOT NULL AND edd IS NOT NULL AND CURRENT_DATE() > edd) AS edd_breached,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
+    ROUND(AVG(committed_sla), 1) AS avg_sla
+  FROM base GROUP BY 1
+),
+by_facility AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL
+  GROUP BY 1
+  HAVING facility IS NOT NULL
+),
+by_tier AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE'
+      ) THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI'
+      ) THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
+  FROM base
+  WHERE drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1
+),
+by_courier_day AS (
+  SELECT courier_group, shipment_type, FORMAT_DATE('%d %b', created_date) AS period_label, created_date AS period_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
+),
+by_courier_week AS (
+  SELECT courier_group, shipment_type, FORMAT_DATE('W%V %Y', created_date) AS period_label, DATE_TRUNC(created_date, WEEK) AS period_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
+),
+by_courier_month AS (
+  SELECT courier_group, shipment_type, FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
+),
+by_month_all AS (
+  SELECT FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2
+),
+by_status AS (SELECT unified_status, COUNT(awb) AS total FROM base GROUP BY 1),
+by_zone AS (
+  SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto
+  FROM base WHERE zone IS NOT NULL GROUP BY 1
+),
+by_payment_detail AS (
+  SELECT payment_mode, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto, COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_order_value
+  FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
+),
+by_payment_day AS (
+  SELECT payment_mode, FORMAT_DATE('%d %b', created_date) AS period_label, created_date AS period_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
+by_payment_week AS (
+  SELECT payment_mode, FORMAT_DATE('W%V %Y', created_date) AS period_label, DATE_TRUNC(created_date, WEEK) AS period_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
+by_payment_month AS (
+  SELECT payment_mode, FORMAT_DATE('%b-%y', created_date) AS period_label, DATE_TRUNC(created_date, MONTH) AS period_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
+by_day AS (
+  SELECT FORMAT_DATE('%d %b', created_date) AS label, created_date AS dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='RTO') AS rto, COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)), 0) AS delivered_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
+),
+by_week AS (
+  SELECT FORMAT_DATE('W%V %Y', created_date) AS label, DATE_TRUNC(created_date, WEEK) AS dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='RTO') AS rto, COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)), 0) AS delivered_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
+),
+by_month AS (
+  SELECT FORMAT_DATE('%b %Y', created_date) AS label, DATE_TRUNC(created_date, MONTH) AS dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='RTO') AS rto, COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)), 0) AS delivered_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
+    ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
+),
+rto_reasons AS (
+  SELECT courier_group, shipment_type, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO' GROUP BY 1, 2, 3
+),
+rto_ageing AS (
+  SELECT
+    courier_group,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 0 AND 1) AS order_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 2 AND 4) AS order_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 5 AND 7) AS order_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 8 AND 10) AS order_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) > 10) AS order_10plus,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 0 AND 1) AS shipment_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 2 AND 4) AS shipment_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 5 AND 7) AS shipment_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 8 AND 10) AS shipment_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) > 10) AS shipment_10plus,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 0 AND 1) AS pickup_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 2 AND 4) AS pickup_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 5 AND 7) AS pickup_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 8 AND 10) AS pickup_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) > 10) AS pickup_10plus,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 1) AS rtodel_0_1,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 2 AND 4) AS rtodel_2_4,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 5 AND 7) AS rtodel_5_7,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 8 AND 10) AS rtodel_8_10,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) > 10) AS rtodel_10plus,
+    COUNTIF(unified_status='RTO') AS total_rto
+  FROM base GROUP BY 1
+),
+top_drop_states AS (
+  SELECT courier_group, CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state, COUNT(awb) AS total
+  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2
+),
+top_drop_cities AS (
+  SELECT courier_group, CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2))) AS city, COUNT(awb) AS total
+  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1, 2
+),
+top_pickup_cities AS (
+  SELECT courier_group, CONCAT(UPPER(SUBSTR(pickup_city,1,1)), LOWER(SUBSTR(pickup_city,2))) AS city, COUNT(awb) AS total
+  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2
+),
+by_payment AS (SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1),
+tat_by_courier AS (
+  SELECT courier_group, shipment_type, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
+  FROM base WHERE unified_status='Delivered' GROUP BY 1, 2
+),
+tat_by_month AS (
+  SELECT FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
+  FROM base WHERE unified_status='Delivered' AND created_date IS NOT NULL GROUP BY 1,2
+),
+tat_by_facility AS (
+  SELECT * FROM (
+    SELECT courier_group, shipment_type,
+      CASE
+        WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+        WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+        WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+        WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+        WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+        WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+        WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+        ELSE NULL
+      END AS facility,
+      COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+      COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 720) AS proc_0_12h,
+      COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 721 AND 1440) AS proc_12_24h,
+      COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 1441 AND 2880) AS proc_24_48h,
+      COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) > 2880) AS proc_48plus,
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 1) AS ord_0_1,
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 1) AS op_0_1,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 2 AND 3) AS op_2_3,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 4 AND 5) AS op_4_5,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) > 5) AS op_5plus,
+      -- In-Transit Time: pickup_ts → delivery_ts (days)
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
+    FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2, 3
+  ) WHERE facility IS NOT NULL
+),
+pickup_ageing AS (
+  SELECT
+    courier_group,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 2) AS del_0_2,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 3 AND 4) AS del_2_4,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 5 AND 6) AS del_4_6,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 7 AND 8) AS del_6_8,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 9 AND 10) AS del_8_10,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) > 10) AS del_10plus,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL) AS del_total,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 0 AND 2) AS rto_0_2,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 3 AND 4) AS rto_2_4,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 5 AND 6) AS rto_4_6,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 7 AND 8) AS rto_6_8,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 9 AND 10) AS rto_8_10,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) > 10) AS rto_10plus,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL) AS rto_total
+  FROM base
+  GROUP BY 1
+),
+failed_delivery_reasons AS (
+  SELECT courier_group, shipment_type, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  FROM base
+  WHERE reason_for_last_failed_delivery IS NOT NULL AND reason_for_last_failed_delivery != '' AND ofd_attempts > 1
+  GROUP BY 1, 2, 3
+),
+ndr_by_courier AS (
+  SELECT
+    courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
+    COUNT(awb) AS total_shipments,
+    COUNTIF(ofd_attempts >= 1) AS attempted_shipments,
+    COUNTIF(ofd_attempts >= 2) AS ndr_count,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'Delivered') AS ndr_del,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'RTO') AS ndr_rto,
+    COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
+    COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
+    COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 THEN ofd_attempts END), 2) AS avg_att,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 AND unified_status = 'Delivered' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20 THEN DATE_DIFF(delivery_date, order_date, DAY) END), 2) AS avg_o2d
+  FROM base GROUP BY 1, 2
+),
+by_zone_detail AS (
+  SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days
+  FROM base WHERE zone IS NOT NULL AND zone != '' GROUP BY 1
+),
+by_zone_frido AS (
+  SELECT
+    zone_by_frido AS zone_group,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base GROUP BY 1
+),
+by_zone_frido_tier AS (
+  SELECT
+    zone_by_frido AS zone_group,
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN ('MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE') THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN ('SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI') THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1, 2
+),
+by_facility_tier AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN ('MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE') THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN ('SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI') THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL AND drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1, 2
+  HAVING facility IS NOT NULL
+),
+by_courier_zone AS (
+  SELECT
+    courier_group,
+    zone_by_frido AS zone_group,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach
+  FROM base GROUP BY 1, 2
+),
+by_courier_tier AS (
+  SELECT
+    courier_group,
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE'
+      ) THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI'
+      ) THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1, 2
+),
+by_courier_facility AS (
+  SELECT
+    courier_group,
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL
+  GROUP BY 1, 2
+  HAVING facility IS NOT NULL
+),
+by_zone_facility AS (
+  SELECT
+    zone_by_frido AS zone_group,
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL
+  GROUP BY 1, 2
+  HAVING facility IS NOT NULL
+),
+by_channel AS (
+  SELECT channel_name AS channel, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto, COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_gmv
+  FROM base WHERE channel_name IS NOT NULL AND channel_name != '' GROUP BY 1
+),
+by_weight_slab AS (
+  SELECT courier_group, shipment_type,
+    CASE
+      WHEN weight_g IS NULL THEN 'Unknown' WHEN weight_g <= 500 THEN '0-500g' WHEN weight_g <= 1000 THEN '500g-1kg'
+      WHEN weight_g <= 2000 THEN '1-2kg' WHEN weight_g <= 5000 THEN '2-5kg' WHEN weight_g <= 10000 THEN '5-10kg'
+      WHEN weight_g <= 20000 THEN '10-20kg' WHEN weight_g <= 50000 THEN '20-50kg' ELSE '50kg+'
+    END AS slab,
+    CASE
+      WHEN weight_g IS NULL THEN 0 WHEN weight_g <= 500 THEN 1 WHEN weight_g <= 1000 THEN 2
+      WHEN weight_g <= 2000 THEN 3 WHEN weight_g <= 5000 THEN 4 WHEN weight_g <= 10000 THEN 5
+      WHEN weight_g <= 20000 THEN 6 WHEN weight_g <= 50000 THEN 7 ELSE 8
+    END AS slab_order,
+    COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='Delivered') * 100.0, COUNT(awb)), 1) AS del_pct,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='RTO') * 100.0, COUNT(awb)), 1) AS rto_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
+    ROUND(SUM(invoice_value), 0) AS total_value
+  FROM base GROUP BY 1, 2, 3, 4
+),
+filter_opts AS (
+  SELECT
+    ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
+    ARRAY_AGG(DISTINCT zone IGNORE NULLS ORDER BY zone) AS zones,
+    ARRAY_AGG(DISTINCT CONCAT(UPPER(SUBSTR(pickup_state,1,1)), LOWER(SUBSTR(pickup_state,2))) IGNORE NULLS ORDER BY CONCAT(UPPER(SUBSTR(pickup_state,1,1)), LOWER(SUBSTR(pickup_state,2)))) AS pickup_states,
+    ARRAY_AGG(DISTINCT CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) IGNORE NULLS ORDER BY CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2)))) AS drop_states,
+    ARRAY_AGG(DISTINCT CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2))) IGNORE NULLS ORDER BY CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2)))) AS drop_cities,
+    ARRAY_AGG(DISTINCT category IGNORE NULLS ORDER BY category) AS categories,
+    ARRAY_AGG(DISTINCT sub_category IGNORE NULLS ORDER BY sub_category) AS sub_categories
+  FROM base
+)
+SELECT
+  TO_JSON_STRING((SELECT AS STRUCT * FROM kpis)) AS kpis,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier ORDER BY total DESC)) AS by_courier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_status)) AS by_status,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone ORDER BY total DESC)) AS by_zone,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_day)) AS by_day,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_week)) AS by_week,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month)) AS by_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_reasons)) AS rto_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_ageing ORDER BY total_rto DESC)) AS rto_ageing,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_states)) AS top_drop_states,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_cities)) AS top_drop_cities,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_pickup_cities)) AS top_pickup_cities,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment)) AS by_payment,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_day ORDER BY courier_group, period_dt)) AS by_courier_day,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_week ORDER BY courier_group, period_dt)) AS by_courier_week,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_month ORDER BY courier_group, month_dt)) AS by_courier_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month_all ORDER BY month_dt)) AS by_month_all,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_detail ORDER BY total DESC)) AS by_payment_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_day ORDER BY payment_mode, period_dt)) AS by_payment_day,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_week ORDER BY payment_mode, period_dt)) AS by_payment_week,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, period_dt)) AS by_payment_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM failed_delivery_reasons)) AS failed_delivery_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_detail ORDER BY total DESC)) AS by_zone_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_frido ORDER BY zone_group)) AS by_zone_frido,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_zone ORDER BY courier_group, zone_group)) AS by_courier_zone,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_tier ORDER BY courier_group, tier)) AS by_courier_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_frido_tier ORDER BY zone_group, tier)) AS by_zone_frido_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility_tier ORDER BY facility, tier)) AS by_facility_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_facility ORDER BY courier_group, facility)) AS by_courier_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_facility ORDER BY zone_group, facility)) AS by_zone_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility ORDER BY total DESC)) AS by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_tier ORDER BY CASE tier WHEN 'Tier 1' THEN 1 WHEN 'Tier 2' THEN 2 ELSE 3 END)) AS by_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
+  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM ndr_by_courier ORDER BY ndr_count DESC)) AS ndr_by_courier
+`
+}
+
+console.log(`Running logistics BQ query for ${start} → ${end} (+ prev period ${prevStartStr} → ${prevEndStr})`)
+
+const [
+  [rows], [prevRows],
+  [codRows], [codPrevRows],
+  [prepaidRows], [prepaidPrevRows],
+  [fwdRows], [fwdPrevRows],
+  [revRows], [revPrevRows],
+  [fwdCodRows], [fwdCodPrevRows],
+  [fwdPrepaidRows], [fwdPrepaidPrevRows],
+  [revCodRows], [revCodPrevRows],
+  [revPrepaidRows], [revPrepaidPrevRows],
+] = await Promise.all([
+  bq.query({ query: buildQuery(start, end), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, null, 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, null, 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, null, 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, null, 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID', 'Reverse'), maximumBytesBilled: '10000000000' }),
+])
+
+function parseRow(r) {
+  if (!r) return {}
+  return {
+    kpis: JSON.parse(r.kpis),
+    byCourier: JSON.parse(r.by_courier),
+    byStatus: JSON.parse(r.by_status),
+    byZone: JSON.parse(r.by_zone),
+    byDay: JSON.parse(r.by_day),
+    byWeek: JSON.parse(r.by_week),
+    byMonth: JSON.parse(r.by_month),
+    rtoReasons: JSON.parse(r.rto_reasons),
+    rtoAgeing: JSON.parse(r.rto_ageing),
+    topDropStates: JSON.parse(r.top_drop_states),
+    topDropCities: JSON.parse(r.top_drop_cities),
+    topPickupCities: JSON.parse(r.top_pickup_cities),
+    byPayment: JSON.parse(r.by_payment),
+    byCourierDay: JSON.parse(r.by_courier_day),
+    byCourierWeek: JSON.parse(r.by_courier_week),
+    byCourierMonth: JSON.parse(r.by_courier_month),
+    byMonthAll: JSON.parse(r.by_month_all),
+    byPaymentDetail: JSON.parse(r.by_payment_detail),
+    byPaymentDay: JSON.parse(r.by_payment_day),
+    byPaymentWeek: JSON.parse(r.by_payment_week),
+    byPaymentMonth: JSON.parse(r.by_payment_month),
+    failedDeliveryReasons: JSON.parse(r.failed_delivery_reasons),
+    byZoneDetail: JSON.parse(r.by_zone_detail),
+    byZoneFrido: JSON.parse(r.by_zone_frido),
+    byCourierZone: JSON.parse(r.by_courier_zone),
+    byCourierTier: JSON.parse(r.by_courier_tier),
+    byZoneFridoTier: JSON.parse(r.by_zone_frido_tier),
+    byFacilityTier: JSON.parse(r.by_facility_tier),
+    byCourierFacility: JSON.parse(r.by_courier_facility),
+    byZoneFacility: JSON.parse(r.by_zone_facility),
+    byChannel: JSON.parse(r.by_channel),
+    tatByCourier: JSON.parse(r.tat_by_courier),
+    tatByMonth: JSON.parse(r.tat_by_month),
+    tatByFacility: JSON.parse(r.tat_by_facility),
+    byFacility: JSON.parse(r.by_facility),
+    byTier: JSON.parse(r.by_tier),
+    byWeightSlab: JSON.parse(r.by_weight_slab),
+    pickupAgeing: JSON.parse(r.pickup_ageing),
+    filterOpts: JSON.parse(r.filter_opts),
+    ndrByCourier: JSON.parse(r.ndr_by_courier),
+  }
+}
+
+const payload = {
+  asOf: new Date().toISOString(),
+  dateRange: { start, end, days: 30 },
+  prevDateRange: { start: prevStartStr, end: prevEndStr },
+  current: rows.length ? parseRow(rows[0]) : {},
+  previous: prevRows.length ? parseRow(prevRows[0]) : null,
+}
+
+const json = JSON.stringify(payload)
+writeFileSync('public/logistics-data.json', json)
+console.log(`Written public/logistics-data.json — ${(json.length / 1024).toFixed(0)}KB`)
+
+for (const [mode, cur, prev] of [
+  ['cod', codRows, codPrevRows],
+  ['prepaid', prepaidRows, prepaidPrevRows],
+  ['forward', fwdRows, fwdPrevRows],
+  ['reverse', revRows, revPrevRows],
+  ['forward-cod', fwdCodRows, fwdCodPrevRows],
+  ['forward-prepaid', fwdPrepaidRows, fwdPrepaidPrevRows],
+  ['reverse-cod', revCodRows, revCodPrevRows],
+  ['reverse-prepaid', revPrepaidRows, revPrepaidPrevRows],
+]) {
+  const p = {
+    asOf: new Date().toISOString(),
+    dateRange: { start, end, days },
+    prevDateRange: { start: prevStartStr, end: prevEndStr },
+    current: cur.length ? parseRow(cur[0]) : {},
+    previous: prev.length ? parseRow(prev[0]) : null,
+  }
+  const j = JSON.stringify(p)
+  writeFileSync(`public/logistics-data-${mode}.json`, j)
+  console.log(`Written public/logistics-data-${mode}.json — ${(j.length / 1024).toFixed(0)}KB`)
+}
