@@ -335,6 +335,30 @@ function shapeResponse(j) {
   }
 }
 
+// Which billing month the cost tabs should open on, given today's date.
+//
+// Courier and 3PL invoices for a month arrive through the first half of the NEXT month, so
+// the previous month is still filling up until roughly mid-month. Opening on it before then
+// shows a part-billed period as if it were a closed one — the figure looks like a saving
+// and is really just paperwork that has not arrived.
+//
+// So: on or after the 15th, the previous month is complete enough to report. Before the
+// 15th, fall back a further month to the last one that is genuinely closed.
+//
+//   10 Sep -> 2026-07   (August still being invoiced)
+//   30 Sep -> 2026-08   (August now complete)
+//
+// `today` is injectable so this is deterministic to reason about rather than depending on
+// when it happens to run.
+const BILLING_CUTOFF_DAY = 15
+function defaultBillingMonth(today = new Date()) {
+  const back = today.getDate() >= BILLING_CUTOFF_DAY ? 1 : 2
+  // Day 1 of the current month, then step back whole months — avoids the classic overflow
+  // where subtracting a month from the 31st lands two months back.
+  const d = new Date(today.getFullYear(), today.getMonth() - back, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 function monthLabel(my) {
   if (!my) return '—'
   const [y, m] = String(my).split('-')
@@ -3104,7 +3128,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // Respect a selection already in place for this scope (a shared URL, or an external
     // filter object supplied by the parent).
     if ((filters.months || []).length) return
-    setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
+    // The billing-cycle rule, not simply the newest month in the ledger: a ledger can
+    // carry a partially-invoiced current month, and opening on that understates the
+    // period. See defaultBillingMonth().
+    //
+    // Falls back to the latest month this scope actually holds when the target is absent —
+    // the freight and 3PL ledgers start later than the parcel one, so the target can be a
+    // month a given scope has never billed. The period chip names the month on screen, so
+    // the fallback is visible rather than silent.
+    const target = defaultBillingMonth()
+    setOne('months', all.includes(target) ? [target] : all.slice(-DEFAULT_MONTH_COUNT))
     // filters.months is deliberately NOT a dependency: this must fire when the options
     // arrive or the scope changes, never in response to the user editing the selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
