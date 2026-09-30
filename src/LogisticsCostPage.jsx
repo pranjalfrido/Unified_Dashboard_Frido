@@ -1235,7 +1235,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Overview and FTL/PTL because all three read this same object — which also made the
   // period chip look stuck when switching tabs. The three tabs report on different ledgers
   // with different uploaded months, so each keeps its own period.
-  const [monthsByScope, setMonthsByScope] = useState({})
+  // Pre-seed the default billing month so the very first fetch already has months set
+  // and never shows the all-time total even for one frame.
+  const [monthsByScope, setMonthsByScope] = useState(() => {
+    const dm = defaultBillingMonth()
+    return { all: [dm], b2c: [dm], b2b: [dm], tpl: [dm] }
+  })
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
@@ -1578,11 +1583,22 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // Cache the full base response so future filters (cube for B2C, raw arrays for b2b/tpl) are instant.
         if (isDefaultFilters && j.cube) setBaseData(j)
 
-        setAgg(shapeResponse(j))
-        setB2bRows(j.b2b || [])
-        // When loading from static JSON (all months), pre-filter b2bTotals to the
-        // default billing month so the Overview tile never flashes an all-time total.
+        // When months are pre-selected (always, since monthsByScope is seeded at init),
+        // filter the cube immediately so B2C agg shows the correct month from frame 1.
         const initMonths = f.months?.length ? new Set(f.months) : null
+        if (initMonths && j.cube) {
+          const filtered = filterCube(j.cube, f)
+          const totals = sumCube(filtered)
+          const BASE_TOTALS = j.totals || {}
+          const FILTER_INDEPENDENT_KEYS = ['dc_n', 'dc_ours', 'dc_theirs', 'dc_invoiced',
+            'dc_weight_n', 'dc_rate_n', 'dt_ours', 'dt_theirs', 'dt_invoiced', 'dt_weight_n',
+            'dt_rate_n', 'dt_weight_claim', 'dt_rate_claim']
+          FILTER_INDEPENDENT_KEYS.forEach(k => { if (BASE_TOTALS[k] != null) totals[k] = BASE_TOTALS[k] })
+          setAgg(shapeResponse({ ...j, totals }))
+        } else {
+          setAgg(shapeResponse(j))
+        }
+        setB2bRows(j.b2b || [])
         const initB2bTotals = (() => {
           if (!initMonths || !(j.b2bMonths?.length)) return j.b2bTotals || { trips: 0, cost: 0 }
           const sel = j.b2bMonths.filter(r => initMonths.has(r.key || r.month_year || r.month))
