@@ -1819,7 +1819,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!rows.length) return []
     const by = {}
     for (const r of rows) {
-      const [courier, month] = r.key.split('|')
+      // courier/month come as their own fields; splitting r.key on '|' would break on any
+      // courier name containing that character.
+      const courier = r.courier, month = r.month
+      if (!courier || !month) continue
       const cpk = r.wt ? r.cost / r.wt : 0;
       (by[courier] ??= []).push({ m: month, cpk })
     }
@@ -2090,10 +2093,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       .sort((a, b) => order.indexOf(a.band) - order.indexOf(b.band))
   }, [agg])
 
+  // Reads trendRows, NOT monthSeries: a month-over-month delta needs two consecutive
+  // months, and monthSeries carries only the selected billing period — one month by
+  // default, which made `mom` null and silently removed the MoM/YoY badges from the hero.
+  // trendRows spans every month while still honouring the courier slicer, so the badges
+  // stay correct and stay scoped to whatever carrier is selected.
   const mom = useMemo(() => {
-    if (monthSeries.length < 2) return null
-    return { curr: monthSeries[monthSeries.length - 1], prev: monthSeries[monthSeries.length - 2] }
-  }, [monthSeries])
+    if (trendRows.length < 2) return null
+    return { curr: trendRows[trendRows.length - 1], prev: trendRows[trendRows.length - 2] }
+  }, [trendRows])
 
   // Stacked deltas on the hero, like the Sales page's WoW/MoM/YoY badges. Freight cost
   // is a cost, so DOWN is good — the colour follows that, not the arrow direction.
@@ -2110,11 +2118,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (mom) {
       const [y, m] = String(mom.curr.raw).split('-')
       const yoyKey = `${Number(y) - 1}-${m}`
-      const yoy = monthSeries.find(s => s.raw === yoyKey)
+      // Same series as `mom` for the same reason: the year-ago month is almost never
+      // inside the selected window.
+      const yoy = trendRows.find(s => s.raw === yoyKey)
       if (yoy) push(mom.curr.cost, yoy.cost, 'YoY')
     }
     return out
-  }, [mom, monthSeries])
+  }, [mom, trendRows])
 
   // Reverse legs (RTO + Reverse/RVP/DTO) carry cost with no revenue against them, so
   // management reads them as one burden rather than two separate modes.
@@ -2272,11 +2282,47 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
   // in a month with no shipment data so the line breaks instead of diving to the axis.
-  const tplTrend = useMemo(() => (tpl?.months || []).map(m => ({
+  // Month series for the 3PL trends, rebuilt from the UNFILTERED warehouse-month rows.
+  //
+  // tpl.months is narrowed by the page's billing-period selection, so with the one-month
+  // default it carried a single point and both 3PL trend charts flattened to one bar.
+  // Re-aggregating b2b.tplWhMonths here keeps every month while still honouring the
+  // partner, site and location slicers — the same split the other two scopes make between
+  // "what am I looking at" and "how is it moving".
+  const tplTrendMonths = useMemo(() => {
+    const rows = b2b?.tplWhMonths || []
+    if (!rows.length) return []
+    const selP = filters.tplPartners || [], selS = filters.tplSites || []
+    const selL = filters.tplLocations || []
+    const locByPin = new Map((b2b?.tplWarehouses || []).map(w => [String(w.pincode ?? ''), w.location]))
+    // Deliberately no month clause — that is the whole point of this series.
+    const ok = r => (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? ''))))
+    const by = new Map()
+    for (const r of rows) {
+      if (!ok(r)) continue
+      const k = r.month_year
+      if (!k) continue
+      const a = by.get(k) || { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0 }
+      a.cost += num(r.cost)
+      a.operation_fee += num(r.operation_fee)
+      a.rental_fee += num(r.rental_fee)
+      a.other_fee += num(r.other_fee)
+      a.shipments += num(r.shipments)
+      a.weight_kg += num(r.weight_kg)
+      by.set(k, a)
+    }
+    return [...by.values()].sort((x, y) => String(x.key).localeCompare(String(y.key)))
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations])
+
+  const tplTrend = useMemo(() => tplTrendMonths.map(m => ({
     ...m,
+    // null rather than 0 in a month with no shipment data, so the rate line breaks
+    // instead of diving to the axis and implying the cost collapsed.
     per_ship: m.shipments > 0 ? m.cost / m.shipments : null,
     per_kg: m.weight_kg > 0 ? m.cost / m.weight_kg : null,
-  })), [tpl?.months])
+  })), [tplTrendMonths])
 
   // Per-site rate over time, pivoted to one column per warehouse for a multi-line chart.
   // Sites are ordered by total spend so the biggest site keeps the first colour as months
@@ -2284,7 +2330,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const tplWhNames = useMemo(() =>
     (tpl?.warehouses || []).map(w => w.key).filter(Boolean), [tpl?.warehouses])
   const tplWhTrend = useMemo(() => {
-    const rows = tpl?.whMonths || []
+    // Unfiltered warehouse-month rows, narrowed by everything EXCEPT the month slicer —
+    // same reasoning as tplTrendMonths above. Built by re-running the site/partner/location
+    // test rather than reusing tpl.whMonths, which the billing period has already cut down.
+    const selP = filters.tplPartners || [], selS = filters.tplSites || []
+    const selL = filters.tplLocations || []
+    const locByPin = new Map((b2b?.tplWarehouses || []).map(w => [String(w.pincode ?? ''), w.location]))
+    const rows = (b2b?.tplWhMonths || []).filter(r =>
+      (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? '')))))
     if (!rows.length) return []
     const byMonth = new Map()
     for (const r of rows) {
@@ -2293,7 +2348,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (r.shipments > 0) byMonth.get(r.month_year)[r.warehouse] = r.cost / r.shipments
     }
     return [...byMonth.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)))
-  }, [tpl?.whMonths])
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations])
 
   // Sites ranked by cost per parcel. Sites with no matched volume are dropped rather than
   // plotted at zero, which would read as "free" instead of "unknown".
@@ -2439,11 +2494,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Monthly spend. The server now returns one row per month PER TRANSPORTER so the sidebar
   // filter can bite, which means the client re-aggregates. Sums, not averages — a weighted
   // mean of per-transporter medians would not be the month's real cost.
+  // Month-grain series: uses b2bTrendPick so the month slicer does not reach it. This
+  // feeds the variance sparkline (hidden entirely at one point) and b2bHead's MoM figures,
+  // both of which need consecutive months to mean anything. Transporter, vehicle and
+  // freight-type still apply.
   const b2bVarMonthRows = useMemo(() => {
     if (!b2b) return []
     const by = new Map()
     for (const m of b2b.varMonths || []) {
-      if (b2bPick && !b2bPick(m)) continue
+      if (b2bTrendPick && !b2bTrendPick(m)) continue
       const k = m.month
       if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, billedPriced: 0, card: 0, variance: 0 })
       const a = by.get(k)
@@ -2454,7 +2513,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return [...by.values()]
       .map(a => ({ ...a, variancePct: a.card ? (a.billedPriced / a.card - 1) * 100 : 0 }))
       .sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // ── FTL/PTL monthly trend ──
   //
@@ -2657,18 +2716,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // KM-Logistic have no July trips, and a zero would draw a line collapsing to the axis —
   // reading as "spend fell to nothing" when the truth is "no invoice was raised". Undefined
   // leaves a gap, which is the honest mark.
+  // A trend chart, so the month slicer must not reach it — see b2bTrendPick.
   const b2bTransTrendRows = useMemo(() => {
     if (!b2b) return []
     const byMonth = new Map()
     for (const r of b2b.transMonths || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       const k = r.month
       if (!byMonth.has(k)) byMonth.set(k, { month: monthLabel(k), raw: k })
       const row = byMonth.get(k)
       row[r.transporter] = (row[r.transporter] || 0) + num(r.billed)
     }
     return [...byMonth.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // Which transporters to draw, biggest first, so colour assignment is stable as the filter
   // changes and the legend order matches the visual order.
