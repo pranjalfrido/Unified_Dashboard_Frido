@@ -215,10 +215,15 @@ function cubeToByCourierMonth(cube) {
   for (const r of cube) {
     if (!r.courier_name || !r.month) continue
     const key = `${r.courier_name}|${r.month}`
-    if (!map[key]) map[key] = { key, n: 0, cost: 0, wt: 0 }
+    // courier and month are kept as their own fields, not just fused into `key`: the
+    // Monthly Trend re-aggregates this by month while honouring the courier slicer, and
+    // splitting a composite key back apart would break on any courier name containing "|".
+    if (!map[key]) map[key] = { key, courier: r.courier_name, month: r.month, n: 0, cost: 0, wt: 0, value: 0 }
     map[key].n += Number(r.n) || 0
     map[key].cost += Number(r.cost) || 0
     map[key].wt += Number(r.wt) || 0
+    // Goods value, for the trend's "% of GMV" column.
+    map[key].value += Number(r.value) || 0
   }
   return Object.values(map)
 }
@@ -328,6 +333,30 @@ function shapeResponse(j) {
     trendAll: j.trendAll || [],
     byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
   }
+}
+
+// Which billing month the cost tabs should open on, given today's date.
+//
+// Courier and 3PL invoices for a month arrive through the first half of the NEXT month, so
+// the previous month is still filling up until roughly mid-month. Opening on it before then
+// shows a part-billed period as if it were a closed one — the figure looks like a saving
+// and is really just paperwork that has not arrived.
+//
+// So: on or after the 15th, the previous month is complete enough to report. Before the
+// 15th, fall back a further month to the last one that is genuinely closed.
+//
+//   10 Sep -> 2026-07   (August still being invoiced)
+//   30 Sep -> 2026-08   (August now complete)
+//
+// `today` is injectable so this is deterministic to reason about rather than depending on
+// when it happens to run.
+const BILLING_CUTOFF_DAY = 15
+function defaultBillingMonth(today = new Date()) {
+  const back = today.getDate() >= BILLING_CUTOFF_DAY ? 1 : 2
+  // Day 1 of the current month, then step back whole months — avoids the classic overflow
+  // where subtracting a month from the 31st lands two months back.
+  const d = new Date(today.getFullYear(), today.getMonth() - back, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 function monthLabel(my) {
@@ -708,13 +737,21 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
 
 function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
   const [open, setOpen] = useState(false)
+  // Typed filter over the month list. Cleared on close so the dropdown never reopens
+  // showing a filtered subset of what the reader takes to be the whole list.
+  const [q, setQ] = useState('')
+  const searchRef = useRef(null)
   const ref = useRef(null)
   useEffect(() => {
-    if (!open) return
+    if (!open) { setQ(''); return }
+    // Focus the field so the list is type-to-filter without a second click. Deferred a
+    // tick: the input is not in the DOM until this render commits.
+    const t = setTimeout(() => searchRef.current?.focus(), 0)
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h)
     document.addEventListener('touchstart', h)
     return () => {
+      clearTimeout(t)
       document.removeEventListener('mousedown', h)
       document.removeEventListener('touchstart', h)
     }
@@ -732,6 +769,16 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
   // Empty selection means "everything" everywhere else in this page, so the checkmarks
   // have to show every month ticked rather than none.
   const isOn = m => (sel.length ? sel.includes(m) : true)
+  // Newest first, then narrowed by the query. One derived list, so the rows, the empty
+  // state and the Enter shortcut can never disagree about what is showing.
+  //
+  // Matches the RENDERED label as well as the raw key: "aug", "2026-08" and "aug 2026" all
+  // find the same month. The label is what is on screen; the key is what someone reading a
+  // URL or a CSV export would type.
+  const needle = q.trim().toLowerCase()
+  const shown = [...months].reverse().filter(m =>
+    !needle || String(m).toLowerCase().includes(needle) || label(m).toLowerCase().includes(needle))
+
   const suffix = win.kind === 'all-short' || win.kind === 'all'
     ? `all ${win.total} months`
     : win.kind === 'default'
@@ -790,9 +837,31 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
                 cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
               }}>All {months.length}</button>
           </div>
+          <div style={{ padding: '7px 9px', borderBottom: `1px solid ${C.border}` }}>
+            <input
+              ref={searchRef}
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setQ(''); e.stopPropagation() }
+                // Enter with exactly one match toggles it — the fast path for "aug<enter>".
+                if (e.key === 'Enter' && shown.length === 1) { onToggle(shown[0]); setQ('') }
+              }}
+              placeholder="Search month…"
+              style={{
+                width: '100%', boxSizing: 'border-box', fontSize: 11, fontFamily: 'var(--font)',
+                padding: '5px 8px', borderRadius: 6, color: C.t1, background: C.card,
+                border: `1px solid ${C.border2}`, outline: 'none',
+              }} />
+          </div>
           {/* Newest first: the recent months are the ones anyone reaches for. */}
           <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
-            {[...months].reverse().map(m => {
+            {!shown.length && (
+              <div style={{ padding: '10px 11px', fontSize: 11, color: C.t3 }}>
+                No month matches “{q}”
+              </div>
+            )}
+            {shown.map(m => {
               const on = isOn(m)
               return (
                 <div key={m} onClick={() => onToggle(m)}
@@ -1280,6 +1349,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!months || months.has(r.month_year || r.key || r.month)) &&
         (!tplPartners || tplPartners.has(r.partner)) &&
         (!tplSites || tplSites.has(r.warehouse))
+      // Same test without the month clause. tplWhMonths is what the 3PL Monthly Trend and
+      // Warehouse Trend re-aggregate from, so it has to keep every period; the tables and
+      // tiles below still read the month-filtered rows.
+      const tplFilterNoMonth = r =>
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.warehouse))
 
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
       // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
@@ -1348,8 +1423,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               return acc
             }, {}))
             .sort((x, y) => String(x.key).localeCompare(String(y.key)))
+      // Transporter Trend source — month clause omitted for the same reason as varMonths.
       const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
-        (!months || months.has(r.month || r.month_year || r.key)) &&
         (!transporters || transporters.has(r.transporter)) &&
         (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
         (!freightTypes || freightTypes.has(r.freight_type))
@@ -1377,7 +1452,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!tplPartners || tplPartners.has(r.partner)) &&
         (!tplSites || tplSites.has(r.key))
       )
-      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilter)
+      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilterNoMonth)
 
       // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
       const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
@@ -1414,8 +1489,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         months: filteredB2bMonths,
         types: (baseData.b2bTypes || []).filter(r => (!freightTypes || freightTypes.has(r.key))),
         variance: baseData.b2bVar || null,
+        // NO month clause: this is the month-grain series the trend charts and every
+        // month-over-month figure read, and narrowing it to the selected billing period
+        // leaves one point — a flat chart and a null MoM. The other three slicers apply
+        // as normal, so picking a transporter still redraws the trend for that carrier.
         varMonths: (baseData.b2bVarMonths || []).filter(r =>
-          (!months || months.has(r.month || r.month_year)) &&
           (!transporters || transporters.has(r.transporter)) &&
           (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
           (!freightTypes || freightTypes.has(r.freight_type))
@@ -1591,7 +1669,59 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Window for the Monthly Trend chart: 1, 3 or 6 months back, or everything.
   const [trendMonths, setTrendMonths] = useState(6)
 
-  const trendRows = useMemo(() => monthSeries, [monthSeries])
+  // The trend series is built from the CUBE, not from monthSeries.
+  //
+  // monthSeries reads agg.byMonth, which the server has already narrowed to the selected
+  // billing period. With the page defaulting to a single month that would collapse this
+  // chart to one bar — and "is our freight bill rising" is precisely the question a
+  // one-month window cannot answer.
+  //
+  // byCourierMonth is derived from the cube at (courier, month) grain and arrives
+  // unfiltered, so re-aggregating it here keeps every month while still honouring the
+  // courier slicer: narrowing to Bluedart redraws the trend for Bluedart rather than
+  // ignoring the selection. Zone and mode are deliberately not applied — they are
+  // rewritten before the cube is grouped, so filtering them on raw values returns zero.
+  //
+  // Falls back to monthSeries when the cube is absent (the b2b/tpl scopes never load one),
+  // so those tabs keep working rather than rendering an empty chart.
+  const trendRows = useMemo(() => {
+    // trendAll, NOT byCourierMonth: the cube is filtered server-side by the selected
+    // billing period, so byCourierMonth genuinely only contains the chosen month — no
+    // client-side re-aggregation can recover history the server never sent. trendAll
+    // lives in the filter-independent refCache and now carries courier_name, so it has
+    // every month AND can still honour the courier slicer.
+    const src = agg?.trendAll || []
+    if (!src.length) return monthSeries
+    const sel = filters.couriers || []
+    const C = sel.length ? new Set(sel) : null
+    const by = new Map()
+    for (const r of src) {
+      if (C && !C.has(r.courier_name)) continue
+      const m = r.month_year
+      if (!m) continue
+      if (!by.has(m)) by.set(m, { raw: m, cost: 0, shipments: 0, wt: 0, value: 0 })
+      const a = by.get(m)
+      a.cost += num(r.cost)
+      a.shipments += num(r.n)
+      a.wt += num(r.wt)
+      a.value += num(r.value)
+    }
+    return [...by.values()]
+      .sort((a, b) => String(a.raw).localeCompare(String(b.raw)))
+      .map(a => ({
+        month: monthLabel(a.raw),
+        raw: a.raw,
+        cost: a.cost,
+        shipments: a.shipments,
+        avgCost: a.shipments ? a.cost / a.shipments : 0,
+        cpk: perKg(a.cost, a.wt) ?? 0,
+        wt: a.wt,
+        // Goods value carried through as well as consumed by pctGmv below, so a caller
+        // that needs the raw figure does not have to re-derive it from the percentage.
+        value: a.value,
+        pctGmv: a.value > 0 ? (a.cost / a.value) * 100 : null,
+      }))
+  }, [agg, monthSeries, filters.couriers])
 
   // The chart and its table both read this — the last N periods of the filtered series.
   const trendWindow = useMemo(
@@ -1739,24 +1869,35 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Pivot (month, courier, cpk) into one row per month with a column per courier, which
   // is the shape a multi-line chart needs. Couriers are ordered by spend so the biggest
   // ones take the leading colour slots.
-  // Rate drift derived from byCourierMonth — filter-responsive.
+  // Rate drift is derived from trendAll, which is filter-INDEPENDENT: it compares a
+  // courier's first billed month against its latest, so it needs the full history
+  // regardless of the billing period on screen. The trade-off is that the page's other
+  // slicers (zone, mode, payment, weight band) do not reach this chart — trendAll is
+  // aggregated at (month, courier) only. That is the right call here: "has this carrier's
+  // rate moved" is a question about the carrier, not about a slice of its parcels.
   const driftCouriers = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // trendAll, not byCourierMonth: see driftSeries below.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const spend = {}
     for (const r of rows) {
-      const courier = r.key.split('|')[0]
+      const courier = r.courier_name
+      if (!courier) continue
       spend[courier] = (spend[courier] || 0) + (Number(r.n) || 0)
     }
     return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT.colors.length)
   }, [agg])
 
   const driftSeries = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // trendAll, not byCourierMonth. Drift is a comparison BETWEEN months, so it needs the
+    // filter-independent series — byCourierMonth is cube-derived and the server has
+    // already narrowed it to the selected billing period, which left every line a dot.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const byMonth = {}
     for (const r of rows) {
-      const [courier, month] = r.key.split('|')
+      const courier = r.courier_name, month = r.month_year
+      if (!courier || !month) continue
       if (!driftCouriers.includes(courier)) continue
       const cpk = r.wt ? r.cost / r.wt : 0
       byMonth[month] ??= { month: monthLabel(month), raw: month }
@@ -1766,11 +1907,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }, [agg, driftCouriers])
 
   const driftRows = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // Same source as driftSeries — first-vs-latest needs every month, not the selected one.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const by = {}
     for (const r of rows) {
-      const [courier, month] = r.key.split('|')
+      const courier = r.courier_name, month = r.month_year
+      if (!courier || !month) continue
       const cpk = r.wt ? r.cost / r.wt : 0;
       (by[courier] ??= []).push({ m: month, cpk })
     }
@@ -2041,10 +2184,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       .sort((a, b) => order.indexOf(a.band) - order.indexOf(b.band))
   }, [agg])
 
+  // Reads trendRows, NOT monthSeries: a month-over-month delta needs two consecutive
+  // months, and monthSeries carries only the selected billing period — one month by
+  // default, which made `mom` null and silently removed the MoM/YoY badges from the hero.
+  // trendRows spans every month while still honouring the courier slicer, so the badges
+  // stay correct and stay scoped to whatever carrier is selected.
   const mom = useMemo(() => {
-    if (monthSeries.length < 2) return null
-    return { curr: monthSeries[monthSeries.length - 1], prev: monthSeries[monthSeries.length - 2] }
-  }, [monthSeries])
+    if (trendRows.length < 2) return null
+    return { curr: trendRows[trendRows.length - 1], prev: trendRows[trendRows.length - 2] }
+  }, [trendRows])
 
   // Stacked deltas on the hero, like the Sales page's WoW/MoM/YoY badges. Freight cost
   // is a cost, so DOWN is good — the colour follows that, not the arrow direction.
@@ -2061,11 +2209,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (mom) {
       const [y, m] = String(mom.curr.raw).split('-')
       const yoyKey = `${Number(y) - 1}-${m}`
-      const yoy = monthSeries.find(s => s.raw === yoyKey)
+      // Same series as `mom` for the same reason: the year-ago month is almost never
+      // inside the selected window.
+      const yoy = trendRows.find(s => s.raw === yoyKey)
       if (yoy) push(mom.curr.cost, yoy.cost, 'YoY')
     }
     return out
-  }, [mom, monthSeries])
+  }, [mom, trendRows])
 
   // Reverse legs (RTO + Reverse/RVP/DTO) carry cost with no revenue against them, so
   // management reads them as one burden rather than two separate modes.
@@ -2111,7 +2261,36 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // refCache, which is filter-independent by design (filtering there would leak one
   // request's selection into the next), so narrowing happens on the client. Returning a
   // single function keeps the rule in one place rather than repeated in six memos.
-  const fixedVeh = b2b?.fixedVeh || null
+  // Rebuilt from the per-month rows so it follows the billing-period selection like every
+  // other tile. b2b.fixedVeh is an all-time aggregate from the server — it reported
+  // 11.73L across five months while the rest of the page showed one, so the tile read as a
+  // single month's rent five times too high.
+  //
+  // distinct_vehicles cannot be recovered from a monthly sum (the same four vehicles bill
+  // every month, so adding the per-month counts would give 20), and fixedVehMonths carries
+  // only a per-month `vehicles` count. Taking the max across the selected months is right
+  // for the usual case of a stable fleet, and never overstates it the way a sum would.
+  const fixedVeh = useMemo(() => {
+    const all = b2b?.fixedVehMonths || []
+    if (!all.length) return b2b?.fixedVeh || null
+    // The month filter is applied HERE, not upstream. The cached client path narrows
+    // fixedVehMonths but the live API path returns every month, so relying on the shape
+    // that arrives would give a five-month total on one route and a one-month total on the
+    // other for the same selection.
+    const sel = filters.months || []
+    const M = sel.length ? new Set(sel) : null
+    const rows = M ? all.filter(r => M.has(r.month_year)) : all
+    if (!rows.length) return null
+    const cost = rows.reduce((s, r) => s + num(r.cost), 0)
+    const vehicles = rows.reduce((s, r) => s + num(r.vehicles), 0)
+    return {
+      ...(b2b?.fixedVeh || {}),
+      cost,
+      vehicles,
+      months: rows.length,
+      distinct_vehicles: rows.reduce((m, r) => Math.max(m, num(r.vehicles)), 0),
+    }
+  }, [b2b, filters.months])
   // 3PL, narrowed on the client. The server sends these aggregates unfiltered (they come
   // from refCache, which is shared across requests by design), so partner, site and month
   // selections are applied here instead.
@@ -2223,11 +2402,58 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Monthly spend with the cost-per-shipment rate alongside it. per_ship is null, not 0,
   // in a month with no shipment data so the line breaks instead of diving to the axis.
-  const tplTrend = useMemo(() => (tpl?.months || []).map(m => ({
+  // Month series for the 3PL trends, rebuilt from the UNFILTERED warehouse-month rows.
+  //
+  // tpl.months is narrowed by the page's billing-period selection, so with the one-month
+  // default it carried a single point and both 3PL trend charts flattened to one bar.
+  // Re-aggregating b2b.tplWhMonths here keeps every month while still honouring the
+  // partner, site and location slicers — the same split the other two scopes make between
+  // "what am I looking at" and "how is it moving".
+  const tplTrendMonths = useMemo(() => {
+    const rows = b2b?.tplWhMonths || []
+    if (!rows.length) return []
+    const selP = filters.tplPartners || [], selS = filters.tplSites || []
+    const selL = filters.tplLocations || []
+    const locByPin = new Map((b2b?.tplWarehouses || []).map(w => [String(w.pincode ?? ''), w.location]))
+    // Deliberately no month clause — that is the whole point of this series.
+    const ok = r => (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? ''))))
+    const by = new Map()
+    for (const r of rows) {
+      if (!ok(r)) continue
+      const k = r.month_year
+      if (!k) continue
+      const a = by.get(k) || { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0, ratedCost: 0 }
+      a.cost += num(r.cost)
+      a.operation_fee += num(r.operation_fee)
+      a.rental_fee += num(r.rental_fee)
+      a.other_fee += num(r.other_fee)
+      a.shipments += num(r.shipments)
+      a.weight_kg += num(r.weight_kg)
+      // Cost from sites that actually reported volume this month, tracked separately so the
+      // per-unit rate below matches the Cost/Parcel tile. Charging a site's spend against
+      // volume it did not handle inflates the rate for every other site at once — in August
+      // the two WareIQ sites billed 2.20L with no shipment data, which is the whole gap
+      // between 32.05 and 30.66 per parcel.
+      if (num(r.shipments) > 0) a.ratedCost += num(r.cost)
+      by.set(k, a)
+    }
+    return [...by.values()].sort((x, y) => String(x.key).localeCompare(String(y.key)))
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations])
+
+  const tplTrend = useMemo(() => tplTrendMonths.map(m => ({
     ...m,
-    per_ship: m.shipments > 0 ? m.cost / m.shipments : null,
-    per_kg: m.weight_kg > 0 ? m.cost / m.weight_kg : null,
-  })), [tpl?.months])
+    // null rather than 0 in a month with no shipment data, so the rate line breaks
+    // instead of diving to the axis and implying the cost collapsed.
+    //
+    // ratedCost, not cost: the same rated-sites-only basis the Cost/Parcel tile uses. The
+    // MoM badge beside that tile reads this series, so using the full cost here made the
+    // badge describe a different rate from the number it sits next to — -38.9% against a
+    // tile showing a figure that had really moved -41.6%.
+    per_ship: m.shipments > 0 ? m.ratedCost / m.shipments : null,
+    per_kg: m.weight_kg > 0 ? m.ratedCost / m.weight_kg : null,
+  })), [tplTrendMonths])
 
   // Per-site rate over time, pivoted to one column per warehouse for a multi-line chart.
   // Sites are ordered by total spend so the biggest site keeps the first colour as months
@@ -2235,7 +2461,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const tplWhNames = useMemo(() =>
     (tpl?.warehouses || []).map(w => w.key).filter(Boolean), [tpl?.warehouses])
   const tplWhTrend = useMemo(() => {
-    const rows = tpl?.whMonths || []
+    // Unfiltered warehouse-month rows, narrowed by everything EXCEPT the month slicer —
+    // same reasoning as tplTrendMonths above. Built by re-running the site/partner/location
+    // test rather than reusing tpl.whMonths, which the billing period has already cut down.
+    const selP = filters.tplPartners || [], selS = filters.tplSites || []
+    const selL = filters.tplLocations || []
+    const locByPin = new Map((b2b?.tplWarehouses || []).map(w => [String(w.pincode ?? ''), w.location]))
+    const rows = (b2b?.tplWhMonths || []).filter(r =>
+      (!selS.length || selS.includes(r.warehouse))
+      && (!selP.length || selP.includes(r.partner))
+      && (!selL.length || selL.includes(locByPin.get(String(r.pincode ?? '')))))
     if (!rows.length) return []
     const byMonth = new Map()
     for (const r of rows) {
@@ -2244,7 +2479,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (r.shipments > 0) byMonth.get(r.month_year)[r.warehouse] = r.cost / r.shipments
     }
     return [...byMonth.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)))
-  }, [tpl?.whMonths])
+  }, [b2b, filters.tplPartners, filters.tplSites, filters.tplLocations])
 
   // Sites ranked by cost per parcel. Sites with no matched volume are dropped rather than
   // plotted at zero, which would read as "free" instead of "unknown".
@@ -2271,6 +2506,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       .map(p => ({ key: p.key, cost_pct: (p.cost / tc) * 100, ship_pct: (p.shipments / ts) * 100 }))
       .sort((a, b) => b.cost_pct - a.cost_pct)
   }, [tpl?.partners])
+  // Same row filter as b2bPick but WITHOUT the month clause.
+  //
+  // The trend charts answer "how is our freight bill moving", which must stay answerable
+  // while the rest of the page is scoped to a single billing period. They still respect
+  // transporter, vehicle and freight-type: narrowing to one carrier should redraw the
+  // trend for that carrier rather than ignoring the selection.
+  //
+  // Each trend chart carries its own range control (1M/3M/6M/All), so the month dimension
+  // is not lost — it simply belongs to the chart instead of to the page.
+  const b2bTrendPick = useMemo(() => {
+    const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
+    if (!tr.length && !vh.length && !ft.length) return null
+    const T = tr.length ? new Set(tr) : null
+    const V = vh.length ? new Set(vh) : null
+    const F = ft.length ? new Set(ft) : null
+    return r => (!T || T.has(r.transporter))
+      && (!V || V.has(r.vehicle))
+      && (!F || F.has(r.freight_type))
+  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes])
+
   const b2bPick = useMemo(() => {
     const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
     const mo = filters.months || []
@@ -2370,11 +2625,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Monthly spend. The server now returns one row per month PER TRANSPORTER so the sidebar
   // filter can bite, which means the client re-aggregates. Sums, not averages — a weighted
   // mean of per-transporter medians would not be the month's real cost.
+  // Month-grain series: uses b2bTrendPick so the month slicer does not reach it. This
+  // feeds the variance sparkline (hidden entirely at one point) and b2bHead's MoM figures,
+  // both of which need consecutive months to mean anything. Transporter, vehicle and
+  // freight-type still apply.
   const b2bVarMonthRows = useMemo(() => {
     if (!b2b) return []
     const by = new Map()
     for (const m of b2b.varMonths || []) {
-      if (b2bPick && !b2bPick(m)) continue
+      if (b2bTrendPick && !b2bTrendPick(m)) continue
       const k = m.month
       if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, billedPriced: 0, card: 0, variance: 0 })
       const a = by.get(k)
@@ -2385,7 +2644,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return [...by.values()]
       .map(a => ({ ...a, variancePct: a.card ? (a.billedPriced / a.card - 1) * 100 : 0 }))
       .sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // ── FTL/PTL monthly trend ──
   //
@@ -2401,7 +2660,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const by = new Map()
     for (const m of b2b.varMonths || []) {
-      if (b2bPick && !b2bPick(m)) continue
+      // b2bTrendPick, not b2bPick: the month slicer must not reach this chart.
+      if (b2bTrendPick && !b2bTrendPick(m)) continue
       const k = m.month
       if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, ftlBilled: 0 })
       const a = by.get(k)
@@ -2419,9 +2679,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       ftlShare: r.billed ? (r.ftlBilled / r.billed) * 100 : 0,
       shareOfSpend: grand ? (r.billed / grand) * 100 : 0,
     }))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
-  // Range applies to this chart only, same as the B2C trend.
+  // Range applies to this chart only, same as the B2C trend. Six months by default:
+  // long enough to show direction, short enough that the recent months stay legible.
+  // This is independent of the page's one-month default on purpose.
   const [b2bTrendMonths, setB2bTrendMonths] = useState(6)
   const b2bTrendWindow = useMemo(
     () => (b2bTrendMonths >= 999 ? b2bTrendRows : b2bTrendRows.slice(-b2bTrendMonths)),
@@ -2494,13 +2756,38 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Single-sourcing: share of spend on lanes served by exactly one transporter. A commercial
   // risk rather than a cost — there is no fallback and no competitive reference price.
+  // Recomputed from the lane x vehicle rows rather than read from b2b.sole.
+  //
+  // That server aggregate lives in the filter-independent refCache, so it reported 34 of 51
+  // lanes and 28.7% of spend whatever was selected — an all-time figure sitting beside a
+  // single month's cost. For August the real numbers are 20 of 26 lanes and 44.6%, so the
+  // tile was understating the dependency by a third.
+  //
+  // b2bLaneVehRows already carries the selected period and every FTL/PTL slicer, and a
+  // lane counts as single-sourced when exactly one carrier billed it in that window.
   const b2bSole = useMemo(() => {
-    const s = b2b?.sole
-    if (!s) return null
+    const src = b2b?.laneVeh || []
+    if (!src.length) return null
+    const byLane = new Map()
+    for (const r of src) {
+      if (b2bPick && !b2bPick(r)) continue
+      const e = byLane.get(r.lane) || { cost: 0, carriers: new Set() }
+      e.cost += num(r.cost)
+      // Distinct carrier NAMES across the whole lane. Counting from b2bLaneVehRows'
+      // per-(lane, vehicle) `transporters` figure and taking the max was wrong: a lane
+      // served by two carriers on different vehicle sizes has 1 on each row, so every
+      // lane looked single-sourced — the tile read 100%.
+      if (r.transporter) e.carriers.add(r.transporter)
+      byLane.set(r.lane, e)
+    }
+    const all = [...byLane.values()].map(e => ({ cost: e.cost, carriers: e.carriers.size }))
+    const total = all.reduce((s2, e) => s2 + e.cost, 0)
+    const sole = all.filter(e => e.carriers <= 1)
+    const spend = sole.reduce((s2, e) => s2 + e.cost, 0)
     return {
-      lanes: num(s.sole_lanes), totalLanes: num(s.lanes),
-      spend: num(s.sole_spend),
-      pct: num(s.total_spend) ? (num(s.sole_spend) / num(s.total_spend)) * 100 : 0,
+      lanes: sole.length, totalLanes: all.length,
+      spend,
+      pct: total ? (spend / total) * 100 : 0,
     }
   }, [b2b, b2bPick])
   // Rate comparison: the same vehicle priced by different carriers. The only view on this
@@ -2525,7 +2812,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const by = new Map()
     for (const r of b2b.laneVeh || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      // b2bTrendPick, not b2bPick: a min-to-max range is a consistency measure, and
+      // consistency needs volume. Scoped to one billing month most lanes fell under the
+      // 8-trip guard below, so the chart ranked whichever handful survived — Nashik-Pune
+      // 7.5T showed +2175% off 20 trips where the full book has 137. Transporter, vehicle
+      // and freight-type still apply.
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       const trips = num(r.trips)
       const lo = num(r.min_cost), hi = num(r.max_cost)
       if (!trips || !(lo > 0) || !(hi > lo)) continue
@@ -2550,15 +2842,32 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       }))
       .sort((a, b) => (b.spread * b.trips) - (a.spread * a.trips))
       .slice(0, 8)
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
 
   // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
   // the whole block responds to the sidebar selection, not just the charts below it.
   const b2bHead = useMemo(() => {
     if (!b2b) return null
-    const months = b2bVarMonthRows
-    const last = months[months.length - 1], prev = months[months.length - 2]
+    // Two series, deliberately.
+    //
+    // b2bVarMonthRows spans every month (it feeds the trend charts), so summing it gave a
+    // five-month total on a page scoped to one — the hero read 3.63 Cr across 2,422 trips
+    // where August alone is 64.03 L across 461.
+    //
+    // The headline figures therefore come from the SELECTED months, while the
+    // month-over-month deltas keep reading the full series: a change between periods
+    // cannot be computed from a window holding only one of them.
+    const allMonths = b2bVarMonthRows
+    const sel = filters.months || []
+    const M = sel.length ? new Set(sel) : null
+    const months = M ? allMonths.filter(m => M.has(m.raw)) : allMonths
+    // MoM compares the last selected month against the one before it in the FULL series,
+    // so it stays meaningful when a single period is selected.
+    const lastRaw = months.length ? months[months.length - 1].raw : null
+    const idx = lastRaw ? allMonths.findIndex(m => m.raw === lastRaw) : -1
+    const last = idx >= 0 ? allMonths[idx] : null
+    const prev = idx > 0 ? allMonths[idx - 1] : null
     const spend = months.reduce((s, m) => s + m.billed, 0)
     const trips = months.reduce((s, m) => s + m.trips, 0)
     // Lane concentration: how much of the book rides on its three busiest lanes. A high
@@ -2576,7 +2885,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       momTrips: last && prev && prev.trips ? (last.trips / prev.trips - 1) * 100 : null,
       top3Pct: spend ? (top3 / spend) * 100 : 0,
     }
-  }, [b2b, b2bVarMonthRows, b2bLaneVehRows])
+  }, [b2b, b2bVarMonthRows, b2bLaneVehRows, filters.months])
 
   // Transporter spend by month, pivoted for a multi-series line. Each transporter becomes a
   // key on every row so Recharts can draw one line per carrier.
@@ -2585,18 +2894,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // KM-Logistic have no July trips, and a zero would draw a line collapsing to the axis —
   // reading as "spend fell to nothing" when the truth is "no invoice was raised". Undefined
   // leaves a gap, which is the honest mark.
+  // A trend chart, so the month slicer must not reach it — see b2bTrendPick.
   const b2bTransTrendRows = useMemo(() => {
     if (!b2b) return []
     const byMonth = new Map()
     for (const r of b2b.transMonths || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       const k = r.month
       if (!byMonth.has(k)) byMonth.set(k, { month: monthLabel(k), raw: k })
       const row = byMonth.get(k)
       row[r.transporter] = (row[r.transporter] || 0) + num(r.billed)
     }
     return [...byMonth.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // Which transporters to draw, biggest first, so colour assignment is stable as the filter
   // changes and the legend order matches the visual order.
@@ -2604,11 +2914,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const tot = new Map()
     for (const r of b2b.transMonths || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      // b2bTrendPick: this picks which lines the Transporter Trend draws, and that chart
+      // now spans every month. Filtering the key list by month would drop any carrier that
+      // did not bill in the selected one — VS Transport and KM-Logistic stopped billing in
+      // July — leaving their earlier spend in the data with no line to show it.
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       tot.set(r.transporter, (tot.get(r.transporter) || 0) + num(r.billed))
     }
     return [...tot.entries()].sort((a, b2) => b2[1] - a[1]).map(([k]) => k)
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // ── Overall: B2C + B2B side by side ──
   // Deliberately additive only. The two ledgers bill on different units (parcels vs
@@ -2621,13 +2935,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // Warehousing. Part of the cost of moving the same goods, so it counts toward the total
     // logistics spend rather than sitting outside it — the hero would otherwise understate
     // what logistics actually costs by the whole 3PL book.
-    const tplCost = Number(b2b.tplTotals?.cost) || 0
+    //
+    // Reads tpl.totals, NOT b2b.tplTotals. The latter is the server's aggregate, which is
+    // never month-filtered — it reported 2,27,31,402 across five months beside a B2C figure
+    // for one, so the card overstated warehousing roughly fourfold and dragged every
+    // share-of-spend percentage with it. The tpl memo applies the billing period (and the
+    // partner/site/location slicers) and gives 50,75,646 for August.
+    const tplCost = Number(tpl?.totals?.cost) || 0
     const total = b2cCost + b2bCost + tplCost
     return {
       total,
       b2cCost, b2bCost, tplCost,
-      tplSites: Number(b2b.tplTotals?.warehouses) || 0,
-      tplPartners: Number(b2b.tplTotals?.partners) || 0,
+      // Counts come from the narrowed tpl memo too, so "5 3PL · 8 sites" describes the
+      // same period as the cost beside it rather than the whole ledger.
+      tplSites: Number(tpl?.totals?.warehouses) || 0,
+      tplPartners: Number(tpl?.totals?.partners) || 0,
       b2cUnits: agg.n,
       b2bUnits: Number(b2b.totals.trips) || 0,
       b2bLanes: Number(b2b.totals.lanes) || 0,
@@ -2650,19 +2972,27 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       logisticsPct: num(agg.shipValue) ? (total / num(agg.shipValue)) * 100 : null,
       b2cLogisticsPct: num(agg.shipValue) ? (b2cCost / num(agg.shipValue)) * 100 : null,
     }
-  }, [agg, b2b, b2bTransRows, b2bVariance])
+  }, [agg, b2b, tpl, b2bTransRows, b2bVariance])
 
   // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
+  // Overview trend: every month, whatever the billing-period selection.
+  //
+  // All three of its former inputs — monthSeries, b2bMonthRows and tpl.months — are
+  // narrowed by the month slicer, so with the page defaulting to one month this chart
+  // rendered a single bar. It reads the month-free equivalents instead: trendRows,
+  // b2bTrendRows and tplTrendMonths, each of which still honours its own scope's
+  // courier/transporter/partner slicers.
   const overallMonths = useMemo(() => {
-    const tplRows = tpl?.months || []
-    if (!monthSeries.length && !b2bMonthRows.length && !tplRows.length) return []
+    const tplRows = tplTrendMonths
+    if (!trendRows.length && !b2bTrendRows.length && !tplRows.length) return []
     const keys = [...new Set([
-      ...monthSeries.map(m => m.raw),
-      ...b2bMonthRows.map(m => m.raw),
+      ...trendRows.map(m => m.raw),
+      ...b2bTrendRows.map(m => m.raw),
       ...tplRows.map(m => m.key),
     ])].sort()
-    const b2cBy = Object.fromEntries(monthSeries.map(m => [m.raw, m.cost]))
-    const b2bBy = Object.fromEntries(b2bMonthRows.map(m => [m.raw, m.cost]))
+    const b2cBy = Object.fromEntries(trendRows.map(m => [m.raw, m.cost]))
+    // b2bTrendRows names the money column `billed`, not `cost`.
+    const b2bBy = Object.fromEntries(b2bTrendRows.map(m => [m.raw, m.billed]))
     // 3PL keys its months as `key` (YYYY-MM) rather than `raw`, matching the other two.
     const tplBy = Object.fromEntries(tplRows.map(m => [m.key, Number(m.cost) || 0]))
     return keys.map(k => ({
@@ -2674,7 +3004,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       // rather than beside it: a month's true logistics spend is freight plus storage.
       total: (b2cBy[k] || 0) + (b2bBy[k] || 0) + (tplBy[k] || 0),
     }))
-  }, [monthSeries, b2bMonthRows, tpl?.months])
+  }, [trendRows, b2bTrendRows, tplTrendMonths])
 
   // ── Overview: carrier cards ──
   // One card per partner, both ledgers, with the few figures that actually differentiate a
@@ -2740,7 +3070,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // The ledger holds FEWER than 6 months today (Apr-Jul 2026, so 4). slice(-6) takes
   // whatever exists rather than padding, and `monthWindow` below reports what was
   // actually selected so the page never implies six months of data it does not have.
-  const DEFAULT_MONTH_COUNT = 6
+  // The page opens on the LATEST BILLED MONTH. Cost review is a monthly cycle — the
+  // question on opening the tab is "what did last month cost", not "what did the last
+  // half-year cost" — and a six-month default made every KPI a six-month sum that read
+  // as a monthly figure at a glance.
+  //
+  // The Monthly Trend charts deliberately ignore this: see trendPick below. Direction
+  // over time is the one question a one-month window cannot answer, so those charts keep
+  // their own independent range.
+  const DEFAULT_MONTH_COUNT = 1
   // Months that actually exist in the ledger THIS SCOPE reports on.
   //
   // opts.months comes from the B2C invoice ledger (Jan-Jul). The freight ledger holds only
@@ -2790,7 +3128,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // Respect a selection already in place for this scope (a shared URL, or an external
     // filter object supplied by the parent).
     if ((filters.months || []).length) return
-    setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
+    // The billing-cycle rule, not simply the newest month in the ledger: a ledger can
+    // carry a partially-invoiced current month, and opening on that understates the
+    // period. See defaultBillingMonth().
+    //
+    // Falls back to the latest month this scope actually holds when the target is absent —
+    // the freight and 3PL ledgers start later than the parcel one, so the target can be a
+    // month a given scope has never billed. The period chip names the month on screen, so
+    // the fallback is visible rather than silent.
+    const target = defaultBillingMonth()
+    setOne('months', all.includes(target) ? [target] : all.slice(-DEFAULT_MONTH_COUNT))
     // filters.months is deliberately NOT a dependency: this must fire when the options
     // arrive or the scope changes, never in response to the user editing the selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2839,9 +3186,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           })),
         },
         {
+          // b2bTrendRows, not b2bMonthRows: this export is labelled "Monthly trend" and
+          // should carry the same periods the chart draws, not just the selected month.
           label: 'Monthly trend', file: 'ftl_ptl_monthly',
-          rows: (b2bMonthRows || []).map(r => ({
-            month: r.month, trips: r.trips, spend: round(r.spend),
+          rows: (b2bTrendRows || []).map(r => ({
+            month: r.month, trips: r.trips, spend: round(r.billed),
           })),
         },
       ]
@@ -4020,7 +4369,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               stake (spread x trips), so a wide gap on two trips does not outrank a smaller
               one repeated two hundred times. */}
           <Card style={{ display: 'flex', flexDirection: 'column' }} title="Rate consistency by lane"
-            note="cheapest to dearest trip on the same lane and vehicle · min 8 trips">
+            note="cheapest to dearest trip on the same lane and vehicle · all periods · min 8 trips">
             {b2bSpreadRows.length ? (
               <>
                 <div style={{ flex: 1, minHeight: 200 }}>
@@ -4071,8 +4420,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
                   Each bar runs from the cheapest to the dearest trip billed on that lane and
-                  vehicle. A wide band means the same journey is being priced inconsistently —
-                  worth checking against the rate card before assuming the average is the rate.
+                  vehicle, across every billing period rather than the one selected above —
+                  a min-to-max range needs volume behind it to mean anything. A wide band
+                  means the same journey is being priced inconsistently, though it can also
+                  be a rate that legitimately changed mid-year; either way it is worth
+                  checking against the rate card before assuming the average is the rate.
                 </div>
               </>
             ) : (
@@ -4163,9 +4515,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             }] : []}
             sub={<div>{fmt(perMonth)} per month · {fmtN(t.partners)} partners · {fmtN(t.warehouses)} sites</div>}
           >
-            {tpl.months.length > 1 && (
+            {/* tplTrendMonths, not tpl.months: the latter is narrowed to the selected
+                billing period, which hid this chart at the one-month default. */}
+            {tplTrendMonths.length > 1 && (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tpl.months} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                <AreaChart data={tplTrendMonths} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="tplHero" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
@@ -4438,18 +4792,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* ── Cost overview: hero + 2 rows of 4 ── */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {/* Sparklines read trendRows, not monthSeries. monthSeries carries only the
+              selected billing period, so with the page defaulting to one month every
+              sparkline had a single point and drew nothing — a 14-point trail is the whole
+              purpose of the strip. trendRows spans every month and still honours the
+              courier slicer. The VALUES beside them stay period-scoped: the number answers
+              "this month", the line answers "and here is how it got there". */}
           {[
-            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: monthSeries.map(d => d.cost || 0) },
-            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
-            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: monthSeries.map(d => d.shipments || 0) },
-            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: monthSeries.map(d => d.wt || 0), invertColor: true },
-            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
-            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: monthSeries.map(d => d.avgCost || 0), invertColor: true },
-            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
-            { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
-            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
+            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: trendRows.map(d => d.cost || 0) },
+            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: trendRows.map(d => d.pctGmv || 0), invertColor: true },
+            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: trendRows.map(d => d.shipments || 0) },
+            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: trendRows.map(d => d.wt || 0), invertColor: true },
+            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: trendRows.map(d => d.cost || 0) },
+            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: trendRows.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: trendRows.map(d => d.avgCost || 0), invertColor: true },
+            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: trendRows.map(d => d.cpk || 0), invertColor: true },
+            // All-time, unlike the rest of this strip — lc_billing_summary has no month
+            // column. The label carries the caveat since these compact tiles have no sub-line.
+            { label: 'Should Have Paid (all periods)', value: fmt(agg.dtOurs), spark: trendRows.map(d => d.cost || 0) },
+            { label: 'Actually Billed (all periods)', value: fmt(agg.dtInvoiced), spark: trendRows.map(d => d.cost || 0), accent: C.red.tx },
+            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: trendRows.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
           ].map(m => {
             const pts = m.spark.slice(-14)
             const min = Math.min(...pts), max = Math.max(...pts)
@@ -4486,9 +4848,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           deltas={heroDeltas}
           sub={heroSub}
         >
-          {monthSeries.length > 1 && (
+          {/* trendRows, not monthSeries: monthSeries holds only the selected billing
+              period, so at the one-month default this gate was false and the hero's trend
+              vanished entirely rather than drawing flat. The big number stays scoped to the
+              month; the shape behind it is the run-up to that month. */}
+          {trendRows.length > 1 && (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthSeries} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+              <AreaChart data={trendRows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="lcHero" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
@@ -4513,10 +4879,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             sub="freight ÷ invoices" />
           <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
             sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
+          {/* These two are ALL-TIME and say so, unlike every other tile in this row.
+              They come from lc_billing_summary, which is aggregated to a single row with no
+              month column at all — the figure cannot be narrowed to a billing period
+              without rebuilding that table. Labelling it is honest; silently showing a
+              whole-ledger number beside seven single-month ones is not. */}
           <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
-            sub="card × our weight" />
+            sub="card × our weight · all periods" />
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
-            sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
+            sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card · all periods`}
             accent={C.red.tx} />
           <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
             sub={`${fmtN(reverseBurden.n)} legs · ${reverseBurden.pct.toFixed(1)}% of spend`}

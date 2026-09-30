@@ -118,9 +118,20 @@ async function query(pool, sql, params) {
   for (let attempt = 0; ; attempt++) {
     try {
       const client = await pool.connect()
+      // pool.on('error') only covers IDLE clients. Once a client is checked out, a
+      // dropped connection emits 'error' on the client itself, and with no listener
+      // Node treats it as an unhandled EventEmitter error and kills the process —
+      // which is exactly how the API server died repeatedly. The catch below already
+      // knows how to retry ECONNRESET; it just never got the chance to run.
+      //
+      // Attached per checkout and removed in the finally, so a long-lived pooled
+      // client does not accumulate one listener per query.
+      const onErr = e => console.error('[logistics-cost client]', e.message)
+      client.on('error', onErr)
       try {
         return await client.query(sql, params)
       } finally {
+        client.removeListener('error', onErr)
         client.release()
       }
     } catch (e) {
@@ -355,6 +366,11 @@ export async function buildCube(pool) {
   if (!sql) throw new Error('could not capture unfiltered cube SQL')
 
   const c = await pool.connect()
+  // Same reason as in query() above: a checked-out client is outside pool.on('error'),
+  // and this one holds the connection for the whole cube rebuild — minutes, not
+  // milliseconds — so it is the most exposed of the two to a pooler drop.
+  const onErr = e => console.error('[buildCube client]', e.message)
+  c.on('error', onErr)
   try {
     await c.query('SET statement_timeout = 600000')
     await c.query('DROP TABLE IF EXISTS public.lc_cube_new')
@@ -370,6 +386,7 @@ export async function buildCube(pool) {
     await c.query('ROLLBACK').catch(() => {})
     throw e
   } finally {
+    c.removeListener('error', onErr)
     c.release()
   }
 }
@@ -1132,6 +1149,11 @@ export default async function handler(req, res) {
     // Same reason as the rate grid: identical for every request, so it is cached below.
     const trendQ = () => query(pool, `
       SELECT t.month_year,
+             -- Courier grain, so the Monthly Trend can honour the courier slicer without
+             -- a refetch. This row set is filter-independent by design (it lives in
+             -- refCache), so the narrowing happens on the client: 8 months x ~11 couriers
+             -- is under a hundred rows, far cheaper than re-querying per selection.
+             t.courier_name,
              COUNT(*)::int          AS n,
              -- Ex-GST, or the trend would step up whenever Delhivery's share of the month
              -- grew, which is a tax artefact rather than a cost movement.
@@ -1150,8 +1172,8 @@ export default async function handler(req, res) {
        WHERE t.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('t.zone')}) IS NOT NULL
          AND t.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
          AND t.month_year IS NOT NULL
-       GROUP BY 1
-       ORDER BY 1
+       GROUP BY 1, 2
+       ORDER BY 1, 2
     `, [])
 
     // ── Weight vs rate attribution ──
@@ -1457,12 +1479,15 @@ export default async function handler(req, res) {
       // Every value is escaped below and only ever reaches a TEXT column.
       const sqlLit = (v) => "'" + String(v).replace(/'/g, "''") + "'"
       const inList = (vals) => "(" + vals.map(sqlLit).join(", ") + ")"
-      const b2bWhere = (cols) => {
+      const b2bWhere = (cols, skipMonths = false) => {
         const c = []
         if (f.couriers?.length)     c.push(`${cols.transporter} IN ${inList(f.couriers)}`)
         if (f.freightTypes?.length) c.push(`${cols.freightType} IN ${inList(f.freightTypes)}`)
         if (f.vehicleTypes?.length) c.push(`${cols.vehicle} IN ${inList(f.vehicleTypes)}`)
-        if (f.months?.length)       c.push(`${cols.month} IN ${inList(f.months)}`)
+        // skipMonths: the Monthly Trend charts must keep every period while the rest of
+        // the page is scoped to one billing month, so their queries opt out of this one
+        // clause and keep all the others.
+        if (!skipMonths && f.months?.length) c.push(`${cols.month} IN ${inList(f.months)}`)
         return c
       }
       const LEDGER_COLS = { transporter: 'transporter_name', freightType: '"freight_type_FTL_PTL"', vehicle: 'vehicle_type', month: 'month_year' }
@@ -1473,6 +1498,11 @@ export default async function handler(req, res) {
       const ledgerWhere = b2bWhere(LEDGER_COLS).length ? ' WHERE ' + b2bWhere(LEDGER_COLS).join(' AND ') : ''
       const pricedAnd   = b2bWhere(PRICED_COLS).map((x) => ` AND ${x}`).join('')
       const pricedWhere = b2bWhere(PRICED_COLS).length ? ' WHERE ' + b2bWhere(PRICED_COLS).join(' AND ') : ''
+      // Same clauses minus the month filter, for the series the trend charts read. They
+      // still honour transporter, vehicle and freight type — narrowing to one carrier
+      // should redraw the trend for that carrier, not ignore the selection.
+      const pricedWhereNoMonth = b2bWhere(PRICED_COLS, true).length
+        ? ' WHERE ' + b2bWhere(PRICED_COLS, true).join(' AND ') : ''
 
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
@@ -1676,12 +1706,16 @@ export default async function handler(req, res) {
         // blend coverage into the rate story and read as a falling overcharge in a month
         // that simply had more unpriceable trips.
         () => query(pool, `
+          -- pricedWhereNoMonth, not pricedWhere: every consumer of this row set is a
+          -- trend chart or a month-over-month figure, and both need consecutive periods.
+          -- With the page defaulting to a single billing month the month filter left one
+          -- row here, which flattened the trend and made every MoM delta null.
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed,
                  SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8 AS billed_priced,
                  SUM(card_rate)::float8 AS card_total,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced${pricedWhere}
+            FROM public.b2b_trip_priced${pricedWhereNoMonth}
            GROUP BY 1, 2, 3, 4 ORDER BY 1
         `),
         // ── Transporter x month, long form ──
@@ -1690,9 +1724,11 @@ export default async function handler(req, res) {
         // in its line, which is the finding — pivoting to zero would draw it as a collapse
         // in spend rather than an absence of billing.
         () => query(pool, `
+          -- Month-free for the same reason as varMonths above: this is the Transporter
+          -- Trend's source and a one-month cut would draw a single point per carrier.
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed
-            FROM public.b2b_trip_priced${pricedWhere}
+            FROM public.b2b_trip_priced${pricedWhereNoMonth}
            GROUP BY 1, 2, 3, 4 ORDER BY 1, 4 DESC
         `),
         // ── Vehicle type analysis ──
