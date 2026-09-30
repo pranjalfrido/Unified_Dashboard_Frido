@@ -1571,9 +1571,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
+        // When loading from static JSON (all months), pre-filter b2bTotals to the
+        // default billing month so the Overview tile never flashes an all-time total.
+        const initMonths = f.months?.length ? new Set(f.months) : null
+        const initB2bTotals = (() => {
+          if (!initMonths || !(j.b2bMonths?.length)) return j.b2bTotals || { trips: 0, cost: 0 }
+          const sel = j.b2bMonths.filter(r => initMonths.has(r.key || r.month_year || r.month))
+          const agg = sel.reduce((a, r) => ({ trips: a.trips + (r.trips||0), cost: a.cost + (r.cost||0) }), { trips: 0, cost: 0 })
+          return { ...j.b2bTotals, trips: agg.trips, cost: agg.cost, avg_cost: agg.trips ? agg.cost/agg.trips : 0 }
+        })()
         setB2b({
           lanes: j.b2bLanes || [],
-          totals: j.b2bTotals || { trips: 0, cost: 0 },
+          totals: initB2bTotals,
           transporters: j.b2bTrans || [],
           months: j.b2bMonths || [],
           types: j.b2bTypes || [],
