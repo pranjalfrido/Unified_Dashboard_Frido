@@ -205,7 +205,7 @@ HAVING COUNT(DISTINCT fp.CustomerId) > 0
 ORDER BY customers DESC
 LIMIT 500`),
 
-      // Q5 â€” RFM segments (all-time up to end date)
+      // Q5 â€” RFM segments (trailing 12 months up to end date)
       run(`WITH customer_stats AS (
   SELECT
     CustomerId,
@@ -214,6 +214,7 @@ LIMIT 500`),
     ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+    AND DATE(OrderDate) > DATE_SUB(DATE('${e}'), INTERVAL 365 DAY)
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 ),
@@ -785,13 +786,16 @@ ORDER BY total_orders DESC
 LIMIT 20`),
     ])
 
-    // Fetch additional (offline) spend from Postgres for the selected date range
+    // Fetch additional (offline) spend from Postgres for the selected date range.
+    // Pro-rate partial months: only include the fraction of each month that falls within [s, e]
+    // so a partial-month date range doesn't silently pull the full calendar month's spend.
     let additionalSpend = 0
     try {
       const db = getPool()
-      const months = []
-      const cur = new Date(s)
+      const startDate = new Date(s)
       const endDate = new Date(e)
+      const months = []
+      const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
       while (cur <= endDate) {
         const ym = cur.toISOString().slice(0, 7)
         if (!months.includes(ym)) months.push(ym)
@@ -799,14 +803,27 @@ LIMIT 20`),
       }
       const placeholders = months.map((_, i) => `$${i + 1}`).join(',')
       const { rows } = await db.query(
-        `SELECT SUM(total_spend_ex_gst::numeric) AS total
+        `SELECT TO_CHAR(month_year::timestamp, 'YYYY-MM') AS ym, SUM(total_spend_ex_gst::numeric) AS total
          FROM markting_spend
          WHERE channeltomap = 'D2C'
            AND is_additional_spend = 'yes'
-           AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${placeholders})`,
+           AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${placeholders})
+         GROUP BY ym`,
         months
       )
-      additionalSpend = parseFloat(rows[0]?.total) || 0
+      for (const row of rows) {
+        const monthSpend = parseFloat(row.total) || 0
+        if (monthSpend === 0) continue
+        const [yr, mo] = row.ym.split('-').map(Number)
+        const monthStart = new Date(yr, mo - 1, 1)
+        const monthEnd = new Date(yr, mo, 0) // last day of month
+        const daysInMonth = monthEnd.getDate()
+        const overlapStart = startDate > monthStart ? startDate : monthStart
+        const overlapEnd = endDate < monthEnd ? endDate : monthEnd
+        const overlapDays = Math.max(0, (overlapEnd - overlapStart) / 86400000 + 1)
+        additionalSpend += monthSpend * (overlapDays / daysInMonth)
+      }
+      additionalSpend = Math.round(additionalSpend)
     } catch (_) {
       additionalSpend = 0
     }
@@ -824,7 +841,7 @@ LIMIT 20`),
     const returningCustomers = parseInt(k.returning_customers) || 0
     const netRevenue = parseFloat(k.net_revenue) || 0
     const cac = newCustomers > 0 ? totalSpend / newCustomers : 0
-    // ltv12: avg revenue per customer over last 12 months from rfm total
+    // ltv12: avg revenue per customer over trailing 12 months from rfm query
     const rfmTotalRev = rfm.reduce((s, r) => s + (parseFloat(r.total_revenue) || 0), 0)
     const rfmTotalCust = rfm.reduce((s, r) => s + (parseInt(r.customers) || 0), 0)
     const ltv12 = rfmTotalCust > 0 ? rfmTotalRev / rfmTotalCust : 0

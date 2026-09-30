@@ -71,7 +71,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   // how much of this row's Net Revenue is backed by an SnD entry (SnD has no fallback estimate).
   const costsForSkus = (cat, sc) => {
     const skus = skuData?.[cat]?.[sc] || {}
-    let cogs = 0, netCovered = 0, anyCosted = false
+    let cogs = 0, netCovered = 0, anyCosted = false, anyCogsEstimated = false
     let snd = 0, sndNetCovered = 0, anySnd = false
     // For Mobility subcategories: distribute the manager-defined whitelist net revenue
     // proportionally across SKUs by each SKU's standard-formula net share, so per-SKU COGS%/GM%/
@@ -91,11 +91,13 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         ? { ...rStandard, net: whitelistNet * (rStandard.net / standardNetTotal) }
         : rStandard
       const asp = r.units > 0 ? r.gross / r.units : 0
-      const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+      const isEstimate = !(entry && entry.cogs != null)
+      const perUnitCogs = isEstimate ? estimateCogsPerUnit(asp) : entry.cogs
       if (perUnitCogs > 0 || r.netUnits > 0) {
         cogs += perUnitCogs * r.netUnits
         netCovered += r.net
         anyCosted = true
+        if (isEstimate && r.netUnits > 0) anyCogsEstimated = true
       }
       if (sndBySku && sndBySku[sku] != null) {
         snd += sndBySku[sku]
@@ -103,7 +105,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         anySnd = true
       }
     })
-    return { cogs, netCovered, anyCosted, snd, sndNetCovered, anySnd }
+    return { cogs, netCovered, anyCosted, anyCogsEstimated, snd, sndNetCovered, anySnd }
   }
 
   const allRows = []
@@ -111,7 +113,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     Object.entries(scMap).forEach(([sc, d]) => {
       const r = mapRow(d, sc, cat)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
-      const { cogs, netCovered, anyCosted, snd, sndNetCovered, anySnd } = (cogsMap || sndBySku) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, snd: 0, sndNetCovered: 0, anySnd: false }
+      const { cogs, netCovered, anyCosted, anyCogsEstimated, snd, sndNetCovered, anySnd } = (cogsMap || sndBySku) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, anyCogsEstimated: false, snd: 0, sndNetCovered: 0, anySnd: false }
       const gm = anyCosted ? netCovered - cogs : null
       // CM1 = GM − SnD, only meaningful where BOTH costs are known for the same covered revenue —
       // a row costed for GM but not SnD (or vice versa) can't produce an honest CM1.
@@ -128,7 +130,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       // meaningfully covered" instead, same treatment a true-zero-revenue row already gets.
       const belowFloor = r.net <= MIN_REV_FOR_RATIOS
       allRows.push({
-        cat, sc, ...r, spend, cogs, netCovered, anyCosted, gm, snd, sndNetCovered, anySnd, cm1, cm1Covered, cm2, cm2Covered,
+        cat, sc, ...r, spend, cogs, netCovered, anyCosted, anyCogsEstimated, gm, snd, sndNetCovered, anySnd, cm1, cm1Covered, cm2, cm2Covered,
         returnPct: pctOf(r.totalReturnRev, r.gross),
         spendPct: belowFloor ? 0 : (r.net > 0 ? (spend / r.net * 100) : 0),
         roas: belowFloor ? null : (spend > 0 ? r.excRev / spend : null),
@@ -240,11 +242,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
     { id: 'cogsPct', width: 7, label: 'COGS %', sortKey: 'cogsPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.cogsPct != null ? <span style={{ color: r.cogsPct > 60 ? '#B91C1C' : 'inherit' }}>{r.cogsPct.toFixed(1)}%</span> : noCostCell}</td>,
+      row: r => <td style={tdStyle}>{r.cogsPct != null ? <span style={{ color: r.cogsPct > 60 ? '#B91C1C' : 'inherit' }}>{r.cogsPct.toFixed(1)}%{r.anyCogsEstimated ? <span title="COGS estimated (40/50% of ASP) — no ledger entry" style={{ fontSize: 9, fontWeight: 700, color: '#B8862E', marginLeft: 3, background: '#FCF3E2', border: '1px solid #EAD4A0', borderRadius: 3, padding: '1px 4px', verticalAlign: 'middle' }}>est.</span> : null}</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._costed && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._cogs, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{pctCellOf(tot.cogs, tot.netCovered)}</td> },
     { id: 'gmPct', width: 7, label: 'GM %', sortKey: 'gmPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.gmPct != null ? <span style={{ color: r.gmPct < 0 ? '#B91C1C' : r.gmPct >= 40 ? '#286010' : 'inherit' }}>{r.gmPct.toFixed(1)}%</span> : noCostCell}</td>,
+      row: r => <td style={tdStyle}>{r.gmPct != null ? <span style={{ color: r.gmPct < 0 ? '#B91C1C' : r.gmPct >= 40 ? '#286010' : 'inherit' }}>{r.gmPct.toFixed(1)}%{r.anyCogsEstimated ? <span title="GM uses estimated COGS (40/50% of ASP)" style={{ fontSize: 9, fontWeight: 700, color: '#B8862E', marginLeft: 3, background: '#FCF3E2', border: '1px solid #EAD4A0', borderRadius: 3, padding: '1px 4px', verticalAlign: 'middle' }}>est.</span> : null}</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._gm != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._gm, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{totGm != null ? pctCellOf(totGm, tot.netCovered) : noCostCell}</td> },
     { id: 'sndPct', width: 7, label: 'SnD %', sortKey: 'sndPct', style: thStyle,

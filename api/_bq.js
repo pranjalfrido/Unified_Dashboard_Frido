@@ -340,12 +340,12 @@ item_master AS (
     SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Weight_gms)), '') AS FLOAT64) AS Weight_gms,
     -- Volumetric weight in grams (industry-standard L×W×H(cm) / 5000, dims stored in mm here so
     -- divide by 1000 first per dimension) — confirmed 2026-08-24, needed to distribute Amazon
-    -- SC's unattributed monthly storage-fee lump sum (see api/bq.js's amzSCMonthlyProductSettlement
-    -- comment) across SKUs by a REVENUE + shelf-space blend, not physical weight alone: storage
-    -- cost is driven by the CUBIC SPACE a SKU occupies in the warehouse, which physical
-    -- Weight_gms doesn't capture (a large, light SKU like a cushion takes real shelf space but
-    -- weighs little). NULL when any one dimension is missing/non-numeric — the caller's fallback
-    -- (physical Weight_gms) covers that case, same pattern as Weight_gms's own null-safety.
+    -- SC's unattributed monthly storage-fee lump sum across SKUs by a REVENUE + shelf-space blend,
+    -- not physical weight alone: storage cost is driven by the CUBIC SPACE a SKU occupies in the
+    -- warehouse, which physical Weight_gms doesn't capture (a large, light SKU like a cushion takes
+    -- real shelf space but weighs little). NULL when any one dimension is missing/non-numeric —
+    -- the caller's fallback (physical Weight_gms) covers that case, same pattern as Weight_gms's
+    -- own null-safety.
     SAFE_DIVIDE(
       SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Length_mm)), '') AS FLOAT64) / 10
         * SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Width_mm)), '') AS FLOAT64) / 10

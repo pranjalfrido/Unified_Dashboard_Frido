@@ -570,8 +570,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => {
     const applyFilters = (raw) => {
       if (!raw) return null
-      const { couriers, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs } = lFilters
+      const { couriers, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs, zone } = lFilters
       const hasCourier = couriers.length > 0
+      const hasZone = zone?.length > 0
       const NDD_COURIERS = ['Delhivery NDD', 'Skye Air', 'Urbane Bolt', 'ElasticRun']
       const isNdd = cg => NDD_COURIERS.includes(cg)
       const hasSddNdd = sddNdd && sddNdd !== 'all'
@@ -584,7 +585,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const hasSubCategory = subCategory?.length > 0
       const categoryFilter = x => (!hasCategory || x.category == null || (category || []).map(c => c.toLowerCase()).includes((x.category || '').toLowerCase())) && (!hasSubCategory || x.sub_category == null || (subCategory || []).map(c => c.toLowerCase()).includes((x.sub_category || '').toLowerCase()))
       const hasWeightSlabs = weightSlabs?.length > 0
-      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab))
+      const zoneFilter = x => !hasZone || !x.zone || (zone || []).map(z => z.toLowerCase()).includes((x.zone || '').toLowerCase())
+      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab)) && zoneFilter(x)
 
       // build filtered byCourier rows
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
@@ -643,12 +645,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         byCourierWeek: (raw.byCourierWeek || []).filter(courierFilter),
         byCourierMonth: (raw.byCourierMonth || []).filter(courierFilter),
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
-        byZone: raw.byZone,
-        byZoneDetail: raw.byZoneDetail,
-        byZoneFrido: raw.byZoneFrido,
-        byCourierZone: raw.byCourierZone,
-        byCourierFacility: raw.byCourierFacility,
-        byZoneFacility: raw.byZoneFacility,
+        byZone: (raw.byZone || []).filter(courierFilter),
+        byZoneDetail: (raw.byZoneDetail || []).filter(courierFilter),
+        byZoneFrido: (raw.byZoneFrido || []).filter(courierFilter),
+        byCourierZone: (raw.byCourierZone || []).filter(courierFilter),
+        byCourierFacility: (raw.byCourierFacility || []).filter(courierFilter),
+        byZoneFacility: (raw.byZoneFacility || []).filter(courierFilter),
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -5164,7 +5166,7 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, logisticsCostData, salesAllocData, invSnapshotData, overviewCustData }) {
+function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
   const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
@@ -5881,7 +5883,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               in this grid had — it read as visually isolated rather than as one consistent deck.
               Colour now lives only in the number itself (same treatment as every other tile here),
               keeping the good/bad signal without the mismatched accent stripe. */}
-          <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}` }}>Inventory</div>
+          <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}`, display: 'flex', alignItems: 'center', gap: 8 }}>Inventory{invSnapshotData?.asOf ? <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: C.t3, fontSize: 10 }}>snapshot as of {new Date(invSnapshotData.asOf).toLocaleString()}</span> : null}</div>
           <StatTile span={1} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
             color={(invSummary.criticalLowCount || 0) > 0 ? C.red.tx : C.green.tx}
             sub="Critical + Low stock status" />
@@ -16004,7 +16006,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Gross Rev (ex GST)',   cur: kpis.grossExcGst || 0,           prev: prevKpis.grossExcGst || 0,           f: fmt },
             { label: 'Net Rev (ex GST)',     cur: kpis.netRevenue || 0,             prev: prevKpis.netRevenue || 0,            f: fmt },
             { label: 'Repeat Rev %',         cur: (kpis.repeatRevenueRate||0)*100,  prev: (prevKpis.repeatRevenueRate||0)*100, f: v => `${v.toFixed(1)}%` },
-            { label: '12-Mo LTV',            cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
+            { label: 'Lifetime LTV',         cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
             { label: 'LTV : CAC',            cur: kpis.ltvCac || 0,                prev: pLtvCac,                             f: v => `${v.toFixed(2)}×`, maturing: !pLtvCac, ltvCacRow: true },
           ]
 
@@ -16128,9 +16130,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: C.acc, valColor: C.t1, sparkVals: newCustVals, sparkColor: C.acm, fmt: v => fmtN(v) },
                   { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LIFETIME VALUE', value: fmt(kpis.ltv12 || 0), sub: 'All-time avg rev / customer', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: 'Lifetime LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
@@ -16403,7 +16405,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           const kpiCards = [
             { label: 'New Customers', val: fmtN(kpis.newCustomers), sub: `${fmtN(kpis.returningCustomers || 0)} returning`, spark: newCustVals, cur: kpis.newCustomers, prev: prevKpis.newCustomers },
-            { label: 'CAC', val: fmt(kpis.cac), sub: 'Total Spend / New Customers', spark: cacVals, cur: kpis.cac, prev: prevKpis.cac, lowerBetter: true },
+            { label: 'CAC', val: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', spark: cacVals, cur: kpis.cac, prev: prevKpis.cac, lowerBetter: true },
             { label: 'RoAS', val: `${(kpis.roas||0).toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend', spark: roasVals, cur: kpis.roas, prev: prevKpis.roas },
             { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
             {
@@ -18107,9 +18109,6 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           const channelInsight = null
 
-          // ── CAC zero-while-spend bug flag ──
-          const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
-
           // Discounted = any bucket with actual discount %, Non-Discounted = '0% (Full Price)' + 'No Price Data'
           const totalDiscountedOrders    = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
           const totalNonDiscountedOrders = discountDist.filter(r => r.bucket === '0%' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
@@ -18659,9 +18658,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [logisticsRangeLabel, setLogisticsRangeLabel] = useState('')
   // Overview-tab-only static fetches — same minimal fire-and-forget pattern as logisticsData
   // above (no staleness check, no live-API fallback): these are cheap CDN-served precomputed
-  // files already used elsewhere in the app (LogisticsCostPage, InventoryPage, SalesAllocationPage
-  // respectively), just re-fetched here for Overview's own summary tiles.
-  const [logisticsCostData, setLogisticsCostData] = useState(null)
+  // files already used elsewhere in the app (InventoryPage, SalesAllocationPage respectively),
+  // just re-fetched here for Overview's own summary tiles.
   const [salesAllocData, setSalesAllocData] = useState(null)
   const [invSnapshotData, setInvSnapshotData] = useState(null)
   const [overviewCustData, setOverviewCustData] = useState(null)
@@ -18846,7 +18844,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // query cost. `page` is in this same dependency array below so navigating INTO Overview
       // (without also changing the date range) still triggers the fetch.
       if (page === 'overview') {
-        fetch('/logistics-cost-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
         fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
         fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
         fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
@@ -18858,21 +18855,25 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
 
+  const adsLoadGenRef = useRef(0)
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
   useEffect(() => {
     if (page !== 'ads') return
     const { start, end } = filters
     if (!start || !end) return
+    const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
         // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
         if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
+          if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
           return
         }
         const res = await fetch(`${API}/ads-data.json`)
         if (!res.ok) return
         const json = await res.json()
+        if (gen !== adsLoadGenRef.current) return
         adsCacheRef.current = json
         if (end <= json.rollingEnd) {
           injectAdsFromCache(json, start, end)
@@ -19068,7 +19069,35 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       credCatAgg[cat].orders += p.orders; credCatAgg[cat].units += p.units
     })
     const slicedCredByCategory = Object.values(credCatAgg).sort((a, b) => b.rev - a.rev)
-    const slicedCredCache = { byCategory: slicedCredByCategory, byProduct: slicedCredByProduct }
+    // Aggregate totals and daily series for CRED from the sliced daily-by-product rows
+    const credTotalsAgg = { rev: 0, excRev: 0, orders: 0, units: 0 }
+    const credDailyMap = {}
+    credDailySliced.forEach(x => {
+      credTotalsAgg.rev += x.rev || 0
+      credTotalsAgg.excRev += x.excRev || 0
+      credTotalsAgg.orders += x.orders || 0
+      credTotalsAgg.units += x.units || 0
+      if (!credDailyMap[x.date]) credDailyMap[x.date] = { date: x.date, rev: 0, excRev: 0, orders: 0, units: 0 }
+      credDailyMap[x.date].rev += x.rev || 0
+      credDailyMap[x.date].excRev += x.excRev || 0
+      credDailyMap[x.date].orders += x.orders || 0
+      credDailyMap[x.date].units += x.units || 0
+    })
+    const credDailyArr = Object.values(credDailyMap).sort((a, b) => a.date.localeCompare(b.date))
+    // Slice CRED additionalSpend from credCache if present
+    const rawCredAddlByProduct = (credCache.additionalSpendByProduct) || {}
+    let slicedCredAddlSpend = 0
+    Object.entries(rawCredAddlByProduct).forEach(([, dayMap]) => {
+      Object.entries(dayMap).forEach(([d, v]) => { if (d >= start && d <= end) slicedCredAddlSpend += v })
+    })
+    const slicedCredAdditionalSpend = slicedCredAddlSpend > 0 ? Math.round(slicedCredAddlSpend) : (credCache.additionalSpend ?? null)
+    const slicedCredCache = {
+      byCategory: slicedCredByCategory,
+      byProduct: slicedCredByProduct,
+      totals: credTotalsAgg,
+      daily: credDailyArr,
+      additionalSpend: slicedCredAdditionalSpend,
+    }
 
     setAdsCachedChMap(cachedChMap)
     setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0, credCache: slicedCredCache })
@@ -19120,7 +19149,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} logisticsCostData={logisticsCostData} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
+              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}

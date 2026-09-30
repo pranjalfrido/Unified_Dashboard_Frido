@@ -326,7 +326,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 30 * 24 * 60 * 60 * 1000) throw new Error('static file stale')
+      if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
       staticOk = true
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
