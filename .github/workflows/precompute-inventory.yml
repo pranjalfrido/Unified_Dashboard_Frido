@@ -48,6 +48,12 @@ jobs:
       - name: Generate static logistics JSON
         run: node scripts/generate-logistics-cache.mjs
 
+      - name: Rebuild logistics cost aggregates if ledger changed
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/refresh-cost-aggregates-if-stale.mjs
+
       - name: Generate static logistics cost JSON
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
