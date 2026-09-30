@@ -1325,14 +1325,23 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       // The static JSON sets b2bTotals / tplTotals to all-time sums. When months are
       // selected, recalculate b2b totals from the month-filtered b2bMonths so the
       // Overview tiles stay consistent with what FTL/PTL and 3PL tabs show.
-      if (f.months?.length && baseData.b2bMonths?.length) {
+      if (f.months?.length) {
         const mSet = new Set(f.months)
-        const selMonths = baseData.b2bMonths.filter(r => mSet.has(r.key || r.month_year || r.month))
-        const b2bAgg = selMonths.reduce((acc, r) => ({ trips: acc.trips + (r.trips || 0), cost: acc.cost + (r.cost || 0) }), { trips: 0, cost: 0 })
-        setB2b(prev => prev ? {
-          ...prev,
-          totals: { ...prev.totals, trips: b2bAgg.trips, cost: b2bAgg.cost, avg_cost: b2bAgg.trips ? b2bAgg.cost / b2bAgg.trips : 0 },
-        } : prev)
+        setB2b(prev => {
+          if (!prev) return prev
+          const next = { ...prev }
+          if (baseData.b2bMonths?.length) {
+            const selMonths = baseData.b2bMonths.filter(r => mSet.has(r.key || r.month_year || r.month))
+            const b2bAgg = selMonths.reduce((acc, r) => ({ trips: acc.trips + (r.trips || 0), cost: acc.cost + (r.cost || 0) }), { trips: 0, cost: 0 })
+            next.totals = { ...prev.totals, trips: b2bAgg.trips, cost: b2bAgg.cost, avg_cost: b2bAgg.trips ? b2bAgg.cost / b2bAgg.trips : 0 }
+          }
+          if (baseData.tplWhMonths?.length) {
+            const tplRows = baseData.tplWhMonths.filter(r => mSet.has(r.month_year))
+            const tplCost = tplRows.reduce((a, r) => a + (Number(r.cost) || 0), 0)
+            next.tplTotals = prev.tplTotals ? { ...prev.tplTotals, cost: tplCost } : { cost: tplCost }
+          }
+          return next
+        })
       }
       setLoading(false)
       return
@@ -1602,7 +1611,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           // 3PL warehousing. Carried here so one fetch serves every scope, but kept as
           // its own block: warehousing bills per site per month, not per shipment, so it
           // shares no denominator with the freight or parcel figures.
-          tplTotals: j.tplTotals || null,
+          // Pre-filter tplTotals to the default billing month so Total Logistics Cost
+          // never flashes the all-months 3PL total on initial load (same pattern as b2bTotals above).
+          tplTotals: (() => {
+            if (!initMonths || !(j.tplWhMonths?.length)) return j.tplTotals || null
+            const rows = j.tplWhMonths.filter(r => initMonths.has(r.month_year))
+            const cost = rows.reduce((a, r) => a + (Number(r.cost) || 0), 0)
+            return j.tplTotals ? { ...j.tplTotals, cost } : { cost }
+          })(),
           tplPartners: j.tplPartners || [],
           tplMonths: j.tplMonths || [],
           tplWarehouses: j.tplWarehouses || [],
