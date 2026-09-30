@@ -2680,7 +2680,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const by = new Map()
     for (const r of b2b.laneVeh || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      // b2bTrendPick, not b2bPick: a min-to-max range is a consistency measure, and
+      // consistency needs volume. Scoped to one billing month most lanes fell under the
+      // 8-trip guard below, so the chart ranked whichever handful survived — Nashik-Pune
+      // 7.5T showed +2175% off 20 trips where the full book has 137. Transporter, vehicle
+      // and freight-type still apply.
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       const trips = num(r.trips)
       const lo = num(r.min_cost), hi = num(r.max_cost)
       if (!trips || !(lo > 0) || !(hi > lo)) continue
@@ -2705,7 +2710,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       }))
       .sort((a, b) => (b.spread * b.trips) - (a.spread * a.trips))
       .slice(0, 8)
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
 
   // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
@@ -2760,11 +2765,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const tot = new Map()
     for (const r of b2b.transMonths || []) {
-      if (b2bPick && !b2bPick(r)) continue
+      // b2bTrendPick: this picks which lines the Transporter Trend draws, and that chart
+      // now spans every month. Filtering the key list by month would drop any carrier that
+      // did not bill in the selected one — VS Transport and KM-Logistic stopped billing in
+      // July — leaving their earlier spend in the data with no line to show it.
+      if (b2bTrendPick && !b2bTrendPick(r)) continue
       tot.set(r.transporter, (tot.get(r.transporter) || 0) + num(r.billed))
     }
     return [...tot.entries()].sort((a, b2) => b2[1] - a[1]).map(([k]) => k)
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
   // ── Overall: B2C + B2B side by side ──
   // Deliberately additive only. The two ledgers bill on different units (parcels vs
@@ -3011,9 +3020,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           })),
         },
         {
+          // b2bTrendRows, not b2bMonthRows: this export is labelled "Monthly trend" and
+          // should carry the same periods the chart draws, not just the selected month.
           label: 'Monthly trend', file: 'ftl_ptl_monthly',
-          rows: (b2bMonthRows || []).map(r => ({
-            month: r.month, trips: r.trips, spend: round(r.spend),
+          rows: (b2bTrendRows || []).map(r => ({
+            month: r.month, trips: r.trips, spend: round(r.billed),
           })),
         },
       ]
@@ -4192,7 +4203,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               stake (spread x trips), so a wide gap on two trips does not outrank a smaller
               one repeated two hundred times. */}
           <Card style={{ display: 'flex', flexDirection: 'column' }} title="Rate consistency by lane"
-            note="cheapest to dearest trip on the same lane and vehicle · min 8 trips">
+            note="cheapest to dearest trip on the same lane and vehicle · all periods · min 8 trips">
             {b2bSpreadRows.length ? (
               <>
                 <div style={{ flex: 1, minHeight: 200 }}>
@@ -4243,8 +4254,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: C.t3, lineHeight: 1.5 }}>
                   Each bar runs from the cheapest to the dearest trip billed on that lane and
-                  vehicle. A wide band means the same journey is being priced inconsistently —
-                  worth checking against the rate card before assuming the average is the rate.
+                  vehicle, across every billing period rather than the one selected above —
+                  a min-to-max range needs volume behind it to mean anything. A wide band
+                  means the same journey is being priced inconsistently, though it can also
+                  be a rate that legitimately changed mid-year; either way it is worth
+                  checking against the rate card before assuming the average is the rate.
                 </div>
               </>
             ) : (
