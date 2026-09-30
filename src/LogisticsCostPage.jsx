@@ -1612,14 +1612,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Falls back to monthSeries when the cube is absent (the b2b/tpl scopes never load one),
   // so those tabs keep working rather than rendering an empty chart.
   const trendRows = useMemo(() => {
-    const src = agg?.byCourierMonth || []
+    // trendAll, NOT byCourierMonth: the cube is filtered server-side by the selected
+    // billing period, so byCourierMonth genuinely only contains the chosen month — no
+    // client-side re-aggregation can recover history the server never sent. trendAll
+    // lives in the filter-independent refCache and now carries courier_name, so it has
+    // every month AND can still honour the courier slicer.
+    const src = agg?.trendAll || []
     if (!src.length) return monthSeries
     const sel = filters.couriers || []
     const C = sel.length ? new Set(sel) : null
     const by = new Map()
     for (const r of src) {
-      if (C && !C.has(r.courier)) continue
-      const m = r.month
+      if (C && !C.has(r.courier_name)) continue
+      const m = r.month_year
       if (!m) continue
       if (!by.has(m)) by.set(m, { raw: m, cost: 0, shipments: 0, wt: 0, value: 0 })
       const a = by.get(m)
@@ -2785,16 +2790,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }, [agg, b2b, b2bTransRows, b2bVariance])
 
   // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
+  // Overview trend: every month, whatever the billing-period selection.
+  //
+  // All three of its former inputs — monthSeries, b2bMonthRows and tpl.months — are
+  // narrowed by the month slicer, so with the page defaulting to one month this chart
+  // rendered a single bar. It reads the month-free equivalents instead: trendRows,
+  // b2bTrendRows and tplTrendMonths, each of which still honours its own scope's
+  // courier/transporter/partner slicers.
   const overallMonths = useMemo(() => {
-    const tplRows = tpl?.months || []
-    if (!monthSeries.length && !b2bMonthRows.length && !tplRows.length) return []
+    const tplRows = tplTrendMonths
+    if (!trendRows.length && !b2bTrendRows.length && !tplRows.length) return []
     const keys = [...new Set([
-      ...monthSeries.map(m => m.raw),
-      ...b2bMonthRows.map(m => m.raw),
+      ...trendRows.map(m => m.raw),
+      ...b2bTrendRows.map(m => m.raw),
       ...tplRows.map(m => m.key),
     ])].sort()
-    const b2cBy = Object.fromEntries(monthSeries.map(m => [m.raw, m.cost]))
-    const b2bBy = Object.fromEntries(b2bMonthRows.map(m => [m.raw, m.cost]))
+    const b2cBy = Object.fromEntries(trendRows.map(m => [m.raw, m.cost]))
+    // b2bTrendRows names the money column `billed`, not `cost`.
+    const b2bBy = Object.fromEntries(b2bTrendRows.map(m => [m.raw, m.billed]))
     // 3PL keys its months as `key` (YYYY-MM) rather than `raw`, matching the other two.
     const tplBy = Object.fromEntries(tplRows.map(m => [m.key, Number(m.cost) || 0]))
     return keys.map(k => ({
@@ -2806,7 +2819,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       // rather than beside it: a month's true logistics spend is freight plus storage.
       total: (b2cBy[k] || 0) + (b2bBy[k] || 0) + (tplBy[k] || 0),
     }))
-  }, [monthSeries, b2bMonthRows, tpl?.months])
+  }, [trendRows, b2bTrendRows, tplTrendMonths])
 
   // ── Overview: carrier cards ──
   // One card per partner, both ledgers, with the few figures that actually differentiate a
