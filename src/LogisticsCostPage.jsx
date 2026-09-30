@@ -1248,6 +1248,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all')) return 'all'
     if (allowedTabs.includes('logistics:cost:b2c')) return 'b2c'
     if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
+    if (allowedTabs.includes('logistics:cost:tpl')) return 'tpl'
     return 'all'
   })
   // Scroll to top when switching scope tabs so content doesn't jump

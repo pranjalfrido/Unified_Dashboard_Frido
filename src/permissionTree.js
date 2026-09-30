@@ -62,6 +62,7 @@ export const PERMISSION_TREE = [
           { key: 'logistics:cost:all', label: 'Overview' },
           { key: 'logistics:cost:b2c', label: 'B2C' },
           { key: 'logistics:cost:b2b', label: 'FTL/PTL' },
+          { key: 'logistics:cost:tpl', label: '3PL' },
         ],
       },
     ],
