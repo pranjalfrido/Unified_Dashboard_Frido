@@ -997,8 +997,8 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; const rightEdge = window.innerWidth - r.right; const leftPos = r.right - 240; const pos = leftPos < 8 ? { left: Math.max(8, r.left) + 'px' } : { right: rightEdge + 'px' }; return spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px', ...pos } : { top: (r.bottom + 4) + 'px', ...pos } } catch { return { top: 0, left: 0 } } })()
+        <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; const rightEdge = Math.max(0, window.innerWidth - r.right); const leftPos = r.right - 240; const pos = leftPos < 8 ? { left: Math.max(8, r.left) + 'px' } : { right: rightEdge + 'px' }; return spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px', ...pos } : { top: (r.bottom + 4) + 'px', ...pos } } catch { return { top: 0, left: 0 } } })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
