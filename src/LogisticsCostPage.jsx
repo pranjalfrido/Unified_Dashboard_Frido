@@ -1802,24 +1802,35 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Pivot (month, courier, cpk) into one row per month with a column per courier, which
   // is the shape a multi-line chart needs. Couriers are ordered by spend so the biggest
   // ones take the leading colour slots.
-  // Rate drift derived from byCourierMonth — filter-responsive.
+  // Rate drift is derived from trendAll, which is filter-INDEPENDENT: it compares a
+  // courier's first billed month against its latest, so it needs the full history
+  // regardless of the billing period on screen. The trade-off is that the page's other
+  // slicers (zone, mode, payment, weight band) do not reach this chart — trendAll is
+  // aggregated at (month, courier) only. That is the right call here: "has this carrier's
+  // rate moved" is a question about the carrier, not about a slice of its parcels.
   const driftCouriers = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // trendAll, not byCourierMonth: see driftSeries below.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const spend = {}
     for (const r of rows) {
-      const courier = r.key.split('|')[0]
+      const courier = r.courier_name
+      if (!courier) continue
       spend[courier] = (spend[courier] || 0) + (Number(r.n) || 0)
     }
     return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT.colors.length)
   }, [agg])
 
   const driftSeries = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // trendAll, not byCourierMonth. Drift is a comparison BETWEEN months, so it needs the
+    // filter-independent series — byCourierMonth is cube-derived and the server has
+    // already narrowed it to the selected billing period, which left every line a dot.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const byMonth = {}
     for (const r of rows) {
-      const [courier, month] = r.key.split('|')
+      const courier = r.courier_name, month = r.month_year
+      if (!courier || !month) continue
       if (!driftCouriers.includes(courier)) continue
       const cpk = r.wt ? r.cost / r.wt : 0
       byMonth[month] ??= { month: monthLabel(month), raw: month }
@@ -1829,13 +1840,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }, [agg, driftCouriers])
 
   const driftRows = useMemo(() => {
-    const rows = agg?.byCourierMonth || []
+    // Same source as driftSeries — first-vs-latest needs every month, not the selected one.
+    const rows = agg?.trendAll || []
     if (!rows.length) return []
     const by = {}
     for (const r of rows) {
-      // courier/month come as their own fields; splitting r.key on '|' would break on any
-      // courier name containing that character.
-      const courier = r.courier, month = r.month
+      const courier = r.courier_name, month = r.month_year
       if (!courier || !month) continue
       const cpk = r.wt ? r.cost / r.wt : 0;
       (by[courier] ??= []).push({ m: month, cpk })
