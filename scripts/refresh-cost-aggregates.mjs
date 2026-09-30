@@ -17,12 +17,20 @@ import { loadCourierProfiles, persistCourierProfiles, PER_KG_COURIERS, sqlList }
 import { buildCube } from '../api/logistics-cost.js'
 config()
 
+// Use the direct Postgres connection (no pooler) so SET statement_timeout is respected
+// for the full session. The transaction pooler (port 6543) resets session settings on
+// every checkout, silently overriding statement_timeout = 900000 with Supabase's 2-min
+// default and killing the long CREATE TABLE statements.
+// SUPABASE_DB_URL = postgresql://postgres:[password]@db.<project>.supabase.co:5432/postgres
+// Add this as a GitHub secret and in .env.local for local runs.
+const directUrl = process.env.SUPABASE_DB_URL
+  || (process.env.SUPABASE_URL || '').replace(':6543/', ':5432/')
 const pool = new pkg.Pool({
-  connectionString: process.env.SUPABASE_URL,
+  connectionString: directUrl,
   ssl: { rejectUnauthorized: false }, max: 2,
   connectionTimeoutMillis: 60000,
   idleTimeoutMillis: 120000,
-  statement_timeout: 300000,
+  statement_timeout: 900000,
 })
 // node-postgres emits 'error' on the Pool when the server drops an IDLE connection, and an
 // unhandled EventEmitter error kills the process. Without this, a pooler hiccup on a
