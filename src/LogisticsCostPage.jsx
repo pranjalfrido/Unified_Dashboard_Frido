@@ -2678,13 +2678,38 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Single-sourcing: share of spend on lanes served by exactly one transporter. A commercial
   // risk rather than a cost — there is no fallback and no competitive reference price.
+  // Recomputed from the lane x vehicle rows rather than read from b2b.sole.
+  //
+  // That server aggregate lives in the filter-independent refCache, so it reported 34 of 51
+  // lanes and 28.7% of spend whatever was selected — an all-time figure sitting beside a
+  // single month's cost. For August the real numbers are 20 of 26 lanes and 44.6%, so the
+  // tile was understating the dependency by a third.
+  //
+  // b2bLaneVehRows already carries the selected period and every FTL/PTL slicer, and a
+  // lane counts as single-sourced when exactly one carrier billed it in that window.
   const b2bSole = useMemo(() => {
-    const s = b2b?.sole
-    if (!s) return null
+    const src = b2b?.laneVeh || []
+    if (!src.length) return null
+    const byLane = new Map()
+    for (const r of src) {
+      if (b2bPick && !b2bPick(r)) continue
+      const e = byLane.get(r.lane) || { cost: 0, carriers: new Set() }
+      e.cost += num(r.cost)
+      // Distinct carrier NAMES across the whole lane. Counting from b2bLaneVehRows'
+      // per-(lane, vehicle) `transporters` figure and taking the max was wrong: a lane
+      // served by two carriers on different vehicle sizes has 1 on each row, so every
+      // lane looked single-sourced — the tile read 100%.
+      if (r.transporter) e.carriers.add(r.transporter)
+      byLane.set(r.lane, e)
+    }
+    const all = [...byLane.values()].map(e => ({ cost: e.cost, carriers: e.carriers.size }))
+    const total = all.reduce((s2, e) => s2 + e.cost, 0)
+    const sole = all.filter(e => e.carriers <= 1)
+    const spend = sole.reduce((s2, e) => s2 + e.cost, 0)
     return {
-      lanes: num(s.sole_lanes), totalLanes: num(s.lanes),
-      spend: num(s.sole_spend),
-      pct: num(s.total_spend) ? (num(s.sole_spend) / num(s.total_spend)) * 100 : 0,
+      lanes: sole.length, totalLanes: all.length,
+      spend,
+      pct: total ? (spend / total) * 100 : 0,
     }
   }, [b2b, b2bPick])
   // Rate comparison: the same vehicle priced by different carriers. The only view on this
@@ -2746,8 +2771,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // the whole block responds to the sidebar selection, not just the charts below it.
   const b2bHead = useMemo(() => {
     if (!b2b) return null
-    const months = b2bVarMonthRows
-    const last = months[months.length - 1], prev = months[months.length - 2]
+    // Two series, deliberately.
+    //
+    // b2bVarMonthRows spans every month (it feeds the trend charts), so summing it gave a
+    // five-month total on a page scoped to one — the hero read 3.63 Cr across 2,422 trips
+    // where August alone is 64.03 L across 461.
+    //
+    // The headline figures therefore come from the SELECTED months, while the
+    // month-over-month deltas keep reading the full series: a change between periods
+    // cannot be computed from a window holding only one of them.
+    const allMonths = b2bVarMonthRows
+    const sel = filters.months || []
+    const M = sel.length ? new Set(sel) : null
+    const months = M ? allMonths.filter(m => M.has(m.raw)) : allMonths
+    // MoM compares the last selected month against the one before it in the FULL series,
+    // so it stays meaningful when a single period is selected.
+    const lastRaw = months.length ? months[months.length - 1].raw : null
+    const idx = lastRaw ? allMonths.findIndex(m => m.raw === lastRaw) : -1
+    const last = idx >= 0 ? allMonths[idx] : null
+    const prev = idx > 0 ? allMonths[idx - 1] : null
     const spend = months.reduce((s, m) => s + m.billed, 0)
     const trips = months.reduce((s, m) => s + m.trips, 0)
     // Lane concentration: how much of the book rides on its three busiest lanes. A high
@@ -2765,7 +2807,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       momTrips: last && prev && prev.trips ? (last.trips / prev.trips - 1) * 100 : null,
       top3Pct: spend ? (top3 / spend) * 100 : 0,
     }
-  }, [b2b, b2bVarMonthRows, b2bLaneVehRows])
+  }, [b2b, b2bVarMonthRows, b2bLaneVehRows, filters.months])
 
   // Transporter spend by month, pivoted for a multi-series line. Each transporter becomes a
   // key on every row so Recharts can draw one line per carrier.
