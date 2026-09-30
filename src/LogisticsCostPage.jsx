@@ -4712,8 +4712,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
             { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: monthSeries.map(d => d.avgCost || 0), invertColor: true },
             { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
-            { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
+            // All-time, unlike the rest of this strip — lc_billing_summary has no month
+            // column. The label carries the caveat since these compact tiles have no sub-line.
+            { label: 'Should Have Paid (all periods)', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'Actually Billed (all periods)', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
             ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
           ].map(m => {
             const pts = m.spark.slice(-14)
@@ -4778,10 +4780,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             sub="freight ÷ invoices" />
           <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
             sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
+          {/* These two are ALL-TIME and say so, unlike every other tile in this row.
+              They come from lc_billing_summary, which is aggregated to a single row with no
+              month column at all — the figure cannot be narrowed to a billing period
+              without rebuilding that table. Labelling it is honest; silently showing a
+              whole-ledger number beside seven single-month ones is not. */}
           <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
-            sub="card × our weight" />
+            sub="card × our weight · all periods" />
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
-            sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
+            sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card · all periods`}
             accent={C.red.tx} />
           <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
             sub={`${fmtN(reverseBurden.n)} legs · ${reverseBurden.pct.toFixed(1)}% of spend`}
