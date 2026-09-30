@@ -998,7 +998,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
       </button>
       {open && (
         <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; const dropW = 240; const leftAnchored = Math.max(8, r.right - dropW); const rightAnchored = Math.min(leftAnchored, window.innerWidth - dropW - 8); const left = Math.max(8, rightAnchored); const vPos = spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px' } : { top: (r.bottom + 4) + 'px' }; return { ...vPos, left: left + 'px' } } catch { return { top: 0, left: 0 } } })()
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const dropW = 240; const spaceBelow = window.innerHeight - r.bottom; const vPos = spaceBelow < 300 ? { bottom: (window.innerHeight - r.top + 4) + 'px' } : { top: (r.bottom + 4) + 'px' }; const left = Math.min(Math.max(8, r.right - dropW), window.innerWidth - dropW - 8); return { ...vPos, left: left + 'px' } } catch { return { top: 0, left: 0 } } })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
