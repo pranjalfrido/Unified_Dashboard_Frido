@@ -2357,13 +2357,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (!ok(r)) continue
       const k = r.month_year
       if (!k) continue
-      const a = by.get(k) || { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0 }
+      const a = by.get(k) || { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0, ratedCost: 0 }
       a.cost += num(r.cost)
       a.operation_fee += num(r.operation_fee)
       a.rental_fee += num(r.rental_fee)
       a.other_fee += num(r.other_fee)
       a.shipments += num(r.shipments)
       a.weight_kg += num(r.weight_kg)
+      // Cost from sites that actually reported volume this month, tracked separately so the
+      // per-unit rate below matches the Cost/Parcel tile. Charging a site's spend against
+      // volume it did not handle inflates the rate for every other site at once — in August
+      // the two WareIQ sites billed 2.20L with no shipment data, which is the whole gap
+      // between 32.05 and 30.66 per parcel.
+      if (num(r.shipments) > 0) a.ratedCost += num(r.cost)
       by.set(k, a)
     }
     return [...by.values()].sort((x, y) => String(x.key).localeCompare(String(y.key)))
@@ -2373,8 +2379,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     ...m,
     // null rather than 0 in a month with no shipment data, so the rate line breaks
     // instead of diving to the axis and implying the cost collapsed.
-    per_ship: m.shipments > 0 ? m.cost / m.shipments : null,
-    per_kg: m.weight_kg > 0 ? m.cost / m.weight_kg : null,
+    //
+    // ratedCost, not cost: the same rated-sites-only basis the Cost/Parcel tile uses. The
+    // MoM badge beside that tile reads this series, so using the full cost here made the
+    // badge describe a different rate from the number it sits next to — -38.9% against a
+    // tile showing a figure that had really moved -41.6%.
+    per_ship: m.shipments > 0 ? m.ratedCost / m.shipments : null,
+    per_kg: m.weight_kg > 0 ? m.ratedCost / m.weight_kg : null,
   })), [tplTrendMonths])
 
   // Per-site rate over time, pivoted to one column per warehouse for a multi-line chart.
