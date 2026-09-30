@@ -194,8 +194,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .row-hoverable tbody tr{transition:background-color .1s}
 .row-hoverable tbody tr:hover{background-color:rgba(var(--acc-rgb),.055)!important}
 
-.channel-card-hover{transition:transform .15s ease,box-shadow .15s ease}
-.channel-card-hover:hover{transform:translateY(-2px);box-shadow:var(--sh3)!important}
+/* translate, not transform — see the note on .card-hoverable below. No dropdown lives in
+   one of these tiles today, but the trap is the same one and costs nothing to avoid. */
+.channel-card-hover{transition:translate .15s ease,box-shadow .15s ease}
+.channel-card-hover:hover{translate:0 -2px;box-shadow:var(--sh3)!important}
 
 .stat-tile-hover{transition:background-color .15s ease,box-shadow .15s ease;border-radius:10px}
 .stat-tile-hover:hover{background-color:rgba(var(--acc-rgb),.05);box-shadow:var(--sh1)}
@@ -752,13 +754,19 @@ svg text, svg tspan{
 /* Every card lifts. KPI tiles rise less than the big cards - they sit in tight
    grids, so a full 2px reads as jitter across a row of six.                */
 .card-hoverable,
-.kpi-card{ transition:box-shadow .18s ease, transform .18s ease }
-.card-hoverable:hover{ transform:translateY(-2px) }
-.kpi-card:hover{ transform:translateY(-1px) }
+.kpi-card{ transition:box-shadow .18s ease, translate .18s ease }
+/* Lift on hover WITHOUT transform.
+   A transform makes the element a containing block for position:fixed descendants, so any
+   fixed-position dropdown rendered inside a card anchored to the card instead of the
+   viewport — and because you have to hover the card to reach its controls, the transform
+   was always active when the panel opened. translate does the same 2px lift without
+   establishing a containing block. */
+.card-hoverable:hover{ translate:0 -2px }
+.kpi-card:hover{ translate:0 -1px }
 
 @media (prefers-reduced-motion:reduce){
   .card-hoverable:hover,
-  .kpi-card:hover{ transform:none }
+  .kpi-card:hover{ translate:none }
 }
 
 /* Theme picker menu rows. Hover only lifts a row that is not already selected,

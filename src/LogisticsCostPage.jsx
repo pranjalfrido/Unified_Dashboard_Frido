@@ -1039,7 +1039,9 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
             {!multi && (
               <div onClick={() => { onChange(null); setOpen(false); setSearch('') }}
                 style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
-                All {label}
+                {/* The label is sometimes already a summary ("All sub-categories"), in
+                    which case prefixing "All" reads as "All All sub-categories". */}
+                {/^all/i.test(String(label)) ? label : `All ${label}`}
               </div>
             )}
             {filtered.map(o => {
@@ -1840,7 +1842,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (filters.months?.length && !filters.months.includes(r.month)) continue
       spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
     }
-    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+    // '(unknown)' is dropped from the PICKER only — it is the COALESCE bucket for
+    // shipments whose sub_category is missing from awb_shipment_dims, and at ~5.34 Cr it
+    // is about 30% of B2C spend. Those rows still sit in every total on this page; they
+    // are simply not offered as a slice, since "show me the unclassified ones" is not a
+    // sub-category the way Cushions or Orthotics are.
+    return [...spend.entries()]
+      .filter(([sub]) => sub !== '(unknown)')
+      .sort((a, b) => b[1] - a[1])
+      .map(([s]) => s)
   }, [agg, filters.months])
 
   // Zone rows for the selected sub-category, or null when nothing is selected so the
