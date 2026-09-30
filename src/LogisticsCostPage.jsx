@@ -4754,20 +4754,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* ── Cost overview: hero + 2 rows of 4 ── */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {/* Sparklines read trendRows, not monthSeries. monthSeries carries only the
+              selected billing period, so with the page defaulting to one month every
+              sparkline had a single point and drew nothing — a 14-point trail is the whole
+              purpose of the strip. trendRows spans every month and still honours the
+              courier slicer. The VALUES beside them stay period-scoped: the number answers
+              "this month", the line answers "and here is how it got there". */}
           {[
-            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: monthSeries.map(d => d.cost || 0) },
-            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
-            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: monthSeries.map(d => d.shipments || 0) },
-            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: monthSeries.map(d => d.wt || 0), invertColor: true },
-            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
-            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: monthSeries.map(d => d.avgCost || 0), invertColor: true },
-            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: trendRows.map(d => d.cost || 0) },
+            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: trendRows.map(d => d.pctGmv || 0), invertColor: true },
+            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: trendRows.map(d => d.shipments || 0) },
+            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: trendRows.map(d => d.wt || 0), invertColor: true },
+            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: trendRows.map(d => d.cost || 0) },
+            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: trendRows.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: trendRows.map(d => d.avgCost || 0), invertColor: true },
+            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: trendRows.map(d => d.cpk || 0), invertColor: true },
             // All-time, unlike the rest of this strip — lc_billing_summary has no month
             // column. The label carries the caveat since these compact tiles have no sub-line.
-            { label: 'Should Have Paid (all periods)', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'Actually Billed (all periods)', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
-            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
+            { label: 'Should Have Paid (all periods)', value: fmt(agg.dtOurs), spark: trendRows.map(d => d.cost || 0) },
+            { label: 'Actually Billed (all periods)', value: fmt(agg.dtInvoiced), spark: trendRows.map(d => d.cost || 0), accent: C.red.tx },
+            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: trendRows.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
           ].map(m => {
             const pts = m.spark.slice(-14)
             const min = Math.min(...pts), max = Math.max(...pts)
