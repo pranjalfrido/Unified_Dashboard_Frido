@@ -958,6 +958,11 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const [search, setSearch] = useState('')
   const [staged, setStaged] = useState([])
   const ref = useRef(null)
+  // The trigger itself. Anchoring the panel to the wrapper div is wrong: the wrapper is
+  // position:relative with no width of its own, so inside a flex card header it can be
+  // wider than the button, and the panel then opens offset from the control that was
+  // actually clicked — which is what put this dropdown over the neighbouring chart.
+  const btnRef = useRef(null)
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
     document.addEventListener('mousedown', h)
@@ -985,7 +990,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={handleOpen}
+      <button ref={btnRef} onClick={handleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
           border: `1.5px solid ${active ? C.acm : C.border2}`, borderRadius: 8,
@@ -998,7 +1003,25 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
       </button>
       {open && (
         <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const dropW = 240; const spaceBelow = window.innerHeight - r.bottom; const vPos = spaceBelow < 300 ? { bottom: (window.innerHeight - r.top + 4) + 'px' } : { top: (r.bottom + 4) + 'px' }; const left = Math.min(Math.max(8, r.right - dropW), window.innerWidth - dropW - 8); return { ...vPos, left: left + 'px' } } catch { return { top: 0, left: 0 } } })()
+          // Measured from the BUTTON, not the wrapper. The wrapper is position:relative with
+          // no width of its own, so inside a flex card header it can be wider than the
+          // control that was clicked and the panel then opens offset from it.
+          //
+          // Right edge of the panel aligned to the right edge of the trigger, then clamped
+          // so it cannot leave the viewport on either side. One `left` value drives the
+          // horizontal axis in both the below and flipped-above cases, so the two branches
+          // cannot disagree about where the panel sits.
+          ...(() => {
+            try {
+              const r = (btnRef.current || ref.current).getBoundingClientRect()
+              const W = 240, M = 8
+              const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
+              const spaceBelow = window.innerHeight - r.bottom
+              return spaceBelow < 300
+                ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
+                : { top: (r.bottom + 4) + 'px', left: left + 'px' }
+            } catch { return { top: 0, left: 0 } }
+          })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
