@@ -118,9 +118,20 @@ async function query(pool, sql, params) {
   for (let attempt = 0; ; attempt++) {
     try {
       const client = await pool.connect()
+      // pool.on('error') only covers IDLE clients. Once a client is checked out, a
+      // dropped connection emits 'error' on the client itself, and with no listener
+      // Node treats it as an unhandled EventEmitter error and kills the process —
+      // which is exactly how the API server died repeatedly. The catch below already
+      // knows how to retry ECONNRESET; it just never got the chance to run.
+      //
+      // Attached per checkout and removed in the finally, so a long-lived pooled
+      // client does not accumulate one listener per query.
+      const onErr = e => console.error('[logistics-cost client]', e.message)
+      client.on('error', onErr)
       try {
         return await client.query(sql, params)
       } finally {
+        client.removeListener('error', onErr)
         client.release()
       }
     } catch (e) {
@@ -355,6 +366,11 @@ export async function buildCube(pool) {
   if (!sql) throw new Error('could not capture unfiltered cube SQL')
 
   const c = await pool.connect()
+  // Same reason as in query() above: a checked-out client is outside pool.on('error'),
+  // and this one holds the connection for the whole cube rebuild — minutes, not
+  // milliseconds — so it is the most exposed of the two to a pooler drop.
+  const onErr = e => console.error('[buildCube client]', e.message)
+  c.on('error', onErr)
   try {
     await c.query('SET statement_timeout = 600000')
     await c.query('DROP TABLE IF EXISTS public.lc_cube_new')
@@ -370,6 +386,7 @@ export async function buildCube(pool) {
     await c.query('ROLLBACK').catch(() => {})
     throw e
   } finally {
+    c.removeListener('error', onErr)
     c.release()
   }
 }
