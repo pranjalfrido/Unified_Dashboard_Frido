@@ -215,10 +215,15 @@ function cubeToByCourierMonth(cube) {
   for (const r of cube) {
     if (!r.courier_name || !r.month) continue
     const key = `${r.courier_name}|${r.month}`
-    if (!map[key]) map[key] = { key, n: 0, cost: 0, wt: 0 }
+    // courier and month are kept as their own fields, not just fused into `key`: the
+    // Monthly Trend re-aggregates this by month while honouring the courier slicer, and
+    // splitting a composite key back apart would break on any courier name containing "|".
+    if (!map[key]) map[key] = { key, courier: r.courier_name, month: r.month, n: 0, cost: 0, wt: 0, value: 0 }
     map[key].n += Number(r.n) || 0
     map[key].cost += Number(r.cost) || 0
     map[key].wt += Number(r.wt) || 0
+    // Goods value, for the trend's "% of GMV" column.
+    map[key].value += Number(r.value) || 0
   }
   return Object.values(map)
 }
@@ -1591,7 +1596,51 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Window for the Monthly Trend chart: 1, 3 or 6 months back, or everything.
   const [trendMonths, setTrendMonths] = useState(6)
 
-  const trendRows = useMemo(() => monthSeries, [monthSeries])
+  // The trend series is built from the CUBE, not from monthSeries.
+  //
+  // monthSeries reads agg.byMonth, which the server has already narrowed to the selected
+  // billing period. With the page defaulting to a single month that would collapse this
+  // chart to one bar — and "is our freight bill rising" is precisely the question a
+  // one-month window cannot answer.
+  //
+  // byCourierMonth is derived from the cube at (courier, month) grain and arrives
+  // unfiltered, so re-aggregating it here keeps every month while still honouring the
+  // courier slicer: narrowing to Bluedart redraws the trend for Bluedart rather than
+  // ignoring the selection. Zone and mode are deliberately not applied — they are
+  // rewritten before the cube is grouped, so filtering them on raw values returns zero.
+  //
+  // Falls back to monthSeries when the cube is absent (the b2b/tpl scopes never load one),
+  // so those tabs keep working rather than rendering an empty chart.
+  const trendRows = useMemo(() => {
+    const src = agg?.byCourierMonth || []
+    if (!src.length) return monthSeries
+    const sel = filters.couriers || []
+    const C = sel.length ? new Set(sel) : null
+    const by = new Map()
+    for (const r of src) {
+      if (C && !C.has(r.courier)) continue
+      const m = r.month
+      if (!m) continue
+      if (!by.has(m)) by.set(m, { raw: m, cost: 0, shipments: 0, wt: 0, value: 0 })
+      const a = by.get(m)
+      a.cost += num(r.cost)
+      a.shipments += num(r.n)
+      a.wt += num(r.wt)
+      a.value += num(r.value)
+    }
+    return [...by.values()]
+      .sort((a, b) => String(a.raw).localeCompare(String(b.raw)))
+      .map(a => ({
+        month: monthLabel(a.raw),
+        raw: a.raw,
+        cost: a.cost,
+        shipments: a.shipments,
+        avgCost: a.shipments ? a.cost / a.shipments : 0,
+        cpk: perKg(a.cost, a.wt) ?? 0,
+        wt: a.wt,
+        pctGmv: a.value > 0 ? (a.cost / a.value) * 100 : null,
+      }))
+  }, [agg, monthSeries, filters.couriers])
 
   // The chart and its table both read this — the last N periods of the filtered series.
   const trendWindow = useMemo(
@@ -2271,6 +2320,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       .map(p => ({ key: p.key, cost_pct: (p.cost / tc) * 100, ship_pct: (p.shipments / ts) * 100 }))
       .sort((a, b) => b.cost_pct - a.cost_pct)
   }, [tpl?.partners])
+  // Same row filter as b2bPick but WITHOUT the month clause.
+  //
+  // The trend charts answer "how is our freight bill moving", which must stay answerable
+  // while the rest of the page is scoped to a single billing period. They still respect
+  // transporter, vehicle and freight-type: narrowing to one carrier should redraw the
+  // trend for that carrier rather than ignoring the selection.
+  //
+  // Each trend chart carries its own range control (1M/3M/6M/All), so the month dimension
+  // is not lost — it simply belongs to the chart instead of to the page.
+  const b2bTrendPick = useMemo(() => {
+    const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
+    if (!tr.length && !vh.length && !ft.length) return null
+    const T = tr.length ? new Set(tr) : null
+    const V = vh.length ? new Set(vh) : null
+    const F = ft.length ? new Set(ft) : null
+    return r => (!T || T.has(r.transporter))
+      && (!V || V.has(r.vehicle))
+      && (!F || F.has(r.freight_type))
+  }, [filters.couriers, filters.vehicleTypes, filters.freightTypes])
+
   const b2bPick = useMemo(() => {
     const tr = filters.couriers || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
     const mo = filters.months || []
@@ -2401,7 +2470,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!b2b) return []
     const by = new Map()
     for (const m of b2b.varMonths || []) {
-      if (b2bPick && !b2bPick(m)) continue
+      // b2bTrendPick, not b2bPick: the month slicer must not reach this chart.
+      if (b2bTrendPick && !b2bTrendPick(m)) continue
       const k = m.month
       if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, ftlBilled: 0 })
       const a = by.get(k)
@@ -2419,9 +2489,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       ftlShare: r.billed ? (r.ftlBilled / r.billed) * 100 : 0,
       shareOfSpend: grand ? (r.billed / grand) * 100 : 0,
     }))
-  }, [b2b, b2bPick])
+  }, [b2b, b2bTrendPick])
 
-  // Range applies to this chart only, same as the B2C trend.
+  // Range applies to this chart only, same as the B2C trend. Six months by default:
+  // long enough to show direction, short enough that the recent months stay legible.
+  // This is independent of the page's one-month default on purpose.
   const [b2bTrendMonths, setB2bTrendMonths] = useState(6)
   const b2bTrendWindow = useMemo(
     () => (b2bTrendMonths >= 999 ? b2bTrendRows : b2bTrendRows.slice(-b2bTrendMonths)),
@@ -2740,7 +2812,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // The ledger holds FEWER than 6 months today (Apr-Jul 2026, so 4). slice(-6) takes
   // whatever exists rather than padding, and `monthWindow` below reports what was
   // actually selected so the page never implies six months of data it does not have.
-  const DEFAULT_MONTH_COUNT = 6
+  // The page opens on the LATEST BILLED MONTH. Cost review is a monthly cycle — the
+  // question on opening the tab is "what did last month cost", not "what did the last
+  // half-year cost" — and a six-month default made every KPI a six-month sum that read
+  // as a monthly figure at a glance.
+  //
+  // The Monthly Trend charts deliberately ignore this: see trendPick below. Direction
+  // over time is the one question a one-month window cannot answer, so those charts keep
+  // their own independent range.
+  const DEFAULT_MONTH_COUNT = 1
   // Months that actually exist in the ledger THIS SCOPE reports on.
   //
   // opts.months comes from the B2C invoice ledger (Jan-Jul). The freight ledger holds only
