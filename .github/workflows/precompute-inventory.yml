@@ -36,6 +36,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-inv-cache.mjs
 
+      - name: Refresh facility/state/channel reference data from BQ
+        run: npm run refresh-ref-data
+
       - name: Generate static sales & allocation JSON
         run: node scripts/generate-sales-alloc-cache.mjs
 
