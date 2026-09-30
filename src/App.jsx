@@ -18865,8 +18865,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!start || !end) return
     const load = async () => {
       try {
-        // Return already-loaded cache if it covers the selected range
-        if (adsCacheRef.current && start >= adsCacheRef.current.rollingStart && end <= adsCacheRef.current.rollingEnd) {
+        // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
+        if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
           injectAdsFromCache(adsCacheRef.current, start, end)
           return
         }
@@ -18874,7 +18874,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (!res.ok) return
         const json = await res.json()
         adsCacheRef.current = json
-        if (start >= json.rollingStart && end <= json.rollingEnd) {
+        if (end <= json.rollingEnd) {
           injectAdsFromCache(json, start, end)
         }
       } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
