@@ -346,37 +346,7 @@ function monthLabel(my) {
 // ── Small presentational helpers ──────────────────────────────
 // Compact KPI tile for the hero grid — matches the Sales page's "hero + rows of 4"
 // layout so the two tabs read as one product.
-// Shared sparkline. Same geometry as the mobile hero strip so a reader moving between
-// layouts sees the same shape for the same series.
-//
-// `invert` flips the colour rule: for a COST, rising is bad. Passing the series rather
-// than a ready-made path keeps the min/max scaling here, where the 14-point window is
-// applied, rather than making every caller repeat it.
-function Spark({ data, invert = false, width = 44, height = 22 }) {
-  const pts = (data || []).slice(-14)
-  if (pts.length < 2) return null
-  const min = Math.min(...pts), max = Math.max(...pts)
-  const range = max - min || 1
-  const coords = pts.map((v, i) => {
-    const x = (i / (pts.length - 1)) * width
-    const y = height - ((v - min) / range) * height
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  const [lx, ly] = coords[coords.length - 1].split(',')
-  const last2 = pts.slice(-2)
-  const isUp = last2[1] >= last2[0]
-  const color = invert ? (isUp ? '#E53935' : C.acc) : (isUp ? C.acc : '#E53935')
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
-      style={{ overflow: 'visible', flexShrink: 0 }} aria-hidden="true">
-      <polyline points={coords.join(' ')} fill="none" stroke={color}
-        strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lx} cy={ly} r="2.5" fill={color} />
-    </svg>
-  )
-}
-
-function Tile({ label, value, sub, badge, accent, spark, sparkInvert }) {
+function Tile({ label, value, sub, badge, accent }) {
   return (
     // Fixed three-band layout so every tile in a grid reads identically.
     //
@@ -390,9 +360,7 @@ function Tile({ label, value, sub, badge, accent, spark, sparkInvert }) {
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
-        {/* Sparkline sits where the badge would; a tile carries one or the other, never
-            both, so they share the slot rather than competing for width. */}
-        {badge || (spark ? <Spark data={spark} invert={sparkInvert} /> : null)}
+        {badge}
       </div>
       {/* minHeight reserves two lines, so a one-line sub does not make its card shorter
           than a two-line neighbour and shift the value row. */}
@@ -1724,8 +1692,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         avgCost: a.shipments ? a.cost / a.shipments : 0,
         cpk: perKg(a.cost, a.wt) ?? 0,
         wt: a.wt,
-        // Goods value exposed as well as consumed: the Total Shipment Value tile plots it,
-        // and without it that sparkline silently fell back to the cost series.
+        // Goods value carried through as well as consumed by pctGmv below, so a caller
+        // that needs the raw figure does not have to re-derive it from the percentage.
         value: a.value,
         pctGmv: a.value > 0 ? (a.cost / a.value) * 100 : null,
       }))
@@ -4871,17 +4839,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14, alignItems: 'stretch' }}>
           <Tile label="Total Shipment Value" value={fmt(agg.shipValue)}
-            sub="goods shipped"
-            spark={trendRows.map(d => d.value || d.cost || 0)} />
+            sub="goods shipped" />
           <Tile label="Cost per Kg" value={kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—'}
-            sub={`${fmtKg(kpis.chargedWt)} billed`}
-            spark={trendRows.map(d => d.cpk || 0)} sparkInvert />
+            sub={`${fmtKg(kpis.chargedWt)} billed`} />
           <Tile label="Avg Cost / Shipment" value={kpis.avgCost != null ? '₹' + kpis.avgCost.toFixed(2) : '—'}
-            sub="freight ÷ invoices"
-            spark={trendRows.map(d => d.avgCost || 0)} sparkInvert />
+            sub="freight ÷ invoices" />
           <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
-            sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`}
-            spark={trendRows.map(d => d.cost || 0)} sparkInvert />
+            sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
           {/* These two are ALL-TIME and say so, unlike every other tile in this row.
               They come from lc_billing_summary, which is aggregated to a single row with no
               month column at all — the figure cannot be narrowed to a billing period
