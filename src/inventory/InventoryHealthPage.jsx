@@ -1308,13 +1308,27 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const regularSkus = useMemo(() => {
     if (!data) return []
     return data.skus.map(s => {
-      let reg = (s.facilities || []).filter(f => f.facilityType === 'Regular')
-      if (selectedFacilitySet) reg = reg.filter(f => selectedFacilitySet.has(f.facility))
-      if (selectedLocationSet) reg = reg.filter(f => selectedLocationSet.has(f.location))
-      const totalInvt = reg.reduce((sum, f) => sum + (f.totalInvt || 0), 0)
-      const rtdInvt = reg.reduce((sum, f) => sum + (f.rtdInvt || 0), 0)
-      const rawInvt = reg.reduce((sum, f) => sum + (f.rawInvt || 0), 0)
-      const rawBlockedInvt = reg.reduce((sum, f) => sum + (f.rawBlockedInvt || 0), 0)
+      // s.facilities (with facilityType) is the preferred source; fall back to s.locations
+      // when the cached JSON was generated before the facilities field was added to the script.
+      const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
+      if (hasFacilities) {
+        let reg = s.facilities.filter(f => f.facilityType === 'Regular')
+        if (selectedFacilitySet) reg = reg.filter(f => selectedFacilitySet.has(f.facility))
+        if (selectedLocationSet) reg = reg.filter(f => selectedLocationSet.has(f.location))
+        const totalInvt = reg.reduce((sum, f) => sum + (f.totalInvt || 0), 0)
+        const rtdInvt = reg.reduce((sum, f) => sum + (f.rtdInvt || 0), 0)
+        const rawInvt = reg.reduce((sum, f) => sum + (f.rawInvt || 0), 0)
+        const rawBlockedInvt = reg.reduce((sum, f) => sum + (f.rawBlockedInvt || 0), 0)
+        return { ...s, totalInvt, rtdInvt, rawInvt, rawBlockedInvt }
+      }
+      // Legacy JSON: s.locations[] has location/totalInvt/rtdInvt/rawInvt/rawBlockedInvt
+      // All entries are Regular warehouses (no facilityType discrimination possible).
+      let locs = s.locations || []
+      if (selectedLocationSet) locs = locs.filter(l => selectedLocationSet.has(l.location))
+      const totalInvt = locs.reduce((sum, l) => sum + (l.totalInvt || 0), 0)
+      const rtdInvt = locs.reduce((sum, l) => sum + (l.rtdInvt || 0), 0)
+      const rawInvt = locs.reduce((sum, l) => sum + (l.rawInvt || 0), 0)
+      const rawBlockedInvt = locs.reduce((sum, l) => sum + (l.rawBlockedInvt || 0), 0)
       return { ...s, totalInvt, rtdInvt, rawInvt, rawBlockedInvt }
     })
   }, [data, selectedFacilitySet, selectedLocationSet])
@@ -1341,8 +1355,12 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (!selectedFacilitySet || !data) return null
     const byLoc = new Map()
     for (const s of regularSkus) {
-      for (const f of (s.facilities || [])) {
-        if (f.facilityType !== 'Regular' || !selectedFacilitySet.has(f.facility)) continue
+      // s.facilities has per-facility granularity needed for Facility slicer;
+      // legacy JSON only has s.locations (no facility-level split available).
+      const entries = Array.isArray(s.facilities) && s.facilities.length > 0
+        ? s.facilities.filter(f => f.facilityType === 'Regular' && selectedFacilitySet.has(f.facility))
+        : [] // legacy JSON: can't scope by facility name, byLoc stays empty
+      for (const f of entries) {
         const acc = byLoc.get(f.location) || { totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0 }
         acc.totalInvt += f.totalInvt || 0
         acc.rtdInvt += f.rtdInvt || 0
@@ -1377,7 +1395,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (filters.websiteStatus?.length) rows = rows.filter(r => filters.websiteStatus.includes(r.websiteStatus))
     if (filters.location?.length) {
       const locSet = new Set(filters.location)
-      rows = rows.filter(r => (r.facilities || []).some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0))
+      rows = rows.filter(r => {
+        const hasFacilities = Array.isArray(r.facilities) && r.facilities.length > 0
+        if (hasFacilities) return r.facilities.some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0)
+        return (r.locations || []).some(l => locSet.has(l.location) && (l.totalInvt || 0) > 0)
+      })
     }
     const { key, dir } = sort
     const sign = dir === 'asc' ? 1 : -1
