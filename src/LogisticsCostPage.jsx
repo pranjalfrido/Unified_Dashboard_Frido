@@ -1285,6 +1285,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!months || months.has(r.month_year || r.key || r.month)) &&
         (!tplPartners || tplPartners.has(r.partner)) &&
         (!tplSites || tplSites.has(r.warehouse))
+      // Same test without the month clause. tplWhMonths is what the 3PL Monthly Trend and
+      // Warehouse Trend re-aggregate from, so it has to keep every period; the tables and
+      // tiles below still read the month-filtered rows.
+      const tplFilterNoMonth = r =>
+        (!tplPartners || tplPartners.has(r.partner)) &&
+        (!tplSites || tplSites.has(r.warehouse))
 
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
       // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
@@ -1353,8 +1359,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               return acc
             }, {}))
             .sort((x, y) => String(x.key).localeCompare(String(y.key)))
+      // Transporter Trend source — month clause omitted for the same reason as varMonths.
       const filteredB2bTransMonths = (baseData.b2bTransMonths || []).filter(r =>
-        (!months || months.has(r.month || r.month_year || r.key)) &&
         (!transporters || transporters.has(r.transporter)) &&
         (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
         (!freightTypes || freightTypes.has(r.freight_type))
@@ -1382,7 +1388,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!tplPartners || tplPartners.has(r.partner)) &&
         (!tplSites || tplSites.has(r.key))
       )
-      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilter)
+      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilterNoMonth)
 
       // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
       const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
@@ -1419,8 +1425,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         months: filteredB2bMonths,
         types: (baseData.b2bTypes || []).filter(r => (!freightTypes || freightTypes.has(r.key))),
         variance: baseData.b2bVar || null,
+        // NO month clause: this is the month-grain series the trend charts and every
+        // month-over-month figure read, and narrowing it to the selected billing period
+        // leaves one point — a flat chart and a null MoM. The other three slicers apply
+        // as normal, so picking a transporter still redraws the trend for that carrier.
         varMonths: (baseData.b2bVarMonths || []).filter(r =>
-          (!months || months.has(r.month || r.month_year)) &&
           (!transporters || transporters.has(r.transporter)) &&
           (!vehicleTypes || vehicleTypes.has(r.vehicle)) &&
           (!freightTypes || freightTypes.has(r.freight_type))
