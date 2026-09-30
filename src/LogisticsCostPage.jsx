@@ -1173,8 +1173,12 @@ function filterCube(cube, f) {
     if (f.modes?.length && !f.modes.includes(r.mode)) return false
     if (f.months?.length && !f.months.includes(r.month)) return false
     if (f.payments?.length && !f.payments.includes(r.payment)) return false
-    if (f.billing === 'overbilled' && !r.is_overbilled) return false
-    if (f.billing === 'clean' && r.is_overbilled) return false
+    // 'over' / 'ok' are the values the SegPair control actually sets and the API's WHERE
+    // clause matches. This read 'overbilled' / 'clean', which nothing ever sends, so the
+    // Billing Status filter was a silent no-op on the cube path: the tab returned the
+    // unfiltered total and looked like it had simply found nothing to exclude.
+    if (f.billing === 'over' && !r.is_overbilled) return false
+    if (f.billing === 'ok' && r.is_overbilled) return false
     return true
   })
 }
