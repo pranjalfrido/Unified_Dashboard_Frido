@@ -713,13 +713,21 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
 
 function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
   const [open, setOpen] = useState(false)
+  // Typed filter over the month list. Cleared on close so the dropdown never reopens
+  // showing a filtered subset of what the reader takes to be the whole list.
+  const [q, setQ] = useState('')
+  const searchRef = useRef(null)
   const ref = useRef(null)
   useEffect(() => {
-    if (!open) return
+    if (!open) { setQ(''); return }
+    // Focus the field so the list is type-to-filter without a second click. Deferred a
+    // tick: the input is not in the DOM until this render commits.
+    const t = setTimeout(() => searchRef.current?.focus(), 0)
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h)
     document.addEventListener('touchstart', h)
     return () => {
+      clearTimeout(t)
       document.removeEventListener('mousedown', h)
       document.removeEventListener('touchstart', h)
     }
@@ -737,6 +745,16 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
   // Empty selection means "everything" everywhere else in this page, so the checkmarks
   // have to show every month ticked rather than none.
   const isOn = m => (sel.length ? sel.includes(m) : true)
+  // Newest first, then narrowed by the query. One derived list, so the rows, the empty
+  // state and the Enter shortcut can never disagree about what is showing.
+  //
+  // Matches the RENDERED label as well as the raw key: "aug", "2026-08" and "aug 2026" all
+  // find the same month. The label is what is on screen; the key is what someone reading a
+  // URL or a CSV export would type.
+  const needle = q.trim().toLowerCase()
+  const shown = [...months].reverse().filter(m =>
+    !needle || String(m).toLowerCase().includes(needle) || label(m).toLowerCase().includes(needle))
+
   const suffix = win.kind === 'all-short' || win.kind === 'all'
     ? `all ${win.total} months`
     : win.kind === 'default'
@@ -795,9 +813,31 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
                 cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
               }}>All {months.length}</button>
           </div>
+          <div style={{ padding: '7px 9px', borderBottom: `1px solid ${C.border}` }}>
+            <input
+              ref={searchRef}
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setQ(''); e.stopPropagation() }
+                // Enter with exactly one match toggles it — the fast path for "aug<enter>".
+                if (e.key === 'Enter' && shown.length === 1) { onToggle(shown[0]); setQ('') }
+              }}
+              placeholder="Search month…"
+              style={{
+                width: '100%', boxSizing: 'border-box', fontSize: 11, fontFamily: 'var(--font)',
+                padding: '5px 8px', borderRadius: 6, color: C.t1, background: C.card,
+                border: `1px solid ${C.border2}`, outline: 'none',
+              }} />
+          </div>
           {/* Newest first: the recent months are the ones anyone reaches for. */}
           <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
-            {[...months].reverse().map(m => {
+            {!shown.length && (
+              <div style={{ padding: '10px 11px', fontSize: 11, color: C.t3 }}>
+                No month matches “{q}”
+              </div>
+            )}
+            {shown.map(m => {
               const on = isOn(m)
               return (
                 <div key={m} onClick={() => onToggle(m)}
