@@ -1322,6 +1322,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         byBand: breakdowns.byBand,
       }
       setAgg(shapeResponse(merged))
+      // The static JSON sets b2bTotals / tplTotals to all-time sums. When months are
+      // selected, recalculate b2b totals from the month-filtered b2bMonths so the
+      // Overview tiles stay consistent with what FTL/PTL and 3PL tabs show.
+      if (f.months?.length && baseData.b2bMonths?.length) {
+        const mSet = new Set(f.months)
+        const selMonths = baseData.b2bMonths.filter(r => mSet.has(r.key || r.month_year || r.month))
+        const b2bAgg = selMonths.reduce((acc, r) => ({ trips: acc.trips + (r.trips || 0), cost: acc.cost + (r.cost || 0) }), { trips: 0, cost: 0 })
+        setB2b(prev => prev ? {
+          ...prev,
+          totals: { ...prev.totals, trips: b2bAgg.trips, cost: b2bAgg.cost, avg_cost: b2bAgg.trips ? b2bAgg.cost / b2bAgg.trips : 0 },
+        } : prev)
+      }
       setLoading(false)
       return
     }
