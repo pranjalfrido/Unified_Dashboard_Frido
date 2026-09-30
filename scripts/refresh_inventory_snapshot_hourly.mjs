@@ -34,7 +34,7 @@ import { BigQuery } from '@google-cloud/bigquery'
 
 const bq = new BigQuery({ keyFilename: './sa_key.json', projectId: 'frido-429506' })
 
-const STALE_HOURS_THRESHOLD = 12
+const STALE_HOURS_THRESHOLD = 36
 
 const query = `
 CREATE OR REPLACE TABLE \`frido-429506.production.shelfwise_inventory_corrected\` AS
