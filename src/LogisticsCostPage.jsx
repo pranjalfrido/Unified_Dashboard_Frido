@@ -3156,15 +3156,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     [b2b?.tplWarehouses])
 
   const scopeMonths = useMemo(() => {
-    // 3PL bills its own months — offering the parcel ledger's list would show periods the
-    // warehousing ledger has no rows for, which filter to an empty tab.
+    // A slicer's OPTIONS must come from month-unfiltered data, or the control narrows
+    // itself: b2b.months and b2b.tplMonths are cut down to the selected period, so once
+    // August was picked the dropdown offered only August and there was no way back to
+    // July without clearing the filter entirely.
+    //
+    // varMonths and tplWhMonths carry every period by design — they feed the trend charts,
+    // which must span the full history — so they are the right source for the list of
+    // months a scope *could* show.
+    //
+    // 3PL and freight still get their OWN lists rather than the shared one: those ledgers
+    // start later than the parcel ledger, and offering Jan-Mar on a tab with no rows for
+    // them filters to an empty page.
     if (scope === 'tpl') {
-      const tm = [...new Set((b2b?.tplMonths || []).map(m => m.key).filter(Boolean))].sort()
+      const tm = [...new Set((b2b?.tplWhMonths || []).map(r => r.month_year).filter(Boolean))].sort()
       return tm.length ? tm : (opts.months || [])
     }
     if (scope !== 'b2b') return opts.months || []
-    const bm = [...new Set((b2b?.months || [])
-      .map(r => r.month_year || r.key || r.month)
+    const bm = [...new Set((b2b?.varMonths || [])
+      .map(r => r.month || r.month_year || r.key)
       .filter(Boolean))].sort()
     // Fall back to the shared list rather than rendering nothing if the freight month
     // query has not landed yet.
