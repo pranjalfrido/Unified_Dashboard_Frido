@@ -2194,7 +2194,36 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // refCache, which is filter-independent by design (filtering there would leak one
   // request's selection into the next), so narrowing happens on the client. Returning a
   // single function keeps the rule in one place rather than repeated in six memos.
-  const fixedVeh = b2b?.fixedVeh || null
+  // Rebuilt from the per-month rows so it follows the billing-period selection like every
+  // other tile. b2b.fixedVeh is an all-time aggregate from the server — it reported
+  // 11.73L across five months while the rest of the page showed one, so the tile read as a
+  // single month's rent five times too high.
+  //
+  // distinct_vehicles cannot be recovered from a monthly sum (the same four vehicles bill
+  // every month, so adding the per-month counts would give 20), and fixedVehMonths carries
+  // only a per-month `vehicles` count. Taking the max across the selected months is right
+  // for the usual case of a stable fleet, and never overstates it the way a sum would.
+  const fixedVeh = useMemo(() => {
+    const all = b2b?.fixedVehMonths || []
+    if (!all.length) return b2b?.fixedVeh || null
+    // The month filter is applied HERE, not upstream. The cached client path narrows
+    // fixedVehMonths but the live API path returns every month, so relying on the shape
+    // that arrives would give a five-month total on one route and a one-month total on the
+    // other for the same selection.
+    const sel = filters.months || []
+    const M = sel.length ? new Set(sel) : null
+    const rows = M ? all.filter(r => M.has(r.month_year)) : all
+    if (!rows.length) return null
+    const cost = rows.reduce((s, r) => s + num(r.cost), 0)
+    const vehicles = rows.reduce((s, r) => s + num(r.vehicles), 0)
+    return {
+      ...(b2b?.fixedVeh || {}),
+      cost,
+      vehicles,
+      months: rows.length,
+      distinct_vehicles: rows.reduce((m, r) => Math.max(m, num(r.vehicles)), 0),
+    }
+  }, [b2b, filters.months])
   // 3PL, narrowed on the client. The server sends these aggregates unfiltered (they come
   // from refCache, which is shared across requests by design), so partner, site and month
   // selections are applied here instead.
