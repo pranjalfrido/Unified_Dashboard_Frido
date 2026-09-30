@@ -68,10 +68,8 @@ const pool2 = new pkg.Pool({
   statement_timeout: 30000,
 })
 pool2.on('error', e => console.error('[pool2] non-fatal:', e.message))
-await pool2.query(`
-  CREATE TABLE IF NOT EXISTS public.lc_cube_meta (ledger_n int, built_at timestamptz);
-  TRUNCATE public.lc_cube_meta;
-  INSERT INTO public.lc_cube_meta (ledger_n, built_at) VALUES ($1, now())
-`, [ledger_n])
+await pool2.query(`CREATE TABLE IF NOT EXISTS public.lc_cube_meta (ledger_n int, built_at timestamptz)`)
+await pool2.query(`TRUNCATE public.lc_cube_meta`)
+await pool2.query(`INSERT INTO public.lc_cube_meta (ledger_n, built_at) VALUES ($1, now())`, [ledger_n])
 await pool2.end()
 console.log(`Recorded snapshot: ${ledger_n} rows at ${new Date().toISOString()}`)
