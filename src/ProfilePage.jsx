@@ -579,7 +579,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => { setLocalTabs(permissions) }, [user.user_id, permissions])
+  useEffect(() => { setLocalTabs(permissions) }, [user.user_id])
 
   async function savePermissions() {
     setSaving(true)
