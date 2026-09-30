@@ -583,12 +583,16 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
 
   async function savePermissions() {
     setSaving(true)
-    // If user was admin, demote to member first
+    const tabsToSave = [...localTabs]
     if (user.is_admin) {
       await supabase.from('user_profiles').update({ is_admin: false }).eq('user_id', user.user_id)
     }
-    await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
-    if (localTabs.length > 0) await supabase.from('user_permissions').insert(localTabs.map(tab => ({ user_id: user.user_id, tab })))
+    const { error: delErr } = await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
+    if (delErr) { console.error('delete error', delErr); showToast('Save failed'); setSaving(false); return }
+    if (tabsToSave.length > 0) {
+      const { error: insErr } = await supabase.from('user_permissions').insert(tabsToSave.map(tab => ({ user_id: user.user_id, tab })))
+      if (insErr) { console.error('insert error', insErr); showToast('Save failed'); setSaving(false); return }
+    }
     setSaving(false); onUpdate()
     showToast(user.is_admin ? `${user.name} demoted to Member` : 'Permissions saved')
   }
