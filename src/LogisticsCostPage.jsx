@@ -4514,9 +4514,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             }] : []}
             sub={<div>{fmt(perMonth)} per month · {fmtN(t.partners)} partners · {fmtN(t.warehouses)} sites</div>}
           >
-            {tpl.months.length > 1 && (
+            {/* tplTrendMonths, not tpl.months: the latter is narrowed to the selected
+                billing period, which hid this chart at the one-month default. */}
+            {tplTrendMonths.length > 1 && (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tpl.months} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                <AreaChart data={tplTrendMonths} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="tplHero" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
@@ -4845,9 +4847,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           deltas={heroDeltas}
           sub={heroSub}
         >
-          {monthSeries.length > 1 && (
+          {/* trendRows, not monthSeries: monthSeries holds only the selected billing
+              period, so at the one-month default this gate was false and the hero's trend
+              vanished entirely rather than drawing flat. The big number stays scoped to the
+              month; the shape behind it is the run-up to that month. */}
+          {trendRows.length > 1 && (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthSeries} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+              <AreaChart data={trendRows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="lcHero" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={SER.blue} stopOpacity={0.22} />
