@@ -2815,13 +2815,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // Warehousing. Part of the cost of moving the same goods, so it counts toward the total
     // logistics spend rather than sitting outside it — the hero would otherwise understate
     // what logistics actually costs by the whole 3PL book.
-    const tplCost = Number(b2b.tplTotals?.cost) || 0
+    //
+    // Reads tpl.totals, NOT b2b.tplTotals. The latter is the server's aggregate, which is
+    // never month-filtered — it reported 2,27,31,402 across five months beside a B2C figure
+    // for one, so the card overstated warehousing roughly fourfold and dragged every
+    // share-of-spend percentage with it. The tpl memo applies the billing period (and the
+    // partner/site/location slicers) and gives 50,75,646 for August.
+    const tplCost = Number(tpl?.totals?.cost) || 0
     const total = b2cCost + b2bCost + tplCost
     return {
       total,
       b2cCost, b2bCost, tplCost,
-      tplSites: Number(b2b.tplTotals?.warehouses) || 0,
-      tplPartners: Number(b2b.tplTotals?.partners) || 0,
+      // Counts come from the narrowed tpl memo too, so "5 3PL · 8 sites" describes the
+      // same period as the cost beside it rather than the whole ledger.
+      tplSites: Number(tpl?.totals?.warehouses) || 0,
+      tplPartners: Number(tpl?.totals?.partners) || 0,
       b2cUnits: agg.n,
       b2bUnits: Number(b2b.totals.trips) || 0,
       b2bLanes: Number(b2b.totals.lanes) || 0,
@@ -2844,7 +2852,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       logisticsPct: num(agg.shipValue) ? (total / num(agg.shipValue)) * 100 : null,
       b2cLogisticsPct: num(agg.shipValue) ? (b2cCost / num(agg.shipValue)) * 100 : null,
     }
-  }, [agg, b2b, b2bTransRows, b2bVariance])
+  }, [agg, b2b, tpl, b2bTransRows, b2bVariance])
 
   // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
   // Overview trend: every month, whatever the billing-period selection.
