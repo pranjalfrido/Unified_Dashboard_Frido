@@ -635,7 +635,7 @@ function ExportMenu({ items, suffix }) {
 // Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
 // not click: this is reference material, not an action. The panel carries pointerEvents
 // none so it can never swallow a click meant for the chip beside it.
-function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters }) {
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters, tplMonths, tplTotals }) {
   const [open, setOpen] = useState(false)
   const h = health || {}
   const scoped = Number(h.scoped) || 0
@@ -653,6 +653,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
 
   const b2cRange = monthRange(months)
   const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+  const tplRange = monthRange((tplMonths || []).map(r => r.key || r.month_year).filter(Boolean))
 
   // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
   const sections = []
@@ -678,6 +679,26 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
         // because the underlying unit does.
         (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
           ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
+      ].filter(Boolean),
+    })
+  }
+
+  // Warehousing. Shown on Overview and on the 3PL tab itself, matching how the other two
+  // ledgers are gated. It was missing entirely: the component predates this scope, so the
+  // Overview info panel described two of the three books it totals.
+  //
+  // Sites and partners rather than shipments: this ledger bills per site per month, so a
+  // shipment count is not a figure it carries — the parcels it handles are counted by the
+  // B2C ledger above, and reporting them here would double-count them.
+  if (scope !== 'b2c' && scope !== 'b2b') {
+    const tt = tplTotals || {}
+    sections.push({
+      title: '3PL warehousing ledger',
+      rows: [
+        tplRange && ['Months of data', `${tplRange.n} · ${tplRange.text}`],
+        Number(tt.partners) > 0 && ['Partners', fmtN(Number(tt.partners))],
+        Number(tt.warehouses) > 0 && ['Sites', fmtN(Number(tt.warehouses))],
+        Number(tt.rows) > 0 && ['Invoice lines', fmtN(Number(tt.rows))],
       ].filter(Boolean),
     })
   }
@@ -958,6 +979,11 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const [search, setSearch] = useState('')
   const [staged, setStaged] = useState([])
   const ref = useRef(null)
+  // The trigger itself. Anchoring the panel to the wrapper div is wrong: the wrapper is
+  // position:relative with no width of its own, so inside a flex card header it can be
+  // wider than the button, and the panel then opens offset from the control that was
+  // actually clicked — which is what put this dropdown over the neighbouring chart.
+  const btnRef = useRef(null)
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
     document.addEventListener('mousedown', h)
@@ -985,7 +1011,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={handleOpen}
+      <button ref={btnRef} onClick={handleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
           border: `1.5px solid ${active ? C.acm : C.border2}`, borderRadius: 8,
@@ -998,7 +1024,25 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
       </button>
       {open && (
         <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const dropW = 240; const spaceBelow = window.innerHeight - r.bottom; const vPos = spaceBelow < 300 ? { bottom: (window.innerHeight - r.top + 4) + 'px' } : { top: (r.bottom + 4) + 'px' }; const left = Math.min(Math.max(8, r.right - dropW), window.innerWidth - dropW - 8); return { ...vPos, left: left + 'px' } } catch { return { top: 0, left: 0 } } })()
+          // Measured from the BUTTON, not the wrapper. The wrapper is position:relative with
+          // no width of its own, so inside a flex card header it can be wider than the
+          // control that was clicked and the panel then opens offset from it.
+          //
+          // Right edge of the panel aligned to the right edge of the trigger, then clamped
+          // so it cannot leave the viewport on either side. One `left` value drives the
+          // horizontal axis in both the below and flipped-above cases, so the two branches
+          // cannot disagree about where the panel sits.
+          ...(() => {
+            try {
+              const r = (btnRef.current || ref.current).getBoundingClientRect()
+              const W = 240, M = 8
+              const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
+              const spaceBelow = window.innerHeight - r.bottom
+              return spaceBelow < 300
+                ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
+                : { top: (r.bottom + 4) + 'px', left: left + 'px' }
+            } catch { return { top: 0, left: 0 } }
+          })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
@@ -1016,7 +1060,9 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
             {!multi && (
               <div onClick={() => { onChange(null); setOpen(false); setSearch('') }}
                 style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
-                All {label}
+                {/* The label is sometimes already a summary ("All sub-categories"), in
+                    which case prefixing "All" reads as "All All sub-categories". */}
+                {/^all/i.test(String(label)) ? label : `All ${label}`}
               </div>
             )}
             {filtered.map(o => {
@@ -1173,8 +1219,12 @@ function filterCube(cube, f) {
     if (f.modes?.length && !f.modes.includes(r.mode)) return false
     if (f.months?.length && !f.months.includes(r.month)) return false
     if (f.payments?.length && !f.payments.includes(r.payment)) return false
-    if (f.billing === 'overbilled' && !r.is_overbilled) return false
-    if (f.billing === 'clean' && r.is_overbilled) return false
+    // 'over' / 'ok' are the values the SegPair control actually sets and the API's WHERE
+    // clause matches. This read 'overbilled' / 'clean', which nothing ever sends, so the
+    // Billing Status filter was a silent no-op on the cube path: the tab returned the
+    // unfiltered total and looked like it had simply found nothing to exclude.
+    if (f.billing === 'over' && !r.is_overbilled) return false
+    if (f.billing === 'ok' && r.is_overbilled) return false
     return true
   })
 }
@@ -1813,7 +1863,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       if (filters.months?.length && !filters.months.includes(r.month)) continue
       spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
     }
-    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+    // '(unknown)' is dropped from the PICKER only — it is the COALESCE bucket for
+    // shipments whose sub_category is missing from awb_shipment_dims, and at ~5.34 Cr it
+    // is about 30% of B2C spend. Those rows still sit in every total on this page; they
+    // are simply not offered as a slice, since "show me the unclassified ones" is not a
+    // sub-category the way Cushions or Orthotics are.
+    return [...spend.entries()]
+      .filter(([sub]) => sub !== '(unknown)')
+      .sort((a, b) => b[1] - a[1])
+      .map(([s]) => s)
   }, [agg, filters.months])
 
   // Zone rows for the selected sub-category, or null when nothing is selected so the
@@ -3156,15 +3214,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     [b2b?.tplWarehouses])
 
   const scopeMonths = useMemo(() => {
-    // 3PL bills its own months — offering the parcel ledger's list would show periods the
-    // warehousing ledger has no rows for, which filter to an empty tab.
+    // A slicer's OPTIONS must come from month-unfiltered data, or the control narrows
+    // itself: b2b.months and b2b.tplMonths are cut down to the selected period, so once
+    // August was picked the dropdown offered only August and there was no way back to
+    // July without clearing the filter entirely.
+    //
+    // varMonths and tplWhMonths carry every period by design — they feed the trend charts,
+    // which must span the full history — so they are the right source for the list of
+    // months a scope *could* show.
+    //
+    // 3PL and freight still get their OWN lists rather than the shared one: those ledgers
+    // start later than the parcel ledger, and offering Jan-Mar on a tab with no rows for
+    // them filters to an empty page.
     if (scope === 'tpl') {
-      const tm = [...new Set((b2b?.tplMonths || []).map(m => m.key).filter(Boolean))].sort()
+      const tm = [...new Set((b2b?.tplWhMonths || []).map(r => r.month_year).filter(Boolean))].sort()
       return tm.length ? tm : (opts.months || [])
     }
     if (scope !== 'b2b') return opts.months || []
-    const bm = [...new Set((b2b?.months || [])
-      .map(r => r.month_year || r.key || r.month)
+    const bm = [...new Set((b2b?.varMonths || [])
+      .map(r => r.month || r.month_year || r.key)
       .filter(Boolean))].sort()
     // Fall back to the shared list rather than rendering nothing if the freight month
     // query has not landed yet.
@@ -6128,6 +6196,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 b2bTotals={b2b?.totals}
                 couriers={opts.couriers}
                 transporters={opts.transporters}
+                tplMonths={tpl?.months}
+                tplTotals={tpl?.totals}
               />
               {/* B2C only: the simulator reallocates parcel volume between couriers by
                   weight slab, and neither Overview nor FTL/PTL has that shape — freight is
