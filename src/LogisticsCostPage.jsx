@@ -1201,6 +1201,98 @@ function sumCube(rows) {
 
 // Re-derive the byZone / byMode / byMonth / byCourier / byPay breakdown arrays
 // from the cube rows, so charts still work after a client-side filter.
+// Rebuild the Cost by product tree from subCube for the selected billing period.
+//
+// byProduct is produced by productQ, which only runs on a live API request. On the cached
+// path the static JSON carries the ALL-TIME table, so the month slicer used to leave this
+// one table showing every month while its neighbours filtered — the tab header would read
+// "Aug 2026" above an 8-month figure.
+//
+// subCube has the month and leg dimensions, so the same shape can be regrouped client-side
+// at the selected period. `master` carries the per-sub-category weights forward from the
+// unfiltered payload: product_master_weight is a 287-row lookup keyed on sub_category
+// alone, so those two columns do not vary by month and need not be in the cube.
+function cubeToByProduct(subCube, monthSet, master) {
+  if (!subCube?.length) return null
+  const cats = new Map()
+  const blank = () => ({
+    n: 0, cost: 0, wt: 0, slabSum: 0, vwSum: 0, vwN: 0,
+    fwdN: 0, fwdCost: 0, revN: 0, revCost: 0, rtoN: 0, rtoCost: 0,
+  })
+  const addTo = (a, r) => {
+    const n = Number(r.n) || 0, cost = Number(r.cost) || 0
+    a.n += n; a.cost += cost
+    a.wt += Number(r.wt) || 0
+    a.slabSum += Number(r.slab_sum) || 0
+    a.vwSum += Number(r.vw_sum) || 0
+    a.vwN += Number(r.vw_n) || 0
+    // Per-leg count and cost kept separately: the table shows an AVERAGE per leg, and an
+    // average cannot be recovered from another average — only from its own sum and count.
+    if (r.leg === 'Forward') { a.fwdN += n; a.fwdCost += cost }
+    else if (r.leg === 'RTO') { a.rtoN += n; a.rtoCost += cost }
+    else { a.revN += n; a.revCost += cost }
+  }
+
+  for (const r of subCube) {
+    if (monthSet && !monthSet.has(r.month)) continue
+    // productQ requires d.category IS NOT NULL, so its table has no '(unknown)' row.
+    // subCube buckets those shipments instead of dropping them (it feeds the zone slicer,
+    // which must still sum to the headline total). Excluding them here is what makes the
+    // rebuild agree with the server to the rupee — carrying them through would add a
+    // phantom Rs 82 L category that appears only when a month is selected.
+    if (r.cat === '(unknown)') continue
+    let c = cats.get(r.cat)
+    if (!c) { c = { agg: blank(), subs: new Map() }; cats.set(r.cat, c) }
+    addTo(c.agg, r)
+    let s = c.subs.get(r.sub)
+    if (!s) { s = blank(); c.subs.set(r.sub, s) }
+    addTo(s, r)
+  }
+
+  const avg = (sum, n) => (n > 0 ? sum / n : null)
+  const shape = (a, cat, sub) => {
+    const m = master?.get(sub ?? `__CAT__:${cat}`) || {}
+    return {
+      cat, sub,
+      n: a.n, cost: a.cost, avg_cost: avg(a.cost, a.n),
+      fwd_n: a.fwdN, fwd_avg: avg(a.fwdCost, a.fwdN),
+      rev_n: a.revN, rev_avg: avg(a.revCost, a.revN),
+      rto_n: a.rtoN, rto_avg: avg(a.rtoCost, a.rtoN),
+      cw_avg: avg(a.wt, a.n),
+      cw_slab_avg: avg(a.slabSum, a.n),
+      vw_avg: avg(a.vwSum, a.vwN),
+      // Not derivable from this cube — the modal slab and the distinct-slab count need the
+      // per-shipment grain, which is aggregated away here. Carried from the all-time row so
+      // the columns that use them stay populated rather than blanking out when a month is
+      // selected; they describe the product, not the period.
+      cw_slab_mode: m.cw_slab_mode ?? null,
+      cw_slab_variants: m.cw_slab_variants ?? null,
+      master_kg: m.master_kg ?? null,
+      master_slab: m.master_slab ?? null,
+    }
+  }
+
+  return [...cats.entries()]
+    .map(([cat, c]) => ({
+      ...shape(c.agg, cat, null),
+      children: [...c.subs.entries()]
+        .map(([sub, a]) => shape(a, cat, sub))
+        .sort((x, y) => y.cost - x.cost),
+    }))
+    .sort((a, b) => b.cost - a.cost)
+}
+
+// Per-sub-category attributes that do not vary by month, indexed from the unfiltered
+// payload so cubeToByProduct can carry them into a filtered rebuild.
+function masterIndexFromByProduct(byProduct) {
+  const m = new Map()
+  for (const c of byProduct || []) {
+    m.set(`__CAT__:${c.cat}`, c)
+    for (const s of c.children || []) m.set(s.sub, s)
+  }
+  return m
+}
+
 function cubeToBreakdowns(rows) {
   const acc = (map, key, r) => {
     if (!map[key]) map[key] = {}
@@ -1442,6 +1534,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         byCourierMonth: breakdowns.byCourierMonth,
         slabCosts: breakdowns.slabCosts,
         byBand: breakdowns.byBand,
+        // Cost by product, rebuilt for the selected period. Without this the table kept
+        // the all-time figures from the static payload while every other table on the tab
+        // honoured the month slicer. Falls back to the unfiltered tree if subCube is
+        // missing, which is better than an empty table.
+        byProduct: cubeToByProduct(
+          baseData.subCube,
+          f.months?.length ? new Set(f.months) : null,
+          masterIndexFromByProduct(baseData.byProduct),
+        ) || baseData.byProduct,
       }
       setAgg(shapeResponse(merged))
       // The static JSON sets b2bTotals / tplTotals to all-time sums. When months are
@@ -1711,7 +1812,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             'dc_weight_n', 'dc_rate_n', 'dt_ours', 'dt_theirs', 'dt_invoiced', 'dt_weight_n',
             'dt_rate_n', 'dt_weight_claim', 'dt_rate_claim']
           FILTER_INDEPENDENT_KEYS.forEach(k => { if (BASE_TOTALS[k] != null) totals[k] = BASE_TOTALS[k] })
-          setAgg(shapeResponse({ ...j, totals }))
+          // Cost by product for the pre-selected period. This is the path a FIRST load
+          // takes — months are always seeded at init — so without it the table opened on
+          // all-time figures under an "Aug 2026" header, which is what made the mismatch
+          // visible before any slicer had been touched.
+          const byProduct = cubeToByProduct(
+            j.subCube, initMonths, masterIndexFromByProduct(j.byProduct),
+          ) || j.byProduct
+          setAgg(shapeResponse({ ...j, totals, byProduct }))
         } else {
           setAgg(shapeResponse(j))
         }
