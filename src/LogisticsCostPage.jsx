@@ -640,7 +640,10 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   const scoped = Number(h.scoped) || 0
 
   const monthRange = list => {
-    const s = [...(list || [])].sort()
+    // DISTINCT months, not rows. The sources are row sets, not month lists: varMonths is
+    // (month, transporter, vehicle, freight_type) and tplWhMonths is (site, month), so
+    // counting entries reported "95 months" and "36 months" for ledgers holding five.
+    const s = [...new Set((list || []).filter(Boolean).map(String))].sort()
     if (!s.length) return null
     const lab = m => {
       const [y, mo] = String(m).split('-')
@@ -6218,7 +6221,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <DataInfo
                 scope={scope}
                 health={agg?.health}
-                months={scopeMonths}
+                months={opts.months}
                 b2bMonths={b2b?.varMonths}
                 b2bTotals={b2b?.totals}
                 couriers={opts.couriers}
