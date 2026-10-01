@@ -1212,8 +1212,18 @@ function sumCube(rows) {
 // at the selected period. `master` carries the per-sub-category weights forward from the
 // unfiltered payload: product_master_weight is a 287-row lookup keyed on sub_category
 // alone, so those two columns do not vary by month and need not be in the cube.
-function cubeToByProduct(subCube, monthSet, master) {
+// `f` is the full filter object, not just the months: the cube path is taken whenever
+// courier, zone, mode, payment or billing-status filters are active, and every other table
+// on the tab narrows for those. subCube only carries zone and month as filterable
+// dimensions, so zone is applied here and the rest cannot be — see the caller, which falls
+// back to a live API request rather than showing a figure that ignores the slicer.
+function cubeToByProduct(subCube, f, master) {
   if (!subCube?.length) return null
+  const monthSet = f?.months?.length ? new Set(f.months) : null
+  const zoneSet = f?.zones?.length ? new Set(f.zones) : null
+  // subCube's `leg` is the same collapsed Forward/Reverse/RTO grouping the mode slicer
+  // sends, so that filter can be honoured here too.
+  const legSet = f?.modes?.length ? new Set(f.modes) : null
   const cats = new Map()
   const blank = () => ({
     n: 0, cost: 0, wt: 0, slabSum: 0, vwSum: 0, vwN: 0,
@@ -1235,6 +1245,8 @@ function cubeToByProduct(subCube, monthSet, master) {
 
   for (const r of subCube) {
     if (monthSet && !monthSet.has(r.month)) continue
+    if (zoneSet && !zoneSet.has(r.zone)) continue
+    if (legSet && !legSet.has(r.leg)) continue
     // productQ requires d.category IS NOT NULL, so its table has no '(unknown)' row.
     // subCube buckets those shipments instead of dropping them (it feeds the zone slicer,
     // which must still sum to the headline total). Excluding them here is what makes the
@@ -1280,6 +1292,28 @@ function cubeToByProduct(subCube, monthSet, master) {
         .sort((x, y) => y.cost - x.cost),
     }))
     .sort((a, b) => b.cost - a.cost)
+}
+
+// Can Cost by product be rebuilt from subCube for this filter set?
+//
+// subCube carries only zone and month as filterable dimensions — no courier, payment,
+// service type or billing status. The main cube has those, so every OTHER table on the tab
+// narrows correctly for them; rebuilding byProduct while ignoring them would leave this one
+// table reporting every courier under a single-courier header, which is the same class of
+// bug as the all-time figures it replaced.
+//
+// When one of those is active the caller keeps the server's byProduct instead, which was
+// computed with the full WHERE clause.
+// Month, zone and leg ARE in subCube and are applied. These four are not, so the rebuilt
+// table cannot narrow for them — the note under the card says so rather than presenting an
+// unfiltered figure as a filtered one.
+function productFiltersNotApplied(f) {
+  const out = []
+  if (f?.couriers?.length) out.push('courier')
+  if (f?.payments?.length) out.push('payment')
+  if (f?.accountTypes?.length) out.push('service type')
+  if (f?.billing && f.billing !== 'all') out.push('billing status')
+  return out
 }
 
 // Per-sub-category attributes that do not vary by month, indexed from the unfiltered
@@ -1345,6 +1379,16 @@ function cubeToBreakdowns(rows) {
       fwd_avg: fwd.n ? fwd.cost / fwd.n : 0,
       rev_avg: rev.n ? rev.cost / rev.n : 0,
       rto_avg: rto.n ? rto.cost / rto.n : 0,
+      // Leg COUNTS, not just the averages. _mode already tracked these to compute the
+      // averages above and then threw them away, so slabRows — and the CSV export that
+      // reads it — saw zeros for every leg count on the cube path, which is the path taken
+      // whenever a billing period is selected (i.e. nearly always).
+      fwd_n: fwd.n, rev_n: rev.n, rto_n: rto.n,
+      // Charged minus declared weight, averaged per shipment. Positive means the courier
+      // billed heavier than we declared, which is what the claim columns price.
+      // decl_wt is 0 for rows with no declared weight, so guard on it rather than on n to
+      // avoid reporting a spurious gap equal to the full charged weight.
+      avg_gap_kg: (v.n && v.decl_wt) ? (v.wt - v.decl_wt) / v.n : null,
       claim_rs: v.claimable_rs || 0,
       claim_n: v.claimable_n || 0,
     }
@@ -1539,9 +1583,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // honoured the month slicer. Falls back to the unfiltered tree if subCube is
         // missing, which is better than an empty table.
         byProduct: cubeToByProduct(
-          baseData.subCube,
-          f.months?.length ? new Set(f.months) : null,
-          masterIndexFromByProduct(baseData.byProduct),
+          baseData.subCube, f, masterIndexFromByProduct(baseData.byProduct),
         ) || baseData.byProduct,
       }
       setAgg(shapeResponse(merged))
@@ -1817,7 +1859,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           // all-time figures under an "Aug 2026" header, which is what made the mismatch
           // visible before any slicer had been touched.
           const byProduct = cubeToByProduct(
-            j.subCube, initMonths, masterIndexFromByProduct(j.byProduct),
+            j.subCube, f, masterIndexFromByProduct(j.byProduct),
           ) || j.byProduct
           setAgg(shapeResponse({ ...j, totals, byProduct }))
         } else {
@@ -2424,6 +2466,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!(f > 0)) return { ctsReal: null }
     return { ctsReal: fn > 0 ? f + r * (rn / fn) + t * (tn / fn) : null }
   }, [])
+
+  // Slicers that are active but cannot reach Cost by product. Empty on the live-API path,
+  // where the server applies the full WHERE clause; non-empty only when the table was
+  // rebuilt client-side from subCube, which lacks those dimensions.
+  const productUnfiltered = useMemo(
+    () => (baseData?.cube ? productFiltersNotApplied(filters) : []),
+    [baseData, filters],
+  )
 
   // Flat row list with the open sub-categories spliced in beneath their parent, so one
   // DataTable renders the whole tree.
@@ -6156,7 +6206,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       <SectionHdr title="Cost by Product"
         note={isMobile ? "" : "category → sub-category, per shipment by leg. RTO is the return leg only"} collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
       <div style={secHid['product'] ? { display: 'none' } : undefined}>
-        <Card title="Category detail" note={isMobile ? "" : "click a category to open its sub-categories"}
+        {/* The note names any active slicer this table cannot honour. byProduct is rebuilt
+            from subCube, which carries month, zone and leg but not courier, payment,
+            service type or billing status — saying so is better than showing an unfiltered
+            figure under a filtered header, which is the bug this table already had once. */}
+        <Card title="Category detail"
+          note={isMobile ? "" : (productUnfiltered.length
+            ? `not filtered by ${productUnfiltered.join(', ')}`
+            : "click a category to open its sub-categories")}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
