@@ -4525,7 +4525,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             note="cheapest to dearest trip on the same lane and vehicle · all periods · min 8 trips">
             {b2bSpreadRows.length ? (
               <>
-                <div style={{ flex: 1, minHeight: 200 }}>
+                {/* Height follows the row count: 8 lanes in a fixed 200px left ~25px a
+                    row, so a two-line label overlapped its neighbour's bar. 34px a row
+                    plus the axis gives each label its own line and a clear gap. */}
+                <div style={{ flex: 1, minHeight: Math.max(200, b2bSpreadRows.length * 34 + 40) }}>
                   <ResponsiveContainer width="100%" height="100%">
                     {/* A floating band: `lo` is stacked first with a transparent fill and the
                         visible bar sits on top of it, so each bar spans min to max. Recharts
@@ -4536,9 +4539,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                         axisLine={false} tickLine={false}
                         tickFormatter={v => '₹' + Math.round(v / 1000) + 'k'} />
-                      <YAxis type="category" dataKey="key" width={158}
+                      {/* 176px, not 158: the longest labels here run 23 characters
+                          ("Pune → Hyderabad · 20FT") and wrapped to two lines at the old
+                          width. The truncation point drops to 22 so anything longer is
+                          shortened rather than wrapped — one line per lane either way. */}
+                      <YAxis type="category" dataKey="key" width={176}
                         tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false}
-                        tickFormatter={v => (String(v).length > 24 ? String(v).slice(0, 23) + '…' : v)} />
+                        interval={0}
+                        tickFormatter={v => (String(v).length > 22 ? String(v).slice(0, 21) + '…' : v)} />
                       <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
                         content={({ active, payload }) => {
                           if (!active || !payload?.length) return null
@@ -4563,7 +4571,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           )
                         }} />
                       <Bar dataKey="lo" stackId="s" fill="transparent" isAnimationActive={false} />
-                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={13}>
+                      {/* 16px against a 34px row: enough weight to read as a band without
+                          closing the gap between neighbours. At the old 13px in a taller
+                          row the bars looked stranded. */}
+                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={16}>
                         <LabelList dataKey="spreadPct" position="right"
                           formatter={v => '+' + Math.round(v) + '%'}
                           style={{ fontSize: 10, fill: C.t2, fontWeight: 600 }} />
