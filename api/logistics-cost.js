@@ -1048,7 +1048,16 @@ export default async function handler(req, res) {
       -- scripts/refresh-fwd-median.mjs alongside the derived rate card.
       WITH fwd AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median),
       p AS (
-        SELECT d.category AS cat, d.sub_category AS sub,
+        -- "Sparepart (Chair & Mobility)" and "Spare Parts" are the same category under two
+        -- labels in awb_shipment_dims (973 and 261 shipments, both with the single
+        -- sub-category "Sparepart"), so the table listed spares twice. Folded here in the
+        -- source CTE rather than summed afterwards: the merge has to happen BEFORE the
+        -- aggregate, or the averages, the modal slab and COUNT(DISTINCT cw_slab) would each
+        -- be computed on a half of the category and could not be combined correctly after
+        -- the fact.
+        SELECT CASE WHEN d.category ILIKE 'spare%part%' OR d.category ILIKE 'sparepart%'
+                    THEN 'Spare Parts' ELSE d.category END AS cat,
+               d.sub_category AS sub,
                CASE WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
                     WHEN upper(i.shipment_mode) = 'RTO'     THEN 'RTO'
                     ELSE 'Reverse' END AS leg,
