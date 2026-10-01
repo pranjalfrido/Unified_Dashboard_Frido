@@ -224,42 +224,24 @@ await swap('lc_billing_summary', `
 // It also divided each courier's claim by its ENTIRE shipment count, so Bluedart read ₹7.1
 // per shipment when only ~106k of its 431k shipments are disputed at all. Counting only the
 // disputed rows gives ₹28.60, which is the number a claim is actually argued on.
-await swap('lc_courier_disputes', `
-  CREATE TABLE __TARGET__ AS
-  WITH j AS (
-    SELECT i.courier_name,
-           dco.freight_median * (1 + dco.surcharge_rate) AS ours,
-           dct.freight_median * (1 + dct.surcharge_rate) AS theirs,
-           ${EXI} AS invoiced
-      FROM public.logistics_invoices_b2c i
-      ${CARD('dct','i.charged_weight_courier')}
-      ${CARD('dco', OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
-       AND i.charged_weight_courier <= 500
-       AND i.month_year IS NOT NULL
-  )
-  SELECT courier_name,
-         COUNT(*)::int AS priced_n,
-         -- GREATEST(...,0): billing BELOW their own card is not an overcharge, and letting it
-         -- go negative would net off real overbilling on other shipments.
-         COALESCE(SUM(GREATEST(theirs - ours, 0)), 0)::float8   AS weight_rs,
-         COALESCE(SUM(GREATEST(invoiced - theirs, 0)), 0)::float8 AS rate_rs,
-         COALESCE(SUM(GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0)), 0)::float8 AS total_rs,
-         -- Denominator for a per-shipment figure: rows with a dispute worth more than ₹1,
-         -- not every shipment the courier carried.
-         COUNT(*) FILTER (WHERE GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0) > 1)::int AS disputed_n,
-         COALESCE(SUM(invoiced), 0)::float8 AS invoiced_rs
-    FROM j
-   GROUP BY 1
-`, 'CREATE INDEX __IDX__ ON __TARGET__ (courier_name)')
+// lc_courier_disputes REMOVED.
+//
+// Its build joined lc_card_dedup twice across the full ledger on
+// `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash. At 14.6 lakh rows it
+// never finished: 901s even on a direct non-pooler connection with a 15-minute ceiling. A
+// single one of those joins measured 27.9s, and a COALESCE-equality rewrite took 142s for
+// one join, so no shape of the same query gets the pair under the limit.
+//
+// Because it ran BEFORE lc_month_claims and lc_slab_costs, the whole script aborted here
+// and both of those tables sat stale from 24 Sep — the Weight Slab card was understating
+// its book by a quarter. It also poisoned every cache regeneration, since the API queried
+// the table and inherited the timeout.
+//
+// Nothing was lost by removing it. The only column it fed was Claimable (per courier),
+// which is the same measure as rec_infl — GREATEST(courier's weight cost - ours, 0) —
+// already computed inside the cube and rebuilt hourly. The cube's figure is also more
+// complete: 59.20 L against the stale table's 44.08 L.
 
-
-// ── Claimable weight overbilling per month, for the Monthly Trend table ──
-// Same total-cost basis and same per-ROW clamp as lc_billing_summary and
-// lc_courier_disputes, so the monthly column sums to the headline figure rather than telling
-// a third story. Only the WEIGHT component is claimable — the rate variance is measured
-// against a card derived from these same invoices, so it flags inconsistency with the
-// courier's own behaviour rather than a breach of the signed contract.
 await swap('lc_month_claims', `
   CREATE TABLE __TARGET__ AS
   WITH j AS (

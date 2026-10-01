@@ -325,7 +325,6 @@ function shapeResponse(j) {
     rateDrift: j.rateDrift || [],
     byProduct: j.byProduct || [],
     rateGrid: j.rateGrid || [],
-    courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
     // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
     // round trip — see the zone slicer below.
@@ -1955,8 +1954,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   const courierRows = useMemo(() => {
     if (!agg) return []
-    // Claimable weight overbilling per courier, keyed for lookup below.
-    const claimBy = new Map((agg.courierDisputes || []).map(d => [d.courier_name, d]))
+
     return Object.entries(agg.byCourier)
       .map(([courier, b]) => ({
         courier, shipments: b.n, cost: b.cost,
@@ -1970,9 +1968,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         recTotal: b.recInfl + b.recUnexp,
         // Reverse-leg share: an operational-quality signal, not a cost one.
         reversePct: b.n ? (b.reverseN / b.n) * 100 : 0,
-        // Weight-only claim on the total-cost basis, so this column reconciles with the
-        // headline figure. recInfl above is base freight and stays for the stacked chart.
-        claimRs: Number(claimBy.get(courier)?.weight_rs) || 0,
+        // Weight-only claim. Was read from lc_courier_disputes, a pre-computed table whose
+        // query could not finish — it joined the rate card twice across 14.6 lakh rows on
+        // `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash, and failed at
+        // 901s even on a direct connection. So it had been stale since 24 Sep and this
+        // column was showing 44.08 L against a true 59.20 L.
+        //
+        // b.recInfl is the same measure — GREATEST(courier's weight cost - ours, 0) — but
+        // computed inside the cube, which rebuilds hourly. One source, always fresh, and
+        // it reconciles with the Recoverable table below rather than quietly disagreeing.
+        claimRs: b.recInfl,
       }))
       .sort((a, b) => b.cost - a.cost)
   }, [agg])
