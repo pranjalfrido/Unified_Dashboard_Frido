@@ -635,7 +635,7 @@ function ExportMenu({ items, suffix }) {
 // Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
 // not click: this is reference material, not an action. The panel carries pointerEvents
 // none so it can never swallow a click meant for the chip beside it.
-function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters }) {
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters, tplMonths, tplTotals }) {
   const [open, setOpen] = useState(false)
   const h = health || {}
   const scoped = Number(h.scoped) || 0
@@ -653,6 +653,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
 
   const b2cRange = monthRange(months)
   const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+  const tplRange = monthRange((tplMonths || []).map(r => r.key || r.month_year).filter(Boolean))
 
   // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
   const sections = []
@@ -678,6 +679,26 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
         // because the underlying unit does.
         (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
           ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
+      ].filter(Boolean),
+    })
+  }
+
+  // Warehousing. Shown on Overview and on the 3PL tab itself, matching how the other two
+  // ledgers are gated. It was missing entirely: the component predates this scope, so the
+  // Overview info panel described two of the three books it totals.
+  //
+  // Sites and partners rather than shipments: this ledger bills per site per month, so a
+  // shipment count is not a figure it carries — the parcels it handles are counted by the
+  // B2C ledger above, and reporting them here would double-count them.
+  if (scope !== 'b2c' && scope !== 'b2b') {
+    const tt = tplTotals || {}
+    sections.push({
+      title: '3PL warehousing ledger',
+      rows: [
+        tplRange && ['Months of data', `${tplRange.n} · ${tplRange.text}`],
+        Number(tt.partners) > 0 && ['Partners', fmtN(Number(tt.partners))],
+        Number(tt.warehouses) > 0 && ['Sites', fmtN(Number(tt.warehouses))],
+        Number(tt.rows) > 0 && ['Invoice lines', fmtN(Number(tt.rows))],
       ].filter(Boolean),
     })
   }
@@ -6175,6 +6196,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 b2bTotals={b2b?.totals}
                 couriers={opts.couriers}
                 transporters={opts.transporters}
+                tplMonths={tpl?.months}
+                tplTotals={tpl?.totals}
               />
               {/* B2C only: the simulator reallocates parcel volume between couriers by
                   weight slab, and neither Overview nor FTL/PTL has that shape — freight is
