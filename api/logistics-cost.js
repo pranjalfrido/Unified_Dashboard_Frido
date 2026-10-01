@@ -1401,7 +1401,17 @@ export default async function handler(req, res) {
       needsB2cDetail ? driftQ : () => EMPTY,
       needsB2cDetail ? productQ : () => EMPTY,
       cubeQ,
-    ], 3)
+    // Concurrency 1, not 3.
+    //
+    // Five of these queries each open with ${BASE}, a full scan of the 14.6 lakh-row
+    // ledger plus the rate CTEs on top. A bare scan is ~8s; the CTE work takes lflQ to
+    // ~112s and productQ to ~120s on their own. Run three at a time they contend for the
+    // same buffers and every one of them creeps past the pooler's hard 120s ceiling — the
+    // whole request then fails with a statement timeout and the cache cannot regenerate.
+    //
+    // Serialised they finish well inside the limit. Wall-clock is similar, because the
+    // contention was never buying parallelism here: these are I/O-bound on the same table.
+    ], 1)
 
     const DIM_KEY = {
       zone: 'byZone', mode: 'byMode', month: 'byMonth', courier: 'byCourier',
