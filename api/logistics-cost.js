@@ -1260,22 +1260,60 @@ export default async function handler(req, res) {
     // Uses the same exGst() correction as every other cost figure here. Without it this
     // read Rs 12.46Cr against the tab's Rs 12.36Cr, because Delhivery uploaded
     // GST-inclusive totals.
+    // `leg` and the weight sums were added so Cost by product can be rebuilt client-side
+    // for the selected billing period. byProduct comes from productQ, which is only run on
+    // a live request — on the cached path the static JSON carries the ALL-TIME table, and
+    // the month slicer left it untouched while every neighbouring table filtered. The
+    // client now regroups this cube instead (see cubeToByProduct), which needs the leg
+    // split for the Forward/Reverse/RTO columns and the weight sums for the slab column.
+    //
+    // Cost is the ONLY measure summed per leg: the table shows an average per leg, and an
+    // average cannot be re-derived from another average, so the sum and the count must both
+    // be carried and divided at the end.
+    //
+    // Three legs multiplies the row count by at most 3 (5,361 -> ~16k, 0.49 MB -> ~1.5 MB),
+    // which is still far below the 49,740 rows that crossing sub_category with the main
+    // cube's eight dimensions would have cost.
     const SUBCUBE_Q = () => query(pool, `
+      WITH fwd AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median)
       SELECT (${ZONE_MAP_SQL('i.zone')}) AS zone,
              COALESCE(NULLIF(TRIM(d.sub_category), ''), '(unknown)') AS sub,
-             COALESCE(d.category, '(unknown)')                      AS cat,
+             -- Same Spare Parts fold as productQ: two labels for one category, and the two
+             -- tables must agree or switching months would renumber the rows.
+             CASE WHEN d.category ILIKE 'spare%part%' OR d.category ILIKE 'sparepart%'
+                  THEN 'Spare Parts'
+                  ELSE COALESCE(d.category, '(unknown)') END        AS cat,
              i.month_year                                           AS month,
+             CASE WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
+                  WHEN upper(i.shipment_mode) = 'RTO'     THEN 'RTO'
+                  ELSE 'Reverse' END                                AS leg,
              COUNT(*)::int                                          AS n,
-             SUM(${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))})::float8 AS cost,
-             SUM(i.charged_weight_courier::float8)::float8          AS wt
+             -- Nets out the bundled forward leg on RTO for the couriers that include it,
+             -- exactly as productQ does. Without this the cube read 7.1% high against the
+             -- server's own table, so selecting a month would have CHANGED the totals
+             -- rather than narrowing them.
+             SUM(CASE WHEN upper(i.shipment_mode) = 'RTO'
+                           AND i.courier_name IN (SELECT courier_name FROM public.lc_courier_profile WHERE is_rto_bundle)
+                           AND f.fwd_t IS NOT NULL
+                      THEN GREATEST(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} - f.fwd_t, 0)
+                      ELSE ${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))} END)::float8 AS cost,
+             SUM(i.charged_weight_courier::float8)::float8          AS wt,
+             -- Billable slab per shipment, summed so the client can average it. Slabbing
+             -- the average instead would round a blend no parcel is charged.
+             SUM(${SLAB_OF('i.charged_weight_courier::float8')})::float8 AS slab_sum,
+             SUM(d.volumetric_kg::float8)::float8                   AS vw_sum,
+             COUNT(d.volumetric_kg)::int                            AS vw_n
         FROM public.logistics_invoices_b2c i
         LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
+        LEFT JOIN fwd f ON f.courier_name = i.courier_name AND f.zone = i.zone
+                       AND f.acct = COALESCE(i.courier_account_type, '(none)')
+                       AND f.slab = ${SLAB_OF('i.charged_weight_courier::float8')}
        WHERE i.total_cost IS NOT NULL
          AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
          -- Admits courier-zero rows: the fallback below gives them a real weight.
          AND COALESCE(NULLIF(i.charged_weight_courier, 0), i.declared_weight_frido) > 0
          AND i.charged_weight_courier <= 500
-       GROUP BY 1, 2, 3, 4
+       GROUP BY 1, 2, 3, 4, 5
     `, [])
 
     const CUBE_Q = `
