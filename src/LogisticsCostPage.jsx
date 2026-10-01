@@ -999,7 +999,17 @@ function SegPair({ options, value, onChange }) {
 // Full-width labelled dropdown, styled like the Performance sidebar's FILTERS block.
 // Handles both single-select (destination city) and multi-select (zone, mode, payment)
 // so every filter in that block looks the same regardless of arity.
-function SearchSelect({ label, options, value, onChange, multi, selected }) {
+// `anchored` — panel positioned absolutely against the trigger instead of fixed to the
+// viewport. The two call sites have genuinely different constraints:
+//
+//   sidebar (default)  the rail is overflow:hidden for its collapse animation and
+//                      overflowY:auto inside, so an absolute panel is clipped to a 220px
+//                      column. It must be position:fixed to escape, and it accepts the
+//                      scroll-tracking cost that comes with that.
+//   card header        nothing clips it, so absolute positioning lets the browser keep the
+//                      panel glued to the button — no JS tracking, so no lag while the
+//                      page scrolls underneath.
+function SearchSelect({ label, options, value, onChange, multi, selected, anchored }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [staged, setStaged] = useState([])
@@ -1015,38 +1025,43 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  // Panel position, measured AFTER the panel exists rather than computed inline in the
-  // style object. Measuring during render was the long-standing bug here: the rect was
-  // read in the same render that opened the panel (so it could predate the browser's
-  // layout of that frame), it was re-read on every keystroke in the search box, and
-  // nothing re-ran it on scroll — so a `position: fixed` panel kept coordinates frozen
-  // from the moment of opening and drifted away from its button as the page scrolled.
+  // Whether the panel opens upward. Measured once at open, for both modes. Held in state
+  // rather than read inline during render so a keystroke in the search box cannot
+  // re-measure and make the panel jump mid-search.
+  const [flip, setFlip] = useState(false)
+  // Viewport coordinates, for the fixed (sidebar) mode only.
   const [pos, setPos] = useState(null)
+
   useLayoutEffect(() => {
     if (!open) { setPos(null); return }
     const place = () => {
       const el = btnRef.current || ref.current
       if (!el) return
       const r = el.getBoundingClientRect()
-      const W = 240, M = 8
+      const up = window.innerHeight - r.bottom < 300 && r.top > 300
+      setFlip(up)
+      if (anchored) return
       // Right edge of the panel aligned to the right edge of the trigger, then clamped so
       // it cannot leave the viewport on either side. One `left` drives both the below and
-      // flipped-above cases, so the two branches cannot disagree horizontally.
+      // flipped cases, so they cannot disagree horizontally.
+      const W = 240, M = 8
       const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
-      setPos(window.innerHeight - r.bottom < 300
+      setPos(up
         ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
         : { top: (r.bottom + 4) + 'px', left: left + 'px' })
     }
     place()
-    // capture: true — the panel must follow the button when ANY ancestor scrolls, not
-    // just the window. Scroll events from inner containers do not bubble.
+    if (anchored) return
+    // Fixed panels are pinned to the viewport, so they have to be re-placed as the page
+    // moves. capture: true because the page scrolls inside .page-scroll, not the window,
+    // and scroll events from inner containers do not bubble.
     window.addEventListener('scroll', place, true)
     window.addEventListener('resize', place)
     return () => {
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open])
+  }, [open, anchored])
 
   const list = options || []
   const sel = multi ? (selected || []) : []
@@ -1081,17 +1096,19 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        // Measured from the BUTTON, not the wrapper: the wrapper is position:relative with
-        // no width of its own, so inside a flex card header it can be wider than the
-        // control that was clicked, and the panel would open offset from it.
+        // anchored: absolute against the wrapper's RIGHT edge, which is the button's right
+        // edge (the button is width:100% of the wrapper). Right-aligned because the trigger
+        // sits at the right end of a card header, so opening leftward keeps the panel inside
+        // the card rather than over the neighbouring chart. Layout moves it with the button,
+        // so there is nothing to track and nothing to lag.
         //
-        // `pos` comes from the layout effect above, and carries EITHER top or bottom — no
-        // fallback coordinates are spread underneath it, since a stray `top: 0` would fight
-        // the flipped-above case. Until that first measurement lands the panel is hidden,
-        // so it never paints for a frame in the corner.
-        <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          visibility: pos ? 'visible' : 'hidden',
-          ...(pos || { top: 0, left: 0 }),
+        // otherwise: fixed, at coordinates measured from the button, which is the only way
+        // out of the sidebar's overflow:hidden. Hidden until the first measurement lands so
+        // it never paints for a frame in the corner.
+        <div style={{ zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxWidth: '85vw', maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(anchored
+            ? { position: 'absolute', right: 0, ...(flip ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }) }
+            : { position: 'fixed', visibility: pos ? 'visible' : 'hidden', ...(pos || { top: 0, left: 0 }) }),
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
@@ -5420,7 +5437,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
           action={zoneSubOptions.length ? (
             <SearchSelect label="All sub-categories" options={zoneSubOptions}
-              value={zoneSub || null}
+              value={zoneSub || null} anchored
               onChange={v => setZoneSub(v || '')} />
           ) : null}>
           <div style={{ height: 200 }}>
