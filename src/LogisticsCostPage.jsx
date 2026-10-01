@@ -1128,7 +1128,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected, anchor
                 style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
                 {/* The label is sometimes already a summary ("All sub-categories"), in
                     which case prefixing "All" reads as "All All sub-categories". */}
-                {/^all/i.test(String(label)) ? label : `All ${label}`}
+                {/^all\b/i.test(String(label)) ? label : `All ${label}`}
               </div>
             )}
             {filtered.map(o => {
