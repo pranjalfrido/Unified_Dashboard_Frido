@@ -3532,12 +3532,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       },
       {
         label: 'Lane detail', file: 'b2c_lanes',
-        rows: (agg?.byLane || []).map(r => ({
-          lane: r.key, shipments: num(r.n), cost: round(r.cost),
+        // byLane is an OBJECT here, not an array: shapeResponse puts it through toMap(),
+        // which keys rows by `key` and camelCases the fields (overKg, not over_kg).
+        // likeForLike, rateGrid and subCube are passed through untouched, so only this one
+        // needs the entries() treatment.
+        rows: Object.entries(agg?.byLane || {}).map(([lane, r]) => ({
+          lane, shipments: num(r.n), cost: round(r.cost),
           avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
           billed_weight_kg: round(r.wt, 3),
           cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
-          excess_weight_kg: round(r.over_kg, 3),
+          excess_weight_kg: round(r.overKg, 3),
         })),
       },
       {
