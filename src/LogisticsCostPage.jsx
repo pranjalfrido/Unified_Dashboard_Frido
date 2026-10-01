@@ -2132,6 +2132,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       rtoAvg: num(r.rto_avg),
       claimRs: num(r.claim_rs),
       claimN: num(r.claim_n),
+      // Carried for the CSV export rather than the table: the card has no room for leg
+      // counts or the weight gap, but a spreadsheet reading "₹61 reverse" cannot tell
+      // whether that is 30,000 legs or three without them.
+      fwdN: num(r.fwd_n),
+      revN: num(r.rev_n),
+      rtoN: num(r.rto_n),
+      avgGapKg: num(r.avg_gap_kg),
     }))
     const total = rows.reduce((a, r) => a + r.cost, 0)
     return rows.map(r => ({ ...r, share: total ? (r.cost / total) * 100 : 0 }))
@@ -3437,6 +3444,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             courier: r.courier, shipments: r.shipments, cost: round(r.cost),
             avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
             avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+            // Recoverable split by cause: the two need different remedies, so a single
+            // total would not be actionable in a spreadsheet either.
+            recoverable_total: round(r.recTotal),
+            recoverable_inflated_weight: round(r.recInfl),
+            recoverable_unexpected_charge: round(r.recUnexp),
+            // Subset of the inflated-weight figure the courier has conceded in writing.
+            recoverable_admitted: round(r.recAdmit),
+            recoverable_admitted_shipments: num(r.recAdmitN),
+            reverse_leg_pct: round(r.reversePct, 1),
             // Matches the on-screen column, so an exported sheet reconciles with the tab.
             share_of_spend_pct: tot > 0 ? round((Number(r.cost) || 0) / tot * 100, 1) : null,
           }
@@ -3455,8 +3471,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         rows: (slabRows || []).map(r => ({
           slab_kg: r.slab, shipments: r.n, cost: round(r.cost),
           avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
-          forward: round(r.fwdAvg), reverse: round(r.revAvg), rto: round(r.rtoAvg),
-          share_pct: round(r.share, 1), claimable: round(r.claimRs),
+          forward_avg: round(r.fwdAvg), reverse_avg: round(r.revAvg), rto_avg: round(r.rtoAvg),
+          forward_shipments: num(r.fwdN), reverse_shipments: num(r.revN),
+          rto_shipments: num(r.rtoN),
+          share_pct: round(r.share, 1),
+          claimable: round(r.claimRs), claimable_shipments: num(r.claimN),
+          // Charged minus declared weight. Negative means the courier billed LESS than we
+          // declared; positive is the overbilling the claim column prices.
+          avg_weight_gap_kg: round(r.avgGapKg, 3),
         })),
       },
       {
@@ -3467,26 +3489,120 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         })),
       },
       {
+        // The chart plots one line per courier; this is the table behind it, at the grain
+        // the chart actually draws (courier × month) rather than the first-vs-latest
+        // summary the on-screen table collapses it to.
+        label: 'Monthly trend', file: 'b2c_monthly',
+        rows: (trendRows || []).map(r => ({
+          month: r.raw ?? r.month, shipments: num(r.shipments), cost: round(r.cost),
+          avg_per_shipment: num(r.shipments) > 0 ? round(num(r.cost) / num(r.shipments)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+          shipment_value: round(r.value),
+          freight_pct_of_value: num(r.value) > 0 ? round(num(r.cost) / num(r.value) * 100, 2) : null,
+        })),
+      },
+      {
+        label: 'Effective rate drift by courier', file: 'b2c_rate_drift',
+        rows: (driftRows || []).map(r => ({
+          courier: r.courier, first_month_cost_per_kg: round(r.first, 2),
+          latest_month_cost_per_kg: round(r.last, 2),
+          drift_pct: round(r.drift, 1), months_observed: num(r.months),
+        })),
+      },
+      {
+        // Courier × zone × slab, the grain the comparison grid is built on. The card can
+        // only show one slice at a time, so the full matrix is export-only.
+        label: 'Courier rate grid (courier × zone × slab)', file: 'b2c_rate_grid',
+        rows: (agg?.rateGrid || []).map(r => ({
+          courier: r.courier, zone: r.zone, slab_kg: r.slab,
+          shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+        })),
+      },
+      {
+        // Like-for-like: same zone, band, slab and leg, so courier costs are comparable.
+        // This is the evidence behind any "move volume to courier X" decision.
+        label: 'Like-for-like courier comparison', file: 'b2c_like_for_like',
+        rows: (agg?.likeForLike || []).map(r => ({
+          zone: r.zone, weight_band: r.band, slab_kg: r.slab, leg: r.leg,
+          courier: r.courier_name, shipments: num(r.n),
+          avg_per_shipment: round(r.avg_cost), cost_per_kg: round(r.cpk, 2),
+        })),
+      },
+      {
+        label: 'Lane detail', file: 'b2c_lanes',
+        rows: (agg?.byLane || []).map(r => ({
+          lane: r.key, shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+          excess_weight_kg: round(r.over_kg, 3),
+        })),
+      },
+      {
         label: 'Cost by product', file: 'b2c_products',
-        // Flattened: a CSV has no notion of the expandable category/sub-category tree, so
-        // each row carries its own category and a level marker instead.
-        rows: (productRows || []).flatMap(c => [
-          {
-            level: 'category', category: c.cat, sub_category: '',
-            shipments: c.n, cost: round(c.cost), avg_logistics_cost: round(c.ctsReal),
-            billable_slab_kg: round(c.masterSlab ?? c.cw, 2), actual_weight_kg: round(c.masterKg, 3),
-          },
-          ...(c.children || []).map(s => ({
-            level: 'sub_category', category: c.cat, sub_category: s.sub,
-            shipments: s.n, cost: round(s.cost), avg_logistics_cost: round(s.ctsReal),
-            billable_slab_kg: round(s.masterSlab ?? s.cw, 2), actual_weight_kg: round(s.masterKg, 3),
-          })),
-        ]),
+        // Sourced from agg.byProduct, NOT productRows. productRows is the flat display
+        // list: it contains a category's children only while that category is expanded on
+        // screen, and it drops rows entirely when the search box is in use. Exporting it
+        // meant the file silently depended on what the reader happened to have open — and
+        // since those rows carry `label`/`isSub` rather than `cat`/`children`/`sub`, the
+        // category column came out blank and no sub-category row was ever written at all.
+        //
+        // Flattened with a level marker, since a CSV has no notion of the tree. Every
+        // category is followed by all of its sub-categories, whatever the screen shows.
+        rows: (agg?.byProduct || []).flatMap(c => {
+          // Same derivation the table uses, so an exported figure matches the cell.
+          const line = (r, level, cat, sub) => ({
+            level, category: cat, sub_category: sub,
+            shipments: num(r.n), cost: round(r.cost),
+            avg_cost_per_shipment: round(r.avg_cost),
+            // Forward + reverse + RTO, each scaled by how often it happens. The headline
+            // "cost to serve" column on the tab.
+            avg_logistics_cost: round(costToServe(r).ctsReal),
+            forward_shipments: num(r.fwd_n), forward_avg: round(r.fwd_avg),
+            reverse_shipments: num(r.rev_n), reverse_avg: round(r.rev_avg),
+            rto_shipments: num(r.rto_n), rto_avg: round(r.rto_avg),
+            billable_slab_kg: round(r.master_slab ?? r.cw_slab_avg, 2),
+            actual_weight_kg: round(r.master_kg, 3),
+            charged_weight_avg_kg: round(r.cw_avg, 3),
+            volumetric_weight_avg_kg: round(r.vw_avg, 3),
+            // How many distinct slabs this product has been billed in. A high count on a
+            // single SKU is the packaging-inconsistency signal, and it is the one column
+            // that explains an out-of-line cost without opening another tab.
+            slab_variants: num(r.cw_slab_variants),
+            most_common_slab_kg: round(r.cw_slab_mode, 2),
+          })
+          return [
+            line(c, 'category', c.cat, ''),
+            ...[...(c.children || [])]
+              .sort((a, b) => num(b.cost) - num(a.cost))
+              .map(s => line(s, 'sub_category', c.cat, s.sub)),
+          ]
+        }),
+      },
+      {
+        // Zone x sub-category x month, the grain behind "Cost by product" and "Cost by
+        // zone". Neither on-screen table can show it (one collapses zones, the other
+        // collapses products), so without this export the detail is unreachable.
+        label: 'Product × zone × month detail', file: 'b2c_product_zone_month',
+        // subCube carries every uploaded month regardless of the slicer, so the Billing
+        // Period selection is applied here explicitly — without it this one file would
+        // disagree with every other sheet in the same export.
+        rows: (agg?.subCube || [])
+          .filter(r => !filters.months?.length || filters.months.includes(r.month))
+          .map(r => ({
+          month: r.month, category: r.cat, sub_category: r.sub, zone: r.zone,
+          shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+        })),
       },
     ]
-  }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
-      tpl?.partners,
-      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
+  }, [scope, b2b, b2bTrendRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      tpl?.partners, agg, filters.months, costToServe,
+      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, trendRows, driftRows])
 
   // Filename suffix so a file on disk still says what it was filtered to.
   const exportSuffix = useMemo(() => {
