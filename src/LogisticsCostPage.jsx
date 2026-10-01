@@ -4464,7 +4464,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               are what a reader actually needs for those two. */}
           <Card style={{ display: 'flex', flexDirection: 'column' }} title="Freight type mix"
             note="share of total freight spend">
-            <div style={{ height: 168 }}>
+            {/* flex:1, not a fixed 168px. This card shares an auto-fit grid row with Rate
+                consistency by lane, which sizes to its row count — so the card grows but a
+                fixed-height chart left the donut stranded at the top with dead space under
+                the table. minHeight keeps it readable when the sibling is short. */}
+            <div style={{ flex: 1, minHeight: 168 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
                   <Tooltip
@@ -4485,7 +4489,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       )
                     }} />
                   <Pie data={b2bTypeRows} dataKey="cost" nameKey="key" cx="50%" cy="50%"
-                    innerRadius={40} outerRadius={64} paddingAngle={2}
+                    innerRadius="52%" outerRadius="82%" paddingAngle={2}
                     stroke={VIZ.surface} strokeWidth={2} label={false} labelLine={false}>
                     {/* Fixed order by spend, so a type keeps its colour as the filter changes. */}
                     {b2bTypeRows.map((r, i) => (
