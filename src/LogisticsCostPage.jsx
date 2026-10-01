@@ -651,8 +651,12 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   }
 
   const b2cRange = monthRange(months)
-  const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
-  const tplRange = monthRange((tplMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+  // `month` is included: varMonths keys its period that way, where b2bMonths used `key`.
+  // Without it the mapper returned nothing and the section vanished rather than showing a
+  // wrong range — which is the quieter failure of the two.
+  const monthKey = r => r.key || r.month_year || r.month
+  const b2bRange = monthRange((b2bMonths || []).map(monthKey).filter(Boolean))
+  const tplRange = monthRange((tplMonths || []).map(monthKey).filter(Boolean))
 
   // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
   const sections = []
@@ -676,8 +680,15 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
         b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
         // This ledger counts transporters, not couriers — the label differs from B2C
         // because the underlying unit does.
-        (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
-          ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
+        // Counted from the same unfiltered rows as the month range above, for the same
+        // reason the 3PL counts are: bt.transporters is narrowed to the selected period,
+        // so it would state the carriers used in August beside a range covering Apr-Aug.
+        // Falls back to the slicer option list, then to the period figure.
+        (() => {
+          const n = new Set((b2bMonths || []).map(r => r.transporter).filter(Boolean)).size
+            || (transporters || []).length || Number(bt.transporters) || 0
+          return n > 0 && ['Transporters', fmtN(n)]
+        })(),
       ].filter(Boolean),
     })
   }
@@ -690,14 +701,20 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   // shipment count is not a figure it carries — the parcels it handles are counted by the
   // B2C ledger above, and reporting them here would double-count them.
   if (scope !== 'b2c' && scope !== 'b2b') {
-    const tt = tplTotals || {}
+    // Counted from the SAME unfiltered rows the month range is taken from. tplTotals is
+    // narrowed to the selected period, so beside a ledger-wide "5 · Apr – Aug" it reported
+    // August's 7 sites where the ledger has 8 — two rows of one panel disagreeing about
+    // what they describe.
+    const rows3pl = tplMonths || []
+    const nPartners = new Set(rows3pl.map(r => r.partner).filter(Boolean)).size
+    const nSites = new Set(rows3pl.map(r => r.warehouse).filter(Boolean)).size
     sections.push({
       title: '3PL warehousing ledger',
       rows: [
         tplRange && ['Months of data', `${tplRange.n} · ${tplRange.text}`],
-        Number(tt.partners) > 0 && ['Partners', fmtN(Number(tt.partners))],
-        Number(tt.warehouses) > 0 && ['Sites', fmtN(Number(tt.warehouses))],
-        Number(tt.rows) > 0 && ['Invoice lines', fmtN(Number(tt.rows))],
+        nPartners > 0 && ['Partners', fmtN(nPartners)],
+        nSites > 0 && ['Sites', fmtN(nSites)],
+        rows3pl.length > 0 && ['Site-months billed', fmtN(rows3pl.length)],
       ].filter(Boolean),
     })
   }
@@ -6193,15 +6210,20 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               )}
               {/* Data caveats, to the LEFT of the chip because they qualify everything to
                   its right. Overview shows both ledgers; B2C and FTL/PTL show their own. */}
+              {/* Month props come from varMonths / tplWhMonths, NOT b2b.months / tpl.months:
+                  this panel states how much data each LEDGER holds, which must not move when
+                  a billing period is selected. The narrowed arrays made FTL/PTL and 3PL both
+                  report "1 · Aug 2026" against a real 5 months. These two carry every period
+                  by design, since they feed the trend charts. */}
               <DataInfo
                 scope={scope}
                 health={agg?.health}
                 months={scopeMonths}
-                b2bMonths={b2b?.months}
+                b2bMonths={b2b?.varMonths}
                 b2bTotals={b2b?.totals}
                 couriers={opts.couriers}
                 transporters={opts.transporters}
-                tplMonths={tpl?.months}
+                tplMonths={b2b?.tplWhMonths}
                 tplTotals={tpl?.totals}
               />
               {/* B2C only: the simulator reallocates parcel volume between couriers by
