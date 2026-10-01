@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Children } from 'react'
 import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import LoadingOverlay from './LoadingOverlay.jsx'
 import {
@@ -1015,6 +1015,39 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  // Panel position, measured AFTER the panel exists rather than computed inline in the
+  // style object. Measuring during render was the long-standing bug here: the rect was
+  // read in the same render that opened the panel (so it could predate the browser's
+  // layout of that frame), it was re-read on every keystroke in the search box, and
+  // nothing re-ran it on scroll — so a `position: fixed` panel kept coordinates frozen
+  // from the moment of opening and drifted away from its button as the page scrolled.
+  const [pos, setPos] = useState(null)
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return }
+    const place = () => {
+      const el = btnRef.current || ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const W = 240, M = 8
+      // Right edge of the panel aligned to the right edge of the trigger, then clamped so
+      // it cannot leave the viewport on either side. One `left` drives both the below and
+      // flipped-above cases, so the two branches cannot disagree horizontally.
+      const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
+      setPos(window.innerHeight - r.bottom < 300
+        ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
+        : { top: (r.bottom + 4) + 'px', left: left + 'px' })
+    }
+    place()
+    // capture: true — the panel must follow the button when ANY ancestor scrolls, not
+    // just the window. Scroll events from inner containers do not bubble.
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
+
   const list = options || []
   const sel = multi ? (selected || []) : []
   const active = multi ? sel.length > 0 : !!value
@@ -1048,26 +1081,17 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
+        // Measured from the BUTTON, not the wrapper: the wrapper is position:relative with
+        // no width of its own, so inside a flex card header it can be wider than the
+        // control that was clicked, and the panel would open offset from it.
+        //
+        // `pos` comes from the layout effect above, and carries EITHER top or bottom — no
+        // fallback coordinates are spread underneath it, since a stray `top: 0` would fight
+        // the flipped-above case. Until that first measurement lands the panel is hidden,
+        // so it never paints for a frame in the corner.
         <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          // Measured from the BUTTON, not the wrapper. The wrapper is position:relative with
-          // no width of its own, so inside a flex card header it can be wider than the
-          // control that was clicked and the panel then opens offset from it.
-          //
-          // Right edge of the panel aligned to the right edge of the trigger, then clamped
-          // so it cannot leave the viewport on either side. One `left` value drives the
-          // horizontal axis in both the below and flipped-above cases, so the two branches
-          // cannot disagree about where the panel sits.
-          ...(() => {
-            try {
-              const r = (btnRef.current || ref.current).getBoundingClientRect()
-              const W = 240, M = 8
-              const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
-              const spaceBelow = window.innerHeight - r.bottom
-              return spaceBelow < 300
-                ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
-                : { top: (r.bottom + 4) + 'px', left: left + 'px' }
-            } catch { return { top: 0, left: 0 } }
-          })()
+          visibility: pos ? 'visible' : 'hidden',
+          ...(pos || { top: 0, left: 0 }),
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
