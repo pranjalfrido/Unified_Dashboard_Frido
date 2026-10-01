@@ -664,7 +664,13 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
   const sections = []
 
-  if (scope !== 'b2b') {
+  // Each section names the scopes it belongs to rather than excluding the ones it does
+  // not. The old form was `scope !== 'b2b'` / `scope !== 'b2c'`, which was exhaustive when
+  // the tabs were Overview, B2C and FTL/PTL — and then silently admitted every section on
+  // the 3PL tab once that scope was added, so it listed all three ledgers.
+  const onOverview = scope !== 'b2c' && scope !== 'b2b' && scope !== 'tpl'
+
+  if (onOverview || scope === 'b2c') {
     sections.push({
       title: 'B2C courier ledger',
       rows: [
@@ -675,7 +681,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
     })
   }
 
-  if (scope !== 'b2c') {
+  if (onOverview || scope === 'b2b') {
     const bt = b2bTotals || {}
     sections.push({
       title: 'FTL/PTL freight ledger',
@@ -703,7 +709,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   // Sites and partners rather than shipments: this ledger bills per site per month, so a
   // shipment count is not a figure it carries — the parcels it handles are counted by the
   // B2C ledger above, and reporting them here would double-count them.
-  if (scope !== 'b2c' && scope !== 'b2b') {
+  if (onOverview || scope === 'tpl') {
     // Counted from the SAME unfiltered rows the month range is taken from. tplTotals is
     // narrowed to the selected period, so beside a ledger-wide "5 · Apr – Aug" it reported
     // August's 7 sites where the ledger has 8 — two rows of one panel disagreeing about
