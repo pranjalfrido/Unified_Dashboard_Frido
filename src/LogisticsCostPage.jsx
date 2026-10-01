@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Children } from 'react'
 import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import LoadingOverlay from './LoadingOverlay.jsx'
 import {
@@ -325,7 +325,6 @@ function shapeResponse(j) {
     rateDrift: j.rateDrift || [],
     byProduct: j.byProduct || [],
     rateGrid: j.rateGrid || [],
-    courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
     // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
     // round trip — see the zone slicer below.
@@ -641,7 +640,10 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   const scoped = Number(h.scoped) || 0
 
   const monthRange = list => {
-    const s = [...(list || [])].sort()
+    // DISTINCT months, not rows. The sources are row sets, not month lists: varMonths is
+    // (month, transporter, vehicle, freight_type) and tplWhMonths is (site, month), so
+    // counting entries reported "95 months" and "36 months" for ledgers holding five.
+    const s = [...new Set((list || []).filter(Boolean).map(String))].sort()
     if (!s.length) return null
     const lab = m => {
       const [y, mo] = String(m).split('-')
@@ -652,13 +654,23 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   }
 
   const b2cRange = monthRange(months)
-  const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
-  const tplRange = monthRange((tplMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+  // `month` is included: varMonths keys its period that way, where b2bMonths used `key`.
+  // Without it the mapper returned nothing and the section vanished rather than showing a
+  // wrong range — which is the quieter failure of the two.
+  const monthKey = r => r.key || r.month_year || r.month
+  const b2bRange = monthRange((b2bMonths || []).map(monthKey).filter(Boolean))
+  const tplRange = monthRange((tplMonths || []).map(monthKey).filter(Boolean))
 
   // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
   const sections = []
 
-  if (scope !== 'b2b') {
+  // Each section names the scopes it belongs to rather than excluding the ones it does
+  // not. The old form was `scope !== 'b2b'` / `scope !== 'b2c'`, which was exhaustive when
+  // the tabs were Overview, B2C and FTL/PTL — and then silently admitted every section on
+  // the 3PL tab once that scope was added, so it listed all three ledgers.
+  const onOverview = scope !== 'b2c' && scope !== 'b2b' && scope !== 'tpl'
+
+  if (onOverview || scope === 'b2c') {
     sections.push({
       title: 'B2C courier ledger',
       rows: [
@@ -669,7 +681,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
     })
   }
 
-  if (scope !== 'b2c') {
+  if (onOverview || scope === 'b2b') {
     const bt = b2bTotals || {}
     sections.push({
       title: 'FTL/PTL freight ledger',
@@ -677,8 +689,15 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
         b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
         // This ledger counts transporters, not couriers — the label differs from B2C
         // because the underlying unit does.
-        (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
-          ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
+        // Counted from the same unfiltered rows as the month range above, for the same
+        // reason the 3PL counts are: bt.transporters is narrowed to the selected period,
+        // so it would state the carriers used in August beside a range covering Apr-Aug.
+        // Falls back to the slicer option list, then to the period figure.
+        (() => {
+          const n = new Set((b2bMonths || []).map(r => r.transporter).filter(Boolean)).size
+            || (transporters || []).length || Number(bt.transporters) || 0
+          return n > 0 && ['Transporters', fmtN(n)]
+        })(),
       ].filter(Boolean),
     })
   }
@@ -690,15 +709,21 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   // Sites and partners rather than shipments: this ledger bills per site per month, so a
   // shipment count is not a figure it carries — the parcels it handles are counted by the
   // B2C ledger above, and reporting them here would double-count them.
-  if (scope !== 'b2c' && scope !== 'b2b') {
-    const tt = tplTotals || {}
+  if (onOverview || scope === 'tpl') {
+    // Counted from the SAME unfiltered rows the month range is taken from. tplTotals is
+    // narrowed to the selected period, so beside a ledger-wide "5 · Apr – Aug" it reported
+    // August's 7 sites where the ledger has 8 — two rows of one panel disagreeing about
+    // what they describe.
+    const rows3pl = tplMonths || []
+    const nPartners = new Set(rows3pl.map(r => r.partner).filter(Boolean)).size
+    const nSites = new Set(rows3pl.map(r => r.warehouse).filter(Boolean)).size
     sections.push({
       title: '3PL warehousing ledger',
       rows: [
         tplRange && ['Months of data', `${tplRange.n} · ${tplRange.text}`],
-        Number(tt.partners) > 0 && ['Partners', fmtN(Number(tt.partners))],
-        Number(tt.warehouses) > 0 && ['Sites', fmtN(Number(tt.warehouses))],
-        Number(tt.rows) > 0 && ['Invoice lines', fmtN(Number(tt.rows))],
+        nPartners > 0 && ['Partners', fmtN(nPartners)],
+        nSites > 0 && ['Sites', fmtN(nSites)],
+        rows3pl.length > 0 && ['Site-months billed', fmtN(rows3pl.length)],
       ].filter(Boolean),
     })
   }
@@ -974,7 +999,17 @@ function SegPair({ options, value, onChange }) {
 // Full-width labelled dropdown, styled like the Performance sidebar's FILTERS block.
 // Handles both single-select (destination city) and multi-select (zone, mode, payment)
 // so every filter in that block looks the same regardless of arity.
-function SearchSelect({ label, options, value, onChange, multi, selected }) {
+// `anchored` — panel positioned absolutely against the trigger instead of fixed to the
+// viewport. The two call sites have genuinely different constraints:
+//
+//   sidebar (default)  the rail is overflow:hidden for its collapse animation and
+//                      overflowY:auto inside, so an absolute panel is clipped to a 220px
+//                      column. It must be position:fixed to escape, and it accepts the
+//                      scroll-tracking cost that comes with that.
+//   card header        nothing clips it, so absolute positioning lets the browser keep the
+//                      panel glued to the button — no JS tracking, so no lag while the
+//                      page scrolls underneath.
+function SearchSelect({ label, options, value, onChange, multi, selected, anchored }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [staged, setStaged] = useState([])
@@ -989,6 +1024,44 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+
+  // Whether the panel opens upward. Measured once at open, for both modes. Held in state
+  // rather than read inline during render so a keystroke in the search box cannot
+  // re-measure and make the panel jump mid-search.
+  const [flip, setFlip] = useState(false)
+  // Viewport coordinates, for the fixed (sidebar) mode only.
+  const [pos, setPos] = useState(null)
+
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return }
+    const place = () => {
+      const el = btnRef.current || ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const up = window.innerHeight - r.bottom < 300 && r.top > 300
+      setFlip(up)
+      if (anchored) return
+      // Right edge of the panel aligned to the right edge of the trigger, then clamped so
+      // it cannot leave the viewport on either side. One `left` drives both the below and
+      // flipped cases, so they cannot disagree horizontally.
+      const W = 240, M = 8
+      const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
+      setPos(up
+        ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
+        : { top: (r.bottom + 4) + 'px', left: left + 'px' })
+    }
+    place()
+    if (anchored) return
+    // Fixed panels are pinned to the viewport, so they have to be re-placed as the page
+    // moves. capture: true because the page scrolls inside .page-scroll, not the window,
+    // and scroll events from inner containers do not bubble.
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, anchored])
 
   const list = options || []
   const sel = multi ? (selected || []) : []
@@ -1023,26 +1096,19 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'fixed', zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
-          // Measured from the BUTTON, not the wrapper. The wrapper is position:relative with
-          // no width of its own, so inside a flex card header it can be wider than the
-          // control that was clicked and the panel then opens offset from it.
-          //
-          // Right edge of the panel aligned to the right edge of the trigger, then clamped
-          // so it cannot leave the viewport on either side. One `left` value drives the
-          // horizontal axis in both the below and flipped-above cases, so the two branches
-          // cannot disagree about where the panel sits.
-          ...(() => {
-            try {
-              const r = (btnRef.current || ref.current).getBoundingClientRect()
-              const W = 240, M = 8
-              const left = Math.min(Math.max(M, r.right - W), window.innerWidth - W - M)
-              const spaceBelow = window.innerHeight - r.bottom
-              return spaceBelow < 300
-                ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: left + 'px' }
-                : { top: (r.bottom + 4) + 'px', left: left + 'px' }
-            } catch { return { top: 0, left: 0 } }
-          })()
+        // anchored: absolute against the wrapper's RIGHT edge, which is the button's right
+        // edge (the button is width:100% of the wrapper). Right-aligned because the trigger
+        // sits at the right end of a card header, so opening leftward keeps the panel inside
+        // the card rather than over the neighbouring chart. Layout moves it with the button,
+        // so there is nothing to track and nothing to lag.
+        //
+        // otherwise: fixed, at coordinates measured from the button, which is the only way
+        // out of the sidebar's overflow:hidden. Hidden until the first measurement lands so
+        // it never paints for a frame in the corner.
+        <div style={{ zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxWidth: '85vw', maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(anchored
+            ? { position: 'absolute', right: 0, ...(flip ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }) }
+            : { position: 'fixed', visibility: pos ? 'visible' : 'hidden', ...(pos || { top: 0, left: 0 }) }),
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
@@ -1062,7 +1128,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
                 style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
                 {/* The label is sometimes already a summary ("All sub-categories"), in
                     which case prefixing "All" reads as "All All sub-categories". */}
-                {/^all/i.test(String(label)) ? label : `All ${label}`}
+                {/^all\b/i.test(String(label)) ? label : `All ${label}`}
               </div>
             )}
             {filtered.map(o => {
@@ -1955,8 +2021,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   const courierRows = useMemo(() => {
     if (!agg) return []
-    // Claimable weight overbilling per courier, keyed for lookup below.
-    const claimBy = new Map((agg.courierDisputes || []).map(d => [d.courier_name, d]))
+
     return Object.entries(agg.byCourier)
       .map(([courier, b]) => ({
         courier, shipments: b.n, cost: b.cost,
@@ -1970,9 +2035,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         recTotal: b.recInfl + b.recUnexp,
         // Reverse-leg share: an operational-quality signal, not a cost one.
         reversePct: b.n ? (b.reverseN / b.n) * 100 : 0,
-        // Weight-only claim on the total-cost basis, so this column reconciles with the
-        // headline figure. recInfl above is base freight and stays for the stacked chart.
-        claimRs: Number(claimBy.get(courier)?.weight_rs) || 0,
+        // Weight-only claim. Was read from lc_courier_disputes, a pre-computed table whose
+        // query could not finish — it joined the rate card twice across 14.6 lakh rows on
+        // `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash, and failed at
+        // 901s even on a direct connection. So it had been stale since 24 Sep and this
+        // column was showing 44.08 L against a true 59.20 L.
+        //
+        // b.recInfl is the same measure — GREATEST(courier's weight cost - ours, 0) — but
+        // computed inside the cube, which rebuilds hourly. One source, always fresh, and
+        // it reconciles with the Recoverable table below rather than quietly disagreeing.
+        claimRs: b.recInfl,
       }))
       .sort((a, b) => b.cost - a.cost)
   }, [agg])
@@ -2060,6 +2132,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       rtoAvg: num(r.rto_avg),
       claimRs: num(r.claim_rs),
       claimN: num(r.claim_n),
+      // Carried for the CSV export rather than the table: the card has no room for leg
+      // counts or the weight gap, but a spreadsheet reading "₹61 reverse" cannot tell
+      // whether that is 30,000 legs or three without them.
+      fwdN: num(r.fwd_n),
+      revN: num(r.rev_n),
+      rtoN: num(r.rto_n),
+      avgGapKg: num(r.avg_gap_kg),
     }))
     const total = rows.reduce((a, r) => a + r.cost, 0)
     return rows.map(r => ({ ...r, share: total ? (r.cost / total) * 100 : 0 }))
@@ -3365,6 +3444,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             courier: r.courier, shipments: r.shipments, cost: round(r.cost),
             avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
             avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+            // Recoverable split by cause: the two need different remedies, so a single
+            // total would not be actionable in a spreadsheet either.
+            recoverable_total: round(r.recTotal),
+            recoverable_inflated_weight: round(r.recInfl),
+            recoverable_unexpected_charge: round(r.recUnexp),
+            // Subset of the inflated-weight figure the courier has conceded in writing.
+            recoverable_admitted: round(r.recAdmit),
+            recoverable_admitted_shipments: num(r.recAdmitN),
+            reverse_leg_pct: round(r.reversePct, 1),
             // Matches the on-screen column, so an exported sheet reconciles with the tab.
             share_of_spend_pct: tot > 0 ? round((Number(r.cost) || 0) / tot * 100, 1) : null,
           }
@@ -3383,8 +3471,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         rows: (slabRows || []).map(r => ({
           slab_kg: r.slab, shipments: r.n, cost: round(r.cost),
           avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
-          forward: round(r.fwdAvg), reverse: round(r.revAvg), rto: round(r.rtoAvg),
-          share_pct: round(r.share, 1), claimable: round(r.claimRs),
+          forward_avg: round(r.fwdAvg), reverse_avg: round(r.revAvg), rto_avg: round(r.rtoAvg),
+          forward_shipments: num(r.fwdN), reverse_shipments: num(r.revN),
+          rto_shipments: num(r.rtoN),
+          share_pct: round(r.share, 1),
+          claimable: round(r.claimRs), claimable_shipments: num(r.claimN),
+          // Charged minus declared weight. Negative means the courier billed LESS than we
+          // declared; positive is the overbilling the claim column prices.
+          avg_weight_gap_kg: round(r.avgGapKg, 3),
         })),
       },
       {
@@ -3395,26 +3489,124 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         })),
       },
       {
+        // The chart plots one line per courier; this is the table behind it, at the grain
+        // the chart actually draws (courier × month) rather than the first-vs-latest
+        // summary the on-screen table collapses it to.
+        label: 'Monthly trend', file: 'b2c_monthly',
+        rows: (trendRows || []).map(r => ({
+          month: r.raw ?? r.month, shipments: num(r.shipments), cost: round(r.cost),
+          avg_per_shipment: num(r.shipments) > 0 ? round(num(r.cost) / num(r.shipments)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+          shipment_value: round(r.value),
+          freight_pct_of_value: num(r.value) > 0 ? round(num(r.cost) / num(r.value) * 100, 2) : null,
+        })),
+      },
+      {
+        label: 'Effective rate drift by courier', file: 'b2c_rate_drift',
+        rows: (driftRows || []).map(r => ({
+          courier: r.courier, first_month_cost_per_kg: round(r.first, 2),
+          latest_month_cost_per_kg: round(r.last, 2),
+          drift_pct: round(r.drift, 1), months_observed: num(r.months),
+        })),
+      },
+      {
+        // Courier × zone × slab, the grain the comparison grid is built on. The card can
+        // only show one slice at a time, so the full matrix is export-only.
+        label: 'Courier rate grid (courier × zone × slab)', file: 'b2c_rate_grid',
+        rows: (agg?.rateGrid || []).map(r => ({
+          courier: r.courier, zone: r.zone, slab_kg: r.slab,
+          shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+        })),
+      },
+      {
+        // Like-for-like: same zone, band, slab and leg, so courier costs are comparable.
+        // This is the evidence behind any "move volume to courier X" decision.
+        label: 'Like-for-like courier comparison', file: 'b2c_like_for_like',
+        rows: (agg?.likeForLike || []).map(r => ({
+          zone: r.zone, weight_band: r.band, slab_kg: r.slab, leg: r.leg,
+          courier: r.courier_name, shipments: num(r.n),
+          avg_per_shipment: round(r.avg_cost), cost_per_kg: round(r.cpk, 2),
+        })),
+      },
+      {
+        label: 'Lane detail', file: 'b2c_lanes',
+        // byLane is an OBJECT here, not an array: shapeResponse puts it through toMap(),
+        // which keys rows by `key` and camelCases the fields (overKg, not over_kg).
+        // likeForLike, rateGrid and subCube are passed through untouched, so only this one
+        // needs the entries() treatment.
+        rows: Object.entries(agg?.byLane || {}).map(([lane, r]) => ({
+          lane, shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+          excess_weight_kg: round(r.overKg, 3),
+        })),
+      },
+      {
         label: 'Cost by product', file: 'b2c_products',
-        // Flattened: a CSV has no notion of the expandable category/sub-category tree, so
-        // each row carries its own category and a level marker instead.
-        rows: (productRows || []).flatMap(c => [
-          {
-            level: 'category', category: c.cat, sub_category: '',
-            shipments: c.n, cost: round(c.cost), avg_logistics_cost: round(c.ctsReal),
-            billable_slab_kg: round(c.masterSlab ?? c.cw, 2), actual_weight_kg: round(c.masterKg, 3),
-          },
-          ...(c.children || []).map(s => ({
-            level: 'sub_category', category: c.cat, sub_category: s.sub,
-            shipments: s.n, cost: round(s.cost), avg_logistics_cost: round(s.ctsReal),
-            billable_slab_kg: round(s.masterSlab ?? s.cw, 2), actual_weight_kg: round(s.masterKg, 3),
-          })),
-        ]),
+        // Sourced from agg.byProduct, NOT productRows. productRows is the flat display
+        // list: it contains a category's children only while that category is expanded on
+        // screen, and it drops rows entirely when the search box is in use. Exporting it
+        // meant the file silently depended on what the reader happened to have open — and
+        // since those rows carry `label`/`isSub` rather than `cat`/`children`/`sub`, the
+        // category column came out blank and no sub-category row was ever written at all.
+        //
+        // Flattened with a level marker, since a CSV has no notion of the tree. Every
+        // category is followed by all of its sub-categories, whatever the screen shows.
+        rows: (agg?.byProduct || []).flatMap(c => {
+          // Same derivation the table uses, so an exported figure matches the cell.
+          const line = (r, level, cat, sub) => ({
+            level, category: cat, sub_category: sub,
+            shipments: num(r.n), cost: round(r.cost),
+            avg_cost_per_shipment: round(r.avg_cost),
+            // Forward + reverse + RTO, each scaled by how often it happens. The headline
+            // "cost to serve" column on the tab.
+            avg_logistics_cost: round(costToServe(r).ctsReal),
+            forward_shipments: num(r.fwd_n), forward_avg: round(r.fwd_avg),
+            reverse_shipments: num(r.rev_n), reverse_avg: round(r.rev_avg),
+            rto_shipments: num(r.rto_n), rto_avg: round(r.rto_avg),
+            billable_slab_kg: round(r.master_slab ?? r.cw_slab_avg, 2),
+            actual_weight_kg: round(r.master_kg, 3),
+            charged_weight_avg_kg: round(r.cw_avg, 3),
+            volumetric_weight_avg_kg: round(r.vw_avg, 3),
+            // How many distinct slabs this product has been billed in. A high count on a
+            // single SKU is the packaging-inconsistency signal, and it is the one column
+            // that explains an out-of-line cost without opening another tab.
+            slab_variants: num(r.cw_slab_variants),
+            most_common_slab_kg: round(r.cw_slab_mode, 2),
+          })
+          return [
+            line(c, 'category', c.cat, ''),
+            ...[...(c.children || [])]
+              .sort((a, b) => num(b.cost) - num(a.cost))
+              .map(s => line(s, 'sub_category', c.cat, s.sub)),
+          ]
+        }),
+      },
+      {
+        // Zone x sub-category x month, the grain behind "Cost by product" and "Cost by
+        // zone". Neither on-screen table can show it (one collapses zones, the other
+        // collapses products), so without this export the detail is unreachable.
+        label: 'Product × zone × month detail', file: 'b2c_product_zone_month',
+        // subCube carries every uploaded month regardless of the slicer, so the Billing
+        // Period selection is applied here explicitly — without it this one file would
+        // disagree with every other sheet in the same export.
+        rows: (agg?.subCube || [])
+          .filter(r => !filters.months?.length || filters.months.includes(r.month))
+          .map(r => ({
+          month: r.month, category: r.cat, sub_category: r.sub, zone: r.zone,
+          shipments: num(r.n), cost: round(r.cost),
+          avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
+          billed_weight_kg: round(r.wt, 3),
+          cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
+        })),
       },
     ]
-  }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
-      tpl?.partners,
-      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
+  }, [scope, b2b, b2bTrendRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      tpl?.partners, agg, filters.months, costToServe,
+      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, trendRows, driftRows])
 
   // Filename suffix so a file on disk still says what it was filtered to.
   const exportSuffix = useMemo(() => {
@@ -4433,7 +4625,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               are what a reader actually needs for those two. */}
           <Card style={{ display: 'flex', flexDirection: 'column' }} title="Freight type mix"
             note="share of total freight spend">
-            <div style={{ height: 168 }}>
+            {/* flex:1, not a fixed 168px. This card shares an auto-fit grid row with Rate
+                consistency by lane, which sizes to its row count — so the card grows but a
+                fixed-height chart left the donut stranded at the top with dead space under
+                the table. minHeight keeps it readable when the sibling is short. */}
+            <div style={{ flex: 1, minHeight: 168 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
                   <Tooltip
@@ -4454,7 +4650,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       )
                     }} />
                   <Pie data={b2bTypeRows} dataKey="cost" nameKey="key" cx="50%" cy="50%"
-                    innerRadius={40} outerRadius={64} paddingAngle={2}
+                    innerRadius="52%" outerRadius="82%" paddingAngle={2}
                     stroke={VIZ.surface} strokeWidth={2} label={false} labelLine={false}>
                     {/* Fixed order by spend, so a type keeps its colour as the filter changes. */}
                     {b2bTypeRows.map((r, i) => (
@@ -4494,7 +4690,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             note="cheapest to dearest trip on the same lane and vehicle · all periods · min 8 trips">
             {b2bSpreadRows.length ? (
               <>
-                <div style={{ flex: 1, minHeight: 200 }}>
+                {/* Height follows the row count: 8 lanes in a fixed 200px left ~25px a
+                    row, so a two-line label overlapped its neighbour's bar. 34px a row
+                    plus the axis gives each label its own line and a clear gap. */}
+                <div style={{ flex: 1, minHeight: Math.max(200, b2bSpreadRows.length * 34 + 40) }}>
                   <ResponsiveContainer width="100%" height="100%">
                     {/* A floating band: `lo` is stacked first with a transparent fill and the
                         visible bar sits on top of it, so each bar spans min to max. Recharts
@@ -4505,9 +4704,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                         axisLine={false} tickLine={false}
                         tickFormatter={v => '₹' + Math.round(v / 1000) + 'k'} />
-                      <YAxis type="category" dataKey="key" width={158}
+                      {/* 176px, not 158: the longest labels here run 23 characters
+                          ("Pune → Hyderabad · 20FT") and wrapped to two lines at the old
+                          width. The truncation point drops to 22 so anything longer is
+                          shortened rather than wrapped — one line per lane either way. */}
+                      <YAxis type="category" dataKey="key" width={176}
                         tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false}
-                        tickFormatter={v => (String(v).length > 24 ? String(v).slice(0, 23) + '…' : v)} />
+                        interval={0}
+                        tickFormatter={v => (String(v).length > 22 ? String(v).slice(0, 21) + '…' : v)} />
                       <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
                         content={({ active, payload }) => {
                           if (!active || !payload?.length) return null
@@ -4532,7 +4736,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                           )
                         }} />
                       <Bar dataKey="lo" stackId="s" fill="transparent" isAnimationActive={false} />
-                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={13}>
+                      {/* 16px against a 34px row: enough weight to read as a band without
+                          closing the gap between neighbours. At the old 13px in a taller
+                          row the bars looked stranded. */}
+                      <Bar dataKey="band" stackId="s" fill={SER.blue} radius={[3, 3, 3, 3]} barSize={16}>
                         <LabelList dataKey="spreadPct" position="right"
                           formatter={v => '+' + Math.round(v) + '%'}
                           style={{ fontSize: 10, fill: C.t2, fontWeight: 600 }} />
@@ -5350,7 +5557,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
           action={zoneSubOptions.length ? (
             <SearchSelect label="All sub-categories" options={zoneSubOptions}
-              value={zoneSub || null}
+              value={zoneSub || null} anchored
               onChange={v => setZoneSub(v || '')} />
           ) : null}>
           <div style={{ height: 200 }}>
@@ -6188,15 +6395,20 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               )}
               {/* Data caveats, to the LEFT of the chip because they qualify everything to
                   its right. Overview shows both ledgers; B2C and FTL/PTL show their own. */}
+              {/* Month props come from varMonths / tplWhMonths, NOT b2b.months / tpl.months:
+                  this panel states how much data each LEDGER holds, which must not move when
+                  a billing period is selected. The narrowed arrays made FTL/PTL and 3PL both
+                  report "1 · Aug 2026" against a real 5 months. These two carry every period
+                  by design, since they feed the trend charts. */}
               <DataInfo
                 scope={scope}
                 health={agg?.health}
-                months={scopeMonths}
-                b2bMonths={b2b?.months}
+                months={opts.months}
+                b2bMonths={b2b?.varMonths}
                 b2bTotals={b2b?.totals}
                 couriers={opts.couriers}
                 transporters={opts.transporters}
-                tplMonths={tpl?.months}
+                tplMonths={b2b?.tplWhMonths}
                 tplTotals={tpl?.totals}
               />
               {/* B2C only: the simulator reallocates parcel volume between couriers by

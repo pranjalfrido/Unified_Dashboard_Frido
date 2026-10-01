@@ -1048,7 +1048,16 @@ export default async function handler(req, res) {
       -- scripts/refresh-fwd-median.mjs alongside the derived rate card.
       WITH fwd AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median),
       p AS (
-        SELECT d.category AS cat, d.sub_category AS sub,
+        -- "Sparepart (Chair & Mobility)" and "Spare Parts" are the same category under two
+        -- labels in awb_shipment_dims (973 and 261 shipments, both with the single
+        -- sub-category "Sparepart"), so the table listed spares twice. Folded here in the
+        -- source CTE rather than summed afterwards: the merge has to happen BEFORE the
+        -- aggregate, or the averages, the modal slab and COUNT(DISTINCT cw_slab) would each
+        -- be computed on a half of the category and could not be combined correctly after
+        -- the fact.
+        SELECT CASE WHEN d.category ILIKE 'spare%part%' OR d.category ILIKE 'sparepart%'
+                    THEN 'Spare Parts' ELSE d.category END AS cat,
+               d.sub_category AS sub,
                CASE WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
                     WHEN upper(i.shipment_mode) = 'RTO'     THEN 'RTO'
                     ELSE 'Reverse' END AS leg,
@@ -1198,11 +1207,13 @@ export default async function handler(req, res) {
        ORDER BY slab
     `, [])
 
-    const disputesQ = () => query(pool, `
-      SELECT courier_name, priced_n, disputed_n, weight_rs, rate_rs, total_rs, invoiced_rs
-        FROM public.lc_courier_disputes
-       ORDER BY total_rs DESC
-    `, [])
+    // lc_courier_disputes removed: its build joined the rate card twice across the full
+    // ledger on `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash, and
+    // never finished — 901s even on a direct connection — so the table sat stale from
+    // 24 Sep and poisoned every cache regeneration with a statement timeout.
+    //
+    // Nothing is lost. The one column it fed (Claimable, per courier) is the same measure
+    // as rec_infl, which the cube already computes and rebuilds hourly.
 
     const wrQ = () => query(pool, `
       -- Reads a PRE-COMPUTED single-row summary, not a live join.
@@ -1399,7 +1410,17 @@ export default async function handler(req, res) {
       needsB2cDetail ? driftQ : () => EMPTY,
       needsB2cDetail ? productQ : () => EMPTY,
       cubeQ,
-    ], 3)
+    // Concurrency 1, not 3.
+    //
+    // Five of these queries each open with ${BASE}, a full scan of the 14.6 lakh-row
+    // ledger plus the rate CTEs on top. A bare scan is ~8s; the CTE work takes lflQ to
+    // ~112s and productQ to ~120s on their own. Run three at a time they contend for the
+    // same buffers and every one of them creeps past the pooler's hard 120s ceiling — the
+    // whole request then fails with a statement timeout and the cache cannot regenerate.
+    //
+    // Serialised they finish well inside the limit. Wall-clock is similar, because the
+    // contention was never buying parallelism here: these are I/O-bound on the same table.
+    ], 1)
 
     const DIM_KEY = {
       zone: 'byZone', mode: 'byMode', month: 'byMonth', courier: 'byCourier',
@@ -1507,7 +1528,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube, fixedVeh, fixedVehMonths, tplTotals, tplPartners, tplMonths, tplWarehouses, tplWhMonths] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, slabs, subCube, fixedVeh, fixedVehMonths, tplTotals, tplPartners, tplMonths, tplWarehouses, tplWhMonths] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1799,7 +1820,7 @@ export default async function handler(req, res) {
         needsB2cDetail ? wrQ : () => EMPTY,
         needsB2cDetail ? gridQ : () => EMPTY,
         needsB2cDetail ? trendQ : () => EMPTY,
-        disputesQ, slabQ, SUBCUBE_Q,
+        slabQ, SUBCUBE_Q,
         // ── Fixed vehicle rentals ──
         // Vehicles on a standing monthly charge rather than per-trip billing. Reported
         // separately from freight: there are no trips or lanes to divide by, so folding
@@ -2018,7 +2039,6 @@ export default async function handler(req, res) {
         // measured once per cache period rather than per request.
         weightRate: wr.rows[0] || {},
         rateGrid: gridRes.rows,
-        courierDisputes: disputes.rows,
         slabCosts: slabs.rows,
         // Zone x sub-category cube. Filter-independent by design — the client slices it,
         // so it is measured once per cache period like the other reference data.
@@ -2067,7 +2087,6 @@ export default async function handler(req, res) {
     // Applied here, after section 4 has guaranteed refCache exists.
     Object.assign(out.totals, refCache.weightRate || {})
     out.rateGrid = refCache.rateGrid || []
-    out.courierDisputes = refCache.courierDisputes || []
     out.slabCosts = refCache.slabCosts || []
     // Zone x sub-category cube for the zone slicer. Sent whole and sliced client-side, so
     // changing sub-category costs no round trip — the point of the feature.
