@@ -1361,6 +1361,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const freightTypes = f.freightTypes?.length ? new Set(f.freightTypes) : null
       const tplPartners = f.tplPartners?.length ? new Set(f.tplPartners) : null
       const tplSites = f.tplSites?.length ? new Set(f.tplSites) : null
+      const tplLocations = f.tplLocations?.length ? new Set(f.tplLocations) : null
+      // Location resolves through the warehouse list (pincode → city), same as the tpl useMemo.
+      const locByPin = tplLocations
+        ? new Map((baseData.tplWarehouses || []).map(w => [String(w.pincode ?? ''), w.location]))
+        : null
 
       // baseData.b2b holds raw invoice rows, which DO use transporter_name / vehicle_type.
       // The aggregated arrays below use shorter names and are filtered separately.
@@ -1375,13 +1380,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const tplFilter = r =>
         (!months || months.has(r.month_year || r.key || r.month)) &&
         (!tplPartners || tplPartners.has(r.partner)) &&
-        (!tplSites || tplSites.has(r.warehouse))
+        (!tplSites || tplSites.has(r.warehouse)) &&
+        (!tplLocations || tplLocations.has(locByPin.get(String(r.pincode ?? ''))))
       // Same test without the month clause. tplWhMonths is what the 3PL Monthly Trend and
       // Warehouse Trend re-aggregate from, so it has to keep every period; the tables and
       // tiles below still read the month-filtered rows.
       const tplFilterNoMonth = r =>
         (!tplPartners || tplPartners.has(r.partner)) &&
-        (!tplSites || tplSites.has(r.warehouse))
+        (!tplSites || tplSites.has(r.warehouse)) &&
+        (!tplLocations || tplLocations.has(locByPin.get(String(r.pincode ?? ''))))
 
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
       // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
@@ -1461,7 +1468,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       // zeroed the tab. When either of those slicers is active the month series has to be
       // rebuilt from tplWhMonths, which is the finest grain that still carries them.
       const tplMonthsSrc = (baseData.tplWhMonths || []).filter(tplFilter)
-      const filteredTplMonths = (tplPartners || tplSites)
+      const filteredTplMonths = (tplPartners || tplSites || tplLocations)
         ? Object.values(tplMonthsSrc.reduce((acc, r) => {
             const k = r.month_year
             const a = acc[k] || (acc[k] = { key: k, cost: 0, operation_fee: 0, rental_fee: 0, other_fee: 0, shipments: 0, weight_kg: 0 })
@@ -1477,7 +1484,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       // tplWarehouses names the site in `key` and the partner in `partner`.
       const filteredTplWarehouses = (baseData.tplWarehouses || []).filter(r =>
         (!tplPartners || tplPartners.has(r.partner)) &&
-        (!tplSites || tplSites.has(r.key))
+        (!tplSites || tplSites.has(r.key)) &&
+        (!tplLocations || tplLocations.has(r.location))
       )
       const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilterNoMonth)
 
@@ -1803,8 +1811,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // Options ordered by spend, not alphabetically: with 225 sub-categories the ones worth
   // slicing are the expensive ones, and they should not be buried under an alphabetical A.
+  const subCube = agg?.subCube
   const zoneSubOptions = useMemo(() => {
-    const cube = agg?.subCube || []
+    const cube = subCube || []
     if (!cube.length) return []
     const spend = new Map()
     for (const r of cube) {
@@ -1814,14 +1823,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
     }
     return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
-  }, [agg, filters.months])
+  }, [subCube, filters.months])
 
   // Zone rows for the selected sub-category, or null when nothing is selected so the
   // section falls back to the full byZone breakdown (which carries overbilled counts the
   // cube does not).
   const zoneSubRows = useMemo(() => {
     if (!zoneSub) return null
-    const cube = agg?.subCube || []
+    const cube = subCube || []
     const byZone = new Map()
     let total = 0
     for (const r of cube) {
@@ -1854,7 +1863,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         if (ib === -1) return -1
         return ia - ib
       })
-  }, [agg, zoneSub, filters.months])
+  }, [subCube, zoneSub, filters.months])
 
   const zoneRows = useMemo(() => {
     if (!agg) return []
@@ -3109,11 +3118,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     [overallMonths, ovTrendMonths]
   )
 
-  const toggleIn = (key, val) => {
+  const setOne = useCallback((key, val) => setFilters(f => ({ ...f, [key]: val })), [setFilters])
+  const toggleIn = useCallback((key, val) => {
     if (Array.isArray(val)) { setOne(key, val); return }
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
-  }
-  const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
+  }, [setOne, setFilters])
 
   // ── Default billing period: the most recent 6 months ──
   //
@@ -3518,7 +3527,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <SegPair
           value={filters.billing === 'all' ? null : filters.billing}
           onChange={v => setOne('billing', v || 'all')}
-          options={[{ value: 'over', label: 'Overbilled' }, { value: 'ok', label: 'Clean' }]} />
+          options={[{ value: 'overbilled', label: 'Overbilled' }, { value: 'clean', label: 'Clean' }]} />
         </>)}
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
