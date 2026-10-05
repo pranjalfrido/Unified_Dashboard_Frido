@@ -1667,13 +1667,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         (!months || months.has(r.month_year || r.key || r.month)) &&
         (!tplPartners || tplPartners.has(r.partner)) &&
         (!tplSites || tplSites.has(r.warehouse))
-      // Same test without the month clause. tplWhMonths is what the 3PL Monthly Trend and
-      // Warehouse Trend re-aggregate from, so it has to keep every period; the tables and
-      // tiles below still read the month-filtered rows.
-      const tplFilterNoMonth = r =>
-        (!tplPartners || tplPartners.has(r.partner)) &&
-        (!tplSites || tplSites.has(r.warehouse))
-
       const filteredB2b = (baseData.b2b || []).filter(b2bFilter)
       // b2bLanes is aggregated ACROSS transporters — it carries a `transporters` COUNT, not
       // a name — so there is nothing on it to filter by, and testing a name dropped all 51
@@ -1765,12 +1758,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             return acc
           }, {})).sort((x, y) => String(x.key).localeCompare(String(y.key)))
         : (baseData.tplMonths || []).filter(r => !months || months.has(r.key || r.month_year))
-      // tplWarehouses names the site in `key` and the partner in `partner`.
-      const filteredTplWarehouses = (baseData.tplWarehouses || []).filter(r =>
-        (!tplPartners || tplPartners.has(r.partner)) &&
-        (!tplSites || tplSites.has(r.key))
-      )
-      const filteredTplWhMonths = (baseData.tplWhMonths || []).filter(tplFilterNoMonth)
+      // tplWarehouses and tplWhMonths are deliberately NOT narrowed here. They are passed
+      // through whole so the 3PL slicers keep their full option lists, and the `tpl` memo
+      // applies the live filters to them when it derives the tab's figures.
 
       // Recompute b2bTotals from filtered b2bMonths (pre-aggregated, accurate)
       const b2bTotalsAgg = filteredB2bMonths.reduce((acc, r) => ({
@@ -1824,10 +1814,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         fixedVeh: baseData.fixedVeh || null,
         fixedVehMonths: (baseData.fixedVehMonths || []).filter(r => !months || months.has(r.month_year)),
         tplTotals,
-        tplPartners: (baseData.tplPartners || []).filter(r => !tplPartners || tplPartners.has(r.key)),
+        // NOT narrowed to the selection. These three arrays are what the 3PL slicers build
+        // their option lists from, so filtering them here made each slicer delete its own
+        // alternatives: picking Hexalog left Hexalog as the only chip, with no way to add
+        // a second partner or see what else existed. Same self-narrowing the month slicer
+        // had.
+        //
+        // Passing them whole is also correct for the numbers: the `tpl` memo re-derives
+        // every figure from tplWhMonths against the live filters, so narrowing here was
+        // doing the same work twice rather than contributing anything.
+        tplPartners: baseData.tplPartners || [],
         tplMonths: filteredTplMonths,
-        tplWarehouses: filteredTplWarehouses,
-        tplWhMonths: filteredTplWhMonths,
+        tplWarehouses: baseData.tplWarehouses || [],
+        tplWhMonths: baseData.tplWhMonths || [],
       })
       setLoading(false)
       return
