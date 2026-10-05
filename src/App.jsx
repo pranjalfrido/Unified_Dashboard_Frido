@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import SalesExportDialog from './SalesExportDialog.jsx'
-import { buildD2CReports, buildFlatChannelReports } from './salesExportBuilders.js'
+import { buildD2CReports, buildFlatChannelReports, buildAmazonReports } from './salesExportBuilders.js'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -14187,188 +14187,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const filteredData = data
 
   const [allExportOpen, setAllExportOpen] = useState(false)
-  const [amzExportOpen, setAmzExportOpen] = useState(false)
-  const [fkExportOpen, setFkExportOpen] = useState(false)
   const [offExportOpen, setOffExportOpen] = useState(false)
-
-  const handleAmzExport = (type) => {
-    setAmzExportOpen(false)
-    const amzSC = (filteredData || {}).amzSC || {}
-    const amzVC = (filteredData || {}).amzVC || {}
-    const amzVCMatrix = (filteredData || {}).amzVCMatrix || {}
-    const view = channelView // 'all', 'sc', 'vc'
-    const viewLabel = view === 'sc' ? 'SellerCentral' : view === 'vc' ? 'VendorCentral' : 'Overall'
-    const dateTag = `${filters.start}_${filters.end}`
-
-    // ── SKU sheet ──
-    const buildSkuRows = () => {
-      const rows = []
-      if (view !== 'vc') {
-        // SC: skuChannel = {cat: {sc: {sku: {FBA:{...}, MFN:{...}}}}}
-        Object.entries(amzSC.skuChannel || {}).forEach(([cat, scMap]) => {
-          Object.entries(scMap).forEach(([sc, skuMap]) => {
-            Object.entries(skuMap).forEach(([sku, v]) => {
-              const keys = view === 'sc' ? ['FBA','MFN'] : ['FBA','MFN']
-              const agg = keys.reduce((a, k) => {
-                const r = v[k] || {}
-                return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), returnRev: a.returnRev+(r.returnRev||0) }
-              }, { rev:0, excRev:0, units:0, cancelRev:0, rtoRev:0, cirRev:0, returnRev:0 })
-              if (!agg.rev) return
-              const deduct = agg.cancelRev + agg.rtoRev + agg.cirRev + agg.returnRev
-              const retained = agg.rev > 0 ? Math.max(0, 1 - deduct/agg.rev) : 0
-              rows.push({ 'Channel': 'Amazon SC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': agg.units, 'Gross Revenue': Math.round(agg.rev), 'Net Revenue': Math.round(agg.excRev * retained), 'Cancel Rev': Math.round(agg.cancelRev), 'RTO Rev': Math.round(agg.rtoRev), 'CIR Rev': Math.round(agg.cirRev), 'Return Rev': Math.round(agg.returnRev) })
-            })
-          })
-        })
-      }
-      if (view !== 'sc') {
-        // VC: skuData = {cat: {sc: {sku: {rev, excRev, units, returnRev}}}}
-        Object.entries(amzVCMatrix.skuData || {}).forEach(([cat, scMap]) => {
-          Object.entries(scMap).forEach(([sc, skuMap]) => {
-            Object.entries(skuMap).forEach(([sku, v]) => {
-              if (!v.rev) return
-              const retained = v.rev > 0 ? Math.max(0, 1 - (v.returnRev||0)/v.rev) : 0
-              rows.push({ 'Channel': 'Amazon VC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units||0, 'Gross Revenue': Math.round(v.rev||0), 'Net Revenue': Math.round((v.excRev||0) * retained), 'Cancel Rev': 0, 'RTO Rev': 0, 'CIR Rev': 0, 'Return Rev': Math.round(v.returnRev||0) })
-            })
-          })
-        })
-      }
-      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-    }
-
-    // ── Geo sheets (SC only) ──
-    const buildGeoSheets = () => {
-      const stTotal = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
-      const stSheet = (amzSC.states||[]).map(s => ({
-        'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state,
-        'Revenue': Math.round(s.rev), 'Orders': s.orders||0,
-        'AOV': s.orders ? Math.round(s.rev/s.orders) : 0,
-        'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0,
-      }))
-      const ctTotal = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
-      const ctSheet = (amzSC.cities||[]).map(c => ({
-        'City': c.city, 'State': c.state||'',
-        'Revenue': Math.round(c.rev), 'Orders': c.orders||0,
-        'AOV': c.orders ? Math.round(c.rev/c.orders) : 0,
-        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0,
-      }))
-      const rgTotal = (amzSC.regionRows||[]).reduce((s,r) => s+(r.rev||0), 0)
-      const rgSheet = (amzSC.regionRows||[]).map(r => ({
-        'Region': r.region, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
-        'Share (out of 100)': rgTotal > 0 ? parseFloat(((r.rev||0)/rgTotal*100).toFixed(2)) : 0,
-      }))
-      const trTotal = (amzSC.tierRows||[]).reduce((s,r) => s+(r.rev||0), 0)
-      const trSheet = (amzSC.tierRows||[]).map(r => ({
-        'City Tier': r.label || `Tier ${r.tier}`, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
-        'Share (out of 100)': trTotal > 0 ? parseFloat(((r.rev||0)/trTotal*100).toFixed(2)) : 0,
-      }))
-      return { stSheet, ctSheet, rgSheet, trSheet }
-    }
-
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
-      XLSX.writeFile(wb, `amazon_${viewLabel}_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `amazon_${viewLabel}_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `amazon_${viewLabel}_full_export_${dateTag}.xlsx`)
-    }
-  }
-
-  const handleFKExport = (type) => {
-    setFkExportOpen(false)
-    const fk = (filteredData || {}).flipkart || {}
-    const dateTag = `${filters.start}_${filters.end}`
-
-    // ── SKU sheet ──
-    const buildFKSkuRows = () => {
-      const rows = []
-      Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
-        Object.entries(scMap).forEach(([sc, skuMap]) => {
-          Object.entries(skuMap).forEach(([sku, v]) => {
-            if (!v.rev) return
-            const gross = v.rev || 0
-            const excRev = v.excRev || 0
-            const returnRev = v.returnRev || 0
-            const cancelRev = v.cancelRev || 0
-            const deduct = cancelRev + returnRev
-            const retained = gross > 0 ? Math.max(0, 1 - deduct / gross) : 0
-            rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Cancel Rev': Math.round(cancelRev), 'Return Rev': Math.round(returnRev) })
-          })
-        })
-      })
-      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-    }
-
-    // ── Daily sheet ──
-    const buildFKDailyRows = () => {
-      const dailyMap = {}
-      ;(fk.daily || []).forEach(x => {
-        if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returnRev: 0 }
-        dailyMap[x.date].rev += x.rev || 0
-        dailyMap[x.date].orders += x.orders || 0
-        dailyMap[x.date].units += x.units || 0
-        dailyMap[x.date].returnRev += x.returnRev || 0
-      })
-      return Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date)).map(r => ({
-        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
-        'Gross Revenue': Math.round(r.rev), 'Return Rev': Math.round(r.returnRev),
-      }))
-    }
-
-    // ── Geo sheets ──
-    const buildFKGeoSheets = () => {
-      const stTotal = Object.values((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = 0; m[x.state] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
-      const stSheet = Object.entries((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = { rev: 0, orders: 0, returnRev: 0 }; m[x.state].rev += x.rev; m[x.state].orders += x.orders; m[x.state].returnRev += (x.returnRev||0) }); return m })())
-        .map(([state, v]) => ({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((v.rev/stTotal*100).toFixed(2)) : 0 }))
-        .sort((a, b) => b.Revenue - a.Revenue)
-      const ctTotal = Object.values((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = 0; m[x.city] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
-      const ctSheet = Object.entries((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = { rev: 0, orders: 0, returnRev: 0 }; m[x.city].rev += x.rev; m[x.city].orders += x.orders; m[x.city].returnRev += (x.returnRev||0) }); return m })())
-        .map(([city, v]) => ({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((v.rev/ctTotal*100).toFixed(2)) : 0 }))
-        .sort((a, b) => b.Revenue - a.Revenue)
-      const rgAgg = {}
-      ;(fk.regions||[]).forEach(x => { if (!rgAgg[x.region]) rgAgg[x.region] = { rev: 0, orders: 0 }; rgAgg[x.region].rev += x.rev; rgAgg[x.region].orders += x.orders })
-      const rgTotal = Object.values(rgAgg).reduce((s,v) => s+v.rev, 0)
-      const rgSheet = Object.entries(rgAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
-      return { stSheet, ctSheet, rgSheet }
-    }
-
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
-      XLSX.writeFile(wb, `flipkart_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.writeFile(wb, `flipkart_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKDailyRows()), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.writeFile(wb, `flipkart_full_export_${dateTag}.xlsx`)
-    }
-  }
 
   // ── Generic builder helpers ──────────────────────────────────────────────
   const _buildQcSkuRows = (channel, chKey, skuMatrix) => {
@@ -14818,46 +14637,24 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               />
             )}
             {activeTab === 'amazon' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {amzExportOpen && (
-                  <>
-                    <div onClick={() => setAmzExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].filter(([key]) => !(key === 'states' && channelView === 'vc')).map(([key, label]) => (
-                        <div key={key} onClick={() => handleAmzExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="amazon"
+                channelLabel="Amazon"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildAmazonReports(d, { ...opts, view: channelView })}
+              />
             )}
             {activeTab === 'flipkart' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {fkExportOpen && (
-                  <>
-                    <div onClick={() => setFkExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleFKExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="flipkart"
+                channelLabel="Flipkart"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'flipkart' })}
+              />
             )}
             {activeTab === 'blinkit' && (
               <SalesExportDialog

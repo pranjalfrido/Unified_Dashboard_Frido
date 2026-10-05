@@ -215,7 +215,7 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
   const hasReturns = (() => {
     for (const scMap of Object.values(ch.skuMatrix || {})) {
       for (const skuMap of Object.values(scMap || {})) {
-        for (const v of Object.values(skuMap || {})) if (v && v.returnRev != null) return true
+        for (const v of Object.values(skuMap || {})) if (v && (v.returnRev != null || v.cancelRev != null)) return true
       }
     }
     return false
@@ -231,18 +231,30 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
         flat.push({
           cat, sc, sku,
           units: v.units || 0, orders: v.orders || 0,
-          rev: v.rev || 0, excRev: v.excRev || 0, returnRev: v.returnRev || 0,
+          rev: v.rev || 0, excRev: v.excRev || 0,
+          // Flipkart reports cancellations separately from returns; the others send only
+          // returnRev. Summing them into one `lost` keeps the roll-ups comparable while the
+          // two stay visible as their own columns below.
+          returnRev: v.returnRev || 0, cancelRev: v.cancelRev || 0,
         })
       })
     })
   })
   const grossTotal = flat.reduce((s, r) => s + r.rev, 0)
+  const flatHasCancel = flat.some(r => r.cancelRev > 0)
 
-  const lossCols = v => (hasReturns ? {
-    'Return Rev': r0(v.returnRev),
-    'Lost %': pct2(v.returnRev, v.rev),
-    'Retained %': parseFloat((retainedShare(v.rev, v.returnRev) * 100).toFixed(2)),
-  } : {})
+  const hasCancel = flatHasCancel
+  const lossCols = v => {
+    if (!hasReturns) return {}
+    const lost = (v.returnRev || 0) + (v.cancelRev || 0)
+    return {
+      ...(hasCancel ? { 'Cancelled': r0(v.cancelRev) } : {}),
+      'Return Rev': r0(v.returnRev),
+      'Total Lost': r0(lost),
+      'Lost %': pct2(lost, v.rev),
+      'Retained %': parseFloat((retainedShare(v.rev, lost) * 100).toFixed(2)),
+    }
+  }
 
   if (want.has('sku')) {
     out.push({
@@ -261,7 +273,7 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
         'Category': v.cat, 'Sub-Category': v.sc, 'SKU': v.sku,
         'Units': v.units, 'Orders': v.orders,
         'Gross Revenue': r0(v.rev),
-        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev)),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev, v.cancelRev)),
         'AOV': v.units ? r0(v.rev / v.units) : 0,
         ...lossCols(v),
         'Share (out of 100)': pct2(v.rev, grossTotal),
@@ -273,8 +285,9 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
     const byCat = new Map()
     for (const r of flat) {
       const k = `${r.cat}|${r.sc}`
-      const e = byCat.get(k) || { cat: r.cat, sc: r.sc, units: 0, orders: 0, rev: 0, excRev: 0, returnRev: 0 }
-      e.units += r.units; e.orders += r.orders; e.rev += r.rev; e.excRev += r.excRev; e.returnRev += r.returnRev
+      const e = byCat.get(k) || { cat: r.cat, sc: r.sc, units: 0, orders: 0, rev: 0, excRev: 0, returnRev: 0, cancelRev: 0 }
+      e.units += r.units; e.orders += r.orders; e.rev += r.rev; e.excRev += r.excRev
+      e.returnRev += r.returnRev; e.cancelRev += r.cancelRev
       byCat.set(k, e)
     }
     out.push({
@@ -282,7 +295,7 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
       rows: [...byCat.values()].sort((a, b) => b.rev - a.rev).map(v => ({
         'Category': v.cat, 'Sub-Category': v.sc, 'Units': v.units, 'Orders': v.orders,
         'Gross Revenue': r0(v.rev),
-        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev)),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev, v.cancelRev)),
         'AOV': v.units ? r0(v.rev / v.units) : 0,
         ...lossCols(v),
         'Share (out of 100)': pct2(v.rev, grossTotal),
@@ -291,13 +304,29 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
   }
 
   if (want.has('states')) {
-    const states = ch.states || [], cities = ch.cities || []
-    const stTotal = ch.stateTotal || states.reduce((s, x) => s + (x.rev || 0), 0)
-    const ctTotal = ch.cityTotal || cities.reduce((s, x) => s + (x.rev || 0), 0)
+    // Grouped by name, not emitted as-is: some channels send one row per state per
+    // fulfilment type, so the raw list repeats a state several times and an un-grouped
+    // sheet would show Maharashtra four times instead of once.
+    const group = (rows, keyField, extra = []) => {
+      const m = new Map()
+      for (const r of rows || []) {
+        const k = r[keyField]
+        if (k == null) continue
+        const e = m.get(k) || { [keyField]: k, rev: 0, orders: 0, returnRev: 0, ...Object.fromEntries(extra.map(f => [f, r[f] || ''])) }
+        e.rev += r.rev || 0; e.orders += r.orders || 0; e.returnRev += r.returnRev || 0
+        for (const f of extra) if (!e[f] && r[f]) e[f] = r[f]
+        m.set(k, e)
+      }
+      return [...m.values()].sort((a, b) => b.rev - a.rev)
+    }
+    const states = group(ch.states, 'state')
+    const cities = group(ch.cities, 'city', ['region', 'cityTier', 'state'])
+    const stTotal = states.reduce((s, x) => s + x.rev, 0)
+    const ctTotal = cities.reduce((s, x) => s + x.rev, 0)
     out.push({
       id: 'states', name: 'Top States',
       rows: states.map(s => ({
-        'State': titleCase(s.state), 'Revenue': r0(s.rev), 'Orders': s.orders || 0,
+        'State': titleCase(s.state), 'Revenue': r0(s.rev), 'Orders': s.orders,
         'AOV': s.orders ? r0(s.rev / s.orders) : 0,
         'Share (out of 100)': pct2(s.rev, stTotal),
       })),
@@ -305,17 +334,30 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
     out.push({
       id: 'cities', name: 'Top Cities',
       rows: cities.map(c => ({
-        'City': c.city, 'Region': c.region || '', 'City Tier': c.cityTier || '',
-        'Revenue': r0(c.rev), 'Orders': c.orders || 0,
+        'City': c.city, 'State': c.state || '', 'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': r0(c.rev), 'Orders': c.orders,
         'AOV': c.orders ? r0(c.rev / c.orders) : 0,
         'Share (out of 100)': pct2(c.rev, ctTotal),
       })),
     })
 
-    // Region and tier roll-ups, which the quick-commerce exports carried as their own
-    // sheets. Derived from cities because that is the only level holding either field.
+    // Region and tier roll-ups. Some channels (Amazon) send these ready-made as
+    // regionRows/tierRows; the rest only carry region and tier on each city, so they are
+    // derived. Preferring the server's own rows where they exist keeps a channel's export
+    // matching its dashboard rather than re-deriving a slightly different total.
     const reg = new Map(), tier = new Map()
-    for (const c of cities) {
+    for (const r of ch.regionRows || []) {
+      if (!r.region) continue
+      const e = reg.get(r.region) || { rev: 0, orders: 0 }
+      e.rev += r.rev || 0; e.orders += r.orders || 0; reg.set(r.region, e)
+    }
+    for (const r of ch.tierRows || []) {
+      const k = r.label || (r.tier != null ? `Tier ${r.tier}` : null)
+      if (!k) continue
+      const e = tier.get(k) || { rev: 0, orders: 0 }
+      e.rev += r.rev || 0; e.orders += r.orders || 0; tier.set(k, e)
+    }
+    for (const c of (reg.size && tier.size) ? [] : cities) {
       if (c.region) {
         const e = reg.get(c.region) || { rev: 0, orders: 0 }
         e.rev += c.rev || 0; e.orders += c.orders || 0; reg.set(c.region, e)
@@ -338,6 +380,155 @@ export function buildFlatChannelReports(data, { reportIds, dataKey }) {
       id: 'tiers', name: 'City Tier Breakdown',
       rows: [...tier.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([k, v]) => ({
         'City Tier': k, 'Revenue': r0(v.rev), 'Orders': v.orders, 'Share (out of 100)': pct2(v.rev, trTotal),
+      })),
+    })
+  }
+
+  return out
+}
+
+// ── Amazon ─────────────────────────────────────────────────────────────────────────────
+// The only channel with two businesses on one tab. Seller Central nests FBA and MFN under
+// each SKU and carries the full cancel/RTO/CIR split; Vendor Central is a flat matrix with
+// returns only. `view` follows the tab's own SC/VC/All toggle so the file matches the
+// screen, and the Channel column keeps the two apart in a combined export.
+export function buildAmazonReports(data, { reportIds, view = 'all' }) {
+  const amzSC = (data || {}).amzSC || {}
+  const amzVCMatrix = (data || {}).amzVCMatrix || {}
+  const want = new Set(reportIds)
+  const out = []
+
+  const flat = []
+  if (view !== 'vc') {
+    Object.entries(amzSC.skuChannel || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap || {}).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap || {}).forEach(([sku, v]) => {
+          // FBA and MFN summed: they are fulfilment methods for the same listing, and the
+          // dashboard reports them together.
+          const a = ['FBA', 'MFN'].reduce((acc, k) => {
+            const r = (v || {})[k] || {}
+            return {
+              units: acc.units + (r.units || 0), orders: acc.orders + (r.orders || 0),
+              rev: acc.rev + (r.rev || 0), excRev: acc.excRev + (r.excRev || 0),
+              cancelRev: acc.cancelRev + (r.cancelRev || 0), rtoRev: acc.rtoRev + (r.rtoRev || 0),
+              cirRev: acc.cirRev + (r.cirRev || 0), returnRev: acc.returnRev + (r.returnRev || 0),
+            }
+          }, { units: 0, orders: 0, rev: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 })
+          if (a.rev) flat.push({ channel: 'Amazon SC', cat, sc, sku, ...a })
+        })
+      })
+    })
+  }
+  if (view !== 'sc') {
+    Object.entries(amzVCMatrix.skuData || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap || {}).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap || {}).forEach(([sku, v]) => {
+          if (!v?.rev) return
+          flat.push({
+            channel: 'Amazon VC', cat, sc, sku,
+            units: v.units || 0, orders: v.orders || 0, rev: v.rev || 0, excRev: v.excRev || 0,
+            // VC reports a single returns figure; the SC split does not exist here, so these
+            // stay 0 rather than being invented.
+            cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: v.returnRev || 0,
+          })
+        })
+      })
+    })
+  }
+  const grossTotal = flat.reduce((s, r) => s + r.rev, 0)
+  const lossOf = v => (v.cancelRev || 0) + (v.rtoRev || 0) + (v.cirRev || 0) + (v.returnRev || 0)
+  const lossCols = v => {
+    const lost = lossOf(v)
+    return {
+      'Cancelled': r0(v.cancelRev), 'RTO': r0(v.rtoRev), 'CIR': r0(v.cirRev), 'Return Rev': r0(v.returnRev),
+      'Total Lost': r0(lost), 'Lost %': pct2(lost, v.rev),
+      'Retained %': parseFloat((retainedShare(v.rev, lost) * 100).toFixed(2)),
+    }
+  }
+
+  if (want.has('sku') && (amzSC.daily || []).length) {
+    out.push({
+      id: 'sku', name: 'Day-wise',
+      rows: (amzSC.daily || []).map(r => ({
+        'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0,
+        'Gross Revenue': r0(r.rev), 'Net Revenue (Ex GST)': r0(r.excRev),
+      })),
+    })
+  }
+
+  if (want.has('skuTotals')) {
+    out.push({
+      id: 'skuTotals', name: 'SKU Totals',
+      rows: flat.slice().sort((a, b) => b.rev - a.rev).map(v => ({
+        'Channel': v.channel, 'Category': v.cat, 'Sub-Category': v.sc, 'SKU': v.sku,
+        'Units': v.units, 'Orders': v.orders,
+        'Gross Revenue': r0(v.rev),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, lossOf(v))),
+        'AOV': v.units ? r0(v.rev / v.units) : 0,
+        ...lossCols(v),
+        'Share (out of 100)': pct2(v.rev, grossTotal),
+      })),
+    })
+  }
+
+  if (want.has('category')) {
+    const by = new Map()
+    for (const r of flat) {
+      const k = `${r.channel}|${r.cat}|${r.sc}`
+      const e = by.get(k) || { channel: r.channel, cat: r.cat, sc: r.sc, units: 0, orders: 0, rev: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+      for (const f of ['units', 'orders', 'rev', 'excRev', 'cancelRev', 'rtoRev', 'cirRev', 'returnRev']) e[f] += r[f] || 0
+      by.set(k, e)
+    }
+    out.push({
+      id: 'category', name: 'Category Revenue',
+      rows: [...by.values()].sort((a, b) => b.rev - a.rev).map(v => ({
+        'Channel': v.channel, 'Category': v.cat, 'Sub-Category': v.sc,
+        'Units': v.units, 'Orders': v.orders,
+        'Gross Revenue': r0(v.rev),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, lossOf(v))),
+        'AOV': v.units ? r0(v.rev / v.units) : 0,
+        ...lossCols(v),
+        'Share (out of 100)': pct2(v.rev, grossTotal),
+      })),
+    })
+  }
+
+  // Geography is Seller Central only — Vendor Central reports no location, so a combined
+  // geo sheet would silently describe part of the business as if it were all of it.
+  if (want.has('states')) {
+    const stTotal = amzSC.stateTotal || (amzSC.states || []).reduce((s, x) => s + (x.rev || 0), 0)
+    out.push({
+      id: 'states', name: 'Top States (SC)',
+      rows: (amzSC.states || []).map(s => ({
+        'State': titleCase(s.state), 'Revenue': r0(s.rev), 'Orders': s.orders || 0,
+        'AOV': s.orders ? r0(s.rev / s.orders) : 0,
+        'Share (out of 100)': pct2(s.rev, stTotal),
+      })),
+    })
+    const ctTotal = amzSC.cityTotal || (amzSC.cities || []).reduce((s, x) => s + (x.rev || 0), 0)
+    out.push({
+      id: 'cities', name: 'Top Cities (SC)',
+      rows: (amzSC.cities || []).map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Revenue': r0(c.rev), 'Orders': c.orders || 0,
+        'AOV': c.orders ? r0(c.rev / c.orders) : 0,
+        'Share (out of 100)': pct2(c.rev, ctTotal),
+      })),
+    })
+    const rgTotal = (amzSC.regionRows || []).reduce((s, r) => s + (r.rev || 0), 0)
+    if (rgTotal) out.push({
+      id: 'regions', name: 'Region Breakdown',
+      rows: (amzSC.regionRows || []).map(r => ({
+        'Region': r.region, 'Revenue': r0(r.rev), 'Orders': r.orders || 0,
+        'Share (out of 100)': pct2(r.rev, rgTotal),
+      })),
+    })
+    const trTotal = (amzSC.tierRows || []).reduce((s, r) => s + (r.rev || 0), 0)
+    if (trTotal) out.push({
+      id: 'tiers', name: 'City Tier Breakdown',
+      rows: (amzSC.tierRows || []).map(r => ({
+        'City Tier': r.label || `Tier ${r.tier}`, 'Revenue': r0(r.rev), 'Orders': r.orders || 0,
+        'Share (out of 100)': pct2(r.rev, trTotal),
       })),
     })
   }
