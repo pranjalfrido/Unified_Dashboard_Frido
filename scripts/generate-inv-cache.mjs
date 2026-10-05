@@ -366,7 +366,14 @@ function computePayload(windowDays) {
     return [...m.values()].sort((a, b) => b.totalInvt - a.totalInvt)
   })()
 
-  const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.location !== 'Unmapped').map(l => {
+  const locations = sortByLocationOrder([...locationMap.values()].filter(l => {
+    if (l.location === 'Unmapped') return false
+    // Exclude locations that have no Regular facility — e.g. DEL only has Frido Store
+    // (Frido_00015). Including them would show a WH Health card on the Regular tab with
+    // Frido Store inventory, which doesn't belong there.
+    const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
+    return byFacilityType.some(f => f.facilityType === 'Regular')
+  }).map(l => {
     const avgSale = Math.ceil(l.rawAvgSaleQty/windowDays)
     const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty/windowDays)
     const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
