@@ -2828,6 +2828,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   const tplTrend = useMemo(() => tplTrendMonths.map(m => ({
     ...m,
+    // Display label alongside the raw key, the same way b2bTrendRows carries `month`. The
+    // axis and the tooltip both read this; `key` stays as it is because the slicers and the
+    // month filter match on the raw YYYY-MM.
+    month: monthLabel(m.key),
     // null rather than 0 in a month with no shipment data, so the rate line breaks
     // instead of diving to the axis and implying the cost collapsed.
     //
@@ -2858,7 +2862,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (!rows.length) return []
     const byMonth = new Map()
     for (const r of rows) {
-      if (!byMonth.has(r.month_year)) byMonth.set(r.month_year, { key: r.month_year })
+      // `month` is the display label, `key` the raw YYYY-MM the sort relies on — the same
+      // split tplTrend and b2bTrendRows use.
+      if (!byMonth.has(r.month_year)) byMonth.set(r.month_year, { key: r.month_year, month: monthLabel(r.month_year) })
       // Left undefined where the month has no volume, which is what makes the gap appear.
       if (r.shipments > 0) byMonth.get(r.month_year)[r.warehouse] = r.cost / r.shipments
     }
@@ -5139,7 +5145,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <ComposedChart data={tplTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
                 <BarGradient id="tplTotalBar" />
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis yAxisId="l" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
                   tickLine={false} tickFormatter={v => fmt(v)} width={64} />
@@ -5319,7 +5325,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={tplWhTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                <XAxis dataKey="key" tick={{ fontSize: 10.5, fill: VIZ.muted }}
+                <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false} tickLine={false}
                   tickFormatter={v => '₹' + Math.round(v)} width={56} />
