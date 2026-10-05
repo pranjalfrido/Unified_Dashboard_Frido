@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import SalesExportDialog from './SalesExportDialog.jsx'
 import { buildD2CReports, buildFlatChannelReports, buildAmazonReports } from './salesExportBuilders.js'
+import { buildOfflineReports } from './salesExportBuildersOffline.js'
+import { buildAllChannelReports } from './salesExportBuildersAll.js'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -14186,61 +14188,9 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
 
-  const [allExportOpen, setAllExportOpen] = useState(false)
-  const [offExportOpen, setOffExportOpen] = useState(false)
 
   // ── Generic builder helpers ──────────────────────────────────────────────
-  const _buildQcSkuRows = (channel, chKey, skuMatrix) => {
-    const rows = []
-    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
-      Object.entries(scMap).forEach(([sc, skuMap]) => {
-        Object.entries(skuMap).forEach(([sku, v]) => {
-          if (!v.rev) return
-          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(v.rev || 0), 'Net Revenue (Ex GST)': Math.round(v.excRev || 0) })
-        })
-      })
-    })
-    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-  }
-
-  const _buildQcDailyRows = (daily) =>
-    (daily || []).map(r => ({ 'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0, 'Gross Revenue': Math.round(r.rev || 0), 'Net Revenue (Ex GST)': Math.round(r.excRev || 0) }))
-
-  const _buildQcGeoSheets = (cities, states, stTotal, ctTotal) => {
-    const regAgg = {}, tierAgg = {}
-    ;(cities || []).forEach(c => {
-      if (c.region) { if (!regAgg[c.region]) regAgg[c.region] = { rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders || 0 }
-      if (c.cityTier) { const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders || 0 }
-    })
-    const rgTotal = Object.values(regAgg).reduce((s, v) => s + v.rev, 0)
-    const trTotal = Object.values(tierAgg).reduce((s, v) => s + v.rev, 0)
-    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
-    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
-    const rgSheet = Object.entries(regAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
-    const trSheet = Object.entries(tierAgg).map(([tier, v]) => ({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTotal > 0 ? parseFloat((v.rev/trTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
-    return { stSheet, ctSheet, rgSheet, trSheet }
-  }
-
-  const _buildMktSkuRows = (channel, skuMatrix) => {
-    const rows = []
-    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
-      Object.entries(scMap).forEach(([sc, skuMap]) => {
-        Object.entries(skuMap).forEach(([sku, v]) => {
-          if (!v.rev) return
-          const gross = v.rev || 0, excRev = v.excRev || 0, returnRev = v.returnRev || 0
-          const retained = gross > 0 ? Math.max(0, 1 - returnRev / gross) : 0
-          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Orders': v.orders || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Return Rev': Math.round(returnRev) })
-        })
-      })
-    })
-    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-  }
-
-  const _buildMktGeoSheets = (states, cities, stTotal, ctTotal) => {
-    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'AOV': s.orders ? Math.round(s.rev/s.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
-    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'AOV': c.orders ? Math.round(c.rev/c.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
-    return { stSheet, ctSheet }
-  }
+.map(r => ({ 'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0, 'Gross Revenue': Math.round(r.rev || 0), 'Net Revenue (Ex GST)': Math.round(r.excRev || 0) }))
 
   // ── Blinkit ──────────────────────────────────────────────────────────────
   // ── Instamart ────────────────────────────────────────────────────────────
@@ -14249,295 +14199,6 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   // ── FirstCry ─────────────────────────────────────────────────────────────
   // ── Myntra ───────────────────────────────────────────────────────────────
   // ── Offline ──────────────────────────────────────────────────────────────
-  const handleOffExport = (type) => {
-    setOffExportOpen(false)
-    const off = (filteredData || {}).offline || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const subLabel = offlineSub !== 'all' ? `_${offlineSub}` : ''
-
-    const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
-    const isStockist = sc => sc?.startsWith('Stockist')
-    const filterOffSub = rows => {
-      if (offlineSub === 'all') return rows
-      if (offlineSub === 'b2b') return rows.filter(r => isB2B(r.subChannel))
-      if (offlineSub === 'Stockist') return rows.filter(r => isStockist(r.subChannel))
-      if (offlineSub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
-      if (offlineSub === 'misc') return rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
-      return rows.filter(r => r.subChannel === offlineSub)
-    }
-
-    const buildOffDailyRows = () => {
-      const m = {}
-      filterOffSub(off.daily || []).forEach(d => {
-        if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, cnRev: 0, cnExcRev: 0, orders: 0, units: 0 }
-        m[d.date].rev += d.rev || 0; m[d.date].excRev += d.excRev || 0
-        m[d.date].cnRev += Math.abs(d.cnRev || 0); m[d.date].cnExcRev += Math.abs(d.cnExcRev || 0)
-        m[d.date].orders += d.orders || 0; m[d.date].units += d.units || 0
-      })
-      return Object.values(m).sort((a,b) => a.date.localeCompare(b.date)).map(r => ({
-        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
-        'Gross Revenue': Math.round(r.rev), 'Credit Notes': Math.round(r.cnRev),
-        'Net Revenue': Math.round((r.excRev || 0) - (r.cnExcRev || 0)),
-      }))
-    }
-
-    const buildOffSkuRows = () => {
-      const m = {}
-      filterOffSub(off.skuRows || []).forEach(x => {
-        const k = `${x.category}::${x.subCategory}::${x.sku}`
-        if (!m[k]) m[k] = { 'Category': x.category, 'Sub-Category': x.subCategory, 'SKU': x.sku, 'Units': 0, 'Orders': 0, 'Gross Revenue': 0, 'Net Revenue (Ex GST)': 0 }
-        m[k]['Units'] += x.units || 0; m[k]['Orders'] += x.orders || 0
-        m[k]['Gross Revenue'] += x.rev || 0; m[k]['Net Revenue (Ex GST)'] += x.excRev || 0
-      })
-      return Object.values(m).map(r => ({ ...r, 'Gross Revenue': Math.round(r['Gross Revenue']), 'Net Revenue (Ex GST)': Math.round(r['Net Revenue (Ex GST)']) })).sort((a,b) => b['Gross Revenue']-a['Gross Revenue'])
-    }
-
-    const buildOffGeoSheets = () => {
-      const stAgg = {}, ctAgg = {}, rgAgg = {}, trAgg = {}
-      filterOffSub(off.stateRows || []).forEach(r => { if (!stAgg[r.state]) stAgg[r.state] = { rev: 0, orders: 0 }; stAgg[r.state].rev += r.rev||0; stAgg[r.state].orders += r.orders||0 })
-      filterOffSub(off.cityRows || []).forEach(r => { if (!ctAgg[r.city]) ctAgg[r.city] = { rev: 0, orders: 0 }; ctAgg[r.city].rev += r.rev||0; ctAgg[r.city].orders += r.orders||0 })
-      filterOffSub(off.regionRows || []).forEach(r => { if (!rgAgg[r.region]) rgAgg[r.region] = { rev: 0, orders: 0 }; rgAgg[r.region].rev += r.rev||0; rgAgg[r.region].orders += r.orders||0 })
-      filterOffSub(off.tierRows || []).forEach(r => { const k = r.label||`Tier ${r.tier}`; if (!trAgg[k]) trAgg[k] = { rev: 0, orders: 0 }; trAgg[k].rev += r.rev||0; trAgg[k].orders += r.orders||0 })
-      const stTot = Object.values(stAgg).reduce((s,v)=>s+v.rev,0)
-      const ctTot = Object.values(ctAgg).reduce((s,v)=>s+v.rev,0)
-      const rgTot = Object.values(rgAgg).reduce((s,v)=>s+v.rev,0)
-      const trTot = Object.values(trAgg).reduce((s,v)=>s+v.rev,0)
-      const stSheet = Object.entries(stAgg).map(([state,v])=>({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': stTot>0?parseFloat((v.rev/stTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
-      const ctSheet = Object.entries(ctAgg).map(([city,v])=>({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': ctTot>0?parseFloat((v.rev/ctTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
-      const rgSheet = Object.entries(rgAgg).map(([region,v])=>({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTot>0?parseFloat((v.rev/rgTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
-      const trSheet = Object.entries(trAgg).map(([tier,v])=>({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTot>0?parseFloat((v.rev/trTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
-      return { stSheet, ctSheet, rgSheet, trSheet }
-    }
-
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
-      XLSX.writeFile(wb, `offline${subLabel}_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `offline${subLabel}_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffDailyRows()), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `offline${subLabel}_full_export_${dateTag}.xlsx`)
-    }
-  }
-
-  const handleAllExport = (type) => {
-    setAllExportOpen(false)
-    const d = filteredData || {}
-    const { chMap = {}, catMap = {}, subCatMap = {}, catPrevMap = {}, subCatPrevMap = {}, stateMap = {}, statePrevMap = {}, stateTotal = 0, cityRows: cRows = [], cityPrevMap = {}, cityTotal = 0, skuRows: allSkuRows = [] } = d
-    const totalRev = Object.values(chMap).reduce((s, v) => s + (v.rev || 0), 0)
-    const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
-    const dateTag = `${filters.start}_${filters.end}`
-
-    const skuChannelMapBySku = {}
-    allSkuRows.forEach(x => {
-      const cat = x.category || 'Others'; const sc = x.subCategory || 'Others'; const sku = x.sku
-      if (!sku) return
-      if (!skuChannelMapBySku[cat]) skuChannelMapBySku[cat] = {}
-      if (!skuChannelMapBySku[cat][sc]) skuChannelMapBySku[cat][sc] = {}
-      if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
-      skuChannelMapBySku[cat][sc][sku].rev += x.rev || 0; skuChannelMapBySku[cat][sc][sku].units += x.units || 0
-      skuChannelMapBySku[cat][sc][sku].excRev += x.exc_rev || 0; skuChannelMapBySku[cat][sc][sku].cancelRev += x.cancel_rev || 0
-      skuChannelMapBySku[cat][sc][sku].rtoRev += x.rto_rev || 0; skuChannelMapBySku[cat][sc][sku].cirRev += x.cir_rev || 0
-      skuChannelMapBySku[cat][sc][sku].returnRev += x.return_rev || 0
-    })
-    const catMatrixDataAll = {}
-    Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
-    const subCatMatrixDataAll = {}
-    Object.entries(subCatMap).forEach(([k, v]) => {
-      const [cat, sc] = k.split('::')
-      if (!subCatMatrixDataAll[cat]) subCatMatrixDataAll[cat] = {}
-      subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, returnRev: v.returnRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
-      if (catMatrixDataAll[cat]) { catMatrixDataAll[cat].cancelRev += v.cancelRev || 0; catMatrixDataAll[cat].rtoRev += v.rtoRev || 0; catMatrixDataAll[cat].cirRev += v.cirRev || 0; catMatrixDataAll[cat].returnRev += v.returnRev || 0 }
-    })
-    const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, cities: v.cities?.size ?? 0 })).sort((a, b) => b.rev - a.rev)
-
-    if (type === 'channel' || type === 'all') {
-      const { dailyArr: dArr = [] } = d
-      const knownChannels = sortedCh.map(([ch]) => ch)
-      // Sheet 1: Channel Totals (matches dashboard KPIs exactly)
-      const chUnitsMap = {}
-      dArr.forEach(day => {
-        knownChannels.forEach(ch => {
-          chUnitsMap[ch] = (chUnitsMap[ch] || 0) + (day[`${ch}_u`] || 0)
-        })
-      })
-      const totalRows = []
-      sortedCh.forEach(([ch, v]) => {
-        const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
-        const chOrders = v.orders?.size ?? v.orders ?? 0
-        const chUnits = chUnitsMap[ch] || 0
-        totalRows.push({
-          'Date From': filters.start, 'Date To': filters.end,
-          'Channel': chLabel,
-          'Gross Revenue': Math.round(v.rev), 'Net Revenue': Math.round(v.netRev ?? v.excRev ?? 0),
-          'Orders': chOrders, 'Units': chUnits,
-          'AOV': chOrders ? Math.round(v.rev / chOrders) : 0,
-          'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
-        })
-      })
-      // Sheet 2: Day-wise (date × channel)
-      const dayRows = []
-      ;[...dArr].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(day => {
-        knownChannels.forEach(ch => {
-          const rev = day[ch] || 0
-          if (!rev) return
-          const orders = day[`${ch}_o`] || 0
-          const units = day[`${ch}_u`] || 0
-          const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
-          dayRows.push({
-            'Date': day.date, 'Channel': chLabel,
-            'Gross Revenue': Math.round(rev),
-            'Orders': orders, 'Units': units,
-            'AOV': orders ? Math.round(rev / orders) : 0,
-            'Share %': totalRev > 0 ? (rev / totalRev * 100).toFixed(2) : 0,
-          })
-        })
-      })
-      // Sheet 3: Category Breakdown (channel × category × sub-category)
-      const catRows = []
-      const chCatMap = {}
-      allSkuRows.forEach(x => {
-        const ch = x.channel === 'Shopify' ? 'D2C' : x.channel === 'offline_sales' ? 'Offline Sales' : (x.channel || 'Unknown')
-        const cat = x.category || 'Others'
-        const sc = x.subCategory || 'Others'
-        const key = `${ch}||${cat}||${sc}`
-        if (!chCatMap[key]) chCatMap[key] = { ch, cat, sc, rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0 }
-        chCatMap[key].rev += x.rev || 0; chCatMap[key].excRev += x.exc_rev || 0
-        chCatMap[key].units += x.units || 0; chCatMap[key].cancelRev += x.cancel_rev || 0
-        chCatMap[key].rtoRev += x.rto_rev || 0; chCatMap[key].returnRev += x.return_rev || 0
-        chCatMap[key].cirRev += x.cir_rev || 0
-      })
-      Object.values(chCatMap).sort((a, b) => b.rev - a.rev).forEach(r => {
-        const returnTotal = (r.returnRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
-        catRows.push({
-          'Date From': filters.start, 'Date To': filters.end,
-          'Channel': r.ch, 'Category': r.cat, 'Sub-Category': r.sc,
-          'Gross Revenue': Math.round(r.rev), 'Net Revenue': Math.round(r.excRev),
-          'Units': r.units,
-          'Share %': totalRev > 0 ? (r.rev / totalRev * 100).toFixed(2) : 0,
-          'Return %': r.rev > 0 ? (returnTotal / r.rev * 100).toFixed(2) : 0,
-          'Cancel %': r.rev > 0 ? (r.cancelRev / r.rev * 100).toFixed(2) : 0,
-          'RTO %': r.rev > 0 ? ((r.rtoRev + r.cirRev) / r.rev * 100).toFixed(2) : 0,
-        })
-      })
-      if (type === 'channel') {
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
-        XLSX.writeFile(wb, `revenue_by_channel_${dateTag}.xlsx`)
-      }
-    }
-    if (type === 'category') {
-      const rows = []
-      Object.entries(catMatrixDataAll).forEach(([cat]) => {
-        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
-          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
-            rows.push({
-              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
-              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
-              'Units': skv.units || 0,
-              'Return Rev': Math.round(skv.returnRev || 0),
-              'Cancel Rev': Math.round(skv.cancelRev || 0),
-              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
-            })
-          })
-        })
-      })
-      rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
-    }
-    if (type === 'states' || type === 'cities') {
-      const stTotal = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
-      const stSheet = stateRows.map(s => {
-        const prev = statePrevMap[s.state] || 0
-        return {
-          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
-          'Revenue': Math.round(s.rev), 'Orders': s.orders,
-          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
-          'Cities': s.cities,
-          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
-          'Prev Revenue': Math.round(prev),
-        }
-      })
-      const ctTotal = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
-      const ctSheet = cRows.map(c => {
-        const prev = cityPrevMap[c.city] || 0
-        return {
-          'City': c.city, 'State': c.state || '',
-          'Region': c.region || '', 'City Tier': c.cityTier || '',
-          'Revenue': Math.round(c.rev), 'Orders': c.orders,
-          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
-          'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
-          'Prev Revenue': Math.round(prev),
-        }
-      })
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `geo_report_${dateTag}.xlsx`)
-    }
-    if (type === 'all') {
-      // Build category SKU rows
-      const catRows2 = []
-      Object.entries(catMatrixDataAll).forEach(([cat]) => {
-        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
-          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
-            catRows2.push({
-              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
-              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
-              'Units': skv.units || 0,
-              'Return Rev': Math.round(skv.returnRev || 0),
-              'Cancel Rev': Math.round(skv.cancelRev || 0),
-              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
-            })
-          })
-        })
-      })
-      catRows2.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
-      // Build states & cities rows
-      const stTotal2 = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
-      const stSheet2 = stateRows.map(s => ({
-        'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
-        'Revenue': Math.round(s.rev), 'Orders': s.orders,
-        'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
-        'Cities': s.cities,
-        'Share (out of 100)': stTotal2 > 0 ? parseFloat((s.rev / stTotal2 * 100).toFixed(2)) : 0,
-      }))
-      const ctTotal2 = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
-      const ctSheet2 = cRows.map(c => ({
-        'City': c.city, 'State': c.state || '',
-        'Region': c.region || '', 'City Tier': c.cityTier || '',
-        'Revenue': Math.round(c.rev), 'Orders': c.orders,
-        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
-        'Share (out of 100)': ctTotal2 > 0 ? parseFloat((c.rev / ctTotal2 * 100).toFixed(2)) : 0,
-      }))
-      // All in 1 xlsx, 5 tabs
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows2), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet2), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet2), 'Top Cities')
-      XLSX.writeFile(wb, `full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // Sync D2C subChannel from URL into filters
   useEffect(() => {
     if (activeTab !== 'shopify' || d2cSubChannelFromUrl === null) return
@@ -14717,46 +14378,24 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               />
             )}
             {activeTab === 'offline' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {offExportOpen && (
-                  <>
-                    <div onClick={() => setOffExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleOffExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="offline"
+                channelLabel="Offline"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(dd, opts) => buildOfflineReports(dd, { ...opts, offlineSub })}
+              />
             )}
             {activeTab === 'all' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {allExportOpen && (
-                  <>
-                    <div onClick={() => setAllExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['channel','Revenue by Channel'],['category','Category Revenue Matrix'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => { handleAllExport(key); setAllExportOpen(false) }}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="all"
+                channelLabel="All Channels"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(dd, opts) => buildAllChannelReports(dd, opts)}
+              />
             )}
             <FilterIconPopover activeCount={activeFilterCount}>
             <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
