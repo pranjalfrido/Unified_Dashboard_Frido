@@ -198,14 +198,16 @@ const db = {
     return (data ?? []).map((r) => r.month_year).filter(Boolean);
   },
 
-  // Which partners have a bill uploaded for `month`, and which are still outstanding.
-  // Aggregated in the database (see scripts/sql/get_logistics_partner_coverage.sql) rather
-  // than derived from the grid: the grid holds 200 rows, and the b2c ledger is ~1.5M, so
-  // "which couriers are in this month" is not a question the loaded page can answer.
-  async fetchCoverage(fmt, month) {
-    if (!month) return [];
-    const { data, error } = await supabase.rpc("get_logistics_partner_coverage", {
-      tbl: fmt.table, target_month: month, lookback: 3,
+  // Partner x month upload coverage for every month in the ledger.
+  //
+  // Aggregated in the database (see scripts/sql/get_logistics_partner_matrix.sql) rather
+  // than derived from the grid: the grid holds 200 rows and the b2c ledger is ~1.5M, so
+  // "which couriers are in which month" is not a question the loaded page can answer.
+  //
+  // Returns only partner-months that HAVE data; the gaps are what the UI draws.
+  async fetchCoverage(fmt) {
+    const { data, error } = await supabase.rpc("get_logistics_partner_matrix", {
+      tbl: fmt.table,
     });
     if (error) throw error;
     return data ?? [];
@@ -424,8 +426,9 @@ export default function LogisticsLedgerPage() {
   const fileInput = useRef(null);
   // Upload checklist: which partners' bills are in for a given month.
   const [coverage, setCoverage] = useState({ b2b: null, b2c: null });
-  const [coverageMonth, setCoverageMonth] = useState({ b2b: null, b2c: null });
-  const [coverageOpen, setCoverageOpen] = useState(false);
+  // Open by default: the matrix is the point of the panel, and a gap three months back is
+  // invisible behind a collapsed header. Collapsing is left to the user.
+  const [coverageOpen, setCoverageOpen] = useState(true);
 
   const rows = store[tab] ?? [];
   const months = monthsStore[tab] ?? [];
@@ -450,22 +453,12 @@ export default function LogisticsLedgerPage() {
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
 
-      // Upload checklist. Defaults to the latest month that HAS data rather than to last
-      // calendar month: before anything is uploaded for a new month there is no row to
-      // read, so defaulting forward would show every partner as missing on the 1st and
-      // bury the one month that genuinely still has gaps.
-      const target = month || allMonths[0] || null;
-      setCoverageMonth((s) => ({ ...s, [which]: target }));
-      db.fetchCoverage(f, target)
-        .then((c) => {
-          setCoverage((s) => ({ ...s, [which]: c }));
-          // Open the panel when something is outstanding, so a gap is visible without a
-          // click. Collapsing again is left to the user — re-collapsing on every reload
-          // would fight them while they work through a list of pending uploads.
-          if (c.some((r) => !r.uploaded)) setCoverageOpen(true);
-        })
-        // A missing RPC must not break the grid — the checklist is additive, and the page
-        // was useful without it. It just stays hidden.
+      // Upload coverage, every month at once. Refreshed on the same load() that follows an
+      // upload, so adding a file fills its cells in without a manual reload.
+      db.fetchCoverage(f)
+        .then((c) => setCoverage((s) => ({ ...s, [which]: c })))
+        // A missing RPC must not break the grid — the panel is additive, and the page was
+        // useful without it. It just stays hidden.
         .catch(() => setCoverage((s) => ({ ...s, [which]: null })));
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
@@ -911,11 +904,25 @@ export default function LogisticsLedgerPage() {
           nothing to act on, and the panel should not push the grid down the page. */}
       {(() => {
         const cov = coverage[tab];
-        const covMonth = coverageMonth[tab];
-        if (!cov?.length || !covMonth) return null;
-        const pending = cov.filter((r) => !r.uploaded);
-        const done = cov.length - pending.length;
-        const allIn = pending.length === 0;
+        if (!cov?.length) return null;
+
+        const allMonths = [...new Set(cov.map((r) => r.month_year))].sort();
+        const cell = new Map(cov.map((r) => [`${r.partner}|${r.month_year}`, r]));
+
+        // A gap only counts BETWEEN a partner's first and last month. Before the first it
+        // had not been onboarded and after the last we may have stopped using it — marking
+        // either as missing would bury the real holes under months nobody expected a bill
+        // for. Shadowfax billed Feb-Jun and Aug, so July is a genuine hole; its January is
+        // not.
+        const partners = [...new Set(cov.map((r) => r.partner))].map((p) => {
+          const mine = allMonths.filter((m) => cell.has(`${p}|${m}`));
+          const first = mine[0], last = mine[mine.length - 1];
+          const span = allMonths.filter((m) => m >= first && m <= last);
+          return { partner: p, first, last, gaps: span.filter((m) => !cell.has(`${p}|${m}`)) };
+        }).sort((a, b) => b.gaps.length - a.gaps.length || a.partner.localeCompare(b.partner));
+
+        const totalGaps = partners.reduce((n, p) => n + p.gaps.length, 0);
+        const allIn = totalGaps === 0;
         return (
           <div style={{ marginBottom: 12, border: `1px solid ${allIn ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 10, background: allIn ? '#F0FDF4' : '#FFFBEB', overflow: 'hidden' }}>
             <button
@@ -924,40 +931,62 @@ export default function LogisticsLedgerPage() {
             >
               <span style={{ fontWeight: 700 }}>
                 {allIn
-                  ? `All ${cov.length} partners uploaded for ${covMonth}`
-                  : `${pending.length} of ${cov.length} partner${cov.length === 1 ? '' : 's'} pending for ${covMonth}`}
+                  ? `No upload gaps · ${partners.length} partners × ${allMonths.length} months`
+                  : `${totalGaps} missing upload${totalGaps === 1 ? '' : 's'} across ${partners.filter((p) => p.gaps.length).length} partner${partners.filter((p) => p.gaps.length).length === 1 ? '' : 's'}`}
               </span>
               {!allIn && (
                 <span style={{ fontWeight: 500, opacity: .85 }}>
-                  — {pending.map((r) => r.partner).join(', ')}
+                  — {partners.filter((p) => p.gaps.length).map((p) => `${p.partner} (${p.gaps.join(', ')})`).join('; ')}
                 </span>
               )}
               <span style={{ marginLeft: 'auto', fontSize: 10, opacity: .7 }}>{coverageOpen ? '▲' : '▼'}</span>
             </button>
             {coverageOpen && (
-              <div style={{ padding: '2px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 6 }}>
-                {cov.map((r) => (
-                  <label key={r.partner}
-                    title={r.uploaded
-                      ? `${r.rows_n.toLocaleString('en-IN')} lines · ₹${money(r.cost)}`
-                      : `No bill for ${covMonth}. Last seen ${r.last_seen}, billed in ${r.months_seen} of the 3 months before.`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: r.uploaded ? C.t2 : '#92400E', fontWeight: r.uploaded ? 400 : 600, cursor: 'default' }}>
-                    {/* readOnly, not disabled: the state is derived from what is in the
-                        ledger, so it must not look like something the user can toggle —
-                        but disabled would grey out the pending ones, which are the rows
-                        that need to stand out most. */}
-                    <input type="checkbox" checked={r.uploaded} readOnly
-                      style={{ accentColor: C.accent, cursor: 'default', flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.partner}</span>
-                    {r.uploaded && (
-                      <span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.t3, fontFamily: 'monospace', flexShrink: 0 }}>
-                        {r.rows_n.toLocaleString('en-IN')}
-                      </span>
-                    )}
-                  </label>
-                ))}
-                <div style={{ gridColumn: '1/-1', fontSize: 11, color: C.t3, marginTop: 2 }}>
-                  A partner is expected if it was billed in any of the 3 months before {covMonth}; one you stop using drops off after 3 quiet months.
+              <div style={{ padding: '0 12px 12px', overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 11.5, fontFamily: 'inherit' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '4px 10px 6px 0', fontWeight: 600, color: C.t3, position: 'sticky', left: 0, background: allIn ? '#F0FDF4' : '#FFFBEB' }}>Partner</th>
+                      {allMonths.map((m) => (
+                        <th key={m} style={{ padding: '4px 8px 6px', fontWeight: 600, color: C.t3, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{m}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {partners.map((p) => (
+                      <tr key={p.partner}>
+                        <td style={{ padding: '3px 10px 3px 0', whiteSpace: 'nowrap', fontWeight: p.gaps.length ? 700 : 500, color: p.gaps.length ? '#92400E' : C.t2, position: 'sticky', left: 0, background: allIn ? '#F0FDF4' : '#FFFBEB' }}>
+                          {p.partner}
+                        </td>
+                        {allMonths.map((m) => {
+                          const c = cell.get(`${p.partner}|${m}`);
+                          // Three states, deliberately distinct: a line count means the
+                          // bill is in, a dash means a month this partner was not active
+                          // in, and "missing" is a hole inside its active span — the only
+                          // one that needs chasing.
+                          const outside = m < p.first || m > p.last;
+                          return (
+                            <td key={m}
+                              title={c ? `${c.rows_n.toLocaleString('en-IN')} lines · ₹${money(c.cost)}`
+                                : outside ? `Not billing in ${m}` : `No bill uploaded for ${m}`}
+                              style={{
+                                padding: '3px 8px', textAlign: 'right', fontFamily: 'monospace',
+                                whiteSpace: 'nowrap',
+                                color: c ? C.t2 : outside ? '#D1D5DB' : '#B45309',
+                                background: !c && !outside ? '#FEF3C7' : 'transparent',
+                                fontWeight: !c && !outside ? 700 : 400,
+                                borderRadius: 4,
+                              }}>
+                              {c ? c.rows_n.toLocaleString('en-IN') : outside ? '·' : 'missing'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+                  Counts are invoice lines uploaded. <strong>missing</strong> is a month with no bill between a partner's first and last upload; <span style={{ color: '#D1D5DB', fontWeight: 700 }}>·</span> is a month it was not billing in.
                 </div>
               </div>
             )}
