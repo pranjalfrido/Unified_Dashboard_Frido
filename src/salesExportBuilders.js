@@ -199,3 +199,148 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
 
   return out
 }
+
+// ── Quick-commerce and marketplace channels ────────────────────────────────────────────
+// Blinkit, Instamart, Zepto, CRED, FirstCry and Myntra all arrive in the same shape:
+// skuMatrix as cat -> subCat -> sku, a `daily` array, and flat `states` / `cities` lists.
+// The only real difference is that the marketplace three carry returnRev while the
+// quick-commerce three do not, so the loss columns are emitted only where that field
+// exists rather than padded with zeros that would read as "no returns".
+//
+// `dataKey` is the channel's slot on the payload ('blinkit', 'cred', …).
+export function buildFlatChannelReports(data, { reportIds, dataKey }) {
+  const ch = (data || {})[dataKey] || {}
+  const want = new Set(reportIds)
+  const out = []
+  const hasReturns = (() => {
+    for (const scMap of Object.values(ch.skuMatrix || {})) {
+      for (const skuMap of Object.values(scMap || {})) {
+        for (const v of Object.values(skuMap || {})) if (v && v.returnRev != null) return true
+      }
+    }
+    return false
+  })()
+
+  // Flatten skuMatrix once; every roll-up below is built from this rather than re-walking
+  // the three-level object.
+  const flat = []
+  Object.entries(ch.skuMatrix || {}).forEach(([cat, scMap]) => {
+    Object.entries(scMap || {}).forEach(([sc, skuMap]) => {
+      Object.entries(skuMap || {}).forEach(([sku, v]) => {
+        if (!v?.rev) return
+        flat.push({
+          cat, sc, sku,
+          units: v.units || 0, orders: v.orders || 0,
+          rev: v.rev || 0, excRev: v.excRev || 0, returnRev: v.returnRev || 0,
+        })
+      })
+    })
+  })
+  const grossTotal = flat.reduce((s, r) => s + r.rev, 0)
+
+  const lossCols = v => (hasReturns ? {
+    'Return Rev': r0(v.returnRev),
+    'Lost %': pct2(v.returnRev, v.rev),
+    'Retained %': parseFloat((retainedShare(v.rev, v.returnRev) * 100).toFixed(2)),
+  } : {})
+
+  if (want.has('sku')) {
+    out.push({
+      id: 'sku', name: 'Day-wise',
+      rows: (ch.daily || []).map(r => ({
+        'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0,
+        'Gross Revenue': r0(r.rev), 'Net Revenue (Ex GST)': r0(r.excRev),
+      })),
+    })
+  }
+
+  if (want.has('skuTotals')) {
+    out.push({
+      id: 'skuTotals', name: 'SKU Totals',
+      rows: flat.slice().sort((a, b) => b.rev - a.rev).map(v => ({
+        'Category': v.cat, 'Sub-Category': v.sc, 'SKU': v.sku,
+        'Units': v.units, 'Orders': v.orders,
+        'Gross Revenue': r0(v.rev),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev)),
+        'AOV': v.units ? r0(v.rev / v.units) : 0,
+        ...lossCols(v),
+        'Share (out of 100)': pct2(v.rev, grossTotal),
+      })),
+    })
+  }
+
+  if (want.has('category')) {
+    const byCat = new Map()
+    for (const r of flat) {
+      const k = `${r.cat}|${r.sc}`
+      const e = byCat.get(k) || { cat: r.cat, sc: r.sc, units: 0, orders: 0, rev: 0, excRev: 0, returnRev: 0 }
+      e.units += r.units; e.orders += r.orders; e.rev += r.rev; e.excRev += r.excRev; e.returnRev += r.returnRev
+      byCat.set(k, e)
+    }
+    out.push({
+      id: 'category', name: 'Category Revenue',
+      rows: [...byCat.values()].sort((a, b) => b.rev - a.rev).map(v => ({
+        'Category': v.cat, 'Sub-Category': v.sc, 'Units': v.units, 'Orders': v.orders,
+        'Gross Revenue': r0(v.rev),
+        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.returnRev)),
+        'AOV': v.units ? r0(v.rev / v.units) : 0,
+        ...lossCols(v),
+        'Share (out of 100)': pct2(v.rev, grossTotal),
+      })),
+    })
+  }
+
+  if (want.has('states')) {
+    const states = ch.states || [], cities = ch.cities || []
+    const stTotal = ch.stateTotal || states.reduce((s, x) => s + (x.rev || 0), 0)
+    const ctTotal = ch.cityTotal || cities.reduce((s, x) => s + (x.rev || 0), 0)
+    out.push({
+      id: 'states', name: 'Top States',
+      rows: states.map(s => ({
+        'State': titleCase(s.state), 'Revenue': r0(s.rev), 'Orders': s.orders || 0,
+        'AOV': s.orders ? r0(s.rev / s.orders) : 0,
+        'Share (out of 100)': pct2(s.rev, stTotal),
+      })),
+    })
+    out.push({
+      id: 'cities', name: 'Top Cities',
+      rows: cities.map(c => ({
+        'City': c.city, 'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': r0(c.rev), 'Orders': c.orders || 0,
+        'AOV': c.orders ? r0(c.rev / c.orders) : 0,
+        'Share (out of 100)': pct2(c.rev, ctTotal),
+      })),
+    })
+
+    // Region and tier roll-ups, which the quick-commerce exports carried as their own
+    // sheets. Derived from cities because that is the only level holding either field.
+    const reg = new Map(), tier = new Map()
+    for (const c of cities) {
+      if (c.region) {
+        const e = reg.get(c.region) || { rev: 0, orders: 0 }
+        e.rev += c.rev || 0; e.orders += c.orders || 0; reg.set(c.region, e)
+      }
+      if (c.cityTier) {
+        const k = `Tier ${c.cityTier}`
+        const e = tier.get(k) || { rev: 0, orders: 0 }
+        e.rev += c.rev || 0; e.orders += c.orders || 0; tier.set(k, e)
+      }
+    }
+    const rgTotal = [...reg.values()].reduce((s, v) => s + v.rev, 0)
+    const trTotal = [...tier.values()].reduce((s, v) => s + v.rev, 0)
+    if (reg.size) out.push({
+      id: 'regions', name: 'Region Breakdown',
+      rows: [...reg.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([k, v]) => ({
+        'Region': k, 'Revenue': r0(v.rev), 'Orders': v.orders, 'Share (out of 100)': pct2(v.rev, rgTotal),
+      })),
+    })
+    if (tier.size) out.push({
+      id: 'tiers', name: 'City Tier Breakdown',
+      rows: [...tier.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([k, v]) => ({
+        'City Tier': k, 'Revenue': r0(v.rev), 'Orders': v.orders, 'Share (out of 100)': pct2(v.rev, trTotal),
+      })),
+    })
+  }
+
+  return out
+}

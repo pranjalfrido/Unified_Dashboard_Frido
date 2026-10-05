@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import SalesExportDialog from './SalesExportDialog.jsx'
-import { buildD2CReports } from './salesExportBuilders.js'
+import { buildD2CReports, buildFlatChannelReports } from './salesExportBuilders.js'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -14189,12 +14189,6 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const [allExportOpen, setAllExportOpen] = useState(false)
   const [amzExportOpen, setAmzExportOpen] = useState(false)
   const [fkExportOpen, setFkExportOpen] = useState(false)
-  const [blExportOpen, setBlExportOpen] = useState(false)
-  const [insExportOpen, setInsExportOpen] = useState(false)
-  const [ztExportOpen, setZtExportOpen] = useState(false)
-  const [crExportOpen, setCrExportOpen] = useState(false)
-  const [fcExportOpen, setFcExportOpen] = useState(false)
-  const [mnExportOpen, setMnExportOpen] = useState(false)
   const [offExportOpen, setOffExportOpen] = useState(false)
 
   const handleAmzExport = (type) => {
@@ -14430,182 +14424,11 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   }
 
   // ── Blinkit ──────────────────────────────────────────────────────────────
-  const handleBlExport = (type) => {
-    setBlExportOpen(false)
-    const bl = (filteredData || {}).blinkit || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = bl.stateTotal || (bl.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = bl.cityTotal || (bl.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(bl.cities, bl.states, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `blinkit_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `blinkit_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(bl.daily)), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `blinkit_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── Instamart ────────────────────────────────────────────────────────────
-  const handleInsExport = (type) => {
-    setInsExportOpen(false)
-    const ins = (filteredData || {}).instamart || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = ins.stateTotal || (ins.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = ins.cityTotal || (ins.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(ins.cities, ins.states, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `instamart_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `instamart_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(ins.daily)), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `instamart_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── Zepto ────────────────────────────────────────────────────────────────
-  const handleZtExport = (type) => {
-    setZtExportOpen(false)
-    const zt = (filteredData || {}).zepto || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = zt.stateTotal || (zt.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = zt.cityTotal || (zt.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(zt.cities, zt.states, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `zepto_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `zepto_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(zt.daily)), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
-      XLSX.writeFile(wb, `zepto_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── CRED ─────────────────────────────────────────────────────────────────
-  const handleCrExport = (type) => {
-    setCrExportOpen(false)
-    const cr = (filteredData || {}).cred || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = cr.stateTotal || (cr.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = cr.cityTotal || (cr.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet } = _buildMktGeoSheets(cr.states, cr.cities, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `cred_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `cred_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const dailyRows = (cr.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `cred_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── FirstCry ─────────────────────────────────────────────────────────────
-  const handleFcExport = (type) => {
-    setFcExportOpen(false)
-    const fc = (filteredData || {}).firstcry || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = fc.stateTotal || (fc.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = fc.cityTotal || (fc.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet } = _buildMktGeoSheets(fc.states, fc.cities, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `firstcry_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `firstcry_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const dailyRows = (fc.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `firstcry_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── Myntra ───────────────────────────────────────────────────────────────
-  const handleMnExport = (type) => {
-    setMnExportOpen(false)
-    const mn = (filteredData || {}).myntra || {}
-    const dateTag = `${filters.start}_${filters.end}`
-    const stTotal = mn.stateTotal || (mn.states||[]).reduce((s,x) => s+x.rev, 0)
-    const ctTotal = mn.cityTotal || (mn.cities||[]).reduce((s,x) => s+x.rev, 0)
-    const { stSheet, ctSheet } = _buildMktGeoSheets(mn.states, mn.cities, stTotal, ctTotal)
-    if (type === 'sku') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
-      XLSX.writeFile(wb, `myntra_sku_${dateTag}.xlsx`)
-    } else if (type === 'states') {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `myntra_geo_${dateTag}.xlsx`)
-    } else if (type === 'all') {
-      const dailyRows = (mn.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0), 'Return Rev': Math.round(r.returnRev||0) }))
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-      XLSX.writeFile(wb, `myntra_full_export_${dateTag}.xlsx`)
-    }
-  }
-
   // ── Offline ──────────────────────────────────────────────────────────────
   const handleOffExport = (type) => {
     setOffExportOpen(false)
@@ -15037,130 +14860,64 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               </div>
             )}
             {activeTab === 'blinkit' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {blExportOpen && (
-                  <>
-                    <div onClick={() => setBlExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleBlExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="blinkit"
+                channelLabel="Blinkit"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'blinkit' })}
+              />
             )}
             {activeTab === 'instamart' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {insExportOpen && (
-                  <>
-                    <div onClick={() => setInsExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleInsExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="instamart"
+                channelLabel="Instamart"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'instamart' })}
+              />
             )}
             {activeTab === 'zepto' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {ztExportOpen && (
-                  <>
-                    <div onClick={() => setZtExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleZtExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="zepto"
+                channelLabel="Zepto"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'zepto' })}
+              />
             )}
             {activeTab === 'cred' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {crExportOpen && (
-                  <>
-                    <div onClick={() => setCrExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleCrExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="cred"
+                channelLabel="CRED"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'cred' })}
+              />
             )}
             {activeTab === 'firstcry' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {fcExportOpen && (
-                  <>
-                    <div onClick={() => setFcExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleFcExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="firstcry"
+                channelLabel="FirstCry"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'firstcry' })}
+              />
             )}
             {activeTab === 'myntra' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {mnExportOpen && (
-                  <>
-                    <div onClick={() => setMnExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleMnExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="myntra"
+                channelLabel="Myntra"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                buildReports={(d, opts) => buildFlatChannelReports(d, { ...opts, dataKey: 'myntra' })}
+              />
             )}
             {activeTab === 'offline' && (
               <div style={{ position: 'relative' }}>
