@@ -139,19 +139,22 @@ const WEIGHT_BANDS = [
 // Courier name with its mark. The logo is decorative — alt is empty so a screen reader
 // reads the name once, not twice — and a broken file hides the img rather than showing a
 // torn-image glyph, so an unmapped courier degrades to plain text instead of visible damage.
-function CourierCell({ name }) {
+// `size` — the logo/badge edge in px. 18 everywhere by default; the rate-drift table passes
+// 14 because it sits beside a chart and has to fit its height, and the logo is what sets
+// that table's row height rather than the text.
+function CourierCell({ name, size = 18 }) {
   const [bad, setBad] = useState(false)
   const logo = COURIER_LOGOS[name]
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
       {logo && !bad
         ? <img src={logo} alt="" onError={() => setBad(true)}
-            style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3,
+            style={{ width: size, height: size, objectFit: 'contain', borderRadius: 3,
                      flexShrink: 0, background: '#fff' }} />
         // No logo: the initials badge, matching the sidebar so a carrier looks identical
         // wherever it appears. Fixed width either way, so names stay aligned down the column.
         : <span style={{
-            width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+            width: size, height: size, borderRadius: 5, flexShrink: 0,
             background: COURIER_COLORS[name] || '#94a3b8',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 8, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
@@ -6136,7 +6139,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           ) : (
           <DataTable
             columns={[
-              { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+              { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} size={14} /> },
               { key: 'first', label: 'First', align: 'center', render: (_, r) => '₹' + r.first.toFixed(2) },
               { key: 'last', label: 'Latest', align: 'center', render: (_, r) => '₹' + r.last.toFixed(2) },
               { key: 'drift', label: 'Drift', align: 'center', render: (_, r) => (
@@ -6149,6 +6152,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             ]}
             rows={driftRows}
             maxHeight={220}
+            dense
           />
           )}
           {/* Caption removed at the user's request — it was costing two lines of height
