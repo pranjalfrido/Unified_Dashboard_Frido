@@ -627,7 +627,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .recharts-cartesian-grid line{stroke:var(--b1);stroke-dasharray:3 4}
 .recharts-cartesian-axis-line,.recharts-cartesian-axis-tick-line{stroke:transparent}
 .recharts-text{font-family:var(--font);fill:var(--t3)}
-.recharts-tooltip-wrapper{filter:drop-shadow(0 4px 16px rgba(26,28,35,.10))}
+/* z-index: a tooltip is an overlay and must paint over the legend below the plot and over
+   whatever follows the chart in the card — on the rate-drift card it overlapped both the
+   legend and the courier table and was drawn underneath them. Recharts positions this
+   wrapper absolutely but sets no stacking order of its own. */
+.recharts-tooltip-wrapper{filter:drop-shadow(0 4px 16px rgba(26,28,35,.10));z-index:60}
 .recharts-default-tooltip{border:none!important;border-radius:var(--r-md)!important;
   box-shadow:var(--sh2)!important;padding:10px 12px!important}
 /* Ghost bars — the faint volume bars behind the lines in the reference. */

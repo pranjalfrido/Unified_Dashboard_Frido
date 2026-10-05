@@ -6060,8 +6060,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
                   tickFormatter={v => '₹' + v.toFixed(0)} />
+                {/* sortByValue: ten lines cross over each other month to month, so listing
+                    them in series order forced the reader to match name to line by colour.
+                    Sorted high-to-low, the rows mirror the lines' vertical order at the
+                    hovered month — the top row is the top line.
+                    wrapperStyle zIndex: the tooltip overlaps the legend and the table below
+                    and has to paint over both. */}
                 <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
-                  content={<ChartTooltip formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
+                  wrapperStyle={{ zIndex: 60 }}
+                  content={<ChartTooltip sortByValue maxHeight={240}
+                    formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
                 {/* Ten courier names have to fit one row, so this legend runs smaller and
                     tighter than the shared default: 9.5px with a 7px icon and reduced
                     item spacing. At the standard 11px/10px it wrapped, and the band is a

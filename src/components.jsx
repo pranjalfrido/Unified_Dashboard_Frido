@@ -4,13 +4,27 @@ import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, 
 
 export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
 
-export function ChartTooltip({ active, payload, label, formatter }) {
+// `sortByValue` — order the rows high-to-low instead of by series declaration order. On a
+// multi-line chart the declaration order is fixed while the lines cross over each month, so
+// the default leaves the reader matching names to lines by colour alone. Sorted, row order
+// mirrors the lines' vertical order at the hovered month.
+//
+// `maxHeight` caps the body and scrolls it, for charts with more series than fit a card.
+export function ChartTooltip({ active, payload, label, formatter, sortByValue, maxHeight }) {
   if (!active || !payload?.length) return null
   const format = formatter || fmt
+  // Copy before sorting: payload is Recharts' own array and mutating it reorders the
+  // series state itself, which flickers the lines on every hover.
+  const rows = sortByValue
+    ? [...payload].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))
+    : payload
   return (
-    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)' }}>
+    // zIndex: a tooltip is an overlay and must sit above the legend and the table beneath
+    // the chart. Recharts positions its wrapper without a stacking context of its own, so
+    // without this the tooltip was painted under both.
+    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)', position: 'relative', zIndex: 60, ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) }}>
       <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
-      {payload.map((p, i) => (
+      {rows.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === C.acc ? '1px solid #E6C200' : 'none' }} />
           <span style={{ color: C.t2 }}>{p.name}</span>
