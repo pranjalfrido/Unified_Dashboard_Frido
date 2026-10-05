@@ -4689,7 +4689,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
                 { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
-                { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTransRows}
             />
@@ -4786,7 +4786,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
                 { key: 'lanes', label: 'Lanes', align: 'center', render: (_, r) => fmtN(r.lanes) },
                 { key: 'transporters', label: 'Transporters', align: 'center', render: (_, r) => fmtN(r.transporters) },
-                { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bVehicleRows}
             />
@@ -4872,7 +4872,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               columns={[
                 { key: 'key', label: 'Type' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
                 { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
               ]}
               rows={b2bTypeRows}
@@ -5237,7 +5237,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               // or infinity, where the site billed a month that has no shipment data.
               { key: 'per_ship', label: '₹ / Parcel', align: 'center',
                 render: (_, r) => (r.shipments > 0 ? money1(r.cost / r.shipments) : '—') },
-              { key: 'per_kg', label: 'Cost / kg', align: 'center',
+              { key: 'per_kg', label: '₹ / kg', align: 'center',
                 render: (_, r) => (r.weight_kg > 0 ? money1(r.cost / r.weight_kg) : '—') },
             ]}
             search searchKeys={['key', 'pincode', 'location', 'partner']} searchPlaceholder="Find a facility, pincode or partner…"
@@ -5663,7 +5663,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           columns={[
             { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
             { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-            { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+            { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
             { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
             { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
             { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
@@ -5859,7 +5859,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
               { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={zoneRowsShown}
           />
@@ -5993,9 +5993,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             columns={[
               { key: 'mode', label: 'Mode' },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
               { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={modeRows}
           />
@@ -6086,7 +6086,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'band', label: 'Slab' },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
               { key: 'cost', label: isMobile ? 'Cost' : 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'overPct', label: 'Overbilled', align: 'center', render: (_, r) => r.overPct.toFixed(1) + '%' },
@@ -6557,8 +6557,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               columns={[
                 { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
                 { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
-                { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-                { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+                { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+                { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
                 { key: 'vs', label: 'vs cheapest', align: 'center', render: (_, r) => {
                   const d = r.avgCost - activeCell.rows[0].avgCost
                   return d < 0.01
