@@ -6048,9 +6048,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             content (₹/kg by tier) is already covered by the weight-slab chart beside it.
             Replaced with rate drift, which answers a question nobody could ask before:
             is any courier quietly raising its effective rate? */}
-        <Card title="Effective rate drift by courier"
+        {/* Same flex column + flex:1 chart as the weight-slab card beside it, so the two
+            charts in this row share a baseline. With a fixed height the ten-courier legend
+            wrapped to two lines and pushed this chart down relative to its neighbour. */}
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Effective rate drift by courier"
           note={isMobile ? "" : "₹/kg per month — a rising line is a rate increase, not a heavier mix"}>
-          <div style={{ height: 200 }}>
+          <div style={{ flex: 1, minHeight: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={driftSeries} margin={isMobile ? { top: 12, right: 16, left: -24, bottom: 4 } : { top: 12, right: 44, left: 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
@@ -6116,15 +6119,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             maxHeight={220}
           />
           )}
-          {/* The 500-shipment floor is applied by the rate-drift query, which feeds the
-              TABLE. The chart reads trendAll, which carries every month, so the two differ
-              on thin months — currently only Bluedart B2B's July and August. Saying this
-              applies to both would be wrong; saying nothing would leave a reader assuming
-              a line and its table row were built the same way. */}
-          {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
-            The table below excludes months with fewer than 500 shipments, so a handful of
-            parcels can't fake a drift figure. The chart plots every month a courier billed.
-          </div>}
+          {/* Caption removed at the user's request — it was costing two lines of height
+              and pushing this card past its neighbour. The rule it described still holds:
+              the TABLE's drift figures exclude months under 500 shipments (the floor is in
+              the rate-drift query), while the chart reads trendAll and plots every month a
+              courier billed. Currently that only differs on Bluedart B2B's July and
+              August, whose rates sit in line with its other months. */}
         </Card>
       </div>
 
