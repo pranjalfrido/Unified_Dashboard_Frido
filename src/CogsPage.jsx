@@ -70,9 +70,24 @@ export default function CogsPage() {
         // product_code, lowercase. The column was quoted as "Product_Code", which does not
         // exist — PostgREST returned an error, `data` fell back to [], and validSkus became
         // an EMPTY Set, so every SKU in an upload was reported "not found in item master".
-        const { data, error } = await supabase.from("item_master").select("product_code");
-        if (error) throw error;
-        const set = new Set((data ?? [])
+        //
+        // Paged, because PostgREST caps a response at 1000 rows and item_master has 3720.
+        // An unpaged select silently returned the first 1000 and nothing said so, so the
+        // other 2720 codes were reported "not found" — every WED-* code among them, since
+        // none fall inside that window.
+        const PAGE = 1000;
+        const codes = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await supabase
+            .from("item_master")
+            .select("product_code")
+            .order("product_code")          // stable paging; without an order the window can repeat or skip rows
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          codes.push(...(data ?? []));
+          if (!data || data.length < PAGE) break;
+        }
+        const set = new Set(codes
           .map((d) => String(d.product_code || "").trim().toUpperCase())
           .filter(Boolean));
         // An empty result is a failure, not an item master with no products. Treating it as
