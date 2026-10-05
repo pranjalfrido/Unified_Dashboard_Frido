@@ -5747,7 +5747,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           ) : (
           <DataTable
             columns={[
-              { key: 'slab', label: 'Weight Slab', render: (_, r) => (
+              { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => (
                 <span style={{ fontWeight: 700 }}>{r.slab} kg</span>
               ) },
               { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
