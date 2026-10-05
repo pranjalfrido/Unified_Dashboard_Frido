@@ -31,13 +31,18 @@ export function ChartTooltip({ active, payload, label, formatter, sortByValue, m
     // the chart. Recharts positions its wrapper without a stacking context of its own, so
     // without this the tooltip was painted under both.
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)', position: 'relative', zIndex: 60, ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) }}>
-      <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
+      {/* Tighter under the label when a lead value follows, since the value block carries
+          its own spacing and the two belong together as one heading. */}
+      <div style={{ fontWeight: 700, color: C.t2, marginBottom: lead ? 2 : 5 }}>{label}</div>
+      {/* The value on its own line under the label rather than in a label/value row, which
+          is how the FTL/PTL donut already presents its headline figure. Left-aligned at
+          15px/800 it reads as the tooltip's subject; squeezed onto the right of a row it
+          read as just the largest of five numbers. */}
       {lead && (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 11, color: C.t2 }}>{lead.name}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 16, fontWeight: 800, color: C.t1, fontFamily: 'var(--mono)', letterSpacing: '-.01em' }}>
+        <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>
             {format(lead.value)}
-          </span>
+          </div>
         </div>
       )}
       {rows.map((p, i) => (
