@@ -6547,10 +6547,27 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           </button>
         )}
 
-        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 24px 40px 14px' }}>
+        {/* Column: the scope/period bar is a fixed-height sibling ABOVE the scrolling
+            region, so it stays in view on every tab without being sticky. This is how the
+            Sales tab's .fbar works — outside .page-scroll rather than pinned inside it —
+            and it avoids the problems a sticky bar brings here: no z-index contest with
+            the SearchSelect panel or the chart tooltips, and no background strip needed to
+            hide rows passing underneath. */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
+          {/* position/zIndex, not decoration: PeriodChip and ExportMenu open their panels
+              with position:absolute, and those panels now hang below a bar that sits
+              OUTSIDE the scrolling region. Without a stacking order here they are painted
+              under the content that scrolls beneath them. The ancestor at the top of this
+              block is overflow:hidden, but only vertically beyond the page — the panels
+              open within it, so they are not clipped. */}
+          <div style={{
+            flexShrink: 0, position: 'relative', zIndex: 20,
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            padding: isMobile ? '8px 8px 10px' : '8px 24px 10px 14px',
+            background: C.bg, borderBottom: `1px solid ${C.border}`,
+          }}>
             <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
               {SCOPES.filter(sc => !allowedTabs || allowedTabs.includes(`logistics:cost:${sc.id}`) || allowedTabs.includes('logistics:cost')).map(sc => {
                 const on = scope === sc.id
@@ -6657,9 +6674,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
-          {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
+          {/* Everything below the bar scrolls. The padding that used to sit on the parent
+              moves here, so the bar can span the full width while the content keeps its
+              gutters.
+              Refetch holds the previous render at reduced opacity — no skeleton flash,
               no layout jump, per the interaction rules. */}
-          <div style={{ opacity: loading && agg ? 0.55 : 1, transition: 'opacity .18s ease' }}>
+          <div style={{
+            flex: 1, overflow: 'auto', minHeight: 0,
+            padding: isMobile ? '14px 8px 40px' : '14px 24px 40px 14px',
+            opacity: loading && agg ? 0.55 : 1, transition: 'opacity .18s ease',
+          }}>
             {content}
           </div>
         </div>
