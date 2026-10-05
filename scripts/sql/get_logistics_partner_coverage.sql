@@ -72,6 +72,40 @@ BEGIN
       FULL JOIN actual a ON a.partner = p.partner
      ORDER BY (a.partner IS NOT NULL), COALESCE(p.months_seen, 0) DESC, 1;
 
+  ELSIF tbl = 'logistics_costs_3pl' THEN
+    RETURN QUERY
+    WITH prior AS (
+      SELECT b.threepl_logistics_name AS partner,
+             COUNT(DISTINCT b.month_year)::int AS months_seen,
+             MAX(b.month_year)                 AS last_seen
+        FROM logistics_costs_3pl b
+       WHERE b.threepl_logistics_name IS NOT NULL
+         AND b.month_year IS NOT NULL
+         AND b.month_year < target_month
+         AND b.month_year >= to_char(
+               to_date(target_month, 'YYYY-MM') - (lookback || ' months')::interval,
+               'YYYY-MM')
+       GROUP BY 1
+    ),
+    actual AS (
+      SELECT b.threepl_logistics_name AS partner,
+             COUNT(*)::int  AS rows_n,
+             SUM(b.total_cost) AS cost
+        FROM logistics_costs_3pl b
+       WHERE b.threepl_logistics_name IS NOT NULL
+         AND b.month_year = target_month
+       GROUP BY 1
+    )
+    SELECT COALESCE(p.partner, a.partner)::text,
+           (a.partner IS NOT NULL)            AS uploaded,
+           COALESCE(a.rows_n, 0)              AS rows_n,
+           COALESCE(a.cost, 0)::numeric       AS cost,
+           COALESCE(p.last_seen, target_month)::text,
+           COALESCE(p.months_seen, 0)         AS months_seen
+      FROM prior p
+      FULL JOIN actual a ON a.partner = p.partner
+     ORDER BY (a.partner IS NOT NULL), COALESCE(p.months_seen, 0) DESC, 1;
+
   ELSIF tbl = 'logistics_invoices_b2b' THEN
     RETURN QUERY
     WITH prior AS (
