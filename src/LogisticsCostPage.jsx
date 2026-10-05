@@ -139,9 +139,10 @@ const WEIGHT_BANDS = [
 // Courier name with its mark. The logo is decorative — alt is empty so a screen reader
 // reads the name once, not twice — and a broken file hides the img rather than showing a
 // torn-image glyph, so an unmapped courier degrades to plain text instead of visible damage.
-// `size` — the logo/badge edge in px. 18 everywhere by default; the rate-drift table passes
-// 14 because it sits beside a chart and has to fit its height, and the logo is what sets
-// that table's row height rather than the text.
+// `size` — the logo/badge edge in px. At the default 18 the logo is taller than the text
+// line box, so it, not the padding, sets the row height: a table with logos runs 29px a row
+// against 25.4px for a text-only one. The rate-drift table passes 14, which brings its rows
+// to exactly the height of the weight-slab table beside it.
 function CourierCell({ name, size = 18 }) {
   const [bad, setBad] = useState(false)
   const logo = COURIER_LOGOS[name]
@@ -6152,7 +6153,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             ]}
             rows={driftRows}
             maxHeight={220}
-            dense
           />
           )}
           {/* Caption removed at the user's request — it was costing two lines of height

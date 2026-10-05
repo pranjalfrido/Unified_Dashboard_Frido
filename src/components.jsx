@@ -198,10 +198,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
 // (if less human-readable) storage key rather than colliding with every other unkeyed DataTable.
 // maxHeight scrolls the body vertically while the header stays put, so a card can hold a long
 // table at a fixed height instead of stretching the whole row.
-// `dense` — tighter rows, for tables that sit beside a chart and have to fit its height
-// rather than set their own. Opt-in rather than a new default: this component renders every
-// table in the app, and most of them are read on their own and want the roomier spacing.
-export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, search, searchKeys, searchPlaceholder, style, dense }) {
+export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, search, searchKeys, searchPlaceholder, style }) {
   // Opt-in search. Long tables (139 weight slabs, ~290 sub-categories) are scroll-only
   // otherwise, so finding one row means dragging through the whole list.
   const [q, setQ] = useState('')
@@ -251,7 +248,7 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
             return (
             <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none', background: zebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
               {reorder.orderedColumns.map(c => (
-                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? (dense ? '2px 5px' : '5.5px 5px') : (dense ? '2px 5px 8px' : '5.5px 5px 14px'), color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: zebra, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
+                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: zebra, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
               ))}
