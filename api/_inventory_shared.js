@@ -254,9 +254,9 @@ export function computeRowInventory(row) {
     return { totalInventory: rawInvt + rawBlockedInvt, rawInvt, rawBlockedInvt, rtdInvt: 0, packQty }
   } else {
     // RTD is available inventory only — InventoryBlocked is never counted as RTD (blocked
-    // stock isn't ready-to-dispatch by definition), even though totalInventory still includes
-    // it for the Total Invt column.
-    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: inv2, packQty }
+    // stock isn't ready-to-dispatch by definition). Blocked units are reported as rawBlockedInvt
+    // so they appear in the RAW BLOCKED column rather than silently inflating totalInventory.
+    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: blocked2, rtdInvt: inv2, packQty }
   }
 }
 
