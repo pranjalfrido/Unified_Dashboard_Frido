@@ -110,3 +110,17 @@ END;
 $function$;
 
 GRANT EXECUTE ON FUNCTION public.get_logistics_partner_coverage(text, text, int) TO anon, authenticated;
+
+-- Required, not optional. Without these the function scans the full 1.5M-row b2c ledger
+-- twice and takes 20.8s, which is fine on a direct connection but exceeds the 8s statement
+-- timeout PostgREST applies — so the browser got "canceling statement due to statement
+-- timeout" and the panel silently stayed hidden. With them it runs in 3.9s.
+--
+-- (month_year, courier_name) is the exact grouping both CTEs use, and INCLUDE (total_cost)
+-- carries the only other column read, so the plan is an index-only scan with no heap
+-- fetches. Build takes ~15s on b2c, instant on b2b.
+CREATE INDEX IF NOT EXISTS idx_lib2c_month_courier
+  ON public.logistics_invoices_b2c (month_year, courier_name) INCLUDE (total_cost);
+
+CREATE INDEX IF NOT EXISTS idx_lib2b_month_transporter
+  ON public.logistics_invoices_b2b (month_year, transporter_name) INCLUDE (total_cost);
