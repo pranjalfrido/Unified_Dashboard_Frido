@@ -130,6 +130,37 @@ function WhCarousel({ locations, filters, facilityTypes }) {
   )
 }
 
+// Returns per-location inventory totals summed from Regular-type facilities only.
+// s.locations[] is pre-aggregated across ALL facility types (warehouse + stores), so
+// it can't be used directly when the Regular toggle is active. s.facilities[] carries
+// facilityType per entry and is the authoritative source for Regular-only numbers.
+// Falls back to s.locations when facilities array is absent (legacy JSON).
+function regularLocations(s) {
+  const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
+  if (!hasFacilities) return s.locations || []
+  const byLoc = new Map()
+  for (const f of s.facilities) {
+    if (f.facilityType !== 'Regular') continue
+    const loc = f.location
+    if (!byLoc.has(loc)) byLoc.set(loc, { location: loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, avgSale: null, doi: null, stockStatus: null })
+    const acc = byLoc.get(loc)
+    acc.totalInvt += f.totalInvt || 0
+    acc.rtdInvt += f.rtdInvt || 0
+    acc.rawInvt += f.rawInvt || 0
+    acc.rawBlockedInvt += f.rawBlockedInvt || 0
+  }
+  // Merge avgSale/doi/stockStatus from s.locations (location-grain, not facility-grain)
+  for (const l of s.locations || []) {
+    if (byLoc.has(l.location)) {
+      const acc = byLoc.get(l.location)
+      acc.avgSale = l.avgSale
+      acc.doi = l.doi
+      acc.stockStatus = l.stockStatus
+    }
+  }
+  return [...byLoc.values()]
+}
+
 // Mobile inventory detail table — sticky Product ID, scrolled to right on mount so
 // Inventory/Avg Sale/DOI are visible by default; Sub-cat revealed by scrolling left.
 const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
@@ -190,7 +221,7 @@ const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableT
                 <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(s.avgSale)}</td>
                 <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtDays(s.doi)}d</td>
               </tr>
-              {expandedSku === s.skuKey && s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0).map(l => (
+              {expandedSku === s.skuKey && regularLocations(s).filter(l => l.totalInvt > 0 || l.avgSale > 0).map(l => (
                 <tr key={`mob-${s.skuKey}-${l.location}`} style={{ background: 'rgba(0,0,0,0.025)', borderBottom: `1px solid ${IC.border}`, height: 26 }}>
                   <td style={{ ...stickyTd('rgba(245,245,246,1)'), color: ths, fontSize: 10.5, paddingLeft: 10 }}>↳ {l.location}</td>
                   <td style={{ padding: P }} />
@@ -360,6 +391,19 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   )
   // Column headers show the human-readable Store_Location (e.g. "Amanora Mall, PNQ") instead
   // of the raw facility code (e.g. "Frido_0002") when available.
+  // For Dark Store columns, strip the city prefix (e.g. "Bangalore Domlur" → "Domlur") so the
+  // neighborhood name is visible in the narrow 90px column instead of "BANGALOR..." for all.
+  const colLabel = (facility) => {
+    const loc = allFacilities.find(f => f.facility === facility)
+    const name = loc?.storeLocation || facility
+    if (facilityType === 'Dark Store') {
+      const cityPrefixes = ['Bangalore ', 'Mumbai ', 'Hyderabad ', 'Chennai ', 'Delhi ', 'Kolkata ', 'Pune ', 'Gurugram ']
+      for (const prefix of cityPrefixes) {
+        if (name.startsWith(prefix)) return name.slice(prefix.length)
+      }
+    }
+    return name
+  }
   const storeLocationByFacility = useMemo(
     () => new Map(allFacilities.map(f => [f.facility, f.storeLocation || f.facility])),
     [allFacilities]
@@ -436,8 +480,8 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   const frozenLeft = idx => FROZEN_WIDTHS.slice(0, idx).reduce((a, b) => a + b, 0)
   const frozenStyle = idx => ({ position: 'sticky', left: frozenLeft(idx), zIndex: 2 })
 
-  const th = (label, key, align = 'right', frozenIdx = null) => (
-    <th onClick={() => onSort(key)} title={label}
+  const th = (label, key, align = 'right', frozenIdx = null, tooltip = null) => (
+    <th onClick={() => onSort(key)} title={tooltip || label}
       style={{
         textAlign: align, padding: '6px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none',
@@ -487,7 +531,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   {th('Category', 'category', 'left', 0)}
                   {th('Sub-category', 'subCategory', 'left', 1)}
                   {th('Product ID', 'sku', 'left', 2)}
-                  {columns.map(c => th(storeLocationByFacility.get(c) || c, colKey(c)))}
+                  {columns.map(c => th(colLabel(c), colKey(c), 'right', null, storeLocationByFacility.get(c) || c))}
                   {th('Total Invt', 'totalInvt')}
                 </tr>
                 <tr style={{ height: 1 }}>
@@ -1529,7 +1573,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // expand-to-locations view, but flattened for CSV instead of collapsed by default.
   const inventoryDetailExportRows = useMemo(() => {
     return detailSkus.flatMap(s =>
-      s.locations
+      regularLocations(s)
         .filter(l => l.totalInvt > 0 || l.avgSale > 0)
         .map(l => ({
           category: s.category, subCategory: s.subCategory, sku: s.sku, location: l.location,
@@ -1661,7 +1705,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                     {topSpacerH > 0 && <tr style={{ height: topSpacerH }}><td colSpan={colOrder.length} /></tr>}
                     {detailSkus.slice(startIdx, endIdx).map((s, relIdx) => {
                 const i = startIdx + relIdx
-                const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
+                const activeLocations = regularLocations(s).filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
                     <tr onClick={() => toggleExpandedSku(s.skuKey)}
