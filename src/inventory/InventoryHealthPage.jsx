@@ -130,10 +130,23 @@ function WhCarousel({ locations, filters, facilityTypes }) {
   )
 }
 
+// DOI bands — must match _inventory_shared.js DOI_BANDS + stockStatus logic.
+const REG_DOI_BANDS = { critical: 2, low: 15, sufficient: 45 }
+function regStockStatus(doi, avgSale, totalInvt) {
+  if (totalInvt === 0) return 'Out of Stock'
+  if (avgSale === 0 || avgSale == null) return 'No Demand'
+  if (doi <= REG_DOI_BANDS.critical) return 'Critical'
+  if (doi <= REG_DOI_BANDS.low) return 'Low'
+  if (doi <= REG_DOI_BANDS.sufficient) return 'Sufficient'
+  return 'Excess'
+}
+
 // Returns per-location inventory totals summed from Regular-type facilities only.
 // s.locations[] is pre-aggregated across ALL facility types (warehouse + stores), so
 // it can't be used directly when the Regular toggle is active. s.facilities[] carries
 // facilityType per entry and is the authoritative source for Regular-only numbers.
+// DOI and stockStatus are recomputed from Regular-only totalInvt so they match what's shown.
+// avgSale is location-grain (no facility-type split in sales data) — copied as-is.
 // Falls back to s.locations when facilities array is absent (legacy JSON).
 function regularLocations(s) {
   const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
@@ -149,13 +162,16 @@ function regularLocations(s) {
     acc.rawInvt += f.rawInvt || 0
     acc.rawBlockedInvt += f.rawBlockedInvt || 0
   }
-  // Merge avgSale/doi/stockStatus from s.locations (location-grain, not facility-grain)
+  // Merge avgSale from s.locations (location-grain, not facility-grain — sales data has no
+  // facility-type dimension so this is the best available value). Then recompute DOI and
+  // stockStatus fresh from Regular-only totalInvt so they match the inventory shown.
   for (const l of s.locations || []) {
     if (byLoc.has(l.location)) {
       const acc = byLoc.get(l.location)
       acc.avgSale = l.avgSale
-      acc.doi = l.doi
-      acc.stockStatus = l.stockStatus
+      const denom = Math.ceil(acc.avgSale || 0)
+      acc.doi = acc.totalInvt > 0 && denom === 0 ? null : (denom > 0 ? Math.floor(acc.totalInvt / denom) : 0)
+      acc.stockStatus = acc.doi == null ? regStockStatus(0, acc.avgSale, acc.totalInvt) : regStockStatus(acc.doi, acc.avgSale, acc.totalInvt)
     }
   }
   return [...byLoc.values()]
