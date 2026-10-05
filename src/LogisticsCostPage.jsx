@@ -76,8 +76,22 @@ const MODE = {
 }
 
 // Courier trend lines — all greens/teals so the chart reads as one family.
-// Six steps spaced across light→dark so lines stay apart even on greyscale/CVD.
-const DRIFT = { get colors(){ return [C.acc, '#2BB3A3', C.acm, '#57C4A8', C.acd, '#A8D5C8'] } }
+// Steps spaced across light→dark so lines stay apart even on greyscale/CVD.
+//
+// Ten, not six: this array is also what CAPS the number of couriers drawn, and at six the
+// chart silently dropped the four smallest. Urbanbolt and Safexpress were missing while the
+// table right beneath showed Safexpress at +29% drift — a real rate movement with no line.
+// The ledger carries ten couriers, so the palette covers ten.
+const DRIFT = {
+  get colors(){
+    return [
+      C.acc, '#2BB3A3', C.acm, '#57C4A8', C.acd, '#A8D5C8',
+      // Four more steps, alternating dark/light like the six above rather than appended as
+      // a run of pale tints, so the tail couriers stay distinguishable from each other.
+      '#1E7A6F', '#7FCBB8', '#14594F', '#C2E2D8',
+    ]
+  },
+}
 
 // Chart chrome — recessive hairlines, muted axis ink.
 // Per-unit rates, to one decimal. fmt() compacts to lakhs/crores, which is right for spend
@@ -6102,9 +6116,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             maxHeight={220}
           />
           )}
+          {/* The 500-shipment floor is applied by the rate-drift query, which feeds the
+              TABLE. The chart reads trendAll, which carries every month, so the two differ
+              on thin months — currently only Bluedart B2B's July and August. Saying this
+              applies to both would be wrong; saying nothing would leave a reader assuming
+              a line and its table row were built the same way. */}
           {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
-            Couriers with fewer than 500 shipments in a month are excluded, so a handful
-            of parcels can't fake a spike.
+            The table below excludes months with fewer than 500 shipments, so a handful of
+            parcels can't fake a drift figure. The chart plots every month a courier billed.
           </div>}
         </Card>
       </div>
