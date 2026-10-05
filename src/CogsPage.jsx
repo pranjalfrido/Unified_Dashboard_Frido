@@ -249,15 +249,54 @@ export default function CogsPage() {
         if (!aoa.length) throw new Error("Empty sheet");
 
         const normHead = (c) => String(c ?? "").trim().toLowerCase().replace(/\s*\*\s*$/, "").replace(/[\s_]+/g, " ").trim();
+
+        // Accepted spellings per column. The template writes the first of each, but files
+        // come from Tally exports, the CSV/Excel this page itself downloads (which uses the
+        // DB column names), and hand-made sheets — all of which spell the SKU column
+        // differently. Matching only "sku code" rejected a file whose data was perfectly
+        // good, with an error that read as though the file were malformed.
+        const ALIASES = {
+          month: ["month", "month year", "period", "billing month", "mon"],
+          itemskucode: ["sku code", "sku", "itemskucode", "item sku code", "item sku",
+                        "sku id", "skucode", "item code", "product code"],
+          cogs: ["cogs", "cost", "unit cost", "cogs value", "cost of goods sold", "cogs per unit"],
+        };
+        const matchCol = (cells, key) => {
+          for (const a of ALIASES[key]) {
+            const i = cells.indexOf(a);
+            if (i !== -1) return i;
+          }
+          return -1;
+        };
+
+        // A row is the header when the two REQUIRED identifying columns are both present.
+        // cogs is not part of the test: a sheet can legitimately label that column something
+        // this list does not know, and failing on it would reject the whole file rather than
+        // flagging one column.
         const hIdx = aoa.findIndex((row) => {
           const cells = row.map(normHead);
-          return ["month", "sku code"].every((w) => cells.includes(w));
+          return matchCol(cells, "month") !== -1 && matchCol(cells, "itemskucode") !== -1;
         });
-        if (hIdx === -1) throw new Error("Couldn't find header row with 'Month' and 'SKU Code' columns. Use the downloaded template.");
+        if (hIdx === -1) {
+          // Name what was actually in the first row. "Use the template" is no help when the
+          // file came from somewhere else and the reader cannot see which column was wrong.
+          const first = (aoa[0] || []).map(normHead).filter(Boolean).slice(0, 8).join(", ");
+          throw new Error(
+            "Couldn't find a header row with a month column and a SKU column.\n\n" +
+            (first ? `First row reads: ${first}\n\n` : "") +
+            "Accepted month headers: " + ALIASES.month.join(", ") + "\n" +
+            "Accepted SKU headers: " + ALIASES.itemskucode.join(", ")
+          );
+        }
 
         const head = aoa[hIdx].map(normHead);
         const ci = {};
-        for (const f of FIELDS) ci[f.key] = head.indexOf(normHead(f.label));
+        for (const f of FIELDS) {
+          // Alias match first, then the exact label, so a column this list does not know but
+          // which matches FIELDS verbatim still resolves.
+          ci[f.key] = matchCol(head, f.key);
+          if (ci[f.key] === -1) ci[f.key] = head.indexOf(normHead(f.label));
+        }
 
         const body = aoa.slice(hIdx + 1);
         const good = [], bad = [];
