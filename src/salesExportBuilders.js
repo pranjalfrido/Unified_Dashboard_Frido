@@ -43,6 +43,21 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
     })
   })
 
+  // Returns are not a separate sheet. Cancel/RTO/CIR are measures of the SAME rows every
+  // other sheet is built from, so they belong as columns on each roll-up rather than in a
+  // file of their own — otherwise a reader comparing a SKU's revenue against its RTO has to
+  // join two tabs by hand, and "Day-wise & SKU" plus "Returns & RTO" means downloading the
+  // same numbers twice at two different grains.
+  const lossCols = v => {
+    const lost = (v.cancelRev || 0) + (v.rtoRev || 0) + (v.cirRev || 0)
+    return {
+      'Cancelled': r0(v.cancelRev), 'RTO': r0(v.rtoRev), 'CIR': r0(v.cirRev),
+      'Total Lost': r0(lost),
+      'Lost %': pct2(lost, v.rev),
+      'Retained %': parseFloat((retainedShare(v.rev, lost) * 100).toFixed(2)),
+    }
+  }
+
   if (want.has('sku')) {
     out.push({
       id: 'sku', name: 'Day-wise SKU',
@@ -54,27 +69,30 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
           'Sub-Channel': r.subChannel || '', 'Units': r.units || 0,
           'Gross Revenue': r0(r.rev), 'Net Revenue': r0((r.excRev || 0) * keep),
           'Return Units': r.returnUnits || 0,
+          ...lossCols(r),
         }
       }),
     })
   }
 
-  if (want.has('returns')) {
-    // Aggregated to SKU rather than left per-day: a returns review is about which products
-    // leak revenue, and a day-level row for a SKU with three orders a week is noise.
+  // SKU totals for the period. The day-wise sheet answers "what happened on the 12th";
+  // this one answers "which products leak revenue", which is the question the old separate
+  // returns sheet existed for — and it carries the same loss columns.
+  if (want.has('skuTotals')) {
     const bySku = new Map()
     for (const r of rows) {
-      const e = bySku.get(r.sku) || { units: 0, rev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnUnits: 0 }
-      e.units += r.units || 0; e.rev += r.rev || 0
+      const e = bySku.get(r.sku) || { units: 0, rev: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnUnits: 0 }
+      e.units += r.units || 0; e.rev += r.rev || 0; e.excRev += r.excRev || 0
       e.cancelRev += r.cancelRev || 0; e.rtoRev += r.rtoRev || 0; e.cirRev += r.cirRev || 0
       e.returnUnits += r.returnUnits || 0
       bySku.set(r.sku, e)
     }
+    const total = [...bySku.values()].reduce((s, v) => s + v.rev, 0)
     out.push({
-      id: 'returns', name: 'Returns & RTO',
+      id: 'skuTotals', name: 'SKU Totals',
       rows: [...bySku.entries()]
         .filter(([, v]) => v.rev > 0)
-        .sort((a, b) => (b[1].cancelRev + b[1].rtoRev + b[1].cirRev) - (a[1].cancelRev + a[1].rtoRev + a[1].cirRev))
+        .sort((a, b) => b[1].rev - a[1].rev)
         .map(([sku, v]) => {
           const look = skuCat[sku] || { cat: 'Others', sc: 'Others' }
           const lost = v.cancelRev + v.rtoRev + v.cirRev
@@ -82,10 +100,10 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
             'Category': look.cat, 'Sub-Category': look.sc, 'SKU': sku,
             'Units': v.units, 'Return Units': v.returnUnits,
             'Gross Revenue': r0(v.rev),
-            'Cancelled': r0(v.cancelRev), 'RTO': r0(v.rtoRev), 'CIR': r0(v.cirRev),
-            'Total Lost': r0(lost),
-            'Lost %': pct2(lost, v.rev),
-            'Retained %': parseFloat((retainedShare(v.rev, lost) * 100).toFixed(2)),
+            'Net Revenue': r0(v.excRev * retainedShare(v.rev, lost)),
+            'AOV': v.units ? r0(v.rev / v.units) : 0,
+            ...lossCols(v),
+            'Share (out of 100)': pct2(v.rev, total),
           }
         }),
     })
@@ -96,24 +114,30 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
     for (const r of rows) {
       const look = skuCat[r.sku] || { cat: 'Others', sc: 'Others' }
       const k = `${look.cat}|${look.sc}`
-      const e = byCat.get(k) || { cat: look.cat, sc: look.sc, units: 0, rev: 0, excRev: 0, lost: 0, returnUnits: 0 }
+      // cancelRev/rtoRev/cirRev kept apart rather than summed on the way in: the three have
+      // different causes and different owners, and a single "lost" total cannot be split
+      // back out once added.
+      const e = byCat.get(k) || { cat: look.cat, sc: look.sc, units: 0, rev: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnUnits: 0 }
       e.units += r.units || 0; e.rev += r.rev || 0; e.excRev += r.excRev || 0
-      e.lost += (r.cancelRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
+      e.cancelRev += r.cancelRev || 0; e.rtoRev += r.rtoRev || 0; e.cirRev += r.cirRev || 0
       e.returnUnits += r.returnUnits || 0
       byCat.set(k, e)
     }
     const total = [...byCat.values()].reduce((s, v) => s + v.rev, 0)
     out.push({
       id: 'category', name: 'Category Revenue',
-      rows: [...byCat.values()].sort((a, b) => b.rev - a.rev).map(v => ({
-        'Category': v.cat, 'Sub-Category': v.sc, 'Units': v.units,
-        'Gross Revenue': r0(v.rev),
-        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.lost)),
-        'Return Units': v.returnUnits,
-        'Lost %': pct2(v.lost, v.rev),
-        'AOV': v.units ? r0(v.rev / v.units) : 0,
-        'Share (out of 100)': pct2(v.rev, total),
-      })),
+      rows: [...byCat.values()].sort((a, b) => b.rev - a.rev).map(v => {
+        const lost = v.cancelRev + v.rtoRev + v.cirRev
+        return {
+          'Category': v.cat, 'Sub-Category': v.sc, 'Units': v.units,
+          'Gross Revenue': r0(v.rev),
+          'Net Revenue': r0(v.excRev * retainedShare(v.rev, lost)),
+          'Return Units': v.returnUnits,
+          'AOV': v.units ? r0(v.rev / v.units) : 0,
+          ...lossCols(v),
+          'Share (out of 100)': pct2(v.rev, total),
+        }
+      }),
     })
   }
 
@@ -150,21 +174,26 @@ export function buildD2CReports(data, { reportIds, subChannel }) {
     const bySub = new Map()
     for (const r of dailySKU) {
       const k = r.subChannel || '(unknown)'
-      const e = bySub.get(k) || { units: 0, rev: 0, excRev: 0, lost: 0 }
+      const e = bySub.get(k) || { units: 0, rev: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnUnits: 0 }
       e.units += r.units || 0; e.rev += r.rev || 0; e.excRev += r.excRev || 0
-      e.lost += (r.cancelRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
+      e.cancelRev += r.cancelRev || 0; e.rtoRev += r.rtoRev || 0; e.cirRev += r.cirRev || 0
+      e.returnUnits += r.returnUnits || 0
       bySub.set(k, e)
     }
     const total = [...bySub.values()].reduce((s, v) => s + v.rev, 0)
     out.push({
       id: 'channels', name: 'Sub-Channel Split',
-      rows: [...bySub.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([k, v]) => ({
-        'Sub-Channel': k, 'Units': v.units, 'Gross Revenue': r0(v.rev),
-        'Net Revenue': r0(v.excRev * retainedShare(v.rev, v.lost)),
-        'AOV': v.units ? r0(v.rev / v.units) : 0,
-        'Lost %': pct2(v.lost, v.rev),
-        'Share (out of 100)': pct2(v.rev, total),
-      })),
+      rows: [...bySub.entries()].sort((a, b) => b[1].rev - a[1].rev).map(([k, v]) => {
+        const lost = v.cancelRev + v.rtoRev + v.cirRev
+        return {
+          'Sub-Channel': k, 'Units': v.units, 'Return Units': v.returnUnits,
+          'Gross Revenue': r0(v.rev),
+          'Net Revenue': r0(v.excRev * retainedShare(v.rev, lost)),
+          'AOV': v.units ? r0(v.rev / v.units) : 0,
+          ...lossCols(v),
+          'Share (out of 100)': pct2(v.rev, total),
+        }
+      }),
     })
   }
 

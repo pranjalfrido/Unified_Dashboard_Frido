@@ -17,12 +17,16 @@ import { C } from './utils.js'
 // One row per report the dialog can produce. `build` receives the resolved dataset and
 // returns an array of flat objects; an empty array means the sheet is skipped rather than
 // written blank, so a workbook never contains an empty tab.
+// Each entry is a GRAIN, not a metric. Returns used to be its own report, which meant the
+// same numbers came down twice — once per day and once rolled up — and anyone comparing a
+// SKU's revenue against its RTO had to join two tabs by hand. Cancel/RTO/CIR are now
+// columns on every sheet built from the order rows, so one report answers both questions.
 export const SALES_REPORTS = [
-  { id: 'sku', label: 'Day-wise & SKU', hint: 'One row per day per SKU' },
-  { id: 'category', label: 'Category revenue', hint: 'Category and sub-category totals' },
-  { id: 'returns', label: 'Returns & RTO detail', hint: 'Cancel, RTO and CIR per SKU' },
-  { id: 'channels', label: 'Channel comparison', hint: 'Revenue, AOV and share per channel' },
-  { id: 'states', label: 'Top states & cities', hint: 'Geography split' },
+  { id: 'sku', label: 'Day-wise (date × SKU)', hint: 'One row per day per SKU, with returns and RTO columns' },
+  { id: 'skuTotals', label: 'SKU totals', hint: 'One row per SKU for the whole period, with returns and RTO' },
+  { id: 'category', label: 'Category & sub-category', hint: 'Category totals, with returns and RTO' },
+  { id: 'channels', label: 'Sub-channel split', hint: 'MyFrido / Mobility / International, with returns and RTO' },
+  { id: 'states', label: 'States & cities', hint: 'Geography split — separate source, no SKU detail' },
 ]
 
 const iso = d => {
