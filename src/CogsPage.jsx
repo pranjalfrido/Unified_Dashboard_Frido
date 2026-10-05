@@ -151,13 +151,23 @@ export default function CogsPage() {
 
     setSaving(true);
     try {
-      const records = valid.map(toDbRecord);
+      // Same collapse as the upload path: nothing stops the grid holding two rows for one
+      // SKU+month, and ON CONFLICT DO UPDATE cannot touch a row twice in one statement.
+      // Last one wins, matching the row order on screen.
+      const byKey = new Map();
+      for (const r of valid) byKey.set(`${r.itemskucode.trim().toUpperCase()}|${r.month}`, r);
+      const records = [...byKey.values()].map(toDbRecord);
       const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
       if (error) throw error;
       setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
       const months = [...new Set(valid.map((r) => r.month))].sort();
       setAllMonths((prev) => [...new Set([...prev, ...months])].sort());
-      flash("ok", `Saved ${valid.length} records to database.`);
+      // records.length, not valid.length — the two differ when duplicate SKU+month rows
+      // were collapsed above, and reporting the pre-collapse count would overstate what
+      // actually reached the table.
+      flash("ok", valid.length > records.length
+        ? `Saved ${records.length} records to database. ${valid.length - records.length} duplicate SKU+month row(s) collapsed.`
+        : `Saved ${records.length} records to database.`);
     } catch (e) {
       flash("error", `Save failed: ${e.message ?? e}`);
     } finally {
@@ -364,22 +374,39 @@ export default function CogsPage() {
           if (!confirm(`${warned.length} row(s) have COGS at or above the SKU's last-60-day selling price (inc GST) — likely a data-entry mistake:\n\n${preview}\n\nContinue with upload anyway?`)) return;
         }
 
-        setUploadProgress({ done: 0, total: good.length });
+        // Collapse repeated SKU+month pairs before sending. ON CONFLICT DO UPDATE cannot
+        // touch the same row twice in one statement, so a file listing a SKU twice for the
+        // same month failed the whole upload with "cannot affect row a second time" —
+        // partway through, leaving earlier chunks already written.
+        //
+        // Last occurrence wins, which matches how the upsert behaves across chunks and how
+        // a re-upload behaves against existing rows: the newest value for a SKU-month is
+        // the one that stands.
+        const byKey = new Map();
+        for (const r of good) byKey.set(`${r.itemskucode.trim().toUpperCase()}|${r.month}`, r);
+        const deduped = [...byKey.values()];
+        const dupCount = good.length - deduped.length;
+
+        setUploadProgress({ done: 0, total: deduped.length });
         await new Promise((r) => setTimeout(r, 30));
 
         const PAGE = 500;
         let done = 0;
-        for (let i = 0; i < good.length; i += PAGE) {
-          const chunk = good.slice(i, i + PAGE).map(toDbRecord);
+        for (let i = 0; i < deduped.length; i += PAGE) {
+          const chunk = deduped.slice(i, i + PAGE).map(toDbRecord);
           const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
           if (error) throw error;
           done += chunk.length;
-          setUploadProgress({ done, total: good.length });
+          setUploadProgress({ done, total: deduped.length });
         }
 
         await loadFromDb();
-        setUploadProgress({ done: good.length, total: good.length, finished: true });
-        flash("ok", `Uploaded ${good.length} records.`);
+        setUploadProgress({ done: deduped.length, total: deduped.length, finished: true });
+        // Say when rows were collapsed. Silently uploading fewer records than the file held
+        // would leave the reader to discover the difference by counting.
+        flash("ok", dupCount
+          ? `Uploaded ${deduped.length} records. ${dupCount} duplicate SKU+month ${dupCount === 1 ? "row was" : "rows were"} collapsed, keeping the last value for each.`
+          : `Uploaded ${deduped.length} records.`);
         setTimeout(() => setUploadProgress(null), 4000);
       } catch (err) {
         setUploadProgress(null);
