@@ -4073,9 +4073,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // ── OVERALL: B2B + B2C combined ──
     content = !overall ? <Card title="Loading summary…" /> : (
       <>
-        {/* No header here — the scope toggle above already says Overview. The spacer stands
-            in for the SectionHdr margin the block used to get. */}
-        <div style={{ height: 12 }} />
+        {/* No header here — the scope toggle above already says Overview. No spacer
+            either: the scope bar's own marginBottom is the gap, and adding 12px on top of
+            it made every tab but B2C sit lower than B2C does. */}
         {/* Hero plus a 3x2 tile grid, then the combined trend, then a card per carrier. Same
             hero + tile geometry as the other two tabs so the three read as one dashboard. */}
         <div className="ov-hero cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 12, alignItems: 'stretch' }}>
@@ -4405,9 +4405,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       </Card>
     ) : (
       <>
-        {/* No header on this block — the cards are self-describing. The spacer keeps the
-            vertical rhythm the SectionHdr used to provide. */}
-        <div style={{ height: 12 }} />
+        {/* No header on this block — the cards are self-describing. No spacer either; the
+            scope bar's marginBottom already provides the gap, and B2C sets the standard. */}
         {b2b.totals?.unpriced_rows > 0 && (
           <div style={{
             display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 0 12px',
@@ -5005,7 +5004,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
       return (
       <>
-        <div style={{ height: 12 }} />
+        {/* No leading spacer — see the Overview block; B2C has none and sets the gap. */}
         <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 14, alignItems: 'stretch' }}>
           <Hero
             label="Total Warehousing Cost"
