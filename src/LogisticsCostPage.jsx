@@ -5148,7 +5148,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <YAxis yAxisId="r" orientation="right" domain={[0, 'auto']}
                   tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} width={52} />
-                <Tooltip content={<ChartTooltip />} />
+                {/* Total spend is the bar and the other three are its components, so it is
+                    the figure the reader is after — emphasise lifts it out of the list. */}
+                <Tooltip content={<ChartTooltip emphasise="Total spend" />} />
                 <Legend {...chartLegendProps({ fontSize: 11 })} />
                 <Bar yAxisId="l" dataKey="cost" name="Total spend" fill="url(#tplTotalBar)"
                   radius={[4, 4, 0, 0]} maxBarSize={54} />

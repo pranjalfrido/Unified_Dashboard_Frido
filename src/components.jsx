@@ -10,20 +10,36 @@ export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, 
 // mirrors the lines' vertical order at the hovered month.
 //
 // `maxHeight` caps the body and scrolls it, for charts with more series than fit a card.
-export function ChartTooltip({ active, payload, label, formatter, sortByValue, maxHeight }) {
+//
+// `emphasise` — the series name to set apart as the headline figure. On a chart where one
+// series is the total and the rest are its components, every row rendered at the same weight
+// makes the reader hunt for the number they came for. The named row is pulled to the top,
+// set larger, and separated by a rule, so the tooltip reads as "the total, and what makes it
+// up" rather than as a flat list.
+export function ChartTooltip({ active, payload, label, formatter, sortByValue, maxHeight, emphasise }) {
   if (!active || !payload?.length) return null
   const format = formatter || fmt
   // Copy before sorting: payload is Recharts' own array and mutating it reorders the
   // series state itself, which flickers the lines on every hover.
-  const rows = sortByValue
+  const sorted = sortByValue
     ? [...payload].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))
     : payload
+  const lead = emphasise ? sorted.find(p => p.name === emphasise) : null
+  const rows = lead ? sorted.filter(p => p !== lead) : sorted
   return (
     // zIndex: a tooltip is an overlay and must sit above the legend and the table beneath
     // the chart. Recharts positions its wrapper without a stacking context of its own, so
     // without this the tooltip was painted under both.
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)', position: 'relative', zIndex: 60, ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) }}>
       <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
+      {lead && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 11, color: C.t2 }}>{lead.name}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 16, fontWeight: 800, color: C.t1, fontFamily: 'var(--mono)', letterSpacing: '-.01em' }}>
+            {format(lead.value)}
+          </span>
+        </div>
+      )}
       {rows.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === C.acc ? '1px solid #E6C200' : 'none' }} />
