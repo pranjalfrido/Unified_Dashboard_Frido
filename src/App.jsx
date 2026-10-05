@@ -1,6 +1,8 @@
 ﻿import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, Component } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
+import SalesExportDialog from './SalesExportDialog.jsx'
+import { buildD2CReports } from './salesExportBuilders.js'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -14185,7 +14187,6 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const filteredData = data
 
   const [allExportOpen, setAllExportOpen] = useState(false)
-  const [d2cExportOpen, setD2cExportOpen] = useState(false)
   const [amzExportOpen, setAmzExportOpen] = useState(false)
   const [fkExportOpen, setFkExportOpen] = useState(false)
   const [blExportOpen, setBlExportOpen] = useState(false)
@@ -14195,128 +14196,6 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const [fcExportOpen, setFcExportOpen] = useState(false)
   const [mnExportOpen, setMnExportOpen] = useState(false)
   const [offExportOpen, setOffExportOpen] = useState(false)
-
-  const handleD2CExport = (type) => {
-    setD2cExportOpen(false)
-    const sh = (filteredData || {}).shopify || {}
-    const subCh = filters.subChannel // 'MyFrido', 'Mobility', or null/'' = Overall
-    const subChLabel = subCh === 'MyFrido' ? 'MyFrido' : subCh === 'Mobility' ? 'Mobility' : 'Overall'
-    const matrixSubCh = (subCh === 'MyFrido' || subCh === 'Mobility') ? subCh.toLowerCase() : null
-    const dateTag = `${filters.start}_${filters.end}`
-
-    if (type === 'sku' || type === 'all') {
-      // Date × SKU rows from sh.dailySKU, filtered by subChannel
-      const dailySKU = sh.dailySKU || []
-      // Build sku→{cat,subCat} lookup from skuMap
-      const skuCatLookup = {}
-      Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
-        Object.entries(scMap).forEach(([sc, skuMap_]) => {
-          Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
-        })
-      })
-      const filtered = matrixSubCh
-        ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
-        : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
-      const skuRows = filtered.map(r => {
-        const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
-        const gross = r.rev || 0
-        const excGst = r.excRev || 0
-        const cancelRev = r.cancelRev || 0
-        const rtoRev = r.rtoRev || 0
-        const cirRev = r.cirRev || 0
-        const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
-        return {
-          'Date': r.date,
-          'Sub Channel': r.subChannel || '',
-          'Category': lookup.cat,
-          'Sub-Category': lookup.sc,
-          'SKU': r.sku || '',
-          'Units': r.units || 0,
-          'Gross Revenue': Math.round(gross),
-          'Net Revenue': Math.round(excGst * retainedShare),
-          'Cancel Rev': Math.round(cancelRev),
-          'RTO Rev': Math.round(rtoRev),
-          'CIR Rev': Math.round(cirRev),
-        }
-      }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
-
-      if (type === 'sku') {
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
-        XLSX.writeFile(wb, `d2c_${subChLabel}_daywise_sku_${dateTag}.xlsx`)
-        return
-      }
-    }
-
-    if (type === 'states' || type === 'all') {
-      const stateMap = sh.stateMap || {}
-      const statePrevMap = sh.statePrevMap || {}
-      const shCityRows = sh.cityRows || []
-      const cityPrevMap = sh.cityPrevMap || {}
-      const stTotal = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
-      const stSheet = Object.entries(stateMap)
-        .map(([state, v]) => ({ state, rev: v.rev || 0, orders: v.orders || 0, cities: v.cities || 0 }))
-        .sort((a, b) => b.rev - a.rev)
-        .map(s => ({
-          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
-          'Revenue': Math.round(s.rev), 'Orders': s.orders, 'Cities': s.cities,
-          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
-          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
-        }))
-      const ctTotal = shCityRows.reduce((s, r) => s + (r.rev || 0), 0)
-      const ctSheet = shCityRows.map(c => ({
-        'City': c.city, 'State': c.state || '',
-        'Region': c.region || '', 'City Tier': c.cityTier || '',
-        'Revenue': Math.round(c.rev), 'Orders': c.orders || 0,
-        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
-        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
-      }))
-
-      if (type === 'states') {
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-        XLSX.writeFile(wb, `d2c_${subChLabel}_geo_${dateTag}.xlsx`)
-        return
-      }
-
-      if (type === 'all') {
-        // Build SKU rows again for full export
-        const dailySKU = sh.dailySKU || []
-        const skuCatLookup = {}
-        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
-          Object.entries(scMap).forEach(([sc, skuMap_]) => {
-            Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
-          })
-        })
-        const filteredSKU = matrixSubCh
-          ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
-          : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
-        const skuRows = filteredSKU.map(r => {
-          const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
-          const gross = r.rev || 0
-          const excGst = r.excRev || 0
-          const cancelRev = r.cancelRev || 0
-          const rtoRev = r.rtoRev || 0
-          const cirRev = r.cirRev || 0
-          const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
-          return {
-            'Date': r.date, 'Sub Channel': r.subChannel || '',
-            'Category': lookup.cat, 'Sub-Category': lookup.sc, 'SKU': r.sku || '',
-            'Units': r.units || 0, 'Gross Revenue': Math.round(gross),
-            'Net Revenue': Math.round(excGst * retainedShare),
-            'Cancel Rev': Math.round(cancelRev), 'RTO Rev': Math.round(rtoRev), 'CIR Rev': Math.round(cirRev),
-          }
-        }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
-
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
-        XLSX.writeFile(wb, `d2c_${subChLabel}_full_export_${dateTag}.xlsx`)
-      }
-    }
-  }
 
   const handleAmzExport = (type) => {
     setAmzExportOpen(false)
@@ -15101,26 +14980,19 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
             )}
+            {/* Replaces the fixed three-item menu with a date range, a report picker and
+                one workbook. D2C first; the other eight channel tabs still carry their own
+                menus until their row builders are written. */}
             {activeTab === 'shopify' && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
-                </button>
-                {d2cExportOpen && (
-                  <>
-                    <div onClick={() => setD2cExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
-                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
-                      {[['sku','Day-wise & SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
-                        <div key={key} onClick={() => handleD2CExport(key)}
-                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{label}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <SalesExportDialog
+                channel="shopify"
+                channelLabel="D2C"
+                dashStart={filters.start} dashEnd={filters.end}
+                data={filteredData}
+                api={import.meta.env.VITE_API_URL || ''}
+                extraFilters={filters.subChannel ? { subChannel: filters.subChannel } : {}}
+                buildReports={(d, opts) => buildD2CReports(d, { ...opts, subChannel: filters.subChannel })}
+              />
             )}
             {activeTab === 'amazon' && (
               <div style={{ position: 'relative' }}>
