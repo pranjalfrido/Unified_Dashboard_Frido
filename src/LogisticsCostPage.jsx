@@ -1554,10 +1554,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // effect on every load). Track "already served from static" with a ref instead.
   const b2bStaticServed = useRef(false)
 
-  // The API request key. tplPartners/tplSites are stripped: 3PL aggregates arrive from the
-  // server's filter-independent refCache and are narrowed on the client, so including them
-  // here would refetch the entire cost ledger every time a warehousing chip is clicked and
-  // come back with identical data.
+  // The API request key. tplPartners/tplSites/tplLocations are stripped: 3PL aggregates
+  // arrive from the server's filter-independent refCache and are narrowed on the client, so
+  // including them here would refetch the entire cost ledger every time a warehousing chip
+  // is clicked and come back with identical data.
   const filterKey = useMemo(() => {
     const { tplPartners: _tp, tplSites: _ts, tplLocations: _tl, ...apiFilters } = filters
     // scope rides along so the API can skip the heavy B2C detail queries when a tab does not
@@ -1565,12 +1565,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // so they must not share a cache entry.
     return JSON.stringify({ ...apiFilters, scope })
   }, [filters, scope])
+
+  // The three 3PL slicers, as their own key. They are deliberately absent from filterKey so
+  // they never trigger a refetch — but the effect below ALSO does the client-side narrowing,
+  // and it only re-runs when its dependencies change. Keyed on filterKey alone, clicking a
+  // 3PL partner changed `filters` without changing anything the effect watched, so the
+  // narrowing never ran and the slicer did nothing at all.
+  const tplFilterKey = useMemo(
+    () => JSON.stringify([filters.tplPartners || [], filters.tplSites || [], filters.tplLocations || []]),
+    [filters.tplPartners, filters.tplSites, filters.tplLocations],
+  )
   const scanRef = useRef(0)
 
   useEffect(() => {
     const ctl = new AbortController()
     const myRun = ++scanRef.current
-    const f = JSON.parse(filterKey)
+    // filterKey has the 3PL slicers stripped out, so they are added back here. Everything
+    // downstream reads `f`, including the client-side 3PL narrowing — without this it would
+    // see tplPartners as undefined and filter nothing even when the effect does re-run.
+    const [tplPartnersSel, tplSitesSel, tplLocationsSel] = JSON.parse(tplFilterKey)
+    const f = { ...JSON.parse(filterKey), tplPartners: tplPartnersSel, tplSites: tplSitesSel, tplLocations: tplLocationsSel }
 
     // If the base data is loaded AND the filter can be handled by the cube, skip the API.
     if (baseData?.cube && isCubeFilter(f, scope)) {
@@ -1956,7 +1970,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     })()
 
     return () => ctl.abort()
-  }, [filterKey, API, reloadKey, baseData, scope])
+  }, [filterKey, tplFilterKey, API, reloadKey, baseData, scope])
 
   // ── Derived views ──
   const kpis = useMemo(() => {
