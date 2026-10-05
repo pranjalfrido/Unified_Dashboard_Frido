@@ -67,12 +67,23 @@ export default function CogsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase.from("item_master").select("Product_Code");
+        // product_code, lowercase. The column was quoted as "Product_Code", which does not
+        // exist — PostgREST returned an error, `data` fell back to [], and validSkus became
+        // an EMPTY Set, so every SKU in an upload was reported "not found in item master".
+        const { data, error } = await supabase.from("item_master").select("product_code");
         if (error) throw error;
-        setValidSkus(new Set((data ?? []).map((d) => String(d.Product_Code || "").trim().toUpperCase())));
+        const set = new Set((data ?? [])
+          .map((d) => String(d.product_code || "").trim().toUpperCase())
+          .filter(Boolean));
+        // An empty result is a failure, not an item master with no products. Treating it as
+        // data is what turned one bad column name into "all 1,813 rows are invalid".
+        setValidSkus(set.size ? set : null);
       } catch (e) {
         console.error("Failed to load item master for SKU validation:", e);
-        setValidSkus(new Set()); // fail closed — validity gate below treats unknown as invalid until this loads
+        // null, NOT an empty Set: every gate below is written `validSkus && ...`, so null
+        // skips validation and lets the upload through. Failing closed here means a
+        // transient fetch error silently rejects a perfectly good file and blames the file.
+        setValidSkus(null);
       }
     })();
   }, []);
