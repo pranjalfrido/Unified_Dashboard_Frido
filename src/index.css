@@ -830,3 +830,22 @@ svg text, svg tspan{
   .load-veil,.load-veil.is-done{ animation:none }
   .load-veil.is-done{ opacity:0 }
 }
+
+/* ══════════════════════════════════════════════
+   Rate-drift legend — ten couriers on one line
+   ══════════════════════════════════════════════
+   The drift chart carries one line per courier and the ledger has ten of them, which at the
+   shared legend size wrapped to a second row. Recharts reserves the legend band at a fixed
+   height, so a wrapped row is clipped rather than growing the chart — "Urbanbolt" ended up
+   orphaned below the card.
+
+   Recharts sets per-item margins inline, so the gap can only be closed with !important. The
+   existing rules that do this are inside a mobile media query; this one is unscoped because
+   the drift chart is where the count is highest and it needs the treatment at every width. */
+.drift-legend .recharts-default-legend{
+  display:flex !important; flex-wrap:nowrap !important; justify-content:center !important;
+  gap:0 9px !important; padding:0 !important; white-space:nowrap
+}
+.drift-legend .recharts-legend-item{ margin:0 !important; display:inline-flex !important; align-items:center }
+.drift-legend .recharts-legend-item-text{ font-size:9.5px !important }
+.drift-legend .recharts-legend-item svg{ margin-right:3px !important }

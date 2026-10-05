@@ -6062,7 +6062,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   tickFormatter={v => '₹' + v.toFixed(0)} />
                 <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
                   content={<ChartTooltip formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
-                <Legend {...chartLegendProps({ fontSize: 11 })} iconType="plainline" />
+                {/* Ten courier names have to fit one row, so this legend runs smaller and
+                    tighter than the shared default: 9.5px with a 7px icon and reduced
+                    item spacing. At the standard 11px/10px it wrapped, and the band is a
+                    fixed-height reservation, so the second row was clipped with
+                    "Urbanbolt" orphaned below the card. */}
+                <Legend {...chartLegendProps({ fontSize: 9.5, iconSize: 7, height: 24 })}
+                  iconType="plainline"
+                  wrapperStyle={{ fontSize: 9.5, paddingTop: 2, lineHeight: 1.2 }}
+                  wrapperClassName="drift-legend" />
                 {driftCouriers.map((c, i) => (
                   <Line key={c} type="monotone" dataKey={c} name={c}
                     stroke={DRIFT.colors[i % DRIFT.colors.length]} strokeWidth={2}
