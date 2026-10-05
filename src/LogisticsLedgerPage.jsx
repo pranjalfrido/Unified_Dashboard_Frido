@@ -198,6 +198,19 @@ const db = {
     return (data ?? []).map((r) => r.month_year).filter(Boolean);
   },
 
+  // Which partners have a bill uploaded for `month`, and which are still outstanding.
+  // Aggregated in the database (see scripts/sql/get_logistics_partner_coverage.sql) rather
+  // than derived from the grid: the grid holds 200 rows, and the b2c ledger is ~1.5M, so
+  // "which couriers are in this month" is not a question the loaded page can answer.
+  async fetchCoverage(fmt, month) {
+    if (!month) return [];
+    const { data, error } = await supabase.rpc("get_logistics_partner_coverage", {
+      tbl: fmt.table, target_month: month, lookback: 3,
+    });
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async fetchAllRows(fmt, months, onProgress) {
     const selected = Array.isArray(months) ? months : (months ? [months] : []);
     const monthParam = selected.length === 1
@@ -409,6 +422,10 @@ export default function LogisticsLedgerPage() {
   const [exportProgress, setExportProgress] = useState(null); // null | { done, total, type }
   const [uploadProgress, setUploadProgress] = useState(null); // null | { done, total }
   const fileInput = useRef(null);
+  // Upload checklist: which partners' bills are in for a given month.
+  const [coverage, setCoverage] = useState({ b2b: null, b2c: null });
+  const [coverageMonth, setCoverageMonth] = useState({ b2b: null, b2c: null });
+  const [coverageOpen, setCoverageOpen] = useState(false);
 
   const rows = store[tab] ?? [];
   const months = monthsStore[tab] ?? [];
@@ -432,6 +449,24 @@ export default function LogisticsLedgerPage() {
       ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
+
+      // Upload checklist. Defaults to the latest month that HAS data rather than to last
+      // calendar month: before anything is uploaded for a new month there is no row to
+      // read, so defaulting forward would show every partner as missing on the 1st and
+      // bury the one month that genuinely still has gaps.
+      const target = month || allMonths[0] || null;
+      setCoverageMonth((s) => ({ ...s, [which]: target }));
+      db.fetchCoverage(f, target)
+        .then((c) => {
+          setCoverage((s) => ({ ...s, [which]: c }));
+          // Open the panel when something is outstanding, so a gap is visible without a
+          // click. Collapsing again is left to the user — re-collapsing on every reload
+          // would fight them while they work through a list of pending uploads.
+          if (c.some((r) => !r.uploaded)) setCoverageOpen(true);
+        })
+        // A missing RPC must not break the grid — the checklist is additive, and the page
+        // was useful without it. It just stays hidden.
+        .catch(() => setCoverage((s) => ({ ...s, [which]: null })));
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
       flash("error", `Couldn't load ${f.table}: ${e.message ?? e}`);
@@ -869,6 +904,65 @@ export default function LogisticsLedgerPage() {
             })}
           </div>
         )
+      })()}
+
+      {/* Upload checklist — which partners' bills are in for this month, and which are not.
+          Collapsed to a one-line summary by default: when everything is uploaded there is
+          nothing to act on, and the panel should not push the grid down the page. */}
+      {(() => {
+        const cov = coverage[tab];
+        const covMonth = coverageMonth[tab];
+        if (!cov?.length || !covMonth) return null;
+        const pending = cov.filter((r) => !r.uploaded);
+        const done = cov.length - pending.length;
+        const allIn = pending.length === 0;
+        return (
+          <div style={{ marginBottom: 12, border: `1px solid ${allIn ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 10, background: allIn ? '#F0FDF4' : '#FFFBEB', overflow: 'hidden' }}>
+            <button
+              onClick={() => setCoverageOpen((o) => !o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, color: allIn ? C.green : '#92400E', textAlign: 'left' }}
+            >
+              <span style={{ fontWeight: 700 }}>
+                {allIn
+                  ? `All ${cov.length} partners uploaded for ${covMonth}`
+                  : `${pending.length} of ${cov.length} partner${cov.length === 1 ? '' : 's'} pending for ${covMonth}`}
+              </span>
+              {!allIn && (
+                <span style={{ fontWeight: 500, opacity: .85 }}>
+                  — {pending.map((r) => r.partner).join(', ')}
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: 10, opacity: .7 }}>{coverageOpen ? '▲' : '▼'}</span>
+            </button>
+            {coverageOpen && (
+              <div style={{ padding: '2px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 6 }}>
+                {cov.map((r) => (
+                  <label key={r.partner}
+                    title={r.uploaded
+                      ? `${r.rows_n.toLocaleString('en-IN')} lines · ₹${money(r.cost)}`
+                      : `No bill for ${covMonth}. Last seen ${r.last_seen}, billed in ${r.months_seen} of the 3 months before.`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: r.uploaded ? C.t2 : '#92400E', fontWeight: r.uploaded ? 400 : 600, cursor: 'default' }}>
+                    {/* readOnly, not disabled: the state is derived from what is in the
+                        ledger, so it must not look like something the user can toggle —
+                        but disabled would grey out the pending ones, which are the rows
+                        that need to stand out most. */}
+                    <input type="checkbox" checked={r.uploaded} readOnly
+                      style={{ accentColor: C.accent, cursor: 'default', flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.partner}</span>
+                    {r.uploaded && (
+                      <span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.t3, fontFamily: 'monospace', flexShrink: 0 }}>
+                        {r.rows_n.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                  </label>
+                ))}
+                <div style={{ gridColumn: '1/-1', fontSize: 11, color: C.t3, marginTop: 2 }}>
+                  A partner is expected if it was billed in any of the 3 months before {covMonth}; one you stop using drops off after 3 quiet months.
+                </div>
+              </div>
+            )}
+          </div>
+        );
       })()}
 
       {/* Toolbar */}
