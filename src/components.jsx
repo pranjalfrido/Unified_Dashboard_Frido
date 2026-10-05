@@ -10,41 +10,20 @@ export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, 
 // mirrors the lines' vertical order at the hovered month.
 //
 // `maxHeight` caps the body and scrolls it, for charts with more series than fit a card.
-//
-// `emphasise` — the series name to set apart as the headline figure. On a chart where one
-// series is the total and the rest are its components, every row rendered at the same weight
-// makes the reader hunt for the number they came for. The named row is pulled to the top,
-// set larger, and separated by a rule, so the tooltip reads as "the total, and what makes it
-// up" rather than as a flat list.
-export function ChartTooltip({ active, payload, label, formatter, sortByValue, maxHeight, emphasise }) {
+export function ChartTooltip({ active, payload, label, formatter, sortByValue, maxHeight }) {
   if (!active || !payload?.length) return null
   const format = formatter || fmt
   // Copy before sorting: payload is Recharts' own array and mutating it reorders the
   // series state itself, which flickers the lines on every hover.
-  const sorted = sortByValue
+  const rows = sortByValue
     ? [...payload].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))
     : payload
-  const lead = emphasise ? sorted.find(p => p.name === emphasise) : null
-  const rows = lead ? sorted.filter(p => p !== lead) : sorted
   return (
     // zIndex: a tooltip is an overlay and must sit above the legend and the table beneath
     // the chart. Recharts positions its wrapper without a stacking context of its own, so
     // without this the tooltip was painted under both.
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)', position: 'relative', zIndex: 60, ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) }}>
-      {/* Tighter under the label when a lead value follows, since the value block carries
-          its own spacing and the two belong together as one heading. */}
-      <div style={{ fontWeight: 700, color: C.t2, marginBottom: lead ? 2 : 5 }}>{label}</div>
-      {/* The value on its own line under the label rather than in a label/value row, which
-          is how the FTL/PTL donut already presents its headline figure. Left-aligned at
-          15px/800 it reads as the tooltip's subject; squeezed onto the right of a row it
-          read as just the largest of five numbers. */}
-      {lead && (
-        <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>
-            {format(lead.value)}
-          </div>
-        </div>
-      )}
+      <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
       {rows.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === C.acc ? '1px solid #E6C200' : 'none' }} />

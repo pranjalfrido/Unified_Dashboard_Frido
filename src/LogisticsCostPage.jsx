@@ -5148,9 +5148,40 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <YAxis yAxisId="r" orientation="right" domain={[0, 'auto']}
                   tick={{ fontSize: 10.5, fill: VIZ.muted }}
                   axisLine={false} tickLine={false} tickFormatter={v => '₹' + Math.round(v)} width={52} />
-                {/* Total spend is the bar and the other three are its components, so it is
-                    the figure the reader is after — emphasise lifts it out of the list. */}
-                <Tooltip content={<ChartTooltip emphasise="Total spend" />} />
+                {/* Written out rather than using ChartTooltip, to match the FTL/PTL trend
+                    tooltip exactly: period, then the total on its own line as the subject,
+                    then the components as plain coloured lines. The shared component leads
+                    with a dot-and-row list, which is right where every series is a peer but
+                    wrong here, where three of the four are parts of the first. */}
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                        <div style={{ fontSize: 11.5, color: SER.blue, marginTop: 5, fontWeight: 600 }}>
+                          {fmt(r.operation_fee)} operations
+                        </div>
+                        <div style={{ fontSize: 11.5, color: SER.orange, fontWeight: 600 }}>
+                          {fmt(r.rental_fee)} rental
+                        </div>
+                        {/* Other is usually zero; shown only when it is not, so the tooltip
+                            does not carry a dead row on every hover. */}
+                        {num(r.other_fee) > 0 && (
+                          <div style={{ fontSize: 11.5, color: SER.yellow, fontWeight: 600 }}>
+                            {fmt(r.other_fee)} other
+                          </div>
+                        )}
+                        {r.per_ship != null && (
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>
+                            ₹{Math.round(r.per_ship).toLocaleString('en-IN')} / parcel
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }} />
                 <Legend {...chartLegendProps({ fontSize: 11 })} />
                 <Bar yAxisId="l" dataKey="cost" name="Total spend" fill="url(#tplTotalBar)"
                   radius={[4, 4, 0, 0]} maxBarSize={54} />
