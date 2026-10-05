@@ -124,3 +124,22 @@ CREATE INDEX IF NOT EXISTS idx_lib2c_month_courier
 
 CREATE INDEX IF NOT EXISTS idx_lib2b_month_transporter
   ON public.logistics_invoices_b2b (month_year, transporter_name) INCLUDE (total_cost);
+
+-- Also required, for a reason that is not obvious. Adding the index above gave the planner
+-- a new way to satisfy the ledger grid's own query, and it chose badly: the grid orders by
+-- (month_year DESC, id DESC) and takes 200 rows, which the (month_year, courier_name) index
+-- can only serve by scanning a whole month and re-sorting. That query went from acceptable
+-- to 5.2s and started failing in the browser — the anon role has a 3s statement timeout,
+-- NOT the 8s the authenticated role gets, so the whole page broke with "canceling statement
+-- due to statement timeout".
+--
+-- This index matches the grid's ORDER BY exactly, so the LIMIT 200 is a plain backward
+-- index scan that stops after 200 entries. 5.2s -> 0.21s.
+CREATE INDEX IF NOT EXISTS idx_lib2c_month_id
+  ON public.logistics_invoices_b2c (month_year DESC, id DESC);
+
+-- Run after creating these. Index-only scans consult the visibility map, and on a table
+-- that has not been vacuumed recently every entry falls back to a heap fetch: get_logistics_months
+-- was doing 311,397 of them and taking 5.6s for a query that returns 8 rows. After a vacuum
+-- it is 0.64s.
+VACUUM (ANALYZE) public.logistics_invoices_b2c;
