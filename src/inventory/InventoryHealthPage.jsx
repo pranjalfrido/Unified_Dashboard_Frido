@@ -771,6 +771,49 @@ function TileToggle({ label, active, onClick }) {
   )
 }
 
+function MobileAccordionSlicer({ label, options, selected, onChange, getKey, getLabel }) {
+  const [open, setOpen] = useState(false)
+  const key = getKey || (o => o)
+  const lbl = getLabel || (o => o)
+  const selCount = selected.length
+  const toggle = k => {
+    const next = selected.includes(k) ? selected.filter(x => x !== k) : [...selected, k]
+    onChange(next)
+  }
+  return (
+    <div style={{ borderRadius: 8, border: `1px solid ${IC.border}`, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', padding: '9px 12px', cursor: 'pointer', background: selCount > 0 ? IC.accDim : IC.surface, gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 12.5, fontWeight: selCount > 0 ? 700 : 500, color: IC.t1 }}>{label}</span>
+        {selCount > 0 && (
+          <>
+            <span style={{ fontSize: 10, fontWeight: 700, background: IC.accBorder, color: '#fff', borderRadius: 10, padding: '1px 7px' }}>{selCount}</span>
+            <button onClick={e => { e.stopPropagation(); onChange([]) }} style={{ background: 'none', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+          </>
+        )}
+        <span style={{ fontSize: 13, color: IC.t3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', lineHeight: 1 }}>›</span>
+      </div>
+      {open && (
+        <div style={{ background: IC.page, borderTop: `1px solid ${IC.border}`, maxHeight: 220, overflowY: 'auto' }}>
+          {options.length === 0 && <div style={{ padding: '10px 12px', fontSize: 12, color: IC.t3 }}>No options</div>}
+          {options.map(o => {
+            const k = key(o), l = lbl(o), checked = selected.includes(k)
+            return (
+              <div key={k} onClick={() => toggle(k)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer', background: checked ? IC.accDim : 'transparent' }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: `2px solid ${checked ? IC.accBorder : IC.border2}`, background: checked ? IC.accBorder : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <span style={{ fontSize: 9, color: '#fff', lineHeight: 1 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 12.5, color: checked ? IC.t1 : IC.t2, fontWeight: checked ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, popover, facilityView }) {
   const opts = data.filterOptions
   // Facility slicer only offers facilities matching the active Regular/Other Facilities tab —
@@ -828,10 +871,10 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           </div>
           <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
           <SidebarSectionTitle title="Filters" />
-          <SearchableMultiSelect label="Facility" options={facilityOptionsForView} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
+          <MobileAccordionSlicer label="Facility" options={facilityOptionsForView} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} />
+          <MobileAccordionSlicer label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} />
+          <MobileAccordionSlicer label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} />
+          <MobileAccordionSlicer label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} />
           {anyActive && (
             <button onClick={() => setFilters({})} style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
               ✕ Clear all filters
