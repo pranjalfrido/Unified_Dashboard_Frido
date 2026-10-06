@@ -9266,7 +9266,11 @@ const EBO_TREND_GROUP_OPTS = [
 
 function EBOTab({ data, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
-  const EBO_ACCENT = '#8B5E3C'
+  // The theme's own accent, not a literal. This was '#8B5E3C', a hardcoded brown, which
+  // left the EBO sparkline and toggle reading as a different product from every other
+  // channel card — and stayed brown when the theme switched to gold or indigo, since a
+  // literal cannot follow a token.
+  const EBO_ACCENT = C.acc
   const ebo = data.ebo || {}
   const catMap = ebo.catMap || {}
   const subCatMap = ebo.subCatMap || {}
