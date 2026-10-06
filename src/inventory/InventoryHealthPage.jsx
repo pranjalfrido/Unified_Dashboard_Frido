@@ -1450,10 +1450,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
       {/* The collapse toggle is position:fixed and docked against the nav rail, so it no
           longer sits where content begins - this padding is just the page gutter. */}
-      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 0 }}>
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
         {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 'var(--nav)', zIndex: 30, background: IC.page, paddingTop: 10, paddingBottom: 8, marginBottom: -6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
             value={facilityView}
