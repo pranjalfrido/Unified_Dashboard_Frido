@@ -1453,7 +1453,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
         {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 'var(--nav)', zIndex: 30, background: IC.page, paddingTop: 4, paddingBottom: 8, marginTop: -4, marginBottom: -10 }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
             value={facilityView}
