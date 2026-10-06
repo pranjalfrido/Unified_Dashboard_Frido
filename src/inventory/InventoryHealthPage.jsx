@@ -1452,8 +1452,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Toggle row — sticky at top of the .page-scroll container (the actual scroll ancestor) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: -16, zIndex: 30, background: IC.page, marginLeft: -12, marginRight: -24, padding: '10px 24px 10px 12px', height: 44, boxSizing: 'border-box', borderBottom: `1px solid ${IC.border}` }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
             value={facilityView}
