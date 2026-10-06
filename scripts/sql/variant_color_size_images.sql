@@ -1,6 +1,9 @@
 -- Variant Color / Size / Images — one row per Shopify variant across both stores.
 --
--- Reproduces the Variant_Color_Size_Images sheet: Product Title, SKU, Color, Size, Images.
+-- Columns follow the Variant_Color_Size_Images sample sheet — Product Title, SKU, Color,
+-- Size, Images — plus Store and Status, which that sheet had no way to express. The sheet
+-- was a FORMAT example, so this is not filtered to match its row count: it returns the
+-- current catalogue in that shape.
 --
 -- Three things about these tables drive the shape of this query:
 --
@@ -17,6 +20,14 @@
 --    placeholder on single-variant products. Reading option1 as colour would label a shoe
 --    size as a colour. Each option is matched BY NAME to find which position it occupies,
 --    then that position is read off the variant.
+--
+-- The grain is ONE ROW PER VARIANT, and SKU is not unique within it. 378 SKUs appear on
+-- more than one row and 288 of those are within active products alone — FR-ASPI-L1 appears
+-- 17 times, across "Frido Arch Sports Insole", "AC - Frido Arch Sports Insole" and "MAX",
+-- at sizes "7 UK", "L (7-10 UK)" and "Large (7-10 UK)". These are real separate listings
+-- that share a code, not duplicate rows, so they are left alone. Deduplicating on SKU would
+-- silently drop live listings. Group by SKU afterwards only if you want one row per code
+-- and are content to lose that detail.
 
 WITH
 -- Newest row per product, per store.
@@ -44,6 +55,7 @@ products AS (
 variants AS (
   SELECT
     p.store,
+    p.status,
     p.id    AS product_id,
     p.title AS product_title,
     v.sku,
@@ -59,12 +71,14 @@ variants AS (
 
     v.option1, v.option2, v.option3
   FROM products p, UNNEST(p.variants) v
-  WHERE p.status = 'active'        -- drafts and unlisted products are not in the sheet
+  -- No status filter here on purpose: `status` is emitted as a column instead, so the
+  -- caller decides. Add  WHERE Status = 'active'  around this query, or uncomment below.
+  -- WHERE p.status = 'active'
 ),
 
 resolved AS (
   SELECT
-    store, product_id, product_title, sku, variant_id, image_id,
+    store, status, product_id, product_title, sku, variant_id, image_id,
     CASE colour_pos WHEN 1 THEN option1 WHEN 2 THEN option2 WHEN 3 THEN option3 END AS color,
     CASE size_pos   WHEN 1 THEN option1 WHEN 2 THEN option2 WHEN 3 THEN option3 END AS size
   FROM variants
@@ -112,7 +126,12 @@ SELECT
   r.sku           AS `SKU`,
   r.color         AS `Color`,
   r.size          AS `Size`,
-  COALESCE(a.src, b.src, c.src) AS `Images`
+  COALESCE(a.src, b.src, c.src) AS `Images`,
+  -- Beyond the five columns of the sample sheet. A SKU can exist in both stores, and a
+  -- draft looks identical to a live product once it is a row in a spreadsheet — without
+  -- these two the reader cannot tell either apart.
+  r.store         AS `Store`,
+  r.status        AS `Status`
 FROM resolved r
 LEFT JOIN by_image_id     a ON a.store = r.store AND a.image_id   = r.image_id
 LEFT JOIN by_variant_list b ON b.store = r.store AND b.variant_id = r.variant_id
