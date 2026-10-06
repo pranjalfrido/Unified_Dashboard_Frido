@@ -4141,7 +4141,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
 
   const idc = inventoryDateControl || {}
   const hf = idc.invHealthFilters || {}
-  const setHf = idc.setInvHealthFilters || (() => {})
+  const setHf = idc.setInvHealthFilters || (() => { alert('setInvHealthFilters is missing from inventoryDateControl') })
   const hOpts = idc.invHealthOpts || {}
   const sf = idc.invSalesFilters || {}
   const setSf = idc.setInvSalesFilters || (() => {})
