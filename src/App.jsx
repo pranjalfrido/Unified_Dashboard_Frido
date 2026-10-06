@@ -4822,7 +4822,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
             {mobFilterOpen && (
               <>
                 <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.40)' }} />
-                <div style={{
+                <div onClick={e => e.stopPropagation()} style={{
                   position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
                   zIndex: 500, width: 'min(340px, 92vw)',
                   background: '#fff', borderRadius: 16, overflow: 'hidden',
