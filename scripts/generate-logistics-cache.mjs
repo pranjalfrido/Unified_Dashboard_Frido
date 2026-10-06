@@ -35,7 +35,7 @@ WITH base AS (
     c.shipment_type,
     c.payment_mode,
     c.zone,
-    COALESCE(c.zone, 'C') AS zone_by_frido,
+    COALESCE(c.zone_by_frido, c.zone, 'C') AS zone_by_frido,
     c.pickup_city,
     c.pickup_state,
     c.drop_city,
@@ -100,6 +100,7 @@ WITH base AS (
   WHERE DATE(c.created_at) BETWEEN '${startDate}' AND '${endDate}'
   ${paymentMode ? `AND LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'` : ''}
   ${shipmentType ? `AND LOWER(TRIM(c.shipment_type)) = '${shipmentType.toLowerCase()}'` : ''}
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY c.awb ORDER BY c.created_at) = 1
 ),
 kpis AS (
   SELECT
