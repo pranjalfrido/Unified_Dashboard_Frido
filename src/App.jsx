@@ -10101,8 +10101,11 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     height={325}
                   />
                 })()}
+                {/* boxHeight, not boxheight — JSX props are case-sensitive, so the lowercase
+                    spelling was silently ignored and this donut fell back to its natural
+                    height instead of matching the 325px trend card beside it. */}
                 {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={325} />
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
                   : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
               </div>
             )
@@ -13910,7 +13913,9 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
               height={325}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={325} />
+            {/* boxHeight, not boxheight — the lowercase spelling is silently dropped, which
+                left this donut shorter than the 325px trend card in the same row. */}
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} />
           </div>
         )
       })()}
