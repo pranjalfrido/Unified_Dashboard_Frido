@@ -67,12 +67,38 @@ export default function CogsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase.from("item_master").select("Product_Code");
-        if (error) throw error;
-        setValidSkus(new Set((data ?? []).map((d) => String(d.Product_Code || "").trim().toUpperCase())));
+        // product_code, lowercase. The column was quoted as "Product_Code", which does not
+        // exist — PostgREST returned an error, `data` fell back to [], and validSkus became
+        // an EMPTY Set, so every SKU in an upload was reported "not found in item master".
+        //
+        // Paged, because PostgREST caps a response at 1000 rows and item_master has 3720.
+        // An unpaged select silently returned the first 1000 and nothing said so, so the
+        // other 2720 codes were reported "not found" — every WED-* code among them, since
+        // none fall inside that window.
+        const PAGE = 1000;
+        const codes = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await supabase
+            .from("item_master")
+            .select("product_code")
+            .order("product_code")          // stable paging; without an order the window can repeat or skip rows
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          codes.push(...(data ?? []));
+          if (!data || data.length < PAGE) break;
+        }
+        const set = new Set(codes
+          .map((d) => String(d.product_code || "").trim().toUpperCase())
+          .filter(Boolean));
+        // An empty result is a failure, not an item master with no products. Treating it as
+        // data is what turned one bad column name into "all 1,813 rows are invalid".
+        setValidSkus(set.size ? set : null);
       } catch (e) {
         console.error("Failed to load item master for SKU validation:", e);
-        setValidSkus(new Set()); // fail closed — validity gate below treats unknown as invalid until this loads
+        // null, NOT an empty Set: every gate below is written `validSkus && ...`, so null
+        // skips validation and lets the upload through. Failing closed here means a
+        // transient fetch error silently rejects a perfectly good file and blames the file.
+        setValidSkus(null);
       }
     })();
   }, []);
@@ -125,13 +151,23 @@ export default function CogsPage() {
 
     setSaving(true);
     try {
-      const records = valid.map(toDbRecord);
+      // Same collapse as the upload path: nothing stops the grid holding two rows for one
+      // SKU+month, and ON CONFLICT DO UPDATE cannot touch a row twice in one statement.
+      // Last one wins, matching the row order on screen.
+      const byKey = new Map();
+      for (const r of valid) byKey.set(`${r.itemskucode.trim().toUpperCase()}|${r.month}`, r);
+      const records = [...byKey.values()].map(toDbRecord);
       const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
       if (error) throw error;
       setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
       const months = [...new Set(valid.map((r) => r.month))].sort();
       setAllMonths((prev) => [...new Set([...prev, ...months])].sort());
-      flash("ok", `Saved ${valid.length} records to database.`);
+      // records.length, not valid.length — the two differ when duplicate SKU+month rows
+      // were collapsed above, and reporting the pre-collapse count would overstate what
+      // actually reached the table.
+      flash("ok", valid.length > records.length
+        ? `Saved ${records.length} records to database. ${valid.length - records.length} duplicate SKU+month row(s) collapsed.`
+        : `Saved ${records.length} records to database.`);
     } catch (e) {
       flash("error", `Save failed: ${e.message ?? e}`);
     } finally {
@@ -249,15 +285,54 @@ export default function CogsPage() {
         if (!aoa.length) throw new Error("Empty sheet");
 
         const normHead = (c) => String(c ?? "").trim().toLowerCase().replace(/\s*\*\s*$/, "").replace(/[\s_]+/g, " ").trim();
+
+        // Accepted spellings per column. The template writes the first of each, but files
+        // come from Tally exports, the CSV/Excel this page itself downloads (which uses the
+        // DB column names), and hand-made sheets — all of which spell the SKU column
+        // differently. Matching only "sku code" rejected a file whose data was perfectly
+        // good, with an error that read as though the file were malformed.
+        const ALIASES = {
+          month: ["month", "month year", "period", "billing month", "mon"],
+          itemskucode: ["sku code", "sku", "itemskucode", "item sku code", "item sku",
+                        "sku id", "skucode", "item code", "product code"],
+          cogs: ["cogs", "cost", "unit cost", "cogs value", "cost of goods sold", "cogs per unit"],
+        };
+        const matchCol = (cells, key) => {
+          for (const a of ALIASES[key]) {
+            const i = cells.indexOf(a);
+            if (i !== -1) return i;
+          }
+          return -1;
+        };
+
+        // A row is the header when the two REQUIRED identifying columns are both present.
+        // cogs is not part of the test: a sheet can legitimately label that column something
+        // this list does not know, and failing on it would reject the whole file rather than
+        // flagging one column.
         const hIdx = aoa.findIndex((row) => {
           const cells = row.map(normHead);
-          return ["month", "sku code"].every((w) => cells.includes(w));
+          return matchCol(cells, "month") !== -1 && matchCol(cells, "itemskucode") !== -1;
         });
-        if (hIdx === -1) throw new Error("Couldn't find header row with 'Month' and 'SKU Code' columns. Use the downloaded template.");
+        if (hIdx === -1) {
+          // Name what was actually in the first row. "Use the template" is no help when the
+          // file came from somewhere else and the reader cannot see which column was wrong.
+          const first = (aoa[0] || []).map(normHead).filter(Boolean).slice(0, 8).join(", ");
+          throw new Error(
+            "Couldn't find a header row with a month column and a SKU column.\n\n" +
+            (first ? `First row reads: ${first}\n\n` : "") +
+            "Accepted month headers: " + ALIASES.month.join(", ") + "\n" +
+            "Accepted SKU headers: " + ALIASES.itemskucode.join(", ")
+          );
+        }
 
         const head = aoa[hIdx].map(normHead);
         const ci = {};
-        for (const f of FIELDS) ci[f.key] = head.indexOf(normHead(f.label));
+        for (const f of FIELDS) {
+          // Alias match first, then the exact label, so a column this list does not know but
+          // which matches FIELDS verbatim still resolves.
+          ci[f.key] = matchCol(head, f.key);
+          if (ci[f.key] === -1) ci[f.key] = head.indexOf(normHead(f.label));
+        }
 
         const body = aoa.slice(hIdx + 1);
         const good = [], bad = [];
@@ -299,22 +374,39 @@ export default function CogsPage() {
           if (!confirm(`${warned.length} row(s) have COGS at or above the SKU's last-60-day selling price (inc GST) — likely a data-entry mistake:\n\n${preview}\n\nContinue with upload anyway?`)) return;
         }
 
-        setUploadProgress({ done: 0, total: good.length });
+        // Collapse repeated SKU+month pairs before sending. ON CONFLICT DO UPDATE cannot
+        // touch the same row twice in one statement, so a file listing a SKU twice for the
+        // same month failed the whole upload with "cannot affect row a second time" —
+        // partway through, leaving earlier chunks already written.
+        //
+        // Last occurrence wins, which matches how the upsert behaves across chunks and how
+        // a re-upload behaves against existing rows: the newest value for a SKU-month is
+        // the one that stands.
+        const byKey = new Map();
+        for (const r of good) byKey.set(`${r.itemskucode.trim().toUpperCase()}|${r.month}`, r);
+        const deduped = [...byKey.values()];
+        const dupCount = good.length - deduped.length;
+
+        setUploadProgress({ done: 0, total: deduped.length });
         await new Promise((r) => setTimeout(r, 30));
 
         const PAGE = 500;
         let done = 0;
-        for (let i = 0; i < good.length; i += PAGE) {
-          const chunk = good.slice(i, i + PAGE).map(toDbRecord);
+        for (let i = 0; i < deduped.length; i += PAGE) {
+          const chunk = deduped.slice(i, i + PAGE).map(toDbRecord);
           const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
           if (error) throw error;
           done += chunk.length;
-          setUploadProgress({ done, total: good.length });
+          setUploadProgress({ done, total: deduped.length });
         }
 
         await loadFromDb();
-        setUploadProgress({ done: good.length, total: good.length, finished: true });
-        flash("ok", `Uploaded ${good.length} records.`);
+        setUploadProgress({ done: deduped.length, total: deduped.length, finished: true });
+        // Say when rows were collapsed. Silently uploading fewer records than the file held
+        // would leave the reader to discover the difference by counting.
+        flash("ok", dupCount
+          ? `Uploaded ${deduped.length} records. ${dupCount} duplicate SKU+month ${dupCount === 1 ? "row was" : "rows were"} collapsed, keeping the last value for each.`
+          : `Uploaded ${deduped.length} records.`);
         setTimeout(() => setUploadProgress(null), 4000);
       } catch (err) {
         setUploadProgress(null);
