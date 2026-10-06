@@ -1304,12 +1304,16 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         byLoc.set(f.location, acc)
       }
     }
-    // Keep every other field (avgSale/doi/stockStatus/etc.) from the original location object —
-    // only the inventory figures need to be facility-scoped; sales/allocation data has no
-    // facility identity to split by (same reasoning WhCarousel already applies for facilityTypes).
+    // avgSale/allocationPct stay as the location's original values — sales data has no
+    // facility-level split. Recompute doi and stockStatus from the scoped totalInvt so the
+    // card's DOI badge and status chip reflect the selected facility's actual inventory.
     return data.locations.map(loc => {
       const scoped = byLoc.get(loc.location)
-      return scoped ? { ...loc, ...scoped, byFacilityType: [{ facilityType: 'Regular', ...scoped }] } : { ...loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, byFacilityType: [] }
+      if (!scoped) return { ...loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, doi: 0, stockStatus: 'Out of Stock', byFacilityType: [] }
+      const denom = Math.ceil(loc.avgSale || 0)
+      const doi = scoped.totalInvt > 0 && denom === 0 ? null : (denom > 0 ? Math.floor(scoped.totalInvt / denom) : 0)
+      const stockStatus = doi == null ? regStockStatus(0, loc.avgSale, scoped.totalInvt) : regStockStatus(doi, loc.avgSale, scoped.totalInvt)
+      return { ...loc, ...scoped, doi, stockStatus, byFacilityType: [{ facilityType: 'Regular', ...scoped }] }
     })
   }, [selectedFacilitySet, regularSkus, data])
 
