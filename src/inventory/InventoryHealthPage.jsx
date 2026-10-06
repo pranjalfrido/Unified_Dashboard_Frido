@@ -1166,7 +1166,9 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef(null)
   React.useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = e => {
+      if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-smsel-panel]')) setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
