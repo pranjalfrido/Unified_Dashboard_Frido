@@ -1374,62 +1374,19 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     return t
   }, [detailSkus])
 
-  // Location-Wise Inventory pivot — restricted to whatever SKUs survive filteredSkus (Regular
-  // scope + every sidebar filter), so this table respects the same Category/Sub-category/
-  // Product ID/Stock Status/RTD Level/Location/Facility selections as Inventory Detail above
-  // it, instead of always showing the full company-wide pivot regardless of what's filtered.
+  // Location-Wise Inventory pivot — always company-wide, not affected by sidebar filters.
   const filteredPivot = useMemo(() => {
-    const keySet = new Set(filteredSkus.map(s => s.sku))
-    // Restrict pivot columns to canonical warehouse locations only — same fixed order used
-    // server-side (LOCATION_ORDER). DEL has only a Frido Store (no Regular WH) so it must
-    // not appear here, consistent with Warehouse Health which already excludes it.
     const WH_LOCATIONS = new Set(['PNQ', 'GGN', 'BLR', 'MUM', 'KOL', 'HYD', 'CHN'])
-    const locSet = filters.location?.length ? new Set(filters.location) : null
-    const locations = data.pivot.locations.filter(l =>
-      WH_LOCATIONS.has(l) && (!locSet || locSet.has(l))
-    )
-    const rows = data.pivot.rows.filter(r => keySet.has(r.sku))
-    return { locations, rows }
-  }, [data, filteredSkus, filters.location])
-
-  // Slow Moving / Dead Stock — recomputed from filteredSkus (Regular-scoped + every sidebar
-  // filter applied) instead of the server-side data.slowMoving/data.deadStock, which are
-  // always company-wide regardless of what's selected in the sidebar. Same thresholds/logic
-  // as the server-side version (scripts/generate-inv-cache.mjs): a sub-category counts as
-  // "dead" if it's not selling and holds >200 units, or its DOI exceeds 200; "slow moving" if
-  // not selling at all, or DOI exceeds 45. Sub-categories with ≤50 total units, or starting
-  // with "spareparts", are excluded — same floor as the server-side computation.
-  const filteredSubCatRows = useMemo(() => {
-    const SUBCAT_QTY_FLOOR = 50
-    const map = new Map()
-    for (const s of filteredSkus) {
-      const key = `${s.category}|${s.subCategory}`
-      if (!map.has(key)) map.set(key, { category: s.category, subCategory: s.subCategory, totalInvt: 0, avgSale: 0, skuList: [] })
-      const acc = map.get(key)
-      acc.totalInvt += s.totalInvt; acc.avgSale += s.avgSale; acc.skuList.push(s)
+    return {
+      locations: data.pivot.locations.filter(l => WH_LOCATIONS.has(l)),
+      rows: data.pivot.rows,
     }
-    return [...map.values()]
-      .filter(sc => sc.totalInvt > SUBCAT_QTY_FLOOR && !sc.subCategory?.toLowerCase().startsWith('sparepart'))
-      .map(sc => {
-        const notBeingSold = sc.avgSale <= 0
-        const doi = notBeingSold ? Math.round(sc.totalInvt) : Math.floor(sc.totalInvt / sc.avgSale)
-        return {
-          category: sc.category, subCategory: sc.subCategory,
-          totalInvt: Math.round(sc.totalInvt), avgSale: +sc.avgSale.toFixed(2), doi, notBeingSold,
-          skus: sc.skuList.filter(s => s.totalInvt > 0)
-            .map(s => ({ sku: s.sku, totalInvt: Math.round(s.totalInvt), avgSale: +s.avgSale.toFixed(2), doi: s.avgSale > 0 ? s.doi : Math.round(s.totalInvt) }))
-            .sort((a, b) => b.totalInvt - a.totalInvt),
-        }
-      })
-  }, [filteredSkus])
-  const filteredDeadStock = useMemo(
-    () => filteredSubCatRows.filter(sc => (sc.notBeingSold && sc.totalInvt > 200) || sc.doi > 200).sort((a, b) => b.totalInvt - a.totalInvt),
-    [filteredSubCatRows]
-  )
-  const filteredSlowMoving = useMemo(
-    () => filteredSubCatRows.filter(sc => sc.notBeingSold || sc.doi > 45).sort((a, b) => b.totalInvt - a.totalInvt),
-    [filteredSubCatRows]
-  )
+  }, [data])
+
+  // Slow Moving / Dead Stock — always company-wide from the pre-computed cache,
+  // not affected by sidebar filters.
+  const filteredSlowMoving = data.slowMoving
+  const filteredDeadStock = data.deadStock
 
   // Export rows flatten each sub-category's collapsed `skus[]` array to one row per SKU —
   // the on-screen table stays collapsed-by-default, but the CSV needs the SKU-level detail.
