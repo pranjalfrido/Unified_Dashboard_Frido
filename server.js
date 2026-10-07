@@ -309,6 +309,158 @@ app.post('/api/logistics', (req, res) => logisticsHandler(req, res))
 app.post('/api/customer', (req, res) => customerHandler(req, res))
 app.post('/api/cogs-context', (req, res) => cogsContextHandler(req, res))
 
+// ── API: Meta UTM analytics ───────────────────────────────────
+const metaUtmCache = new Map()
+app.post('/api/meta-utm', async (req, res) => {
+  const { start, end } = req.body
+  if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
+  const cacheKey = `${start}_${end}`
+  if (metaUtmCache.has(cacheKey)) {
+    return res.json(metaUtmCache.get(cacheKey))
+  }
+  try {
+    const sql = `
+WITH utm AS (
+  SELECT
+    o.name as order_name,
+    MAX(IF(n.name='utm_campaign', n.value, NULL)) as utm_campaign,
+    MAX(IF(n.name='utm_content', n.value, NULL)) as utm_content,
+    MAX(IF(n.name='utm_medium', n.value, NULL)) as utm_medium,
+    MAX(IF(n.name='deliver_order_count', n.value, NULL)) as deliver_order_count,
+    MAX(IF(n.name='$os', n.value, NULL)) as os
+  FROM \`frido-429506.Frido_BigQuery.Frido_Shopify_orders\` o,
+       UNNEST(note_attributes) n
+  WHERE DATE(o.created_at) BETWEEN @start AND @end
+  GROUP BY o.name
+  HAVING MAX(IF(n.name='utm_source', n.value, NULL)) = 'facebook'
+),
+base AS (
+  SELECT
+    s.OrderId,
+    s.OrderDate,
+    s.SellingPrice_Inc_GST,
+    s.Order_Status,
+    s.State,
+    s.payment_type,
+    s.Category,
+    s.Pincode,
+    u.utm_campaign,
+    u.utm_content,
+    u.utm_medium,
+    u.deliver_order_count,
+    u.os,
+    COALESCE(p.City_Tier, 'Unknown') as city_tier,
+    SPLIT(u.utm_content, '__')[SAFE_OFFSET(0)] as creator,
+    SPLIT(u.utm_content, '__')[SAFE_OFFSET(4)] as utm_product,
+    SPLIT(u.utm_content, '__')[SAFE_OFFSET(6)] as ad_format,
+    SPLIT(u.utm_campaign, '__')[SAFE_OFFSET(0)] as campaign_type
+  FROM \`frido-429506.production.fact_all_platform_sales_report\` s
+  JOIN utm u ON s.OrderId = u.order_name
+  LEFT JOIN \`frido-429506.production.pincode_city_master\` p ON CAST(s.Pincode AS STRING) = CAST(p.Pincode AS STRING)
+  WHERE s.Channel = 'Shopify'
+    AND s.OrderDate BETWEEN @start AND @end
+    AND s.Order_Status NOT IN ('Cancelled', 'RTO')
+),
+-- Deduplicated order-level view for counts (COD, new customer) to avoid double-counting multi-item orders
+orders AS (
+  SELECT
+    OrderId,
+    ANY_VALUE(OrderDate) as OrderDate,
+    ANY_VALUE(payment_type) as payment_type,
+    ANY_VALUE(deliver_order_count) as deliver_order_count,
+    ANY_VALUE(utm_campaign) as utm_campaign,
+    ANY_VALUE(utm_medium) as utm_medium,
+    ANY_VALUE(campaign_type) as campaign_type,
+    ANY_VALUE(os) as os,
+    ANY_VALUE(city_tier) as city_tier,
+    ANY_VALUE(State) as State
+  FROM base
+  GROUP BY OrderId
+)
+SELECT
+  COUNT(DISTINCT OrderId) as total_orders,
+  SUM(SellingPrice_Inc_GST) as total_revenue,
+  (SELECT COUNTIF(payment_type = 'COD') FROM orders) as cod_orders,
+  (SELECT COUNTIF(payment_type = 'Prepaid') FROM orders) as prepaid_orders,
+  (SELECT COUNTIF(deliver_order_count = '1') FROM orders) as total_new_customers,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT utm_medium, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 WHERE utm_medium IS NOT NULL GROUP BY utm_medium ORDER BY orders DESC
+  )) as by_medium,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT utm_campaign, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue,
+      SUM(SellingPrice_Inc_GST)/NULLIF(COUNT(DISTINCT OrderId),0) as aov,
+      COUNT(DISTINCT IF(deliver_order_count='1', OrderId, NULL)) as new_customers
+    FROM base b2 GROUP BY utm_campaign ORDER BY revenue DESC
+  )) as by_campaign,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT utm_content, creator, utm_product, ad_format,
+      COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue,
+      SUM(SellingPrice_Inc_GST)/NULLIF(COUNT(DISTINCT OrderId),0) as aov,
+      COUNT(DISTINCT IF(deliver_order_count='1', OrderId, NULL)) as new_customers
+    FROM base b2
+    WHERE utm_content NOT LIKE '{%' AND utm_content LIKE '%__%'
+    GROUP BY utm_content, creator, utm_product, ad_format ORDER BY revenue DESC LIMIT 30
+  )) as by_creative,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT city_tier, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 GROUP BY city_tier ORDER BY revenue DESC
+  )) as by_city_tier,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT State as state, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 WHERE State IS NOT NULL GROUP BY State ORDER BY revenue DESC LIMIT 15
+  )) as by_state,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT Category as category, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 WHERE Category IS NOT NULL GROUP BY Category ORDER BY revenue DESC
+  )) as by_category,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT campaign_type, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue,
+      SUM(SellingPrice_Inc_GST)/NULLIF(COUNT(DISTINCT OrderId),0) as aov,
+      COUNT(DISTINCT IF(deliver_order_count='1', OrderId, NULL)) as new_customers
+    FROM base b2 WHERE campaign_type IN ('ABO','ASC') GROUP BY campaign_type
+  )) as by_campaign_type,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT os, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 WHERE os IS NOT NULL GROUP BY os ORDER BY orders DESC
+  )) as by_os,
+  TO_JSON_STRING(ARRAY(
+    SELECT AS STRUCT OrderDate as date, COUNT(DISTINCT OrderId) as orders, SUM(SellingPrice_Inc_GST) as revenue
+    FROM base b2 GROUP BY OrderDate ORDER BY OrderDate
+  )) as by_day
+FROM base`
+    const d2cSql = `
+      SELECT
+        COUNT(DISTINCT OrderId) as d2c_total_orders,
+        SUM(SellingPrice_Inc_GST) as d2c_total_revenue
+      FROM \`frido-429506.production.fact_all_platform_sales_report\`
+      WHERE Channel = 'Shopify'
+        AND OrderDate BETWEEN @start AND @end
+        AND Order_Status NOT IN ('Cancelled', 'RTO')
+    `
+    const [[rows], [d2cRows]] = await Promise.all([
+      bq.query({ query: sql, location: 'asia-south1', params: { start, end } }),
+      bq.query({ query: d2cSql, location: 'asia-south1', params: { start, end } }),
+    ])
+    const row = rows[0] || {}
+    const d2c = d2cRows[0] || {}
+    row.d2c_total_orders = d2c.d2c_total_orders || 0
+    row.d2c_total_revenue = d2c.d2c_total_revenue || 0
+    const jsonFields = ['by_medium', 'by_campaign', 'by_creative', 'by_city_tier', 'by_state', 'by_category', 'by_campaign_type', 'by_os', 'by_day']
+    for (const f of jsonFields) {
+      if (typeof row[f] === 'string') {
+        try { row[f] = JSON.parse(row[f]) } catch { row[f] = [] }
+      }
+    }
+    metaUtmCache.set(cacheKey, row)
+    setTimeout(() => metaUtmCache.delete(cacheKey), 5 * 60 * 1000)
+    res.json(row)
+  } catch (err) {
+    console.error('[api/meta-utm]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── OLD Supabase-based route (kept for reference, never reached) ─
 async function _legacyBqRoute(req, res) {
   const { start, end } = req.body
