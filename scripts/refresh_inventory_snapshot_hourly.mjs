@@ -104,15 +104,15 @@ SELECT
   SUM(IF(InventoryType = 'GOOD_INVENTORY', Quantity_Final, 0)) AS Inventory,
   SUM(QuantityBlocked) AS InventoryBlocked,
   -- Vadgaon_OPS only: RTD/Raw split by shelf-name substring, not the pack-qty/raw-SKU-text
-  -- heuristic every other facility uses. A shelf containing "RTD" is RTD (RTD-LANE-* shelves
-  -- included — RTD wins the tie over LANE); a shelf containing "LANE" but not "RTD" is Raw.
+  -- heuristic every other facility uses. A shelf containing "RTD" is RTD (RTD-RACK-* shelves
+  -- included — RTD wins the tie over RACK); a shelf containing "RACK" but not "RTD" is Raw.
   -- Shelves matching neither (PKG/RTN/QC/...) are excluded from both — Vadgaon_OPS's Total
   -- Inventory is RtdInvt + RawInvt only, deliberately smaller than its full GOOD_INVENTORY sum.
   SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND REGEXP_CONTAINS(Shelf, r'RTD'), Quantity_Final, 0)) AS RtdInvt,
-  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'LANE'), Quantity_Final, 0)) AS RawInvt,
+  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'RACK'), Quantity_Final, 0)) AS RawInvt,
   -- Same shelf-substring rule applied to Quantity Blocked, so Vadgaon_OPS's blocked stock is
   -- no longer silently dropped (it was previously uncounted anywhere in the dashboard).
-  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'LANE'), QuantityBlocked, 0)) AS RawBlockedInvt,
+  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'RACK'), QuantityBlocked, 0)) AS RawBlockedInvt,
   SUM(QuantityNotFound) AS QuantityNotFound,
   -SUM(QuantityNotFound) AS NetVariance
 FROM corrected
