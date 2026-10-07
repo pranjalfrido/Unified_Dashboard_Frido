@@ -59,14 +59,14 @@ export default async function inwardHandler(req, res) {
     const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
       bq.query({
         query: `SELECT
-                  GRN_Code AS grnCode, GRN_Date AS grnDate, Item_SkuCode AS itemSkuCode,
-                  Facility, Category AS rawCategory, Vendor_Name AS vendorName, Vendor_Code AS vendorCode,
-                  PO_Code AS poCode, PO_Date AS poDate,
-                  Quantity_Received AS qtyReceived, Quantity_Rejected AS qtyRejected,
-                  Rejection_Reason AS rejectionReason, Grn_item_Status AS grnStatus,
-                  GRN_Received_Timestamp AS grnReceivedTs, QC_Completed_On AS qcCompletedOn
+                  \`GRN Code\` AS grnCode, \`GRN Date\` AS grnDate, \`Item SkuCode\` AS itemSkuCode,
+                  Facility, Category AS rawCategory, \`Vendor Name\` AS vendorName, \`Vendor Code\` AS vendorCode,
+                  \`PO Code\` AS poCode, \`PO Date\` AS poDate,
+                  \`Quantity Received\` AS qtyReceived, \`Quantity Rejected\` AS qtyRejected,
+                  \`Rejection Reason\` AS rejectionReason, \`Grn item Status\` AS grnStatus,
+                  \`GRN Received Timestamp\` AS grnReceivedTs, \`QC Completed On\` AS qcCompletedOn
                 FROM \`frido-429506.production.Unicommerce_GRN_Report\`
-                WHERE DATE(GRN_Date) BETWEEN '${start}' AND '${end}'`,
+                WHERE DATE(\`GRN Date\`) BETWEEN '${start}' AND '${end}'`,
         maximumBytesBilled: '5000000000',
       }),
       bq.query({
