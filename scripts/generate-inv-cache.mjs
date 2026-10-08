@@ -322,7 +322,7 @@ function computePayload(windowDays) {
     if (rawAvgSaleQty > 0 || rawTotalAvgSaleQty > 0 || orderAllocation > 0) {
       acc.rawAvgSaleQty = rawAvgSaleQty
       acc.rawTotalAvgSaleQty = rawTotalAvgSaleQty
-      acc.orderAllocation = orderAllocation
+      acc.orderAllocation = orderAllocation / windowDays  // match the daily-rate unit used by skuLocRows
     }
   }
 
