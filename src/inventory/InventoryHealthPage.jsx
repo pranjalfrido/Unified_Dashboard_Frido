@@ -151,10 +151,15 @@ function regStockStatus(doi, avgSale, totalInvt) {
 function regularLocations(s) {
   const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
   if (!hasFacilities) return s.locations || []
+  // Use s.locations as the source of which locations to show — it is already filtered by
+  // the active location/facility filter in invData. We only look at Regular facilities
+  // within those locations to compute RTD/RAW/rawBlocked breakdowns.
+  const allowedLocs = new Set((s.locations || []).map(l => l.location))
   const byLoc = new Map()
   for (const f of s.facilities) {
     if (f.facilityType !== 'Regular') continue
     const loc = f.location
+    if (!allowedLocs.has(loc)) continue
     if (!byLoc.has(loc)) byLoc.set(loc, { location: loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, avgSale: null, doi: null, stockStatus: null })
     const acc = byLoc.get(loc)
     acc.totalInvt += f.totalInvt || 0
