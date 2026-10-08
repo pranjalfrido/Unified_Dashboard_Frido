@@ -158,8 +158,18 @@ const MAX_PLAUSIBLE_PARCEL_KG = 500
 // <= 0.5, not < 0.5: a shipment of exactly 0.5 kg belongs in the 0.5 slab. With a
 // strict <, CEIL(0.5) promotes it to the 1 kg slab, which over-states the billable
 // slab for a large share of parcels (173,220 Bluedart rows sit at exactly 0.5 kg).
-const SLAB_SQL = `CASE WHEN dw > 0 AND dw <= 0.5 THEN 0.5
-                       WHEN dw > 0 THEN CEIL(dw)
+//
+// Derived from cw (charged_weight_courier), NOT dw. The slab is a BILLING bracket: it is
+// the bracket the courier actually invoiced, which follows the weight the courier
+// charged. Grouping on dw answered a different question — "what slab should we have been
+// billed at" — so the Weight slab detail card reported the slab mix of our declared
+// weights while labelling the money as billed spend. 23.3% of August shipments sit in a
+// different slab under the two bases, so the two never reconciled.
+//
+// This also brings the card into line with the exactSlab filter (see below) and with
+// public.lc_slab_costs, both of which were already cw-based.
+const SLAB_SQL = `CASE WHEN cw > 0 AND cw <= 0.5 THEN 0.5
+                       WHEN cw > 0 THEN CEIL(cw)
                        ELSE NULL END`
 
 // Same slab rule, applied to any weight column. Used to round BOTH the courier's
@@ -198,7 +208,7 @@ const GST_DIVISOR = 1.18
 //
 // Matched on UPPER(TRIM(...)) so West/WEST/west all land together, and keys are compared
 // after stripping any bracketed suffix so "NE (North East)" matches "NE".
-const ZONE_MAP_SQL = col => `
+export const ZONE_MAP_SQL = col => `
   CASE
     WHEN UPPER(TRIM(${col})) IN ('A','B','C','D','E') THEN UPPER(TRIM(${col}))
     WHEN UPPER(TRIM(${col})) = 'WEST'          THEN 'A'
@@ -467,6 +477,52 @@ export default async function handler(req, res) {
     respCache.clear()
     refCache = null
     return res.status(200).json({ ok: true, invalidated: true })
+  }
+
+  // ── Raw AWB-level export ────────────────────────────────────────────────────────
+  // Streams the underlying invoice rows rather than any aggregate, so a finance query that
+  // the dashboard does not answer can be settled in a spreadsheet.
+  //
+  // MONTHS ARE REQUIRED for b2c. That ledger holds 14.7 lakh rows; a single month is ~3.1
+  // lakh, which a browser can turn into a CSV, while the whole table is ~280 MB and exceeds
+  // Excel's own 10,48,576-row ceiling — the file would download and then not open. Refusing
+  // is better than handing over something unusable. b2b (2,422 rows) and tpl (47) are small
+  // enough to send whole, so months are optional there.
+  //
+  // SELECT *: a RAW export should be raw. Naming columns here would mean editing this file
+  // every time the ledger gains one, and the column that gets forgotten is always the one
+  // someone needs.
+  if (f.action === 'rawExport') {
+    const SRC = {
+      b2c: { table: 'logistics_invoices_b2c', monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: true },
+      b2b: { table: 'logistics_invoices_b2b', monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: false },
+      tpl: { table: 'logistics_costs_3pl',    monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: false },
+    }
+    const src = SRC[f.scope]
+    if (!src) return res.status(400).json({ error: `unknown scope "${f.scope}"` })
+
+    const months = Array.isArray(f.months) ? f.months.filter(m => typeof m === 'string' && /^\d{4}-\d{2}$/.test(m)) : []
+    if (src.requireMonths && !months.length) {
+      return res.status(400).json({ error: 'Select at least one billing month before exporting raw B2C rows — the full ledger is too large to export in one file.' })
+    }
+    // Hard ceiling even with months chosen: eight months of B2C would still be 14 lakh rows.
+    // Reported to the caller rather than silently truncating, so a partial file can never be
+    // mistaken for a complete one.
+    const CAP = 600000
+    try {
+      const where = months.length ? `WHERE ${src.monthCol} = ANY($1)` : ''
+      const params = months.length ? [months] : []
+      const { rows: cnt } = await pool.query(`SELECT COUNT(*)::int n FROM public.${src.table} ${where}`, params)
+      if (cnt[0].n > CAP) {
+        return res.status(400).json({ error: `${cnt[0].n.toLocaleString('en-IN')} rows selected, over the ${CAP.toLocaleString('en-IN')} export limit. Narrow the billing months and try again.` })
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM public.${src.table} ${where} ORDER BY ${src.order}`, params)
+      return res.status(200).json({ ok: true, scope: f.scope, months, rows })
+    } catch (e) {
+      console.error('[logistics-cost rawExport]', e.message)
+      return res.status(500).json({ error: e.message })
+    }
   }
 
   // Claim mutations share this endpoint so the dashboard needs only one route.
@@ -797,6 +853,12 @@ export default async function handler(req, res) {
         SUM(ship_value)::float8    AS value,
         SUM(surcharge)::float8     AS surcharge,
         COUNT(*) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0)::int AS over_n,
+        -- Mirror of over_n: the charged slab sits BELOW the slab our declared weight
+        -- earns. gap is already slab-minus-slab, so a negative gap is exactly this and
+        -- needs no second expression. Not a saving — it usually means our declared
+        -- weight is overstated, which is a catalogue problem rather than a courier one,
+        -- so it is shown beside over_n rather than netted against it.
+        COUNT(*) FILTER (WHERE gap < -0.001 AND COALESCE(dw, 0) > 0)::int AS under_n,
         COALESCE(SUM(gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_kg,
         -- Recoverable split by CAUSE, per dimension. The two need different remedies:
         --   inflation   = courier billed a heavier weight than we shipped (weight dispute)
@@ -820,9 +882,14 @@ export default async function handler(req, res) {
         -- The denominator is the CHARGED SLAB, matching the slab-based gap above, so
         -- rate x excess-slabs is internally consistent.
         COALESCE(SUM((cost / NULLIF(cw_slab, 0)) * gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_cost,
-        COUNT(*) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001)::int AS slab_n,
-        COALESCE(SUM(cw - slab) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_kg,
-        COALESCE(SUM((cost / cw) * (cw - slab)) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_cost,
+        -- slab_n / slab_kg / slab_cost removed (Oct 2026). They measured the same weight
+        -- overbilling as over_n / over_kg / over_cost directly above, but subtracted a
+        -- ROUNDED slab from a RAW weight (cw - dw_slab) where over_* differences two slabs
+        -- (SLAB_OF(cw_raw) - SLAB_OF(dw)). Mixing the units put the two 9% apart on identical
+        -- rows (zone E: over_kg 8,862 vs slab_kg 8,152) while claiming to measure one thing.
+        -- Nothing rendered them — the chain ended at an unread kpis field — so deleting the
+        -- duplicate was safer than repairing it into a second name for over_*, which would
+        -- have been free to drift again. One definition, in one place, is the fix.
         -- Rate-card variance
         COALESCE(SUM(frido_base), 0)::float8      AS rc_entitled,
         COALESCE(SUM(frido_carrier), 0)::float8   AS rc_carrier,
@@ -886,6 +953,7 @@ export default async function handler(req, res) {
         COALESCE(SUM(value), 0)::float8               AS value,
         COALESCE(SUM(surcharge), 0)::float8           AS surcharge,
         COALESCE(SUM(over_n), 0)::int                 AS over_n,
+        COALESCE(SUM(under_n), 0)::int                AS under_n,
         COALESCE(SUM(over_kg), 0)::float8             AS over_kg,
         COALESCE(SUM(rec_infl), 0)::float8            AS rec_infl,
         COALESCE(SUM(rec_unexp), 0)::float8           AS rec_unexp,
@@ -895,9 +963,6 @@ export default async function handler(req, res) {
         COALESCE(SUM(claimable_rs), 0)::float8        AS claimable_rs,
         COALESCE(SUM(reverse_n), 0)::int              AS reverse_n,
         COALESCE(SUM(over_cost), 0)::float8           AS over_cost,
-        COALESCE(SUM(slab_n), 0)::int                 AS slab_n,
-        COALESCE(SUM(slab_kg), 0)::float8             AS slab_kg,
-        COALESCE(SUM(slab_cost), 0)::float8           AS slab_cost,
         COALESCE(SUM(rc_entitled), 0)::float8         AS rc_entitled,
         COALESCE(SUM(rc_carrier), 0)::float8          AS rc_carrier,
         COALESCE(SUM(rc_entitled_allin), 0)::float8   AS rc_entitled_allin,
@@ -1118,6 +1183,11 @@ export default async function handler(req, res) {
              CASE WHEN COUNT(DISTINCT master_slab) = 1 THEN MIN(master_slab) END::float8
                AS master_slab,
              COUNT(DISTINCT cw_slab)::int AS cw_slab_variants,
+             -- See subCube for the slab-vs-slab rationale. master_slab is the per-shipment
+             -- column carried down from the pmw join above.
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL AND cw_slab > master_slab)::int AS over_slab_n,
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL AND cw_slab < master_slab)::int AS under_slab_n,
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL)::int AS cmp_n,
              AVG(vw)::float8      AS vw_avg
         FROM p
        GROUP BY GROUPING SETS ((cat), (cat, sub))
@@ -1302,9 +1372,23 @@ export default async function handler(req, res) {
              -- the average instead would round a blend no parcel is charged.
              SUM(${SLAB_OF('i.charged_weight_courier::float8')})::float8 AS slab_sum,
              SUM(d.volumetric_kg::float8)::float8                   AS vw_sum,
-             COUNT(d.volumetric_kg)::int                            AS vw_n
+             COUNT(d.volumetric_kg)::int                            AS vw_n,
+             -- Charged slab vs the slab the product's TRUE weight earns. Slab-to-slab, not
+             -- kg-to-kg: couriers bill in brackets, so a 0.44 kg product billed at 0.52 kg
+             -- is still one 0.5 kg slab and there is nothing to dispute. Only a crossed
+             -- bracket costs money.
+             -- NULL master weight contributes to neither count (the comparison is unknown,
+             -- not zero), which is why both are reported against their own denominator.
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL
+                              AND ${SLAB_OF('i.charged_weight_courier::float8')} > pmw.slab_kg)::int AS over_slab_n,
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL
+                              AND ${SLAB_OF('i.charged_weight_courier::float8')} < pmw.slab_kg)::int AS under_slab_n,
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL)::int AS cmp_n
         FROM public.logistics_invoices_b2c i
         LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
+        -- Same sub-category join productQ uses, so the two paths agree row for row.
+        LEFT JOIN public.product_master_weight pmw
+               ON lower(trim(pmw.sub_category)) = lower(trim(d.sub_category))
         LEFT JOIN fwd f ON f.courier_name = i.courier_name AND f.zone = i.zone
                        AND f.acct = COALESCE(i.courier_account_type, '(none)')
                        AND f.slab = ${SLAB_OF('i.charged_weight_courier::float8')}
@@ -1345,6 +1429,7 @@ export default async function handler(req, res) {
         SUM(ship_value)::float8                                  AS value,
         SUM(surcharge)::float8                                   AS surcharge,
         COUNT(*) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0)::int  AS over_n,
+        COUNT(*) FILTER (WHERE gap < -0.001 AND COALESCE(dw, 0) > 0)::int AS under_n,
         COALESCE(SUM(gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_kg,
         COALESCE(SUM((cost / NULLIF(cw_slab, 0)) * gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_cost,
         COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0)), 0)::float8  AS rec_infl,
@@ -1355,9 +1440,8 @@ export default async function handler(req, res) {
         COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0))
                  FILTER (WHERE GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0) > 10), 0)::float8 AS claimable_rs,
         COUNT(*) FILTER (WHERE mode_group <> 'Forward')::int               AS reverse_n,
-        COUNT(*) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001)::int AS slab_n,
-        COALESCE(SUM(cw - slab) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_kg,
-        COALESCE(SUM((cost / cw) * (cw - slab)) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_cost,
+        -- slab_n / slab_kg / slab_cost removed here too — see the GROUPED query. Keeping a
+        -- second copy in a second builder is what let the pair drift in the first place.
         COALESCE(SUM(frido_base), 0)::float8           AS rc_entitled,
         COALESCE(SUM(frido_carrier), 0)::float8        AS rc_carrier,
         COALESCE(SUM(frido_base_allin), 0)::float8     AS rc_entitled_allin,
@@ -1473,7 +1557,6 @@ export default async function handler(req, res) {
           overbilled_rows: r.over_n, overbilled_kg: r.over_kg, overbilled_cost: r.over_cost,
           rec_infl: r.rec_infl, rec_unexp: r.rec_unexp, reverse_n: r.reverse_n,
           rec_admit: r.rec_admit, rec_admit_n: r.rec_admit_n,
-          slab_rows: r.slab_n, slab_excess_kg: r.slab_kg, slab_excess_cost: r.slab_cost,
           rc_entitled: r.rc_entitled, rc_carrier: r.rc_carrier, rc_total: r.rc_total,
           rc_entitled_allin: r.rc_entitled_allin, rc_carrier_allin: r.rc_carrier_allin,
           rc_entitled_surcharge: r.rc_entitled_surcharge, inv_addons: r.inv_addons,

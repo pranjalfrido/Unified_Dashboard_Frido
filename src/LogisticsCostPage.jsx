@@ -260,6 +260,7 @@ function shapeResponse(j) {
         declWt: Number(r.decl_wt) || 0,
         value: Number(r.value) || 0,
         overN: Number(r.over_n) || 0,
+        underN: Number(r.under_n) || 0,
         overKg: Number(r.over_kg) || 0,
         recInfl: Number(r.rec_infl) || 0,
         recAdmit: Number(r.rec_admit) || 0,
@@ -282,9 +283,6 @@ function shapeResponse(j) {
     overbilledRows: Number(t.overbilled_rows) || 0,
     overbilledKg: Number(t.overbilled_kg) || 0,
     overbilledCostEst: Number(t.overbilled_cost) || 0,
-    slabRows: Number(t.slab_rows) || 0,
-    slabExcessKg: Number(t.slab_excess_kg) || 0,
-    slabExcessCost: Number(t.slab_excess_cost) || 0,
     // Rate-card pricing (see api/logistics-cost.js).
     rcEntitled: Number(t.rc_entitled) || 0,
     rcCarrier: Number(t.rc_carrier) || 0,
@@ -554,8 +552,12 @@ function ChipRow({ options, selected, onToggle, small }) {
 //
 // Charts are NOT exported as images: a CSV of the chart's own series is more useful than a
 // PNG, and every chart here is backed by a table or row array, so the data is the export.
-function ExportMenu({ items, suffix }) {
+function ExportMenu({ items, suffix, raw }) {
   const [open, setOpen] = useState(false)
+  // Raw export is a live query, not a slice of what is already loaded, so it needs its own
+  // pending/error state — the aggregate items download instantly and have neither.
+  const [rawBusy, setRawBusy] = useState(false)
+  const [rawErr, setRawErr] = useState(null)
   const ref = useRef(null)
   useEffect(() => {
     if (!open) return
@@ -571,7 +573,9 @@ function ExportMenu({ items, suffix }) {
   // Only offer what actually has rows: a menu entry that downloads an empty file is worse
   // than no entry.
   const ready = (items || []).filter(it => (it.rows?.length || 0) > 0)
-  if (!ready.length) return null
+  // `raw` alone is enough to show the menu: it fetches its own rows, so it is offerable even
+  // before any aggregate table has loaded.
+  if (!ready.length && !raw) return null
 
   const run = it => {
     // suffix carries the active period and scope, so a file on disk still says what it
@@ -626,6 +630,37 @@ function ExportMenu({ items, suffix }) {
               </div>
             ))}
           </div>
+          {raw && (
+            <div style={{ borderTop: `1px solid ${C.border}` }}>
+              <div onClick={async () => {
+                if (rawBusy) return
+                setRawBusy(true); setRawErr(null)
+                try { await raw.run(); setOpen(false) }
+                catch (e) { setRawErr(e.message || 'Export failed') }
+                finally { setRawBusy(false) }
+              }}
+                style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '8px 11px', fontSize: 11.5,
+                  cursor: rawBusy ? 'wait' : 'pointer', color: C.t1, background: C.bg,
+                }}>
+                <span style={{ fontWeight: 700 }}>
+                  {rawBusy ? 'Preparing…' : raw.label}
+                </span>
+                <span style={{ fontSize: 10, color: C.t3, whiteSpace: 'nowrap' }}>
+                  {rawBusy ? '' : 'AWB level'}
+                </span>
+              </div>
+              {/* The month requirement and the row cap are both enforced server-side, so the
+                  message shown here is the server's own — repeating the rule in the client
+                  would let the two drift apart. */}
+              {rawErr && (
+                <div style={{ padding: '0 11px 8px', fontSize: 10.5, color: C.red.tx, lineHeight: 1.45 }}>
+                  {rawErr}
+                </div>
+              )}
+            </div>
+          )}
           {ready.length > 1 && (
             <div onClick={() => { ready.forEach(run); setOpen(false) }}
               style={{
@@ -1208,7 +1243,6 @@ function sumCube(rows) {
     add('overbilled_rows', r.over_n); add('overbilled_kg', r.over_kg); add('overbilled_cost', r.over_cost)
     add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('reverse_n', r.reverse_n)
     add('rec_admit', r.rec_admit); add('rec_admit_n', r.rec_admit_n)
-    add('slab_rows', r.slab_n); add('slab_excess_kg', r.slab_kg); add('slab_excess_cost', r.slab_cost)
     add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier); add('rc_total', r.rc_total)
     add('rc_entitled_allin', r.rc_entitled_allin); add('rc_carrier_allin', r.rc_carrier_allin)
     add('rc_entitled_surcharge', r.rc_entitled_surcharge); add('inv_addons', r.inv_addons)
@@ -1250,6 +1284,7 @@ function cubeToByProduct(subCube, f, master) {
   const blank = () => ({
     n: 0, cost: 0, wt: 0, slabSum: 0, vwSum: 0, vwN: 0,
     fwdN: 0, fwdCost: 0, revN: 0, revCost: 0, rtoN: 0, rtoCost: 0,
+    overSlabN: 0, underSlabN: 0, cmpN: 0,
   })
   const addTo = (a, r) => {
     const n = Number(r.n) || 0, cost = Number(r.cost) || 0
@@ -1258,6 +1293,10 @@ function cubeToByProduct(subCube, f, master) {
     a.slabSum += Number(r.slab_sum) || 0
     a.vwSum += Number(r.vw_sum) || 0
     a.vwN += Number(r.vw_n) || 0
+    // Counts, so they sum across the cube exactly like n does.
+    a.overSlabN += Number(r.over_slab_n) || 0
+    a.underSlabN += Number(r.under_slab_n) || 0
+    a.cmpN += Number(r.cmp_n) || 0
     // Per-leg count and cost kept separately: the table shows an AVERAGE per leg, and an
     // average cannot be recovered from another average — only from its own sum and count.
     if (r.leg === 'Forward') { a.fwdN += n; a.fwdCost += cost }
@@ -1294,6 +1333,7 @@ function cubeToByProduct(subCube, f, master) {
       rto_n: a.rtoN, rto_avg: avg(a.rtoCost, a.rtoN),
       cw_avg: avg(a.wt, a.n),
       cw_slab_avg: avg(a.slabSum, a.n),
+      over_slab_n: a.overSlabN, under_slab_n: a.underSlabN, cmp_n: a.cmpN,
       vw_avg: avg(a.vwSum, a.vwN),
       // Not derivable from this cube — the modal slab and the distinct-slab count need the
       // per-shipment grain, which is aggregated away here. Carried from the all-time row so
@@ -1490,6 +1530,16 @@ function CostKpiCarousel({ children }) {
     </>
   )
 }
+
+// Master switch for the Recoverable section — see the render guard below.
+const RECOVERABLE_VISIBLE = false
+
+// Shared width for the Cost by Product measure columns, so all ten size identically
+// rather than each stretching to fit its own header text.
+const W = 104
+
+// Why the RTO column is not comparable with Forward/Reverse. Shown on hover.
+const RTO_NOTE = "Return-to-origin leg. Six couriers (Delhivery, Ekart, ElasticRun, Shadowfax, SkyAir, Swift) bundle the original forward leg into the RTO invoice, so that portion is subtracted here: this is the return's own incremental cost, not the full invoice. Bluedart and Urbanbolt bill the return separately, so theirs passes through as-is. Not comparable with Forward and Reverse, which are full per-leg costs."
 
 export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation } = {}) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -1991,10 +2041,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       weightGap: agg.chargedWt - agg.declaredWt,
       overbilledPct: (agg.overbilledRows / agg.n) * 100,
       overbilledCost: agg.overbilledCostEst,
-      slabPct: (agg.slabRows / agg.n) * 100,
-      slabExcessKg: agg.slabExcessKg,
-      slabExcessCost: agg.slabExcessCost,
-      slabBillable: agg.slabBillable,
+      // slabPct / slabExcessKg / slabExcessCost / slabBillable removed (Oct 2026): assigned
+      // here and never read by any JSX, export or other tab. They came from the deleted
+      // slab_n/kg/cost columns, which double-counted over_n/over_kg/over_cost on a mixed
+      // raw-vs-slab basis. slabBillable was worse — shapeResponse never set agg.slabBillable
+      // at all, so it was permanently undefined.
+      // NOTE: the `slabRows` const below is a DIFFERENT thing — the Weight slab detail table,
+      // built from agg.slabCosts. It shadows the agg field that used to live here and is very
+      // much alive; do not fold the two together.
       // No separate RTO figure: RTO now reports inside the Reverse bucket, so the
       // "Wasted Freight (Returns)" tile covers it via reverseBurden.
       surchargePct: agg.cost > 0 ? (agg.surcharge / agg.cost) * 100 : 0,
@@ -2212,7 +2266,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         courier, shipments: b.n, cost: b.cost,
         avgCost: b.n ? b.cost / b.n : 0,
         cpk: perKg(b.cost, b.wt),
+        // Over/under the slab our DECLARED weight earns — the same comparison the old
+        // '% Wrong Weight' made, split by direction. Slab-to-slab, so only a crossed
+        // billing bracket counts; a sub-bracket difference costs nothing to dispute.
+        overN: b.overN, underN: b.underN,
         overPct: b.n ? (b.overN / b.n) * 100 : 0,
+        underPct: b.n ? (b.underN / b.n) * 100 : 0,
         // Recoverable split by cause — the two need different remedies.
         recInfl: b.recInfl, recUnexp: b.recUnexp,
         // Subset of recInfl the courier has conceded in writing — never added on top.
@@ -2338,7 +2397,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return Object.entries(agg?.byCourier || {})
       .map(([courier, b]) => {
         const spend = num(b.cost)
-        const cl = num(b.rec_infl)
+        // camelCase: shapeResponse puts byCourier through toMap(), which renames every
+        // field (recInfl, not rec_infl). Reading the snake_case name yielded undefined ->
+        // 0, so this chart drew a flat 0% claim line against correct spend bars.
+        const cl = num(b.recInfl)
         return { courier, spend, claim: cl, claimPct: spend ? (cl / spend) * 100 : 0 }
       })
       .sort((a, b) => b.spend - a.spend)
@@ -2348,12 +2410,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const recoverRows = useMemo(
     () => Object.entries(agg?.byCourier || {})
       .map(([courier, b]) => {
-        const recInfl = num(b.rec_infl)
-        const recUnexp = num(b.rec_unexp)
-        const recAdmit = num(b.rec_admit)
+        // camelCase, per toMap() — see courierSpendRows above. These five read undefined
+        // before, so every row scored 0, the .filter() below emptied the list, and the
+        // whole Recoverable section was hidden by its own length guard.
+        const recInfl = num(b.recInfl)
+        const recUnexp = num(b.recUnexp)
+        const recAdmit = num(b.recAdmit)
         const recTotal = recInfl + recUnexp
         const shipments = num(b.n)
-        const disputedN = num(b.claimable_n)
+        const disputedN = num(b.claimableN)
         return {
           courier,
           recInfl, recUnexp, recAdmit, recTotal,
@@ -2531,6 +2596,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         n: num(c.n), fwd, rev: num(c.rev_avg), rto: num(c.rto_avg),
         ...costToServe(c),
         cw: num(c.cw_slab_avg), masterKg: num(c.master_kg), masterSlab: num(c.master_slab),
+        overSlabN: num(c.over_slab_n), underSlabN: num(c.under_slab_n), cmpN: num(c.cmp_n),
         vw: num(c.vw_avg), cost: num(c.cost),
       })
       // A category matched by name shows all its children; otherwise only the matching
@@ -2543,6 +2609,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           n: num(s.n), fwd: sf, rev: num(s.rev_avg), rto: num(s.rto_avg),
           ...costToServe(s),
           cw: num(s.cw_slab_avg), masterKg: num(s.master_kg), masterSlab: num(s.master_slab),
+          overSlabN: num(s.over_slab_n), underSlabN: num(s.under_slab_n), cmpN: num(s.cmp_n),
           vw: num(s.vw_avg), cost: num(s.cost),
         })
       }
@@ -2772,6 +2839,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       totals: {
         rows: rows.length, cost: totalCost,
         partners: partners.length, warehouses: warehouses.length, months: byMonth.size,
+        // The actual month keys behind `months`, not just the count. The warehouse-cost
+        // ratio needs a shipment-value denominator covering EXACTLY these months — the B2C
+        // ledger runs from Jan while 3PL starts in Apr, so summing all of byMonth would
+        // divide five months of warehouse cost by eight months of value.
+        monthKeys: [...byMonth.keys()],
         // Summed from the filtered rows now that the fee split is carried at (site, month)
         // grain. This replaces apportioning the unfiltered totals by share of spend, which
         // was an estimate that could not reflect a filter selecting months whose mix
@@ -2940,9 +3012,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     for (const v of b2b.vehicles || []) {
       if (b2bPick && !b2bPick(v)) continue
       const k = v.transporter
-      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      // vehTrips/freight: the partner cards show WHAT each transporter is used for, not
+      // just how much it cost. Accumulated here rather than from b2b.vehicles directly so
+      // the mix honours b2bPick like every other figure on these cards.
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0, vehTrips: new Map(), freight: new Set() })
       const a = by.get(k)
       a.trips += num(v.trips); a.cost += num(v.billed)
+      if (v.vehicle) a.vehTrips.set(v.vehicle, (a.vehTrips.get(v.vehicle) || 0) + num(v.trips))
+      if (v.freight_type) a.freight.add(v.freight_type)
     }
     const rows = [...by.values()]
     const total = rows.reduce((s2, r) => s2 + r.cost, 0)
@@ -2950,6 +3027,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       key: r.key, trips: r.trips, cost: r.cost,
       avgCost: r.trips ? r.cost / r.trips : 0,
       share: total ? (r.cost / total) * 100 : 0,
+      vehicleCount: r.vehTrips.size,
+      // Busiest vehicle by TRIPS, not spend: this answers "what does this partner run for
+      // us", and a single expensive 32FT would otherwise outrank a hundred pickups.
+      topVehicle: r.vehTrips.size ? [...r.vehTrips.entries()].sort((x, y) => y[1] - x[1])[0][0] : null,
+      // Sorted so FTL/PTL reads the same way on every card rather than in Set order.
+      freightTypes: [...r.freight].sort().join('/'),
     })).sort((a, b3) => b3.cost - a.cost)
   }, [b2b, b2bPick])
 
@@ -3417,7 +3500,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       cpk: num(b.wt) ? num(b.cost) / num(b.wt) : null,
       // Weight-overbilling already established elsewhere on the page; carried here so a card
       // shows whether this partner has an open claim against it.
-      claimable: num(b.claimable_rs),
+      claimable: num(b.claimableRs),
     })).sort((a, b2) => b2.cost - a.cost)
   }, [agg])
 
@@ -3433,6 +3516,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       trips: t.trips,
       share: total ? (t.cost / total) * 100 : 0,
       avgCost: t.avgCost,
+      vehicleCount: t.vehicleCount,
+      topVehicle: t.topVehicle,
+      freightTypes: t.freightTypes,
     })).sort((a, b2) => b2.cost - a.cost)
   }, [b2b, b2bTransRows])
 
@@ -3553,6 +3639,31 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   //
   // Numbers are exported RAW, not formatted: "₹1.74 Cr" is useless in a spreadsheet, and
   // exportCSV JSON-stringifies each value so a raw number survives as a number.
+  // Raw AWB-level export. Unlike exportItems — which slice data already in memory — this
+  // queries the ledger directly, because per-shipment rows are never shipped to the browser
+  // (B2C alone is 14.7 lakh of them).
+  //
+  // The month requirement and the row cap live on the SERVER; this only surfaces whatever it
+  // says. Duplicating the rule here would let the two drift apart, and the server is the one
+  // that actually knows how many rows the selection hits.
+  const rawExport = useMemo(() => ({
+    label: 'Raw invoice rows',
+    run: async () => {
+      const res = await fetch(`${API}/api/logistics-cost`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rawExport', scope, months: filters.months || [] }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || `Server returned ${res.status}`)
+      if (!j.rows?.length) throw new Error('No rows for the selected months.')
+      const period = (filters.months || []).length
+        ? [...filters.months].sort().join('_')
+        : 'all'
+      exportCSV(j.rows, `frido_${scope}_raw_awb_${period}.csv`)
+    },
+  }), [API, scope, filters.months])
+
   const exportItems = useMemo(() => {
     const round = (v, d = 2) => (v == null || Number.isNaN(Number(v)) ? '' : Number(Number(v).toFixed(d)))
 
@@ -3769,6 +3880,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             billable_slab_kg: round(r.master_slab ?? r.cw_slab_avg, 2),
             actual_weight_kg: round(r.master_kg, 3),
             charged_weight_avg_kg: round(r.cw_avg, 3),
+            // Slabbed-then-averaged, matching the Avg Courier Weight column on screen.
+            // Kept alongside the raw average above rather than replacing it: the gap
+            // between the two IS the slab rounding, which is worth seeing in a sheet.
+            courier_slab_avg_kg: round(r.cw_slab_avg, 2),
+            charged_overweight_shipments: num(r.over_slab_n),
+            charged_underweight_shipments: num(r.under_slab_n),
+            // Denominator for the two above — shipments where a master weight exists to
+            // compare against. Without it the counts cannot be turned back into rates.
+            weight_comparable_shipments: num(r.cmp_n),
             volumetric_weight_avg_kg: round(r.vw_avg, 3),
             // How many distinct slabs this product has been billed in. A high count on a
             // single SKU is the packaging-inconsistency signal, and it is the one column
@@ -3792,7 +3912,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // subCube carries every uploaded month regardless of the slicer, so the Billing
         // Period selection is applied here explicitly — without it this one file would
         // disagree with every other sheet in the same export.
-        rows: (agg?.subCube || [])
+        // The PRODUCT's own weight and slab come from the item master, which subCube does
+        // not carry — it is a property of the sub-category, not of the zone or month, so it
+        // is looked up per row rather than aggregated. Same index Cost by Product uses, so
+        // the sheet and the table agree.
+        rows: (() => { const master = masterIndexFromByProduct(agg?.byProduct); return (agg?.subCube || [])
           .filter(r => !filters.months?.length || filters.months.includes(r.month))
           .map(r => ({
           month: r.month, category: r.cat, sub_category: r.sub, zone: r.zone,
@@ -3800,7 +3924,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           avg_per_shipment: num(r.n) > 0 ? round(num(r.cost) / num(r.n)) : null,
           billed_weight_kg: round(r.wt, 3),
           cost_per_kg: num(r.wt) > 0 ? round(num(r.cost) / num(r.wt), 2) : null,
-        })),
+          // Average BILLABLE slab: each shipment is slabbed first (0.5 kg floor, then CEIL
+          // to the next whole kg) and the slabs are summed server-side as slab_sum, so this
+          // divides a sum of slabs — not the mean weight rounded, which would round the
+          // average instead of reflecting what was actually billed.
+          avg_billed_slab_kg: num(r.n) > 0 ? round(num(r.slab_sum) / num(r.n), 2) : null,
+          // Shipments whose charged slab sits above / below the slab the product's master
+          // weight earns. Slab-to-slab, so only a crossed billing bracket counts.
+          over_weight_shipments: num(r.over_slab_n),
+          under_weight_shipments: num(r.under_slab_n),
+          // Denominator for the two above: shipments with a master weight to compare
+          // against. Without it the counts cannot be turned back into rates.
+          weight_comparable_shipments: num(r.cmp_n),
+          // PRODUCT weight slab: the bracket this product's true catalogue weight earns —
+          // what we SHOULD be billed at. Set against avg_billed_slab_kg above (what the
+          // courier actually charged), the pair is the whole weight-dispute case on one row.
+          // Blank where the item master has no entry for the sub-category (~12% of them).
+          product_weight_kg: round(master.get(r.sub)?.master_kg, 3),
+          product_weight_slab_kg: round(master.get(r.sub)?.master_slab, 2),
+        })) })(),
       },
     ]
   }, [scope, b2b, b2bTrendRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
@@ -4325,11 +4467,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   {c.pctValue != null ? c.pctValue.toFixed(2) + '% of value' : '—'}
                 </span>
               </div>
+              {/* Claimable line removed on request (Oct 2026), alongside the Recoverable
+                  section. overviewB2cCards still carries `claimable`, so restoring this is
+                  just un-commenting the block below.
               {c.claimable > 0 && (
                 <div style={{ fontSize: 10.5, color: C.red.tx, fontWeight: 700 }}>
                   {fmt(c.claimable)} claimable
                 </div>
-              )}
+              )} */}
             </div>
           ))}
         </div>
@@ -4352,6 +4497,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   ₹{Math.round(c.avgCost).toLocaleString('en-IN')} / trip
                 </span>
               </div>
+              {/* What the partner is actually used for. Rendered only when the vehicle mix
+                  is known — a dash line would cost a row of height and say nothing. */}
+              {c.vehicleCount > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t3 }}>
+                  <span>{c.vehicleCount} {c.vehicleCount === 1 ? 'vehicle' : 'vehicles'}{c.freightTypes ? ` · ${c.freightTypes}` : ''}</span>
+                  {c.topVehicle && (
+                    <span style={{ textAlign: 'right' }}>mostly {c.topVehicle}</span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
           {/* Fixed rentals sit with the partners because that is what they are — a
@@ -5009,6 +5164,22 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       const perMonth = t.months > 0 ? t.cost / t.months : 0
       const share = v => (t.cost > 0 ? (v / t.cost) * 100 : 0)
 
+      // Shipment value over the same months the warehouse cost covers.
+      //
+      // agg.byMonth arrives in TWO shapes: shapeResponse puts it through toMap() (an object
+      // keyed by month) on the static-payload path, but cubeToBreakdowns returns toArr() (an
+      // array of {key, ...}) whenever the cube is used — which is every filtered load, i.e.
+      // nearly always. Reading only one shape returns undefined on the other and the tile
+      // silently shows 0%, which is the same failure the Recoverable section had.
+      const bm = agg?.byMonth
+      const valueOf = m => {
+        if (!bm) return 0
+        if (Array.isArray(bm)) return Number(bm.find(r => r.key === m)?.value) || 0
+        return Number(bm[m]?.value) || 0
+      }
+      const tplShipValue = (t.monthKeys || []).reduce((a, m) => a + valueOf(m), 0)
+      const tplValuePct = tplShipValue > 0 ? (t.cost / tplShipValue) * 100 : null
+
       // Blended rate across every site that has volume. Costs from months with no shipment
       // data are EXCLUDED from the numerator as well as the denominator — counting Haryana's
       // unmatched May spend against April–August volume would overstate the rate for every
@@ -5059,7 +5230,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               </ResponsiveContainer>
             )}
           </Hero>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14 }}>
+          {/* gridTemplateRows was 'repeat(2, 1fr)' for eight tiles. Two were removed above,
+              so a fixed two-row track would stretch six tiles over the same height. Auto rows
+              let them flow as 4 + 2. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
             {/* Row 1 — the unit economics. These are the figures a warehousing contract is
                 actually judged on; the composition split moved to row 2. */}
             <Tile label="Cost / Parcel" value={perShip != null ? money1(perShip) : '—'}
@@ -5078,12 +5252,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               sub={`${share(t.operation_fee).toFixed(1)}% of spend`} />
             <Tile label="Rental" value={t.rental_fee > 0 ? fmt(t.rental_fee) : '—'}
               sub={t.rental_fee > 0 ? `${share(t.rental_fee).toFixed(1)}% — fixed, volume-blind` : 'nothing billed'} />
+            {/* Warehousing as a share of the goods value shipped in the SAME months. The
+                denominator is summed over tpl.totals.monthKeys rather than agg totals: the
+                B2C ledger starts in January and 3PL in April, so the all-time value would
+                understate the ratio by covering months that carry no warehouse cost at all.
+                Em-dash rather than a figure when no month overlaps, instead of a 0% that
+                would read as free warehousing. */}
+            <Tile label="Warehousing % of Value"
+              value={tplValuePct != null ? tplValuePct.toFixed(2) + '%' : '—'}
+              sub={tplValuePct != null ? `${fmt(t.cost)} on ${fmt(tplShipValue)} shipped` : 'no matching months'} />
+            {/* Top Site Share / Top Partner Share removed on request (Oct 2026). Both were
+                derived inline from tpl.warehouses / tpl.partners, which the sections below
+                still use, so nothing else is affected and restoring them is a paste.
             <Tile label="Top Site Share"
               value={tpl.warehouses.length ? `${share(tpl.warehouses[0].cost).toFixed(1)}%` : '—'}
               sub={tpl.warehouses.length ? tpl.warehouses[0].key : null} />
             <Tile label="Top Partner Share"
               value={tpl.partners.length ? `${share(tpl.partners[0].cost).toFixed(1)}%` : '—'}
-              sub={tpl.partners.length ? tpl.partners[0].key : null} />
+              sub={tpl.partners.length ? tpl.partners[0].key : null} /> */}
           </div>
         </div>
 
@@ -5430,7 +5616,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           )}
         </Hero>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14, alignItems: 'stretch' }}>
+        {/* gridTemplateRows was 'repeat(2, 1fr)' for exactly eight tiles. Three were
+            removed above, so a fixed two-row track would stretch five tiles over a row and
+            a half of dead space. Auto rows let the five flow as 4 + 1. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignItems: 'stretch' }}>
           <Tile label="Total Shipment Value" value={fmt(agg.shipValue)}
             sub="goods shipped" />
           <Tile label="Cost per Kg" value={kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—'}
@@ -5439,26 +5628,20 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             sub="freight ÷ invoices" />
           <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
             sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
-          {/* These two are ALL-TIME and say so, unlike every other tile in this row.
-              They come from lc_billing_summary, which is aggregated to a single row with no
-              month column at all — the figure cannot be narrowed to a billing period
-              without rebuilding that table. Labelling it is honest; silently showing a
-              whole-ledger number beside seven single-month ones is not. */}
+          {/* Should Have Paid / Actually Billed / Weight Disputes removed on request
+              (Oct 2026), with the Recoverable section. agg.dtOurs, agg.dtInvoiced and
+              kpis.overbilledPct are all still computed, so these are restorable as-is.
           <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
             sub="card × our weight · all periods" />
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
             sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card · all periods`}
-            accent={C.red.tx} />
+            accent={C.red.tx} /> */}
           <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
             sub={`${fmtN(reverseBurden.n)} legs · ${reverseBurden.pct.toFixed(1)}% of spend`}
             accent={C.red.tx} />
-          {/* Fills the eighth slot the Claimable tile vacated. A RATE rather than a rupee
-              claim figure: how often the courier's charged weight exceeds our declared one,
-              which is the billing-accuracy signal. The rupee value of it lives in the
-              Recoverable section, where the claim workflow is. */}
-          <Tile label="Weight Disputes"
+          {/* <Tile label="Weight Disputes"
             value={kpis.overbilledPct != null ? kpis.overbilledPct.toFixed(1) + '%' : '—'}
-            sub={`${fmtN(agg.overbilledRows)} of ${fmtN(kpis.shipments)} shipments`} />
+            sub={`${fmtN(agg.overbilledRows)} of ${fmtN(kpis.shipments)} shipments`} /> */}
         </div>
       </div>
       )}
@@ -5666,9 +5849,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
             { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
             { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-            { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
-              <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
-                {r.overPct.toFixed(1) + '%'}
+            // Replaces the old single '% Wrong Weight'. That column counted mis-weighed
+            // shipments without saying which WAY, so a courier we under-declare to looked
+            // identical to one over-billing us. Split by direction, Ekart (10.7% over /
+            // 32.9% under) reads as a catalogue-data problem while Shadowfax (30.4% / 0.7%)
+            // reads as a billing one — same headline number, two different conversations.
+            { key: 'overPct', label: 'Over Wt', align: 'center', render: (_, r) => (
+              <span style={{ color: r.overPct > 25 ? C.red.tx : undefined, fontWeight: r.overPct > 25 ? 700 : 400 }}>
+                {fmtN(r.overN)} <span style={{ fontWeight: 400, color: C.t3 }}>({r.overPct.toFixed(1)}%)</span>
+              </span>
+            ) },
+            { key: 'underPct', label: 'Under Wt', align: 'center', render: (_, r) => (
+              <span style={{ color: C.t2 }}>
+                {fmtN(r.underN)} <span style={{ color: C.t3 }}>({r.underPct.toFixed(1)}%)</span>
               </span>
             ) },
             // Share of spend across the partners listed here, so the column sums to 100%
@@ -6206,7 +6399,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* Weight overbilling only — the courier charged for weight we did not ship, the one
           dispute backed by our own declared figures rather than by a card inferred from
           their invoices. Rate variance sits beside it as a diagnostic, never summed in. */}
-      {recoverRows.length > 0 && (
+      {/* HIDDEN on request (Oct 2026). The section is switched off at the render guard
+          rather than deleted: recoverRows/recoverTotals/courierSpendRows and every SQL
+          column behind them stay live and correct, so nothing else on the page shifts and
+          restoring this is a one-word change (RECOVERABLE_VISIBLE -> true).
+          Note courierSpendRows also feeds the Overview carrier cards' claimable column,
+          which is why none of the derivation was removed. */}
+      {RECOVERABLE_VISIBLE && recoverRows.length > 0 && (
         <>
           <SectionHdr title="Recoverable"
             note={`${fmt(recoverTotals.infl)} claimable on weight across ${recoverRows.length} partners · ${fmt(recoverTotals.unexp)} rate variance shown separately, not invoiceable`} collapsed={secHid['recover']} onToggle={() => toggleSec('recover')} />
@@ -6338,22 +6537,35 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       </span>}{r.label}
                     </span>
               ) },
-              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
-              { key: 'cost', label: isMobile ? 'Spend' : 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
-              { key: 'fwd', label: 'Forward', align: 'center', render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
-              { key: 'rev', label: 'Reverse', align: 'center', render: (_, r) => r.rev ? fmt(r.rev) : '—' },
-              { key: 'rto', label: 'RTO', align: 'center', render: (_, r) => r.rto ? fmt(r.rto) : '—' },
+              // W: one shared width for every measure column. These were auto-sizing, so a
+              // long header like 'Charged Underweight' stole width from its neighbours and the
+              // row read as a ragged grid. The label column stays auto.
+              { key: 'n', label: 'Shipments', align: 'center', width: W, render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: 'Spend', align: 'center', width: W, render: (_, r) => fmt(r.cost) },
+              { key: 'fwd', label: 'Forward', align: 'center', width: W, render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
+              { key: 'rev', label: 'Reverse', align: 'center', width: W, render: (_, r) => r.rev ? fmt(r.rev) : '—' },
+              // Label carries a native-title tooltip rather than a longer header: at the
+              // shared 104px width 'RTO (net of fwd)' wraps to three lines, and the caveat
+              // needs more words than a header can hold anyway. The dotted underline is the
+              // affordance — without it nobody discovers the explanation.
+              { key: 'rto', align: 'center', width: W,
+                label: (
+                  <span title={RTO_NOTE} style={{ borderBottom: `1px dotted ${C.t3}`, cursor: 'help' }}>
+                    RTO<span style={{ fontWeight: 400, color: C.t3 }}> net</span>
+                  </span>
+                ),
+                render: (_, r) => r.rto ? fmt(r.rto) : '—' },
               // Cost to serve one order: forward + reverse + RTO, each scaled by how often it
               // actually happens (return count ÷ forward count). Forward is the denominator
               // because every order has one; returns are the exception at 3-21%. A raw sum of
               // the three averages would assume every shipment goes out, is picked up AND is
               // RTO'd — overstating Footwear by ~2.5x (₹264 vs ₹103).
-              { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
+              { key: 'ctsReal', label: 'Cost / Order', align: 'center', width: W, render: (_, r) => (
                 r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
               ) },
               // Weight Slab: one real billable slab on sub-category rows, the
               // shipment-weighted average across the category on category rows.
-              { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
+              { key: 'slab', label: 'Billed Slab', align: 'center', width: W, render: (_, r) => {
                 // Sub-category rows: the ONE billable slab from the item master — a real
                 // value the courier charges on.
                 if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
@@ -6376,8 +6588,39 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               //
               // Distinct from the Weight Slab column beside it: that shows the BILLABLE
               // slab the courier charges on, this shows the true weight.
-              { key: 'masterKg', label: 'Actual Weight', align: 'center', render: (_, r) => (
+              { key: 'masterKg', label: 'Actual Wt', align: 'center', width: W, render: (_, r) => (
                 r.masterKg > 0 ? r.masterKg.toFixed(2) + ' kg' : '—'
+              ) },
+              // Average BILLABLE weight: every shipment is slabbed first (0.5 kg floor, then
+              // CEIL to the next whole kg) and the slabs are averaged — not the raw charged
+              // weights averaged and then slabbed, which would round the mean instead of
+              // reflecting what was billed. Orthotics: 0.64 kg slabbed vs 0.59 kg raw.
+              //
+              // Reads from the same cw_slab_avg the Weight Slab column falls back to, so the
+              // two never disagree. Distinct from Weight Slab beside it: that names the slab
+              // the group is charged at, this is the mean across a mixed group.
+              { key: 'cw', label: 'Avg Billed Wt', align: 'center', width: W, render: (_, r) => (
+                r.cw > 0 ? r.cw.toFixed(2) + ' kg' : '—'
+              ) },
+              // Shipments whose CHARGED slab sits above / below the slab the product's true
+              // weight earns. The % denominator is cmpN, not n: rows with no master weight
+              // can be neither over nor under, so dividing by all shipments would understate
+              // both rates on exactly the products where coverage is worst.
+              { key: 'overSlabN', label: 'Over Wt', align: 'center', width: W, render: (_, r) => (
+                r.cmpN > 0
+                  ? <span style={{ fontWeight: r.overSlabN > 0 ? 700 : 400, color: r.overSlabN > 0 ? C.red.tx : C.t3 }}>
+                      {fmtN(r.overSlabN)}{' '}
+                      <span style={{ fontWeight: 400, color: C.t3 }}>({(r.overSlabN / r.cmpN * 100).toFixed(1)}%)</span>
+                    </span>
+                  : '—'
+              ) },
+              { key: 'underSlabN', label: 'Under Wt', align: 'center', width: W, render: (_, r) => (
+                r.cmpN > 0
+                  ? <span style={{ color: C.t2 }}>
+                      {fmtN(r.underSlabN)}{' '}
+                      <span style={{ color: C.t3 }}>({(r.underSlabN / r.cmpN * 100).toFixed(1)}%)</span>
+                    </span>
+                  : '—'
               ) },
             ]}
             rows={productRows}
@@ -6712,7 +6955,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               {/* Export sits to the RIGHT of the chip: the chip says what period is in
                   view, and this exports exactly that. Last in the cluster so it reads as
                   the action after the state. */}
-              <ExportMenu items={exportItems} suffix={exportSuffix} />
+              <ExportMenu items={exportItems} suffix={exportSuffix} raw={rawExport} />
             </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
