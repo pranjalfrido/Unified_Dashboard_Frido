@@ -540,7 +540,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
     if (hasFacilityFilter) {
       skus = skus
-        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location))))
+        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)) && (f.totalInvt || 0) > 0))
         .map(s => {
           const facs = (s.facilities || []).filter(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)))
           const totalInvt = facs.reduce((a, f) => a + (f.totalInvt || 0), 0)
@@ -567,7 +567,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
           const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
-          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs }
+          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs, facilities: facs }
         })
     } else if (effectiveLocations?.length) {
       skus = skus
@@ -634,6 +634,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
     return {
       ...raw, skus,
+      rawSkuCount: raw.skus.length,
       summary: { ...raw.summary, totalInvt: Math.round(totalInvt), rawInvt: Math.round(rawInvt), rawBlockedInvt: Math.round(rawBlockedInvt), rtdInvt: Math.round(rtdInvt), avgSale: Math.round(avgSale), avgSaleB2C: Math.round(avgSale), totalAvgSale: Math.round(totalAvgSale), doi, stockStatus: dominantStatus, skuCount: skus.length, criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length, deadStockCount: skus.filter(s => s.isDead).length, deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0) },
       statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
       locations, allLocations, deadStock: raw.deadStock, slowMoving: raw.slowMoving, leadTimeRisk,

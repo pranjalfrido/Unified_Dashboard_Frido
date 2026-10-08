@@ -216,8 +216,8 @@ export const isPseudoSku = sku => {
 //
 // Vadgaon_OPS is a special case: its RTD/Raw/Raw-Blocked split is computed upstream (in
 // refresh_inventory_snapshot_hourly.mjs) directly from Shelfwise shelf names — any shelf
-// containing "RTD" is RTD (RTD-LANE-* included — RTD wins the tie), any shelf containing
-// "LANE" (and not "RTD") is Raw, with its GOOD_INVENTORY quantity going to RawInvt and its
+// containing "RTD" is RTD (RTD-RACK-* included — RTD wins the tie), any shelf containing
+// "RACK" (and not "RTD") is Raw, with its GOOD_INVENTORY quantity going to RawInvt and its
 // blocked quantity going to RawBlockedInvt (PKG/RTN/QC-prefixed shelves are deliberately
 // excluded entirely from Vadgaon_OPS, unlike every other facility). Total = RTD + Raw +
 // Raw Blocked, same as every other facility. Those pre-computed sums arrive as

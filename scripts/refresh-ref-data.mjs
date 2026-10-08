@@ -42,9 +42,9 @@ const [facilityRows, stateRows, channelRows] = await Promise.all([
         Facility,
         Facility2,
         Location,
-        FCs_Status_for_Invt AS \`FCs Status for Invt\`,
+        FCs_Status_for_Invt,
         FacilityType,
-        Store_Location AS \`Store Location\`
+        Store_Location
       FROM \`frido-429506.inventory_sales_allocation.facility_master\`
       ORDER BY Facility
     `,
