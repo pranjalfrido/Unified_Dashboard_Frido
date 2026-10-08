@@ -540,7 +540,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
     if (hasFacilityFilter) {
       skus = skus
-        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location))))
+        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)) && (f.totalInvt || 0) > 0))
         .map(s => {
           const facs = (s.facilities || []).filter(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)))
           const totalInvt = facs.reduce((a, f) => a + (f.totalInvt || 0), 0)
