@@ -14,8 +14,25 @@
 import pkg from 'pg'
 import { config } from 'dotenv'
 import { loadCourierProfiles, persistCourierProfiles, PER_KG_COURIERS, sqlList } from './courier-profiles.mjs'
-import { buildCube } from '../api/logistics-cost.js'
+import { buildCube, ZONE_MAP_SQL } from '../api/logistics-cost.js'
 config()
+
+// Exit non-zero on failure.
+//
+// These scripts run top-level await, and an unhandled rejection here terminated the process
+// with status 0 — a crash that looked like a clean run. Observed three times in one session:
+// a full AWB sync lost its database connection at 94%%, reported success, and left the table
+// half-updated. In CI that is worse than a hard failure, because the workflow's own
+// continue-on-error guard only triggers on a NON-zero exit, so a silent crash passes and the
+// dashboard serves partial data with nothing flagged.
+process.on('unhandledRejection', e => {
+  console.error('FATAL (unhandled rejection):', e?.message || e)
+  process.exit(1)
+})
+process.on('uncaughtException', e => {
+  console.error('FATAL (uncaught exception):', e?.message || e)
+  process.exit(1)
+})
 
 // Use the direct Postgres connection (no pooler) so SET statement_timeout is respected
 // for the full session. The transaction pooler (port 6543) resets session settings on
@@ -113,12 +130,12 @@ await swap('lc_addon_rate', `
 // Median forward cost per cell, used to net the bundled forward leg out of RTO rows.
 await swap('lc_fwd_median', `
   CREATE TABLE __TARGET__ AS
-  SELECT i.courier_name, i.zone, COALESCE(i.courier_account_type, '(none)') AS acct,
+  SELECT i.courier_name, (${ZONE_MAP_SQL('i.zone')}) AS zone, COALESCE(i.courier_account_type, '(none)') AS acct,
          ${SLAB} AS slab,
          percentile_cont(0.5) WITHIN GROUP (ORDER BY ${EX_GST.replace(/total_cost|freight_charge|surcharge|other_charge/g, m => 'i.' + m)}) AS fwd_t
     FROM public.logistics_invoices_b2c i
    WHERE upper(i.shipment_mode) = 'FORWARD' AND i.total_cost > 0
-     AND i.zone IN ('A','B','C','D','E') AND i.charged_weight_courier <= 500
+     AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL AND i.charged_weight_courier <= 500
    GROUP BY 1, 2, 3, 4
 `, 'CREATE INDEX __IDX__ ON __TARGET__ (courier_name, zone, acct, slab)')
 
@@ -136,7 +153,12 @@ const LEG = `CASE WHEN upper(i.shipment_mode)='FORWARD' THEN 'Forward'
 const SL = c => `CASE WHEN i.courier_name IN (${sqlList(PER_KG_COURIERS)}) THEN NULL
                       WHEN ${c}>0 AND ${c}<=0.5 THEN 0.5
                       WHEN ${c}>0 THEN CEIL(${c}) ELSE 0 END`
-const EXI = EX_GST.replace(/(total_cost|freight_charge|surcharge|other_charge)/g, 'i.$1')
+// Floored at zero. The WHERE clauses above admit rows with a negative total_cost — 150
+// credit notes the courier issued, almost all Bluedart RTO/Reverse legs. Per the business
+// (and matching the API's COST_FLOOR), the SHIPMENT should count while the cost reads zero:
+// a refund is not negative freight. Dropping them removed the shipments from every count as
+// well as the money; letting them through unfloored would subtract spend that was charged.
+const EXI = `GREATEST(${EX_GST.replace(/(total_cost|freight_charge|surcharge|other_charge)/g, 'i.$1')}, 0)`
 
 // OUR weight, falling back to the courier's when we did not declare one.
 //
@@ -198,7 +220,8 @@ await swap('lc_billing_summary', `
          COUNT(*) FILTER (WHERE dct.freight_median*(1+dct.surcharge_rate)
                               - dco.freight_median*(1+dco.surcharge_rate) > 1)::int AS dt_weight_n,
          COUNT(*) FILTER (WHERE ${EXI}
-                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n,
+                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n
+,
          -- Per-ROW clamped: the claimable figure. Netting on the grand total lets a shipment
          -- billed BELOW card cancel one billed above it, but you cannot invoice a courier for
          -- the under-billed parcels — so the clamp belongs on each row, not on the sum.
@@ -209,7 +232,7 @@ await swap('lc_billing_summary', `
     FROM public.logistics_invoices_b2c i
     ${CARD('dct','i.charged_weight_courier')}
     ${CARD('dco', OUR_WT)}
-   WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+   WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
      AND i.charged_weight_courier <= 500
      AND i.month_year IS NOT NULL
 `, null)
@@ -252,7 +275,7 @@ await swap('lc_month_claims', `
       FROM public.logistics_invoices_b2c i
       ${CARD('dct','i.charged_weight_courier')}
       ${CARD('dco', OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+     WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
        AND i.charged_weight_courier <= 500
        AND i.month_year IS NOT NULL
   )
@@ -314,7 +337,7 @@ await swap('lc_slab_costs', `
                        AND co.leg = ${LEG} AND co.zone = i.zone
                        AND co.payment_mode = COALESCE(i.payment_mode,'(none)')
                        AND co.weight_slab IS NOT DISTINCT FROM ${SLABC(OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+     WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
        AND i.charged_weight_courier <= 500
   )
   SELECT slab,
