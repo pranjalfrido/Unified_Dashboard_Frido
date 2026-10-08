@@ -259,6 +259,23 @@ function computePayload(windowDays) {
   })
 
   const rolledSkuMap = new Map()
+
+  // Seed every item-master SKU (excluding BUNDLE/COMBO — already filtered when itemMaster was
+  // built) so that SKUs with no Live-facility inventory row still appear in the table.
+  // Sales and inventory fill in below via the same loops as before; anything that stays at
+  // zero will show as Out of Stock with its avg sale data still visible.
+  for (const [skuKey, master] of itemMaster) {
+    if (rolledSkuMap.has(skuKey)) continue
+    const last90 = lastSaleBySkuKey.get(skuKey)
+    const newLaunch = isNewLaunch(master.launchDate, endDateObj)
+    rolledSkuMap.set(skuKey, {
+      sku: skuKey, skuKey, category: master.category, subCategory: master.subCategory,
+      totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, rawAvgSaleQty: 0, rawTotalAvgSaleQty: 0, orderAllocation: 0,
+      leadTime: master.leadTime, productSource: master.productSource, newLaunch, lastSaleDate: last90?.lastSaleDate || null,
+      locations: [], facilities: [],
+    })
+  }
+
   for (const r of skuFacilityRows) {
     if (!rolledSkuMap.has(r.skuKey)) {
       rolledSkuMap.set(r.skuKey, {
@@ -269,6 +286,8 @@ function computePayload(windowDays) {
       })
     }
     const acc = rolledSkuMap.get(r.skuKey)
+    // Use the inventory-row's sku (display code) if the item-master seed left it as skuKey
+    if (acc.sku === acc.skuKey && r.sku !== r.skuKey) acc.sku = r.sku
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
     // rawAvgSaleQty/rawTotalAvgSaleQty/orderAllocation are Location-grain, not Facility-grain —
     // summing per facility row here would double/triple-count a location with several
@@ -281,6 +300,30 @@ function computePayload(windowDays) {
     if (!acc) continue
     acc.rawAvgSaleQty += r.rawAvgSaleQty; acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty; acc.orderAllocation += r.orderAllocation
     acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.byFacility })
+  }
+
+  // Populate avg sale for item-master-seeded SKUs that have sales but no inventory rows.
+  // skuLocRows only covers SKUs that appeared in invBySkuFacility (inventory-driven), so SKUs
+  // with sales but zero Live-facility inventory would otherwise show avgSale=0. Pull their
+  // sales figures directly from the location-level sale maps.
+  for (const [skuKey, acc] of rolledSkuMap) {
+    if (acc.rawAvgSaleQty > 0 || acc.rawTotalAvgSaleQty > 0) continue // already populated
+    // Sum across all locations this SKU has sales at
+    let rawAvgSaleQty = 0, rawTotalAvgSaleQty = 0, orderAllocation = 0
+    for (const [mapKey, qty] of avgSaleBySkuLoc) {
+      if (mapKey.startsWith(skuKey + '|')) rawAvgSaleQty += qty
+    }
+    for (const [mapKey, qty] of totalAvgSaleBySkuLoc) {
+      if (mapKey.startsWith(skuKey + '|')) rawTotalAvgSaleQty += qty
+    }
+    for (const [mapKey, qty] of allocBySkuLoc) {
+      if (mapKey.startsWith(skuKey + '|')) orderAllocation += qty
+    }
+    if (rawAvgSaleQty > 0 || rawTotalAvgSaleQty > 0 || orderAllocation > 0) {
+      acc.rawAvgSaleQty = rawAvgSaleQty
+      acc.rawTotalAvgSaleQty = rawTotalAvgSaleQty
+      acc.orderAllocation = orderAllocation
+    }
   }
 
   let skus = [...rolledSkuMap.values()].map(s => {
