@@ -634,6 +634,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
     return {
       ...raw, skus,
+      rawSkuCount: raw.skus.length,
       summary: { ...raw.summary, totalInvt: Math.round(totalInvt), rawInvt: Math.round(rawInvt), rawBlockedInvt: Math.round(rawBlockedInvt), rtdInvt: Math.round(rtdInvt), avgSale: Math.round(avgSale), avgSaleB2C: Math.round(avgSale), totalAvgSale: Math.round(totalAvgSale), doi, stockStatus: dominantStatus, skuCount: skus.length, criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length, deadStockCount: skus.filter(s => s.isDead).length, deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0) },
       statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
       locations, allLocations, deadStock: raw.deadStock, slowMoving: raw.slowMoving, leadTimeRisk,

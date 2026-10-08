@@ -1543,7 +1543,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         {/* Main inventory table */}
         <div className="inv-detail-card"><GlassCard
           title="Inventory Detail"
-          note={<span className="inv-detail-desktop-only">{`${fmtInt(detailSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}</span>}
+          note={<span className="inv-detail-desktop-only">{`${fmtInt(detailSkus.length)} of ${fmtInt(data.rawSkuCount ?? data.skus.length)} SKUs`}</span>}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
