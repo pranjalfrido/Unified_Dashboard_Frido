@@ -48,6 +48,32 @@ jobs:
       - name: Generate static logistics JSON
         run: node scripts/generate-logistics-cache.mjs
 
+      # Pulls new AWB category / sub-category / dimensions from BigQuery into Supabase.
+      # Runs BEFORE the aggregates so the cube is rebuilt from fresh categories in the same
+      # pass — otherwise a re-categorised product would wait an extra hour to appear.
+      #
+      # Incremental: it skips AWBs already synced (14.44 lakh of 14.73 lakh on the last run)
+      # and fetches only the new ones, so this adds ~1 minute, not a full 5.6M-row scan.
+      #
+      # continue-on-error: this workflow also refreshes inventory, P&L, ads and sales. A
+      # BigQuery outage should not cost all of that to avoid category data being one hour
+      # stale — and because the sync is incremental, the next run picks up whatever it
+      # missed, so nothing is lost. The step is marked failed in the Actions UI, and the
+      # guard below prints a loud line in the log, so a sync quietly broken for weeks is
+      # still visible rather than silent.
+      - name: Sync AWB dimensions from BigQuery
+        id: awb_sync
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/sync-awb-dims.mjs
+
+      - name: Flag AWB sync failure
+        if: steps.awb_sync.outcome == 'failure'
+        run: |
+          echo "::warning title=AWB dimension sync failed::awb_shipment_dims was NOT updated this run. Cost-by-product categories may be stale. The sync is incremental, so the next hourly run will catch up — but if this warning repeats, investigate."
+
       - name: Rebuild logistics cost aggregates if ledger changed
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
