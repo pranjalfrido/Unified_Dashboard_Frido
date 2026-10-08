@@ -567,7 +567,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
           const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
-          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs }
+          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs, facilities: facs }
         })
     } else if (effectiveLocations?.length) {
       skus = skus
