@@ -1501,7 +1501,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
         {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {/* Other Facilities hidden until backend integration is complete */}
+          <PillToggle
+            options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
+            value={facilityView}
+            onChange={v => {
+              setFacilityView(v)
+              setFilters(f => ({ ...f, facility: [] }))
+            }}
+          />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {asOf && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.3 }}>
@@ -1751,7 +1758,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       </>}
 
 </> : (
-        <OtherFacilitiesTable skus={data.skus} search='' locationOrder={data.filterOptions.locations} allFacilities={data.filterOptions.facilities} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '80px 24px', color: IC.t3 }}>
+          <span style={{ fontSize: 32 }}>🔧</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: IC.t2 }}>Other Facilities — Under Maintenance</span>
+          <span style={{ fontSize: 13, color: IC.t3 }}>This section is currently being updated. Please check back soon.</span>
+        </div>
       )}
       </div>
     </div>
