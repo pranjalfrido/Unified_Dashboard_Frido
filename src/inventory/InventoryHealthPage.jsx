@@ -1183,7 +1183,7 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   )
 }
 
-const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -1481,6 +1481,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
   if (!data) return null
 
+  // Users with only inventory:detail access see just the Inventory Detail table — KPIs and
+  // Warehouse Health are hidden. Full inventory access (or admin) sees everything.
+  const showDetailOnly = allowedTabs != null && !allowedTabs.includes('inventory') && allowedTabs.includes('inventory:detail')
+
   // The collapse-toggle button used to sit in normal document flow right after the fixed
   // sidebar, assuming it would land flush against the sidebar's edge — but a position:fixed
   // sibling doesn't participate in flow at all, so this button's actual position depended on
@@ -1525,7 +1529,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         {facilityView === 'regular' ? <>
 
         {/* KPI row — desktop: 7-col grid; mobile: swipe carousel */}
-        <KpiCarousel>
+        {!showDetailOnly && <KpiCarousel>
           <KpiTile compact label="Total Inventory" value={fmtNum(regularSummary.totalInvt)} unit="units" icon="/inv-icon-total.png" />
           <KpiTile compact label="RTD Inventory" value={fmtNum(regularSummary.rtdInvt)} unit="units" icon="/inv-icon-rtd.jpg" />
           <KpiTile compact label="RAW Inventory" value={fmtNum(regularSummary.rawInvt)} unit="units" icon="/inv-icon-raw.png" />
@@ -1533,10 +1537,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           <KpiTile compact label="Avg Sale (B2C)" value={fmtNum(data.summary.avgSaleB2C)} unit="units/day" icon="/inv-icon-avgsale.png" />
           <KpiTile compact label="Total Avg Sale" value={fmtNum(data.summary.totalAvgSale)} unit="units/day" icon="/inv-icon-totalavgsale.png" />
           <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="/inv-icon-doi.png" />
-        </KpiCarousel>
+        </KpiCarousel>}
 
         {/* Warehouse Health — desktop: GlassCard grid; mobile: swipe carousel */}
-        <WhCarousel locations={facilityScopedLocations || data.locations} filters={filters} facilityTypes={['Regular']} />
+        {!showDetailOnly && <WhCarousel locations={facilityScopedLocations || data.locations} filters={filters} facilityTypes={['Regular']} />}
 
         {/* Main inventory table */}
         <div className="inv-detail-card"><GlassCard
@@ -1759,7 +1763,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   )
 })
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate }) {
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
@@ -1767,7 +1771,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       data={data} filters={filters} setFilters={setFilters}
       sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
       facilityViewProp={facilityViewProp} setFacilityViewProp={setFacilityViewProp}
-      asOf={asOf} lastSalesDate={lastSalesDate}
+      asOf={asOf} lastSalesDate={lastSalesDate} allowedTabs={allowedTabs}
     />
   )
 }

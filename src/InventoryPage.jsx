@@ -360,7 +360,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
+export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -670,7 +670,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>

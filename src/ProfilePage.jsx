@@ -36,18 +36,29 @@ function PermGroup({ node, tabs, setTabs, isNested = false }) {
         </button>
       </div>
       {(() => {
-        const groups = node.children.filter(c => c.isGroup)
-        const leaves = node.children.filter(c => !c.isGroup)
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {leaves.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {leaves.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
+        // Collect consecutive leaves into chip rows, preserving original child order
+        const rows = []
+        let leafBatch = []
+        const flushLeaves = () => {
+          if (leafBatch.length > 0) {
+            const batch = leafBatch.splice(0)
+            rows.push(
+              <div key={`leaves-${batch[0].key}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {batch.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
               </div>
-            )}
-            {groups.map(child => <PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)}
-          </div>
-        )
+            )
+          }
+        }
+        for (const child of node.children) {
+          if (child.isGroup) {
+            flushLeaves()
+            rows.push(<PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)
+          } else {
+            leafBatch.push(child)
+          }
+        }
+        flushLeaves()
+        return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{rows}</div>
       })()}
     </div>
   )

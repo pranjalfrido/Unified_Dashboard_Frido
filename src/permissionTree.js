@@ -69,7 +69,12 @@ export const PERMISSION_TREE = [
   },
   {
     key: 'inventory', label: 'Inventory', isGroup: true, children: [
-      { key: 'inventory',       label: 'Health & Overview' },
+      {
+        key: 'inventory', label: 'Health & Overview', isGroup: true, children: [
+          { key: 'inventory',        label: 'Health & Overview' },
+          { key: 'inventory:detail', label: 'Inventory Detail' },
+        ],
+      },
       { key: 'inventory:sales', label: 'Sales & Allocation' },
     ],
   },

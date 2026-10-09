@@ -3329,7 +3329,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     if (i.id === 'ads') return hasAdsAccess(allowedTabs)
 if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
-    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
+    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
     return allowedTabs.includes(i.id)
   }) : allItems
   const dims = [
@@ -3355,7 +3355,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
-          const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
+          const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
           const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
           const hasBothInv = hasHealth && hasSales
           const subTabs = [
@@ -3498,7 +3498,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
             item.id === 'ads' ? hasAdsAccess(allowedTabs) :
             item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
             item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
-            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
             !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
@@ -18492,11 +18492,11 @@ const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sale
 const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
 const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
 const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
-const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:sales', 'customer', 'documents']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'documents']
 const permKeyToPage = {
   'logistics': 'logistics',
   'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
-  'inventory': 'inventory', 'inventory:sales': 'inventory',
+  'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory',
   ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
   ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
   ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
@@ -18611,7 +18611,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     : null
 
   const setPage = (p) => {
-    if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
+    if (p === 'inventory') goTo('inventory', (allowedTabs?.includes('inventory') || allowedTabs?.includes('inventory:detail')) ? 'health' : 'sales')
     else if (p === 'sales') goTo('sales', defaultSalesTab, 'overall')
     else if (p === 'pnl') goTo('pnl', defaultPnlTab)
     else if (p === 'ads') goTo('ads', defaultAdsPlatform)
@@ -18640,7 +18640,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // user with cost access is bounced straight back to their default page.
       page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
-      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
@@ -19189,9 +19189,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <CourierAllocationPage onBack={() => goTo('logistics-cost')} />
             </div>
           )}
-          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (
+          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
