@@ -291,6 +291,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .inv-detail-mobile-only { display: none; }
 .mob-only { display: none; }
 
+/* Inventory Detail table row hover — CSS-only, no JS re-renders */
+.inv-sku-row { cursor: pointer; }
+.inv-sku-row:hover { background: rgba(0,0,0,0.025) !important; }
+.inv-loc-row:hover { background: rgba(0,0,0,0.045) !important; }
+
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
    ══════════════════════════════════════════════ */

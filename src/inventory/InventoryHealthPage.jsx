@@ -1209,12 +1209,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 250)
-    return () => clearTimeout(t)
-  }, [searchInput])
+  const searchDebounceRef = useRef(null)
+  const handleSearchChange = useCallback(e => {
+    const val = e.target.value
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => setSearch(val), 250)
+  }, [])
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
 
@@ -1224,7 +1225,18 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const rafRef = useRef(null)
   const ROW_H = 34
   const OVERSCAN = 15
-  const useVirtual = false
+  const useVirtual = true
+  useEffect(() => {
+    const el = tableScrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      vScrollTopRef.current = el.scrollTop
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => setVScrollTop(el.scrollTop))
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -1553,7 +1565,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
                 onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} /></span>
-              <input placeholder="Search…" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+              <input placeholder="Search…" onChange={handleSearchChange}
                 className="inv-detail-search"
                 style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
               <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
@@ -1611,9 +1623,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
                     <tr onClick={() => toggleExpandedSku(s.skuKey)}
-                      style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34, contentVisibility: 'auto', containIntrinsicSize: '0 34px' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      className="inv-sku-row"
+                      style={{ borderBottom: `1px solid ${IC.border}`, height: 34, contentVisibility: 'auto', containIntrinsicSize: '0 34px' }}>
                       {colOrder.map(key => {
                         if (hiddenCols.has(key)) return <td key={key} style={{ padding: 0, width: 0, overflow: 'hidden' }} />
                         const def = COLUMN_DEFS[key]
@@ -1643,9 +1654,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                       </tr>
                     )}
                     {expandedSku === s.skuKey && activeLocations.map(l => (
-                      <tr key={s.skuKey + l.location} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 30 }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.045)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}>
+                      <tr key={s.skuKey + l.location} className="inv-loc-row" style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 30 }}>
                         {colOrder.map(key => {
                           if (hiddenCols.has(key)) return <td key={key} style={{ padding: 0, width: 0, overflow: 'hidden' }} />
                           const def = COLUMN_DEFS[key]
