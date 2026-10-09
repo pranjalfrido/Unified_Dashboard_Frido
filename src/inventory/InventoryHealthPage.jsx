@@ -1501,14 +1501,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
         {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <PillToggle
-            options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
-            value={facilityView}
-            onChange={v => {
-              setFacilityView(v)
-              setFilters(f => ({ ...f, facility: [] }))
-            }}
-          />
+          {/* Other Facilities hidden until backend integration is complete */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {asOf && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.3 }}>
