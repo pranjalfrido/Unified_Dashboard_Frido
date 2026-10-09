@@ -1705,6 +1705,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       </GlassCard></div>
 
       {/* Location-wise pivot table — hidden on mobile */}
+      {!showDetailOnly && <>
       <div className="inv-detail-desktop-only"><GlassCard title="Location-Wise Inventory & Avg Sale"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1754,6 +1755,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
       </div>
+      </>}
 
 </> : (
         <OtherFacilitiesTable skus={data.skus} search='' locationOrder={data.filterOptions.locations} allFacilities={data.filterOptions.facilities} />
