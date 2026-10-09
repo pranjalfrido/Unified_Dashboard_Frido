@@ -401,10 +401,6 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
   const onSort = key => setSort(prev => prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
   const [selectedFacilities, setSelectedFacilities] = useState([])
-  const headerScrollRef = useRef(null)
-  const bodyScrollRef = useRef(null)
-  const syncFromBody = e => { if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
-  const syncFromHeader = e => { if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
 
   const facilityOptions = useMemo(
     () => allFacilities.filter(f => f.facilityType === facilityType).sort((a, b) => a.facility.localeCompare(b.facility)),
@@ -539,9 +535,9 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
       {sortedRows.length === 0 ? (
         <div style={{ color: IC.t3, fontSize: 12 }}>No inventory at {selectedFacilities.length > 0 ? 'the selected store(s)' : `${facilityType} facilities`}.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${IC.border}`, borderRadius: 8, overflow: 'hidden' }}>
-          {/* Fixed header — scrolls horizontally in sync with body */}
-          <div ref={headerScrollRef} onScroll={syncFromHeader} style={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
+        <div style={{ border: `1px solid ${IC.border}`, borderRadius: 8, overflow: 'hidden' }}>
+          {/* Single scroll container — sticky thead + tfoot + sticky left columns all work natively */}
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
             <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
@@ -556,21 +552,12 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   {th('Total Invt', 'totalInvt')}
                 </tr>
                 <tr style={{ height: 1 }}>
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(0), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(1), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(2), zIndex: 3 }} />
                   <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
                 </tr>
               </thead>
-            </table>
-          </div>
-          {/* Scrollable body */}
-          <div ref={bodyScrollRef} onScroll={syncFromBody} style={{ overflowX: 'auto', overflowY: 'auto', height: 370 }}>
-            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
-                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
-              </colgroup>
               <tbody>
                 {sortedRows.map(r => (
                   <tr key={r.sku} style={{ borderBottom: `1px solid ${IC.border}`, height: 34 }}>
@@ -584,16 +571,10 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-          {/* Fixed footer total */}
-          <div ref={null} style={{ overflowX: 'hidden', borderTop: `1px solid ${IC.border}` }}>
-            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
-                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
-              </colgroup>
-              <tbody>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
+                <tr style={{ borderTop: `1px solid ${IC.border}`, height: 1 }}>
+                  <td colSpan={columns.length + 4} style={{ padding: 0, height: 1, background: IC.border }} />
+                </tr>
                 <tr style={{ background: IC.surface, height: 34 }}>
                   <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, background: IC.surface, ...frozenStyle(0), zIndex: 2 }}>Total</td>
                   <td style={{ padding: '7px 10px', background: IC.surface, ...frozenStyle(1), zIndex: 2 }} />
@@ -603,7 +584,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   ))}
                   <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(total)}</td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </div>
