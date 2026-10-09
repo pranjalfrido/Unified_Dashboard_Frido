@@ -596,7 +596,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
     setSaving(true)
     const tabsToSave = [...localTabs]
     if (user.is_admin) {
-      await supabase.from('user_profiles').update({ is_admin: false }).eq('user_id', user.user_id)
+      await adminCall('demote_user', session, { user_id: user.user_id })
     }
     const { error: delErr } = await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
     if (delErr) { console.error('delete error', delErr); showToast('Save failed'); setSaving(false); return }
