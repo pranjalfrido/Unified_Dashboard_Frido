@@ -1206,7 +1206,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const rafRef = useRef(null)
   const ROW_H = 34
   const OVERSCAN = 15
-  const useVirtual = true
+  const useVirtual = false
   useEffect(() => {
     const el = tableScrollRef.current
     if (!el) return
