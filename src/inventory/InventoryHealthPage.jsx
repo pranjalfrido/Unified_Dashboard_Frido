@@ -506,7 +506,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
         background: IC.surface,
         position: 'sticky', top: 0,
         zIndex: frozenIdx != null ? 4 : 2,
-        ...(frozenIdx != null ? frozenStyle(frozenIdx) : {}),
+        ...(frozenIdx != null ? { left: frozenLeft(frozenIdx) } : {}),
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
     </th>
@@ -552,10 +552,10 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   {th('Total Invt', 'totalInvt')}
                 </tr>
                 <tr style={{ height: 1 }}>
-                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(0), zIndex: 3 }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(1), zIndex: 3 }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', left: frozenLeft(2), zIndex: 3 }} />
-                  <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(0), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(1), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(2), zIndex: 3 }} />
+                  <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0 }} />
                 </tr>
               </thead>
               <tbody>
