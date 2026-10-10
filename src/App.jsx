@@ -2703,7 +2703,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
                 <div style={{ overflow: 'hidden', flex: 1, minHeight: 0 }}>
-                <ResponsiveContainer width="100%" height={248}>
+                <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -9023,11 +9023,11 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <Dropdown value={shTrendGroup} onChange={setShTrendGroup} options={GROUP_OPTS} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 200 : 220} minHeight={180}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height={isMob ? 200 : '100%'} minHeight={180}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
                   <defs>
                     <linearGradient id="shGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -10024,8 +10024,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     <Dropdown value={ovTrendGroup} onChange={setOvTrendGroup} options={GROUP_OPTS} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, width: isMob ? 66 : 82 }} />
                   </div>
                 }>
-                  <div style={isMob ? { margin: '0 -18px' } : {}}>
-                  <ResponsiveContainer width="100%" height={isMob ? 200 : 255} minHeight={180}>
+                  <div style={{ ...(isMob ? { margin: '0 -18px' } : {}) }}>
+                  <ResponsiveContainer width="100%" height={isMob ? 200 : 270} minHeight={180}>
                     <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 20, left: isMob ? 18 : 0 }}>
                       <defs>
                         <linearGradient id="amzTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -10104,9 +10104,57 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                 {/* boxHeight, not boxheight — JSX props are case-sensitive, so the lowercase
                     spelling was silently ignored and this donut fell back to its natural
                     height instead of matching the 325px trend card beside it. */}
-                {channelView !== 'vc'
+                {channelView === 'sc'
                   ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
-                  : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
+                  : (() => {
+                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
+                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
+                      const rows = (() => {
+                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
+                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
+                        if (channelView === 'vc') {
+                          return (amzVC.accounts || [])
+                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
+                            .sort((a, b) => b.rev - a.rev)
+                        }
+                        // 'all': SC FBA + SC MFN + each VC account
+                        const out = []
+                        if (showSC) {
+                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
+                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
+                        }
+                        if (showVC) {
+                          ;(amzVC.accounts || []).forEach((a, i) => {
+                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
+                          })
+                        }
+                        return out.sort((a, b) => b.rev - a.rev)
+                      })()
+                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
+                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+                      return (
+                        <Card fill title="Channel · Account Breakdown" note={chNote} style={{ height: 325 }}>
+                          {rows.length === 0
+                            ? <div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>No data</div>
+                            : <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 6, paddingRight: 10, overflowY: 'auto', height: '100%' }}>
+                                {rows.map(r => (
+                                  <div key={r.name}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>{r.name}</span>
+                                      <span style={{ fontSize: 11, color: C.t2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmt(r.rev)}</span>
+                                    </div>
+                                    <div style={{ height: 6, borderRadius: 3, background: C.border2, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: `${(r.rev / maxRev) * 100}%`, background: r.color, borderRadius: 3, transition: 'width 0.3s' }} />
+                                    </div>
+                                    <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(r.units)} units</div>
+                                  </div>
+                                ))}
+                              </div>
+                          }
+                        </Card>
+                      )
+                    })()
+                }
               </div>
             )
           })()}
@@ -10406,8 +10454,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
                   </div>
                 )}
               </div>}
-              <div style={{ flex: 1, minHeight: 0 }}>
-              <div style={isMob ? { margin: '0 -10px' } : {}}>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, minHeight: 0, ...(isMob ? { margin: '0 -10px' } : {}) }}>
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 16 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -12957,8 +13005,8 @@ function CredTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={crTrendGroup} onChange={setCrTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="crTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -13215,8 +13263,8 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={fcTrendGroup} onChange={setFcTrendGroup} options={fcGroupOpts} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="fcTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -13466,8 +13514,8 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={mnTrendGroup} onChange={setMnTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
@@ -13853,8 +13901,8 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
                 <Dropdown value={offTrendGroup} onChange={setOffTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="offTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
