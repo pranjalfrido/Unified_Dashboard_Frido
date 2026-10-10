@@ -254,16 +254,15 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
     if (!cached) return
-    // If cache has rawRows, always use it for client-side date filtering — never fall back to BQ.
-    // (Raw rows cover the full FY window; dates before cache start simply yield no data rows,
-    // which is correct. Avoids live BQ calls that time out on Vercel's 60s limit.)
-    if (cachedDataRef.current?.rawRows) {
+    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    // If cache has rawRows and selected range is within the cached window, use client-side filtering.
+    // If outside the cache window (e.g. prior FY), fall through to BQ API.
+    if (cachedDataRef.current?.rawRows && withinCache) {
       setData(cachedDataRef.current)
       return
     }
-    // No rawRows in cache — fall back to API only if date range is outside cached window
-    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
-    if (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current))) {
+    // No rawRows, or range is outside cache — fall back to API
+    if (!cachedDataRef.current?.rawRows && (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current)))) {
       if (cachedDataRef.current) setData(cachedDataRef.current)
       return
     }
@@ -289,8 +288,9 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       }
     }
     if (!cached) return // still on initial load
-    // If static file has rawRows, client-side filtering handles it instantly
-    if (cachedDataRef.current?.rawRows) return
+    // If static file has rawRows AND date is within cache window, client-side filtering handles it instantly
+    const withinCacheF = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    if (cachedDataRef.current?.rawRows && withinCacheF) return
     clearTimeout(filterTimerRef.current)
     filterTimerRef.current = setTimeout(() => fetchFromAPI(start, end), 600)
     return () => clearTimeout(filterTimerRef.current)
