@@ -663,7 +663,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <LoadingOverlay loading={active.loading && !active.data} label="Loading inventory" />
+        <LoadingOverlay loading={active.loading} label="Loading inventory" />
         {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
