@@ -557,11 +557,11 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const gradId = grossGradId || 'trendGrossGrad'
 
   return (
-    <Card title={title} style={boxHeight ? { minHeight: isMob ? 'auto' : boxHeight } : undefined} action={
+    <Card fill title={title} style={boxHeight ? { height: isMob ? 'auto' : boxHeight } : undefined} action={
       <Dropdown value={groupBy} onChange={setGroupBy} options={GROUP_OPTS} style={selStyle} />
     }>
-      <div style={isMob ? { margin: '0 -28px' } : {}}>
-      <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={220}>
+      <div style={{ height: '100%', ...(isMob ? { margin: '0 -28px' } : {}) }}>
+      <ResponsiveContainer width="100%" height={isMob ? 220 : 255} minHeight={220}>
         <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 44 : 20, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
