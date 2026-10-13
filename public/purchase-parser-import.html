@@ -301,8 +301,15 @@ function buildImport(sheet,m){
       if(diff){let big=0;lines.forEach((l,i)=>{if(l.usd>lines[big].usd)big=i;});vals[big]=r2(vals[big]+diff);}
     }
     inrTotal+=inv.inr||0;
+    // lineNo: the Nth occurrence of this exact (Voucher, Product, Vendor) combo within THIS
+    // invoice — same reasoning as the domestic parser (confirmed 2026-10-12): Tally can list the
+    // same product twice on one voucher (same vendor both times), so Voucher+Product+Vendor alone
+    // isn't a safe re-upload key. A real case of this was found in this very table (voucher
+    // YH-7732-8-1, "R & D Items - Imported" twice from the same vendor).
+    const lineSeen={};
     lines.forEach((l,i)=>{const x=vals[i]; if(x!==null) lineTotal+=x;
-      rows.push([inv.date,l.product,inv.vendor,inv.vtype,inv.vno,inv.ref,inv.gst,l.qty,l.uom,l.rate,l.usd!==null?r2(l.usd):null,x,roe?Math.round(roe*1e6)/1e6:null,(x!==null&&l.qty)?Math.round(x/l.qty*1e4)/1e4:null]);});
+      const lineKey=`${l.product}::${inv.vendor}`; const lineNo=(lineSeen[lineKey]||0)+1; lineSeen[lineKey]=lineNo;
+      rows.push([inv.date,l.product,inv.vendor,inv.vtype,inv.vno,inv.ref,inv.gst,l.qty,l.uom,l.rate,l.usd!==null?r2(l.usd):null,x,roe?Math.round(roe*1e6)/1e6:null,(x!==null&&l.qty)?Math.round(x/l.qty*1e4)/1e4:null,lineNo]);});
   }
   Object.entries(seen).filter(([,n])=>n>1).forEach(([v,n])=>checks.unshift(["error",`VoucherNo <code>${esc(v)}</code> appears on ${n} separate invoices in this export.`]));
   const match=Math.abs(inrTotal-lineTotal)<0.01&&!gone.size;
@@ -408,7 +415,7 @@ function render(res,label){
   const numCols=new Set(Object.keys(rep.fmts).map(Number).filter(i=>i>0));
   let h="<thead><tr>"+rep.cols.map((c,i)=>`<th class="${rep.calc.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
   for(const row of res.rows.slice(0,PREVIEW)){
-    h+="<tr>"+row.map((v,i)=>{
+    h+="<tr>"+row.slice(0,rep.cols.length).map((v,i)=>{
       let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=rep.fmts[i]==="0.0000"?Number(v).toFixed(4):rep.fmts[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
       return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
   }
@@ -419,7 +426,7 @@ function render(res,label){
 
 /* ---------- build xlsx ---------- */
 function buildWorkbook(res){
-  const rep=res.rep, aoa=[rep.cols,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])];
+  const rep=res.rep, aoa=[rep.cols,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1,rep.cols.length)])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(rep.fmts)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
   ws["!cols"]=rep.widths.map(w=>({wch:w}));
@@ -459,7 +466,7 @@ async function download(){
 /* Fallback: tab-separated copy that pastes straight into Excel as columns */
 function toTSV(res){
   const f=(v,i)=>{if(v===null||v===undefined) return ""; if(i===0&&v instanceof Date) return `${v.getDate()}-${v.toLocaleString("en-GB",{month:"short"})}-${String(v.getFullYear()).slice(2)}`; return String(v).replace(/[\t\r\n]+/g," ");};
-  return [res.rep.cols.join("\t"),...res.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+  return [res.rep.cols.join("\t"),...res.rows.map(r=>r.slice(0,res.rep.cols.length).map(f).join("\t"))].join("\r\n");
 }
 async function copyTSV(){
   const st=document.getElementById("dlstatus"), txt=toTSV(result);
@@ -510,11 +517,14 @@ saveBtn.addEventListener("click",async()=>{
       product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
       voucher_ref_no:r[5], gst:r[6], quantity:r[7], unit_of_measure:r[8],
       rate_usd:r[9], gross_total_usd:r[10], gross_total_rs:r[11],
-      roe:r[12], purchase_rate_per_qty_rs_exc_gst:r[13]
+      roe:r[12], purchase_rate_per_qty_rs_exc_gst:r[13], line_no:r[14]
     }));
     const CHUNK=500; let done=0;
     for(let i=0;i<rows.length;i+=CHUNK){
-      const {error}=await sb.from("purchase_ledger_import").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
+      // Key is (voucher_no, product_name, vendor_name, line_no) — confirmed 2026-10-12, NOT
+      // quantity, so re-uploading the same file with a correction cleanly replaces the row instead
+      // of inserting a duplicate alongside it.
+      const {error}=await sb.from("purchase_ledger_import").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,vendor_name,line_no"});
       if(error) throw error;
       done+=Math.min(CHUNK,rows.length-i);
       st.textContent=`Saving… ${done}/${rows.length} rows`;

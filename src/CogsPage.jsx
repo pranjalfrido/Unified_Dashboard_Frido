@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
-import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabase.js";
 import { C as BASE_C } from "./utils.js";
 
@@ -50,7 +50,7 @@ const fromDbRecord = (d) => ({
 
 const API = import.meta.env.VITE_API_URL || "";
 
-export default function CogsPage() {
+export default function CogsPage({ onBack }) {
   const [rows, setRows] = useState([blankRow()]);
   const [query, setQuery] = useState("");
   const [monthFilter, setMonthFilter] = useState("all");
@@ -502,6 +502,11 @@ export default function CogsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>
+          {onBack && (
+            <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.card, border: `1.5px solid ${C.accent}`, color: C.accent, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginBottom: 10 }}>
+              <ArrowLeft size={14} /> Back to Documents
+            </button>
+          )}
           <div style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>SKU-wise · month-wise</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.5 }}>COGS Tracker</div>
         </div>

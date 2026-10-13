@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { C } from './utils.js'
 
 const TABS = [
@@ -7,7 +8,7 @@ const TABS = [
   { id: 'packaging', label: 'Packaging',  src: '/purchase-parser-packaging.html' },
 ]
 
-export default function PurchaseLedgerPage() {
+export default function PurchaseLedgerPage({ onBack }) {
   const [tab, setTab] = useState('domestic')
   const current = TABS.find(t => t.id === tab)
 
@@ -15,6 +16,11 @@ export default function PurchaseLedgerPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px 32px 0' }}>
       {/* Header */}
       <div style={{ marginBottom: 16 }}>
+        {onBack && (
+          <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.card, border: `1.5px solid ${C.acc}`, color: C.acc, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginBottom: 10 }}>
+            <ArrowLeft size={14} /> Back to Documents
+          </button>
+        )}
         <div style={{ fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>
           Documents
         </div>
