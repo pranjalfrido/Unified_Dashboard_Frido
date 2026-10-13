@@ -3,6 +3,8 @@ import PnLChannelTab from './PnLChannelTab.jsx'
 import StorePnLTable from './StorePnLTable.jsx'
 import PriceSimulator from './PriceSimulator.jsx'
 import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
+import B2BCostingCalculator from './B2BCostingCalculator.jsx'
+import POApprovalChecker from './POApprovalChecker.jsx'
 import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 import { C } from '../utils.js'
 
@@ -12,6 +14,15 @@ import { C } from '../utils.js'
 const PNL_TOOLS = [
   { id: 'priceSimulator', label: 'Price Simulator' },
   { id: 'breakevenRoas', label: 'Breakeven ROAS' },
+]
+
+// Offline's own planning tool — a forward cost-plus pricing calculator (see
+// B2BCostingCalculator.jsx), not a what-if on an existing live price like D2C's Price Simulator,
+// since Offline has no tracked Listing Price/Discount to flex. Kept as its own single-item list
+// (not merged into PNL_TOOLS) since it's gated on activeTab === 'offline', not 'shopify'.
+const OFFLINE_TOOLS = [
+  { id: 'b2bCosting', label: 'B2B Costing Calculator' },
+  { id: 'poApproval', label: 'PO Approval Checker' },
 ]
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
@@ -109,7 +120,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // Which of the two planning tools (if any) is showing INSTEAD of the normal channel view —
   // null means "show the normal channel tab content". Independent of activeTab so switching back
   // just restores whichever channel was already selected.
-  const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas'
+  const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas' | 'b2bCosting' | 'poApproval'
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -491,6 +502,17 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     return out
   }, [data, offlineSub, sndRates])
+
+  // Per-SKU weight (constant, item-master value) used by offSndBySku above — re-derived here as
+  // its own small map so offlineProductList below can look up a SKU's weight without re-scanning
+  // data.offline.skuRows a second time per product.
+  const offlineSkuWeightGm = useMemo(() => {
+    const rows = data?.offline?.skuRows
+    if (!rows?.length) return {}
+    const out = {}
+    rows.forEach(r => { if (r.sku && !out[r.sku] && r.unitWeightGms) out[r.sku] = r.unitWeightGms })
+    return out
+  }, [data])
 
   // Amazon Seller Central S&D: real per-MasterSKU cost from the settlement report (see
   // amzSCSettlement in api/bq.js) — no rate-card estimate needed, unlike Shopify. Only
@@ -1506,6 +1528,51 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       adSpend: data?.pnlAdSpendMap?.[g.subCategory] ?? null,
     })).sort((a, b) => b.gross - a.gross)
   }, [d2cProductList, daysInRange, data])
+
+  // Product-level (SubCategory grain, same convention as d2cProductGroups above) rollup for the
+  // B2B Costing Calculator — built from data.offline.skuRows (ALL sub-channels combined,
+  // independent of the offlineSub toggle, since the calculator is a forward pricing tool for a
+  // product in general, not scoped to "what already sold through B2B vs Stockist this range").
+  // COGS/unit comes from the same cogsMap/estimateCogsPerUnit fallback every other per-SKU
+  // consumer in this file uses; Vol. Weight (kg) comes from offlineSkuWeightGm (item-master
+  // unitWeightGms, grams → kg). Offline has no Listing_Price/GST tracked per SKU (confirmed: no
+  // such columns in the offlineSKU query) and no RTO/CIR/Return/Cancel order-status concept (its
+  // "return" is a Credit Note, not a per-unit outcome rate) — so unlike d2cProductGroups, this
+  // list deliberately carries NO listingPrice/discount/returnRevRate/adSpend fields; the B2B
+  // Costing Calculator asks the user for Listing Price and GST% directly per product, matching
+  // the original B2B Costing Calculator spreadsheet's own manual-entry convention for those two.
+  const offlineProductGroups = useMemo(() => {
+    const rows = data?.offline?.skuRows
+    if (!rows?.length) return []
+    const bySubCat = {}
+    rows.forEach(r => {
+      if (!r.sku) return
+      const key = `${r.category}::${r.subCategory}`
+      if (!bySubCat[key]) bySubCat[key] = { key, name: r.subCategory, category: r.category, subCategory: r.subCategory, units: 0, gross: 0, excRev: 0, cogsTotal: 0, weightTotal: 0, weightKnownUnits: 0, variantCount: 0, skus: new Set() }
+      const g = bySubCat[key]
+      g.units += r.units || 0
+      g.gross += r.rev || 0
+      g.excRev += r.excRev || 0
+      const cogsEntry = cogsMap?.[r.sku]
+      const asp = r.units > 0 ? (r.rev || 0) / r.units : 0
+      const cogsPerUnit = (cogsEntry && cogsEntry.cogs != null) ? cogsEntry.cogs : estimateCogsPerUnit(asp)
+      g.cogsTotal += cogsPerUnit * (r.units || 0)
+      const weightGm = offlineSkuWeightGm[r.sku]
+      if (weightGm != null) { g.weightTotal += weightGm * (r.units || 0); g.weightKnownUnits += (r.units || 0) }
+      if (!g.skus.has(r.sku)) { g.skus.add(r.sku); g.variantCount += 1 }
+    })
+    return Object.values(bySubCat).map(g => ({
+      sku: g.key, // same convention as d2cProductGroups — reuses `sku` as the picker's lookup key
+      category: g.category, subCategory: g.subCategory, name: g.name,
+      units: g.units, gross: g.gross, excRev: g.excRev,
+      asp: g.units > 0 ? g.gross / g.units : 0,
+      cogsPerUnit: g.units > 0 ? g.cogsTotal / g.units : 0,
+      // kg, not grams — the B2B Costing Calculator's Vol. Weight field is in kg (matching the
+      // original spreadsheet), unlike D2C's weightGm (grams) convention elsewhere in this file.
+      weightKg: g.weightKnownUnits > 0 ? (g.weightTotal / g.weightKnownUnits) / 1000 : null,
+      variantCount: g.variantCount,
+    })).sort((a, b) => b.gross - a.gross)
+  }, [data, cogsMap, offlineSkuWeightGm])
   // Sourced from channelData's reconciled version (activeData.mobilityNetBySubCat), NOT the raw
   // data.shopify.mobilityNetBySubCat server payload — the raw version's SubCategory keys can
   // include names (e.g. a null-SubCategory row normalizing to 'Frido' server-side) that don't
@@ -1726,12 +1793,38 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             ))
           )}
           {activeTab === 'offline' && (
-            [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
-              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
+            <>
+              {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
+                <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                  {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                  <button onClick={() => { setActiveTool(null); setOfflineSub(opt.id) }} style={{ fontSize: 12, fontWeight: !activeTool && offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !activeTool && offlineSub === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
+                </div>
+              ))}
+              {/* Offline's own planning tool — same gold-brown pill treatment as D2C's tools,
+                  pushed to the right (marginLeft: auto) since it's a forward pricing calculator
+                  unrelated to the B2B/Stockist/MT GT/Misc sub-channel toggle to its left. */}
+              <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid ${C.border}`, gap: 4 }}>
+                {OFFLINE_TOOLS.map(tool => {
+                  const isActive = activeTool === tool.id
+                  return (
+                    <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
+                      className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
+                      {tool.id === 'b2bCosting' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                        </svg>
+                      )}
+                      {tool.label}
+                    </button>
+                  )
+                })}
               </div>
-            ))
+            </>
           )}
           {!['shopify', 'amazon', 'offline'].includes(activeTab) && (
             <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: C.t1, display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
@@ -1743,6 +1836,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           <PriceSimulator variantProducts={d2cProductList} productGroups={d2cProductGroups} />
         ) : activeTool === 'breakevenRoas' ? (
           <BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} />
+        ) : activeTool === 'b2bCosting' ? (
+          <B2BCostingCalculator productGroups={offlineProductGroups} />
+        ) : activeTool === 'poApproval' ? (
+          <POApprovalChecker productGroups={offlineProductGroups} />
         ) : (
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}
