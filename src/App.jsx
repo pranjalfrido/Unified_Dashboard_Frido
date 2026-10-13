@@ -18,6 +18,7 @@ import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
 import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
+import PackagingBomPage from './PackagingBomPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
@@ -4849,7 +4850,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
@@ -18457,6 +18458,12 @@ function DocumentsPage({ setPage }) {
       description: 'Upload domestic, import & packaging purchase data.',
       icon: '🧾',
     },
+    {
+      id: 'packaging-bom',
+      title: 'Packaging BOM',
+      description: 'Define which packaging materials go into each product.',
+      icon: '📦',
+    },
   ]
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
@@ -18636,7 +18643,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
-      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger') ? (!allowedTabs || allowedTabs.includes('documents')) :
+      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -19106,7 +19113,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -19168,17 +19175,22 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'cogs' && (
             <div className="page-scroll">
-              <CogsPage />
+              <CogsPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
-              <LogisticsLedgerPage />
+              <LogisticsLedgerPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'purchase-ledger' && (
             <div className="page-scroll">
-              <PurchaseLedgerPage />
+              <PurchaseLedgerPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'packaging-bom' && (
+            <div className="page-scroll">
+              <PackagingBomPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'profile' && (
