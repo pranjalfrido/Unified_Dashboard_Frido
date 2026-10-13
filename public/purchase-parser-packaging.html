@@ -263,12 +263,19 @@ function build(x){
     if(iv.unassigned){unassigned+=iv.unassigned; missing.push(`${iv.vno} (₹${inr(iv.unassigned)})`);}
     const sumLines=iv.lines.reduce((a,l)=>a+(l.v||0),0);
     if(!iv.unassigned&&Math.abs(sumLines-iv.taxable)>1) diffs.push(`${iv.vno} (lines ₹${inr(sumLines)} vs ledger ₹${inr(iv.taxable)})`);
+    // lineNo: the Nth occurrence of this exact (Voucher, Product, Vendor) combo within THIS
+    // invoice — same reasoning as the domestic/import parsers (confirmed 2026-10-12): Tally can
+    // list the same product twice on one voucher (same vendor both times), so Voucher+Product+
+    // Vendor alone isn't a safe re-upload key.
+    const lineSeen=new Map();
     for(const l of iv.lines){
       const e=l.v!==null?r2(l.v):null;
       if(e!==null) exc+=e;
       if(l.fromValue){fromValueLines++; fromValueInv.add(iv.vno);}
+      const lineKey=`${l.product}::${iv.vendor}`;
+      const lineNo=(lineSeen.get(lineKey)||0)+1; lineSeen.set(lineKey,lineNo);
       rows.push([iv.date,l.product,iv.vendor,iv.vtype,iv.vno,iv.ref,l.qty!==null?l.qty*iv.sign:null,l.uom,l.rate,e,
-        (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null]);
+        (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null,lineNo]);
     }
   }
   // checks
@@ -314,7 +321,7 @@ function render(res,label,x){
   document.getElementById("extras").innerHTML=x.extras.length?`<b>Ignored</b>: ${x.extras.map(esc).join(", ")}`:"";
   const numCols=new Set(Object.keys(FMTS).map(Number).filter(i=>i>0));
   let h="<thead><tr>"+COLS.map((c,i)=>`<th class="${CALC.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
-  for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
+  for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.slice(0,COLS.length).map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
     return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
   document.getElementById("tbl").innerHTML=h+"</tbody>";
   document.getElementById("tablemeta").textContent=res.rows.length>PREVIEW?`first ${PREVIEW} of ${res.rows.length} lines`:`${res.rows.length} lines`;
@@ -323,7 +330,7 @@ function render(res,label,x){
 
 /* ---------- xlsx / download / copy ---------- */
 function buildWorkbook(res){
-  const aoa=[COLS,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])], ws=XLSX.utils.aoa_to_sheet(aoa);
+  const aoa=[COLS,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1,COLS.length)])], ws=XLSX.utils.aoa_to_sheet(aoa);
   for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(FMTS)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
   ws["!cols"]=WIDTHS.map(w=>({wch:w})); ws["!autofilter"]={ref:ws["!ref"]};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
@@ -349,7 +356,7 @@ async function download(){
 async function copyTSV(){
   const st=document.getElementById("dlstatus");
   const f=(v,i)=>v===null||v===undefined?"":i===0&&v instanceof Date?fmtDate(v):String(v).replace(/[\t\r\n]+/g," ");
-  const txt=[COLS.join("\t"),...result.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+  const txt=[COLS.join("\t"),...result.rows.map(r=>r.slice(0,COLS.length).map(f).join("\t"))].join("\r\n");
   try{await navigator.clipboard.writeText(txt); st.className="status"; st.textContent=`Copied ${result.rows.length} lines with headers. Paste into cell A1 of a blank sheet.`;}
   catch(e){const ta=document.getElementById("tsv"); ta.hidden=false; ta.value=txt; ta.focus(); ta.select(); st.className="status err"; st.textContent="Copy was blocked here. The data is selected in the box below: press Ctrl+C (Cmd+C on Mac).";}
 }
@@ -392,11 +399,14 @@ saveBtn.addEventListener("click",async()=>{
       product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
       voucher_ref_no:r[5], quantity:r[6], unit_of_measure:r[7], rate:r[8],
       line_item_gross_total_exc_gst:r[9],
-      purchase_rate_per_qty_rs_exc_gst:r[10]
+      purchase_rate_per_qty_rs_exc_gst:r[10],
+      line_no:r[11]
     }));
     const CHUNK=500; let done=0;
     for(let i=0;i<rows.length;i+=CHUNK){
-      const {error}=await sb.from("purchase_ledger_packaging").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
+      // Key is (voucher_no, product_name, vendor_name, line_no) — confirmed 2026-10-12, NOT
+      // quantity, so re-uploading the same file with a correction cleanly replaces the row.
+      const {error}=await sb.from("purchase_ledger_packaging").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,vendor_name,line_no"});
       if(error) throw error;
       done+=Math.min(CHUNK,rows.length-i);
       st.textContent=`Saving… ${done}/${rows.length} rows`;
