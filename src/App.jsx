@@ -9932,7 +9932,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             if (selectedCat) {
               vcDailyCatFiltered?.forEach(d => { if (!vcDailyMap[d.date]) vcDailyMap[d.date] = { orderedRev: 0, orderedUnits: 0 }; vcDailyMap[d.date].orderedRev += d.rev; vcDailyMap[d.date].orderedUnits += d.units })
             } else {
-              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.orderedRev || 0, orderedUnits: d.orderedUnits || 0 } })
+              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.estimated ? 0 : (d.orderedRev || 0), orderedUnits: d.estimated ? 0 : (d.orderedUnits || 0) } })
             }
             const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRevRaw) / scTotalRev : 0
             const returnRate = scTotalRev > 0 ? (amzSC.netCalc?.returnRev || 0) / scTotalRev : 0
