@@ -282,33 +282,174 @@ GRANT SELECT ON public.item_master TO authenticated;
 --    session persistence), so a user already signed into the dashboard in that browser still
 --    works — this only blocks requests with no valid session at all.
 --
---    line_no / re-upload key — also confirmed 2026-10-12: the original unique key was
---    (voucher_no, product_name, quantity), which breaks in two ways. (1) Correcting a Quantity or
---    Rate on re-upload changes the key, so the corrected row gets INSERTED alongside the old wrong
---    one instead of replacing it. (2) Tally can legitimately list the same product twice on one
---    voucher from the same vendor (e.g. a price-revision line) — a real case of this was found in
---    purchase_ledger_import (voucher YH-7732-8-1, "R & D Items - Imported" twice). line_no is the
---    Nth occurrence of (Product, Vendor) within one voucher, computed by each parser HTML in file
---    order; the key is now (voucher_no, product_name, vendor_name, line_no) — a correction to
---    Quantity/Rate/Date/anything else keeps the same line_no and cleanly replaces the row, while
---    two genuinely different lines for the same product still get distinct keys.
-ALTER TABLE public.purchase_ledger_domestic ADD COLUMN IF NOT EXISTS line_no INTEGER NOT NULL DEFAULT 1;
+--    Re-upload safety — history of attempts, confirmed 2026-10-12 through 2026-10-14, each one
+--    found broken by the next: (1) key = (voucher_no, product_name, quantity) — broke when a
+--    Quantity/Rate correction changed the key, inserting a duplicate instead of replacing. (2) key
+--    + line_no (Nth occurrence of Product+Vendor per voucher) — broke on a NULL vendor_name
+--    (Postgres never treats NULL = NULL, so two NULL-vendor rows both passed the constraint; found
+--    4 real duplicate pairs). (3) tried a UNIQUE INDEX on COALESCE(vendor_name,'') to fix that —
+--    WRONG, PostgREST's upsert onConflict can only target a plain column list, never an expression,
+--    so this broke every Save-to-Supabase button outright. (4) normalized vendor_name/ledger_name
+--    to '' and went back to a plain constraint — fixed the NULL issue, but then found a much bigger
+--    one: the exact same file, re-uploaded a few hours apart, produced ~5,600 duplicate rows in
+--    purchase_ledger_domestic because Tally's own export reformats product_name spacing/punctuation
+--    between two runs of the identical data ("Olive Green-6UK" vs "Olive Green - 6UK" for the same
+--    real line). (5) tried keying on line POSITION within the voucher instead of product_name text
+--    — also WRONG: verified directly that line order is NOT stable across two exports either
+--    (1,071 of 6,630 position-pairs and 466 of 1,288 shared vouchers differed between the two
+--    uploads of the same file). (6) tried Quantity+Rate as the key — also WRONG: 44% of rows in a
+--    single clean upload share Quantity+Rate with a sibling line (common for footwear SKUs sold in
+--    round pack sizes across many size variants at one rate), so this collided constantly even
+--    within one real upload, let alone across two.
+--
+--    Conclusion: no per-line key survives Tally's own export inconsistency. The real, stable fact
+--    is the VOUCHER itself — verified directly: (date, voucher_type, voucher_no) uniquely
+--    identifies one real invoice with zero exceptions (0 cases of >1 vendor for the same key across
+--    2,255 distinct vouchers checked). So re-upload safety is now handled procedurally, not via a
+--    DB uniqueness constraint at all: each upload DELETES every existing row for every voucher it
+--    contains, then INSERTS that upload's lines fresh — via the replace_voucher_lines_*() functions
+--    below, each a single Postgres function call (one implicit transaction), so a crash mid-upload
+--    never leaves a voucher half-deleted; vouchers not yet processed keep their original data.
+--    product_name and line_no remain as plain descriptive/display fields — no uniqueness meaning.
+UPDATE public.purchase_ledger_domestic SET vendor_name = '' WHERE vendor_name IS NULL;
+UPDATE public.purchase_ledger_import SET vendor_name = '' WHERE vendor_name IS NULL;
+UPDATE public.purchase_ledger_import SET ledger_name = '' WHERE ledger_name IS NULL;
+UPDATE public.purchase_ledger_packaging SET vendor_name = '' WHERE vendor_name IS NULL;
+
+ALTER TABLE public.purchase_ledger_domestic ADD COLUMN IF NOT EXISTS line_no INTEGER;
 ALTER TABLE public.purchase_ledger_domestic DROP CONSTRAINT IF EXISTS purchase_ledger_domestic_unique;
 ALTER TABLE public.purchase_ledger_domestic DROP CONSTRAINT IF EXISTS purchase_ledger_domestic_voucher_product_vendor_line_key;
-ALTER TABLE public.purchase_ledger_domestic ADD CONSTRAINT purchase_ledger_domestic_voucher_product_vendor_line_key
-  UNIQUE (voucher_no, product_name, vendor_name, line_no);
+DROP INDEX IF EXISTS purchase_ledger_domestic_voucher_product_vendor_line_idx;
+CREATE INDEX IF NOT EXISTS purchase_ledger_domestic_voucher_key_idx ON public.purchase_ledger_domestic (date, voucher_type, voucher_no);
 
-ALTER TABLE public.purchase_ledger_import ADD COLUMN IF NOT EXISTS line_no INTEGER NOT NULL DEFAULT 1;
+-- ledger_name: which specific ledger a row came from (e.g. "CHA Charges", "Cess on Import",
+-- "Import of Goods") — this table pools Import of Goods together with every Cost ledger type
+-- (Custom Duty, SWS, CAIDC, Cess, CHA, Freight — all via the same "ledger" report path in
+-- public/purchase-parser-import.html); without this column nothing distinguished one cost ledger
+-- from another, only that a row was SOME cost ledger (quantity IS NULL). Since the same Voucher No.
+-- can legitimately carry separate Cost-ledger blocks (e.g. both CHA and Freight booked on one
+-- bill), the voucher-replace key for this table also includes ledger_name so uploading one ledger's
+-- file never wipes out another ledger's rows for the same voucher.
+ALTER TABLE public.purchase_ledger_import ADD COLUMN IF NOT EXISTS line_no INTEGER;
+ALTER TABLE public.purchase_ledger_import ADD COLUMN IF NOT EXISTS ledger_name TEXT;
 ALTER TABLE public.purchase_ledger_import DROP CONSTRAINT IF EXISTS purchase_ledger_import_unique;
 ALTER TABLE public.purchase_ledger_import DROP CONSTRAINT IF EXISTS purchase_ledger_import_voucher_product_vendor_line_key;
-ALTER TABLE public.purchase_ledger_import ADD CONSTRAINT purchase_ledger_import_voucher_product_vendor_line_key
-  UNIQUE (voucher_no, product_name, vendor_name, line_no);
+ALTER TABLE public.purchase_ledger_import DROP CONSTRAINT IF EXISTS purchase_ledger_import_voucher_product_vendor_line_ledger_key;
+DROP INDEX IF EXISTS purchase_ledger_import_voucher_product_vendor_line_ledger_idx;
+CREATE INDEX IF NOT EXISTS purchase_ledger_import_voucher_key_idx ON public.purchase_ledger_import (date, voucher_type, voucher_no);
 
-ALTER TABLE public.purchase_ledger_packaging ADD COLUMN IF NOT EXISTS line_no INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.purchase_ledger_packaging ADD COLUMN IF NOT EXISTS line_no INTEGER;
 ALTER TABLE public.purchase_ledger_packaging DROP CONSTRAINT IF EXISTS purchase_ledger_packaging_unique;
 ALTER TABLE public.purchase_ledger_packaging DROP CONSTRAINT IF EXISTS purchase_ledger_packaging_voucher_product_vendor_line_key;
-ALTER TABLE public.purchase_ledger_packaging ADD CONSTRAINT purchase_ledger_packaging_voucher_product_vendor_line_key
-  UNIQUE (voucher_no, product_name, vendor_name, line_no);
+DROP INDEX IF EXISTS purchase_ledger_packaging_voucher_product_vendor_line_idx;
+CREATE INDEX IF NOT EXISTS purchase_ledger_packaging_voucher_key_idx ON public.purchase_ledger_packaging (date, voucher_type, voucher_no);
+
+-- replace_voucher_lines_*(): delete every existing row for one voucher, then insert the upload's
+-- new lines for that same voucher — all inside one function call (one implicit Postgres
+-- transaction), so a page crash/network drop mid-upload never leaves a voucher half-deleted.
+-- SECURITY DEFINER (confirmed 2026-10-14): the parser HTML pages have no login — they always call
+-- Supabase with the plain anon key — but the table's RLS policies and grants only ever covered
+-- `authenticated`, so with SECURITY INVOKER every save/read failed outright ("permission denied
+-- for table ..."). Fix: run these three functions as their owner (bypassing RLS) and grant EXECUTE
+-- to anon, while leaving direct table grants/RLS as authenticated-only — so anon can replace one
+-- voucher's lines through this function's exact shape, but cannot read/write the table directly.
+CREATE OR REPLACE FUNCTION public.replace_voucher_lines_domestic(
+  p_date DATE, p_voucher_type TEXT, p_voucher_no TEXT, p_rows JSONB
+) RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  DELETE FROM public.purchase_ledger_domestic
+  WHERE date = p_date AND voucher_type = p_voucher_type AND voucher_no = p_voucher_no;
+
+  INSERT INTO public.purchase_ledger_domestic (
+    date, product_name, vendor_name, voucher_type, voucher_no, voucher_ref_no,
+    quantity, unit_of_measure, rate, line_item_gross_total_exc_gst,
+    purchase_rate_per_qty_rs_exc_gst, line_no
+  )
+  SELECT
+    (r->>'date')::DATE, r->>'product_name', r->>'vendor_name', r->>'voucher_type', r->>'voucher_no',
+    r->>'voucher_ref_no', (r->>'quantity')::NUMERIC, r->>'unit_of_measure', (r->>'rate')::NUMERIC,
+    (r->>'line_item_gross_total_exc_gst')::NUMERIC, (r->>'purchase_rate_per_qty_rs_exc_gst')::NUMERIC,
+    (r->>'line_no')::INTEGER
+  FROM jsonb_array_elements(p_rows) AS r;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.replace_voucher_lines_packaging(
+  p_date DATE, p_voucher_type TEXT, p_voucher_no TEXT, p_rows JSONB
+) RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  DELETE FROM public.purchase_ledger_packaging
+  WHERE date = p_date AND voucher_type = p_voucher_type AND voucher_no = p_voucher_no;
+
+  INSERT INTO public.purchase_ledger_packaging (
+    date, product_name, vendor_name, voucher_type, voucher_no, voucher_ref_no,
+    quantity, unit_of_measure, rate, line_item_gross_total_exc_gst,
+    purchase_rate_per_qty_rs_exc_gst, line_no
+  )
+  SELECT
+    (r->>'date')::DATE, r->>'product_name', r->>'vendor_name', r->>'voucher_type', r->>'voucher_no',
+    r->>'voucher_ref_no', (r->>'quantity')::NUMERIC, r->>'unit_of_measure', (r->>'rate')::NUMERIC,
+    (r->>'line_item_gross_total_exc_gst')::NUMERIC, (r->>'purchase_rate_per_qty_rs_exc_gst')::NUMERIC,
+    (r->>'line_no')::INTEGER
+  FROM jsonb_array_elements(p_rows) AS r;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+-- 4-argument version: the voucher-replace key here also includes ledger_name (see comment above
+-- the column definitions) since the same Voucher No. can carry separate Cost-ledger blocks.
+CREATE OR REPLACE FUNCTION public.replace_voucher_lines_import(
+  p_date DATE, p_voucher_type TEXT, p_voucher_no TEXT, p_ledger_name TEXT, p_rows JSONB
+) RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  DELETE FROM public.purchase_ledger_import
+  WHERE date = p_date AND voucher_type = p_voucher_type AND voucher_no = p_voucher_no
+    AND COALESCE(ledger_name, '') = COALESCE(p_ledger_name, '');
+
+  INSERT INTO public.purchase_ledger_import (
+    date, product_name, vendor_name, voucher_type, voucher_no, voucher_ref_no, gst,
+    quantity, unit_of_measure, rate_usd, gross_total_usd, gross_total_rs, roe,
+    purchase_rate_per_qty_rs_exc_gst, line_no, ledger_name
+  )
+  SELECT
+    (r->>'date')::DATE, r->>'product_name', r->>'vendor_name', r->>'voucher_type', r->>'voucher_no',
+    r->>'voucher_ref_no', r->>'gst', (r->>'quantity')::NUMERIC, r->>'unit_of_measure',
+    (r->>'rate_usd')::NUMERIC, (r->>'gross_total_usd')::NUMERIC, (r->>'gross_total_rs')::NUMERIC,
+    (r->>'roe')::NUMERIC, (r->>'purchase_rate_per_qty_rs_exc_gst')::NUMERIC,
+    (r->>'line_no')::INTEGER, r->>'ledger_name'
+  FROM jsonb_array_elements(p_rows) AS r;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.replace_voucher_lines_domestic(DATE,TEXT,TEXT,JSONB) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.replace_voucher_lines_packaging(DATE,TEXT,TEXT,JSONB) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.replace_voucher_lines_import(DATE,TEXT,TEXT,TEXT,JSONB) TO authenticated, anon;
 
 DROP POLICY IF EXISTS "allow all" ON public.purchase_ledger_domestic;
 DROP POLICY IF EXISTS "Authenticated users can read purchase_ledger_domestic" ON public.purchase_ledger_domestic;
@@ -344,3 +485,69 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.purchase_ledger_packaging TO auth
 -- Replace the UUID with your actual user ID from Supabase → Authentication → Users
 -- INSERT INTO public.user_profiles (user_id, name, email, is_admin, is_active)
 -- VALUES ('YOUR-USER-UUID-HERE', 'Pranjal Tripati', 'pranjal.t@myfrido.com', true, true);
+
+-- 11. tally_sku_mapping — persists the Tally Product Name -> SKU Code mapping built 2026-10-14
+--     (previously only an Excel export). Join path confirmed: tally_product_name matches
+--     productid_sku_mapping.productid where channelname='Tally' (that column holds the raw Tally
+--     product name text for Tally rows, not a numeric ID like other channels), which maps to
+--     masterskucode, which is sku_master.Product_Code (also exposed as item_master.Product_Code in
+--     Supabase). Deliberately a SEPARATE table from cogs_ledger — cogs_ledger stays the manual-
+--     entry table exactly as-is; this table is the input the COGS CALCULATION reads from, kept
+--     independent so recomputing/re-reviewing the mapping never touches manually-typed COGS rows.
+--     confidence/match_source/flag mirror the verification work done when this mapping was first
+--     built (mapping-sheet primary, sku_master fallback, size/category/collision re-checks) — kept
+--     here so a stale or shaky mapping can be filtered out of the COGS calc without re-deriving it.
+CREATE TABLE IF NOT EXISTS public.tally_sku_mapping (
+  tally_product_name   TEXT PRIMARY KEY,
+  product_code         TEXT,            -- sku_master.Product_Code / item_master.Product_Code; NULL = confirmed no match
+  matched_sku_name     TEXT,            -- sku_master.Name at match time, for display/audit only
+  confidence           TEXT NOT NULL,   -- 'high' | 'medium' | 'low' | 'needs_review' | 'conflict' | 'unverifiable' | 'no_match'
+  match_source         TEXT,            -- 'mapping_sheet' | 'sku_master_fallback' | 'human_rule_*' | etc.
+  flag                 TEXT,            -- human-readable note on why this needs review, if applicable
+  is_cost_ledger_only  BOOLEAN DEFAULT false,  -- name only ever seen in Import Cost-ledger rows (CHA/Freight/Duty/…), no separate goods line
+  updated_at           TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.tally_sku_mapping ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authenticated users can read tally_sku_mapping" ON public.tally_sku_mapping;
+CREATE POLICY "Authenticated users can read tally_sku_mapping" ON public.tally_sku_mapping
+  FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Authenticated users can write tally_sku_mapping" ON public.tally_sku_mapping;
+CREATE POLICY "Authenticated users can write tally_sku_mapping" ON public.tally_sku_mapping
+  FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tally_sku_mapping TO authenticated;
+
+-- 12. cogs_calculated — automatically derived COGS per (product_code, month), confirmed design
+--     2026-10-15: product_cost = weighted-average purchase rate (Σ qty×rate / Σ qty) across that
+--     SKU's Domestic + Import "Import of Goods" purchase lines in that month, via tally_sku_mapping;
+--     if a SKU had no purchase in a given month, the LAST KNOWN weighted-average cost is carried
+--     forward (confirmed: inventory bought in an earlier month is still being sold later, so the
+--     cost shouldn't go blank just because nothing was purchased that exact month).
+--     packaging_cost = Σ(packaging_bom.qty_per_unit × COALESCE(cost_override, packaging_sku_master.
+--     cost_per_unit)) for that product_code's BOM — confirmed 2026-10-15 to use packaging's CURRENT
+--     cost flat across every month, since packaging_bom/packaging_sku_master have no month/effective
+--     -date dimension yet (unlike the purchase ledger, which is naturally dated) — revisit once
+--     packaging cost history starts being tracked.
+--     Deliberately separate from cogs_ledger (the pre-existing manual-entry table, left untouched)
+--     per 2026-10-15 decision: at read time, callers should use cogs_calculated first and fall back
+--     to cogs_ledger only where no calculated row exists for that (SKU, month).
+CREATE TABLE IF NOT EXISTS public.cogs_calculated (
+  product_code       TEXT NOT NULL,
+  month              TEXT NOT NULL,  -- YYYY-MM
+  product_cost       NUMERIC,        -- weighted-avg purchase rate for the month (or carried forward)
+  product_cost_month TEXT,           -- the month this product_cost actually came from, when carried forward (NULL = this month had a real purchase)
+  packaging_cost     NUMERIC,        -- current packaging BOM cost (flat across months, see note above)
+  other_charges      NUMERIC DEFAULT 0,  -- placeholder for any additional per-unit charge, not yet defined
+  cogs               NUMERIC,        -- product_cost + packaging_cost + other_charges
+  computed_at        TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (product_code, month)
+);
+
+ALTER TABLE public.cogs_calculated ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authenticated users can read cogs_calculated" ON public.cogs_calculated;
+CREATE POLICY "Authenticated users can read cogs_calculated" ON public.cogs_calculated
+  FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Authenticated users can write cogs_calculated" ON public.cogs_calculated;
+CREATE POLICY "Authenticated users can write cogs_calculated" ON public.cogs_calculated
+  FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.cogs_calculated TO authenticated;
