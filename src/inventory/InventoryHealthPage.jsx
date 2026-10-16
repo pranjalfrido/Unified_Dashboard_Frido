@@ -1499,6 +1499,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
+        {/* Under Maintenance banner */}
+        <div style={{ width: '100%', background: 'linear-gradient(90deg, #f59e0b22, #f59e0b11)', border: '1px solid #f59e0b55', borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 16 }}>🚧</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b', letterSpacing: 0.2 }}>Under Maintenance</span>
+          <span style={{ fontSize: 12, color: '#f59e0b99', marginLeft: 4 }}>— Some data may be temporarily unavailable. We'll be back shortly.</span>
+        </div>
+
         {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <PillToggle
