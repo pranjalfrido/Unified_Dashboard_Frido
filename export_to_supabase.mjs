@@ -30,8 +30,12 @@ async function run() {
       CREATE TABLE IF NOT EXISTS item_master (
         product_code TEXT PRIMARY KEY,
         category_name TEXT, sub_category TEXT, lead_time TEXT,
-        product_source TEXT, sku_first_sales_date TEXT, type TEXT
+        product_source TEXT, sku_first_sales_date TEXT, type TEXT,
+        name TEXT
       )`)
+    // name: sku_master.Name — added 2026-10-15 so Tally-product-name -> SKU joins (via sku_mapping)
+    // can also show the product's real name, not just category/sub_category.
+    await db.query(`ALTER TABLE item_master ADD COLUMN IF NOT EXISTS name TEXT`)
     await db.query(`
       CREATE TABLE IF NOT EXISTS sku_mapping (
         productid TEXT PRIMARY KEY, masterskucode TEXT
@@ -91,7 +95,7 @@ async function run() {
       [itemRows], [skuRows], [invRows], [salesRows], [last90Rows], [shopifyRows],
       [facilityRows], [regionRows], [channelRows], [packagingSkuRows],
     ] = await Promise.all([
-      bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
+      bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type, Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
       bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')` }),
       bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt, RawBlockedInvt FROM \`frido-429506.production.shelfwise_inventory_corrected\`` }),
       bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\`` }),
@@ -104,8 +108,8 @@ async function run() {
     ])
     console.log(`Fetched: item_master=${itemRows.length}, sku_mapping=${skuRows.length}, inv_snapshot=${invRows.length}, sales_window=${salesRows.length}, sales_90d=${last90Rows.length}, shopify=${shopifyRows.length}, facility_master=${facilityRows.length}, state_region=${regionRows.length}, channel_desc=${channelRows.length}, packaging_sku_master=${packagingSkuRows.length}`)
 
-    await bulkLoad(db, 'item_master', itemRows, ['a','b','c','d','e','f','g'],
-      r => [r.Product_Code||null, r.Category_Name||null, r.Sub_category||null, String(r.Lead_Time??''), r.Product_Source||null, r.SKU_First_Sales_Date||null, r.Type||null])
+    await bulkLoad(db, 'item_master', itemRows, ['a','b','c','d','e','f','g','h'],
+      r => [r.Product_Code||null, r.Category_Name||null, r.Sub_category||null, String(r.Lead_Time??''), r.Product_Source||null, r.SKU_First_Sales_Date||null, r.Type||null, r.Name||null])
 
     await bulkLoad(db, 'sku_mapping', skuRows, ['a','b'],
       r => [r.productid||null, r.masterskucode||null])
