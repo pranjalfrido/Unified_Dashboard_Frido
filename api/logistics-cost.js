@@ -118,9 +118,20 @@ async function query(pool, sql, params) {
   for (let attempt = 0; ; attempt++) {
     try {
       const client = await pool.connect()
+      // pool.on('error') only covers IDLE clients. Once a client is checked out, a
+      // dropped connection emits 'error' on the client itself, and with no listener
+      // Node treats it as an unhandled EventEmitter error and kills the process —
+      // which is exactly how the API server died repeatedly. The catch below already
+      // knows how to retry ECONNRESET; it just never got the chance to run.
+      //
+      // Attached per checkout and removed in the finally, so a long-lived pooled
+      // client does not accumulate one listener per query.
+      const onErr = e => console.error('[logistics-cost client]', e.message)
+      client.on('error', onErr)
       try {
         return await client.query(sql, params)
       } finally {
+        client.removeListener('error', onErr)
         client.release()
       }
     } catch (e) {
@@ -147,8 +158,18 @@ const MAX_PLAUSIBLE_PARCEL_KG = 500
 // <= 0.5, not < 0.5: a shipment of exactly 0.5 kg belongs in the 0.5 slab. With a
 // strict <, CEIL(0.5) promotes it to the 1 kg slab, which over-states the billable
 // slab for a large share of parcels (173,220 Bluedart rows sit at exactly 0.5 kg).
-const SLAB_SQL = `CASE WHEN dw > 0 AND dw <= 0.5 THEN 0.5
-                       WHEN dw > 0 THEN CEIL(dw)
+//
+// Derived from cw (charged_weight_courier), NOT dw. The slab is a BILLING bracket: it is
+// the bracket the courier actually invoiced, which follows the weight the courier
+// charged. Grouping on dw answered a different question — "what slab should we have been
+// billed at" — so the Weight slab detail card reported the slab mix of our declared
+// weights while labelling the money as billed spend. 23.3% of August shipments sit in a
+// different slab under the two bases, so the two never reconciled.
+//
+// This also brings the card into line with the exactSlab filter (see below) and with
+// public.lc_slab_costs, both of which were already cw-based.
+const SLAB_SQL = `CASE WHEN cw > 0 AND cw <= 0.5 THEN 0.5
+                       WHEN cw > 0 THEN CEIL(cw)
                        ELSE NULL END`
 
 // Same slab rule, applied to any weight column. Used to round BOTH the courier's
@@ -187,7 +208,7 @@ const GST_DIVISOR = 1.18
 //
 // Matched on UPPER(TRIM(...)) so West/WEST/west all land together, and keys are compared
 // after stripping any bracketed suffix so "NE (North East)" matches "NE".
-const ZONE_MAP_SQL = col => `
+export const ZONE_MAP_SQL = col => `
   CASE
     WHEN UPPER(TRIM(${col})) IN ('A','B','C','D','E') THEN UPPER(TRIM(${col}))
     WHEN UPPER(TRIM(${col})) = 'WEST'          THEN 'A'
@@ -355,6 +376,11 @@ export async function buildCube(pool) {
   if (!sql) throw new Error('could not capture unfiltered cube SQL')
 
   const c = await pool.connect()
+  // Same reason as in query() above: a checked-out client is outside pool.on('error'),
+  // and this one holds the connection for the whole cube rebuild — minutes, not
+  // milliseconds — so it is the most exposed of the two to a pooler drop.
+  const onErr = e => console.error('[buildCube client]', e.message)
+  c.on('error', onErr)
   try {
     await c.query('SET statement_timeout = 600000')
     await c.query('DROP TABLE IF EXISTS public.lc_cube_new')
@@ -370,6 +396,7 @@ export async function buildCube(pool) {
     await c.query('ROLLBACK').catch(() => {})
     throw e
   } finally {
+    c.removeListener('error', onErr)
     c.release()
   }
 }
@@ -450,6 +477,52 @@ export default async function handler(req, res) {
     respCache.clear()
     refCache = null
     return res.status(200).json({ ok: true, invalidated: true })
+  }
+
+  // ── Raw AWB-level export ────────────────────────────────────────────────────────
+  // Streams the underlying invoice rows rather than any aggregate, so a finance query that
+  // the dashboard does not answer can be settled in a spreadsheet.
+  //
+  // MONTHS ARE REQUIRED for b2c. That ledger holds 14.7 lakh rows; a single month is ~3.1
+  // lakh, which a browser can turn into a CSV, while the whole table is ~280 MB and exceeds
+  // Excel's own 10,48,576-row ceiling — the file would download and then not open. Refusing
+  // is better than handing over something unusable. b2b (2,422 rows) and tpl (47) are small
+  // enough to send whole, so months are optional there.
+  //
+  // SELECT *: a RAW export should be raw. Naming columns here would mean editing this file
+  // every time the ledger gains one, and the column that gets forgotten is always the one
+  // someone needs.
+  if (f.action === 'rawExport') {
+    const SRC = {
+      b2c: { table: 'logistics_invoices_b2c', monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: true },
+      b2b: { table: 'logistics_invoices_b2b', monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: false },
+      tpl: { table: 'logistics_costs_3pl',    monthCol: 'month_year', order: 'month_year DESC, id', requireMonths: false },
+    }
+    const src = SRC[f.scope]
+    if (!src) return res.status(400).json({ error: `unknown scope "${f.scope}"` })
+
+    const months = Array.isArray(f.months) ? f.months.filter(m => typeof m === 'string' && /^\d{4}-\d{2}$/.test(m)) : []
+    if (src.requireMonths && !months.length) {
+      return res.status(400).json({ error: 'Select at least one billing month before exporting raw B2C rows — the full ledger is too large to export in one file.' })
+    }
+    // Hard ceiling even with months chosen: eight months of B2C would still be 14 lakh rows.
+    // Reported to the caller rather than silently truncating, so a partial file can never be
+    // mistaken for a complete one.
+    const CAP = 600000
+    try {
+      const where = months.length ? `WHERE ${src.monthCol} = ANY($1)` : ''
+      const params = months.length ? [months] : []
+      const { rows: cnt } = await pool.query(`SELECT COUNT(*)::int n FROM public.${src.table} ${where}`, params)
+      if (cnt[0].n > CAP) {
+        return res.status(400).json({ error: `${cnt[0].n.toLocaleString('en-IN')} rows selected, over the ${CAP.toLocaleString('en-IN')} export limit. Narrow the billing months and try again.` })
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM public.${src.table} ${where} ORDER BY ${src.order}`, params)
+      return res.status(200).json({ ok: true, scope: f.scope, months, rows })
+    } catch (e) {
+      console.error('[logistics-cost rawExport]', e.message)
+      return res.status(500).json({ error: e.message })
+    }
   }
 
   // Claim mutations share this endpoint so the dashboard needs only one route.
@@ -780,6 +853,12 @@ export default async function handler(req, res) {
         SUM(ship_value)::float8    AS value,
         SUM(surcharge)::float8     AS surcharge,
         COUNT(*) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0)::int AS over_n,
+        -- Mirror of over_n: the charged slab sits BELOW the slab our declared weight
+        -- earns. gap is already slab-minus-slab, so a negative gap is exactly this and
+        -- needs no second expression. Not a saving — it usually means our declared
+        -- weight is overstated, which is a catalogue problem rather than a courier one,
+        -- so it is shown beside over_n rather than netted against it.
+        COUNT(*) FILTER (WHERE gap < -0.001 AND COALESCE(dw, 0) > 0)::int AS under_n,
         COALESCE(SUM(gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_kg,
         -- Recoverable split by CAUSE, per dimension. The two need different remedies:
         --   inflation   = courier billed a heavier weight than we shipped (weight dispute)
@@ -803,9 +882,14 @@ export default async function handler(req, res) {
         -- The denominator is the CHARGED SLAB, matching the slab-based gap above, so
         -- rate x excess-slabs is internally consistent.
         COALESCE(SUM((cost / NULLIF(cw_slab, 0)) * gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_cost,
-        COUNT(*) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001)::int AS slab_n,
-        COALESCE(SUM(cw - slab) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_kg,
-        COALESCE(SUM((cost / cw) * (cw - slab)) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_cost,
+        -- slab_n / slab_kg / slab_cost removed (Oct 2026). They measured the same weight
+        -- overbilling as over_n / over_kg / over_cost directly above, but subtracted a
+        -- ROUNDED slab from a RAW weight (cw - dw_slab) where over_* differences two slabs
+        -- (SLAB_OF(cw_raw) - SLAB_OF(dw)). Mixing the units put the two 9% apart on identical
+        -- rows (zone E: over_kg 8,862 vs slab_kg 8,152) while claiming to measure one thing.
+        -- Nothing rendered them — the chain ended at an unread kpis field — so deleting the
+        -- duplicate was safer than repairing it into a second name for over_*, which would
+        -- have been free to drift again. One definition, in one place, is the fix.
         -- Rate-card variance
         COALESCE(SUM(frido_base), 0)::float8      AS rc_entitled,
         COALESCE(SUM(frido_carrier), 0)::float8   AS rc_carrier,
@@ -869,6 +953,7 @@ export default async function handler(req, res) {
         COALESCE(SUM(value), 0)::float8               AS value,
         COALESCE(SUM(surcharge), 0)::float8           AS surcharge,
         COALESCE(SUM(over_n), 0)::int                 AS over_n,
+        COALESCE(SUM(under_n), 0)::int                AS under_n,
         COALESCE(SUM(over_kg), 0)::float8             AS over_kg,
         COALESCE(SUM(rec_infl), 0)::float8            AS rec_infl,
         COALESCE(SUM(rec_unexp), 0)::float8           AS rec_unexp,
@@ -878,9 +963,6 @@ export default async function handler(req, res) {
         COALESCE(SUM(claimable_rs), 0)::float8        AS claimable_rs,
         COALESCE(SUM(reverse_n), 0)::int              AS reverse_n,
         COALESCE(SUM(over_cost), 0)::float8           AS over_cost,
-        COALESCE(SUM(slab_n), 0)::int                 AS slab_n,
-        COALESCE(SUM(slab_kg), 0)::float8             AS slab_kg,
-        COALESCE(SUM(slab_cost), 0)::float8           AS slab_cost,
         COALESCE(SUM(rc_entitled), 0)::float8         AS rc_entitled,
         COALESCE(SUM(rc_carrier), 0)::float8          AS rc_carrier,
         COALESCE(SUM(rc_entitled_allin), 0)::float8   AS rc_entitled_allin,
@@ -1031,7 +1113,16 @@ export default async function handler(req, res) {
       -- scripts/refresh-fwd-median.mjs alongside the derived rate card.
       WITH fwd AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median),
       p AS (
-        SELECT d.category AS cat, d.sub_category AS sub,
+        -- "Sparepart (Chair & Mobility)" and "Spare Parts" are the same category under two
+        -- labels in awb_shipment_dims (973 and 261 shipments, both with the single
+        -- sub-category "Sparepart"), so the table listed spares twice. Folded here in the
+        -- source CTE rather than summed afterwards: the merge has to happen BEFORE the
+        -- aggregate, or the averages, the modal slab and COUNT(DISTINCT cw_slab) would each
+        -- be computed on a half of the category and could not be combined correctly after
+        -- the fact.
+        SELECT CASE WHEN d.category ILIKE 'spare%part%' OR d.category ILIKE 'sparepart%'
+                    THEN 'Spare Parts' ELSE d.category END AS cat,
+               d.sub_category AS sub,
                CASE WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
                     WHEN upper(i.shipment_mode) = 'RTO'     THEN 'RTO'
                     ELSE 'Reverse' END AS leg,
@@ -1092,6 +1183,11 @@ export default async function handler(req, res) {
              CASE WHEN COUNT(DISTINCT master_slab) = 1 THEN MIN(master_slab) END::float8
                AS master_slab,
              COUNT(DISTINCT cw_slab)::int AS cw_slab_variants,
+             -- See subCube for the slab-vs-slab rationale. master_slab is the per-shipment
+             -- column carried down from the pmw join above.
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL AND cw_slab > master_slab)::int AS over_slab_n,
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL AND cw_slab < master_slab)::int AS under_slab_n,
+             COUNT(*) FILTER (WHERE master_slab IS NOT NULL)::int AS cmp_n,
              AVG(vw)::float8      AS vw_avg
         FROM p
        GROUP BY GROUPING SETS ((cat), (cat, sub))
@@ -1132,6 +1228,11 @@ export default async function handler(req, res) {
     // Same reason as the rate grid: identical for every request, so it is cached below.
     const trendQ = () => query(pool, `
       SELECT t.month_year,
+             -- Courier grain, so the Monthly Trend can honour the courier slicer without
+             -- a refetch. This row set is filter-independent by design (it lives in
+             -- refCache), so the narrowing happens on the client: 8 months x ~11 couriers
+             -- is under a hundred rows, far cheaper than re-querying per selection.
+             t.courier_name,
              COUNT(*)::int          AS n,
              -- Ex-GST, or the trend would step up whenever Delhivery's share of the month
              -- grew, which is a tax artefact rather than a cost movement.
@@ -1150,8 +1251,8 @@ export default async function handler(req, res) {
        WHERE t.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('t.zone')}) IS NOT NULL
          AND t.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
          AND t.month_year IS NOT NULL
-       GROUP BY 1
-       ORDER BY 1
+       GROUP BY 1, 2
+       ORDER BY 1, 2
     `, [])
 
     // ── Weight vs rate attribution ──
@@ -1176,11 +1277,13 @@ export default async function handler(req, res) {
        ORDER BY slab
     `, [])
 
-    const disputesQ = () => query(pool, `
-      SELECT courier_name, priced_n, disputed_n, weight_rs, rate_rs, total_rs, invoiced_rs
-        FROM public.lc_courier_disputes
-       ORDER BY total_rs DESC
-    `, [])
+    // lc_courier_disputes removed: its build joined the rate card twice across the full
+    // ledger on `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash, and
+    // never finished — 901s even on a direct connection — so the table sat stale from
+    // 24 Sep and poisoned every cache regeneration with a statement timeout.
+    //
+    // Nothing is lost. The one column it fed (Claimable, per courier) is the same measure
+    // as rec_infl, which the cube already computes and rebuilds hourly.
 
     const wrQ = () => query(pool, `
       -- Reads a PRE-COMPUTED single-row summary, not a live join.
@@ -1227,22 +1330,74 @@ export default async function handler(req, res) {
     // Uses the same exGst() correction as every other cost figure here. Without it this
     // read Rs 12.46Cr against the tab's Rs 12.36Cr, because Delhivery uploaded
     // GST-inclusive totals.
+    // `leg` and the weight sums were added so Cost by product can be rebuilt client-side
+    // for the selected billing period. byProduct comes from productQ, which is only run on
+    // a live request — on the cached path the static JSON carries the ALL-TIME table, and
+    // the month slicer left it untouched while every neighbouring table filtered. The
+    // client now regroups this cube instead (see cubeToByProduct), which needs the leg
+    // split for the Forward/Reverse/RTO columns and the weight sums for the slab column.
+    //
+    // Cost is the ONLY measure summed per leg: the table shows an average per leg, and an
+    // average cannot be re-derived from another average, so the sum and the count must both
+    // be carried and divided at the end.
+    //
+    // Three legs multiplies the row count by at most 3 (5,361 -> ~16k, 0.49 MB -> ~1.5 MB),
+    // which is still far below the 49,740 rows that crossing sub_category with the main
+    // cube's eight dimensions would have cost.
     const SUBCUBE_Q = () => query(pool, `
+      WITH fwd AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median)
       SELECT (${ZONE_MAP_SQL('i.zone')}) AS zone,
              COALESCE(NULLIF(TRIM(d.sub_category), ''), '(unknown)') AS sub,
-             COALESCE(d.category, '(unknown)')                      AS cat,
+             -- Same Spare Parts fold as productQ: two labels for one category, and the two
+             -- tables must agree or switching months would renumber the rows.
+             CASE WHEN d.category ILIKE 'spare%part%' OR d.category ILIKE 'sparepart%'
+                  THEN 'Spare Parts'
+                  ELSE COALESCE(d.category, '(unknown)') END        AS cat,
              i.month_year                                           AS month,
+             CASE WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
+                  WHEN upper(i.shipment_mode) = 'RTO'     THEN 'RTO'
+                  ELSE 'Reverse' END                                AS leg,
              COUNT(*)::int                                          AS n,
-             SUM(${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))})::float8 AS cost,
-             SUM(i.charged_weight_courier::float8)::float8          AS wt
+             -- Nets out the bundled forward leg on RTO for the couriers that include it,
+             -- exactly as productQ does. Without this the cube read 7.1% high against the
+             -- server's own table, so selecting a month would have CHANGED the totals
+             -- rather than narrowing them.
+             SUM(CASE WHEN upper(i.shipment_mode) = 'RTO'
+                           AND i.courier_name IN (SELECT courier_name FROM public.lc_courier_profile WHERE is_rto_bundle)
+                           AND f.fwd_t IS NOT NULL
+                      THEN GREATEST(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} - f.fwd_t, 0)
+                      ELSE ${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))} END)::float8 AS cost,
+             SUM(i.charged_weight_courier::float8)::float8          AS wt,
+             -- Billable slab per shipment, summed so the client can average it. Slabbing
+             -- the average instead would round a blend no parcel is charged.
+             SUM(${SLAB_OF('i.charged_weight_courier::float8')})::float8 AS slab_sum,
+             SUM(d.volumetric_kg::float8)::float8                   AS vw_sum,
+             COUNT(d.volumetric_kg)::int                            AS vw_n,
+             -- Charged slab vs the slab the product's TRUE weight earns. Slab-to-slab, not
+             -- kg-to-kg: couriers bill in brackets, so a 0.44 kg product billed at 0.52 kg
+             -- is still one 0.5 kg slab and there is nothing to dispute. Only a crossed
+             -- bracket costs money.
+             -- NULL master weight contributes to neither count (the comparison is unknown,
+             -- not zero), which is why both are reported against their own denominator.
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL
+                              AND ${SLAB_OF('i.charged_weight_courier::float8')} > pmw.slab_kg)::int AS over_slab_n,
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL
+                              AND ${SLAB_OF('i.charged_weight_courier::float8')} < pmw.slab_kg)::int AS under_slab_n,
+             COUNT(*) FILTER (WHERE pmw.slab_kg IS NOT NULL)::int AS cmp_n
         FROM public.logistics_invoices_b2c i
         LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
+        -- Same sub-category join productQ uses, so the two paths agree row for row.
+        LEFT JOIN public.product_master_weight pmw
+               ON lower(trim(pmw.sub_category)) = lower(trim(d.sub_category))
+        LEFT JOIN fwd f ON f.courier_name = i.courier_name AND f.zone = i.zone
+                       AND f.acct = COALESCE(i.courier_account_type, '(none)')
+                       AND f.slab = ${SLAB_OF('i.charged_weight_courier::float8')}
        WHERE i.total_cost IS NOT NULL
          AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
          -- Admits courier-zero rows: the fallback below gives them a real weight.
          AND COALESCE(NULLIF(i.charged_weight_courier, 0), i.declared_weight_frido) > 0
          AND i.charged_weight_courier <= 500
-       GROUP BY 1, 2, 3, 4
+       GROUP BY 1, 2, 3, 4, 5
     `, [])
 
     const CUBE_Q = `
@@ -1274,6 +1429,7 @@ export default async function handler(req, res) {
         SUM(ship_value)::float8                                  AS value,
         SUM(surcharge)::float8                                   AS surcharge,
         COUNT(*) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0)::int  AS over_n,
+        COUNT(*) FILTER (WHERE gap < -0.001 AND COALESCE(dw, 0) > 0)::int AS under_n,
         COALESCE(SUM(gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_kg,
         COALESCE(SUM((cost / NULLIF(cw_slab, 0)) * gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_cost,
         COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0)), 0)::float8  AS rec_infl,
@@ -1284,9 +1440,8 @@ export default async function handler(req, res) {
         COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0))
                  FILTER (WHERE GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0) > 10), 0)::float8 AS claimable_rs,
         COUNT(*) FILTER (WHERE mode_group <> 'Forward')::int               AS reverse_n,
-        COUNT(*) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001)::int AS slab_n,
-        COALESCE(SUM(cw - slab) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_kg,
-        COALESCE(SUM((cost / cw) * (cw - slab)) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_cost,
+        -- slab_n / slab_kg / slab_cost removed here too — see the GROUPED query. Keeping a
+        -- second copy in a second builder is what let the pair drift in the first place.
         COALESCE(SUM(frido_base), 0)::float8           AS rc_entitled,
         COALESCE(SUM(frido_carrier), 0)::float8        AS rc_carrier,
         COALESCE(SUM(frido_base_allin), 0)::float8     AS rc_entitled_allin,
@@ -1377,7 +1532,17 @@ export default async function handler(req, res) {
       needsB2cDetail ? driftQ : () => EMPTY,
       needsB2cDetail ? productQ : () => EMPTY,
       cubeQ,
-    ], 3)
+    // Concurrency 1, not 3.
+    //
+    // Five of these queries each open with ${BASE}, a full scan of the 14.6 lakh-row
+    // ledger plus the rate CTEs on top. A bare scan is ~8s; the CTE work takes lflQ to
+    // ~112s and productQ to ~120s on their own. Run three at a time they contend for the
+    // same buffers and every one of them creeps past the pooler's hard 120s ceiling — the
+    // whole request then fails with a statement timeout and the cache cannot regenerate.
+    //
+    // Serialised they finish well inside the limit. Wall-clock is similar, because the
+    // contention was never buying parallelism here: these are I/O-bound on the same table.
+    ], 1)
 
     const DIM_KEY = {
       zone: 'byZone', mode: 'byMode', month: 'byMonth', courier: 'byCourier',
@@ -1392,7 +1557,6 @@ export default async function handler(req, res) {
           overbilled_rows: r.over_n, overbilled_kg: r.over_kg, overbilled_cost: r.over_cost,
           rec_infl: r.rec_infl, rec_unexp: r.rec_unexp, reverse_n: r.reverse_n,
           rec_admit: r.rec_admit, rec_admit_n: r.rec_admit_n,
-          slab_rows: r.slab_n, slab_excess_kg: r.slab_kg, slab_excess_cost: r.slab_cost,
           rc_entitled: r.rc_entitled, rc_carrier: r.rc_carrier, rc_total: r.rc_total,
           rc_entitled_allin: r.rc_entitled_allin, rc_carrier_allin: r.rc_carrier_allin,
           rc_entitled_surcharge: r.rc_entitled_surcharge, inv_addons: r.inv_addons,
@@ -1457,12 +1621,15 @@ export default async function handler(req, res) {
       // Every value is escaped below and only ever reaches a TEXT column.
       const sqlLit = (v) => "'" + String(v).replace(/'/g, "''") + "'"
       const inList = (vals) => "(" + vals.map(sqlLit).join(", ") + ")"
-      const b2bWhere = (cols) => {
+      const b2bWhere = (cols, skipMonths = false) => {
         const c = []
         if (f.couriers?.length)     c.push(`${cols.transporter} IN ${inList(f.couriers)}`)
         if (f.freightTypes?.length) c.push(`${cols.freightType} IN ${inList(f.freightTypes)}`)
         if (f.vehicleTypes?.length) c.push(`${cols.vehicle} IN ${inList(f.vehicleTypes)}`)
-        if (f.months?.length)       c.push(`${cols.month} IN ${inList(f.months)}`)
+        // skipMonths: the Monthly Trend charts must keep every period while the rest of
+        // the page is scoped to one billing month, so their queries opt out of this one
+        // clause and keep all the others.
+        if (!skipMonths && f.months?.length) c.push(`${cols.month} IN ${inList(f.months)}`)
         return c
       }
       const LEDGER_COLS = { transporter: 'transporter_name', freightType: '"freight_type_FTL_PTL"', vehicle: 'vehicle_type', month: 'month_year' }
@@ -1473,11 +1640,16 @@ export default async function handler(req, res) {
       const ledgerWhere = b2bWhere(LEDGER_COLS).length ? ' WHERE ' + b2bWhere(LEDGER_COLS).join(' AND ') : ''
       const pricedAnd   = b2bWhere(PRICED_COLS).map((x) => ` AND ${x}`).join('')
       const pricedWhere = b2bWhere(PRICED_COLS).length ? ' WHERE ' + b2bWhere(PRICED_COLS).join(' AND ') : ''
+      // Same clauses minus the month filter, for the series the trend charts read. They
+      // still honour transporter, vehicle and freight type — narrowing to one carrier
+      // should redraw the trend for that carrier, not ignore the selection.
+      const pricedWhereNoMonth = b2bWhere(PRICED_COLS, true).length
+        ? ' WHERE ' + b2bWhere(PRICED_COLS, true).join(' AND ') : ''
 
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube, fixedVeh, fixedVehMonths, tplTotals, tplPartners, tplMonths, tplWarehouses, tplWhMonths] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, slabs, subCube, fixedVeh, fixedVehMonths, tplTotals, tplPartners, tplMonths, tplWarehouses, tplWhMonths] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1676,12 +1848,16 @@ export default async function handler(req, res) {
         // blend coverage into the rate story and read as a falling overcharge in a month
         // that simply had more unpriceable trips.
         () => query(pool, `
+          -- pricedWhereNoMonth, not pricedWhere: every consumer of this row set is a
+          -- trend chart or a month-over-month figure, and both need consecutive periods.
+          -- With the page defaulting to a single billing month the month filter left one
+          -- row here, which flattened the trend and made every MoM delta null.
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed,
                  SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8 AS billed_priced,
                  SUM(card_rate)::float8 AS card_total,
                  SUM(variance)::float8 AS variance
-            FROM public.b2b_trip_priced${pricedWhere}
+            FROM public.b2b_trip_priced${pricedWhereNoMonth}
            GROUP BY 1, 2, 3, 4 ORDER BY 1
         `),
         // ── Transporter x month, long form ──
@@ -1690,9 +1866,11 @@ export default async function handler(req, res) {
         // in its line, which is the finding — pivoting to zero would draw it as a collapse
         // in spend rather than an absence of billing.
         () => query(pool, `
+          -- Month-free for the same reason as varMonths above: this is the Transporter
+          -- Trend's source and a one-month cut would draw a single point per carrier.
           SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
                  SUM(billed)::float8 AS billed
-            FROM public.b2b_trip_priced${pricedWhere}
+            FROM public.b2b_trip_priced${pricedWhereNoMonth}
            GROUP BY 1, 2, 3, 4 ORDER BY 1, 4 DESC
         `),
         // ── Vehicle type analysis ──
@@ -1763,7 +1941,7 @@ export default async function handler(req, res) {
         needsB2cDetail ? wrQ : () => EMPTY,
         needsB2cDetail ? gridQ : () => EMPTY,
         needsB2cDetail ? trendQ : () => EMPTY,
-        disputesQ, slabQ, SUBCUBE_Q,
+        slabQ, SUBCUBE_Q,
         // ── Fixed vehicle rentals ──
         // Vehicles on a standing monthly charge rather than per-trip billing. Reported
         // separately from freight: there are no trips or lanes to divide by, so folding
@@ -1982,7 +2160,6 @@ export default async function handler(req, res) {
         // measured once per cache period rather than per request.
         weightRate: wr.rows[0] || {},
         rateGrid: gridRes.rows,
-        courierDisputes: disputes.rows,
         slabCosts: slabs.rows,
         // Zone x sub-category cube. Filter-independent by design — the client slices it,
         // so it is measured once per cache period like the other reference data.
@@ -2031,7 +2208,6 @@ export default async function handler(req, res) {
     // Applied here, after section 4 has guaranteed refCache exists.
     Object.assign(out.totals, refCache.weightRate || {})
     out.rateGrid = refCache.rateGrid || []
-    out.courierDisputes = refCache.courierDisputes || []
     out.slabCosts = refCache.slabCosts || []
     // Zone x sub-category cube for the zone slicer. Sent whole and sliced client-side, so
     // changing sub-category costs no round trip — the point of the feature.

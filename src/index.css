@@ -194,8 +194,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .row-hoverable tbody tr{transition:background-color .1s}
 .row-hoverable tbody tr:hover{background-color:rgba(var(--acc-rgb),.055)!important}
 
-.channel-card-hover{transition:transform .15s ease,box-shadow .15s ease}
-.channel-card-hover:hover{transform:translateY(-2px);box-shadow:var(--sh3)!important}
+/* translate, not transform — see the note on .card-hoverable below. No dropdown lives in
+   one of these tiles today, but the trap is the same one and costs nothing to avoid. */
+.channel-card-hover{transition:translate .15s ease,box-shadow .15s ease}
+.channel-card-hover:hover{translate:0 -2px;box-shadow:var(--sh3)!important}
 
 .stat-tile-hover{transition:background-color .15s ease,box-shadow .15s ease;border-radius:10px}
 .stat-tile-hover:hover{background-color:rgba(var(--acc-rgb),.05);box-shadow:var(--sh1)}
@@ -288,6 +290,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .tnav-mob-only { display: none; }
 .inv-detail-mobile-only { display: none; }
 .mob-only { display: none; }
+
+/* Inventory Detail table row hover — CSS-only, no JS re-renders */
+.inv-sku-row { cursor: pointer; }
+.inv-sku-row:hover { background: rgba(0,0,0,0.025) !important; }
+.inv-loc-row:hover { background: rgba(0,0,0,0.045) !important; }
 
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
@@ -625,7 +632,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .recharts-cartesian-grid line{stroke:var(--b1);stroke-dasharray:3 4}
 .recharts-cartesian-axis-line,.recharts-cartesian-axis-tick-line{stroke:transparent}
 .recharts-text{font-family:var(--font);fill:var(--t3)}
-.recharts-tooltip-wrapper{filter:drop-shadow(0 4px 16px rgba(26,28,35,.10))}
+/* z-index: a tooltip is an overlay and must paint over the legend below the plot and over
+   whatever follows the chart in the card — on the rate-drift card it overlapped both the
+   legend and the courier table and was drawn underneath them. Recharts positions this
+   wrapper absolutely but sets no stacking order of its own. */
+.recharts-tooltip-wrapper{filter:drop-shadow(0 4px 16px rgba(26,28,35,.10));z-index:60}
 .recharts-default-tooltip{border:none!important;border-radius:var(--r-md)!important;
   box-shadow:var(--sh2)!important;padding:10px 12px!important}
 /* Ghost bars — the faint volume bars behind the lines in the reference. */
@@ -752,13 +763,19 @@ svg text, svg tspan{
 /* Every card lifts. KPI tiles rise less than the big cards - they sit in tight
    grids, so a full 2px reads as jitter across a row of six.                */
 .card-hoverable,
-.kpi-card{ transition:box-shadow .18s ease, transform .18s ease }
-.card-hoverable:hover{ transform:translateY(-2px) }
-.kpi-card:hover{ transform:translateY(-1px) }
+.kpi-card{ transition:box-shadow .18s ease, translate .18s ease }
+/* Lift on hover WITHOUT transform.
+   A transform makes the element a containing block for position:fixed descendants, so any
+   fixed-position dropdown rendered inside a card anchored to the card instead of the
+   viewport — and because you have to hover the card to reach its controls, the transform
+   was always active when the panel opened. translate does the same 2px lift without
+   establishing a containing block. */
+.card-hoverable:hover{ translate:0 -2px }
+.kpi-card:hover{ translate:0 -1px }
 
 @media (prefers-reduced-motion:reduce){
   .card-hoverable:hover,
-  .kpi-card:hover{ transform:none }
+  .kpi-card:hover{ translate:none }
 }
 
 /* Theme picker menu rows. Hover only lifts a row that is not already selected,
@@ -822,3 +839,22 @@ svg text, svg tspan{
   .load-veil,.load-veil.is-done{ animation:none }
   .load-veil.is-done{ opacity:0 }
 }
+
+/* ══════════════════════════════════════════════
+   Rate-drift legend — ten couriers on one line
+   ══════════════════════════════════════════════
+   The drift chart carries one line per courier and the ledger has ten of them, which at the
+   shared legend size wrapped to a second row. Recharts reserves the legend band at a fixed
+   height, so a wrapped row is clipped rather than growing the chart — "Urbanbolt" ended up
+   orphaned below the card.
+
+   Recharts sets per-item margins inline, so the gap can only be closed with !important. The
+   existing rules that do this are inside a mobile media query; this one is unscoped because
+   the drift chart is where the count is highest and it needs the treatment at every width. */
+.drift-legend .recharts-default-legend{
+  display:flex !important; flex-wrap:nowrap !important; justify-content:center !important;
+  gap:0 9px !important; padding:0 !important; white-space:nowrap
+}
+.drift-legend .recharts-legend-item{ margin:0 !important; display:inline-flex !important; align-items:center }
+.drift-legend .recharts-legend-item-text{ font-size:9.5px !important }
+.drift-legend .recharts-legend-item svg{ margin-right:3px !important }

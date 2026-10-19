@@ -216,15 +216,15 @@ export const isPseudoSku = sku => {
 //
 // Vadgaon_OPS is a special case: its RTD/Raw/Raw-Blocked split is computed upstream (in
 // refresh_inventory_snapshot_hourly.mjs) directly from Shelfwise shelf names — any shelf
-// containing "RTD" is RTD (RTD-LANE-* included — RTD wins the tie), any shelf containing
-// "LANE" (and not "RTD") is Raw, with its GOOD_INVENTORY quantity going to RawInvt and its
+// containing "RTD" is RTD (RTD-RACK-* included — RTD wins the tie), any shelf containing
+// "RACK" (and not "RTD") is Raw, with its GOOD_INVENTORY quantity going to RawInvt and its
 // blocked quantity going to RawBlockedInvt (PKG/RTN/QC-prefixed shelves are deliberately
 // excluded entirely from Vadgaon_OPS, unlike every other facility). Total = RTD + Raw +
 // Raw Blocked, same as every other facility. Those pre-computed sums arrive as
 // row.RtdInvt/row.RawInvt/row.RawBlockedInvt and are used as-is here — the pack-qty/
 // raw-SKU-text heuristic below does not apply to this facility.
 export function computeRowInventory(row) {
-  if (row.Facility === 'Vadgaon_OPS') {
+  if (row.Facility === 'Vadgaon_OPS' || row.Facility === 'Frido_Sudhawadi') {
     const rtdInvt = Number(row.RtdInvt || 0)
     const rawInvt = Number(row.RawInvt || 0)
     const rawBlockedInvt = Number(row.RawBlockedInvt || 0)
@@ -254,9 +254,9 @@ export function computeRowInventory(row) {
     return { totalInventory: rawInvt + rawBlockedInvt, rawInvt, rawBlockedInvt, rtdInvt: 0, packQty }
   } else {
     // RTD is available inventory only — InventoryBlocked is never counted as RTD (blocked
-    // stock isn't ready-to-dispatch by definition), even though totalInventory still includes
-    // it for the Total Invt column.
-    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: inv2, packQty }
+    // stock isn't ready-to-dispatch by definition). Blocked units are reported as rawBlockedInvt
+    // so they appear in the RAW BLOCKED column rather than silently inflating totalInventory.
+    return { totalInventory: inv2 + blocked2, rawInvt: 0, rawBlockedInvt: blocked2, rtdInvt: inv2, packQty }
   }
 }
 

@@ -138,4 +138,21 @@ export async function persistCourierProfiles(pool, profiles) {
            is_per_kg     = EXCLUDED.is_per_kg,
            measured_at   = EXCLUDED.measured_at`,
     [profiles.allIn, profiles.bundlers, profiles.perKg])
+
+  // Drop rows for couriers the ledger no longer carries.
+  //
+  // The upsert above never deleted, so a renamed courier left its old row behind forever:
+  // the table held both 'Elasticrun' and 'ElasticRun', and both 'Urbernbolt' and
+  // 'Urbanbolt', months after those misspellings were corrected in the ledger. Six of the
+  // sixteen rows were ghosts of that kind.
+  //
+  // Harmless to the figures — every consumer joins on courier_name, so an orphan matches
+  // nothing — but the table is read by hand when someone asks which couriers bundle RTO,
+  // and a list with two spellings of the same carrier invites exactly the wrong answer.
+  const { rowCount } = await pool.query(`
+    DELETE FROM public.lc_courier_profile p
+     WHERE NOT EXISTS (
+       SELECT 1 FROM public.logistics_invoices_b2c i
+        WHERE i.courier_name = p.courier_name)`)
+  if (rowCount) console.log(`  profiles: removed ${rowCount} courier(s) no longer in the ledger`)
 }

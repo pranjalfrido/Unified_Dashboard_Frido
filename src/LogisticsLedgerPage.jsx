@@ -73,8 +73,8 @@ const FORMATS = {
       { key: "destination_pincode", label: "destination_pincode", type: "text", w: 165, ex: "560001", desc: "Pincode delivered to" },
       { key: "destination_city", label: "destination_city", type: "text", w: 145, ex: "Bengaluru", desc: "City delivered to" },
       { key: "zone", label: "zone", type: "text", req: true, w: 80, ex: "B", desc: "Courier zone classification" },
-      { key: "product", label: "product", type: "text", req: true, w: 175, ex: "Neck Pillow - Grey", desc: "Product/SKU shipped" },
-      { key: "qty", label: "qty", type: "int", req: true, w: 80, ex: "1", desc: "Quantity shipped" },
+      { key: "product", label: "product", type: "text", w: 175, ex: "Neck Pillow - Grey", desc: "Product/SKU shipped" },
+      { key: "qty", label: "qty", type: "int", w: 80, ex: "1", desc: "Quantity shipped" },
       { key: "charged_weight_courier", label: "charged_weight_courier", type: "num", req: true, w: 185, ex: "0.65", desc: "Weight courier billed on" },
       { key: "declared_weight_frido", label: "declared_weight_frido", type: "num", w: 180, ex: "0.55", desc: "Our recorded weight" },
       { key: "freight_charge", label: "freight_charge", type: "num", req: true, w: 130, ex: "62.50", desc: "Base freight charge" },
@@ -196,6 +196,21 @@ const db = {
     const { data, error } = await supabase.rpc("get_logistics_months", { tbl: fmt.table });
     if (error) throw error;
     return (data ?? []).map((r) => r.month_year).filter(Boolean);
+  },
+
+  // Partner x month upload coverage for every month in the ledger.
+  //
+  // Aggregated in the database (see scripts/sql/get_logistics_partner_matrix.sql) rather
+  // than derived from the grid: the grid holds 200 rows and the b2c ledger is ~1.5M, so
+  // "which couriers are in which month" is not a question the loaded page can answer.
+  //
+  // Returns only partner-months that HAVE data; the gaps are what the UI draws.
+  async fetchCoverage(fmt) {
+    const { data, error } = await supabase.rpc("get_logistics_partner_matrix", {
+      tbl: fmt.table,
+    });
+    if (error) throw error;
+    return data ?? [];
   },
 
   async fetchAllRows(fmt, months, onProgress) {
@@ -409,6 +424,11 @@ export default function LogisticsLedgerPage({ onBack }) {
   const [exportProgress, setExportProgress] = useState(null); // null | { done, total, type }
   const [uploadProgress, setUploadProgress] = useState(null); // null | { done, total }
   const fileInput = useRef(null);
+  // Upload checklist: which partners' bills are in for a given month.
+  const [coverage, setCoverage] = useState({ b2b: null, b2c: null });
+  // Open by default: the matrix is the point of the panel, and a gap three months back is
+  // invisible behind a collapsed header. Collapsing is left to the user.
+  const [coverageOpen, setCoverageOpen] = useState(true);
 
   const rows = store[tab] ?? [];
   const months = monthsStore[tab] ?? [];
@@ -432,6 +452,14 @@ export default function LogisticsLedgerPage({ onBack }) {
       ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
+
+      // Upload coverage, every month at once. Refreshed on the same load() that follows an
+      // upload, so adding a file fills its cells in without a manual reload.
+      db.fetchCoverage(f)
+        .then((c) => setCoverage((s) => ({ ...s, [which]: c })))
+        // A missing RPC must not break the grid — the panel is additive, and the page was
+        // useful without it. It just stays hidden.
+        .catch(() => setCoverage((s) => ({ ...s, [which]: null })));
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
       flash("error", `Couldn't load ${f.table}: ${e.message ?? e}`);
@@ -874,6 +902,101 @@ export default function LogisticsLedgerPage({ onBack }) {
             })}
           </div>
         )
+      })()}
+
+      {/* Upload checklist — which partners' bills are in for this month, and which are not.
+          Collapsed to a one-line summary by default: when everything is uploaded there is
+          nothing to act on, and the panel should not push the grid down the page. */}
+      {(() => {
+        const cov = coverage[tab];
+        if (!cov?.length) return null;
+
+        const allMonths = [...new Set(cov.map((r) => r.month_year))].sort();
+        const cell = new Map(cov.map((r) => [`${r.partner}|${r.month_year}`, r]));
+
+        // A gap only counts BETWEEN a partner's first and last month. Before the first it
+        // had not been onboarded and after the last we may have stopped using it — marking
+        // either as missing would bury the real holes under months nobody expected a bill
+        // for. Shadowfax billed Feb-Jun and Aug, so July is a genuine hole; its January is
+        // not.
+        const partners = [...new Set(cov.map((r) => r.partner))].map((p) => {
+          const mine = allMonths.filter((m) => cell.has(`${p}|${m}`));
+          const first = mine[0], last = mine[mine.length - 1];
+          const span = allMonths.filter((m) => m >= first && m <= last);
+          return { partner: p, first, last, gaps: span.filter((m) => !cell.has(`${p}|${m}`)) };
+        }).sort((a, b) => b.gaps.length - a.gaps.length || a.partner.localeCompare(b.partner));
+
+        const totalGaps = partners.reduce((n, p) => n + p.gaps.length, 0);
+        const allIn = totalGaps === 0;
+        return (
+          <div style={{ marginBottom: 12, border: `1px solid ${allIn ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 10, background: allIn ? '#F0FDF4' : '#FFFBEB', overflow: 'hidden' }}>
+            <button
+              onClick={() => setCoverageOpen((o) => !o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, color: allIn ? C.green : '#92400E', textAlign: 'left' }}
+            >
+              <span style={{ fontWeight: 700 }}>
+                {allIn
+                  ? `No upload gaps · ${partners.length} partners × ${allMonths.length} months`
+                  : `${totalGaps} missing upload${totalGaps === 1 ? '' : 's'} across ${partners.filter((p) => p.gaps.length).length} partner${partners.filter((p) => p.gaps.length).length === 1 ? '' : 's'}`}
+              </span>
+              {!allIn && (
+                <span style={{ fontWeight: 500, opacity: .85 }}>
+                  — {partners.filter((p) => p.gaps.length).map((p) => `${p.partner} (${p.gaps.join(', ')})`).join('; ')}
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: 10, opacity: .7 }}>{coverageOpen ? '▲' : '▼'}</span>
+            </button>
+            {coverageOpen && (
+              <div style={{ padding: '0 12px 12px', overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 11.5, fontFamily: 'inherit' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '4px 10px 6px 0', fontWeight: 600, color: C.t3, position: 'sticky', left: 0, background: allIn ? '#F0FDF4' : '#FFFBEB' }}>Partner</th>
+                      {allMonths.map((m) => (
+                        <th key={m} style={{ padding: '4px 8px 6px', fontWeight: 600, color: C.t3, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{m}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {partners.map((p) => (
+                      <tr key={p.partner}>
+                        <td style={{ padding: '3px 10px 3px 0', whiteSpace: 'nowrap', fontWeight: p.gaps.length ? 700 : 500, color: p.gaps.length ? '#92400E' : C.t2, position: 'sticky', left: 0, background: allIn ? '#F0FDF4' : '#FFFBEB' }}>
+                          {p.partner}
+                        </td>
+                        {allMonths.map((m) => {
+                          const c = cell.get(`${p.partner}|${m}`);
+                          // Three states, deliberately distinct: a line count means the
+                          // bill is in, a dash means a month this partner was not active
+                          // in, and "missing" is a hole inside its active span — the only
+                          // one that needs chasing.
+                          const outside = m < p.first || m > p.last;
+                          return (
+                            <td key={m}
+                              title={c ? `${c.rows_n.toLocaleString('en-IN')} lines · ₹${money(c.cost)}`
+                                : outside ? `Not billing in ${m}` : `No bill uploaded for ${m}`}
+                              style={{
+                                padding: '3px 8px', textAlign: 'right', fontFamily: 'monospace',
+                                whiteSpace: 'nowrap',
+                                color: c ? C.t2 : outside ? '#D1D5DB' : '#B45309',
+                                background: !c && !outside ? '#FEF3C7' : 'transparent',
+                                fontWeight: !c && !outside ? 700 : 400,
+                                borderRadius: 4,
+                              }}>
+                              {c ? c.rows_n.toLocaleString('en-IN') : outside ? '·' : 'missing'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+                  Counts are invoice lines uploaded. <strong>missing</strong> is a month with no bill between a partner's first and last upload; <span style={{ color: '#D1D5DB', fontWeight: 700 }}>·</span> is a month it was not billing in.
+                </div>
+              </div>
+            )}
+          </div>
+        );
       })()}
 
       {/* Toolbar */}

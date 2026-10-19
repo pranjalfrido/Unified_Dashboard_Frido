@@ -528,7 +528,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     }
     finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.start, filters.end, lFilters.shipmentType, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
+  }, [filters.start, filters.end, lFilters.shipmentType, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs), JSON.stringify(lFilters.category), JSON.stringify(lFilters.subCategory)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -571,8 +571,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => {
     const applyFilters = (raw) => {
       if (!raw) return null
-      const { couriers, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs } = lFilters
+      const { couriers, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs, zone } = lFilters
       const hasCourier = couriers.length > 0
+      const hasZone = zone?.length > 0
       const NDD_COURIERS = ['Delhivery NDD', 'Skye Air', 'Urbane Bolt', 'ElasticRun']
       const isNdd = cg => NDD_COURIERS.includes(cg)
       const hasSddNdd = sddNdd && sddNdd !== 'all'
@@ -585,7 +586,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const hasSubCategory = subCategory?.length > 0
       const categoryFilter = x => (!hasCategory || x.category == null || (category || []).map(c => c.toLowerCase()).includes((x.category || '').toLowerCase())) && (!hasSubCategory || x.sub_category == null || (subCategory || []).map(c => c.toLowerCase()).includes((x.sub_category || '').toLowerCase()))
       const hasWeightSlabs = weightSlabs?.length > 0
-      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab))
+      const zoneFilter = x => !hasZone || !x.zone || (zone || []).map(z => z.toLowerCase()).includes((x.zone || '').toLowerCase())
+      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab)) && zoneFilter(x)
 
       // build filtered byCourier rows
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
@@ -593,7 +595,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       // derive kpis from byCourier rows (all fields now present in each courier row)
       // when only shipmentType filter is active (no courier/sddNdd), use raw.kpis directly
       // since the API already filtered by shipmentType — byCourier.total uses COUNT(awb) not DISTINCT
-      const kpis = (hasCourier || hasSddNdd)
+      const kpis = (hasCourier || hasSddNdd || hasZone)
         ? filteredCouriers.reduce((acc, x) => {
             const n = k => typeof x[k] === 'number' ? x[k] : 0
             acc.total_shipments = (acc.total_shipments || 0) + n('total')
@@ -627,7 +629,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           }, {})
         : raw.kpis
 
-      if ((hasCourier || hasSddNdd) && kpis._wt) {
+      if ((hasCourier || hasSddNdd || hasZone) && kpis._wt) {
         kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
         kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
         kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
@@ -644,12 +646,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         byCourierWeek: (raw.byCourierWeek || []).filter(courierFilter),
         byCourierMonth: (raw.byCourierMonth || []).filter(courierFilter),
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
-        byZone: raw.byZone,
-        byZoneDetail: raw.byZoneDetail,
-        byZoneFrido: raw.byZoneFrido,
-        byCourierZone: raw.byCourierZone,
-        byCourierFacility: raw.byCourierFacility,
-        byZoneFacility: raw.byZoneFacility,
+        byZone: (raw.byZone || []).filter(courierFilter),
+        byZoneDetail: (raw.byZoneDetail || []).filter(courierFilter),
+        byZoneFrido: (raw.byZoneFrido || []).filter(courierFilter),
+        byCourierZone: (raw.byCourierZone || []).filter(courierFilter),
+        byCourierFacility: (raw.byCourierFacility || []).filter(courierFilter),
+        byZoneFacility: (raw.byZoneFacility || []).filter(courierFilter),
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -2702,7 +2704,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
                 <div style={{ overflow: 'hidden', flex: 1, minHeight: 0 }}>
-                <ResponsiveContainer width="100%" height={248}>
+                <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -3326,9 +3328,9 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
     if (i.id === 'ads') return hasAdsAccess(allowedTabs)
-    if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
+if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
-    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
+    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
     return allowedTabs.includes(i.id)
   }) : allItems
   const dims = [
@@ -3354,7 +3356,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
       <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
-          const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
+          const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
           const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
           const hasBothInv = hasHealth && hasSales
           const subTabs = [
@@ -3497,7 +3499,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
             item.id === 'ads' ? hasAdsAccess(allowedTabs) :
             item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
             item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
-            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
             !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
@@ -4821,7 +4823,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
             {mobFilterOpen && (
               <>
                 <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.40)' }} />
-                <div style={{
+                <div onClick={e => e.stopPropagation()} style={{
                   position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
                   zIndex: 500, width: 'min(340px, 92vw)',
                   background: '#fff', borderRadius: 16, overflow: 'hidden',
@@ -5166,7 +5168,7 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, logisticsCostData, salesAllocData, invSnapshotData, overviewCustData }) {
+function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
   const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
@@ -5891,7 +5893,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               in this grid had — it read as visually isolated rather than as one consistent deck.
               Colour now lives only in the number itself (same treatment as every other tile here),
               keeping the good/bad signal without the mismatched accent stripe. */}
-          <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}` }}>Inventory</div>
+          <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}`, display: 'flex', alignItems: 'center', gap: 8 }}>Inventory{invSnapshotData?.asOf ? <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: C.t3, fontSize: 10 }}>snapshot as of {new Date(invSnapshotData.asOf).toLocaleString()}</span> : null}</div>
           <StatTile span={1} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
             color={(invSummary.criticalLowCount || 0) > 0 ? C.red.tx : C.green.tx}
             sub="Critical + Low stock status" />
@@ -7847,7 +7849,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnRevAll = data.returnRev || 0
-  const returnNumeratorRev = data.returnTrackableRev || 0
+  const returnNumeratorRev = cancellRev + rtoRev + returnRevAll + cirRev
   const returnPct = totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
   // Provisional Return % — same pattern as every other tab (confirmed 2026-10-19): shown
   // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
@@ -9049,11 +9051,11 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 320 }} action={
               <Dropdown value={shTrendGroup} onChange={setShTrendGroup} options={GROUP_OPTS} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 200 : 220} minHeight={180}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height={isMob ? 200 : '100%'} minHeight={180}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
                   <defs>
                     <linearGradient id="shGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -9292,7 +9294,11 @@ const EBO_TREND_GROUP_OPTS = [
 
 function EBOTab({ data, rangeStart, rangeEnd }) {
   const isMob = useIsMobile()
-  const EBO_ACCENT = '#8B5E3C'
+  // The theme's own accent, not a literal. This was '#8B5E3C', a hardcoded brown, which
+  // left the EBO sparkline and toggle reading as a different product from every other
+  // channel card — and stayed brown when the theme switched to gold or indigo, since a
+  // literal cannot follow a token.
+  const EBO_ACCENT = C.acc
   const ebo = data.ebo || {}
   const catMap = ebo.catMap || {}
   const subCatMap = ebo.subCatMap || {}
@@ -9966,7 +9972,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             if (selectedCat) {
               vcDailyCatFiltered?.forEach(d => { if (!vcDailyMap[d.date]) vcDailyMap[d.date] = { orderedRev: 0, orderedUnits: 0 }; vcDailyMap[d.date].orderedRev += d.rev; vcDailyMap[d.date].orderedUnits += d.units })
             } else {
-              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.orderedRev || 0, orderedUnits: d.orderedUnits || 0 } })
+              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.estimated ? 0 : (d.orderedRev || 0), orderedUnits: d.estimated ? 0 : (d.orderedUnits || 0) } })
             }
             const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRevRaw) / scTotalRev : 0
             const returnRate = scTotalRev > 0 ? (amzSC.netCalc?.returnRev || 0) / scTotalRev : 0
@@ -10059,8 +10065,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     <Dropdown value={ovTrendGroup} onChange={setOvTrendGroup} options={GROUP_OPTS} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, width: isMob ? 66 : 82 }} />
                   </div>
                 }>
-                  <div style={isMob ? { margin: '0 -18px' } : {}}>
-                  <ResponsiveContainer width="100%" height={isMob ? 200 : 255} minHeight={180}>
+                  <div style={{ ...(isMob ? { margin: '0 -18px' } : {}) }}>
+                  <ResponsiveContainer width="100%" height={isMob ? 200 : 270} minHeight={180}>
                     <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 20, left: isMob ? 18 : 0 }}>
                       <defs>
                         <linearGradient id="amzTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -10136,9 +10142,60 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     height={325}
                   />
                 })()}
-                {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={325} />
-                  : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
+                {/* boxHeight, not boxheight — JSX props are case-sensitive, so the lowercase
+                    spelling was silently ignored and this donut fell back to its natural
+                    height instead of matching the 325px trend card beside it. */}
+                {channelView === 'sc'
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
+                  : (() => {
+                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
+                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
+                      const rows = (() => {
+                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
+                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
+                        if (channelView === 'vc') {
+                          return (amzVC.accounts || [])
+                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
+                            .sort((a, b) => b.rev - a.rev)
+                        }
+                        // 'all': SC FBA + SC MFN + each VC account
+                        const out = []
+                        if (showSC) {
+                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
+                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
+                        }
+                        if (showVC) {
+                          ;(amzVC.accounts || []).forEach((a, i) => {
+                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
+                          })
+                        }
+                        return out.sort((a, b) => b.rev - a.rev)
+                      })()
+                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
+                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+                      return (
+                        <Card fill title="Channel · Account Breakdown" note={chNote} style={{ height: 325 }}>
+                          {rows.length === 0
+                            ? <div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>No data</div>
+                            : <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 6, paddingRight: 10, overflowY: 'auto', height: '100%' }}>
+                                {rows.map(r => (
+                                  <div key={r.name}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>{r.name}</span>
+                                      <span style={{ fontSize: 11, color: C.t2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmt(r.rev)}</span>
+                                    </div>
+                                    <div style={{ height: 6, borderRadius: 3, background: C.border2, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: `${(r.rev / maxRev) * 100}%`, background: r.color, borderRadius: 3, transition: 'width 0.3s' }} />
+                                    </div>
+                                    <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(r.units)} units</div>
+                                  </div>
+                                ))}
+                              </div>
+                          }
+                        </Card>
+                      )
+                    })()
+                }
               </div>
             )
           })()}
@@ -10445,8 +10502,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
                   </div>
                 )}
               </div>}
-              <div style={{ flex: 1, minHeight: 0 }}>
-              <div style={isMob ? { margin: '0 -10px' } : {}}>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, minHeight: 0, ...(isMob ? { margin: '0 -10px' } : {}) }}>
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 16 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -12996,8 +13053,8 @@ function CredTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={crTrendGroup} onChange={setCrTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="crTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -13254,8 +13311,8 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={fcTrendGroup} onChange={setFcTrendGroup} options={fcGroupOpts} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="fcTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -13511,8 +13568,8 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={mnTrendGroup} onChange={setMnTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
@@ -13905,8 +13962,8 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
                 <Dropdown value={offTrendGroup} onChange={setOffTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+              <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <defs>
                     <linearGradient id="offTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -13965,7 +14022,9 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
               height={325}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={325} />
+            {/* boxHeight, not boxheight — the lowercase spelling is silently dropped, which
+                left this donut shorter than the 325px trend card in the same row. */}
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} />
           </div>
         )
       })()}
@@ -16065,7 +16124,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Gross Rev (ex GST)',   cur: kpis.grossExcGst || 0,           prev: prevKpis.grossExcGst || 0,           f: fmt },
             { label: 'Net Rev (ex GST)',     cur: kpis.netRevenue || 0,             prev: prevKpis.netRevenue || 0,            f: fmt },
             { label: 'Repeat Rev %',         cur: (kpis.repeatRevenueRate||0)*100,  prev: (prevKpis.repeatRevenueRate||0)*100, f: v => `${v.toFixed(1)}%` },
-            { label: '12-Mo LTV',            cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
+            { label: 'Lifetime LTV',         cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
             { label: 'LTV : CAC',            cur: kpis.ltvCac || 0,                prev: pLtvCac,                             f: v => `${v.toFixed(2)}×`, maturing: !pLtvCac, ltvCacRow: true },
           ]
 
@@ -16189,9 +16248,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: C.acc, valColor: C.t1, sparkVals: newCustVals, sparkColor: C.acm, fmt: v => fmtN(v) },
                   { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
-                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LIFETIME VALUE', value: fmt(kpis.ltv12 || 0), sub: 'All-time avg rev / customer', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: 'Lifetime LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
@@ -16464,7 +16523,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           const kpiCards = [
             { label: 'New Customers', val: fmtN(kpis.newCustomers), sub: `${fmtN(kpis.returningCustomers || 0)} returning`, spark: newCustVals, cur: kpis.newCustomers, prev: prevKpis.newCustomers },
-            { label: 'CAC', val: fmt(kpis.cac), sub: 'Total Spend / New Customers', spark: cacVals, cur: kpis.cac, prev: prevKpis.cac, lowerBetter: true },
+            { label: 'CAC', val: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', spark: cacVals, cur: kpis.cac, prev: prevKpis.cac, lowerBetter: true },
             { label: 'RoAS', val: `${(kpis.roas||0).toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend', spark: roasVals, cur: kpis.roas, prev: prevKpis.roas },
             { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
             {
@@ -18168,9 +18227,6 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           const channelInsight = null
 
-          // ── CAC zero-while-spend bug flag ──
-          const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
-
           // Discounted = any bucket with actual discount %, Non-Discounted = '0% (Full Price)' + 'No Price Data'
           const totalDiscountedOrders    = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
           const totalNonDiscountedOrders = discountDist.filter(r => r.bucket === '0%' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
@@ -18551,11 +18607,11 @@ const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sale
 const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
 const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
 const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
-const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:sales', 'customer', 'documents']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'documents']
 const permKeyToPage = {
   'logistics': 'logistics',
   'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
-  'inventory': 'inventory', 'inventory:sales': 'inventory',
+  'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory',
   ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
   ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
   ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
@@ -18670,7 +18726,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     : null
 
   const setPage = (p) => {
-    if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
+    if (p === 'inventory') goTo('inventory', (allowedTabs?.includes('inventory') || allowedTabs?.includes('inventory:detail')) ? 'health' : 'sales')
     else if (p === 'sales') goTo('sales', defaultSalesTab, 'overall')
     else if (p === 'pnl') goTo('pnl', defaultPnlTab)
     else if (p === 'ads') goTo('ads', defaultAdsPlatform)
@@ -18699,7 +18755,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // user with cost access is bounced straight back to their default page.
       page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
-      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
@@ -18726,9 +18782,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [logisticsRangeLabel, setLogisticsRangeLabel] = useState('')
   // Overview-tab-only static fetches — same minimal fire-and-forget pattern as logisticsData
   // above (no staleness check, no live-API fallback): these are cheap CDN-served precomputed
-  // files already used elsewhere in the app (LogisticsCostPage, InventoryPage, SalesAllocationPage
-  // respectively), just re-fetched here for Overview's own summary tiles.
-  const [logisticsCostData, setLogisticsCostData] = useState(null)
+  // files already used elsewhere in the app (InventoryPage, SalesAllocationPage respectively),
+  // just re-fetched here for Overview's own summary tiles.
   const [salesAllocData, setSalesAllocData] = useState(null)
   const [invSnapshotData, setInvSnapshotData] = useState(null)
   const [overviewCustData, setOverviewCustData] = useState(null)
@@ -18927,7 +18982,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // query cost. `page` is in this same dependency array below so navigating INTO Overview
       // (without also changing the date range) still triggers the fetch.
       if (page === 'overview') {
-        fetch('/logistics-cost-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setLogisticsCostData(j)).catch(() => {})
         fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
         fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
         fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
@@ -18939,23 +18993,27 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
 
+  const adsLoadGenRef = useRef(0)
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
   useEffect(() => {
     if (page !== 'ads') return
     const { start, end } = filters
     if (!start || !end) return
+    const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Return already-loaded cache if it covers the selected range
-        if (adsCacheRef.current && start >= adsCacheRef.current.rollingStart && end <= adsCacheRef.current.rollingEnd) {
+        // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
+        if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
+          if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
           return
         }
         const res = await fetch(`${API}/ads-data.json`)
         if (!res.ok) return
         const json = await res.json()
+        if (gen !== adsLoadGenRef.current) return
         adsCacheRef.current = json
-        if (start >= json.rollingStart && end <= json.rollingEnd) {
+        if (end <= json.rollingEnd) {
           injectAdsFromCache(json, start, end)
         }
       } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
@@ -19149,7 +19207,35 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       credCatAgg[cat].orders += p.orders; credCatAgg[cat].units += p.units
     })
     const slicedCredByCategory = Object.values(credCatAgg).sort((a, b) => b.rev - a.rev)
-    const slicedCredCache = { byCategory: slicedCredByCategory, byProduct: slicedCredByProduct }
+    // Aggregate totals and daily series for CRED from the sliced daily-by-product rows
+    const credTotalsAgg = { rev: 0, excRev: 0, orders: 0, units: 0 }
+    const credDailyMap = {}
+    credDailySliced.forEach(x => {
+      credTotalsAgg.rev += x.rev || 0
+      credTotalsAgg.excRev += x.excRev || 0
+      credTotalsAgg.orders += x.orders || 0
+      credTotalsAgg.units += x.units || 0
+      if (!credDailyMap[x.date]) credDailyMap[x.date] = { date: x.date, rev: 0, excRev: 0, orders: 0, units: 0 }
+      credDailyMap[x.date].rev += x.rev || 0
+      credDailyMap[x.date].excRev += x.excRev || 0
+      credDailyMap[x.date].orders += x.orders || 0
+      credDailyMap[x.date].units += x.units || 0
+    })
+    const credDailyArr = Object.values(credDailyMap).sort((a, b) => a.date.localeCompare(b.date))
+    // Slice CRED additionalSpend from credCache if present
+    const rawCredAddlByProduct = (credCache.additionalSpendByProduct) || {}
+    let slicedCredAddlSpend = 0
+    Object.entries(rawCredAddlByProduct).forEach(([, dayMap]) => {
+      Object.entries(dayMap).forEach(([d, v]) => { if (d >= start && d <= end) slicedCredAddlSpend += v })
+    })
+    const slicedCredAdditionalSpend = slicedCredAddlSpend > 0 ? Math.round(slicedCredAddlSpend) : (credCache.additionalSpend ?? null)
+    const slicedCredCache = {
+      byCategory: slicedCredByCategory,
+      byProduct: slicedCredByProduct,
+      totals: credTotalsAgg,
+      daily: credDailyArr,
+      additionalSpend: slicedCredAdditionalSpend,
+    }
 
     setAdsCachedChMap(cachedChMap)
     setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0, credCache: slicedCredCache })
@@ -19201,7 +19287,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} logisticsCostData={logisticsCostData} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
+              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
@@ -19232,9 +19318,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <CourierAllocationPage onBack={() => goTo('logistics-cost')} />
             </div>
           )}
-          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (
+          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (

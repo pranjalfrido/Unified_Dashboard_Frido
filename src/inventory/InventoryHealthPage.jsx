@@ -130,6 +130,58 @@ function WhCarousel({ locations, filters, facilityTypes }) {
   )
 }
 
+// DOI bands — must match _inventory_shared.js DOI_BANDS + stockStatus logic.
+const REG_DOI_BANDS = { critical: 2, low: 15, sufficient: 45 }
+function regStockStatus(doi, avgSale, totalInvt) {
+  if (totalInvt === 0) return 'Out of Stock'
+  if (avgSale === 0 || avgSale == null) return 'No Demand'
+  if (doi <= REG_DOI_BANDS.critical) return 'Critical'
+  if (doi <= REG_DOI_BANDS.low) return 'Low'
+  if (doi <= REG_DOI_BANDS.sufficient) return 'Sufficient'
+  return 'Excess'
+}
+
+// Returns per-location inventory totals summed from Regular-type facilities only.
+// s.locations[] is pre-aggregated across ALL facility types (warehouse + stores), so
+// it can't be used directly when the Regular toggle is active. s.facilities[] carries
+// facilityType per entry and is the authoritative source for Regular-only numbers.
+// DOI and stockStatus are recomputed from Regular-only totalInvt so they match what's shown.
+// avgSale is location-grain (no facility-type split in sales data) — copied as-is.
+// Falls back to s.locations when facilities array is absent (legacy JSON).
+function regularLocations(s) {
+  const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
+  if (!hasFacilities) return s.locations || []
+  // Use s.locations as the source of which locations to show — it is already filtered by
+  // the active location/facility filter in invData. We only look at Regular facilities
+  // within those locations to compute RTD/RAW/rawBlocked breakdowns.
+  const allowedLocs = new Set((s.locations || []).map(l => l.location))
+  const byLoc = new Map()
+  for (const f of s.facilities) {
+    if (f.facilityType !== 'Regular') continue
+    const loc = f.location
+    if (!allowedLocs.has(loc)) continue
+    if (!byLoc.has(loc)) byLoc.set(loc, { location: loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, avgSale: null, doi: null, stockStatus: null })
+    const acc = byLoc.get(loc)
+    acc.totalInvt += f.totalInvt || 0
+    acc.rtdInvt += f.rtdInvt || 0
+    acc.rawInvt += f.rawInvt || 0
+    acc.rawBlockedInvt += f.rawBlockedInvt || 0
+  }
+  // Merge avgSale from s.locations (location-grain, not facility-grain — sales data has no
+  // facility-type dimension so this is the best available value). Then recompute DOI and
+  // stockStatus fresh from Regular-only totalInvt so they match the inventory shown.
+  for (const l of s.locations || []) {
+    if (byLoc.has(l.location)) {
+      const acc = byLoc.get(l.location)
+      acc.avgSale = l.avgSale
+      const denom = Math.ceil(acc.avgSale || 0)
+      acc.doi = acc.totalInvt > 0 && denom === 0 ? null : (denom > 0 ? Math.floor(acc.totalInvt / denom) : 0)
+      acc.stockStatus = acc.doi == null ? regStockStatus(0, acc.avgSale, acc.totalInvt) : regStockStatus(acc.doi, acc.avgSale, acc.totalInvt)
+    }
+  }
+  return [...byLoc.values()]
+}
+
 // Mobile inventory detail table — sticky Product ID, scrolled to right on mount so
 // Inventory/Avg Sale/DOI are visible by default; Sub-cat revealed by scrolling left.
 const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
@@ -190,7 +242,7 @@ const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableT
                 <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(s.avgSale)}</td>
                 <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtDays(s.doi)}d</td>
               </tr>
-              {expandedSku === s.skuKey && s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0).map(l => (
+              {expandedSku === s.skuKey && regularLocations(s).filter(l => l.totalInvt > 0 || l.avgSale > 0).map(l => (
                 <tr key={`mob-${s.skuKey}-${l.location}`} style={{ background: 'rgba(0,0,0,0.025)', borderBottom: `1px solid ${IC.border}`, height: 26 }}>
                   <td style={{ ...stickyTd('rgba(245,245,246,1)'), color: ths, fontSize: 10.5, paddingLeft: 10 }}>↳ {l.location}</td>
                   <td style={{ padding: P }} />
@@ -349,10 +401,6 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
   const onSort = key => setSort(prev => prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
   const [selectedFacilities, setSelectedFacilities] = useState([])
-  const headerScrollRef = useRef(null)
-  const bodyScrollRef = useRef(null)
-  const syncFromBody = e => { if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
-  const syncFromHeader = e => { if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft }
 
   const facilityOptions = useMemo(
     () => allFacilities.filter(f => f.facilityType === facilityType).sort((a, b) => a.facility.localeCompare(b.facility)),
@@ -360,6 +408,19 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   )
   // Column headers show the human-readable Store_Location (e.g. "Amanora Mall, PNQ") instead
   // of the raw facility code (e.g. "Frido_0002") when available.
+  // For Dark Store columns, strip the city prefix (e.g. "Bangalore Domlur" → "Domlur") so the
+  // neighborhood name is visible in the narrow 90px column instead of "BANGALOR..." for all.
+  const colLabel = (facility) => {
+    const loc = allFacilities.find(f => f.facility === facility)
+    const name = loc?.storeLocation || facility
+    if (facilityType === 'Dark Store') {
+      const cityPrefixes = ['Bangalore ', 'Mumbai ', 'Hyderabad ', 'Chennai ', 'Delhi ', 'Kolkata ', 'Pune ', 'Gurugram ']
+      for (const prefix of cityPrefixes) {
+        if (name.startsWith(prefix)) return name.slice(prefix.length)
+      }
+    }
+    return name
+  }
   const storeLocationByFacility = useMemo(
     () => new Map(allFacilities.map(f => [f.facility, f.storeLocation || f.facility])),
     [allFacilities]
@@ -436,8 +497,8 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
   const frozenLeft = idx => FROZEN_WIDTHS.slice(0, idx).reduce((a, b) => a + b, 0)
   const frozenStyle = idx => ({ position: 'sticky', left: frozenLeft(idx), zIndex: 2 })
 
-  const th = (label, key, align = 'right', frozenIdx = null) => (
-    <th onClick={() => onSort(key)} title={label}
+  const th = (label, key, align = 'right', frozenIdx = null, tooltip = null) => (
+    <th onClick={() => onSort(key)} title={tooltip || label}
       style={{
         textAlign: align, padding: '6px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none',
@@ -445,7 +506,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
         background: IC.surface,
         position: 'sticky', top: 0,
         zIndex: frozenIdx != null ? 4 : 2,
-        ...(frozenIdx != null ? frozenStyle(frozenIdx) : {}),
+        ...(frozenIdx != null ? { left: frozenLeft(frozenIdx) } : {}),
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
     </th>
@@ -474,9 +535,9 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
       {sortedRows.length === 0 ? (
         <div style={{ color: IC.t3, fontSize: 12 }}>No inventory at {selectedFacilities.length > 0 ? 'the selected store(s)' : `${facilityType} facilities`}.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${IC.border}`, borderRadius: 8, overflow: 'hidden' }}>
-          {/* Fixed header — scrolls horizontally in sync with body */}
-          <div ref={headerScrollRef} onScroll={syncFromHeader} style={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
+        <div style={{ border: `1px solid ${IC.border}`, borderRadius: 8, overflow: 'hidden' }}>
+          {/* Single scroll container — sticky thead + tfoot + sticky left columns all work natively */}
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
             <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
@@ -487,25 +548,16 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   {th('Category', 'category', 'left', 0)}
                   {th('Sub-category', 'subCategory', 'left', 1)}
                   {th('Product ID', 'sku', 'left', 2)}
-                  {columns.map(c => th(storeLocationByFacility.get(c) || c, colKey(c)))}
+                  {columns.map(c => th(colLabel(c), colKey(c), 'right', null, storeLocationByFacility.get(c) || c))}
                   {th('Total Invt', 'totalInvt')}
                 </tr>
                 <tr style={{ height: 1 }}>
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(0) }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(1) }} />
-                  <td style={{ padding: 0, height: 1, background: IC.border, ...frozenStyle(2) }} />
-                  <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(0), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(1), zIndex: 3 }} />
+                  <td style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0, left: frozenLeft(2), zIndex: 3 }} />
+                  <td colSpan={columns.length + 1} style={{ padding: 0, height: 1, background: IC.border, position: 'sticky', top: 0 }} />
                 </tr>
               </thead>
-            </table>
-          </div>
-          {/* Scrollable body */}
-          <div ref={bodyScrollRef} onScroll={syncFromBody} style={{ overflowX: 'auto', overflowY: 'auto', height: 370 }}>
-            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
-                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
-              </colgroup>
               <tbody>
                 {sortedRows.map(r => (
                   <tr key={r.sku} style={{ borderBottom: `1px solid ${IC.border}`, height: 34 }}>
@@ -519,16 +571,10 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-          {/* Fixed footer total */}
-          <div ref={null} style={{ overflowX: 'hidden', borderTop: `1px solid ${IC.border}` }}>
-            <table style={{ width: FROZEN_WIDTHS.reduce((a,b)=>a+b,0) + columns.length * 90 + 90, borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: FROZEN_WIDTHS[0] }} /><col style={{ width: FROZEN_WIDTHS[1] }} /><col style={{ width: FROZEN_WIDTHS[2] }} />
-                {columns.map(c => <col key={c} style={{ width: 90 }} />)}<col style={{ width: 90 }} />
-              </colgroup>
-              <tbody>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
+                <tr style={{ borderTop: `1px solid ${IC.border}`, height: 1 }}>
+                  <td colSpan={columns.length + 4} style={{ padding: 0, height: 1, background: IC.border }} />
+                </tr>
                 <tr style={{ background: IC.surface, height: 34 }}>
                   <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, background: IC.surface, ...frozenStyle(0), zIndex: 2 }}>Total</td>
                   <td style={{ padding: '7px 10px', background: IC.surface, ...frozenStyle(1), zIndex: 2 }} />
@@ -538,7 +584,7 @@ function SimpleFacilityTypeTable({ skus, facilityType, search = '', locationOrde
                   ))}
                   <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', background: IC.surface }}>{fmtInt(total)}</td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -644,131 +690,6 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   )
 }
 
-// Independent Avg Sale table for Mobility & Ergo Furniture — see mobilityErgoAvgSale in
-// scripts/generate-inv-cache.mjs for the calculation itself (adaptive-window, all-location,
-// no exclusions on Cancelled/RTO). Deliberately NOT wired to the Location sidebar filter — this
-// table's numbers are driven entirely by each SKU's own selling history, not the page's
-// location/date-range selection, so it stays visually and functionally separate from the main
-// Inventory Detail table (same reasoning as why it's a distinct backend field, not folded into
-// `skus`).
-const MOBILITY_ERGO_COLS = [
-  { key: 'category', label: 'Category', align: 'left', width: 110 },
-  { key: 'subCategory', label: 'Sub-Category', align: 'left', width: 160 },
-  { key: 'sku', label: 'Product ID', align: 'left', width: 130 },
-  { key: 'rtdInvt', label: 'RTD Invt', width: 78 },
-  { key: 'rawInvt', label: 'Raw Invt', width: 78 },
-  { key: 'rawBlockedInvt', label: 'Raw Blocked', width: 90 },
-  { key: 'totalInvt', label: 'Total Invt', width: 84 },
-  { key: 'lifeDays', label: 'Selling Life', width: 90 },
-  { key: 'windowDays', label: 'Window Used', width: 130 },
-  { key: 'avgSaleNew', label: 'Avg Sale', width: 82 },
-  { key: 'avgSaleCurrent', label: 'Avg Sale (Std 7d)', width: 110 },
-  { key: 'doi', label: 'DOI', width: 64 },
-  { key: 'stockStatus', label: 'Status', width: 110 },
-  { key: 'websiteStatus', label: 'Website Status', width: 110 },
-]
-
-function MobilityErgoAvgSaleTable({ rows }) {
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
-  const onSort = key => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
-
-  const q = search.trim().toLowerCase()
-  const filtered = q ? rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q)) : rows
-  const sorted = [...filtered].sort((a, b) => {
-    const sign = sort.dir === 'asc' ? 1 : -1
-    const av = a[sort.key], bv = b[sort.key]
-    if (typeof av === 'string') return sign * av.localeCompare(bv)
-    return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
-  })
-
-  const totals = filtered.reduce((acc, r) => ({
-    rtdInvt: acc.rtdInvt + (r.rtdInvt || 0), rawInvt: acc.rawInvt + (r.rawInvt || 0),
-    rawBlockedInvt: acc.rawBlockedInvt + (r.rawBlockedInvt || 0), totalInvt: acc.totalInvt + (r.totalInvt || 0),
-  }), { rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, totalInvt: 0 })
-
-  const exportRows = filtered.map(r => ({
-    Category: r.category, SubCategory: r.subCategory, ProductID: r.sku,
-    RTDInvt: r.rtdInvt, RawInvt: r.rawInvt, RawBlocked: r.rawBlockedInvt, TotalInvt: r.totalInvt,
-    SellingLifeDays: r.lifeDays, WindowStart: r.windowStart, WindowEnd: r.windowEnd, WindowDays: r.windowDays,
-    AvgSale: r.avgSaleNew, AvgSaleStd7d: r.avgSaleCurrent, DOI: r.doi, Status: r.stockStatus, WebsiteStatus: r.websiteStatus,
-  }))
-
-  return (
-    <GlassCard
-      title="Avg Sale · Mobility &amp; Ergo Furniture"
-      note={`${fmtInt(filtered.length)} of ${fmtInt(rows.length)} SKUs · adaptive-window calculation, all locations`}
-      action={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input placeholder="Search category / product…" value={search} onChange={e => setSearch(e.target.value)}
-            style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 200, boxSizing: 'border-box' }} />
-          <ExportButton filename="mobility_ergo_avg_sale.csv" rows={exportRows}
-            columns={[
-              { label: 'Category', key: 'Category' }, { label: 'Sub-Category', key: 'SubCategory' }, { label: 'Product ID', key: 'ProductID' },
-              { label: 'RTD Invt', key: 'RTDInvt' }, { label: 'RAW Invt', key: 'RawInvt' }, { label: 'RAW Blocked', key: 'RawBlocked' }, { label: 'Total Invt', key: 'TotalInvt' },
-              { label: 'Selling Life (days)', key: 'SellingLifeDays' }, { label: 'Window Start', key: 'WindowStart' }, { label: 'Window End', key: 'WindowEnd' }, { label: 'Window (days)', key: 'WindowDays' },
-              { label: 'Avg Sale', key: 'AvgSale' }, { label: 'Avg Sale (Std 7d)', key: 'AvgSaleStd7d' }, { label: 'DOI', key: 'DOI' }, { label: 'Status', key: 'Status' }, { label: 'Website Status', key: 'WebsiteStatus' },
-            ]} />
-        </div>
-      }>
-      <div style={{ maxHeight: 520, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-          <colgroup>{MOBILITY_ERGO_COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}</colgroup>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surface }}>
-            <tr>
-              {MOBILITY_ERGO_COLS.map(c => (
-                <SortableTh key={c.key} label={c.label} sortKey={c.key} sortState={sort} onSort={onSort} align={c.align} />
-              ))}
-            </tr>
-            {/* Divider as a real filler row (genuine table content, 1px tall) — border/box-shadow
-                on this sticky <thead> proved unreliable (not rendering despite being in the CSS). */}
-            <tr style={{ height: 1 }}><td colSpan={MOBILITY_ERGO_COLS.length} style={{ padding: 0, height: 1, background: IC.border }} /></tr>
-          </thead>
-          <tbody>
-            {sorted.map((r, i) => (
-              <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}`, height: 32 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
-                <td style={{ padding: '8px 12px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
-                <td style={{ padding: '8px 12px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rtdInvt)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rawInvt)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.status.Low.c }}>{fmtInt(r.rawBlockedInvt)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtDays(r.lifeDays)}d</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10.5, color: IC.t3 }} title={`${r.windowStart} → ${r.windowEnd}`}>{fmtDays(r.windowDays)}d</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
-                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                    background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
-                    color: r.websiteStatus === 'Live' ? IC.status.Sufficient.c : IC.status.Critical.c,
-                  }}>{r.websiteStatus}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr style={{ height: 1 }}><td colSpan={MOBILITY_ERGO_COLS.length} style={{ padding: 0, height: 1, background: IC.border }} /></tr>
-            <tr style={{ position: 'sticky', bottom: 0, background: IC.surface, height: 34 }}>
-              <td style={{ padding: '7px 10px', fontWeight: 700, fontSize: 11, color: IC.t3 }} colSpan={3}>{filtered.length} SKUs</td>
-              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rtdInvt)}</td>
-              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rawInvt)}</td>
-              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.status.Low.c }}>{fmtInt(totals.rawBlockedInvt)}</td>
-              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.totalInvt)}</td>
-              <td colSpan={7} />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </GlassCard>
-  )
-}
-
 function WarehouseCard({ loc, selected }) {
   const rtdPct = loc.totalInvt > 0 ? (loc.rtdInvt / loc.totalInvt) * 100 : 0
   const borderColor = IC.status[loc.stockStatus]?.c || IC.border
@@ -836,6 +757,49 @@ function TileToggle({ label, active, onClick }) {
   )
 }
 
+function MobileAccordionSlicer({ label, options, selected, onChange, getKey, getLabel }) {
+  const [open, setOpen] = useState(false)
+  const key = getKey || (o => o)
+  const lbl = getLabel || (o => o)
+  const selCount = selected.length
+  const toggle = k => {
+    const next = selected.includes(k) ? selected.filter(x => x !== k) : [...selected, k]
+    onChange(next)
+  }
+  return (
+    <div style={{ borderRadius: 8, border: `1px solid ${IC.border}`, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', padding: '9px 12px', cursor: 'pointer', background: selCount > 0 ? IC.accDim : IC.surface, gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 12.5, fontWeight: selCount > 0 ? 700 : 500, color: IC.t1 }}>{label}</span>
+        {selCount > 0 && (
+          <>
+            <span style={{ fontSize: 10, fontWeight: 700, background: IC.accBorder, color: '#fff', borderRadius: 10, padding: '1px 7px' }}>{selCount}</span>
+            <button onClick={e => { e.stopPropagation(); onChange([]) }} style={{ background: 'none', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+          </>
+        )}
+        <span style={{ fontSize: 13, color: IC.t3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', lineHeight: 1 }}>›</span>
+      </div>
+      {open && (
+        <div style={{ background: IC.page, borderTop: `1px solid ${IC.border}`, maxHeight: 220, overflowY: 'auto' }}>
+          {options.length === 0 && <div style={{ padding: '10px 12px', fontSize: 12, color: IC.t3 }}>No options</div>}
+          {options.map(o => {
+            const k = key(o), l = lbl(o), checked = selected.includes(k)
+            return (
+              <div key={k} onClick={() => toggle(k)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer', background: checked ? IC.accDim : 'transparent' }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: `2px solid ${checked ? IC.accBorder : IC.border2}`, background: checked ? IC.accBorder : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <span style={{ fontSize: 9, color: '#fff', lineHeight: 1 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 12.5, color: checked ? IC.t1 : IC.t2, fontWeight: checked ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop, popover, facilityView }) {
   const opts = data.filterOptions
   // Facility slicer only offers facilities matching the active Regular/Other Facilities tab —
@@ -893,10 +857,10 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           </div>
           <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
           <SidebarSectionTitle title="Filters" />
-          <SearchableMultiSelect label="Facility" options={facilityOptionsForView} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
-          <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
+          <MobileAccordionSlicer label="Facility" options={facilityOptionsForView} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} />
+          <MobileAccordionSlicer label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} />
+          <MobileAccordionSlicer label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} />
+          <MobileAccordionSlicer label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} />
           {anyActive && (
             <button onClick={() => setFilters({})} style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
               ✕ Clear all filters
@@ -1188,7 +1152,9 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef(null)
   React.useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = e => {
+      if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-smsel-panel]')) setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
@@ -1217,28 +1183,41 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   )
 }
 
-const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 250)
-    return () => clearTimeout(t)
-  }, [searchInput])
+  const searchDebounceRef = useRef(null)
+  const handleSearchChange = useCallback(e => {
+    const val = e.target.value
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => setSearch(val), 250)
+  }, [])
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
 
-  // Desktop table virtualization
   const tableScrollRef = useRef(null)
+  const vScrollTopRef = useRef(0)
   const [vScrollTop, setVScrollTop] = useState(0)
+  const rafRef = useRef(null)
   const ROW_H = 34
-  const OVERSCAN = 5
-  const useVirtual = !expandedSku
+  const OVERSCAN = 15
+  const useVirtual = false
+  useEffect(() => {
+    const el = tableScrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      vScrollTopRef.current = el.scrollTop
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => setVScrollTop(el.scrollTop))
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -1307,13 +1286,27 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const regularSkus = useMemo(() => {
     if (!data) return []
     return data.skus.map(s => {
-      let reg = (s.facilities || []).filter(f => f.facilityType === 'Regular')
-      if (selectedFacilitySet) reg = reg.filter(f => selectedFacilitySet.has(f.facility))
-      if (selectedLocationSet) reg = reg.filter(f => selectedLocationSet.has(f.location))
-      const totalInvt = reg.reduce((sum, f) => sum + (f.totalInvt || 0), 0)
-      const rtdInvt = reg.reduce((sum, f) => sum + (f.rtdInvt || 0), 0)
-      const rawInvt = reg.reduce((sum, f) => sum + (f.rawInvt || 0), 0)
-      const rawBlockedInvt = reg.reduce((sum, f) => sum + (f.rawBlockedInvt || 0), 0)
+      // s.facilities (with facilityType) is the preferred source; fall back to s.locations
+      // when the cached JSON was generated before the facilities field was added to the script.
+      const hasFacilities = Array.isArray(s.facilities) && s.facilities.length > 0
+      if (hasFacilities) {
+        let reg = s.facilities.filter(f => f.facilityType === 'Regular')
+        if (selectedFacilitySet) reg = reg.filter(f => selectedFacilitySet.has(f.facility))
+        if (selectedLocationSet) reg = reg.filter(f => selectedLocationSet.has(f.location))
+        const totalInvt = reg.reduce((sum, f) => sum + (f.totalInvt || 0), 0)
+        const rtdInvt = reg.reduce((sum, f) => sum + (f.rtdInvt || 0), 0)
+        const rawInvt = reg.reduce((sum, f) => sum + (f.rawInvt || 0), 0)
+        const rawBlockedInvt = reg.reduce((sum, f) => sum + (f.rawBlockedInvt || 0), 0)
+        return { ...s, totalInvt, rtdInvt, rawInvt, rawBlockedInvt }
+      }
+      // Legacy JSON: s.locations[] has location/totalInvt/rtdInvt/rawInvt/rawBlockedInvt
+      // All entries are Regular warehouses (no facilityType discrimination possible).
+      let locs = s.locations || []
+      if (selectedLocationSet) locs = locs.filter(l => selectedLocationSet.has(l.location))
+      const totalInvt = locs.reduce((sum, l) => sum + (l.totalInvt || 0), 0)
+      const rtdInvt = locs.reduce((sum, l) => sum + (l.rtdInvt || 0), 0)
+      const rawInvt = locs.reduce((sum, l) => sum + (l.rawInvt || 0), 0)
+      const rawBlockedInvt = locs.reduce((sum, l) => sum + (l.rawBlockedInvt || 0), 0)
       return { ...s, totalInvt, rtdInvt, rawInvt, rawBlockedInvt }
     })
   }, [data, selectedFacilitySet, selectedLocationSet])
@@ -1340,8 +1333,12 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (!selectedFacilitySet || !data) return null
     const byLoc = new Map()
     for (const s of regularSkus) {
-      for (const f of (s.facilities || [])) {
-        if (f.facilityType !== 'Regular' || !selectedFacilitySet.has(f.facility)) continue
+      // s.facilities has per-facility granularity needed for Facility slicer;
+      // legacy JSON only has s.locations (no facility-level split available).
+      const entries = Array.isArray(s.facilities) && s.facilities.length > 0
+        ? s.facilities.filter(f => f.facilityType === 'Regular' && selectedFacilitySet.has(f.facility))
+        : [] // legacy JSON: can't scope by facility name, byLoc stays empty
+      for (const f of entries) {
         const acc = byLoc.get(f.location) || { totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0 }
         acc.totalInvt += f.totalInvt || 0
         acc.rtdInvt += f.rtdInvt || 0
@@ -1350,12 +1347,16 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         byLoc.set(f.location, acc)
       }
     }
-    // Keep every other field (avgSale/doi/stockStatus/etc.) from the original location object —
-    // only the inventory figures need to be facility-scoped; sales/allocation data has no
-    // facility identity to split by (same reasoning WhCarousel already applies for facilityTypes).
+    // avgSale/allocationPct stay as the location's original values — sales data has no
+    // facility-level split. Recompute doi and stockStatus from the scoped totalInvt so the
+    // card's DOI badge and status chip reflect the selected facility's actual inventory.
     return data.locations.map(loc => {
       const scoped = byLoc.get(loc.location)
-      return scoped ? { ...loc, ...scoped, byFacilityType: [{ facilityType: 'Regular', ...scoped }] } : { ...loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, byFacilityType: [] }
+      if (!scoped) return { ...loc, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, doi: 0, stockStatus: 'Out of Stock', byFacilityType: [] }
+      const denom = Math.ceil(loc.avgSale || 0)
+      const doi = scoped.totalInvt > 0 && denom === 0 ? null : (denom > 0 ? Math.floor(scoped.totalInvt / denom) : 0)
+      const stockStatus = doi == null ? regStockStatus(0, loc.avgSale, scoped.totalInvt) : regStockStatus(doi, loc.avgSale, scoped.totalInvt)
+      return { ...loc, ...scoped, doi, stockStatus, byFacilityType: [{ facilityType: 'Regular', ...scoped }] }
     })
   }, [selectedFacilitySet, regularSkus, data])
 
@@ -1376,11 +1377,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     if (filters.websiteStatus?.length) rows = rows.filter(r => filters.websiteStatus.includes(r.websiteStatus))
     if (filters.location?.length) {
       const locSet = new Set(filters.location)
-      rows = rows.filter(r => (r.facilities || []).some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0))
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      rows = rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q))
+      rows = rows.filter(r => {
+        const hasFacilities = Array.isArray(r.facilities) && r.facilities.length > 0
+        if (hasFacilities) return r.facilities.some(f => f.facilityType === 'Regular' && locSet.has(f.location) && (f.totalInvt || 0) > 0)
+        return (r.locations || []).some(l => locSet.has(l.location) && (l.totalInvt || 0) > 0)
+      })
     }
     const { key, dir } = sort
     const sign = dir === 'asc' ? 1 : -1
@@ -1393,14 +1394,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       return sign * (av - bv)
     })
     return rows
-  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, search, sort])
+  }, [data, regularSkus, filters.category, filters.subCategory, filters.productId, filters.stockStatus, filters.rtdLevel, filters.websiteStatus, filters.location, sort])
+
+  // Search applies only to Inventory Detail table — not to pivot/slow-moving/dead-stock
+  const detailSkus = useMemo(() => {
+    if (!search.trim()) return filteredSkus
+    const q = search.trim().toLowerCase()
+    return filteredSkus.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q))
+  }, [filteredSkus, search])
 
   // Footer totals for the Inventory Detail table — sums the measure columns across
   // whatever's currently visible (search + slicers applied), so it reads as "total for
   // what I'm looking at," not the whole unfiltered dataset.
   const tableTotals = useMemo(() => {
     const t = { rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, totalInvt: 0, avgSale: 0, orderAllocation: 0 }
-    for (const s of filteredSkus) {
+    for (const s of detailSkus) {
       t.rtdInvt += s.rtdInvt
       t.rawInvt += s.rawInvt
       t.rawBlockedInvt += s.rawBlockedInvt
@@ -1411,58 +1419,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     const denominator = Math.ceil(Math.max(t.avgSale, t.orderAllocation))
     t.doi = denominator > 0 ? Math.floor(t.totalInvt / denominator) : null
     return t
-  }, [filteredSkus])
+  }, [detailSkus])
 
-  // Location-Wise Inventory pivot — restricted to whatever SKUs survive filteredSkus (Regular
-  // scope + every sidebar filter), so this table respects the same Category/Sub-category/
-  // Product ID/Stock Status/RTD Level/Location/Facility selections as Inventory Detail above
-  // it, instead of always showing the full company-wide pivot regardless of what's filtered.
+  // Location-Wise Inventory pivot — always company-wide, not affected by sidebar filters.
   const filteredPivot = useMemo(() => {
-    const keySet = new Set(filteredSkus.map(s => s.sku))
-    const locSet = filters.location?.length ? new Set(filters.location) : null
-    const locations = locSet ? data.pivot.locations.filter(l => locSet.has(l)) : data.pivot.locations
-    const rows = data.pivot.rows.filter(r => keySet.has(r.sku))
-    return { locations, rows }
-  }, [data, filteredSkus, filters.location])
-
-  // Slow Moving / Dead Stock — recomputed from filteredSkus (Regular-scoped + every sidebar
-  // filter applied) instead of the server-side data.slowMoving/data.deadStock, which are
-  // always company-wide regardless of what's selected in the sidebar. Same thresholds/logic
-  // as the server-side version (scripts/generate-inv-cache.mjs): a sub-category counts as
-  // "dead" if it's not selling and holds >200 units, or its DOI exceeds 200; "slow moving" if
-  // not selling at all, or DOI exceeds 45. Sub-categories with ≤50 total units, or starting
-  // with "spareparts", are excluded — same floor as the server-side computation.
-  const filteredSubCatRows = useMemo(() => {
-    const SUBCAT_QTY_FLOOR = 50
-    const map = new Map()
-    for (const s of filteredSkus) {
-      const key = `${s.category}|${s.subCategory}`
-      if (!map.has(key)) map.set(key, { category: s.category, subCategory: s.subCategory, totalInvt: 0, avgSale: 0, skuList: [] })
-      const acc = map.get(key)
-      acc.totalInvt += s.totalInvt; acc.avgSale += s.avgSale; acc.skuList.push(s)
+    const WH_LOCATIONS = new Set(['PNQ', 'GGN', 'BLR', 'MUM', 'KOL', 'HYD', 'CHN'])
+    return {
+      locations: data.pivot.locations.filter(l => WH_LOCATIONS.has(l)),
+      rows: data.pivot.rows,
     }
-    return [...map.values()]
-      .filter(sc => sc.totalInvt > SUBCAT_QTY_FLOOR && !sc.subCategory?.toLowerCase().startsWith('sparepart'))
-      .map(sc => {
-        const notBeingSold = sc.avgSale <= 0
-        const doi = notBeingSold ? Math.round(sc.totalInvt) : Math.floor(sc.totalInvt / sc.avgSale)
-        return {
-          category: sc.category, subCategory: sc.subCategory,
-          totalInvt: Math.round(sc.totalInvt), avgSale: +sc.avgSale.toFixed(2), doi, notBeingSold,
-          skus: sc.skuList.filter(s => s.totalInvt > 0)
-            .map(s => ({ sku: s.sku, totalInvt: Math.round(s.totalInvt), avgSale: +s.avgSale.toFixed(2), doi: s.avgSale > 0 ? s.doi : Math.round(s.totalInvt) }))
-            .sort((a, b) => b.totalInvt - a.totalInvt),
-        }
-      })
-  }, [filteredSkus])
-  const filteredDeadStock = useMemo(
-    () => filteredSubCatRows.filter(sc => (sc.notBeingSold && sc.totalInvt > 200) || sc.doi > 200).sort((a, b) => b.totalInvt - a.totalInvt),
-    [filteredSubCatRows]
-  )
-  const filteredSlowMoving = useMemo(
-    () => filteredSubCatRows.filter(sc => sc.notBeingSold || sc.doi > 45).sort((a, b) => b.totalInvt - a.totalInvt),
-    [filteredSubCatRows]
-  )
+  }, [data])
+
+  // Slow Moving / Dead Stock — always company-wide from the pre-computed cache,
+  // not affected by sidebar filters.
+  const filteredSlowMoving = data.slowMoving
+  const filteredDeadStock = data.deadStock
 
   // Export rows flatten each sub-category's collapsed `skus[]` array to one row per SKU —
   // the on-screen table stays collapsed-by-default, but the CSV needs the SKU-level detail.
@@ -1496,8 +1467,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // Inventory Detail export: one row per (SKU, location) — mirrors the on-screen table's
   // expand-to-locations view, but flattened for CSV instead of collapsed by default.
   const inventoryDetailExportRows = useMemo(() => {
-    return filteredSkus.flatMap(s =>
-      s.locations
+    return detailSkus.flatMap(s =>
+      regularLocations(s)
         .filter(l => l.totalInvt > 0 || l.avgSale > 0)
         .map(l => ({
           category: s.category, subCategory: s.subCategory, sku: s.sku, location: l.location,
@@ -1506,9 +1477,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           websiteStatus: s.websiteStatus,
         }))
     )
-  }, [filteredSkus])
+  }, [detailSkus])
 
   if (!data) return null
+
+  // Users with only inventory:detail access see just the Inventory Detail table — KPIs and
+  // Warehouse Health are hidden. Full inventory access (or admin) sees everything.
+  const showDetailOnly = allowedTabs != null && !allowedTabs.includes('inventory') && allowedTabs.includes('inventory:detail')
 
   // The collapse-toggle button used to sit in normal document flow right after the fixed
   // sidebar, assuming it would land flush against the sidebar's edge — but a position:fixed
@@ -1524,7 +1499,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           longer sits where content begins - this padding is just the page gutter. */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
+{/* Toggle row: facility toggle on left, snapshot info + Filters popover on right (desktop only) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <PillToggle
             options={[{ value: 'regular', label: 'Regular' }, { value: 'other', label: 'Other Facilities' }]}
@@ -1554,7 +1529,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         {facilityView === 'regular' ? <>
 
         {/* KPI row — desktop: 7-col grid; mobile: swipe carousel */}
-        <KpiCarousel>
+        {!showDetailOnly && <KpiCarousel>
           <KpiTile compact label="Total Inventory" value={fmtNum(regularSummary.totalInvt)} unit="units" icon="/inv-icon-total.png" />
           <KpiTile compact label="RTD Inventory" value={fmtNum(regularSummary.rtdInvt)} unit="units" icon="/inv-icon-rtd.jpg" />
           <KpiTile compact label="RAW Inventory" value={fmtNum(regularSummary.rawInvt)} unit="units" icon="/inv-icon-raw.png" />
@@ -1562,20 +1537,20 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           <KpiTile compact label="Avg Sale (B2C)" value={fmtNum(data.summary.avgSaleB2C)} unit="units/day" icon="/inv-icon-avgsale.png" />
           <KpiTile compact label="Total Avg Sale" value={fmtNum(data.summary.totalAvgSale)} unit="units/day" icon="/inv-icon-totalavgsale.png" />
           <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="/inv-icon-doi.png" />
-        </KpiCarousel>
+        </KpiCarousel>}
 
         {/* Warehouse Health — desktop: GlassCard grid; mobile: swipe carousel */}
-        <WhCarousel locations={facilityScopedLocations || data.locations} filters={filters} facilityTypes={['Regular']} />
+        {!showDetailOnly && <WhCarousel locations={facilityScopedLocations || data.locations} filters={filters} facilityTypes={['Regular']} />}
 
         {/* Main inventory table */}
         <div className="inv-detail-card"><GlassCard
           title="Inventory Detail"
-          note={<span className="inv-detail-desktop-only">{`${fmtInt(filteredSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}</span>}
+          note={<span className="inv-detail-desktop-only">{`${fmtInt(detailSkus.length)} of ${fmtInt(data.rawSkuCount ?? data.skus.length)} SKUs`}</span>}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
                 onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} /></span>
-              <input placeholder="Search…" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+              <input placeholder="Search…" onChange={handleSearchChange}
                 className="inv-detail-search"
                 style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
               <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
@@ -1598,10 +1573,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           }
         >
         {/* Mobile table: sticky Product ID + 6 scrollable cols */}
-        <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
+        <MobDetailTable filteredSkus={detailSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
         {/* Desktop table */}
-        <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}
-          onScroll={e => setVScrollTop(e.currentTarget.scrollTop)}>
+        <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surface }}>
               <tr>
@@ -1622,21 +1596,20 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               {(() => {
                 const containerH = tableScrollRef.current ? tableScrollRef.current.clientHeight : window.innerHeight * 0.58
                 const startIdx = useVirtual ? Math.max(0, Math.floor(vScrollTop / ROW_H) - OVERSCAN) : 0
-                const endIdx = useVirtual ? Math.min(filteredSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : filteredSkus.length
+                const endIdx = useVirtual ? Math.min(detailSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : detailSkus.length
                 const topSpacerH = useVirtual ? startIdx * ROW_H : 0
-                const bottomSpacerH = useVirtual ? (filteredSkus.length - endIdx) * ROW_H : 0
+                const bottomSpacerH = useVirtual ? (detailSkus.length - endIdx) * ROW_H : 0
                 return (
                   <>
                     {topSpacerH > 0 && <tr style={{ height: topSpacerH }}><td colSpan={colOrder.length} /></tr>}
-                    {filteredSkus.slice(startIdx, endIdx).map((s, relIdx) => {
+                    {detailSkus.slice(startIdx, endIdx).map((s, relIdx) => {
                 const i = startIdx + relIdx
-                const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
+                const activeLocations = regularLocations(s).filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
                     <tr onClick={() => toggleExpandedSku(s.skuKey)}
-                      style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34 }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      className="inv-sku-row"
+                      style={{ borderBottom: `1px solid ${IC.border}`, height: 34, contentVisibility: 'auto', containIntrinsicSize: '0 34px' }}>
                       {colOrder.map(key => {
                         if (hiddenCols.has(key)) return <td key={key} style={{ padding: 0, width: 0, overflow: 'hidden' }} />
                         const def = COLUMN_DEFS[key]
@@ -1666,9 +1639,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                       </tr>
                     )}
                     {expandedSku === s.skuKey && activeLocations.map(l => (
-                      <tr key={s.skuKey + l.location} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 30 }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.045)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}>
+                      <tr key={s.skuKey + l.location} className="inv-loc-row" style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 30 }}>
                         {colOrder.map(key => {
                           if (hiddenCols.has(key)) return <td key={key} style={{ padding: 0, width: 0, overflow: 'hidden' }} />
                           const def = COLUMN_DEFS[key]
@@ -1716,7 +1687,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                   const cellStyle = { padding: '7px 10px', textAlign: def.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700, color: IC.t1 }
                   if (key === 'category') return <td key={key} style={cellStyle}>Total</td>
                   if (key === 'subCategory') return <td key={key} style={cellStyle} />
-                  if (key === 'sku') return <td key={key} style={{ ...cellStyle, fontSize: 11, color: IC.t3, fontWeight: 500 }}>{filteredSkus.length} SKUs</td>
+                  if (key === 'sku') return <td key={key} style={{ ...cellStyle, fontSize: 11, color: IC.t3, fontWeight: 500 }}>{detailSkus.length} SKUs</td>
                   if (key === 'rtdInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rtdInvt)}</td>
                   if (key === 'rawInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rawInvt)}</td>
                   if (key === 'rawBlockedInvt') return <td key={key} style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtInt(tableTotals.rawBlockedInvt)}</td>
@@ -1734,6 +1705,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       </GlassCard></div>
 
       {/* Location-wise pivot table — hidden on mobile */}
+      {!showDetailOnly && <>
       <div className="inv-detail-desktop-only"><GlassCard title="Location-Wise Inventory & Avg Sale"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1783,24 +1755,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
       </div>
+      </>}
 
-      {/* Mobility & Ergo Furniture — independent Avg Sale table. Not gated by any sidebar
-          filter (location/facility/category/etc.) — see MOBILITY_ERGO_COLS comment above for
-          why this is deliberately separate from the main Inventory Detail table. */}
-      {data.mobilityErgoAvgSale?.length > 0 && (
-        <div style={{ paddingBottom: 20 }}>
-          <MobilityErgoAvgSaleTable rows={data.mobilityErgoAvgSale} />
+</> : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '80px 24px', color: IC.t3 }}>
+          <span style={{ fontSize: 32 }}>🔧</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: IC.t2 }}>Other Facilities — Under Maintenance</span>
+          <span style={{ fontSize: 13, color: IC.t3 }}>This section is currently being updated. Please check back soon.</span>
         </div>
-      )}
-      </> : (
-        <OtherFacilitiesTable skus={data.skus} search={search} locationOrder={data.filterOptions.locations} allFacilities={data.filterOptions.facilities} />
       )}
       </div>
     </div>
   )
 })
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate }) {
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
@@ -1808,7 +1777,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       data={data} filters={filters} setFilters={setFilters}
       sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
       facilityViewProp={facilityViewProp} setFacilityViewProp={setFacilityViewProp}
-      asOf={asOf} lastSalesDate={lastSalesDate}
+      asOf={asOf} lastSalesDate={lastSalesDate} allowedTabs={allowedTabs}
     />
   )
 }

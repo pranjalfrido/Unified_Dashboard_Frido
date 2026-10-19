@@ -254,16 +254,15 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
     if (!cached) return
-    // If cache has rawRows, always use it for client-side date filtering — never fall back to BQ.
-    // (Raw rows cover the full FY window; dates before cache start simply yield no data rows,
-    // which is correct. Avoids live BQ calls that time out on Vercel's 60s limit.)
-    if (cachedDataRef.current?.rawRows) {
+    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    // If cache has rawRows and selected range is within the cached window, use client-side filtering.
+    // If outside the cache window (e.g. prior FY), fall through to BQ API.
+    if (cachedDataRef.current?.rawRows && withinCache) {
       setData(cachedDataRef.current)
       return
     }
-    // No rawRows in cache — fall back to API only if date range is outside cached window
-    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
-    if (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current))) {
+    // No rawRows, or range is outside cache — fall back to API
+    if (!cachedDataRef.current?.rawRows && (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current)))) {
       if (cachedDataRef.current) setData(cachedDataRef.current)
       return
     }
@@ -289,8 +288,9 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       }
     }
     if (!cached) return // still on initial load
-    // If static file has rawRows, client-side filtering handles it instantly
-    if (cachedDataRef.current?.rawRows) return
+    // If static file has rawRows AND date is within cache window, client-side filtering handles it instantly
+    const withinCacheF = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    if (cachedDataRef.current?.rawRows && withinCacheF) return
     clearTimeout(filterTimerRef.current)
     filterTimerRef.current = setTimeout(() => fetchFromAPI(start, end), 600)
     return () => clearTimeout(filterTimerRef.current)
@@ -326,7 +326,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 30 * 24 * 60 * 60 * 1000) throw new Error('static file stale')
+      if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
       staticOk = true
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
@@ -360,7 +360,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
+export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -540,7 +540,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
     if (hasFacilityFilter) {
       skus = skus
-        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location))))
+        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)) && (f.totalInvt || 0) > 0))
         .map(s => {
           const facs = (s.facilities || []).filter(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)))
           const totalInvt = facs.reduce((a, f) => a + (f.totalInvt || 0), 0)
@@ -567,7 +567,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
           const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
-          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs }
+          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs, facilities: facs }
         })
     } else if (effectiveLocations?.length) {
       skus = skus
@@ -627,38 +627,6 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     const allLocations = (raw.locations || []).filter(l => l.totalInvt > 0 || l.avgSale > 0)
     const locations = (raw.locations || []).map(mapLoc).filter(Boolean)
 
-    // Recompute pivot table from filtered skus
-    const pivotLocations = locations.map(l => l.location)
-    const pivotRows = skus.map(s => ({
-      sku: s.sku, category: s.category, subCategory: s.subCategory,
-      totalInvt: Math.round(s.totalInvt), avgSale: s.avgSale,
-      byLocation: Object.fromEntries((s.locations || []).map(l => [l.location, { totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale }])),
-    }))
-
-    // Recompute slow-moving and dead stock as sub-category rollups from filtered skus
-    const DEAD_DOI = 200, SLOW_DOI = 45, SUBCAT_FLOOR = 50
-    const subCatMap = new Map()
-    for (const s of skus) {
-      const key = `${s.category}|${s.subCategory}`
-      if (!subCatMap.has(key)) subCatMap.set(key, { category: s.category, subCategory: s.subCategory, totalInvt: 0, avgSale: 0, skuList: [] })
-      const acc = subCatMap.get(key)
-      acc.totalInvt += s.totalInvt; acc.avgSale += s.avgSale; acc.skuList.push(s)
-    }
-    const subCatRows = [...subCatMap.values()]
-      .filter(sc => sc.totalInvt > SUBCAT_FLOOR && !sc.subCategory?.toLowerCase().startsWith('sparepart'))
-      .map(sc => {
-        const notBeingSold = sc.avgSale <= 0
-        const doi = notBeingSold ? Math.round(sc.totalInvt) : Math.floor(sc.totalInvt / sc.avgSale)
-        return {
-          category: sc.category, subCategory: sc.subCategory,
-          totalInvt: Math.round(sc.totalInvt), avgSale: +sc.avgSale.toFixed(2), doi, notBeingSold,
-          skus: sc.skuList.filter(s => s.totalInvt > 0)
-            .map(s => ({ sku: s.sku, totalInvt: Math.round(s.totalInvt), avgSale: +s.avgSale.toFixed(2), doi: s.avgSale > 0 ? s.doi : Math.round(s.totalInvt) }))
-            .sort((a, b) => b.totalInvt - a.totalInvt),
-        }
-      })
-    const slowMoving = subCatRows.filter(sc => sc.notBeingSold || sc.doi > SLOW_DOI).sort((a, b) => b.totalInvt - a.totalInvt)
-    const deadStock = subCatRows.filter(sc => (sc.notBeingSold && sc.totalInvt > DEAD_DOI) || sc.doi > DEAD_DOI).sort((a, b) => b.totalInvt - a.totalInvt)
     const leadTimeRisk = skus
       .filter(s => s.productSource && s.productSource !== 'Inhouse' && s.leadTime > 0 && s.doi != null && s.totalInvt > 0 && s.doi <= s.leadTime + 10)
       .map(s => ({ sku: s.sku, category: s.category, leadTime: s.leadTime, productSource: s.productSource, doi: s.doi, stockStatus: s.stockStatus, avgSale: s.avgSale }))
@@ -666,10 +634,11 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
     return {
       ...raw, skus,
+      rawSkuCount: raw.skus.length,
       summary: { ...raw.summary, totalInvt: Math.round(totalInvt), rawInvt: Math.round(rawInvt), rawBlockedInvt: Math.round(rawBlockedInvt), rtdInvt: Math.round(rtdInvt), avgSale: Math.round(avgSale), avgSaleB2C: Math.round(avgSale), totalAvgSale: Math.round(totalAvgSale), doi, stockStatus: dominantStatus, skuCount: skus.length, criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length, deadStockCount: skus.filter(s => s.isDead).length, deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0) },
       statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
-      locations, allLocations, deadStock, slowMoving, leadTimeRisk,
-      pivot: { locations: pivotLocations, rows: pivotRows },
+      locations, allLocations, deadStock: raw.deadStock, slowMoving: raw.slowMoving, leadTimeRisk,
+      pivot: raw.pivot,
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inv.data, healthFilters])
@@ -694,15 +663,15 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <LoadingOverlay loading={active.loading && !active.data} label="Loading inventory" />
+        <LoadingOverlay loading={active.loading} label="Loading inventory" />
         {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} /></div>
-        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} /></div>
+        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
     </div>

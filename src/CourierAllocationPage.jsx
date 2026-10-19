@@ -616,7 +616,7 @@ function Shell({ children, onBack, right }) {
         <button onClick={onBack} style={btnStyle}>← Cost Analytics</button>
         <div style={{ flex: 1, minWidth: 120 }}>
           <div style={{ fontFamily: C.display, fontSize: 19, fontWeight: 600, color: C.t1, letterSpacing: '-.02em' }}>Courier Allocation</div>
-          <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>Which courier should carry which weight and zone</div>
+          <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>Which courier should carry which weight and zone · uses rolling performance window, not dashboard date range</div>
         </div>
         {right}
       </div>

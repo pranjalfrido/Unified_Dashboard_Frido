@@ -75,6 +75,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true })
     }
 
+    // ── Demote admin to member ───────────────────────────────────────────────
+    if (action === 'demote_user') {
+      const { user_id } = payload
+      await admin.from('user_profiles').update({ is_admin: false }).eq('user_id', user_id)
+      return res.status(200).json({ success: true })
+    }
+
     return res.status(400).json({ error: 'Unknown action' })
   } catch (e) {
     return res.status(500).json({ error: e.message })

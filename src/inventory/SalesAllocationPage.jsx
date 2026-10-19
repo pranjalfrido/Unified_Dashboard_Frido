@@ -323,7 +323,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -332,8 +332,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   }, [])
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
-  const [categoryMetric, setCategoryMetric] = useState('rev') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
+  const [channelMetric, setChannelMetric] = useState('qty') // 'rev' | 'qty' — Channel-Wise Sales bar list
+  const [categoryMetric, setCategoryMetric] = useState('qty') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
   const [drasticLevel, setDrasticLevel] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
   const [drasticMode, setDrasticMode] = useState('day2') // 'day2' | 'day7'
   const [drasticMetric, setDrasticMetric] = useState('qty') // 'qty' | 'rev'
@@ -344,8 +344,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [matrixExpanded, setMatrixExpanded] = useState(new Set()) // expanded row paths ("cat" or "cat|sub")
   const [matrixSearch, setMatrixSearch] = useState('')
   const [matrixSort, setMatrixSort] = useState({ key: 'total', dir: 'desc' }) // key: 'total' | a bucketKey | 'name'
-  const [top20Metric, setTop20Metric] = useState('rev') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
+  const [top20Metric, setTop20Metric] = useState('qty') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
   const [top20Level, setTop20Level] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
+  const [top20Channel, setTop20Channel] = useState([]) // channel filter local to Top Products card
 
   // Client-side filter: when static file has rawRows, filter instantly without API call
   const filteredData = useMemo(() => {
@@ -414,7 +415,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       // fillRate
       if (r.nearestWH) {
         whDemand.set(r.nearestWH, (whDemand.get(r.nearestWH) || 0) + r.qty)
-        if (r.location === r.nearestWH) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
+        const isCorrect = (r.location === 'PNQ' || r.location === 'MUM')
+          ? (r.nearestWH === 'PNQ' || r.nearestWH === 'MUM')
+          : r.location === r.nearestWH
+        if (isCorrect) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
       }
       // facility allocation
       if (r.location && r.location !== 'Unmapped') {
@@ -426,7 +430,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
     const days = daily.length || 1
     const exactTotal = rows.reduce((s, r) => s + r.qty, 0)
-    const exactCorrect = rows.filter(r => r.nearestWH && r.location === r.nearestWH).reduce((s, r) => s + r.qty, 0)
+    const exactCorrect = rows.filter(r => {
+      if (!r.nearestWH) return false
+      return (r.location === 'PNQ' || r.location === 'MUM')
+        ? (r.nearestWH === 'PNQ' || r.nearestWH === 'MUM')
+        : r.location === r.nearestWH
+    }).reduce((s, r) => s + r.qty, 0)
 
     // weekly/monthly rollup
     const weekKey = d => { const dt = new Date(d + 'T00:00:00Z'); const day = (dt.getUTCDay() + 6) % 7; dt.setUTCDate(dt.getUTCDate() - day); return dt.toISOString().slice(0, 10) }
@@ -476,6 +485,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const matrixSkuList = [...matrixSkuMetaMap.entries()].map(([key, meta]) => ({ skuKey: key, ...meta }))
     const matrixDates = [...matrixDatesSet].sort()
 
+    const firstDayQty = daily[0]?.qty || 0
+    const lastDayQty = daily[daily.length - 1]?.qty || 0
+    const momentumPct = firstDayQty > 0 ? ((lastDayQty - firstDayQty) / firstDayQty) * 100 : null
+
     return {
       ...data,
       rawRows: data.rawRows,
@@ -487,6 +500,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         avgDailyUnits: Math.round(totalQty / days),
         avgSellingPrice: totalQty > 0 ? Math.round(totalRev / totalQty) : 0,
         exactFillRate: exactTotal > 0 ? exactCorrect / exactTotal : null,
+        momentumPct,
       },
       daily,
       weekly: rollup(weekKey),
@@ -713,23 +727,39 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     : _drasticRowsRaw
 
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
-  // Sales Change. Level toggle picks which server-computed rollup to rank: SKU-level uses
-  // productSales (name = sku), Sub-category/Category reuse the same rollups already powering
-  // Category Contribution / the Matrix — re-sorted here so both metrics rank correctly.
-  const topProductsSource = !filteredData ? [] : top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
-    : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
-    : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
-  // deduplicate by name (merge duplicates), filter zero-sales rows, then sort
-  const _deduped = new Map()
-  for (const r of topProductsSource) {
-    if (!r.name) continue
-    const ex = _deduped.get(r.name)
-    if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
-    else _deduped.set(r.name, { ...r })
-  }
-  const topProductsRows = [..._deduped.values()]
-    .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
-    .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
+  // Sales Change. When top20Channel is active, re-aggregate from rawRows filtered by channel
+  // instead of using the pre-aggregated rollups (which don't have a per-channel breakdown).
+  const topProductsRows = useMemo(() => {
+    if (!filteredData) return []
+    let source
+    if (top20Channel.length > 0) {
+      const chRows = filteredData.rawRows.filter(r => top20Channel.includes(r.channel2) || top20Channel.includes(r.channel))
+      const m = new Map()
+      for (const r of chRows) {
+        const key = top20Level === 'sku' ? r.sku : top20Level === 'subCategory' ? r.subCategory : r.category
+        if (!key) continue
+        const ex = m.get(key)
+        if (ex) { ex.qty += r.qty; ex.rev += r.rev }
+        else m.set(key, { name: key, qty: r.qty, rev: r.rev })
+      }
+      source = [...m.values()]
+    } else {
+      const raw = top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
+        : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
+        : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
+      const m = new Map()
+      for (const r of raw) {
+        if (!r.name) continue
+        const ex = m.get(r.name)
+        if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
+        else m.set(r.name, { ...r })
+      }
+      source = [...m.values()]
+    }
+    return source
+      .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
+      .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
+  }, [filteredData, top20Level, top20Metric, top20Channel])
 
   if (!data) return null
   const revenueAvailable = filteredData.summary.totalRevenue > 0
@@ -750,13 +780,27 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
       <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* Mobile filter button */}
-        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
-          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
-        }}>
-          ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
-        </button>
+        {/* Mobile filter button + info lines row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+            display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+            background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+          }}>
+            ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
+          </button>
+          {asOf && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.3, marginLeft: 'auto' }}>
+              <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                Data source: Unicommerce &nbsp;·&nbsp; Snapshot {new Date(asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+              </span>
+              {lastSalesDate && (
+                <span style={{ fontSize: 10.5, color: IC.t3, whiteSpace: 'nowrap' }}>
+                  Latest sales {new Date(lastSalesDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* KPI row */}
         <SaKpiCarousel>
@@ -869,6 +913,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                   options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' }]} />
                 <PillToggle size="sm" value={top20Metric} onChange={setTop20Metric}
                   options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
+                {!isMobile && <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={top20Channel} onChange={setTop20Channel} width={110} height={25} />}
               </div>
             }>
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>

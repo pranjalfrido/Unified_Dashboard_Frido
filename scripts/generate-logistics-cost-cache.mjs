@@ -34,12 +34,17 @@ const fakeRes = {
 try {
   await handler(fakeReq, fakeRes)
 } catch (e) {
+  // exit(0) is deliberate — a stale-but-valid JSON beats no dashboard. But the failure must
+  // still SHOW: ::error:: surfaces it in the GitHub Actions UI instead of scrolling past in
+  // a log nobody reads.
   console.warn(`⚠️  logistics-cost handler threw: ${e.message} — keeping last good JSON, workflow continues`)
+  console.log(`::error title=logistics-cost cache not regenerated::${e.message}`)
   process.exit(0)
 }
 
 if (responseStatus !== 200 || !responseBody) {
   console.warn(`⚠️  logistics-cost handler returned status ${responseStatus}: ${JSON.stringify(responseBody)} — keeping last good JSON, workflow continues`)
+  console.log(`::error title=logistics-cost cache not regenerated::handler returned status ${responseStatus}`)
   process.exit(0)
 }
 

@@ -28,6 +28,23 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 config()
+
+// Exit non-zero on failure.
+//
+// These scripts run top-level await, and an unhandled rejection here terminated the process
+// with status 0 — a crash that looked like a clean run. Observed three times in one session:
+// a full AWB sync lost its database connection at 94%%, reported success, and left the table
+// half-updated. In CI that is worse than a hard failure, because the workflow's own
+// continue-on-error guard only triggers on a NON-zero exit, so a silent crash passes and the
+// dashboard serves partial data with nothing flagged.
+process.on('unhandledRejection', e => {
+  console.error('FATAL (unhandled rejection):', e?.message || e)
+  process.exit(1)
+})
+process.on('uncaughtException', e => {
+  console.error('FATAL (uncaught exception):', e?.message || e)
+  process.exit(1)
+})
 const { Pool } = pkg
 
 const argv = process.argv.slice(2)

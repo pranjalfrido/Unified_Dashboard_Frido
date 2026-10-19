@@ -14,15 +14,40 @@
 import pkg from 'pg'
 import { config } from 'dotenv'
 import { loadCourierProfiles, persistCourierProfiles, PER_KG_COURIERS, sqlList } from './courier-profiles.mjs'
-import { buildCube } from '../api/logistics-cost.js'
+import { buildCube, ZONE_MAP_SQL } from '../api/logistics-cost.js'
 config()
 
+// Exit non-zero on failure.
+//
+// These scripts run top-level await, and an unhandled rejection here terminated the process
+// with status 0 — a crash that looked like a clean run. Observed three times in one session:
+// a full AWB sync lost its database connection at 94%%, reported success, and left the table
+// half-updated. In CI that is worse than a hard failure, because the workflow's own
+// continue-on-error guard only triggers on a NON-zero exit, so a silent crash passes and the
+// dashboard serves partial data with nothing flagged.
+process.on('unhandledRejection', e => {
+  console.error('FATAL (unhandled rejection):', e?.message || e)
+  process.exit(1)
+})
+process.on('uncaughtException', e => {
+  console.error('FATAL (uncaught exception):', e?.message || e)
+  process.exit(1)
+})
+
+// Use the direct Postgres connection (no pooler) so SET statement_timeout is respected
+// for the full session. The transaction pooler (port 6543) resets session settings on
+// every checkout, silently overriding statement_timeout = 900000 with Supabase's 2-min
+// default and killing the long CREATE TABLE statements.
+// SUPABASE_DB_URL = postgresql://postgres:[password]@db.<project>.supabase.co:5432/postgres
+// Add this as a GitHub secret and in .env.local for local runs.
+const directUrl = process.env.SUPABASE_DB_URL
+  || (process.env.SUPABASE_URL || '').replace(':6543/', ':5432/')
 const pool = new pkg.Pool({
-  connectionString: process.env.SUPABASE_URL,
+  connectionString: directUrl,
   ssl: { rejectUnauthorized: false }, max: 2,
   connectionTimeoutMillis: 60000,
   idleTimeoutMillis: 120000,
-  statement_timeout: 300000,
+  statement_timeout: 900000,
 })
 // node-postgres emits 'error' on the Pool when the server drops an IDLE connection, and an
 // unhandled EventEmitter error kills the process. Without this, a pooler hiccup on a
@@ -105,12 +130,12 @@ await swap('lc_addon_rate', `
 // Median forward cost per cell, used to net the bundled forward leg out of RTO rows.
 await swap('lc_fwd_median', `
   CREATE TABLE __TARGET__ AS
-  SELECT i.courier_name, i.zone, COALESCE(i.courier_account_type, '(none)') AS acct,
+  SELECT i.courier_name, (${ZONE_MAP_SQL('i.zone')}) AS zone, COALESCE(i.courier_account_type, '(none)') AS acct,
          ${SLAB} AS slab,
          percentile_cont(0.5) WITHIN GROUP (ORDER BY ${EX_GST.replace(/total_cost|freight_charge|surcharge|other_charge/g, m => 'i.' + m)}) AS fwd_t
     FROM public.logistics_invoices_b2c i
    WHERE upper(i.shipment_mode) = 'FORWARD' AND i.total_cost > 0
-     AND i.zone IN ('A','B','C','D','E') AND i.charged_weight_courier <= 500
+     AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL AND i.charged_weight_courier <= 500
    GROUP BY 1, 2, 3, 4
 `, 'CREATE INDEX __IDX__ ON __TARGET__ (courier_name, zone, acct, slab)')
 
@@ -128,7 +153,12 @@ const LEG = `CASE WHEN upper(i.shipment_mode)='FORWARD' THEN 'Forward'
 const SL = c => `CASE WHEN i.courier_name IN (${sqlList(PER_KG_COURIERS)}) THEN NULL
                       WHEN ${c}>0 AND ${c}<=0.5 THEN 0.5
                       WHEN ${c}>0 THEN CEIL(${c}) ELSE 0 END`
-const EXI = EX_GST.replace(/(total_cost|freight_charge|surcharge|other_charge)/g, 'i.$1')
+// Floored at zero. The WHERE clauses above admit rows with a negative total_cost — 150
+// credit notes the courier issued, almost all Bluedart RTO/Reverse legs. Per the business
+// (and matching the API's COST_FLOOR), the SHIPMENT should count while the cost reads zero:
+// a refund is not negative freight. Dropping them removed the shipments from every count as
+// well as the money; letting them through unfloored would subtract spend that was charged.
+const EXI = `GREATEST(${EX_GST.replace(/(total_cost|freight_charge|surcharge|other_charge)/g, 'i.$1')}, 0)`
 
 // OUR weight, falling back to the courier's when we did not declare one.
 //
@@ -190,7 +220,8 @@ await swap('lc_billing_summary', `
          COUNT(*) FILTER (WHERE dct.freight_median*(1+dct.surcharge_rate)
                               - dco.freight_median*(1+dco.surcharge_rate) > 1)::int AS dt_weight_n,
          COUNT(*) FILTER (WHERE ${EXI}
-                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n,
+                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n
+,
          -- Per-ROW clamped: the claimable figure. Netting on the grand total lets a shipment
          -- billed BELOW card cancel one billed above it, but you cannot invoice a courier for
          -- the under-billed parcels — so the clamp belongs on each row, not on the sum.
@@ -201,7 +232,7 @@ await swap('lc_billing_summary', `
     FROM public.logistics_invoices_b2c i
     ${CARD('dct','i.charged_weight_courier')}
     ${CARD('dco', OUR_WT)}
-   WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+   WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
      AND i.charged_weight_courier <= 500
      AND i.month_year IS NOT NULL
 `, null)
@@ -216,42 +247,24 @@ await swap('lc_billing_summary', `
 // It also divided each courier's claim by its ENTIRE shipment count, so Bluedart read ₹7.1
 // per shipment when only ~106k of its 431k shipments are disputed at all. Counting only the
 // disputed rows gives ₹28.60, which is the number a claim is actually argued on.
-await swap('lc_courier_disputes', `
-  CREATE TABLE __TARGET__ AS
-  WITH j AS (
-    SELECT i.courier_name,
-           dco.freight_median * (1 + dco.surcharge_rate) AS ours,
-           dct.freight_median * (1 + dct.surcharge_rate) AS theirs,
-           ${EXI} AS invoiced
-      FROM public.logistics_invoices_b2c i
-      ${CARD('dct','i.charged_weight_courier')}
-      ${CARD('dco', OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
-       AND i.charged_weight_courier <= 500
-       AND i.month_year IS NOT NULL
-  )
-  SELECT courier_name,
-         COUNT(*)::int AS priced_n,
-         -- GREATEST(...,0): billing BELOW their own card is not an overcharge, and letting it
-         -- go negative would net off real overbilling on other shipments.
-         COALESCE(SUM(GREATEST(theirs - ours, 0)), 0)::float8   AS weight_rs,
-         COALESCE(SUM(GREATEST(invoiced - theirs, 0)), 0)::float8 AS rate_rs,
-         COALESCE(SUM(GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0)), 0)::float8 AS total_rs,
-         -- Denominator for a per-shipment figure: rows with a dispute worth more than ₹1,
-         -- not every shipment the courier carried.
-         COUNT(*) FILTER (WHERE GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0) > 1)::int AS disputed_n,
-         COALESCE(SUM(invoiced), 0)::float8 AS invoiced_rs
-    FROM j
-   GROUP BY 1
-`, 'CREATE INDEX __IDX__ ON __TARGET__ (courier_name)')
+// lc_courier_disputes REMOVED.
+//
+// Its build joined lc_card_dedup twice across the full ledger on
+// `weight_slab IS NOT DISTINCT FROM`, which the planner cannot hash. At 14.6 lakh rows it
+// never finished: 901s even on a direct non-pooler connection with a 15-minute ceiling. A
+// single one of those joins measured 27.9s, and a COALESCE-equality rewrite took 142s for
+// one join, so no shape of the same query gets the pair under the limit.
+//
+// Because it ran BEFORE lc_month_claims and lc_slab_costs, the whole script aborted here
+// and both of those tables sat stale from 24 Sep — the Weight Slab card was understating
+// its book by a quarter. It also poisoned every cache regeneration, since the API queried
+// the table and inherited the timeout.
+//
+// Nothing was lost by removing it. The only column it fed was Claimable (per courier),
+// which is the same measure as rec_infl — GREATEST(courier's weight cost - ours, 0) —
+// already computed inside the cube and rebuilt hourly. The cube's figure is also more
+// complete: 59.20 L against the stale table's 44.08 L.
 
-
-// ── Claimable weight overbilling per month, for the Monthly Trend table ──
-// Same total-cost basis and same per-ROW clamp as lc_billing_summary and
-// lc_courier_disputes, so the monthly column sums to the headline figure rather than telling
-// a third story. Only the WEIGHT component is claimable — the rate variance is measured
-// against a card derived from these same invoices, so it flags inconsistency with the
-// courier's own behaviour rather than a breach of the signed contract.
 await swap('lc_month_claims', `
   CREATE TABLE __TARGET__ AS
   WITH j AS (
@@ -262,7 +275,7 @@ await swap('lc_month_claims', `
       FROM public.logistics_invoices_b2c i
       ${CARD('dct','i.charged_weight_courier')}
       ${CARD('dco', OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+     WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
        AND i.charged_weight_courier <= 500
        AND i.month_year IS NOT NULL
   )
@@ -324,7 +337,7 @@ await swap('lc_slab_costs', `
                        AND co.leg = ${LEG} AND co.zone = i.zone
                        AND co.payment_mode = COALESCE(i.payment_mode,'(none)')
                        AND co.weight_slab IS NOT DISTINCT FROM ${SLABC(OUR_WT)}
-     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+     WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
        AND i.charged_weight_courier <= 500
   )
   SELECT slab,

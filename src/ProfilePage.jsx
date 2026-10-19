@@ -36,18 +36,29 @@ function PermGroup({ node, tabs, setTabs, isNested = false }) {
         </button>
       </div>
       {(() => {
-        const groups = node.children.filter(c => c.isGroup)
-        const leaves = node.children.filter(c => !c.isGroup)
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {leaves.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {leaves.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
+        // Collect consecutive leaves into chip rows, preserving original child order
+        const rows = []
+        let leafBatch = []
+        const flushLeaves = () => {
+          if (leafBatch.length > 0) {
+            const batch = leafBatch.splice(0)
+            rows.push(
+              <div key={`leaves-${batch[0].key}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {batch.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
               </div>
-            )}
-            {groups.map(child => <PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)}
-          </div>
-        )
+            )
+          }
+        }
+        for (const child of node.children) {
+          if (child.isGroup) {
+            flushLeaves()
+            rows.push(<PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)
+          } else {
+            leafBatch.push(child)
+          }
+        }
+        flushLeaves()
+        return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{rows}</div>
       })()}
     </div>
   )
@@ -579,16 +590,20 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => { setLocalTabs(permissions) }, [user.user_id, permissions])
+  useEffect(() => { setLocalTabs(permissions) }, [user.user_id])
 
   async function savePermissions() {
     setSaving(true)
-    // If user was admin, demote to member first
+    const tabsToSave = [...localTabs]
     if (user.is_admin) {
-      await supabase.from('user_profiles').update({ is_admin: false }).eq('user_id', user.user_id)
+      await adminCall('demote_user', session, { user_id: user.user_id })
     }
-    await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
-    if (localTabs.length > 0) await supabase.from('user_permissions').insert(localTabs.map(tab => ({ user_id: user.user_id, tab })))
+    const { error: delErr } = await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
+    if (delErr) { console.error('delete error', delErr); showToast('Save failed'); setSaving(false); return }
+    if (tabsToSave.length > 0) {
+      const { error: insErr } = await supabase.from('user_permissions').insert(tabsToSave.map(tab => ({ user_id: user.user_id, tab })))
+      if (insErr) { console.error('insert error', insErr); showToast('Save failed'); setSaving(false); return }
+    }
     setSaving(false); onUpdate()
     showToast(user.is_admin ? `${user.name} demoted to Member` : 'Permissions saved')
   }
