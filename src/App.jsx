@@ -18875,7 +18875,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // P&L static cache: serve instantly if no filters and dates match a pre-computed window.
     // Checks MTD (pnl-data.json) and Last Month (pnl-data-lastmonth.json) — both are
     // pre-computed daily by GitHub Actions so these date ranges never hit BigQuery.
-    const hasFilters = ch || Object.keys(extraFilters).length > 0
+    // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
+    // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
+    const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
+    const effectiveSubCh = extraFilters.subChannel
+    const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
