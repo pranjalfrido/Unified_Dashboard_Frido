@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -5137,7 +5137,7 @@ const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, her
 )
 // Same tile as ReturnTrendChart's TrendStatTile (D2CReturnAnalysisTab.jsx) — a 3px color bar
 // identifies which chart line this number belongs to; the number itself stays in ink tokens.
-const TrendStatTile = ({ label, value, badge, color }) => (
+const TrendStatTile = ({ label, value, badge, color, sub }) => (
   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0 }}>
     <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -5146,6 +5146,7 @@ const TrendStatTile = ({ label, value, badge, color }) => (
         <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
         {badge}
       </div>
+      {sub && <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap' }}>{sub}</span>}
     </div>
   </div>
 )
@@ -5284,6 +5285,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
   const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
   const totalReturnPct = cancelPct + rtoPct + cirPct
+  // Provisional Return % — all-channel version (confirmed 2026-10-19), same pattern as every
+  // per-channel tab: shown ALONGSIDE the real headline Return % above, never replacing it,
+  // whenever the selected range's tail hasn't had time to mature. Sourced from
+  // data.returnRateMature.allRate.netRevenueReturnPct — the SAME (cancelRev+rtoRev+returnRev+
+  // cirRev) ÷ totalRev formula as totalReturnPct above, computed over the rolling mature window
+  // via a single all-channel query (overallReturnRateMature), not summed from per-channel tabs.
+  const showProvisionalReturnOverview = rangeTouchesImmatureWindow(filters?.end)
+  const provisionalReturnPctOverview = (data.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
 
   // ── Ads ──
   const adsTotals = ads.totals || []
@@ -5547,7 +5556,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
-              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
+              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} sub={(showProvisionalReturnOverview && provisionalReturnPctOverview != null) ? `Provisional: ${(provisionalReturnPctOverview * 100).toFixed(1)}%` : null} />
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%" minHeight={240}>
@@ -7842,6 +7851,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const returnRevAll = data.returnRev || 0
   const returnNumeratorRev = cancellRev + rtoRev + returnRevAll + cirRev
   const returnPct = totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
+  // Provisional Return % — same pattern as every other tab (confirmed 2026-10-19): shown
+  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from data.allTabReturnRateMature.allRate.pct — the SAME
+  // scoped returnNumeratorRev formula as returnPct above (only channels with a real return
+  // lifecycle; Blinkit/Instamart/Zepto excluded), computed over the rolling mature window via its
+  // own dedicated query (allTabReturnRateMature), separate from Overview's cruder all-channel sum.
+  const showProvisionalReturnAll = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctAll = (data.allTabReturnRateMature?.allRate?.pct ?? null)
   const aspUnits = (typeof data.aspQty === 'number' && data.aspQty > 1000) ? data.aspQty : totalQty
   const asp = aspUnits > 0 ? totalRev / aspUnits : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -8026,7 +8043,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
             { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
             { label: 'GST', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Repeat Customer Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers`, accent: undefined, badge: (() => { const prevRate = prevNCusts > 0 ? (prevRepeatCusts / prevNCusts * 100) : null; if (prevRate === null || prevRate === 0) return null; const p = (parseFloat(repeatRate) - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
-            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: (showProvisionalReturnAll && provisionalReturnPctAll != null) ? `Provisional Return: ${(provisionalReturnPctAll * 100).toFixed(1)}%` : `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8752,6 +8769,16 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
   const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev + shCancelRevRaw) / totalRev * 100) : 0
+  // Provisional Returns % — confirmed 2026-10-19: shown ALONGSIDE the real returnRevPct above
+  // (never replacing it), whenever the selected range's tail hasn't had time to mature (RTOs/
+  // returns/CIRs/cancellations take 1-3+ weeks to resolve, so a recent range's own returnRevPct
+  // silently reads too low). Sourced from data.shopify.returnRateMature.allRate.netRevenueReturnPct
+  // — the channel-wide rolling mature-window rate (today-44d to today-14d) — which is
+  // mathematically the SAME formula as returnRevPct above (RTO+CIR+Return+full Cancellation ÷
+  // Gross Inc GST), just computed over the trustworthy mature window instead of the live-selected
+  // one, so the two numbers are directly comparable side by side.
+  const showProvisionalReturn = rangeTouchesImmatureWindow(filters?.end)
+  const provisionalReturnPct = (sh.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — D2C is India-only, so this is just every non-International sub-channel.
@@ -8948,7 +8975,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturn && provisionalReturnPct != null) ? `Provisional Return: ${(provisionalReturnPct * 100).toFixed(1)}%` : `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
@@ -9323,6 +9350,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const exchangeRev = ebo.exchange?.exchangeRev || 0
   const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
   const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev + cancelRev) / totalRev * 100) : 0
+  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart/Myntra (confirmed
+  // 2026-10-19): shown ALONGSIDE the real Returns % below, never replacing it, whenever the
+  // selected range's tail hasn't had time to mature. Sourced from ebo.returnRateMature.allRate.
+  // netRevenueReturnPct — same formula as returnRevPct above, over the rolling mature window.
+  const showProvisionalReturnEbo = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctEbo = (ebo.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
   const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
   const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
@@ -9493,7 +9526,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturnEbo && provisionalReturnPctEbo != null) ? `Provisional Return: ${(provisionalReturnPctEbo * 100).toFixed(1)}%` : `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
@@ -9703,6 +9736,13 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   const amzVCMatrix = data.amzVCMatrix || {}
 
   const returnRateReliable = (amzSC.returnRate?.rollOrders || 0) > 0
+  // Provisional Return % (SC) — same pattern as Shopify's D2C tab (confirmed 2026-10-19): shown
+  // ALONGSIDE the real SC Returns % above, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from amzSC.returnRateMature.allRate.netRevenueReturnPct —
+  // the channel-wide rolling mature-window rate (today-44d to today-14d) — same formula as the
+  // live returnRate above (RTO+CIR+Return+full Cancellation ÷ Gross Inc GST), so directly comparable.
+  const showProvisionalReturnSC = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctSC = (amzSC.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   // Combined SC+VC Returns % for the "All" toggle — SC's own returnRate card (rollOrders/
   // rollReturned — despite the "rollOrders" name, both are REVENUE figures: total_rev_inc/
   // returned_rev from amzSCReturnRate, see api/bq.js) is Seller-Central-only, so on the combined
@@ -9910,7 +9950,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
                     ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
-                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
+                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: (showProvisionalReturnSC && provisionalReturnPctSC != null) ? `Provisional Return: ${(provisionalReturnPctSC * 100).toFixed(1)}%` : (returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data'), accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'vc' ? [{ label: 'Returns % (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross rev` }] : []),
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -10254,6 +10294,13 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
   const fk = data.flipkart || {}
   const nDays = data.nDays || 1
+  // Provisional Return % — same pattern as Shopify/Amazon SC tabs (confirmed 2026-10-19): shown
+  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from fk.returnRateMature.allRate.pct — Flipkart's own
+  // return_rev/total_rev formula computed over the rolling mature window (today-44d to today-14d)
+  // instead of the live-selected one, so directly comparable to fkReturnCur.pct below.
+  const showProvisionalReturnFk = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctFk = (fk.returnRateMature?.allRate?.pct ?? null)
 
   // When cat/subcat selected, derive totals+daily from dailyCat (FBF+Non-FBF combined — no split)
   const dailyCat = fk.dailyCat || []
@@ -10381,7 +10428,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
             { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             { label: 'GST', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: selectedCat ? null : fkChgBadge(rev - excRev, fkPrevGST) },
             { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: (showProvisionalReturnFk && provisionalReturnPctFk != null) ? `Provisional Return: ${(provisionalReturnPctFk * 100).toFixed(1)}%` : `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -13357,6 +13404,12 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
   const mnReturnRev = (totals.returnRev || 0) + (mn.netCalc?.rtoRev || 0) + (mn.netCalc?.cirRev || 0) + (mn.netCalc?.cancelRev || 0)
   const mnReturnOrders = totals.returnOrders || 0
   const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
+  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart (confirmed 2026-10-19):
+  // shown ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's
+  // tail hasn't had time to mature. Sourced from mn.returnRateMature.allRate.netRevenueReturnPct —
+  // same formula as mnReturnPct above, computed over the rolling mature window instead.
+  const showProvisionalReturnMn = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctMn = (mn.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
 
   const prevRev = mn.prevRev || 0
   const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
@@ -13466,7 +13519,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
-            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: (showProvisionalReturnMn && provisionalReturnPctMn != null) ? `Provisional Return: ${(provisionalReturnPctMn * 100).toFixed(1)}%` : `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -13789,6 +13842,13 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
   const totalRev = rev
   const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
   const cnPct = grossRev > 0 ? cnRevAbs / grossRev * 100 : 0
+  // Provisional Credit Note % — same pattern as other channels' Provisional Return% (confirmed
+  // 2026-10-19), adapted for Offline Sales' own Sales-vs-Credit-Note vocabulary (no RTO/CIR/
+  // Return lifecycle here). Shown ALONGSIDE the real Credit Notes % above, never replacing it,
+  // whenever the selected range's tail hasn't had time to mature — a credit note can take weeks
+  // to be issued against a recent sale, same maturity concern as an e-commerce return.
+  const showProvisionalCN = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalCnPct = (off.creditNoteRateMature?.allRate?.pct ?? null)
 
   const subLabel = sub !== 'all' ? ` · ${SUB_OPTIONS.find(o => o.id === sub)?.label || sub}` : ''
 
@@ -13848,7 +13908,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(qty)} units`, badge: chgBadge(nOrders, prevOrders) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
-            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
+            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: (showProvisionalCN && provisionalCnPct != null) ? `Provisional: ${(provisionalCnPct * 100).toFixed(1)}%` : `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -18865,14 +18925,28 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
       if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
-      fetchData(start, end, extra)
+      // Gate the ~290-query /api/bq fetch to only the tabs that actually consume its result —
+      // confirmed 2026-10-19 by checking every `data={data}`/`data &&` call site in this file:
+      // Overview, Sales, PnL, Ads, and Intelligence (IntelPage destructures data.orders directly)
+      // are the only 5 consumers. Before this gate, the fetch fired unconditionally on every
+      // date/filter change regardless of which tab was open — e.g. tweaking a Logistics filter
+      // silently ran the full fan-out and threw the result away, competing with that tab's own
+      // (actually needed) BigQuery queries for the same rate-limited concurrency slots. Topnav's
+      // MobileSalesFilterPanel also receives `data` as its fallback-branch prop but never reads
+      // it (confirmed: zero `salesData.` dereferences in that component) — not a 6th dependency.
+      if (['overview', 'sales', 'pnl', 'ads', 'intelligence'].includes(page)) {
+        fetchData(start, end, extra)
+      }
       // Logistics summary for Overview tab — LIVE query against the page's own selected/maturity-
       // adjusted range via api/logistics.js (same endpoint the dedicated Logistics tab uses),
       // replacing the old static /logistics-data.json cache, which was a fixed "month-to-date"
       // snapshot that never actually respected the date picker at all. Using the maturity-adjusted
       // range (not the raw picker range) keeps immature tail-of-range shipments from diluting
       // Delivery%/RTO%/SLA% the same way the rest of Overview already guards against this.
-      {
+      // Gated to page==='overview' (confirmed 2026-10-19) — this feeds ONLY Overview's logistics
+      // tile (setLogisticsData), so it was previously firing on every filter change on every OTHER
+      // tab too, for a result nothing there ever reads — same waste as the main fetchData gate above.
+      if (page === 'overview') {
         const logRange = getMaturityAdjustedRange({ start, end })
         setLogisticsRangeLabel(logRange.label || `· ${logRange.start} – ${logRange.end}`)
         // Try static CDN file first (same file the Logistics tab uses) — instant load.

@@ -94,6 +94,116 @@ export function netRevenueSelectFragment(alias = '') {
     SUM(CASE WHEN ${p}Order_Status = 'Exchange' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS exch_rev`
 }
 
+// Shared mature-rolling-window return-rate aggregator — extracted 2026-10-19 from Shopify's
+// original inline implementation (api/bq.js's shReturnRateMature payload builder) so every
+// channel's own *ReturnRateMature query result can be aggregated the same way, instead of
+// copy-pasting this ~30-line reduction once per channel. Takes the raw query rows (each a
+// Category/SubCategory/MasterSKU grain row with units + the netRevenueSelectFragment columns)
+// and returns { skuRate, catRate, allRate, categoryBySku, minMatureUnits } — pre-aggregated at
+// 3 grains so the frontend can fall back SKU -> Category -> whole-channel without a second
+// round-trip. A grain is only trusted once its own mature-window UNIT volume crosses
+// minMatureUnits (default 30, same floor Shopify already uses) — below that, it's left null so
+// the caller falls back to the next grain up, rather than presenting a low-volume fluke as if it
+// were a reliable rate.
+export function buildReturnRateMature(rows, { minMatureUnits = 30 } = {}) {
+  const REV_FIELDS = ['gross_inc_gst', 'gross_exc_gst', 'cir_rev', 'rto_rev', 'return_rev', 'cancel_rev', 'exch_rev']
+  const emptyAgg = () => ({ units: 0, ...Object.fromEntries(REV_FIELDS.map(f => [f, 0])) })
+  const addRow = (agg, x) => {
+    agg.units += parseInt(x.units) || 0
+    REV_FIELDS.forEach(f => { agg[f] += parseFloat(x[f]) || 0 })
+  }
+  const bySku = {}, byCat = {}
+  const allAgg = emptyAgg()
+  ;(rows || []).forEach(x => {
+    const cat = x.category || 'Others'
+    if (!bySku[x.sku]) bySku[x.sku] = emptyAgg()
+    addRow(bySku[x.sku], x)
+    if (!byCat[cat]) byCat[cat] = emptyAgg()
+    addRow(byCat[cat], x)
+    addRow(allAgg, x)
+  })
+  const componentsOf = agg => {
+    const m = computeNetRevenueMeasures(agg)
+    return { netRevenueReturnPct: 1 - m.retainedShare, rtoPct: m.rtoPct, cirPct: m.cirPct, returnPct: m.returnPct, cancelPct: m.cancelPct, exchPct: m.exchPct }
+  }
+  const rateIfMature = agg => agg.units >= minMatureUnits ? componentsOf(agg) : null
+  const allRate = allAgg.units > 0 ? componentsOf(allAgg) : null
+  const catRate = {}
+  Object.entries(byCat).forEach(([cat, agg]) => { catRate[cat] = rateIfMature(agg) })
+  const skuRate = {}
+  Object.entries(bySku).forEach(([sku, agg]) => { skuRate[sku] = rateIfMature(agg) })
+  const categoryBySku = {}
+  ;(rows || []).forEach(x => { categoryBySku[x.sku] = x.category || 'Others' })
+  return { skuRate, catRate, allRate, categoryBySku, minMatureUnits }
+}
+
+// Flipkart-specific mature-rate aggregator — same SKU -> Category -> Channel fallback SHAPE as
+// buildReturnRateMature, but Flipkart's rows carry only {total_rev, return_rev} (its own simpler
+// return_rev/total_rev formula, confirmed 2026-10-19 — see fkReturnRateMature query comment),
+// not the full netRevenueSelectFragment columns buildReturnRateMature expects. A separate function
+// rather than overloading buildReturnRateMature with per-channel field-name branching.
+export function buildFkReturnRateMature(rows, { minMatureUnits = 30 } = {}) {
+  const emptyAgg = () => ({ units: 0, total_rev: 0, return_rev: 0 })
+  const addRow = (agg, x) => {
+    agg.units += parseInt(x.units) || 0
+    agg.total_rev += parseFloat(x.total_rev) || 0
+    agg.return_rev += parseFloat(x.return_rev) || 0
+  }
+  const bySku = {}, byCat = {}
+  const allAgg = emptyAgg()
+  ;(rows || []).forEach(x => {
+    const cat = x.category || 'Others'
+    if (!bySku[x.sku]) bySku[x.sku] = emptyAgg()
+    addRow(bySku[x.sku], x)
+    if (!byCat[cat]) byCat[cat] = emptyAgg()
+    addRow(byCat[cat], x)
+    addRow(allAgg, x)
+  })
+  const pctOf = agg => agg.total_rev > 0 ? agg.return_rev / agg.total_rev : 0
+  const rateIfMature = agg => agg.units >= minMatureUnits ? { pct: pctOf(agg) } : null
+  const allRate = allAgg.total_rev > 0 ? { pct: pctOf(allAgg) } : null
+  const catRate = {}
+  Object.entries(byCat).forEach(([cat, agg]) => { catRate[cat] = rateIfMature(agg) })
+  const skuRate = {}
+  Object.entries(bySku).forEach(([sku, agg]) => { skuRate[sku] = rateIfMature(agg) })
+  const categoryBySku = {}
+  ;(rows || []).forEach(x => { categoryBySku[x.sku] = x.category || 'Others' })
+  return { skuRate, catRate, allRate, categoryBySku, minMatureUnits }
+}
+
+// Offline Sales-specific mature-rate aggregator — same SKU -> Category -> Channel fallback SHAPE
+// as the others, but Offline's rows carry {sales_rev, cn_rev} (its own Sales-vs-Credit-Note
+// vocabulary, confirmed 2026-10-19 — see offlineCreditNoteRateMature query comment), since this
+// channel has no e-commerce return lifecycle (no RTO/CIR/Return/Cancelled statuses at all).
+export function buildOfflineCreditNoteRateMature(rows, { minMatureUnits = 30 } = {}) {
+  const emptyAgg = () => ({ units: 0, sales_rev: 0, cn_rev: 0 })
+  const addRow = (agg, x) => {
+    agg.units += parseInt(x.units) || 0
+    agg.sales_rev += parseFloat(x.sales_rev) || 0
+    agg.cn_rev += parseFloat(x.cn_rev) || 0
+  }
+  const bySku = {}, byCat = {}
+  const allAgg = emptyAgg()
+  ;(rows || []).forEach(x => {
+    const cat = x.category || 'Others'
+    if (!bySku[x.sku]) bySku[x.sku] = emptyAgg()
+    addRow(bySku[x.sku], x)
+    if (!byCat[cat]) byCat[cat] = emptyAgg()
+    addRow(byCat[cat], x)
+    addRow(allAgg, x)
+  })
+  const pctOf = agg => agg.sales_rev > 0 ? agg.cn_rev / agg.sales_rev : 0
+  const rateIfMature = agg => agg.units >= minMatureUnits ? { pct: pctOf(agg) } : null
+  const allRate = allAgg.sales_rev > 0 ? { pct: pctOf(allAgg) } : null
+  const catRate = {}
+  Object.entries(byCat).forEach(([cat, agg]) => { catRate[cat] = rateIfMature(agg) })
+  const skuRate = {}
+  Object.entries(bySku).forEach(([sku, agg]) => { skuRate[sku] = rateIfMature(agg) })
+  const categoryBySku = {}
+  ;(rows || []).forEach(x => { categoryBySku[x.sku] = x.category || 'Others' })
+  return { skuRate, catRate, allRate, categoryBySku, minMatureUnits }
+}
+
 export function computeNetRevenueMeasures(row = {}) {
   const grossIncGst = parseFloat(row.gross_inc_gst) || 0
   const grossExcGst = parseFloat(row.gross_exc_gst) || 0

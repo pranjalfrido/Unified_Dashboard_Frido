@@ -58,14 +58,27 @@ const DEFAULT_MIN_PROFIT_PCT = 15
 // (wrapped in useMemo below) and the bulk upload path (run once per uploaded row), so the two
 // can never drift apart into two different formulas. Takes already-parsed numeric inputs (not
 // state setters/strings) plus the shared sndRateSlabs rate card.
-function computePOResult({ qty, sellingPrice, cogsPerUnit, weightKg, softwareCostPerUnit, sellingIncentivePct, assetCost, minProfitPct, logisticsMode, ftlPtlTotalCost }, sndRateSlabs) {
+//
+// Multi-product POs (2026-10-19): a PO can carry several different products that all ship
+// together on ONE truck — e.g. 4 products, 1 FTL booking. Each product still has its own
+// Qty/SP/COGS/Weight (computePOLineResult below handles one line), but in FTL/PTL mode the
+// single truck cost has to be shared across every line, not divided within just one line's own
+// qty. Fulfilment (warehouse handling/packing) stays per-line regardless — it's a real per-unit
+// cost unrelated to which truck carries the shipment, so splitting it across lines would be
+// wrong; only the FORWARD/freight leg is a single shared cost in FTL/PTL mode.
+//
+// Shared truck cost is split by WEIGHT SHARE (confirmed 2026-10-19: a heavier product should
+// carry more of the truck cost than a lighter one at the same qty — matches how freight actually
+// bills a mixed shipment, not an even per-line or per-unit split) — each line's shipment weight
+// = qty × weight/unit; its share of the truck cost = its shipment weight ÷ the PO's TOTAL
+// shipment weight (across every line) × the one truck cost.
+function computePOLineResult({ qty, sellingPrice, cogsPerUnit, weightKg, softwareCostPerUnit, sellingIncentivePct, logisticsMode, forwardPerUnitOverride }, sndRateSlabs) {
   const q = parseFloat(qty)
   const sp = parseFloat(sellingPrice)
   const cogs = parseFloat(cogsPerUnit)
   const weight = parseFloat(weightKg)
   const softwareCost = parseFloat(softwareCostPerUnit) || 0
   const incentivePct = (parseFloat(sellingIncentivePct) || 0) / 100
-  const asset = parseFloat(assetCost) || 0
   if (!(q > 0) || !(sp > 0) || !(cogs >= 0)) return null
 
   // Fulfilment always comes from the weight-slab rate card — it's warehouse handling/packing
@@ -74,12 +87,13 @@ function computePOResult({ qty, sellingPrice, cogsPerUnit, weightKg, softwareCos
   const rate = rateForWeightKg(sndRateSlabs, weight)
   const fulfilmentPerUnit = rate ? rate.fulfilment : null
 
-  let logisticPerUnit = null, logisticsPerUnitTotal, hasLogisticsInput, ftlPtlTotal = null
+  let logisticPerUnit = null, logisticsPerUnitTotal, hasLogisticsInput
   if (logisticsMode === 'ftlPtl') {
-    ftlPtlTotal = parseFloat(ftlPtlTotalCost)
-    const ftlPtlPerUnit = ftlPtlTotal > 0 ? ftlPtlTotal / q : 0
-    hasLogisticsInput = ftlPtlTotal > 0
-    logisticsPerUnitTotal = ftlPtlPerUnit + (fulfilmentPerUnit || 0)
+    // forwardPerUnitOverride is this line's weight-share of the ONE shared truck cost, already
+    // converted to a per-unit rate by the caller (computePOResult) — null until a truck cost >0
+    // has been entered, same "no logistics input yet" state as courier mode with no weight match.
+    hasLogisticsInput = forwardPerUnitOverride != null
+    logisticsPerUnitTotal = (forwardPerUnitOverride || 0) + (fulfilmentPerUnit || 0)
   } else {
     logisticPerUnit = rate ? rate.forward : null
     logisticsPerUnitTotal = (logisticPerUnit || 0) + (fulfilmentPerUnit || 0)
@@ -91,18 +105,76 @@ function computePOResult({ qty, sellingPrice, cogsPerUnit, weightKg, softwareCos
   const totalLogistics = logisticsPerUnitTotal * q
   const totalSoftware = softwareCost * q
   // Selling Incentive = % of Selling Price (per unit), same "% of SP" convention the B2B
-  // Costing Calculator's Shared Assumptions use — scales with Qty like Software Cost, unlike
-  // the one-time Asset Cost below.
+  // Costing Calculator's Shared Assumptions use — scales with Qty like Software Cost.
   const totalSellingIncentive = sp * incentivePct * q
+
+  return {
+    q, sp, cogs, weight, rate, logisticPerUnit, fulfilmentPerUnit, logisticsPerUnitTotal,
+    totalSale, totalCogs, totalLogistics, totalSoftware, totalSellingIncentive,
+    hasWeightRate: hasLogisticsInput,
+  }
+}
+
+// Combines N product lines (each run through computePOLineResult) into one PO-level result —
+// shared Asset Cost (one-time, NOT multiplied by Qty, NOT split per line — it's a single fixed
+// cost for the whole PO regardless of how many products are on it) is deducted once at the PO
+// level, never per line. In FTL/PTL mode, the truck cost is first split across lines by weight
+// share (see header comment above) before each line's own profit is computed — so a per-line
+// Profit/Profit% is always available even though the truck cost itself is a single shared input.
+function computePOResult({ lines, softwareCostPerUnit, sellingIncentivePct, assetCost, minProfitPct, logisticsMode, ftlPtlTotalCost }, sndRateSlabs) {
+  const asset = parseFloat(assetCost) || 0
+  const validLines = (lines || []).filter(l => parseFloat(l.qty) > 0 && parseFloat(l.sellingPrice) > 0 && parseFloat(l.cogsPerUnit) >= 0)
+  if (!validLines.length) return null
+
+  let ftlPtlTotal = null, totalShipmentWeightGm = 0
+  if (logisticsMode === 'ftlPtl') {
+    ftlPtlTotal = parseFloat(ftlPtlTotalCost)
+    totalShipmentWeightGm = validLines.reduce((s, l) => {
+      const q = parseFloat(l.qty) || 0, w = parseFloat(l.weightKg) || 0
+      return s + q * w
+    }, 0)
+  }
+
+  const lineResults = validLines.map(l => {
+    let forwardPerUnitOverride = null
+    if (logisticsMode === 'ftlPtl' && ftlPtlTotal > 0 && totalShipmentWeightGm > 0) {
+      const q = parseFloat(l.qty) || 0, w = parseFloat(l.weightKg) || 0
+      const lineShipmentWeight = q * w
+      const weightShare = lineShipmentWeight / totalShipmentWeightGm
+      const lineTruckCost = ftlPtlTotal * weightShare
+      forwardPerUnitOverride = q > 0 ? lineTruckCost / q : 0
+    }
+    const res = computePOLineResult({ ...l, softwareCostPerUnit, sellingIncentivePct, logisticsMode, forwardPerUnitOverride }, sndRateSlabs)
+    return res ? { ...res, productName: l.productName, weightShare: logisticsMode === 'ftlPtl' && totalShipmentWeightGm > 0 ? ((parseFloat(l.qty) || 0) * (parseFloat(l.weightKg) || 0)) / totalShipmentWeightGm : null } : null
+  }).filter(Boolean)
+
+  if (!lineResults.length) return null
+
+  const totalSale = lineResults.reduce((s, r) => s + r.totalSale, 0)
+  const totalCogs = lineResults.reduce((s, r) => s + r.totalCogs, 0)
+  const totalLogistics = lineResults.reduce((s, r) => s + r.totalLogistics, 0)
+  const totalSoftware = lineResults.reduce((s, r) => s + r.totalSoftware, 0)
+  const totalSellingIncentive = lineResults.reduce((s, r) => s + r.totalSellingIncentive, 0)
+  const totalQty = lineResults.reduce((s, r) => s + r.q, 0)
   const totalCost = totalCogs + totalLogistics + totalSoftware + totalSellingIncentive + asset
   const profit = totalSale - totalCost
   const profitPct = totalSale > 0 ? (profit / totalSale) * 100 : null
   const approved = profitPct != null && profitPct >= (parseFloat(minProfitPct) || 0)
+  const hasWeightRate = lineResults.every(r => r.hasWeightRate)
+
+  // Per-line profit, for the breakdown table — Asset Cost is PO-level only (not apportioned
+  // here), so a line's own profit reflects just its sale/COGS/logistics/software/incentive.
+  const linesWithProfit = lineResults.map(r => {
+    const lineTotalCost = r.totalCogs + r.totalLogistics + r.totalSoftware + r.totalSellingIncentive
+    const lineProfit = r.totalSale - lineTotalCost
+    const lineProfitPct = r.totalSale > 0 ? (lineProfit / r.totalSale) * 100 : null
+    return { ...r, lineProfit, lineProfitPct }
+  })
 
   return {
-    q, sp, cogs, weight, rate, logisticPerUnit, fulfilmentPerUnit, logisticsPerUnitTotal, ftlPtlTotal,
+    lines: linesWithProfit, q: totalQty, ftlPtlTotal,
     totalSale, totalCogs, totalLogistics, totalSoftware, totalSellingIncentive, asset, totalCost, profit, profitPct, approved,
-    hasWeightRate: hasLogisticsInput,
+    hasWeightRate,
   }
 }
 
@@ -458,11 +530,20 @@ export default function POApprovalChecker({ productGroups = [] }) {
   useEffect(() => { loadSndRates().then(setSndRateSlabs) }, [])
 
   const [customerName, setCustomerName] = useState('')
-  const [productName, setProductName] = useState('')
-  const [qty, setQty] = useState('')
-  const [sellingPrice, setSellingPrice] = useState('')
-  const [cogsPerUnit, setCogsPerUnit] = useState('')
-  const [weightKg, setWeightKg] = useState('')
+  // Multi-product PO (2026-10-19): a PO can carry several different products sharing ONE truck —
+  // each line keeps its own product/qty/SP/COGS/weight; Freight/Software/Incentive/Asset/Min
+  // Profit % below stay PO-level (shared across every line), matching how a real PO actually
+  // works (one freight booking, one minimum-margin bar for the whole deal).
+  const emptyLine = () => ({ _key: Math.random().toString(36).slice(2), productName: '', qty: '', sellingPrice: '', cogsPerUnit: '', weightKg: '' })
+  const [lines, setLines] = useState([emptyLine()])
+  const updateLine = (key, patch) => setLines(ls => ls.map(l => l._key === key ? { ...l, ...patch } : l))
+  const addLine = () => setLines(ls => [...ls, emptyLine()])
+  const removeLine = key => setLines(ls => ls.length > 1 ? ls.filter(l => l._key !== key) : ls)
+  const applyProductToLine = (key, p) => updateLine(key, {
+    productName: p.name,
+    cogsPerUnit: Math.round(p.cogsPerUnit * 100) / 100,
+    weightKg: p.weightKg != null ? Math.round(p.weightKg * 100) / 100 : '',
+  })
   const [softwareCostPerUnit, setSoftwareCostPerUnit] = useState(DEFAULT_SOFTWARE_COST_PER_UNIT)
   const [sellingIncentivePct, setSellingIncentivePct] = useState(DEFAULT_SELLING_INCENTIVE_PCT)
   const [assetCost, setAssetCost] = useState('')
@@ -476,6 +557,22 @@ export default function POApprovalChecker({ productGroups = [] }) {
   // divided evenly across Qty to get an effective per-unit freight cost.
   const [logisticsMode, setLogisticsMode] = useState('courier') // 'courier' | 'ftlPtl'
   const [ftlPtlTotalCost, setFtlPtlTotalCost] = useState('')
+
+  // Reset the single-PO form back to its initial empty state — does NOT touch Bulk Upload
+  // results (bulkRows/bulkSkipped/bulkError below), which are a separate, independent workflow.
+  const resetForm = () => {
+    setCustomerName('')
+    setLines([emptyLine()])
+    setSoftwareCostPerUnit(DEFAULT_SOFTWARE_COST_PER_UNIT)
+    setSellingIncentivePct(DEFAULT_SELLING_INCENTIVE_PCT)
+    setAssetCost('')
+    setMinProfitPct(DEFAULT_MIN_PROFIT_PCT)
+    setLogisticsMode('courier')
+    setFtlPtlTotalCost('')
+  }
+  const isFormDirty = customerName !== '' || lines.length > 1 || lines.some(l => l.productName || l.qty || l.sellingPrice || l.cogsPerUnit || l.weightKg)
+    || softwareCostPerUnit !== DEFAULT_SOFTWARE_COST_PER_UNIT || sellingIncentivePct !== DEFAULT_SELLING_INCENTIVE_PCT
+    || assetCost !== '' || minProfitPct !== DEFAULT_MIN_PROFIT_PCT || logisticsMode !== 'courier' || ftlPtlTotalCost !== ''
 
   // Bulk upload: an uploaded file's rows get run through computePOResult (the SAME formula the
   // single-PO form above uses) one by one, then shown as a results table instead of one-at-a-time
@@ -499,7 +596,18 @@ export default function POApprovalChecker({ productGroups = [] }) {
           if (!confirm(`${bad.length} row(s) will be skipped (missing required fields):\n\n${preview}\n\nProcess the other ${good.length} row(s)?`)) return
         }
         if (!good.length) { alert('No valid PO rows found in this file.'); return }
-        const computed = good.map((row, i) => ({ ...row, _line: i, _result: computePOResult(row, sndRateSlabs) }))
+        // Bulk upload stays single-product-per-row (2026-10-19) — each row becomes a
+        // one-line-item PO for the shared computePOResult, so bulk and the interactive form never
+        // run two different formulas even though the form now supports multiple product lines.
+        const computed = good.map((row, i) => {
+          const res = computePOResult({ lines: [row], ...row }, sndRateSlabs)
+          // Bulk's results table/export were written for a single product per row — alias the
+          // one line's own sp/cogs/weight back onto the top-level result object so that display
+          // code (BulkResultsCard, exportBulkResults) doesn't need to know the result is now
+          // lines-shaped underneath.
+          const resWithLine = res ? { ...res, sp: res.lines[0].sp, cogs: res.lines[0].cogs, weight: res.lines[0].weight } : null
+          return { ...row, _line: i, _result: resWithLine }
+        })
         setBulkRows(computed)
         setBulkSkipped(bad)
       } catch (err) {
@@ -543,16 +651,10 @@ export default function POApprovalChecker({ productGroups = [] }) {
     XLSX.writeFile(wb, 'po_approval_bulk_results.xlsx')
   }
 
-  const applyProduct = p => {
-    setProductName(p.name)
-    setCogsPerUnit(Math.round(p.cogsPerUnit * 100) / 100)
-    setWeightKg(p.weightKg != null ? Math.round(p.weightKg * 100) / 100 : '')
-  }
-
   const result = useMemo(() => computePOResult(
-    { qty, sellingPrice, cogsPerUnit, weightKg, softwareCostPerUnit, sellingIncentivePct, assetCost, minProfitPct, logisticsMode, ftlPtlTotalCost },
+    { lines, softwareCostPerUnit, sellingIncentivePct, assetCost, minProfitPct, logisticsMode, ftlPtlTotalCost },
     sndRateSlabs
-  ), [qty, sellingPrice, cogsPerUnit, weightKg, softwareCostPerUnit, sellingIncentivePct, assetCost, sndRateSlabs, minProfitPct, logisticsMode, ftlPtlTotalCost])
+  ), [lines, softwareCostPerUnit, sellingIncentivePct, assetCost, sndRateSlabs, minProfitPct, logisticsMode, ftlPtlTotalCost])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -595,28 +697,49 @@ export default function POApprovalChecker({ productGroups = [] }) {
         {/* ── PO inputs ── */}
         <div style={{ flex: '1 1 340px', display: 'flex' }}>
           <Card style={{ flex: 1, gap: 14, padding: 16 }}>
-            <SectionLabel>PO Details</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Customer / Party</span>
-                <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="e.g. Allescare Global Pvt Ltd"
-                  style={{ boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border2}`, fontSize: 13, fontWeight: 600, color: C.t1, background: '#fff', outline: 'none' }} />
-              </label>
-              <NumField label="Qty" value={qty} onChange={setQty} min={1} step={1} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionLabel>PO Details</SectionLabel>
+              {isFormDirty && (
+                <button onClick={() => { if (confirm('Reset this PO form? All entered values will be cleared.')) resetForm() }}
+                  style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, background: 'none', border: `1px solid ${C.border2}`, borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                  ↺ Reset
+                </button>
+              )}
             </div>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Customer / Party</span>
+              <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="e.g. Allescare Global Pvt Ltd"
+                style={{ boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border2}`, fontSize: 13, fontWeight: 600, color: C.t1, background: '#fff', outline: 'none' }} />
+            </label>
 
-            <ProductPicker productGroups={productGroups} onApply={applyProduct} />
-            {productName && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1 }}>{productName}</div>}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <NumField label="Selling Price (as per PO)" value={sellingPrice} onChange={setSellingPrice} prefix="₹" step={1} />
-              <NumField label="COGS / Unit" value={cogsPerUnit} onChange={setCogsPerUnit} prefix="₹" step={0.01} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Products {lines.length > 1 ? `(${lines.length} — sharing one Freight/Asset Cost below)` : ''}</span>
+                <button onClick={addLine} style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.acd, cursor: 'pointer' }}>+ Add Product</button>
+              </div>
+              {lines.map((line, i) => (
+                <div key={line._key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase' }}>Product {i + 1}</span>
+                    {lines.length > 1 && <button onClick={() => removeLine(line._key)} style={{ fontSize: 10.5, fontWeight: 700, color: C.red.tx, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}>✕ Remove</button>}
+                  </div>
+                  <ProductPicker productGroups={productGroups} onApply={p => applyProductToLine(line._key, p)} />
+                  {line.productName && <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{line.productName}</div>}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <NumField label="Qty" value={line.qty} onChange={v => updateLine(line._key, { qty: v })} min={1} step={1} />
+                    <NumField label="Selling Price" value={line.sellingPrice} onChange={v => updateLine(line._key, { sellingPrice: v })} prefix="₹" step={1} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <NumField label="COGS / Unit" value={line.cogsPerUnit} onChange={v => updateLine(line._key, { cogsPerUnit: v })} prefix="₹" step={0.01} />
+                    <NumField label="Weight Slab" value={line.weightKg} onChange={v => updateLine(line._key, { weightKg: v })} suffix="kg/unit" step={0.1} />
+                  </div>
+                </div>
+              ))}
             </div>
-            <NumField label="Weight Slab" value={weightKg} onChange={setWeightKg} suffix="kg/unit" step={0.1} />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Freight</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Freight {lines.length > 1 ? '(shared across all products)' : ''}</span>
                 <div style={{ display: 'flex', gap: 4, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 3 }}>
                   <button onClick={() => setLogisticsMode('courier')}
                     style={{ fontSize: 11, fontWeight: logisticsMode === 'courier' ? 700 : 500, padding: '4px 10px', borderRadius: 6, border: 'none', outline: 'none', background: logisticsMode === 'courier' ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>
@@ -631,10 +754,14 @@ export default function POApprovalChecker({ productGroups = [] }) {
               {logisticsMode === 'ftlPtl' ? (
                 <>
                   <NumField label="Truck Cost (whole shipment, one-time)" value={ftlPtlTotalCost} onChange={setFtlPtlTotalCost} prefix="₹" step={100} />
-                  <div style={{ fontSize: 11, color: C.t3 }}>Divided evenly across Qty for an effective per-unit freight cost. Fulfilment is still added separately from the weight-slab rate card above.</div>
+                  <div style={{ fontSize: 11, color: C.t3 }}>
+                    {lines.length > 1
+                      ? 'Split across products by weight share (qty × weight ÷ total shipment weight), then divided by each product\'s own qty for an effective per-unit freight. Fulfilment is still added separately, per product, from the weight-slab rate card.'
+                      : 'Divided evenly across Qty for an effective per-unit freight cost. Fulfilment is still added separately from the weight-slab rate card above.'}
+                  </div>
                 </>
               ) : (
-                <div style={{ fontSize: 11, color: C.t3 }}>Forward freight + Fulfilment looked up automatically from Weight Slab above.</div>
+                <div style={{ fontSize: 11, color: C.t3 }}>Forward freight + Fulfilment looked up automatically from each product's own Weight Slab.</div>
               )}
             </div>
 
@@ -645,9 +772,9 @@ export default function POApprovalChecker({ productGroups = [] }) {
             </div>
             <NumField label="Minimum Acceptable Profit %" value={minProfitPct} onChange={setMinProfitPct} suffix="%" step={0.5} />
 
-            {!(parseFloat(qty) > 0) || !(parseFloat(sellingPrice) > 0) ? (
+            {!result ? (
               <div style={{ fontSize: 11.5, color: C.amber.tx, background: C.amber.bg, border: `1px solid ${C.amber.bd}`, borderRadius: 10, padding: '10px 14px' }}>
-                Enter Qty, Selling Price, and COGS/Unit to check this PO.
+                Enter Qty, Selling Price, and COGS/Unit for at least one product to check this PO.
               </div>
             ) : null}
           </Card>
@@ -678,31 +805,31 @@ export default function POApprovalChecker({ productGroups = [] }) {
 
               <Card style={{ gap: 14, padding: 18 }}>
                 <div>
-                  <SectionLabel>PO Breakdown</SectionLabel>
-                  {(customerName || productName) && (
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.t1, marginTop: 4 }}>
-                      {customerName}{customerName && productName ? ' — ' : ''}{productName}
-                    </div>
+                  <SectionLabel>PO Breakdown{result.lines.length > 1 ? ` — ${result.lines.length} products` : ''}</SectionLabel>
+                  {customerName && (
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.t1, marginTop: 4 }}>{customerName}</div>
                   )}
                 </div>
 
-                <CostBar label="Total Sale" sub={`${result.q} units × ${fmt(result.sp)}`} value={result.totalSale} scaleMax={result.totalSale} tone="sale" />
+                <CostBar label="Total Sale" sub={`${result.q} units across ${result.lines.length} product${result.lines.length === 1 ? '' : 's'}`} value={result.totalSale} scaleMax={result.totalSale} tone="sale" />
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 2, borderLeft: `2px solid ${C.border}`, marginLeft: 2 }}>
-                  <CostBar label="COGS" sub={`${result.q} units × ${fmt(result.cogs)}`} value={-result.totalCogs} scaleMax={result.totalSale} />
+                  <CostBar label="COGS" sub={`Across ${result.lines.length} product${result.lines.length === 1 ? '' : 's'}`} value={-result.totalCogs} scaleMax={result.totalSale} />
                   <CostBar
                     label="Logistics & Fulfilment"
                     sub={
                       !result.hasWeightRate ? 'No weight slab matched / no Truck Cost entered — see inputs above'
-                      : logisticsMode === 'ftlPtl'
-                        ? `${fmt(result.ftlPtlTotal)} truck ÷ ${result.q} + ${fmt(result.fulfilmentPerUnit)} fulfilment/unit`
-                        : `${fmt(result.logisticPerUnit)} forward + ${fmt(result.fulfilmentPerUnit)} fulfilment per unit × ${result.q}`
+                      : logisticsMode === 'ftlPtl' && result.lines.length > 1
+                        ? `${fmt(result.ftlPtlTotal)} truck split by weight share across ${result.lines.length} products + fulfilment per unit`
+                        : logisticsMode === 'ftlPtl'
+                        ? `${fmt(result.ftlPtlTotal)} truck ÷ ${result.q} + ${fmt(result.lines[0].fulfilmentPerUnit)} fulfilment/unit`
+                        : `Forward + fulfilment per unit, per product, × qty`
                     }
                     value={-result.totalLogistics} scaleMax={result.totalSale}
                   />
                   <CostBar label="Software Cost" sub={`${result.q} units × ${fmt(softwareCostPerUnit)}`} value={-result.totalSoftware} scaleMax={result.totalSale} />
-                  <CostBar label="Selling Incentive" sub={`${sellingIncentivePct}% of ${fmt(result.sp)} × ${result.q}`} value={-result.totalSellingIncentive} scaleMax={result.totalSale} />
-                  {result.asset > 0 && <CostBar label="Asset Cost" sub="one-time, not scaled by Qty" value={-result.asset} scaleMax={result.totalSale} />}
+                  <CostBar label="Selling Incentive" sub={`${sellingIncentivePct}% of SP, per product`} value={-result.totalSellingIncentive} scaleMax={result.totalSale} />
+                  {result.asset > 0 && <CostBar label="Asset Cost" sub="one-time, shared across the whole PO" value={-result.asset} scaleMax={result.totalSale} />}
                 </div>
 
                 <CostBar label="Profit" value={result.profit} scaleMax={result.totalSale} tone="total" negative={result.profit < 0} />
@@ -710,17 +837,49 @@ export default function POApprovalChecker({ productGroups = [] }) {
                 {!result.hasWeightRate && (
                   <div style={{ fontSize: 11.5, color: C.amber.tx, background: C.amber.bg, border: `1px solid ${C.amber.bd}`, borderRadius: 10, padding: '10px 12px' }}>
                     {logisticsMode === 'ftlPtl'
-                      ? 'Enter the Truck Cost above to include freight — fulfilment still needs a matching Weight Slab too. Profit shown above excludes logistics until both are entered.'
-                      : 'No weight slab matched — enter Weight (kg/unit) above to include real logistics/fulfilment cost. Profit shown above excludes logistics until then.'}
+                      ? 'Enter the Truck Cost above to include freight — fulfilment still needs a matching Weight Slab on every product too. Profit shown above excludes logistics until all are entered.'
+                      : 'No weight slab matched on one or more products — enter Weight (kg/unit) above to include real logistics/fulfilment cost. Profit shown above excludes logistics until then.'}
                   </div>
                 )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                   <KpiTile label="Profit / Unit" value={fmt(result.profit / result.q)} negative={result.profit < 0} />
-                  <KpiTile label="Logistics / Unit" value={result.hasWeightRate ? fmt(result.logisticsPerUnitTotal) : '—'} />
                   <KpiTile label="Total Cost" value={fmt(result.totalCost)} />
                   <KpiTile label="Total Sale" value={fmt(result.totalSale)} />
+                  <KpiTile label="Total Units" value={result.q} />
                 </div>
+
+                {result.lines.length > 1 && (
+                  <div style={{ paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                    <SectionLabel>Per-Product Breakdown</SectionLabel>
+                    <div style={{ overflowX: 'auto', marginTop: 8 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                            {['Product', 'Qty', 'SP', 'COGS/Unit', logisticsMode === 'ftlPtl' ? 'Weight Share' : 'Weight', 'Logistics', 'Profit', 'Profit %'].map(h => (
+                              <th key={h} style={{ textAlign: h === 'Product' ? 'left' : 'right', padding: '6px 8px', fontWeight: 700, color: C.t3, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.lines.map((l, i) => (
+                            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                              <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 600 }}>{l.productName || `Product ${i + 1}`}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{l.q}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(l.sp)}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(l.cogs)}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{logisticsMode === 'ftlPtl' ? (l.weightShare != null ? `${(l.weightShare * 100).toFixed(1)}%` : '—') : `${l.weight}kg`}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: C.t3 }}>−{fmt(l.totalLogistics)}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: l.lineProfit < 0 ? C.red.tx : C.t1 }}>{fmt(l.lineProfit)}</td>
+                              <td style={{ padding: '7px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: l.lineProfitPct < 0 ? C.red.tx : C.t1 }}>{l.lineProfitPct != null ? `${l.lineProfitPct.toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.t3, marginTop: 6 }}>Per-product Profit/Profit% excludes the shared Asset Cost (deducted once at the PO level above, not per product).</div>
+                  </div>
+                )}
               </Card>
             </>
           ) : (

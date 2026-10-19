@@ -83,6 +83,95 @@ export function netRevenueOf(d, scName, mobilityNetBySubCat = {}, catName, netSc
 // different COGS%/GM%/CM1%/CM2% for the same date range, inside the same tab).
 export const estimateCogsPerUnit = asp => asp > 0 ? asp * (asp < 5000 ? 0.4 : 0.5) : 0
 
+// ── Month-aware COGS (added 2026-10-18, replaces the flat public/cogs-data.json lookup) ──
+//
+// public.product_cogs_monthly (Supabase) holds one row per (sku, month), covering Feb 2022
+// through the current month for every SKU — months before the earliest uploaded sheet carry
+// that sheet's earliest month backward, and months after the latest uploaded sheet carry ITS
+// latest month forward, until a newer month's sheet replaces it (see scripts/
+// sync-cogs-monthly-rest.mjs). api/cogs-monthly.js serves it; cogsMonthlyMapOf() below shapes
+// the raw rows into { [sku]: { [month]: {cogs, category, subCategory, cogsSource} } } for O(1)
+// lookup by date.
+//
+// The ASP-based estimateCogsPerUnit fallback above is UNCHANGED and stays the second tier —
+// per explicit instruction, the fallback logic itself is not being touched, only what sits
+// ahead of it (real month-aware COGS instead of the old flat per-SKU rate).
+export function cogsMonthlyMapOf(rows) {
+  const map = {}
+  ;(rows || []).forEach(r => {
+    if (!map[r.sku]) map[r.sku] = {}
+    map[r.sku][r.month] = { cogs: r.cogs, category: r.category, subCategory: r.subCategory, cogsSource: r.cogsSource }
+  })
+  return map
+}
+
+// date: any 'YYYY-MM-DD...' string (a daily-trend row's own date) or a 'YYYY-MM-01' month
+// already. asp: that row's own ASP (gross ÷ units), used only if no real COGS entry exists for
+// this sku+month.
+export function getCogsPerUnit({ sku, date, cogsMonthlyMap, asp }) {
+  const month = `${String(date).slice(0, 7)}-01`
+  const entry = cogsMonthlyMap?.[sku]?.[month]
+  return (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+}
+
+// Same sku+month lookup as getCogsPerUnit, but also reports whether this came from a real
+// product_cogs_monthly entry or the estimateCogsPerUnit (40/50%-of-ASP) fallback — kept as a
+// separate function rather than changing getCogsPerUnit's own return shape, since that plain-
+// number signature is relied on elsewhere (PnLPage.jsx's day-wise COGS trend callers) and
+// changing it would require updating every call site for a signal only getCogsForRange needs.
+function getCogsPerUnitWithSource({ sku, date, cogsMonthlyMap, asp }) {
+  const month = `${String(date).slice(0, 7)}-01`
+  const entry = cogsMonthlyMap?.[sku]?.[month]
+  const hasReal = entry && entry.cogs != null
+  return { rate: hasReal ? entry.cogs : estimateCogsPerUnit(asp), isEstimate: !hasReal }
+}
+
+// Whole-range (no single date) COGS for one SKU: splits the SKU's units across every month the
+// [startDate, endDate] range touches proportional to that month's share of DAYS in the range
+// (the whole-range callers — kpiSummary, PnLFinancialTable — only have a total unit count per
+// SKU for the period, not a per-day breakdown), then applies each month's own rate to its slice.
+// A single-month range collapses to exactly today's flat-rate behavior (one month, 100% of
+// units, one rate) — this only differs from a flat lookup when the range actually spans a COGS
+// rate change. isEstimate is true if ANY touched month fell back to the ASP estimate — restores
+// the Financial Table's "est." badge (added on main 2026-09-30 against the old flat cogsMap),
+// re-derived against the new monthly-COGS pipeline, same all-or-nothing per-SKU semantic the old
+// badge used (not a per-month partial flag).
+export function getCogsForRange({ sku, units, startDate, endDate, cogsMonthlyMap, asp }) {
+  if (!(units > 0)) return { totalCogs: 0, perUnitBlended: 0, isEstimate: false }
+  const months = monthsBetween(startDate, endDate)
+  if (months.length <= 1) {
+    const { rate, isEstimate } = getCogsPerUnitWithSource({ sku, date: startDate, cogsMonthlyMap, asp })
+    return { totalCogs: rate * units, perUnitBlended: rate, isEstimate }
+  }
+  const totalDays = months.reduce((s, m) => s + m.daysInRange, 0)
+  let totalCogs = 0, isEstimate = false
+  months.forEach(m => {
+    const shareUnits = units * (m.daysInRange / totalDays)
+    const { rate, isEstimate: monthIsEstimate } = getCogsPerUnitWithSource({ sku, date: m.month, cogsMonthlyMap, asp })
+    totalCogs += rate * shareUnits
+    if (monthIsEstimate) isEstimate = true
+  })
+  return { totalCogs, perUnitBlended: totalCogs / units, isEstimate }
+}
+
+// Internal: list of {month: 'YYYY-MM-01', daysInRange} for every calendar month touched by
+// [startDate, endDate], clipped to the range itself.
+function monthsBetween(startDate, endDate) {
+  const start = new Date(startDate), end = new Date(endDate)
+  const out = []
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+  while (cursor <= end) {
+    const monthStart = new Date(cursor)
+    const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
+    const rangeStartInMonth = monthStart > start ? monthStart : start
+    const rangeEndInMonth = monthEnd < end ? monthEnd : end
+    const daysInRange = Math.max(1, Math.round((rangeEndInMonth - rangeStartInMonth) / 86400000) + 1)
+    out.push({ month: monthStart.toISOString().slice(0, 10), daysInRange })
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+  }
+  return out
+}
+
 // Shared per-unit D2C cost engine — used by both the Breakeven ROAS calculator and the Price
 // Simulator so a hypothetical/simulated unit is costed with the EXACT same formula as a real one
 // in shSkuCosts (PnLPage.jsx) / api/bq.js's D2C SnD queries: payment gateway = 1.1% of gross Inc
