@@ -94,7 +94,11 @@ function vcMarginPeriodFor(orderDate, oldMarginEndDate, events) {
 
 // Server-side in-memory cache with 5-minute TTL
 const cache = new Map()
-const CACHE_TTL = 5 * 60 * 1000
+const CACHE_TTL = 30 * 60 * 1000
+
+// FK latest date cached for 1 hour — only changes when new FK data lands (daily)
+let fkLatestCache = { date: null, ts: 0 }
+const FK_LATEST_TTL = 60 * 60 * 1000
 
 // Bumped 2026-08-25 (v10): amzSC.monthlyProductSettlement's bucket field names changed
 // (commission/fulfilment/promotionsOther → referralFee/fulfilmentFee/storageFee/
@@ -231,9 +235,13 @@ export default async function handler(req, res) {
   // momBase and yoyBase are only used inside momYoyTotals (merged UNION ALL) — not referenced elsewhere
 
 
-  // Detect if selected range is entirely after latest FK data — if so, shift FK queries to last available window
-  const [[fkLatestRow]] = await bq.query({ query: `SELECT MAX(OrderDate) AS latest FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart'`, maximumBytesBilled: '1000000000' })
-  const fkLatestDate = fkLatestRow?.latest?.value || fkLatestRow?.latest || null
+  // Detect if selected range is entirely after latest FK data — cached 1hr since it only
+  // changes when new Flipkart data lands (daily), so no need to re-query on every request.
+  if (Date.now() - fkLatestCache.ts > FK_LATEST_TTL) {
+    const [[fkLatestRow]] = await bq.query({ query: `SELECT MAX(OrderDate) AS latest FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart'`, maximumBytesBilled: '1000000000' })
+    fkLatestCache = { date: fkLatestRow?.latest?.value || fkLatestRow?.latest || null, ts: Date.now() }
+  }
+  const fkLatestDate = fkLatestCache.date
   let fkStart = start, fkEnd = end
   if (fkLatestDate && start > fkLatestDate) {
     // Shift the FK query window so it ends at fkLatestDate with same number of days
