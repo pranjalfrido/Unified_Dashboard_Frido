@@ -1,14 +1,15 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, Fragment } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
-import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
+import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 
 // Financial View table — Category → Product (→ SKU) grain, same visual language as
 // FlatCategoryProductMatrix (sticky C.bg header, sortable columns, hover-highlight rows,
 // bold sticky Total row, expandable SKU rows, CSV export).
 //
-// COGS/GM are real, sourced from public/cogs-data.json (a flat per-SKU cost sheet — not yet
-// month-wise, regenerate via scripts/generate-cogs-cache.mjs when a new sheet lands). COGS value
+// COGS/GM are real, sourced from public.product_cogs_monthly (Supabase) via cogsMonthlyMap,
+// passed down from PnLPage.jsx — a per-(sku, month) cost table covering Feb 2022-present (see
+// scripts/sync-cogs-monthly-rest.mjs), replacing the old flat public/cogs-data.json. COGS value
 // = per-unit cost × net units sold (gross units minus cancelled/RTO/returned/CIR units) — only
 // Amazon SC currently reports returnedUnits (see amzSCSubCatChannel/amzSCSKUChannel in
 // api/bq.js), so other channels fall back to gross units in mapRow() until they're wired up the
@@ -37,17 +38,12 @@ import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 // Seller Central and Vendor Central views stop at CM1 % (marketing spend is only mapped on the
 // combined "All" SC+VC view, since that's the grain the Ads tab's Amazon spend reconciles to).
 // includeUnmatched/mobilityNetBySubCat: D2C-only — see PnLPage.jsx for how each is computed.
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1 }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
-  const [cogsMap, setCogsMap] = useState(null)
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
   const { Th } = table
-
-  useEffect(() => {
-    fetch('/cogs-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).then(setCogsMap).catch(() => setCogsMap({}))
-  }, [])
 
   const q = search.trim().toLowerCase()
 
@@ -65,13 +61,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const MIN_REV_FOR_RATIOS = 100
   const pctOfFloored = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : 0
 
-  // Per-SKU COGS × units and SnD. Every SKU gets a COGS figure — real (cogsMap) where available,
-  // else the ASP-based estimate above — so anyCosted is always true and no product is ever
+  // Per-SKU COGS × units and SnD. Every SKU gets a COGS figure — real (cogsMonthlyMap, blended
+  // across the months this range touches) where available, else the ASP-based estimate above —
+  // so anyCosted is always true and no product is ever
   // excluded from GM%/CM1%/CM2% for lack of a cost sheet entry. netCovered/sndNetCovered track
   // how much of this row's Net Revenue is backed by an SnD entry (SnD has no fallback estimate).
   const costsForSkus = (cat, sc) => {
     const skus = skuData?.[cat]?.[sc] || {}
-    let cogs = 0, netCovered = 0, anyCosted = false
+    let cogs = 0, netCovered = 0, anyCosted = false, anyCogsEstimated = false
     let snd = 0, sndNetCovered = 0, anySnd = false
     // For Mobility subcategories: distribute the manager-defined whitelist net revenue
     // proportionally across SKUs by each SKU's standard-formula net share, so per-SKU COGS%/GM%/
@@ -85,17 +82,17 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     const skuEntries = Object.entries(skus)
     const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
     skuEntries.forEach(([sku, d]) => {
-      const entry = cogsMap?.[sku]
       const rStandard = mapRow(d)
       const r = whitelistNet != null && standardNetTotal > 0
         ? { ...rStandard, net: whitelistNet * (rStandard.net / standardNetTotal) }
         : rStandard
       const asp = r.units > 0 ? r.gross / r.units : 0
-      const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+      const { perUnitBlended: perUnitCogs, isEstimate } = getCogsForRange({ sku, units: r.units, startDate, endDate, cogsMonthlyMap, asp })
       if (perUnitCogs > 0 || r.netUnits > 0) {
         cogs += perUnitCogs * r.netUnits
         netCovered += r.net
         anyCosted = true
+        if (isEstimate && r.netUnits > 0) anyCogsEstimated = true
       }
       if (sndBySku && sndBySku[sku] != null) {
         snd += sndBySku[sku]
@@ -103,7 +100,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         anySnd = true
       }
     })
-    return { cogs, netCovered, anyCosted, snd, sndNetCovered, anySnd }
+    return { cogs, netCovered, anyCosted, anyCogsEstimated, snd, sndNetCovered, anySnd }
   }
 
   const allRows = []
@@ -111,7 +108,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     Object.entries(scMap).forEach(([sc, d]) => {
       const r = mapRow(d, sc, cat)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
-      const { cogs, netCovered, anyCosted, snd, sndNetCovered, anySnd } = (cogsMap || sndBySku) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, snd: 0, sndNetCovered: 0, anySnd: false }
+      const { cogs, netCovered, anyCosted, anyCogsEstimated, snd, sndNetCovered, anySnd } = (cogsMonthlyMap || sndBySku) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, anyCogsEstimated: false, snd: 0, sndNetCovered: 0, anySnd: false }
       const gm = anyCosted ? netCovered - cogs : null
       // CM1 = GM − SnD, only meaningful where BOTH costs are known for the same covered revenue —
       // a row costed for GM but not SnD (or vice versa) can't produce an honest CM1.
@@ -128,7 +125,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       // meaningfully covered" instead, same treatment a true-zero-revenue row already gets.
       const belowFloor = r.net <= MIN_REV_FOR_RATIOS
       allRows.push({
-        cat, sc, ...r, spend, cogs, netCovered, anyCosted, gm, snd, sndNetCovered, anySnd, cm1, cm1Covered, cm2, cm2Covered,
+        cat, sc, ...r, spend, cogs, netCovered, anyCosted, anyCogsEstimated, gm, snd, sndNetCovered, anySnd, cm1, cm1Covered, cm2, cm2Covered,
         returnPct: pctOf(r.totalReturnRev, r.gross),
         spendPct: belowFloor ? 0 : (r.net > 0 ? (spend / r.net * 100) : 0),
         roas: belowFloor ? null : (spend > 0 ? r.excRev / spend : null),
@@ -240,11 +237,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
     { id: 'cogsPct', width: 7, label: 'COGS %', sortKey: 'cogsPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.cogsPct != null ? <span style={{ color: r.cogsPct > 60 ? '#B91C1C' : 'inherit' }}>{r.cogsPct.toFixed(1)}%</span> : noCostCell}</td>,
+      row: r => <td style={tdStyle}>{r.cogsPct != null ? <span style={{ color: r.cogsPct > 60 ? '#B91C1C' : 'inherit' }}>{r.cogsPct.toFixed(1)}%{r.anyCogsEstimated ? <span title="COGS estimated (40/50% of ASP) — no ledger entry" style={{ fontSize: 9, fontWeight: 700, color: '#B8862E', marginLeft: 3, background: '#FCF3E2', border: '1px solid #EAD4A0', borderRadius: 3, padding: '1px 4px', verticalAlign: 'middle' }}>est.</span> : null}</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._costed && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._cogs, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{pctCellOf(tot.cogs, tot.netCovered)}</td> },
     { id: 'gmPct', width: 7, label: 'GM %', sortKey: 'gmPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.gmPct != null ? <span style={{ color: r.gmPct < 0 ? '#B91C1C' : r.gmPct >= 40 ? '#286010' : 'inherit' }}>{r.gmPct.toFixed(1)}%</span> : noCostCell}</td>,
+      row: r => <td style={tdStyle}>{r.gmPct != null ? <span style={{ color: r.gmPct < 0 ? '#B91C1C' : r.gmPct >= 40 ? '#286010' : 'inherit' }}>{r.gmPct.toFixed(1)}%{r.anyCogsEstimated ? <span title="GM uses estimated COGS (40/50% of ASP)" style={{ fontSize: 9, fontWeight: 700, color: '#B8862E', marginLeft: 3, background: '#FCF3E2', border: '1px solid #EAD4A0', borderRadius: 3, padding: '1px 4px', verticalAlign: 'middle' }}>est.</span> : null}</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._gm != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._gm, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{totGm != null ? pctCellOf(totGm, tot.netCovered) : noCostCell}</td> },
     { id: 'sndPct', width: 7, label: 'SnD %', sortKey: 'sndPct', style: thStyle,
@@ -275,33 +272,35 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const handleExport = () => {
     const p2 = v => v != null ? +v.toFixed(2) : ''
     const ri = v => v != null ? Math.round(v) : ''
-    const buildRow = (category, product, sku, sk, rawD, skCogs, skGm, skSnd, skCm1, skSpend, skCm2, costed) => {
+    const buildRow = (category, product, sk, rawD, skCogs, skGm, skSnd, skCm1, skSpend, skCm2, costed) => {
       const cancelRev = rawD?.cancelRev || 0
       const rtoRev = rawD?.rtoRev || 0
-      const returnRev = rawD?.returnRev || 0
       const cirRev = rawD?.cirRev || 0
       const exchRev = rawD?.exchRev || 0
       const gross = sk.gross
       return {
         Category: category,
         Product: product,
-        SKU: sku,
         'Gross Rev (Inc GST)': ri(gross),
         'Gross Rev (Ex GST)': ri(sk.excRev),
         Units: sk.units,
         'Net Units': sk.netUnits,
         ASP: sk.units > 0 ? ri(gross / sk.units) : '',
-        'Cancel Rev': ri(cancelRev),
-        'Cancel %': p2(pctOf(cancelRev, gross)),
-        'RTO Rev': ri(rtoRev),
-        'RTO %': p2(pctOf(rtoRev, gross)),
-        'Return Rev': ri(returnRev),
-        'Return %': p2(pctOf(returnRev, gross)),
-        'CIR Rev': ri(cirRev),
-        'CIR %': p2(pctOf(cirRev, gross)),
-        'Exchange Rev': ri(exchRev),
-        'Total Returns Rev': ri(sk.totalReturnRev),
-        'Total Returns %': p2(pctOf(sk.totalReturnRev, gross)),
+        ...(hasReturnBreakdown ? {
+          'Cancel Rev': ri(cancelRev),
+          'Cancel %': p2(pctOf(cancelRev, gross)),
+          'RTO Rev': ri(rtoRev),
+          'RTO %': p2(pctOf(rtoRev, gross)),
+          'CIR Rev': ri(cirRev),
+          'CIR %': p2(pctOf(cirRev, gross)),
+          'Exch Rev': ri(exchRev),
+          'Exch %': p2(pctOf(exchRev, gross)),
+          'Total Returns Rev': ri(sk.totalReturnRev),
+          'Total Returns %': p2(pctOf(sk.totalReturnRev, gross)),
+        } : {
+          'Return Rev': ri(sk.totalReturnRev),
+          'Return %': p2(pctOf(sk.totalReturnRev, gross)),
+        }),
         'Net Revenue': ri(sk.net),
         'COGS': costed ? ri(skCogs) : '',
         'COGS %': costed && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skCogs, sk.net)) : '',
@@ -322,37 +321,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       }
     }
 
-    const csvRows = rows.flatMap(r => {
+    const csvRows = rows.map(r => {
       const rawD = subCatData?.[r.cat]?.[r.sc] || {}
       const rFull = mapRow(rawD, r.sc, r.cat)
-      const main = buildRow(r.cat, r.sc, '',
+      return buildRow(r.cat, r.sc,
         { gross: r.gross, excRev: r.excRev, units: r.units, netUnits: rFull.netUnits, totalReturnRev: r.totalReturnRev, net: r.net },
         rawD,
         r.anyCosted ? r.cogs : null, r.gm, r.anySnd ? r.snd : null, r.cm1, r.spend, r.cm2, r.anyCosted
       )
-
-      const whitelistNet = mobilityNetBySubCat[`${r.cat}::${r.sc}`] != null ? mobilityNetBySubCat[`${r.cat}::${r.sc}`] : null
-      const skuEntries = Object.entries(skuData?.[r.cat]?.[r.sc] || {})
-      const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
-      const csvSkuTotalGross = skuEntries.reduce((s, [, d]) => s + (mapRow(d).gross || 0), 0)
-      const skuRows = skuEntries.map(([sku, rawSkuD]) => {
-        const rStandard = mapRow(rawSkuD)
-        const sk = whitelistNet != null && standardNetTotal > 0
-          ? { ...rStandard, net: whitelistNet * (rStandard.net / standardNetTotal) }
-          : rStandard
-        const entry = cogsMap?.[sku]
-        const asp = sk.units > 0 ? sk.gross / sk.units : 0
-        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
-        const costed = perUnitCogs > 0 || sk.netUnits > 0
-        const skCogs = costed ? perUnitCogs * sk.netUnits : null
-        const skGm = costed ? sk.net - skCogs : null
-        const skSnd = sndBySku?.[sku] ?? null
-        const skCm1 = costed && skSnd != null ? skGm - skSnd : null
-        const skSpend = showMarketing && r.spend > 0 && csvSkuTotalGross > 0 ? r.spend * (sk.gross / csvSkuTotalGross) : 0
-        const skCm2 = skCm1 != null && showMarketing ? skCm1 - skSpend : null
-        return buildRow(r.cat, r.sc, sku, sk, rawSkuD, skCogs, skGm, skSnd, skCm1, skSpend, skCm2, costed)
-      })
-      return skuRows.length > 0 ? skuRows : [main]
     })
     exportCSV(csvRows, `${(title || 'financial_view').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`)
   }
@@ -412,9 +388,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                   </tr>
                   {isOpen && skus.map(sk_ => {
-                    const entry = cogsMap?.[sk_.sku]
                     const skAsp = sk_.units > 0 ? sk_.gross / sk_.units : 0
-                    const skPerUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(skAsp)
+                    const skPerUnitCogs = getCogsForRange({ sku: sk_.sku, units: sk_.units, startDate, endDate, cogsMonthlyMap, asp: skAsp }).perUnitBlended
                     const costed = skPerUnitCogs > 0 || sk_.netUnits > 0
                     const skCogs = costed ? skPerUnitCogs * sk_.netUnits : 0
                     const skGm = costed ? sk_.net - skCogs : null

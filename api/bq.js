@@ -1,4 +1,4 @@
-import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
 import { getPool } from './_db.js'
 import { getStoreIdMap, getStoreCosts, getCostForMonth } from './_store_pnl.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
@@ -110,19 +110,16 @@ const SLOW_QUERY_KEYS = new Set([
   'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
   'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
   'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','amzSCReturnRateMature','fkReturnRateMature','mnReturnRateMature','offlineCreditNoteRateMature','eboReturnRateMature','overallReturnRateMature','allTabReturnRateMature',
   'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
   'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
   'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
   'amzSCCatChannelPrev','amzSCSubCatChannelPrev','amzSCSKUChannelPrev',
   'amzSCRollingRate','amzSCRollingNetRevenue','amzSCDailyNetBySKU',
-  'amzSCDailySettlement','amzSCMFNOrderWeights','amzSCLineItemWeights','amzSCSettlement',
-  'amzSCReturnCat','amzSCReturnSubCat','amzSCReturnSKU','amzSCOrderStatusDebug',
+  'amzSCDailySettlement','amzSCMFNOrderWeights','amzSCLineItemWeights',
   'amzSCRegion','amzSCTier','amzSCFulfillment','amzSCStatus',
   'amzVCCat','amzVCSubCat','amzVCSKU','amzVCDailySKU','amzVCDailyCat',
   'amzVCCatPrev','amzVCSubCatPrev','amzVCSKUPrev',
-  'amzIntlCountries','amzIntlSKUs','amzIntlCatChannel','amzIntlSubCatChannel','amzIntlSKUChannel',
-  'amzIntlReturnCat','amzIntlReturnSubCat','amzIntlReturnSKU',
   'fkCategories','fkSubCategory','fkSKUs','fkSKUMatrix','fkDailyCat',
   'fkStates','fkStatesPrev','fkCities','fkCitiesPrev',
   'fkRegions','fkReturnRate','fkStatus','fkCatPrev','fkSubCatPrev','fkSKUPrev',
@@ -432,6 +429,68 @@ export default async function handler(req, res) {
     // mature-window volume to trust its own rate (the fallback floor), even though the rate itself
     // is revenue-share, not unit-share.
     shReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // amzSCReturnRateMature — same mature-rolling-window pattern as shReturnRateMature above
+    // (confirmed 2026-10-19), replicated for Amazon Seller Central: Order_Status carries genuine
+    // separate Cancelled/RTO/CIR/Return values on this channel too (see amzSCSubCatChannel/
+    // amzSCCatChannel, which already break them out individually — amzSCNetCalc's hardcoded
+    // `0 AS rto_rev, 0 AS cir_rev` was only a simplification for THAT query, not a real data gap),
+    // so the same netRevenueSelectFragment formula applies unchanged, just filtered to
+    // SubChannel='Amazon Seller Central' instead of Channel='Shopify'.
+    amzSCReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE SubChannel='Amazon Seller Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY category, subcategory, sku`,
+    // fkReturnRateMature — Flipkart's OWN simpler formula, NOT the shared netRevenueSelectFragment
+    // (confirmed 2026-10-19): Flipkart's data genuinely has no separate CIR status, Return+RTO are
+    // always combined into one Order_Status bucket, and cancellation is tracked via
+    // FulfilmentStatus='Cancelled' (not Order_Status), not Order_Status='Cancelled' — reusing the
+    // shared fragment unchanged would silently read 0 for rto/cir and miss cancellations entirely.
+    // Matches fkReturnRate's own existing live-range formula exactly (return_rev ÷ total_rev,
+    // where return_rev = Order_Status IN ('Return','RTO') only — no cancellation, no CIR — see
+    // that query above and its payload builder), so the two numbers are directly comparable.
+    fkReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),2) AS total_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // mnReturnRateMature — same pattern as shReturnRateMature (confirmed 2026-10-19): Myntra's
+    // mnTotals already uses the shared netRevenueSelectFragment with genuine separate Cancelled/
+    // RTO/CIR/Return Order_Status values (see mnSubCategories, which already breaks them out
+    // individually) and mnReturnPct's own formula is identical to netRevenueReturnPct (RTO+CIR+
+    // Return+full Cancellation ÷ Gross Inc GST) — so the shared fragment/aggregator applies
+    // unchanged, just filtered to Channel='Myntra'.
+    mnReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Myntra' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // eboReturnRateMature — same pattern as shReturnRateMature/mnReturnRateMature (confirmed
+    // 2026-10-19): EBO (Channel='Retail') carries the full genuine RTO/CIR/Return/Cancelled/
+    // Exchange vocabulary (see eboTotals/eboSKU, which already break them out individually), and
+    // EBO's own live-range returnRevPct formula (rtoRev+returnRev+cirRev+cancelRev ÷ totalRev)
+    // already matches netRevenueReturnPct exactly, so the shared fragment/aggregator applies
+    // unchanged, just filtered to Channel='Retail'.
+    eboReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // overallReturnRateMature — the ALL-CHANNEL version (confirmed 2026-10-19), for Overview's
+    // headline "Return %" tile, which blends every channel via byOrderStatus (no Channel= filter
+    // at all — see that query above) using the exact same (cancelRev+rtoRev+returnRev+cirRev) ÷
+    // totalRev formula as netRevenueReturnPct. A SINGLE all-channel query here, rather than
+    // summing the 6 per-channel *ReturnRateMature queries built so far, since 5 channels
+    // (Blinkit/Instamart/Zepto/CRED/Firstcry) still have none — this stays correct and complete
+    // regardless of per-channel build progress, since it's computed independently from BigQuery's
+    // full fact table, not derived from the other channel-specific queries above.
+    overallReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // allTabReturnRateMature — for Sales tab's "All" (cross-channel) subtab specifically, NOT the
+    // same as overallReturnRateMature above (confirmed 2026-10-19: that one is Overview's cruder
+    // all-channel-indiscriminate sum). The All tab's own returnPct uses returnNumeratorRev, which
+    // deliberately scopes to only channels with a real/trackable return lifecycle (Amazon/
+    // Flipkart/Myntra/Shopify/Retail/CRED/Firstcry treat RTO+Return+CIR+Cancelled as returns;
+    // CRED/Firstcry count ONLY Order_Status='Return'; offline_sales counts Credit Note; Blinkit/
+    // Instamart/Zepto are excluded entirely since they have no returns pipeline — see
+    // returnNumerator query's own CASE WHEN for the exact per-channel rules) — replicating that
+    // same scoped numerator here, against the rolling mature window, so the two are comparable.
+    // Shopify's Cancelled branch excludes COD (PaymentMode != 'COD') to match returnNumerator's
+    // own COD exclusion (see that query's comment — fixed on main 2026-09-30, "Fix All-tab
+    // Returns% to exclude COD cancellations from Shopify, matching the per-channel
+    // overallReturnPct formula in _bq.js"; this query must stay in lockstep with it or the
+    // Provisional Return% on the Sales "All" subtab would silently diverge from the live number
+    // it's meant to be a mature-window estimate of).
+    allTabReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),2) AS total_rev, ROUND(SUM(CASE WHEN ((Channel='Amazon' AND SubChannel IN ('Amazon Seller Central','Amazon International')) OR Channel IN ('Flipkart','Myntra')) AND Order_Status IN ('RTO','Return','CIR','Cancelled') THEN SellingPrice_Inc_GST WHEN Channel='Shopify' AND SubChannel != 'Shopify International' AND Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST WHEN Channel='Shopify' AND SubChannel != 'Shopify International' AND Order_Status = 'Cancelled' AND PaymentMode != 'COD' THEN SellingPrice_Inc_GST WHEN Channel IN ('CRED','Firstcry') AND Order_Status = 'Return' THEN SellingPrice_Inc_GST WHEN Channel='Retail' AND Order_Status IN ('RTO','Return','CIR','Cancelled') THEN SellingPrice_Inc_GST WHEN Channel='offline_sales' AND Order_Status = 'Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS return_rev FROM q WHERE MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // offlineCreditNoteRateMature — Offline Sales has no e-commerce return lifecycle at all
+    // (confirmed 2026-10-19): Order_Status is only ever 'Sales' or 'Credit Note', no RTO/CIR/
+    // Return/Cancelled anywhere. There was also no existing "Returns %" KPI tile for this channel
+    // to attach a Provisional number to — a new "Credit Note %" tile is being added alongside this
+    // query, matching OfflineTab's own existing formula (|Credit Note revenue| ÷ Sales revenue).
+    offlineCreditNoteRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, { includeCreditNotes: true })}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty WHEN Order_Status='Credit Note' THEN -ItemQty ELSE 0 END) AS units, ROUND(SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS sales_rev, ROUND(SUM(CASE WHEN Order_Status='Credit Note' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cn_rev FROM q WHERE Channel='offline_sales' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
     // PnL cost rows — per SKU × Order_Status × weight_slab for D2C India (Shopify, non-international).
     // Weight slab: if Weight_gms <= 500 → 500, else CEIL(Weight_gms / 1000) * 1000.
     // Client applies snd-rates.json lookup per slab + status to get logistics & fulfilment costs.
@@ -606,7 +665,11 @@ export default async function handler(req, res) {
     amzSCNetCalc: `WITH q AS (${base}) SELECT ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),2) AS gross_inc_gst, ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Exc_GST ELSE 0 END),2) AS gross_exc_gst, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev, ROUND(SUM(CASE WHEN Order_Status = 'Cancelled' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cancel_rev, 0 AS rto_rev, 0 AS cir_rev FROM q WHERE SubChannel = 'Amazon Seller Central'`,
     amzSCFulfillment: `WITH q AS (${base}) SELECT fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY fulfillment_channel`,
     amzSCStatus: `WITH q AS (${base}) SELECT FinancialStatus AS order_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY order_status ORDER BY orders DESC`,
-    amzSCOrderStatusDebug: `WITH q AS (${base}) SELECT Order_Status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY Order_Status ORDER BY orders DESC`,
+    // amzSCOrderStatusDebug removed 2026-10-19 — confirmed dead: its result was only ever mapped
+    // into payload.amzSC.orderStatusDebug, and `grep -rn "orderStatusDebug" src/` found zero
+    // consumers anywhere in the frontend. Verified independently before deleting (not just taking
+    // an earlier audit's word for it) — see api/bq.js git history for the removed query text if
+    // ever needed again.
     amzSCStates: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(State)) AS ship_state, OrderId, Order_Status, SellingPrice_Inc_GST, FulfilmentStatus FROM q WHERE SubChannel = 'Amazon Seller Central') SELECT ship_state, COUNT(DISTINCT CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY ship_state ORDER BY rev DESC`,
     amzSCCities: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(City_L2)) AS city, OrderId, Order_Status, SellingPrice_Inc_GST FROM q WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '') SELECT city, COUNT(DISTINCT CASE WHEN COALESCE(Order_Status,'') != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN COALESCE(Order_Status,'') != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY city ORDER BY rev DESC LIMIT 50`,
     amzSCStatesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS ship_state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY ship_state`,
@@ -616,9 +679,9 @@ export default async function handler(req, res) {
     amzSCSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, ProductId AS asin, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY sku, asin ORDER BY rev DESC LIMIT 20`,
     amzSCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY date, fulfillment_channel ORDER BY date`,
     // amzSCReturnRate removed — derived from amzSCNetCalc in payload (confirmed perfect match)
-    amzSCReturnCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category`,
-    amzSCReturnSubCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category, q.SubCategory`,
-    amzSCReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.Category, q.SubCategory, q.MasterSKU`,
+    // amzSCReturnCat / amzSCReturnSubCat / amzSCReturnSKU removed 2026-10-19 — confirmed dead via
+    // `grep -c "r\.<key>\b" api/bq.js` = 0 for each (never read downstream, server or frontend).
+    // Verified independently before deleting. See git history for the removed query text.
     amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, ch ORDER BY rev DESC`,
     // returned_units = cancelled/RTO/returned/CIR unit count, so the frontend can derive
     // net units sold (units - returned_units) for COGS — COGS should price only units that
@@ -829,54 +892,10 @@ export default async function handler(req, res) {
         SUM(rto_rev) AS matched_rto_rev, SUM(cir_rev) AS matched_cir_rev, SUM(return_rev) AS matched_return_rev
       FROM sku_resolved
       GROUP BY order_date, category, subcategory`,
-    // Final per-SKU real settlement S&D, used as-is wherever a SKU already has enough of its
-    // own settlement history (kept for the "Unattributed" catch-all and any caller that wants
-    // a flat per-SKU total rather than the day-wise breakdown).
-    amzSCSettlement: `
-      WITH settlement_by_item AS (
-        SELECT
-          order_id, sku_code,
-          SUM(COALESCE(item_fees_fba_pick_and_pack_fee,0) + COALESCE(item_fee_adjustment_fba_pick_and_pack_fee,0)
-            + COALESCE(item_fees_fba_weight_handling_fee,0) + COALESCE(item_fee_adjustment_fba_weight_handling_fee,0)
-            + COALESCE(shipping_chargeback_amount,0)) AS logistics,
-          SUM(COALESCE(storage_fee,0)) AS storage,
-          SUM(COALESCE(commission_amount,0) + COALESCE(refund_commission_amount,0)
-            + COALESCE(fixed_closing_fee,0)
-            + COALESCE(item_fees_technology_fee,0) + COALESCE(item_fee_adjustment_technology_fee,0)) AS fulfilment_selling,
-          -- 'Other' is genuine charges only. cs_error_items_amount, free_replacement_refund_items_amount,
-          -- incorrect_fee_non_itemized_amount, reversal_reimbursement_amount, and
-          -- reimbursement_for_lost_package are excluded here — verified against the FULL
-          -- settlement_report table (every row, all time) that each of these is ALWAYS >= 0,
-          -- meaning they are Amazon reimbursing/crediting YOU (CS-error compensation, free-
-          -- replacement cost recovery, an over-charged fee refunded, reverse-logistics loss/
-          -- damage compensation, lost-package compensation) — not a cost. Bundling a pure credit
-          -- into a cost bucket was silently canceling out genuine logistics/commission charges
-          -- on any SubCategory with meaningful return/CS volume (confirmed on Mobility Transfer
-          -- Lift: reversal_reimbursement_amount alone was +₹2.6L, masking ₹2.7L of real charges
-          -- and understating its SnD by ~7x). warehouse_damage is ALSO always >= 0 for the same
-          -- reason (Amazon compensating a warehouse-caused damage) and is excluded too.
-          -- clawback_reimbursment_amount is kept despite its name — verified ALWAYS negative
-          -- (Amazon clawing money back FROM you), a genuine charge.
-          SUM(COALESCE(clawback_reimbursment_amount,0) + COALESCE(gift_wrap_chargeback,0)
-            + COALESCE(gift_wrap,0)
-            + COALESCE(misadjustment_amount,0) + COALESCE(order_cancellation_charge,0)
-            + COALESCE(promo_rebates,0) + COALESCE(shipping_commission,0)) AS other
-        FROM \`frido-429506.production.fact_amazon_all_settlement_report\`
-        WHERE settlement_region = 'India' AND order_id IS NOT NULL AND order_id != ''
-        GROUP BY order_id, sku_code
-      ),
-      sku_resolved AS (
-        SELECT s.order_id, s.sku_code, s.logistics, s.storage, s.fulfilment_selling, s.other, sales.masterskucode AS master_sku
-        FROM settlement_by_item s
-        LEFT JOIN (SELECT DISTINCT OrderId, ChannelSKUCode, masterskucode FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE SubChannel = 'Amazon Seller Central' AND OrderDate BETWEEN '${start}' AND '${end}') sales
-          ON s.order_id = sales.OrderId AND s.sku_code = sales.ChannelSKUCode
-        WHERE s.sku_code IS NOT NULL AND s.sku_code != ''
-      )
-      SELECT
-        COALESCE(master_sku, 'Unattributed') AS sku,
-        SUM(logistics) AS logistics, SUM(storage) AS storage, SUM(fulfilment_selling) AS fulfilment_selling, SUM(other) AS other
-      FROM sku_resolved
-      GROUP BY sku`,
+    // amzSCSettlement removed 2026-10-19 — confirmed dead: `grep -c "r\.amzSCSettlement\b"
+    // api/bq.js` = 0, never read downstream. The day-wise settlement query right above this
+    // (producing matched_gross/matched_rto_rev/etc. per order_date/category/subcategory) is a
+    // SEPARATE, actively-used query — not touched. Verified independently before deleting.
     // TODO(VC returns): fact_all_platform_sales_report is getting a schema change for Vendor
     // Central — delivered vs. returned line items will be bifurcated (with a dummy OrderId per
     // line, same additive "delivered + returned = total revenue" convention Shopify/Amazon
@@ -931,21 +950,21 @@ export default async function handler(req, res) {
     amzVCAccounts: `WITH q AS (${base}) SELECT ChannelAccount AS vendor_account, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS ordered_exc_rev, SUM(ItemQty) AS shipped_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS shipped_rev, COUNT(DISTINCT CASE WHEN Order_Status = 'Return' THEN OrderId END) AS returns, ${vcReturnsSelectFragment()} FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY vendor_account ORDER BY ordered_rev DESC`,
     amzVCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, SUM(ItemQty) AS shipped_units FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY date ORDER BY date`,
     amzVCASINs: `WITH q AS (${base}) SELECT ProductId AS asin, COALESCE(NULLIF(TRIM(ChannelSKUCode),''), NULLIF(TRIM(MasterSKU),'')) AS sku, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, SUM(ItemQty) AS shipped_units, 0 AS returns FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY asin, sku ORDER BY ordered_rev DESC LIMIT 20`,
-    amzIntlPrev: `SELECT COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${ps}' AND '${pe}' AND item_status != 'Cancelled'`,
-    amzIntlReturnRate: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),2) AS total_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev FROM q WHERE SubChannel='Amazon International'`,
-    amzIntlReturnCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region IN ('UAE','UK')) SELECT q.Category, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon International' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category`,
-    amzIntlReturnSubCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region IN ('UAE','UK')) SELECT q.Category, q.SubCategory, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon International' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category, q.SubCategory`,
-    amzIntlReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region IN ('UAE','UK')) SELECT q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon International' AND COALESCE(q.Order_Status,'') != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.MasterSKU`,
-    amzIntlCountries: `SELECT Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev, ROUND(SUM(CAST(item_tax AS FLOAT64)),0) AS tax, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY Country ORDER BY rev DESC`,
-    amzIntlCatChannel: `WITH q AS (${base}) SELECT Category, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND COALESCE(Order_Status,'') != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, Country ORDER BY rev DESC`,
-    amzIntlSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND COALESCE(Order_Status,'') != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, SubCategory, Country ORDER BY rev DESC`,
-    amzIntlSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND COALESCE(Order_Status,'') != 'Cancelled' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, Country ORDER BY rev DESC`,
-    amzIntlSKUs: `SELECT sku, Country, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY sku, Country ORDER BY rev DESC LIMIT 20`,
-    amzIntlDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Country, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS net_rev FROM q WHERE SubChannel = 'Amazon International' AND COALESCE(Order_Status,'') != 'Cancelled' GROUP BY date, Country ORDER BY date`,
+    // amzIntlPrev/ReturnRate/ReturnCat/ReturnSubCat/ReturnSKU/Countries/CatChannel/SubCatChannel/
+    // SKUChannel/SKUs/Daily (11 queries) removed 2026-10-19 — confirmed dead: all 11 were read
+    // server-side into payload.amzIntl (a full sub-object, built below), but `grep -rn "amzIntl"
+    // src/` found zero occurrences anywhere in the frontend. The Sales tab's "International"
+    // channel renders <InternationalPlaceholderTab/>, which takes no props at all, so there was
+    // no possible consumer. The separate, LIVE "international" namespace (Channel='International'
+    // rows, used by PnL's International tab) is unaffected — different data entirely, not touched
+    // here. Verified independently before deleting. See git history for the removed query text.
     // Flipkart doesn't distinguish RTO from Return (combined here as return_rev, rto_rev always 0)
     // and has no CIR status; cancellation comes from FulfilmentStatus, not Order_Status, on this
     // channel. Field names match netRevenueSelectFragment's output so computeNetRevenueMeasures works.
-    fkNetCalc: `WITH q AS (${fkBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(SellingPrice_Exc_GST) AS gross_exc_gst, SUM(CASE WHEN FulfilmentStatus='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END) AS return_rev, 0 AS rto_rev, 0 AS cir_rev FROM q WHERE Channel='Flipkart'`,
+    // fkNetCalc removed 2026-10-19 — confirmed dead (`r.fkNetCalc` never read). Was already
+    // explicitly superseded by fkBlock.patchedTotals (see comment near adjAspQty below) because
+    // this query's own base/status logic didn't reconcile with the Flipkart tab's real numbers —
+    // kept running anyway, for no reason, until now. See git history for the removed query text.
     fkTotals: `WITH q AS (${fkBase}) SELECT CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status='Return' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS total_return_rev, COUNT(DISTINCT CASE WHEN FulfilmentStatus='Cancelled' THEN OrderId END) AS cancel_orders, ROUND(SUM(CASE WHEN FulfilmentStatus='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev FROM q WHERE Channel='Flipkart' GROUP BY sub`,
     fkDaily: `WITH q AS (${fkBase}) SELECT CAST(OrderDate AS STRING) AS date, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Flipkart' GROUP BY date, sub ORDER BY date`,
     fkStatus: `WITH q AS (${fkBase}) SELECT FulfilmentStatus AS status, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Flipkart' AND FulfilmentStatus IS NOT NULL GROUP BY status, sub ORDER BY orders DESC`,
@@ -1994,6 +2013,16 @@ export default async function handler(req, res) {
       scopedAOV: blendedAOVScoped, scopedASP: aspScoped,
       gstCollected: adjTotalRev - adjTotalExcRev,
       rtoRev, returnRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc, returnTrackableRev,
+      // Mature-window (today-44d to today-14d), ALL-CHANNEL return rate for Overview's headline
+      // "Return %" tile — replicated from the per-channel pattern (confirmed 2026-10-19), but
+      // sourced from overallReturnRateMature's own all-channel query, not summed from per-channel
+      // results, so it's always complete regardless of per-channel build progress.
+      returnRateMature: buildReturnRateMature(r.overallReturnRateMature),
+      // allTabReturnRateMature — separate from returnRateMature above (Overview's cruder
+      // all-channel sum): this one matches the Sales "All" tab's own scoped returnNumeratorRev
+      // formula exactly (confirmed 2026-10-19), so the two tabs' Provisional numbers don't
+      // silently disagree with their own respective live-range formulas.
+      allTabReturnRateMature: buildFkReturnRateMature(r.allTabReturnRateMature),
       cirOrders: parseInt(osByStatus('CIR').cnt) || 0,
       exchangeOrders: parseInt(osByStatus('Exchange').cnt) || 0,
       exchangeRev: parseFloat(osByStatus('Exchange').rev) || 0,
@@ -2133,52 +2162,20 @@ export default async function handler(req, res) {
         // aggregated across rows first (SKU → Category → whole-D2C), THEN computeNetRevenueMeasures
         // is applied once per grain — summing already-computed %s would silently weight every SKU
         // equally regardless of its revenue.
-        returnRateMature: (() => {
-          const MIN_MATURE_UNITS = 30
-          const rows = r.shReturnRateMature || []
-          const REV_FIELDS = ['gross_inc_gst', 'gross_exc_gst', 'cir_rev', 'rto_rev', 'return_rev', 'cancel_rev', 'exch_rev']
-          const emptyAgg = () => ({ units: 0, ...Object.fromEntries(REV_FIELDS.map(f => [f, 0])) })
-          const addRow = (agg, x) => {
-            agg.units += parseInt(x.units) || 0
-            REV_FIELDS.forEach(f => { agg[f] += parseFloat(x[f]) || 0 })
-          }
-          const bySku = {}, byCat = {}
-          const allAgg = emptyAgg()
-          rows.forEach(x => {
-            const cat = x.category || 'Others'
-            if (!bySku[x.sku]) bySku[x.sku] = emptyAgg()
-            addRow(bySku[x.sku], x)
-            if (!byCat[cat]) byCat[cat] = emptyAgg()
-            addRow(byCat[cat], x)
-            addRow(allAgg, x)
-          })
-          // Full component breakdown per grain (not just one blended number) — SnD impact needs
-          // the INDIVIDUAL rto/cir/return/cancel/exchange %s, since each outcome carries a
-          // different real logistics cost path (see pnlUtils.js's blendedLogisticsPerUnit: RTO =
-          // forward+rto, Return/CIR/Exchange = forward+reverse, Cancelled = no logistics at all —
-          // a single blended "return rate" can't distinguish these). Net Revenue impact uses
-          // netRevenueReturnPct = 1 − retainedShare, i.e. RTO+CIR+Return+FULL Cancellation (COD
-          // included) — the SAME cancellation treatment computeNetRevenueMeasures' retainedShare
-          // itself uses to derive real Net Revenue, NOT the Return Analysis tab's headline
-          // "Return%" KPI (overallReturnPct), which deliberately uses prepaid-only cancellation
-          // for that one display metric. A Net Revenue *simulation* needs the same full-cancellation
-          // treatment the real Net Revenue formula uses, not the display-only KPI's narrower one.
-          const componentsOf = agg => {
-            const m = computeNetRevenueMeasures(agg)
-            return { netRevenueReturnPct: 1 - m.retainedShare, rtoPct: m.rtoPct, cirPct: m.cirPct, returnPct: m.returnPct, cancelPct: m.cancelPct, exchPct: m.exchPct }
-          }
-          const rateIfMature = agg => agg.units >= MIN_MATURE_UNITS ? componentsOf(agg) : null
-          const allRate = allAgg.units > 0 ? componentsOf(allAgg) : null
-          const catRate = {}
-          Object.entries(byCat).forEach(([cat, agg]) => { catRate[cat] = rateIfMature(agg) })
-          const skuRate = {}
-          Object.entries(bySku).forEach(([sku, agg]) => { skuRate[sku] = rateIfMature(agg) })
-          // categoryBySku lets the client resolve a SKU's fallback Category rate without also
-          // shipping the full skuData tree back down just to look up one field.
-          const categoryBySku = {}
-          rows.forEach(x => { categoryBySku[x.sku] = x.category || 'Others' })
-          return { skuRate, catRate, allRate, categoryBySku, minMatureUnits: MIN_MATURE_UNITS }
-        })(),
+        // Full component breakdown per grain (not just one blended number) — SnD impact needs
+        // the INDIVIDUAL rto/cir/return/cancel/exchange %s, since each outcome carries a
+        // different real logistics cost path (see pnlUtils.js's blendedLogisticsPerUnit: RTO =
+        // forward+rto, Return/CIR/Exchange = forward+reverse, Cancelled = no logistics at all —
+        // a single blended "return rate" can't distinguish these). Net Revenue impact uses
+        // netRevenueReturnPct = 1 − retainedShare, i.e. RTO+CIR+Return+FULL Cancellation (COD
+        // included) — the SAME cancellation treatment computeNetRevenueMeasures' retainedShare
+        // itself uses to derive real Net Revenue, NOT the Return Analysis tab's headline
+        // "Return%" KPI (overallReturnPct), which deliberately uses prepaid-only cancellation
+        // for that one display metric. A Net Revenue *simulation* needs the same full-cancellation
+        // treatment the real Net Revenue formula uses, not the display-only KPI's narrower one.
+        // Aggregation itself moved to the shared buildReturnRateMature() helper (_bq.js) — this
+        // channel's own logic now ends at its *ReturnRateMature query above.
+        returnRateMature: buildReturnRateMature(r.shReturnRateMature),
         // Per-SKU cost rows — each row is (sku, order_status, weight_slab, total_qty, gross_inc_gst).
         // PnLPage.jsx applies snd-rates.json lookup + status logic to compute logistics/fulfilment.
         skuCostRows: (r.shSkuCosts || []).map(x => ({
@@ -2242,6 +2239,10 @@ export default async function handler(req, res) {
         return {
           netCalc,
           prevNetCalc,
+          // Mature-window (today-44d to today-14d) return rate, replicated from Shopify's pattern
+          // (confirmed 2026-10-19) — EBO's own live-range formula already matches
+          // netRevenueReturnPct exactly, so the shared fragment/aggregator applies unchanged.
+          returnRateMature: buildReturnRateMature(r.eboReturnRateMature),
           totals: r.eboTotals?.[0] ? { rev: parseFloat(r.eboTotals[0].rev)||0, excRev: parseFloat(r.eboTotals[0].exc_rev)||0, orders: parseInt(r.eboTotals[0].orders)||0, qty: parseInt(r.eboTotals[0].qty)||0 } : {},
           // Same shape as Shopify's skuCostRows — PnLPage.jsx applies the identical D2C weight-slab
           // SnD formula to these, scaled by 0.85. Derived from eboStoreSkuCosts' RAW rows (summed
@@ -2360,7 +2361,8 @@ export default async function handler(req, res) {
         prevDaily: prevDailyByChannelMap['Amazon'] || [],
         fulfillment: (r.amzSCFulfillment || []).map(x => ({ type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 })),
         status: (r.amzSCStatus || []).map(x => ({ status: x.order_status, orders: parseInt(x.orders)||0 })),
-        orderStatusDebug: (r.amzSCOrderStatusDebug || []).map(x => ({ status: x.Order_Status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        // orderStatusDebug removed 2026-10-19 alongside its source query (confirmed dead, see
+        // amzSCOrderStatusDebug removal comment above).
         states: (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.amzSCStatesPrev||[]).map(x => [x.ship_state, parseFloat(x.rev)||0])),
         cityPrevMap: Object.fromEntries((r.amzSCCitiesPrev||[]).map(x => [x.city, parseFloat(x.rev)||0])),
@@ -2375,6 +2377,12 @@ export default async function handler(req, res) {
           const pct = totalRev > 0 ? Math.round(returnedRev / totalRev * 1000) / 10 : 0
           return { pct, daily: [], rollOrders: totalRev, rollReturned: returnedRev }
         })(),
+        // Mature-window (today-44d to today-14d) return rate, replicated from Shopify's
+        // shReturnRateMature pattern — confirmed 2026-10-19 safe to reuse unchanged since Amazon
+        // SC's Order_Status also carries genuine separate Cancelled/RTO/CIR/Return values (see
+        // amzSCReturnRateMature query comment). Used for the Provisional Return% shown alongside
+        // this channel's own live-range returnRate above, never replacing it.
+        returnRateMature: buildReturnRateMature(r.amzSCReturnRateMature),
         regionRows: (r.amzSCRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.amzSCTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         topStates: (r.amzSCStates || []).slice(0, 6).map(x => ({ name: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
@@ -2687,53 +2695,9 @@ export default async function handler(req, res) {
         latestVCDate: (() => { const dates = (r.amzVCDaily || []).map(x => x.date).sort(); return dates[dates.length-1] || null })(),
         asins: (r.amzVCASINs || []).map(x => ({ asin: x.asin, sku: x.sku || '—', orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, shippedUnits: parseInt(x.shipped_units)||0, returns: parseInt(x.returns)||0 })),
       },
-      amzIntl: {
-        prevRev: parseFloat(r.amzIntlPrev?.[0]?.rev) || 0,
-        prevNetRev: parseFloat(r.amzIntlPrev?.[0]?.net_rev) || 0,
-        prevOrders: parseInt(r.amzIntlPrev?.[0]?.orders) || 0,
-        prevUnits: parseInt(r.amzIntlPrev?.[0]?.units) || 0,
-        countries: (r.amzIntlCountries || []).map(x => ({ country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, netRev: parseFloat(x.net_rev)||0, tax: parseFloat(x.tax)||0, units: parseInt(x.units)||0 })),
-        skus: (r.amzIntlSKUs || []).map(x => ({ sku: x.sku, country: x.Country, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, netRev: parseFloat(x.net_rev)||0 })),
-        daily: (r.amzIntlDaily || []).map(x => ({ date: x.date, country: x.Country, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, netRev: parseFloat(x.net_rev)||0 })),
-        returnRate: (() => { const row = (r.amzIntlReturnRate||[])[0]; const totalRev = parseFloat(row?.total_rev)||0; const returnRev = parseFloat(row?.return_rev)||0; return { pct: totalRev > 0 ? Math.round(returnRev/totalRev*1000)/10 : 0, returnRev, totalRev } })(),
-        returnByCat: Object.fromEntries((r.amzIntlReturnCat || []).map(x => [x.Category, { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 }])),
-        returnBySubCat: (() => { const m = {}; (r.amzIntlReturnSubCat || []).forEach(x => { if (!m[x.Category]) m[x.Category] = {}; m[x.Category][x.SubCategory] = { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 } }); return m })(),
-        returnBySku: Object.fromEntries((r.amzIntlReturnSKU || []).map(x => [x.sku, { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 }])),
-        catChannel: (() => {
-          const retMap = Object.fromEntries((r.amzIntlReturnCat || []).map(x => [x.Category, { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 }]))
-          const map = {}
-          ;(r.amzIntlCatChannel || []).forEach(x => {
-            if (!map[x.Category]) map[x.Category] = {}
-            const rd = retMap[x.Category] || { orders: 0, returned: 0 }
-            map[x.Category][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returned: rd.returned, totalOrdersForReturn: rd.orders }
-          })
-          return map
-        })(),
-        subCatChannel: (() => {
-          const retMap = {}
-          ;(r.amzIntlReturnSubCat || []).forEach(x => { retMap[`${x.Category}::${x.SubCategory}`] = { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 } })
-          const map = {}
-          ;(r.amzIntlSubCatChannel || []).forEach(x => {
-            if (!map[x.Category]) map[x.Category] = {}
-            if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            const rd = retMap[`${x.Category}::${x.SubCategory}`] || { orders: 0, returned: 0 }
-            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returned: rd.returned, totalOrdersForReturn: rd.orders }
-          })
-          return map
-        })(),
-        skuChannel: (() => {
-          const retMap = Object.fromEntries((r.amzIntlReturnSKU || []).map(x => [x.sku, { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 }]))
-          const map = {}
-          ;(r.amzIntlSKUChannel || []).forEach(x => {
-            if (!map[x.Category]) map[x.Category] = {}
-            if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            if (!map[x.Category][x.SubCategory][x.sku]) map[x.Category][x.SubCategory][x.sku] = {}
-            const rd = retMap[x.sku] || { orders: 0, returned: 0 }
-            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returned: rd.returned, totalOrdersForReturn: rd.orders }
-          })
-          return map
-        })(),
-      },
+      // amzIntl payload block removed 2026-10-19 — confirmed dead alongside its 11 source queries
+      // above (`grep -rn "amzIntl" src/` = 0 matches anywhere in the frontend). See git history
+      // for the removed object if ever needed again.
       flipkart: {
         prevRev: parseFloat(r.prevFk?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevFk?.[0]?.exc_rev) || 0,
@@ -2771,6 +2735,10 @@ export default async function handler(req, res) {
           })
           return { all: { ...all, pct: all.deliveredRev > 0 ? all.returnRev/all.deliveredRev*100 : 0 }, bySub: bySubMap }
         })(),
+        // Mature-window (today-44d to today-14d) return rate, Flipkart's own return_rev/total_rev
+        // formula (see fkReturnRateMature query + buildFkReturnRateMature comment) — used for the
+        // Provisional Return % shown alongside the live returnRate above, never replacing it.
+        returnRateMature: buildFkReturnRateMature(r.fkReturnRateMature),
         categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0, excRev: parseFloat(x.exc_rev)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
         states: (r.fkStates || []).map(x => ({ state: (!x.state || x.state.trim() === '-' || x.state.trim() === '') ? 'Others' : x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
         cities: (r.fkCities || []).map(x => ({ city: x.city, state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
@@ -2990,6 +2958,10 @@ export default async function handler(req, res) {
         prevOrders: parseInt(r.prevMn?.[0]?.orders) || 0,
         prevDaily: prevDailyByChannelMap['Myntra'] || [],
         totals: r.mnTotals?.[0] ? { orders: parseInt(r.mnTotals[0].orders)||0, units: parseInt(r.mnTotals[0].units)||0, rev: parseFloat(r.mnTotals[0].rev)||0, excRev: parseFloat(r.mnTotals[0].exc_rev)||0, skus: parseInt(r.mnTotals[0].skus)||0, cities: parseInt(r.mnTotals[0].cities)||0, days: parseInt(r.mnTotals[0].days)||0, returnRev: parseFloat(r.mnTotals[0].return_rev)||0, returnOrders: parseInt(r.mnTotals[0].return_orders)||0 } : {},
+        // Mature-window (today-44d to today-14d) return rate, replicated from Shopify's pattern
+        // (confirmed 2026-10-19) — mnReturnPct's own live-range formula already matches
+        // netRevenueReturnPct exactly, so the shared fragment/aggregator applies unchanged.
+        returnRateMature: buildReturnRateMature(r.mnReturnRateMature),
         daily: (r.mnDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         status: (r.mnStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         categories: (r.mnCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
@@ -3030,6 +3002,10 @@ export default async function handler(req, res) {
         ...computeQcSnd(r.blDailySKU),
       },
       offline: {
+        // Mature-window (today-44d to today-14d) Credit Note % — new metric, replicated from the
+        // same pattern as the other channels' returnRateMature (confirmed 2026-10-19), using
+        // Offline's own Sales-vs-Credit-Note vocabulary since it has no RTO/CIR/Return lifecycle.
+        creditNoteRateMature: buildOfflineCreditNoteRateMature(r.offlineCreditNoteRateMature),
         totalsBySub: (r.offlineTotals || []).map(x => ({ subChannel: x.SubChannel, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, revSales: parseFloat(x.rev_sales)||0, excRevSales: parseFloat(x.exc_rev_sales)||0, cnRev: parseFloat(x.cn_rev)||0, cnExcRev: parseFloat(x.cn_exc_rev)||0, cnOrders: parseInt(x.cn_orders)||0, cnUnits: parseInt(x.cn_units)||0 })),
         prevBySub: (r.prevOffline || []).map(x => ({ subChannel: x.SubChannel, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, revSales: parseFloat(x.rev_sales)||0, excRevSales: parseFloat(x.exc_rev_sales)||0, cnRev: parseFloat(x.cn_rev)||0, cnExcRev: parseFloat(x.cn_exc_rev)||0, cnOrders: parseInt(x.cn_orders)||0, cnUnits: parseInt(x.cn_units)||0 })),
         prevDaily: (r.prevOfflineDaily || []).map(x => ({ date: x.date, subChannel: x.SubChannel, rev: parseFloat(x.rev) || 0 })),
@@ -3808,10 +3784,15 @@ export default async function handler(req, res) {
         _slow_cred: chSlow('cred', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
         _slow_firstcry: chSlow('firstcry', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
         _slow_myntra: chSlow('myntra', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev']),
-        _slow_amzSC: chSlow('amzSC', ['states','statesPrev','cities','citiesPrev','skus','catChannel','subCatChannel','skuChannel','catChannelPrev','subCatChannelPrev','skuChannelPrev','sndBySku','dailyPnLBySku','dailyCat','returnCat','returnSubCat','returnSKU','orderStatusDebug','region','tier','fulfillment','status']),
+        // returnCat/returnSubCat/returnSKU/orderStatusDebug removed 2026-10-19 — those amzSC
+        // payload fields no longer exist (their source queries were confirmed dead and removed);
+        // chSlow already skips any field name that isn't present, so this was harmless dead
+        // weight even before removal, but cleaned up for clarity alongside everything else.
+        _slow_amzSC: chSlow('amzSC', ['states','statesPrev','cities','citiesPrev','skus','catChannel','subCatChannel','skuChannel','catChannelPrev','subCatChannelPrev','skuChannelPrev','sndBySku','dailyPnLBySku','dailyCat','region','tier','fulfillment','status']),
         _slow_amzVCMatrix: payload.amzVCMatrix,
         _slow_amzVC: chSlow('amzVC', ['cat','subCat','sku','catPrev','subCatPrev','skuPrev','dailyCat','dailySKU']),
-        _slow_amzIntl: chSlow('amzIntl', ['countries','skus','catChannel','subCatChannel','skuChannel','returnCat','returnSubCat','returnSKU']),
+        // _slow_amzIntl removed 2026-10-19 — the amzIntl payload block it referenced no longer
+        // exists (confirmed dead, removed above).
         _slow_international: chSlow('international', ['categories','subCategories','skuMatrix','catPrev','subCatPrev']),
         _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
         _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
@@ -3853,6 +3834,25 @@ export default async function handler(req, res) {
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
     res.json(payload)
+
+    // Pre-warm D2C sub-channel cache entries in the background, AFTER the response is sent, so
+    // the user's own request is never delayed by this. Only fires for a plain Sales-tab request
+    // (no subChannel/channel/phase already set — i.e. the "Overall" D2C view) — switching to
+    // MyFrido/Mobility re-runs this same handler with subChannel set, which today is always a
+    // guaranteed cache miss (~12-17s), since subChannel is part of both the fetch effect's deps
+    // and the client/server cache key (confirmed 2026-10-19). Firing these 2 variants here means
+    // that by the time a user actually clicks the D2C toggle, the request is very likely already
+    // a cache hit. Does not touch any query logic or returned numbers — purely opportunistic.
+    if (!subChannel && !activeChannel && !phase) {
+      for (const sc of ['MyFrido', 'Mobility']) {
+        const prewarmBody = { ...req.body, subChannel: sc }
+        const prewarmKey = getCacheKey(prewarmBody)
+        if (getFromCache(prewarmKey)) continue
+        handler({ method: 'POST', body: prewarmBody }, {
+          setHeader() {}, status() { return this }, json() {}, end() {},
+        }).catch(e => console.error('[api/bq] prewarm failed', sc, e.message))
+      }
+    }
   } catch (err) {
     console.error('[api/bq]', err.message)
     res.status(500).json({ error: err.message })

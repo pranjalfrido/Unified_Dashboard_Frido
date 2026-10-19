@@ -175,7 +175,8 @@ function ReferenceProductPicker({ productGroups, onApply }) {
 
   return (
     <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t2 }}>Pull rates from a real product</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t2 }}>Check an already-launched product</div>
+      <div style={{ fontSize: 10.5, color: C.t3, marginTop: -4 }}>Fills Listing Price, Discount, COGS, Weight, and all 4 outcome %s from this product's real figures.</div>
       <div style={{ position: 'relative' }}>
         <input
           value={search}
@@ -198,6 +199,9 @@ function ReferenceProductPicker({ productGroups, onApply }) {
               <div key={p.sku} onMouseDown={() => pick(p)} onMouseEnter={() => setHighlightIdx(i)}
                 style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, borderBottom: `1px solid ${C.border}`, background: i === highlightIdx ? C.acl : 'transparent' }}>
                 <div style={{ fontWeight: 700, color: C.t1 }}>{p.name}</div>
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>
+                  {p.listingPrice != null ? `₹${Math.round(p.listingPrice)} listing` : 'no listing price on record'} · COGS ₹{Math.round(p.cogsPerUnit)} · {p.weightGm != null ? `${Math.round(p.weightGm)}g` : 'no weight on record'}
+                </div>
                 <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>
                   Canc {((p.cancelPct || 0) * 100).toFixed(1)}% · RTO {((p.rtoPct || 0) * 100).toFixed(1)}% · CIR {((p.cirPct || 0) * 100).toFixed(1)}% · Exch {((p.exchPct || 0) * 100).toFixed(1)}%
                 </div>
@@ -243,13 +247,33 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
   const [cirPct, setCirPct] = useState(0)
   const [exchangePct, setExchangePct] = useState(0)
 
-  // Fills all four Expected Order Outcome %s from a real, already-launched product's own
-  // mature-window (14-44 day settled) rates — the same rtoPct/cirPct/exchPct/cancelPct fields the
-  // Price Simulator's baseline already relies on (see PnLPage.jsx's d2cProductList/
-  // d2cProductGroups) — so a not-yet-launched product's estimate can be grounded in a real
-  // comparable instead of a guess.
+  // Fills EVERY input from a real, already-launched product's own figures — Listing Price,
+  // Discount, COGS, Weight, and the four Expected Order Outcome %s (mature-window 14-44 day
+  // settled rates — same fields the Price Simulator's baseline relies on, see PnLPage.jsx's
+  // d2cProductList/d2cProductGroups) — so checking an already-launched product's REAL breakeven
+  // ROAS is one click, not re-typing its price/cost/weight by hand after only the rates came
+  // across (2026-10-19: previously this only copied the 4 outcome %s, leaving Listing
+  // Price/COGS/Weight at whatever was last typed — fine for seeding a NEW product's estimate with
+  // a comparable's return behavior, but wrong for "what is THIS product's own breakeven ROAS").
+  // GST rate isn't on d2cProductGroups (no GST% tracked per product there) so it's left as the
+  // user's own preset pick, same as before.
   const applyReferenceRates = product => {
     if (!product) return
+    if (product.listingPrice != null) setListingPrice(Math.round(product.listingPrice))
+    // Real effective discount = (Listing Price − actual selling price) ÷ Listing Price — the SAME
+    // formula the Price Simulator's currentDiscountPct uses (PriceSimulator.jsx), preferring
+    // Prepaid-only ASP over the blended asp for the same reason that file documents (COD orders
+    // carry a handling-fee surcharge baked into selling price, so prepaid-only is the cleaner
+    // comparison against Listing Price). Deliberately NOT product.currentDiscount — confirmed
+    // 2026-10-19 that field is the fact table's raw per-order `Discount` column (not a 0-100
+    // percentage and not used this way by Price Simulator either), which produced a bogus 467%
+    // discount when multiplied as if it already were one.
+    const refPrice = product.prepaidAsp ?? product.asp
+    if (product.listingPrice > 0 && refPrice != null) {
+      setDiscountPct(Math.round(((product.listingPrice - refPrice) / product.listingPrice) * 1000) / 10)
+    }
+    setCogs(Math.round(product.cogsPerUnit * 100) / 100)
+    if (product.weightGm != null) setWeightGm(Math.round(product.weightGm))
     setCancelPct(Math.round((product.cancelPct || 0) * 1000) / 10)
     setRtoPct(Math.round((product.rtoPct || 0) * 1000) / 10)
     setCirPct(Math.round((product.cirPct || 0) * 1000) / 10)
@@ -315,7 +339,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
       <div>
         <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>Breakeven ROAS Calculator</div>
         <div style={{ fontSize: 13, color: C.t3, marginTop: 3 }}>
-          Model a new product's per-unit economics before launch — find the ad efficiency it needs to break even, and the efficiency it needs to hit a healthy 15% CM2.
+          Model a new product's per-unit economics before launch, or check an already-launched product's real breakeven ROAS — find the ad efficiency it needs to break even, and the efficiency it needs to hit a healthy 15% CM2.
         </div>
       </div>
 
@@ -323,6 +347,10 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
         {/* ── Inputs ── */}
         <div style={{ flex: '1 1 420px', display: 'flex' }}>
           <Card style={{ flex: 1, gap: 10, padding: 16 }}>
+            <ReferenceProductPicker productGroups={productGroups} onApply={applyReferenceRates} />
+
+            <div style={{ borderTop: `1px solid ${C.border}` }} />
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <SectionLabel>Pricing</SectionLabel>
               <div style={{ display: 'flex', gap: 10 }}>
@@ -361,7 +389,6 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <SectionLabel>Expected Order Outcomes</SectionLabel>
-              <ReferenceProductPicker productGroups={productGroups} onApply={applyReferenceRates} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <PctField label="Cancellation %" value={cancelPct} onChange={setCancelPct} accent={C.blue.tx} />
                 <PctField label="RTO %" value={rtoPct} onChange={setRtoPct} accent={C.amber.tx} />
