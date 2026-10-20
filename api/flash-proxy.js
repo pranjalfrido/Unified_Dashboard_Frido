@@ -2,7 +2,7 @@
 // Needed because Vercel is HTTPS and the GCP VM is plain HTTP;
 // browsers block mixed-content XHR, but a server-side proxy does not.
 // Usage: POST /api/flash-proxy?path=/chat  (path query param = target endpoint)
-const FLASH_BACKEND = 'http://34.100.146.169/api';
+const FLASH_BACKEND = 'http://34.47.217.199/api';
 
 export default async function handler(req, res) {
   // Allow CORS for browser requests
