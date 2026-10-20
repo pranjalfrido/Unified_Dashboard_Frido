@@ -19072,10 +19072,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
-        if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
+        // Only use cache when the selected range overlaps the rolling window.
+        // If end < rollingStart the entire range predates the cache — skip it so
+        // the live BQ result (data) is used instead of empty sliced arrays.
+        const cacheCovers = (json) => end >= json.rollingStart && end <= json.rollingEnd
+        if (adsCacheRef.current && cacheCovers(adsCacheRef.current)) {
           if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
+          return
+        }
+        if (adsCacheRef.current && !cacheCovers(adsCacheRef.current)) {
+          // Selected range is outside the cache window — clear stale cache so live BQ data flows through
+          if (gen !== adsLoadGenRef.current) return
+          setAdsCache(null)
+          setAdsCachedMeta(null)
+          setAdsCachedChMap(null)
           return
         }
         const res = await fetch(`${API}/ads-data.json`)
@@ -19083,7 +19094,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
         adsCacheRef.current = json
-        if (end <= json.rollingEnd) {
+        if (cacheCovers(json)) {
           injectAdsFromCache(json, start, end)
         }
       } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
@@ -19335,7 +19346,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
