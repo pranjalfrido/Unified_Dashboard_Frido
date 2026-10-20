@@ -24,6 +24,7 @@ import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
+import FlashPage from './FlashPage.jsx'
 
 function useIsMobile() {
   const [mob, setMob] = useState(() => window.innerWidth <= 768)
@@ -3469,6 +3470,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
+        <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
+          onClick={() => setPage('flash')}
+          style={{ cursor: 'pointer' }}>
+          <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
+          <span className="sb-label">FLASH</span>
+        </div>
         <ThemePicker theme={theme} setTheme={setTheme} />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
@@ -5288,14 +5295,13 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
   const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
   const totalReturnPct = cancelPct + rtoPct + cirPct
-  // Provisional Return % — all-channel version (confirmed 2026-10-19), same pattern as every
-  // per-channel tab: shown ALONGSIDE the real headline Return % above, never replacing it,
-  // whenever the selected range's tail hasn't had time to mature. Sourced from
-  // data.returnRateMature.allRate.netRevenueReturnPct — the SAME (cancelRev+rtoRev+returnRev+
-  // cirRev) ÷ totalRev formula as totalReturnPct above, computed over the rolling mature window
-  // via a single all-channel query (overallReturnRateMature), not summed from per-channel tabs.
+  // Provisional Return % — uses the same allTabReturnRateMature query as Sales Overall tab
+  // so both tiles always show the same number. The old overallReturnRateMature used a cruder
+  // all-channel formula (netRevenueSelectFragment with no channel exclusions) that diverged
+  // from Sales Overall by ~2pp. allTabReturnRateMature is the correct scoped formula:
+  // explicit per-channel CASE WHEN rules, excludes Blinkit/Zepto/Instamart.
   const showProvisionalReturnOverview = rangeTouchesImmatureWindow(filters?.end)
-  const provisionalReturnPctOverview = (data.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
+  const provisionalReturnPctOverview = (data.allTabReturnRateMature?.allRate?.pct ?? null)
 
   // ── Ads ──
   const adsTotals = ads.totals || []
@@ -8750,13 +8756,30 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     const p = (curPct - prevPct) / prevPct * 100
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
-  const shDailyArr = sh.daily || []
+  // When a D2C sub-channel filter is active, rebuild daily array from shDailySKU (which has
+  // sub_channel per row) so the trend chart and sparklines reflect MyFrido/Mobility only.
+  const shDailyArr = useMemo(() => {
+    if (!isD2CSubChFiltered) return sh.daily || []
+    const dailySKU = sh.dailySKU || []
+    const subCh = filters.subChannel.toLowerCase()
+    const byDate = {}
+    dailySKU.filter(r => r.subChannel === subCh).forEach(r => {
+      if (!byDate[r.date]) byDate[r.date] = { date: r.date, rev: 0, orders: 0, units: 0, rtoRev: 0, cirRev: 0, cancelRev: 0 }
+      byDate[r.date].rev += r.rev || 0
+      byDate[r.date].units += r.units || 0
+      byDate[r.date].rtoRev += r.rtoRev || 0
+      byDate[r.date].cirRev += r.cirRev || 0
+      byDate[r.date].cancelRev += r.cancelRev || 0
+    })
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, sh.daily, sh.dailySKU])
   const shSparkData = Array.from({ length: Math.max(shDailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = shDailyArr[i]
     const pre = prevDailyArr[i]
     return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
   })
-  const nDays = sh.nDays || data.nDays || 1
+  const nDays = shDailyArr.filter(d => d.rev > 0).length || sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = (shAspQty || totalQty) > 0 ? totalRev / (shAspQty || totalQty) : 0
@@ -8802,7 +8825,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   // across sub_category rows to get a Category total without risking double-counting an order
   // that spans multiple sub-categories, so catRows' `orders` uses the sum here as a reasonable
   // approximation (same caveat already accepted for subChannelMap.orders in api/bq.js).
-  const filteredCatMap = isD2CSubChFiltered ? (() => {
+  const filteredCatMap = useMemo(() => {
+    if (!isD2CSubChFiltered) return catMap
     const m = {}
     ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
       const cat = x.category || 'Others'
@@ -8813,8 +8837,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       m[cat].units += parseInt(x.units) || 0
     })
     return m
-  })() : catMap
-  const filteredSubCatMap = isD2CSubChFiltered ? (() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, data.pnlSalesRows, catMap])
+  const filteredSubCatMap = useMemo(() => {
+    if (!isD2CSubChFiltered) return subCatMap
     const m = {}
     ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
       const key = `${x.category || 'Others'}::${x.sub_category || 'Others'}`
@@ -8825,7 +8851,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       m[key].units += parseInt(x.units) || 0
     })
     return m
-  })() : subCatMap
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, data.pnlSalesRows, subCatMap])
   const catRows = Object.entries(filteredCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(filteredSubCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
@@ -8885,8 +8912,28 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const shCirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
   const shExchRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
   const shExchPct = totalRev > 0 ? shExchRev / totalRev * 100 : 0
-  const shReturnTrendMap = {}
-  ;(data.dailyReturnTrend || []).forEach(x => { shReturnTrendMap[x.date] = x })
+  // When sub-channel filtered, build return trend from daily SKU data so sparklines
+  // reflect MyFrido/Mobility only instead of all-D2C.
+  const shReturnTrendMap = useMemo(() => {
+    const m = {}
+    if (!isD2CSubChFiltered) {
+      ;(data.dailyReturnTrend || []).forEach(x => { m[x.date] = x })
+      return m
+    }
+    shDailyArr.forEach(d => {
+      const gross = d.rev || 0
+      if (!gross) return
+      m[d.date] = {
+        date: d.date,
+        rtoPct: (d.rtoRev || 0) / gross * 100,
+        cirPct: (d.cirRev || 0) / gross * 100,
+        cancelPct: (d.cancelRev || 0) / gross * 100,
+        exchPct: 0,
+      }
+    })
+    return m
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, shDailyArr, data.dailyReturnTrend])
   const shMobKpis = [
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
@@ -9002,14 +9049,13 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       </div>
       <div className="g-2" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
         {(() => {
-          const returnTrendMap = {}
-          ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
+          const returnTrendMap = shReturnTrendMap
           // Net Revenue line: apply the same period-level shrink as the KPI card
           // (netRev / totalRev — Gross minus Cancel/RTO/Return/CIR, then GST removed on
           // completed orders only) since per-day CIR/RTO/Return/Cancel splits aren't available.
           const netShrinkFactor = totalRev > 0 ? netRev / totalRev : 0
-          // Use Shopify-specific daily (EXCLUDES Shopify B2B)
-          const rawDaily = (sh.daily || []).map(d => {
+          // Use shDailyArr — already filtered by sub-channel when MyFrido/Mobility active
+          const rawDaily = shDailyArr.map(d => {
             const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
             return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
@@ -9281,10 +9327,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
         })()}
       </div>}
       {!isIntl && <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
+        <ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
       </div>}
-      <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
+      {!isD2CSubChFiltered && <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />}
     </div>
   )
 }
@@ -18848,8 +18894,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!keepPrev) setLoading(true)
     setError(null)
 
-    // P&L static cache: serve instantly if no filters and dates match the pre-computed MTD window
-    const hasFilters = ch || Object.keys(extraFilters).length > 0
+    // P&L static cache: serve instantly if no filters and dates match a pre-computed window.
+    // Checks MTD (pnl-data.json) and Last Month (pnl-data-lastmonth.json) — both are
+    // pre-computed daily by GitHub Actions so these date ranges never hit BigQuery.
+    // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
+    // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
+    const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
+    const effectiveSubCh = extraFilters.subChannel
+    const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
@@ -18859,16 +18911,26 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         const c = pnlCacheRef.current
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
           if (reqId !== reqIdRef.current) return
-          if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) {
-            setSubCatFirstOrderMap(c.subCatFirstOrderMap)
-          }
+          if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) setSubCatFirstOrderMap(c.subCatFirstOrderMap)
           clientCacheRef.current.set(cacheKey, c)
-          setRawRows(prev => {
-            if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...c }
-            return c
-          })
-          setLoading(false)
-          setFetchPending(false)
+          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...c } : c)
+          setLoading(false); setFetchPending(false)
+          return
+        }
+      } catch (_) {}
+      // Last Month static cache
+      try {
+        if (!pnlCacheRef.lastMonth) {
+          const r = await fetch(`${API}/pnl-data-lastmonth.json`)
+          if (r.ok) pnlCacheRef.lastMonth = await r.json()
+        }
+        const lm = pnlCacheRef.lastMonth
+        if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
+          if (reqId !== reqIdRef.current) return
+          if (lm.subCatFirstOrderMap && Object.keys(lm.subCatFirstOrderMap).length) setSubCatFirstOrderMap(lm.subCatFirstOrderMap)
+          clientCacheRef.current.set(cacheKey, lm)
+          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...lm } : lm)
+          setLoading(false); setFetchPending(false)
           return
         }
       } catch (_) {}
@@ -18919,6 +18981,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    // Debounce only when the date changed (user may still be typing in date picker).
+    // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
+    const debounceMs = dateChanged ? 600 : 0
     debounceRef.current = setTimeout(() => {
       const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = filtersRef.current
       const extra = {}
@@ -18939,7 +19004,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
 
       if (sku?.length) extra.sku = sku.join(',')
-      if (subChannel) extra.subChannel = subChannel
+      // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
+      // so all three hit the same server-side cache key — switching sub-tabs is instant after the
+      // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
+      const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
+      const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
+      if (bqSubChannel) extra.subChannel = bqSubChannel
       if (voucher) extra.voucher = voucher
       if (region?.length) extra.region = region.join(',')
       if (tier?.length) extra.tier = tier.join(',')
@@ -18997,22 +19067,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           }
         })
       }
-      // Overview-only fetches (Logistics Cost / Facility Allocation / Inventory Snapshot /
-      // Customer Summary tiles) — gated behind page==='overview' so switching filters on any
-      // OTHER tab (Sales/Logistics/Inventory/etc.) doesn't silently re-hit these on every
-      // debounced keystroke. /api/customer in particular is a live BigQuery-backed endpoint, not
-      // a static file — refetching it app-wide regardless of which tab is active would waste real
-      // query cost. `page` is in this same dependency array below so navigating INTO Overview
-      // (without also changing the date range) still triggers the fetch.
+
+      // Overview-only fetches — all fired in parallel, gated behind page==='overview' so
+      // filter changes on other tabs don't waste BQ quota on /api/customer.
       if (page === 'overview') {
-        fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
-        fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
-        fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => setOverviewCustData(j))
-          .catch(() => {})
+        Promise.all([
+          fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([salesAlloc, invSnapshot, custData]) => {
+          if (salesAlloc) setSalesAllocData(salesAlloc)
+          if (invSnapshot) setInvSnapshotData(invSnapshot)
+          if (custData) setOverviewCustData(custData)
+        })
       }
-    }, 600)
+    }, debounceMs)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
 
@@ -19025,10 +19094,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
-        if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
+        // Only use cache when the selected range overlaps the rolling window.
+        // If end < rollingStart the entire range predates the cache — skip it so
+        // the live BQ result (data) is used instead of empty sliced arrays.
+        const cacheCovers = (json) => end >= json.rollingStart && end <= json.rollingEnd
+        if (adsCacheRef.current && cacheCovers(adsCacheRef.current)) {
           if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
+          return
+        }
+        if (adsCacheRef.current && !cacheCovers(adsCacheRef.current)) {
+          // Selected range is outside the cache window — clear stale cache so live BQ data flows through
+          if (gen !== adsLoadGenRef.current) return
+          setAdsCache(null)
+          setAdsCachedMeta(null)
+          setAdsCachedChMap(null)
           return
         }
         const res = await fetch(`${API}/ads-data.json`)
@@ -19036,7 +19116,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
         adsCacheRef.current = json
-        if (end <= json.rollingEnd) {
+        if (cacheCovers(json)) {
           injectAdsFromCache(json, start, end)
         }
       } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
@@ -19288,7 +19368,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -19377,6 +19457,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'packaging-bom' && (
             <div className="page-scroll">
               <PackagingBomPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'flash' && (
+            <div className="page-scroll" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <FlashPage userEmail={session?.user?.email || ''} />
             </div>
           )}
           {page === 'profile' && (
