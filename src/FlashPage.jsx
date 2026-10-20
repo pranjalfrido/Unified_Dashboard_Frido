@@ -164,7 +164,7 @@ export default function FlashPage({ userEmail = '' }) {
             {msg.role === 'assistant' && (
               <div className="flash-msg flash-msg-assistant">
                 {msg.headline && <p className="flash-headline">{msg.headline}</p>}
-                <p className="flash-answer">{msg.content}</p>
+                <p className="flash-answer"><RenderAnswer text={msg.content} /></p>
                 {msg.data?.length > 1 && (
                   <DataTable data={msg.data} />
                 )}
@@ -302,6 +302,15 @@ export default function FlashPage({ userEmail = '' }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function RenderAnswer({ text }) {
+  if (!text) return null;
+  // Split on **bold** markers and render inline
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
   );
 }
 
