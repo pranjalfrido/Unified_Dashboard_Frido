@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 
-const FLASH_API = import.meta.env.VITE_FLASH_API_URL || 'http://localhost:3001/api';
+const FLASH_API_BASE = import.meta.env.VITE_FLASH_API_URL || 'http://localhost:3001/api';
+// When using the Vercel proxy, paths become query params to avoid SPA rewrite conflicts
+const flashUrl = (path) => FLASH_API_BASE.includes('flash-proxy')
+  ? `${FLASH_API_BASE}?path=/${path}`
+  : `${FLASH_API_BASE}/${path}`;
 
 const SUGGESTED_QUESTIONS = [
   'What is revenue from all platforms this week?',
@@ -49,7 +53,7 @@ export default function FlashPage({ userEmail = '' }) {
     const timeout = setTimeout(() => controller.abort(), 180000); // 180s timeout
 
     try {
-      const res = await fetch(`${FLASH_API}/chat`, {
+      const res = await fetch(flashUrl('chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, sessionId, userEmail, clarifications, skipAmbiguityCheck }),
@@ -102,7 +106,7 @@ export default function FlashPage({ userEmail = '' }) {
   }
 
   async function sendFeedback(messageId, rating) {
-    await fetch(`${FLASH_API}/chat/feedback`, {
+    await fetch(flashUrl('chat/feedback'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messageId, userEmail, rating })

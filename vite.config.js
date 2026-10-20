@@ -23,7 +23,7 @@ export default defineConfig({
     // Node/OS DNS setups still resolve to ::1 only) guarantees the IPv4 side is up.
     host: '127.0.0.1',
     proxy: {
-      '/api': 'http://localhost:3001'
+      '/api': 'http://34.14.135.133'
     },
     watch: {
       ignored: ['**/*.pbix', '**/*.docx', '**/*.xlsx', '**/*.doc', '**/*.pdf']
