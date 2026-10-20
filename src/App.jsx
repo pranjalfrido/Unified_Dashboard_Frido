@@ -5292,14 +5292,13 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
   const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
   const totalReturnPct = cancelPct + rtoPct + cirPct
-  // Provisional Return % — all-channel version (confirmed 2026-10-19), same pattern as every
-  // per-channel tab: shown ALONGSIDE the real headline Return % above, never replacing it,
-  // whenever the selected range's tail hasn't had time to mature. Sourced from
-  // data.returnRateMature.allRate.netRevenueReturnPct — the SAME (cancelRev+rtoRev+returnRev+
-  // cirRev) ÷ totalRev formula as totalReturnPct above, computed over the rolling mature window
-  // via a single all-channel query (overallReturnRateMature), not summed from per-channel tabs.
+  // Provisional Return % — uses the same allTabReturnRateMature query as Sales Overall tab
+  // so both tiles always show the same number. The old overallReturnRateMature used a cruder
+  // all-channel formula (netRevenueSelectFragment with no channel exclusions) that diverged
+  // from Sales Overall by ~2pp. allTabReturnRateMature is the correct scoped formula:
+  // explicit per-channel CASE WHEN rules, excludes Blinkit/Zepto/Instamart.
   const showProvisionalReturnOverview = rangeTouchesImmatureWindow(filters?.end)
-  const provisionalReturnPctOverview = (data.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
+  const provisionalReturnPctOverview = (data.allTabReturnRateMature?.allRate?.pct ?? null)
 
   // ── Ads ──
   const adsTotals = ads.totals || []
