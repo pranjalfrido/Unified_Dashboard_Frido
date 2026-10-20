@@ -93,37 +93,52 @@ export const estimateCogsPerUnit = asp => asp > 0 ? asp * (asp < 5000 ? 0.4 : 0.
 // the raw rows into { [sku]: { [month]: {cogs, category, subCategory, cogsSource} } } for O(1)
 // lookup by date.
 //
-// The ASP-based estimateCogsPerUnit fallback above is UNCHANGED and stays the second tier —
-// per explicit instruction, the fallback logic itself is not being touched, only what sits
-// ahead of it (real month-aware COGS instead of the old flat per-SKU rate).
+// The ASP-based estimateCogsPerUnit fallback above stays the LAST-resort tier — per explicit
+// instruction (2026-10-19), a SKU missing its own product_cogs_monthly entry now falls back to
+// its sub-category's own average REAL cogs for that month (computed from sibling SKUs that do
+// have a real entry) before ever reaching the ASP guess. subCategoryAvgOf (built alongside the
+// per-SKU map below, from the same rows) holds that average: { [subCategory]: { [month]: avgCogs } },
+// averaging only rows with cogs_source other than nothing — i.e. every row actually present is
+// real data (cogsMonthlyMapOf never stores an estimated row), so a simple mean of all rows sharing
+// a (subCategory, month) is already a real-data average, carried-forward rows included (a
+// carried-forward row is still a real cost figure, just copied from an earlier/later actual month
+// — not a guess the way estimateCogsPerUnit's 40/50%-of-ASP is).
 export function cogsMonthlyMapOf(rows) {
   const map = {}
+  const subCatSums = {} // { [subCategory]: { [month]: {sum, n} } }
   ;(rows || []).forEach(r => {
     if (!map[r.sku]) map[r.sku] = {}
     map[r.sku][r.month] = { cogs: r.cogs, category: r.category, subCategory: r.subCategory, cogsSource: r.cogsSource }
+    if (r.subCategory && r.cogs != null) {
+      if (!subCatSums[r.subCategory]) subCatSums[r.subCategory] = {}
+      if (!subCatSums[r.subCategory][r.month]) subCatSums[r.subCategory][r.month] = { sum: 0, n: 0 }
+      subCatSums[r.subCategory][r.month].sum += r.cogs
+      subCatSums[r.subCategory][r.month].n += 1
+    }
   })
+  const subCategoryAvgOf = {}
+  Object.entries(subCatSums).forEach(([subCat, byMonth]) => {
+    subCategoryAvgOf[subCat] = {}
+    Object.entries(byMonth).forEach(([month, { sum, n }]) => { subCategoryAvgOf[subCat][month] = sum / n })
+  })
+  map.__subCategoryAvg = subCategoryAvgOf
   return map
 }
 
 // date: any 'YYYY-MM-DD...' string (a daily-trend row's own date) or a 'YYYY-MM-01' month
-// already. asp: that row's own ASP (gross ÷ units), used only if no real COGS entry exists for
-// this sku+month.
+// already. asp: that row's own ASP (gross ÷ units), used only as the last resort if no real
+// cogsMonthlyMap entry exists for this sku+month AND no sub-category average is available either.
 export function getCogsPerUnit({ sku, date, cogsMonthlyMap, asp }) {
   const month = `${String(date).slice(0, 7)}-01`
   const entry = cogsMonthlyMap?.[sku]?.[month]
-  return (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
-}
-
-// Same sku+month lookup as getCogsPerUnit, but also reports whether this came from a real
-// product_cogs_monthly entry or the estimateCogsPerUnit (40/50%-of-ASP) fallback — kept as a
-// separate function rather than changing getCogsPerUnit's own return shape, since that plain-
-// number signature is relied on elsewhere (PnLPage.jsx's day-wise COGS trend callers) and
-// changing it would require updating every call site for a signal only getCogsForRange needs.
-function getCogsPerUnitWithSource({ sku, date, cogsMonthlyMap, asp }) {
-  const month = `${String(date).slice(0, 7)}-01`
-  const entry = cogsMonthlyMap?.[sku]?.[month]
-  const hasReal = entry && entry.cogs != null
-  return { rate: hasReal ? entry.cogs : estimateCogsPerUnit(asp), isEstimate: !hasReal }
+  if (entry && entry.cogs != null) return entry.cogs
+  // Sub-category average fallback: look up this SKU's subCategory from ANY of its own months
+  // (a SKU's subCategory doesn't change month to month), then that subCategory's average real
+  // cogs for THIS month.
+  const subCat = Object.values(cogsMonthlyMap?.[sku] || {})[0]?.subCategory
+  const avgEntry = subCat ? cogsMonthlyMap?.__subCategoryAvg?.[subCat]?.[month] : null
+  if (avgEntry != null) return avgEntry
+  return estimateCogsPerUnit(asp)
 }
 
 // Whole-range (no single date) COGS for one SKU: splits the SKU's units across every month the
@@ -132,30 +147,34 @@ function getCogsPerUnitWithSource({ sku, date, cogsMonthlyMap, asp }) {
 // SKU for the period, not a per-day breakdown), then applies each month's own rate to its slice.
 // A single-month range collapses to exactly today's flat-rate behavior (one month, 100% of
 // units, one rate) — this only differs from a flat lookup when the range actually spans a COGS
-// rate change. isEstimate is true if ANY touched month fell back to the ASP estimate — restores
-// the Financial Table's "est." badge (added on main 2026-09-30 against the old flat cogsMap),
-// re-derived against the new monthly-COGS pipeline, same all-or-nothing per-SKU semantic the old
-// badge used (not a per-month partial flag).
+// rate change.
 export function getCogsForRange({ sku, units, startDate, endDate, cogsMonthlyMap, asp }) {
-  if (!(units > 0)) return { totalCogs: 0, perUnitBlended: 0, isEstimate: false }
+  if (!(units > 0)) return { totalCogs: 0, perUnitBlended: 0 }
   const months = monthsBetween(startDate, endDate)
   if (months.length <= 1) {
-    const { rate, isEstimate } = getCogsPerUnitWithSource({ sku, date: startDate, cogsMonthlyMap, asp })
-    return { totalCogs: rate * units, perUnitBlended: rate, isEstimate }
+    const rate = getCogsPerUnit({ sku, date: startDate, cogsMonthlyMap, asp })
+    return { totalCogs: rate * units, perUnitBlended: rate }
   }
   const totalDays = months.reduce((s, m) => s + m.daysInRange, 0)
-  let totalCogs = 0, isEstimate = false
+  let totalCogs = 0
   months.forEach(m => {
     const shareUnits = units * (m.daysInRange / totalDays)
-    const { rate, isEstimate: monthIsEstimate } = getCogsPerUnitWithSource({ sku, date: m.month, cogsMonthlyMap, asp })
+    const rate = getCogsPerUnit({ sku, date: m.month, cogsMonthlyMap, asp })
     totalCogs += rate * shareUnits
-    if (monthIsEstimate) isEstimate = true
   })
-  return { totalCogs, perUnitBlended: totalCogs / units, isEstimate }
+  return { totalCogs, perUnitBlended: totalCogs / units }
 }
 
 // Internal: list of {month: 'YYYY-MM-01', daysInRange} for every calendar month touched by
 // [startDate, endDate], clipped to the range itself.
+//
+// The month-key string is built from cursor's own local getFullYear()/getMonth() (zero-padded
+// by hand), NEVER via cursor.toISOString() — confirmed 2026-10-19: toISOString() renders in UTC,
+// so for any browser east of UTC (e.g. IST, UTC+5:30) local midnight on the 1st is still 18:30 the
+// PREVIOUS day in UTC, producing month keys one day early (e.g. '2026-08-31' for September). That
+// wrong key then missed cogsMonthlyMap's real '2026-09-01' entry and silently fell back to the
+// ASP estimate for every SKU, even when a genuine 'actual' COGS row existed for the month — the
+// Financial Table's "est." badge showing up on products with real COGS data was this bug.
 function monthsBetween(startDate, endDate) {
   const start = new Date(startDate), end = new Date(endDate)
   const out = []
@@ -166,7 +185,8 @@ function monthsBetween(startDate, endDate) {
     const rangeStartInMonth = monthStart > start ? monthStart : start
     const rangeEndInMonth = monthEnd < end ? monthEnd : end
     const daysInRange = Math.max(1, Math.round((rangeEndInMonth - rangeStartInMonth) / 86400000) + 1)
-    out.push({ month: monthStart.toISOString().slice(0, 10), daysInRange })
+    const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-01`
+    out.push({ month: monthKey, daysInRange })
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
   }
   return out
