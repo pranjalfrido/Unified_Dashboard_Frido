@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
@@ -1885,29 +1885,29 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}`, background: rowBg, transition: 'box-shadow .12s, background .12s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.acl; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
                           onMouseLeave={e => { e.currentTarget.style.background = rowBg; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = stickyBg; td.style.boxShadow = 'none' }) }}>
-                          <td data-sticky style={{ padding: '8px 12px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
+                          <td data-sticky style={{ padding: '7px 10px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               {cDrill && <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
                               {logo
-                                ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
-                                : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
+                                ? <img src={logo} alt="" style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                                : <span style={{ width: 24, height: 24, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
                               }
                               <span style={{ color: C.t1, fontWeight: 600, fontSize: 11 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
                         {cExpanded[r.courier_group] && cDrill && (() => {
                           const drillRows = cDrill === 'zone'
@@ -1968,20 +1968,20 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
-                          <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>100.00%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(tot)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 10px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>100.00%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1 }}>{n(tot)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
@@ -3323,6 +3323,9 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'inventory', label: 'Inventory', Icon: Cube },
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
+    // 'financial-mis' (Financial MIS) hidden from nav for now (2026-10-20) — FinancialMISPage,
+    // its route (search page === 'financial-mis'), and its permission key are all still in place,
+    // just not surfaced, so re-enabling later is a one-line add back to this array.
     { id: 'documents', label: 'Documents', Icon: FileText },
   ]
   const items = allowedTabs ? allItems.filter(i => {
@@ -4808,7 +4811,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
 
 function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -18554,6 +18557,26 @@ function AppInner() {
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
 
+// Financial MIS — a formal, report-style rollup of the per-channel PnL figures (Gross Rev →
+// Returns → Net Rev → COGS → GM → SnD → CM1 → Marketing Spend → CM2), one row per line item,
+// one column per channel plus a Total — distinct from the existing P&L tab's per-channel,
+// interactive Financial View (Category/Product drill-down, one channel at a time). Scaffolded as
+// a placeholder (2026-10-20) — the real table is pending two open decisions: whether thin-cost-
+// data channels (Blinkit/Instamart/Zepto/CRED/Firstcry) get their own columns or roll into a
+// single "Others" column, and whether this page needs a Category/Product drill-down under each
+// channel or stays at the whole-channel summary grain. See memory for full design discussion.
+function FinancialMISPage() {
+  return (
+    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 10, textAlign: 'center' }}>
+      <div style={{ fontSize: 40 }}>🧾</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Financial MIS</div>
+      <div style={{ fontSize: 13, color: C.t3, maxWidth: 420 }}>
+        A formal, report-style rollup of Gross Revenue → Returns → Net Revenue → COGS → Gross Margin → SnD → CM1 → Marketing Spend → CM2, across every channel — coming soon.
+      </div>
+    </div>
+  )
+}
+
 function DocumentsPage({ setPage }) {
   const docs = [
     {
@@ -19327,6 +19350,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
             </div>
+          )}
+          {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('financial-mis')) && (
+            <FinancialMISPage />
           )}
           {page === 'documents' && (
             <div className="page-scroll">
