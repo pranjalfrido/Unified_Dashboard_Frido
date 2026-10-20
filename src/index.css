@@ -954,5 +954,9 @@ svg text, svg tspan{
 }
 .flash-table td{ padding:5px 10px; color:var(--t1); border-bottom:1px solid var(--bdr,#2a2a3a22); }
 .flash-table tr:last-child td{ border-bottom:none; }
-.flash-table-more{ font-size:11px; color:var(--t3); text-align:center; margin-top:6px; }
+.flash-table-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:8px; flex-wrap:wrap; }
+.flash-table-more{ font-size:11px; color:var(--t3); }
+.flash-table-link{ background:none; border:none; color:var(--accent,#7c6fff); font-size:11px; cursor:pointer; padding:0; text-decoration:underline; }
+.flash-table-download{ background:none; border:1px solid var(--accent,#7c6fff); color:var(--accent,#7c6fff); font-size:11px; border-radius:6px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
+.flash-table-download:hover{ background:var(--accent,#7c6fff); color:#fff; }
 .flash-timing{ font-size:10px; color:var(--t3); margin:4px 0 0; }

@@ -314,9 +314,33 @@ function RenderAnswer({ text }) {
   );
 }
 
+function downloadCSV(data, keys) {
+  const header = keys.join(',');
+  const rows = data.map(row =>
+    keys.map(k => {
+      const val = String(row[k] ?? '');
+      return val.includes(',') || val.includes('"') || val.includes('\n')
+        ? `"${val.replace(/"/g, '""')}"` : val;
+    }).join(',')
+  );
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `flash_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function DataTable({ data }) {
   if (!data?.length) return null;
+  const [showAll, setShowAll] = useState(false);
   const keys = Object.keys(data[0]);
+  const PREVIEW = 20;
+  const visible = showAll ? data : data.slice(0, PREVIEW);
+  const hasMore = data.length > PREVIEW;
+
   return (
     <div className="flash-table-wrap">
       <table className="flash-table">
@@ -324,15 +348,27 @@ function DataTable({ data }) {
           <tr>{keys.map(k => <th key={k}>{k}</th>)}</tr>
         </thead>
         <tbody>
-          {data.slice(0, 20).map((row, i) => (
+          {visible.map((row, i) => (
             <tr key={i}>
               {keys.map(k => <td key={k}>{String(row[k] ?? '')}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
-      {data.length > 20 && (
-        <p className="flash-table-more">Showing 20 of {data.length} rows</p>
+      {hasMore && (
+        <div className="flash-table-footer">
+          {!showAll && (
+            <span className="flash-table-more">
+              Showing {PREVIEW} of {data.length} rows —{' '}
+              <button className="flash-table-link" onClick={() => setShowAll(true)}>
+                show all {data.length}
+              </button>
+            </span>
+          )}
+          <button className="flash-table-download" onClick={() => downloadCSV(data, keys)}>
+            ⬇ Download Excel (.csv)
+          </button>
+        </div>
       )}
     </div>
   );
