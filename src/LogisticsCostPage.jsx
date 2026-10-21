@@ -448,7 +448,19 @@ function Hero({ label, value, sub, deltas, children, sparkMin }) {
 
 // Section header. Collapsible when given onToggle — the caret and whole-row click match
 // the Logistics Performance tab, so the two tabs behave the same way.
-function SectionHdr({ title, note, collapsed, onToggle }) {
+// "8 of 10 partners": how many partners billed in the selected period out of every partner
+// on record, with the absent ones named in the tooltip. Just "8 partners" when none is absent.
+function partnersNote(shownKeys, allKeys) {
+  const shown = new Set(shownKeys)
+  const missing = [...new Set(allKeys || [])].filter(k => k && !shown.has(k)).sort()
+  const total = shown.size + missing.length
+  return {
+    text: missing.length ? `${fmtN(shown.size)} of ${fmtN(total)} partners` : `${fmtN(shown.size)} partners`,
+    title: missing.length ? `Not billed in this period: ${missing.join(', ')}` : undefined,
+  }
+}
+
+function SectionHdr({ title, note, noteTitle, collapsed, onToggle }) {
   const clickable = typeof onToggle === 'function'
   return (
     <div onClick={clickable ? onToggle : undefined}
@@ -459,7 +471,7 @@ function SectionHdr({ title, note, collapsed, onToggle }) {
                        transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>
       )}
       <span style={{ fontSize: 12, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase' }}>{title}</span>
-      {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
+      {note && <span title={noteTitle} style={{ fontSize: 11.5, color: C.t3, cursor: noteTitle ? 'help' : undefined }}>{note}</span>}
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
   )
@@ -1396,6 +1408,9 @@ function cubeToBreakdowns(rows) {
     add('n', r.n); add('cost', r.cost); add('wt', r.wt); add('decl_wt', r.decl_wt)
     add('value', r.value); add('surcharge', r.surcharge)
     add('over_n', r.over_n); add('over_kg', r.over_kg); add('over_cost', r.over_cost)
+    // under_n is the courier table's Under Wt column. Leaving it out of this rebuild made
+    // every courier read 0 under-weight as soon as a month was selected.
+    add('under_n', r.under_n)
     add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('rec_admit', r.rec_admit)
     add('rec_admit_n', r.rec_admit_n); add('reverse_n', r.reverse_n)
     add('claimable_n', r.claimable_n); add('claimable_rs', r.claimable_rs)
@@ -1866,7 +1881,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         rateCmp: baseData.b2bRateCmp || [],
         sole: baseData.b2bSole || null,
         fixedVeh: baseData.fixedVeh || null,
-        fixedVehMonths: (baseData.fixedVehMonths || []).filter(r => !months || months.has(r.month_year)),
+        // NOT narrowed to the selection: the fixedVeh memo carries the last uploaded month
+        // forward into months with no upload, so it needs the earlier months to be present.
+        fixedVehMonths: baseData.fixedVehMonths || [],
         tplTotals,
         // NOT narrowed to the selection. These three arrays are what the 3PL slicers build
         // their option lists from, so filtering them here made each slicer delete its own
@@ -2728,9 +2745,30 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     // fixedVehMonths but the live API path returns every month, so relying on the shape
     // that arrives would give a five-month total on one route and a one-month total on the
     // other for the same selection.
+    //
+    // Carry-forward: the rental is a fixed monthly charge, so a month with no upload is
+    // billed the same as the latest uploaded month before it. An upload for that month
+    // (amount changed, vehicle added or dropped) replaces the carried figure.
+    const uploaded = new Map(all.map(r => [r.month_year, r]))
+    const upMonths = [...uploaded.keys()].sort()
     const sel = filters.months || []
-    const M = sel.length ? new Set(sel) : null
-    const rows = M ? all.filter(r => M.has(r.month_year)) : all
+    let targets = sel
+    if (!sel.length) {
+      // "All": every month from the first rental upload to the latest month with either a
+      // rental upload or a freight bill, so a freight month with no rental sheet still
+      // gets its carried rent.
+      const freight = (b2b?.varMonths || []).map(r => r.month || r.month_year || r.key).filter(Boolean)
+      targets = [...new Set([...upMonths, ...freight])].filter(m => m >= upMonths[0]).sort()
+    }
+    const rows = []
+    const carried = []
+    for (const m of targets) {
+      if (uploaded.has(m)) { rows.push(uploaded.get(m)); continue }
+      const src = upMonths.filter(u => u < m).at(-1)
+      if (!src) continue
+      rows.push({ ...uploaded.get(src), month_year: m })
+      carried.push({ month: m, from: src })
+    }
     if (!rows.length) return null
     const cost = rows.reduce((s, r) => s + num(r.cost), 0)
     const vehicles = rows.reduce((s, r) => s + num(r.vehicles), 0)
@@ -2740,6 +2778,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       vehicles,
       months: rows.length,
       distinct_vehicles: rows.reduce((m, r) => Math.max(m, num(r.vehicles)), 0),
+      carried,
     }
   }, [b2b, filters.months])
   // 3PL, narrowed on the client. The server sends these aggregates unfiltered (they come
@@ -4447,8 +4486,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             One card per partner. B2C carries weight and goods value so those cards can show
             ₹/kg and freight-as-%-of-value; the freight ledger has neither, so those cards
             state less rather than padding with metrics the data cannot support. */}
-        <SectionHdr title="B2C Courier Partners"
-          note={`${fmtN(overviewB2cCards.length)} partners · ${fmt(overall.b2cCost)}`} collapsed={secHid['ov-b2c-cards']} onToggle={() => toggleSec('ov-b2c-cards')} />
+        {(() => {
+          // Denominator = every courier in the uploaded ledger (opts.couriers is rebuilt from
+          // the data on each load), so a newly uploaded courier joins the count by itself.
+          const pn = partnersNote(overviewB2cCards.map(c => c.key), opts.couriers)
+          return <SectionHdr title="B2C Courier Partners"
+            note={`${pn.text} · ${fmt(overall.b2cCost)}`} noteTitle={pn.title}
+            collapsed={secHid['ov-b2c-cards']} onToggle={() => toggleSec('ov-b2c-cards')} />
+        })()}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2c-cards'] ? { display: 'none' } : {}) }}>
           {overviewB2cCards.map(c => (
             <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -4479,8 +4524,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           ))}
         </div>
 
-        <SectionHdr title="FTL/PTL Transport Partners"
-          note={`${fmtN(overviewB2bCards.length)} partners · ${fmt(overall.b2bCost)}`} collapsed={secHid['ov-b2b-cards']} onToggle={() => toggleSec('ov-b2b-cards')} />
+        {(() => {
+          const pn = partnersNote(overviewB2bCards.map(c => c.key), opts.transporters)
+          return <SectionHdr title="FTL/PTL Transport Partners"
+            note={`${pn.text} · ${fmt(overall.b2bCost)}`} noteTitle={pn.title}
+            collapsed={secHid['ov-b2b-cards']} onToggle={() => toggleSec('ov-b2b-cards')} />
+        })()}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2b-cards'] ? { display: 'none' } : {}) }}>
           {overviewB2bCards.map(c => (
             <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -4513,19 +4562,41 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               transporter relationship — but they are billed monthly rather than per
               trip, so the card shows a monthly charge where the others show ₹/trip.
               Its cost is never added to the freight total above. */}
-          {fixedVeh && fixedVeh.cost > 0 && (
+          {/* Shown whenever rentals exist at all. When the selected months have none (the
+              rental sheet is uploaded separately and often lags the freight bills), the card
+              says so instead of disappearing — a missing card read as "no rentals". */}
+          {((fixedVeh && fixedVeh.cost > 0) || b2b?.fixedVehMonths?.length > 0) && (
             <div className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Rental Fixed Vehicle</span>
                 <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>fixed</span>
               </div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(fixedVeh.cost)}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
-                <span>{fmtN(fixedVeh.distinct_vehicles)} vehicles</span>
-                <span style={{ textAlign: 'right' }}>
-                  {fixedVeh.months > 0 ? `${fmt(fixedVeh.cost / fixedVeh.months)} / month` : '—'}
-                </span>
-              </div>
+              {fixedVeh && fixedVeh.cost > 0 ? (
+                <>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(fixedVeh.cost)}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                    <span>{fmtN(fixedVeh.distinct_vehicles)} vehicles</span>
+                    <span style={{ textAlign: 'right' }}>
+                      {fixedVeh.months > 0 ? `${fmt(fixedVeh.cost / fixedVeh.months)} / month` : '—'}
+                    </span>
+                  </div>
+                  {fixedVeh.carried?.length > 0 && (
+                    <div style={{ fontSize: 10, color: C.t3 }}
+                      title="Fixed monthly charge carried from the last uploaded month. Upload the month in the Ledger if the amount changed.">
+                      {fixedVeh.carried.map(c => `${c.month} = ${c.from}`).join(', ')} (carried)
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: C.t3, letterSpacing: '-.01em' }}>—</div>
+                  <div style={{ fontSize: 10.5, color: C.t3 }}>
+                    not uploaded for this period · last uploaded {
+                      [...b2b.fixedVehMonths].map(r => r.month_year).sort().at(-1)
+                    }
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -4538,9 +4609,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             be matched to the Clickpost pickup data — see the 3PL tab for the full detail. */}
         {tpl?.partners?.length > 0 && (
           <>
-            <SectionHdr title="3PL Warehousing Partners"
-              note={`${fmtN(tpl.partners.length)} partners · ${fmtN(overall.tplSites)} sites · ${fmt(overall.tplCost)}`}
-              collapsed={secHid['ov-tpl-cards']} onToggle={() => toggleSec('ov-tpl-cards')} />
+            {(() => {
+              // baseData.tplPartners is the unfiltered partner list from the ledger.
+              const pn = partnersNote(tpl.partners.map(p => p.key), (baseData?.tplPartners || []).map(p => p.key))
+              return <SectionHdr title="3PL Warehousing Partners"
+                note={`${pn.text} · ${fmtN(overall.tplSites)} sites · ${fmt(overall.tplCost)}`} noteTitle={pn.title}
+                collapsed={secHid['ov-tpl-cards']} onToggle={() => toggleSec('ov-tpl-cards')} />
+            })()}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12,
               ...(secHid['ov-tpl-cards'] ? { display: 'none' } : {}) }}>
               {tpl.partners.map(pp => {
@@ -4655,7 +4730,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 : '—'}
               sub={fixedVeh && fixedVeh.vehicles > 0
                 ? `${fmtN(fixedVeh.distinct_vehicles)} vehicles · ${fmt(fixedVeh.cost)} total`
-                : 'no fixed rentals uploaded'} />
+                  + (fixedVeh.carried?.length ? ` · ${fixedVeh.carried.length} mo carried` : '')
+                : b2b?.fixedVehMonths?.length > 0
+                  ? 'not uploaded for this period'
+                  : 'no fixed rentals uploaded'} />
             <Tile label="Vehicle Types" value={fmtN(b2bVehicleRows.length)}
               sub={b2bVehicleRows[0] ? `${b2bVehicleRows[0].vehicle} leads · ${fmt(b2bVehicleRows[0].cost)}` : null} />
             <Tile label="Dearest Vehicle"

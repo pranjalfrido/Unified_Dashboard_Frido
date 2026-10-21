@@ -22,17 +22,34 @@
 // yields D or E on an Express shipment there is no rate to look up, so the row keeps
 // Delhivery's charge and is flagged in frido_note rather than silently priced at zero.
 //
+// --their-zone (used from Sep-26 on): price on DELHIVERY'S billed zone instead of our mapped
+// zone, so the claim contests weight and rates but not zone. Their sub-zones collapse onto the
+// A-E card (D1/D2 -> D, C1/C2 -> C, F -> E) and Express D/E still price at the C rate, since
+// the Express card has no D/E column. 'zone 2' then holds their (collapsed) zone, and our
+// mapped zone is kept alongside in frido_zone_mapped for reference.
+//
+// --contract (used from Sep-26 on): price on the contract rate card (delhivery-rate-card.mjs,
+// transcribed from the addendum images) instead of the June sample's Rates sheet. The two
+// agree on Express but not Surface/Heavy: above 20 kg the sheet keeps adding Rs13/kg where
+// the contract resets to a flat Rs240 at 20 kg, so the sheet overstated our own rate on
+// most Heavy rows. Also prices COD the contract way - Rs20 or 1.1% of INVOICE value
+// (product_value), whichever is higher - rather than 1.1% of cod_amount.
+//
 // Usage:
-//   node scripts/delhivery-invoice-working.mjs "<raw invoice.xlsx>" [out.xlsx]
+//   node scripts/delhivery-invoice-working.mjs "<raw invoice.xlsx>" [out.xlsx] [--their-zone] [--contract]
 import XLSX from 'xlsx'
 import { readFileSync } from 'fs'
 import { BigQuery } from '@google-cloud/bigquery'
+import { delhiveryBaseRate, delhiveryCod, DELHIVERY_MODE_MULTIPLIER } from './delhivery-rate-card.mjs'
 
-const INVOICE = process.argv[2]
-const OUT = process.argv[3] || INVOICE.replace(/\.xlsx?$/i, '_working.xlsx')
-const SAMPLE = process.argv[4] ||
+const THEIR_ZONE = process.argv.includes('--their-zone')
+const CONTRACT = process.argv.includes('--contract')
+const ARGS = process.argv.slice(2).filter(a => !a.startsWith('--'))
+const INVOICE = ARGS[0]
+const OUT = ARGS[1] || INVOICE.replace(/\.xlsx?$/i, '_working.xlsx')
+const SAMPLE = ARGS[2] ||
   "c:/Users/TusharGupta/OneDrive - Arcatron Mobility Pvt Ltd/Sachin Mariwala's files - Delhivery/Invoices/June 26/Delhivery Express jun 26.xlsx"
-const ZONECSV = process.argv[5] || 'c:/Users/TusharGupta/Downloads/zone_mapped_strict.csv'
+const ZONECSV = ARGS[3] || 'c:/Users/TusharGupta/Downloads/zone_mapped_strict.csv'
 if (!INVOICE) { console.error('usage: node scripts/delhivery-invoice-working.mjs <invoice.xlsx>'); process.exit(1) }
 
 // DTO (door-to-door return) is billed at 1.45x the forward rate for the same slab and zone.
@@ -79,6 +96,25 @@ function rateFor(table, slab, zone) {
   if (!row) return null
   const v = row[zone]
   return typeof v === 'number' ? v : null
+}
+
+// The contract card expanded to the slabs the working prices at, same layout as the sample's
+// Rates sheet (Surface B:G, Express J:M) so the file reads the same as earlier months.
+function contractRatesSheet() {
+  const head = ['Frido_Delhivery_Type', 'Frido_Weight Slab', 'A', 'B', 'C', 'D', 'E', '', '', 'Express Slab', 'A', 'B', 'C']
+  const surf = [500, ...Array.from({ length: 80 }, (_, i) => (i + 1) * 1000)]
+  const expr = Array.from({ length: 80 }, (_, i) => (i + 1) * 500)
+  const rows = [head]
+  for (let i = 0; i < Math.max(surf.length, expr.length); i++) {
+    const s = surf[i], e = expr[i]
+    rows.push([
+      s ? 'Surface' : '', s ?? '', ...'ABCDE'.split('').map(z => (s ? delhiveryBaseRate('Surface', z, s / 1000) : '')),
+      '', '',
+      e ?? '', ...'ABC'.split('').map(z => (e ? delhiveryBaseRate('Express', z, e / 1000) : '')),
+    ])
+  }
+  rows.push([], ['Source: Delhivery addendum - FRIDO SURFACE TIER 2 / FRIDO HEAVY and FRIDO NDD EXPRESS. RTO 90% of fwd, DTO 1.45x fwd, COD Rs20 or 1.1% of invoice value (higher), divisor 5000.'])
+  return XLSX.utils.aoa_to_sheet(rows)
 }
 
 // ── our zone, keyed on (pickup city, destination pincode) ────────────────────────
@@ -189,20 +225,28 @@ async function main() {
     // so a Frido weight heavier than theirs cannot inflate our own figure.
     const minSlab = Math.min(delSlab, fridoSlab)
 
+    // Delhivery's own zone, with sub-zones collapsed onto the A-E card (D1/D2 -> D,
+    // C1/C2 -> C, F -> E). Without this the Heavy file's zone labels match no card column.
+    const theirsRaw = UC(r[find('zone')]).replace(/\d+$/, '')
+    const theirZone = theirsRaw === 'F' ? 'E' : ('ABCDE'.includes(theirsRaw) && theirsRaw.length === 1 ? theirsRaw : null)
+
     // our zone
     const city = cityOf(r), dp = PIN(r[DEST])
+    let ourZone = null
+    if (city && dp && zones.cityPin.has(`${city}|${dp}`)) ourZone = zones.cityPin.get(`${city}|${dp}`)
+    else if (dp && zones.pinOnly.has(dp)) ourZone = zones.pinOnly.get(dp)
+
     let z2 = null
-    if (city && dp && zones.cityPin.has(`${city}|${dp}`)) { z2 = zones.cityPin.get(`${city}|${dp}`); tally.zCity++ }
-    else if (dp && zones.pinOnly.has(dp)) { z2 = zones.pinOnly.get(dp); tally.zPin++ }
-    else {
-      // Last resort: Delhivery's own zone, with Heavy's sub-zones collapsed onto the A-E
-      // card (D1/D2 -> D, C1/C2 -> C, F -> E). Without this the Heavy file's zone labels
-      // match no card column and the row cannot price at all.
-      const theirs = UC(r[find('zone')]).replace(/\d+$/, '')
-      const mapped = theirs === 'F' ? 'E' : theirs
-      if ('ABCDE'.includes(mapped) && mapped.length === 1) { z2 = mapped; tally.zTheirs++ }
-      else tally.zNone++
-    }
+    if (THEIR_ZONE) {
+      z2 = theirZone ?? ourZone
+      if (theirZone) tally.zTheirs++; else if (ourZone) tally.zCity++; else tally.zNone++
+    } else if (ourZone) {
+      z2 = ourZone
+      if (city && dp && zones.cityPin.has(`${city}|${dp}`)) tally.zCity++; else tally.zPin++
+    } else if (theirZone) {
+      // Last resort: Delhivery's own zone, so the row can still price.
+      z2 = theirZone; tally.zTheirs++
+    } else tally.zNone++
 
     // Express is contractually a three-zone product: its card has A, B and C only. The
     // sample confirms the convention — across 20,381 Express rows the mapped zone is never
@@ -210,7 +254,12 @@ async function main() {
     // C, which is the farthest zone that service prices. Surface keeps the full A-E.
     const zoneCols = table ? Object.keys(table[0]).filter(k => k !== 'slab') : []
     const z2Eff = (z2 && !zoneCols.includes(z2)) ? 'C' : z2
-    const carded = (table && z2Eff) ? rateFor(table, minSlab, z2Eff) : null
+    // Contract card: Heavy shares the Surface card ("Rates for FRIDO SURFACE TIER 2 and
+    // FRIDO HEAVY"); slabs are still the sheet's (500 g, then whole kg), which is exactly
+    // where the contract's per-step / per-kg bands break.
+    const carded = !z2Eff ? null
+      : CONTRACT ? delhiveryBaseRate(/express/i.test(service) ? 'Express' : 'Surface', z2Eff, minSlab / 1000)
+      : table ? rateFor(table, minSlab, z2Eff) : null
 
     const dlCharge = NUM(r[DL])
     let note = ''
@@ -227,12 +276,16 @@ async function main() {
     }
 
     const isRTO = UC(r[STATUS]) === 'RTO'
-    const fridoRTO = isRTO ? fridoDL * 0.9 : 0
+    const fridoRTO = isRTO ? fridoDL * DELHIVERY_MODE_MULTIPLIER.RTO : 0
 
     const isCOD = UC(r[PAY]) === 'COD'
     const codAmt = NUM(r[COD])
     const codCharge = NUM(r[CODC])
-    const fridoCOD = Math.min(codCharge, (isCOD && !isRTO) ? Math.max(20, codAmt * 0.011) : 0)
+    const invoiceValue = NUM(r[find('product_value')])
+    const codDue = !(isCOD && !isRTO) ? 0
+      : CONTRACT ? delhiveryCod(invoiceValue)
+      : Math.max(20, codAmt * 0.011)
+    const fridoCOD = Math.min(codCharge, codDue)
 
     // DTO: only rows Delhivery actually billed a DTO on, priced at 1.45x the forward rate
     // for that slab and zone.
@@ -259,10 +312,14 @@ async function main() {
       'Frido wt': Math.round(fridoG * 100) / 100,
       'Frido Slab wt': fridoSlab,
       Min: minSlab,
-      // The zone actually priced. On Express this is the A/B/C-collapsed value, matching the
-      // sample; frido_zone_raw keeps the uncollapsed mapping so the difference stays visible.
-      'zone 2': z2Eff,
+      // Default: the zone actually priced (on Express the A/B/C-collapsed value, matching the
+      // sample); frido_zone_raw keeps the uncollapsed mapping so the difference stays visible.
+      // --their-zone: Delhivery's collapsed zone, so the dispute sheet sees no zone gap; the
+      // Express D/E -> C pricing shows in frido_rate_zone instead.
+      'zone 2': THEIR_ZONE ? z2 : z2Eff,
       frido_zone_raw: z2,
+      frido_rate_zone: z2Eff,
+      frido_zone_mapped: ourZone,
       frido_charge_dl: Math.round(fridoDL * 100) / 100,
       frido_charge_RTO: Math.round(fridoRTO * 100) / 100,
       frido_charge_COD: Math.round(fridoCOD * 100) / 100,
@@ -275,13 +332,15 @@ async function main() {
   const nb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(nb, XLSX.utils.json_to_sheet(out), sheet.slice(0, 31))
   // Carry the rate card through so the output is self-contained and auditable.
-  XLSX.utils.book_append_sheet(nb, XLSX.readFile(SAMPLE).Sheets['Rates'], 'Rates')
+  XLSX.utils.book_append_sheet(nb, CONTRACT ? contractRatesSheet() : XLSX.readFile(SAMPLE).Sheets['Rates'], 'Rates')
   XLSX.writeFile(nb, OUT)
 
   const R = n => '₹' + Math.round(n).toLocaleString('en-IN')
   const pc = n => ((n / rows.length) * 100).toFixed(1) + '%'
   console.log(`\nweight   bq ${tally.wtBQ} (${pc(tally.wtBQ)}) · delhivery fallback ${tally.wtFallback} (${pc(tally.wtFallback)})`)
-  console.log(`zone     city+pin ${tally.zCity} · pin ${tally.zPin} · delhivery-fallback ${tally.zTheirs} · unmapped ${tally.zNone}`)
+  console.log(THEIR_ZONE
+    ? `zone     delhivery's zone ${tally.zTheirs} · our mapping (no usable delhivery zone) ${tally.zCity} · unmapped ${tally.zNone}`
+    : `zone     city+pin ${tally.zCity} · pin ${tally.zPin} · delhivery-fallback ${tally.zTheirs} · unmapped ${tally.zNone}`)
   console.log(`no rate  ${tally.noRate} rows kept at Delhivery's charge`)
   console.log(`\n              delhivery        frido         diff`)
   console.log(`freight   ${R(sumDL).padStart(12)} ${R(sumFDL).padStart(12)} ${R(sumDL - sumFDL).padStart(12)}`)
