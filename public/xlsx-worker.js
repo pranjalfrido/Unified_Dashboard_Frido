@@ -68,7 +68,7 @@ self.onmessage = function (e) {
 
     const body = aoa.slice(hIdx + 1);
     const totalRows = body.length;
-    const sumParts = (r) => totalParts.reduce((s, k) => s + (Number(r[k]) || 0), 0);
+    const sumParts = (r) => totalParts.reduce((s, k) => s + (Number(String(r[k] ?? "").replace(/,/g, "")) || 0), 0);
     const isSample = (r) => sampleSigs.some((sig) =>
       sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" &&
         String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase())

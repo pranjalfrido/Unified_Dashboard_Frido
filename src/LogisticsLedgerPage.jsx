@@ -587,6 +587,8 @@ export default function LogisticsLedgerPage({ onBack }) {
 
         // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
         let uploaded = 0, totalValid = 0;
+        // Rows the worker rejected for missing mandatory fields — reported, never dropped silently
+        let badRows = [];
         // Every parsed row, held until the worker finishes so duplicates can be merged
         // across the whole file rather than per streamed chunk.
         const pendingRows = [];
@@ -630,6 +632,7 @@ export default function LogisticsLedgerPage({ onBack }) {
               processQueue();
             } else if (msg.type === "done") {
               workerDone = true;
+              badRows = msg.bad || [];
               worker.terminate();
               // Everything is parsed: merge duplicates across the FULL set, then send.
               const flush = async () => {
@@ -665,7 +668,20 @@ export default function LogisticsLedgerPage({ onBack }) {
         });
 
         setUploadProgress({ done: uploaded, total: uploaded, finished: true });
-        flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}.`);
+        if (badRows.length) {
+          // Group by the missing columns so a shifted/blank column reads as one line, not hundreds
+          const byMissing = new Map();
+          for (const b of badRows) {
+            const k = b.missing.join(", ");
+            if (!byMissing.has(k)) byMissing.set(k, []);
+            byMissing.get(k).push(b.line);
+          }
+          const detail = [...byMissing].map(([cols, lines]) =>
+            `• ${lines.length} row(s) missing: ${cols}\n   Excel rows ${lines.slice(0, 15).join(", ")}${lines.length > 15 ? ", …" : ""}`).join("\n");
+          alert(`${badRows.length} row(s) were NOT uploaded because mandatory columns are empty.\n${uploaded} row(s) uploaded.\n\n${detail}\n\nCheck the data is under the right headers (columns may be shifted), fix and re-upload only the skipped rows.`);
+        }
+        if (uploaded) flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}${badRows.length ? ` — ${badRows.length} skipped` : ""}.`);
+        else flash("error", `Nothing uploaded to ${fmt.table}${badRows.length ? ` — all ${badRows.length} rows are missing mandatory columns` : ""}.`);
         setTimeout(() => setUploadProgress(null), 4000);
         // Reload grid and months after upload
         load(tab, singleMonth);

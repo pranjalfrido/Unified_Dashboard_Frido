@@ -8,6 +8,7 @@
 //   Weight + Zone   both the billed slab and the billed zone are wrong
 //   Weight          billed slab exceeds ours (their weighing is heavy)
 //   Zone            billed zone differs from ours on the same slab
+//   Express D/E at C rate   priced on their zone, but Express has no D/E rate on the card
 //   RTO / COD rate  slab and zone agree, so the gap is a charge-rate issue - most often
 //                   RTO billed at 100% of freight where the contract says 90%
 //
@@ -76,6 +77,9 @@ for (const r of all) {
   else if (slabDiff && zoneDiff) reason = 'Weight + Zone'
   else if (slabDiff) reason = 'Weight'
   else if (zoneDiff) reason = 'Zone'
+  // Priced on their own zone (--their-zone working) but Express has no D/E rate, so the row
+  // priced at C: the gap is Delhivery charging a D/E rate the contract doesn't have.
+  else if (r.frido_rate_zone && theirZone && baseZone(r.frido_rate_zone) !== theirZone) reason = 'Express D/E at C rate'
   else reason = N(r.charge_RTO) > N(r.frido_charge_RTO) ? 'RTO rate'
     : N(r.charge_COD) > N(r.frido_charge_COD) ? 'COD rate'
     : N(r.charge_DTO) > N(r.frido_charge_DTO) ? 'DTO rate' : 'Charge rate'
