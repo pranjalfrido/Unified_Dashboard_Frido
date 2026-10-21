@@ -2,10 +2,10 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -18,11 +18,13 @@ import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
 import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
+import PackagingBomPage from './PackagingBomPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
+import FlashPage from './FlashPage.jsx'
 
 function useIsMobile() {
   const [mob, setMob] = useState(() => window.innerWidth <= 768)
@@ -1884,29 +1886,29 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}`, background: rowBg, transition: 'box-shadow .12s, background .12s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = C.acl; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
                           onMouseLeave={e => { e.currentTarget.style.background = rowBg; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = stickyBg; td.style.boxShadow = 'none' }) }}>
-                          <td data-sticky style={{ padding: '8px 12px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
+                          <td data-sticky style={{ padding: '7px 10px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               {cDrill && <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
                               {logo
-                                ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
-                                : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
+                                ? <img src={logo} alt="" style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                                : <span style={{ width: 24, height: 24, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
                               }
                               <span style={{ color: C.t1, fontWeight: 600, fontSize: 11 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
                         {cExpanded[r.courier_group] && cDrill && (() => {
                           const drillRows = cDrill === 'zone'
@@ -1967,20 +1969,20 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
-                          <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>100.00%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(tot)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 10px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.acl, zIndex: 1 }}>Total</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>100.00%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1 }}>{n(tot)}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{(sumOnTime+sumSlaBreach) ? (sumSlaBreach/(sumOnTime+sumSlaBreach)*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
+                          <td style={{ padding: '7px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
@@ -3322,6 +3324,9 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'inventory', label: 'Inventory', Icon: Cube },
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
+    // 'financial-mis' (Financial MIS) hidden from nav for now (2026-10-20) — FinancialMISPage,
+    // its route (search page === 'financial-mis'), and its permission key are all still in place,
+    // just not surfaced, so re-enabling later is a one-line add back to this array.
     { id: 'documents', label: 'Documents', Icon: FileText },
   ]
   const items = allowedTabs ? allItems.filter(i => {
@@ -3329,7 +3334,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     if (i.id === 'ads') return hasAdsAccess(allowedTabs)
 if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
-    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
+    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
     return allowedTabs.includes(i.id)
   }) : allItems
   const dims = [
@@ -3355,7 +3360,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
-          const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
+          const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
           const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
           const hasBothInv = hasHealth && hasSales
           const subTabs = [
@@ -3465,6 +3470,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
+        <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
+          onClick={() => setPage('flash')}
+          style={{ cursor: 'pointer' }}>
+          <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
+          <span className="sb-label">FLASH</span>
+        </div>
         <ThemePicker theme={theme} setTheme={setTheme} />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
@@ -3498,7 +3509,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
             item.id === 'ads' ? hasAdsAccess(allowedTabs) :
             item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
             item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
-            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
             !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
@@ -4807,7 +4818,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
 
 function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -4851,7 +4862,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
@@ -5136,7 +5147,7 @@ const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, her
 )
 // Same tile as ReturnTrendChart's TrendStatTile (D2CReturnAnalysisTab.jsx) — a 3px color bar
 // identifies which chart line this number belongs to; the number itself stays in ink tokens.
-const TrendStatTile = ({ label, value, badge, color }) => (
+const TrendStatTile = ({ label, value, badge, color, sub }) => (
   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0 }}>
     <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -5145,6 +5156,7 @@ const TrendStatTile = ({ label, value, badge, color }) => (
         <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
         {badge}
       </div>
+      {sub && <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap' }}>{sub}</span>}
     </div>
   </div>
 )
@@ -5283,6 +5295,13 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
   const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
   const totalReturnPct = cancelPct + rtoPct + cirPct
+  // Provisional Return % — uses the same allTabReturnRateMature query as Sales Overall tab
+  // so both tiles always show the same number. The old overallReturnRateMature used a cruder
+  // all-channel formula (netRevenueSelectFragment with no channel exclusions) that diverged
+  // from Sales Overall by ~2pp. allTabReturnRateMature is the correct scoped formula:
+  // explicit per-channel CASE WHEN rules, excludes Blinkit/Zepto/Instamart.
+  const showProvisionalReturnOverview = rangeTouchesImmatureWindow(filters?.end)
+  const provisionalReturnPctOverview = (data.allTabReturnRateMature?.allRate?.pct ?? null)
 
   // ── Ads ──
   const adsTotals = ads.totals || []
@@ -5546,7 +5565,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
-              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
+              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} sub={(showProvisionalReturnOverview && provisionalReturnPctOverview != null) ? `Provisional: ${(provisionalReturnPctOverview * 100).toFixed(1)}%` : null} />
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%" minHeight={240}>
@@ -7839,8 +7858,16 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnRevAll = data.returnRev || 0
-  const returnNumeratorRev = data.returnTrackableRev || 0
+  const returnNumeratorRev = cancellRev + rtoRev + returnRevAll + cirRev
   const returnPct = totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
+  // Provisional Return % — same pattern as every other tab (confirmed 2026-10-19): shown
+  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from data.allTabReturnRateMature.allRate.pct — the SAME
+  // scoped returnNumeratorRev formula as returnPct above (only channels with a real return
+  // lifecycle; Blinkit/Instamart/Zepto excluded), computed over the rolling mature window via its
+  // own dedicated query (allTabReturnRateMature), separate from Overview's cruder all-channel sum.
+  const showProvisionalReturnAll = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctAll = (data.allTabReturnRateMature?.allRate?.pct ?? null)
   const aspUnits = (typeof data.aspQty === 'number' && data.aspQty > 1000) ? data.aspQty : totalQty
   const asp = aspUnits > 0 ? totalRev / aspUnits : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -8025,7 +8052,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
             { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
             { label: 'GST', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Repeat Customer Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers`, accent: undefined, badge: (() => { const prevRate = prevNCusts > 0 ? (prevRepeatCusts / prevNCusts * 100) : null; if (prevRate === null || prevRate === 0) return null; const p = (parseFloat(repeatRate) - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
-            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: (showProvisionalReturnAll && provisionalReturnPctAll != null) ? `Provisional Return: ${(provisionalReturnPctAll * 100).toFixed(1)}%` : `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8729,13 +8756,30 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     const p = (curPct - prevPct) / prevPct * 100
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
-  const shDailyArr = sh.daily || []
+  // When a D2C sub-channel filter is active, rebuild daily array from shDailySKU (which has
+  // sub_channel per row) so the trend chart and sparklines reflect MyFrido/Mobility only.
+  const shDailyArr = useMemo(() => {
+    if (!isD2CSubChFiltered) return sh.daily || []
+    const dailySKU = sh.dailySKU || []
+    const subCh = filters.subChannel.toLowerCase()
+    const byDate = {}
+    dailySKU.filter(r => r.subChannel === subCh).forEach(r => {
+      if (!byDate[r.date]) byDate[r.date] = { date: r.date, rev: 0, orders: 0, units: 0, rtoRev: 0, cirRev: 0, cancelRev: 0 }
+      byDate[r.date].rev += r.rev || 0
+      byDate[r.date].units += r.units || 0
+      byDate[r.date].rtoRev += r.rtoRev || 0
+      byDate[r.date].cirRev += r.cirRev || 0
+      byDate[r.date].cancelRev += r.cancelRev || 0
+    })
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, sh.daily, sh.dailySKU])
   const shSparkData = Array.from({ length: Math.max(shDailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = shDailyArr[i]
     const pre = prevDailyArr[i]
     return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
   })
-  const nDays = sh.nDays || data.nDays || 1
+  const nDays = shDailyArr.filter(d => d.rev > 0).length || sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = (shAspQty || totalQty) > 0 ? totalRev / (shAspQty || totalQty) : 0
@@ -8751,6 +8795,16 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
   const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev + shCancelRevRaw) / totalRev * 100) : 0
+  // Provisional Returns % — confirmed 2026-10-19: shown ALONGSIDE the real returnRevPct above
+  // (never replacing it), whenever the selected range's tail hasn't had time to mature (RTOs/
+  // returns/CIRs/cancellations take 1-3+ weeks to resolve, so a recent range's own returnRevPct
+  // silently reads too low). Sourced from data.shopify.returnRateMature.allRate.netRevenueReturnPct
+  // — the channel-wide rolling mature-window rate (today-44d to today-14d) — which is
+  // mathematically the SAME formula as returnRevPct above (RTO+CIR+Return+full Cancellation ÷
+  // Gross Inc GST), just computed over the trustworthy mature window instead of the live-selected
+  // one, so the two numbers are directly comparable side by side.
+  const showProvisionalReturn = rangeTouchesImmatureWindow(filters?.end)
+  const provisionalReturnPct = (sh.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — D2C is India-only, so this is just every non-International sub-channel.
@@ -8771,7 +8825,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   // across sub_category rows to get a Category total without risking double-counting an order
   // that spans multiple sub-categories, so catRows' `orders` uses the sum here as a reasonable
   // approximation (same caveat already accepted for subChannelMap.orders in api/bq.js).
-  const filteredCatMap = isD2CSubChFiltered ? (() => {
+  const filteredCatMap = useMemo(() => {
+    if (!isD2CSubChFiltered) return catMap
     const m = {}
     ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
       const cat = x.category || 'Others'
@@ -8782,8 +8837,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       m[cat].units += parseInt(x.units) || 0
     })
     return m
-  })() : catMap
-  const filteredSubCatMap = isD2CSubChFiltered ? (() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, data.pnlSalesRows, catMap])
+  const filteredSubCatMap = useMemo(() => {
+    if (!isD2CSubChFiltered) return subCatMap
     const m = {}
     ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
       const key = `${x.category || 'Others'}::${x.sub_category || 'Others'}`
@@ -8794,7 +8851,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       m[key].units += parseInt(x.units) || 0
     })
     return m
-  })() : subCatMap
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, filters.subChannel, data.pnlSalesRows, subCatMap])
   const catRows = Object.entries(filteredCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(filteredSubCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
@@ -8854,8 +8912,28 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const shCirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
   const shExchRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
   const shExchPct = totalRev > 0 ? shExchRev / totalRev * 100 : 0
-  const shReturnTrendMap = {}
-  ;(data.dailyReturnTrend || []).forEach(x => { shReturnTrendMap[x.date] = x })
+  // When sub-channel filtered, build return trend from daily SKU data so sparklines
+  // reflect MyFrido/Mobility only instead of all-D2C.
+  const shReturnTrendMap = useMemo(() => {
+    const m = {}
+    if (!isD2CSubChFiltered) {
+      ;(data.dailyReturnTrend || []).forEach(x => { m[x.date] = x })
+      return m
+    }
+    shDailyArr.forEach(d => {
+      const gross = d.rev || 0
+      if (!gross) return
+      m[d.date] = {
+        date: d.date,
+        rtoPct: (d.rtoRev || 0) / gross * 100,
+        cirPct: (d.cirRev || 0) / gross * 100,
+        cancelPct: (d.cancelRev || 0) / gross * 100,
+        exchPct: 0,
+      }
+    })
+    return m
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isD2CSubChFiltered, shDailyArr, data.dailyReturnTrend])
   const shMobKpis = [
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
@@ -8947,7 +9025,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturn && provisionalReturnPct != null) ? `Provisional Return: ${(provisionalReturnPct * 100).toFixed(1)}%` : `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
@@ -8971,14 +9049,13 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       </div>
       <div className="g-2" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
         {(() => {
-          const returnTrendMap = {}
-          ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
+          const returnTrendMap = shReturnTrendMap
           // Net Revenue line: apply the same period-level shrink as the KPI card
           // (netRev / totalRev — Gross minus Cancel/RTO/Return/CIR, then GST removed on
           // completed orders only) since per-day CIR/RTO/Return/Cancel splits aren't available.
           const netShrinkFactor = totalRev > 0 ? netRev / totalRev : 0
-          // Use Shopify-specific daily (EXCLUDES Shopify B2B)
-          const rawDaily = (sh.daily || []).map(d => {
+          // Use shDailyArr — already filtered by sub-channel when MyFrido/Mobility active
+          const rawDaily = shDailyArr.map(d => {
             const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
             return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
@@ -9250,10 +9327,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
         })()}
       </div>}
       {!isIntl && <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
+        <ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
       </div>}
-      <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
+      {!isD2CSubChFiltered && <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />}
     </div>
   )
 }
@@ -9322,6 +9399,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const exchangeRev = ebo.exchange?.exchangeRev || 0
   const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
   const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev + cancelRev) / totalRev * 100) : 0
+  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart/Myntra (confirmed
+  // 2026-10-19): shown ALONGSIDE the real Returns % below, never replacing it, whenever the
+  // selected range's tail hasn't had time to mature. Sourced from ebo.returnRateMature.allRate.
+  // netRevenueReturnPct — same formula as returnRevPct above, over the rolling mature window.
+  const showProvisionalReturnEbo = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctEbo = (ebo.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
   const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
   const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
@@ -9492,7 +9575,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturnEbo && provisionalReturnPctEbo != null) ? `Provisional Return: ${(provisionalReturnPctEbo * 100).toFixed(1)}%` : `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
@@ -9702,6 +9785,13 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   const amzVCMatrix = data.amzVCMatrix || {}
 
   const returnRateReliable = (amzSC.returnRate?.rollOrders || 0) > 0
+  // Provisional Return % (SC) — same pattern as Shopify's D2C tab (confirmed 2026-10-19): shown
+  // ALONGSIDE the real SC Returns % above, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from amzSC.returnRateMature.allRate.netRevenueReturnPct —
+  // the channel-wide rolling mature-window rate (today-44d to today-14d) — same formula as the
+  // live returnRate above (RTO+CIR+Return+full Cancellation ÷ Gross Inc GST), so directly comparable.
+  const showProvisionalReturnSC = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctSC = (amzSC.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   // Combined SC+VC Returns % for the "All" toggle — SC's own returnRate card (rollOrders/
   // rollReturned — despite the "rollOrders" name, both are REVENUE figures: total_rev_inc/
   // returned_rev from amzSCReturnRate, see api/bq.js) is Seller-Central-only, so on the combined
@@ -9909,7 +9999,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
                     ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
-                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
+                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: (showProvisionalReturnSC && provisionalReturnPctSC != null) ? `Provisional Return: ${(provisionalReturnPctSC * 100).toFixed(1)}%` : (returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data'), accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'vc' ? [{ label: 'Returns % (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross rev` }] : []),
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -9931,7 +10021,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             if (selectedCat) {
               vcDailyCatFiltered?.forEach(d => { if (!vcDailyMap[d.date]) vcDailyMap[d.date] = { orderedRev: 0, orderedUnits: 0 }; vcDailyMap[d.date].orderedRev += d.rev; vcDailyMap[d.date].orderedUnits += d.units })
             } else {
-              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.orderedRev || 0, orderedUnits: d.orderedUnits || 0 } })
+              ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.estimated ? 0 : (d.orderedRev || 0), orderedUnits: d.estimated ? 0 : (d.orderedUnits || 0) } })
             }
             const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRevRaw) / scTotalRev : 0
             const returnRate = scTotalRev > 0 ? (amzSC.netCalc?.returnRev || 0) / scTotalRev : 0
@@ -10253,6 +10343,13 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
   const fk = data.flipkart || {}
   const nDays = data.nDays || 1
+  // Provisional Return % — same pattern as Shopify/Amazon SC tabs (confirmed 2026-10-19): shown
+  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
+  // hasn't had time to mature. Sourced from fk.returnRateMature.allRate.pct — Flipkart's own
+  // return_rev/total_rev formula computed over the rolling mature window (today-44d to today-14d)
+  // instead of the live-selected one, so directly comparable to fkReturnCur.pct below.
+  const showProvisionalReturnFk = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctFk = (fk.returnRateMature?.allRate?.pct ?? null)
 
   // When cat/subcat selected, derive totals+daily from dailyCat (FBF+Non-FBF combined — no split)
   const dailyCat = fk.dailyCat || []
@@ -10380,7 +10477,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
             { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             { label: 'GST', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: selectedCat ? null : fkChgBadge(rev - excRev, fkPrevGST) },
             { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: (showProvisionalReturnFk && provisionalReturnPctFk != null) ? `Provisional Return: ${(provisionalReturnPctFk * 100).toFixed(1)}%` : `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -13356,6 +13453,12 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
   const mnReturnRev = (totals.returnRev || 0) + (mn.netCalc?.rtoRev || 0) + (mn.netCalc?.cirRev || 0) + (mn.netCalc?.cancelRev || 0)
   const mnReturnOrders = totals.returnOrders || 0
   const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
+  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart (confirmed 2026-10-19):
+  // shown ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's
+  // tail hasn't had time to mature. Sourced from mn.returnRateMature.allRate.netRevenueReturnPct —
+  // same formula as mnReturnPct above, computed over the rolling mature window instead.
+  const showProvisionalReturnMn = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalReturnPctMn = (mn.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
 
   const prevRev = mn.prevRev || 0
   const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
@@ -13465,7 +13568,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
-            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: (showProvisionalReturnMn && provisionalReturnPctMn != null) ? `Provisional Return: ${(provisionalReturnPctMn * 100).toFixed(1)}%` : `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -13788,6 +13891,13 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
   const totalRev = rev
   const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
   const cnPct = grossRev > 0 ? cnRevAbs / grossRev * 100 : 0
+  // Provisional Credit Note % — same pattern as other channels' Provisional Return% (confirmed
+  // 2026-10-19), adapted for Offline Sales' own Sales-vs-Credit-Note vocabulary (no RTO/CIR/
+  // Return lifecycle here). Shown ALONGSIDE the real Credit Notes % above, never replacing it,
+  // whenever the selected range's tail hasn't had time to mature — a credit note can take weeks
+  // to be issued against a recent sale, same maturity concern as an e-commerce return.
+  const showProvisionalCN = rangeTouchesImmatureWindow(rangeEnd)
+  const provisionalCnPct = (off.creditNoteRateMature?.allRate?.pct ?? null)
 
   const subLabel = sub !== 'all' ? ` · ${SUB_OPTIONS.find(o => o.id === sub)?.label || sub}` : ''
 
@@ -13847,7 +13957,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(qty)} units`, badge: chgBadge(nOrders, prevOrders) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
-            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
+            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: (showProvisionalCN && provisionalCnPct != null) ? `Provisional: ${(provisionalCnPct * 100).toFixed(1)}%` : `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -18493,6 +18603,26 @@ function AppInner() {
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
 
+// Financial MIS — a formal, report-style rollup of the per-channel PnL figures (Gross Rev →
+// Returns → Net Rev → COGS → GM → SnD → CM1 → Marketing Spend → CM2), one row per line item,
+// one column per channel plus a Total — distinct from the existing P&L tab's per-channel,
+// interactive Financial View (Category/Product drill-down, one channel at a time). Scaffolded as
+// a placeholder (2026-10-20) — the real table is pending two open decisions: whether thin-cost-
+// data channels (Blinkit/Instamart/Zepto/CRED/Firstcry) get their own columns or roll into a
+// single "Others" column, and whether this page needs a Category/Product drill-down under each
+// channel or stays at the whole-channel summary grain. See memory for full design discussion.
+function FinancialMISPage() {
+  return (
+    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 10, textAlign: 'center' }}>
+      <div style={{ fontSize: 40 }}>🧾</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Financial MIS</div>
+      <div style={{ fontSize: 13, color: C.t3, maxWidth: 420 }}>
+        A formal, report-style rollup of Gross Revenue → Returns → Net Revenue → COGS → Gross Margin → SnD → CM1 → Marketing Spend → CM2, across every channel — coming soon.
+      </div>
+    </div>
+  )
+}
+
 function DocumentsPage({ setPage }) {
   const docs = [
     {
@@ -18512,6 +18642,12 @@ function DocumentsPage({ setPage }) {
       title: 'Purchase Ledger',
       description: 'Upload domestic, import & packaging purchase data.',
       icon: '🧾',
+    },
+    {
+      id: 'packaging-bom',
+      title: 'Packaging BOM',
+      description: 'Define which packaging materials go into each product.',
+      icon: '📦',
     },
   ]
   return (
@@ -18540,11 +18676,11 @@ const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sale
 const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
 const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
 const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
-const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:sales', 'customer', 'documents']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'documents']
 const permKeyToPage = {
   'logistics': 'logistics',
   'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
-  'inventory': 'inventory', 'inventory:sales': 'inventory',
+  'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory',
   ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
   ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
   ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
@@ -18659,7 +18795,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     : null
 
   const setPage = (p) => {
-    if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
+    if (p === 'inventory') goTo('inventory', (allowedTabs?.includes('inventory') || allowedTabs?.includes('inventory:detail')) ? 'health' : 'sales')
     else if (p === 'sales') goTo('sales', defaultSalesTab, 'overall')
     else if (p === 'pnl') goTo('pnl', defaultPnlTab)
     else if (p === 'ads') goTo('ads', defaultAdsPlatform)
@@ -18688,11 +18824,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // user with cost access is bounced straight back to their default page.
       page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
-      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
-      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger') ? (!allowedTabs || allowedTabs.includes('documents')) :
+      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -18758,8 +18894,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!keepPrev) setLoading(true)
     setError(null)
 
-    // P&L static cache: serve instantly if no filters and dates match the pre-computed MTD window
-    const hasFilters = ch || Object.keys(extraFilters).length > 0
+    // P&L static cache: serve instantly if no filters and dates match a pre-computed window.
+    // Checks MTD (pnl-data.json) and Last Month (pnl-data-lastmonth.json) — both are
+    // pre-computed daily by GitHub Actions so these date ranges never hit BigQuery.
+    // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
+    // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
+    const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
+    const effectiveSubCh = extraFilters.subChannel
+    const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
@@ -18769,16 +18911,26 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         const c = pnlCacheRef.current
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
           if (reqId !== reqIdRef.current) return
-          if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) {
-            setSubCatFirstOrderMap(c.subCatFirstOrderMap)
-          }
+          if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) setSubCatFirstOrderMap(c.subCatFirstOrderMap)
           clientCacheRef.current.set(cacheKey, c)
-          setRawRows(prev => {
-            if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...c }
-            return c
-          })
-          setLoading(false)
-          setFetchPending(false)
+          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...c } : c)
+          setLoading(false); setFetchPending(false)
+          return
+        }
+      } catch (_) {}
+      // Last Month static cache
+      try {
+        if (!pnlCacheRef.lastMonth) {
+          const r = await fetch(`${API}/pnl-data-lastmonth.json`)
+          if (r.ok) pnlCacheRef.lastMonth = await r.json()
+        }
+        const lm = pnlCacheRef.lastMonth
+        if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
+          if (reqId !== reqIdRef.current) return
+          if (lm.subCatFirstOrderMap && Object.keys(lm.subCatFirstOrderMap).length) setSubCatFirstOrderMap(lm.subCatFirstOrderMap)
+          clientCacheRef.current.set(cacheKey, lm)
+          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...lm } : lm)
+          setLoading(false); setFetchPending(false)
           return
         }
       } catch (_) {}
@@ -18829,6 +18981,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    // Debounce only when the date changed (user may still be typing in date picker).
+    // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
+    const debounceMs = dateChanged ? 600 : 0
     debounceRef.current = setTimeout(() => {
       const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = filtersRef.current
       const extra = {}
@@ -18849,7 +19004,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
 
       if (sku?.length) extra.sku = sku.join(',')
-      if (subChannel) extra.subChannel = subChannel
+      // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
+      // so all three hit the same server-side cache key — switching sub-tabs is instant after the
+      // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
+      const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
+      const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
+      if (bqSubChannel) extra.subChannel = bqSubChannel
       if (voucher) extra.voucher = voucher
       if (region?.length) extra.region = region.join(',')
       if (tier?.length) extra.tier = tier.join(',')
@@ -18858,14 +19018,28 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
       if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
-      fetchData(start, end, extra)
+      // Gate the ~290-query /api/bq fetch to only the tabs that actually consume its result —
+      // confirmed 2026-10-19 by checking every `data={data}`/`data &&` call site in this file:
+      // Overview, Sales, PnL, Ads, and Intelligence (IntelPage destructures data.orders directly)
+      // are the only 5 consumers. Before this gate, the fetch fired unconditionally on every
+      // date/filter change regardless of which tab was open — e.g. tweaking a Logistics filter
+      // silently ran the full fan-out and threw the result away, competing with that tab's own
+      // (actually needed) BigQuery queries for the same rate-limited concurrency slots. Topnav's
+      // MobileSalesFilterPanel also receives `data` as its fallback-branch prop but never reads
+      // it (confirmed: zero `salesData.` dereferences in that component) — not a 6th dependency.
+      if (['overview', 'sales', 'pnl', 'ads', 'intelligence'].includes(page)) {
+        fetchData(start, end, extra)
+      }
       // Logistics summary for Overview tab — LIVE query against the page's own selected/maturity-
       // adjusted range via api/logistics.js (same endpoint the dedicated Logistics tab uses),
       // replacing the old static /logistics-data.json cache, which was a fixed "month-to-date"
       // snapshot that never actually respected the date picker at all. Using the maturity-adjusted
       // range (not the raw picker range) keeps immature tail-of-range shipments from diluting
       // Delivery%/RTO%/SLA% the same way the rest of Overview already guards against this.
-      {
+      // Gated to page==='overview' (confirmed 2026-10-19) — this feeds ONLY Overview's logistics
+      // tile (setLogisticsData), so it was previously firing on every filter change on every OTHER
+      // tab too, for a result nothing there ever reads — same waste as the main fetchData gate above.
+      if (page === 'overview') {
         const logRange = getMaturityAdjustedRange({ start, end })
         setLogisticsRangeLabel(logRange.label || `· ${logRange.start} – ${logRange.end}`)
         // Try static CDN file first (same file the Logistics tab uses) — instant load.
@@ -18893,22 +19067,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           }
         })
       }
-      // Overview-only fetches (Logistics Cost / Facility Allocation / Inventory Snapshot /
-      // Customer Summary tiles) — gated behind page==='overview' so switching filters on any
-      // OTHER tab (Sales/Logistics/Inventory/etc.) doesn't silently re-hit these on every
-      // debounced keystroke. /api/customer in particular is a live BigQuery-backed endpoint, not
-      // a static file — refetching it app-wide regardless of which tab is active would waste real
-      // query cost. `page` is in this same dependency array below so navigating INTO Overview
-      // (without also changing the date range) still triggers the fetch.
+
+      // Overview-only fetches — all fired in parallel, gated behind page==='overview' so
+      // filter changes on other tabs don't waste BQ quota on /api/customer.
       if (page === 'overview') {
-        fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setSalesAllocData(j)).catch(() => {})
-        fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => setInvSnapshotData(j)).catch(() => {})
-        fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => setOverviewCustData(j))
-          .catch(() => {})
+        Promise.all([
+          fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([salesAlloc, invSnapshot, custData]) => {
+          if (salesAlloc) setSalesAllocData(salesAlloc)
+          if (invSnapshot) setInvSnapshotData(invSnapshot)
+          if (custData) setOverviewCustData(custData)
+        })
       }
-    }, 600)
+    }, debounceMs)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
 
@@ -18921,10 +19094,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Return already-loaded cache if it covers the selected range (allow start before rolling window — will just show partial data from rollingStart)
-        if (adsCacheRef.current && end <= adsCacheRef.current.rollingEnd) {
+        // Only use cache when the selected range overlaps the rolling window.
+        // If end < rollingStart the entire range predates the cache — skip it so
+        // the live BQ result (data) is used instead of empty sliced arrays.
+        const cacheCovers = (json) => end >= json.rollingStart && end <= json.rollingEnd
+        if (adsCacheRef.current && cacheCovers(adsCacheRef.current)) {
           if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
+          return
+        }
+        if (adsCacheRef.current && !cacheCovers(adsCacheRef.current)) {
+          // Selected range is outside the cache window — clear stale cache so live BQ data flows through
+          if (gen !== adsLoadGenRef.current) return
+          setAdsCache(null)
+          setAdsCachedMeta(null)
+          setAdsCachedChMap(null)
           return
         }
         const res = await fetch(`${API}/ads-data.json`)
@@ -18932,7 +19116,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
         adsCacheRef.current = json
-        if (end <= json.rollingEnd) {
+        if (cacheCovers(json)) {
           injectAdsFromCache(json, start, end)
         }
       } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
@@ -19184,7 +19368,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -19192,7 +19376,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -19237,15 +19421,18 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <CourierAllocationPage onBack={() => goTo('logistics-cost')} />
             </div>
           )}
-          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (
+          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
             </div>
+          )}
+          {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('financial-mis')) && (
+            <FinancialMISPage />
           )}
           {page === 'documents' && (
             <div className="page-scroll">
@@ -19254,17 +19441,27 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'cogs' && (
             <div className="page-scroll">
-              <CogsPage />
+              <CogsPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
-              <LogisticsLedgerPage />
+              <LogisticsLedgerPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'purchase-ledger' && (
             <div className="page-scroll">
-              <PurchaseLedgerPage />
+              <PurchaseLedgerPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'packaging-bom' && (
+            <div className="page-scroll">
+              <PackagingBomPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'flash' && (
+            <div className="page-scroll" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <FlashPage userEmail={session?.user?.email || ''} />
             </div>
           )}
           {page === 'profile' && (

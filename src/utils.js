@@ -393,6 +393,26 @@ export function getDefaultDates() {
 //   if selectedRange.end is already mature (<= boundary): use the selected range as-is
 //   else: fall back to the last mature 30-day window (today−45d to today−15d)
 // Callers must show `label` in their own section heading — never substitute dates silently.
+// Standardized "is this range immature" check for Provisional Return%, confirmed 2026-10-19:
+// matches the existing today-14d/today-44d rolling-mature-window convention api/bq.js already
+// uses for Shopify's returnRateMature + the S&D rate card (RATE_COVERAGE_FLOOR/rollingStart/
+// rollingEnd), NOT getMaturityAdjustedRange's separate 15d/45d convention above (that function
+// does date-range SUBSTITUTION for one Overview tile; this one is a boolean check used to decide
+// whether to show a second "Provisional" number alongside the real one — deliberately not
+// reusing or changing getMaturityAdjustedRange so its one existing caller is untouched).
+// Touches the immature window if the selected range's END date falls after the cutoff — a
+// recent end date means at least the tail of the range hasn't had time to mature, same logic
+// as getMaturityAdjustedRange's own boundary check.
+export const PROVISIONAL_MATURITY_CUTOFF_DAYS = 14
+export function rangeTouchesImmatureWindow(end) {
+  if (!end) return false
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - PROVISIONAL_MATURITY_CUTOFF_DAYS)
+  const endD = new Date(end + 'T00:00:00')
+  if (Number.isNaN(endD)) return false
+  return endD > cutoff
+}
+
 export function getMaturityAdjustedRange(selectedRange) {
   const today = new Date()
   const maturityBoundary = new Date(today)

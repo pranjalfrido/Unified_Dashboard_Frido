@@ -224,7 +224,7 @@ export const isPseudoSku = sku => {
 // row.RtdInvt/row.RawInvt/row.RawBlockedInvt and are used as-is here — the pack-qty/
 // raw-SKU-text heuristic below does not apply to this facility.
 export function computeRowInventory(row) {
-  if (row.Facility === 'Vadgaon_OPS') {
+  if (row.Facility === 'Vadgaon_OPS' || row.Facility === 'Frido_Sudhawadi') {
     const rtdInvt = Number(row.RtdInvt || 0)
     const rawInvt = Number(row.RawInvt || 0)
     const rawBlockedInvt = Number(row.RawBlockedInvt || 0)

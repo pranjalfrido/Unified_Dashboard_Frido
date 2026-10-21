@@ -180,7 +180,7 @@ const REPORTS={
     calc:new Set(["GrossTotal_$","GrossTotal_Rs","ROE","PurchaseRateperqty_Rs_Exc_GST"]),
     fmts:{0:"d-mmm-yy",7:"#,##0.##",9:"#,##0.00",10:"#,##0.00",11:"#,##0.00",12:"0.0000",13:"#,##0.00"},
     widths:[10,48,38,11,18,18,8,10,12,9,13,16,9,28],
-    legend:"<b>Blue</b> columns are calculated. ROE = invoice ₹ ÷ invoice $ · GrossTotal_Rs = GrossTotal_$ × ROE · PurchaseRateperqty_Rs_Exc_GST = GrossTotal_Rs ÷ Quantity (import IGST not included).",
+    legend:"<b>Blue</b> columns are calculated. ROE = invoice ₹ ÷ invoice $ · GrossTotal_Rs = GrossTotal_$ × ROE · PurchaseRateperqty_Rs_Exc_GST = GrossTotal_Rs ÷ Quantity (import IGST not included). <b>Re-uploading:</b> saving replaces data per voucher — re-uploading a file will fully replace all lines for every (Date, Voucher Type, Voucher No.) it contains with the new data, so corrections of any kind (Rate, Quantity, Product Name, Vendor Name, adding/removing a line) are handled automatically. Just make sure the file you upload has the complete, correct set of lines for each voucher it covers.",
     fields:[F_DATE,F_PART,
       {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo",fallback:"Voucher Ref. No."},
       {key:"Quantity",aliases:["Quantity","Qty","Billed Quantity","Actual Quantity"],need:"calc",use:"Quantity, UnitofMeasure"},
@@ -199,7 +199,7 @@ const REPORTS={
     calc:new Set(),
     fmts:{0:"d-mmm-yy",6:"#,##0.00"},
     widths:[10,52,30,11,18,18,14],
-    legend:"One row per product line. Value = the product's share of this ledger's amount, as allocated in Tally.",
+    legend:"One row per product line. Value = the product's share of this ledger's amount, as allocated in Tally. <b>Re-uploading:</b> saving replaces data per voucher — re-uploading a file will fully replace all lines for every (Date, Voucher Type, Voucher No., Ledger) it contains with the new data, so corrections of any kind (Value, Date, Product Name, Vendor Name, adding/removing a line) are handled automatically. Just make sure the file you upload has the complete, correct set of lines for each voucher it covers.",
     fields:[F_DATE,F_PART,
       {key:"Voucher No.",aliases:["Voucher No.","Voucher No","Voucher Number","Vch No."],need:"calc",use:"VoucherNo"},
       {key:"Value",aliases:["Value","Amount","Item Value"],need:"calc",use:"Value (product share)",fallback:"Gross Total"},
@@ -271,7 +271,7 @@ function mapFields(sheet,rep){
 }
 
 /* ---------- Import of Goods: split invoice ₹ across lines by $ value ---------- */
-function buildImport(sheet,m){
+function buildImport(sheet,m,rep){
   const {get,gone}=m, rows=[], checks=[...m.colChecks], seen={};
   let inrTotal=0, lineTotal=0;
   for(const v of m.vouchers){
@@ -301,8 +301,16 @@ function buildImport(sheet,m){
       if(diff){let big=0;lines.forEach((l,i)=>{if(l.usd>lines[big].usd)big=i;});vals[big]=r2(vals[big]+diff);}
     }
     inrTotal+=inv.inr||0;
+    // lineNo: the line's POSITION within this voucher (1st product listed, 2nd, 3rd…), NOT a count
+    // of repeated (Product, Vendor) text — confirmed 2026-10-14: product_name is free text whose
+    // spacing/punctuation can drift between two exports of the exact same line (found a real case
+    // in the domestic parser's table: the same file re-uploaded hours apart produced ~5,600
+    // duplicate rows this way). Voucher No. duplicates are already a hard error above for this
+    // report type, so position within one invoice block is unambiguous here — the forEach index
+    // itself is the position, no separate counting needed.
     lines.forEach((l,i)=>{const x=vals[i]; if(x!==null) lineTotal+=x;
-      rows.push([inv.date,l.product,inv.vendor,inv.vtype,inv.vno,inv.ref,inv.gst,l.qty,l.uom,l.rate,l.usd!==null?r2(l.usd):null,x,roe?Math.round(roe*1e6)/1e6:null,(x!==null&&l.qty)?Math.round(x/l.qty*1e4)/1e4:null]);});
+      const lineNo=i+1;
+      rows.push([inv.date,l.product,inv.vendor,inv.vtype,inv.vno,inv.ref,inv.gst,l.qty,l.uom,l.rate,l.usd!==null?r2(l.usd):null,x,roe?Math.round(roe*1e6)/1e6:null,(x!==null&&l.qty)?Math.round(x/l.qty*1e4)/1e4:null,lineNo,rep.name]);});
   }
   Object.entries(seen).filter(([,n])=>n>1).forEach(([v,n])=>checks.unshift(["error",`VoucherNo <code>${esc(v)}</code> appears on ${n} separate invoices in this export.`]));
   const match=Math.abs(inrTotal-lineTotal)<0.01&&!gone.size;
@@ -330,12 +338,17 @@ function buildLedger(sheet,m,rep){
   const {get,gone}=m, rows=[], checks=m.colChecks.filter(c=>!/No "Value" column/.test(c[1])), seen={}, left=[], split=[], scaled=[];
   const noValueCol=m.report.some(x=>x.field==="Value"&&x.state==="fallback");
   let lineTotal=0;
+  // voucherOccurrence tracks how many TIMES this exact Voucher No. has appeared as a block so far
+  // in the file — needed because (unlike buildImport) a duplicate Voucher No. is only a warning
+  // here, not an error, so the same vno can legitimately head several separate blocks.
+  const voucherOccurrence={};
   for(const v of m.vouchers){
     const r=v.r, pv=clean(get(r,"Particulars")?.v);
     const vh={date:v.date,vendor:clean(get(r,"Buyer/Supplier")?.v)||pv,vtype:clean(get(r,"Voucher Type")?.v),vno:clean(get(r,"Voucher No.")?.v),gst:clean(get(r,"GSTIN/UIN")?.v),
       value:noValueCol?null:num(get(r,"Value")?.v),led:num(get(r,"Ledger")?.v)};
     if(!v.lines.length){left.push(vh);continue;}
     const key=vh.vno; (seen[key]=seen[key]||[]).push(fmtDate(vh.date));
+    const occurrence=(voucherOccurrence[vh.vno]||0); voucherOccurrence[vh.vno]=occurrence+1;
     let lines=v.lines.map(lr=>({product:clean(get(lr,"Particulars")?.v),val:num(get(lr,"Value")?.v)}));
     lines.filter(l=>l.val===null).forEach(l=>{if(!gone.has("Value")) checks.push(["error",`<code>${esc(vh.vno)}</code>: “${esc(l.product)}” has no Value.`]);});
     const vals=lines.map(l=>l.val||0), sum=vals.reduce((a,b)=>a+b,0);
@@ -348,7 +361,14 @@ function buildLedger(sheet,m,rep){
       if(blk){ lines=lines.slice(blk[0],blk[1]); out=vals.slice(blk[0],blk[1]); split.push(vh.vno); }
       else { out=scaleTo(vals,vh.led); scaled.push(vh.vno); }
     }
-    lines.forEach((l,i)=>{lineTotal+=out[i]; rows.push([vh.date,l.product,vh.vendor,vh.vtype,vh.vno,vh.gst,r2(out[i])]);});
+    // lineNo encodes (which occurrence of this Voucher No. block, position within that block) as
+    // one stable integer — confirmed 2026-10-14: product_name text can drift between two exports of
+    // the same real line (found a real case: the domestic parser's table got ~5,600 duplicate rows
+    // this way), so product_name is deliberately NOT part of the uniqueness key here. Position
+    // within the file is what Tally actually preserves consistently across re-exports.
+    lines.forEach((l,i)=>{lineTotal+=out[i];
+      const lineNo=occurrence*1000+(i+1);
+      rows.push([vh.date,l.product,vh.vendor,vh.vtype,vh.vno,vh.gst,r2(out[i]),lineNo,rep.ledger]);});
   }
   if(noValueCol) checks.push(["warn",`The export has no Value column, so each voucher's ${esc(rep.ledger)} amount was spread over its product lines in proportion to their Gross Total.`]);
   if(split.length) checks.push(["ok",`${split.length} voucher${split.length>1?"s":""} also book another cost ledger on the same bill; only the lines that belong to ${esc(rep.ledger)} were kept: ${split.slice(0,8).map(x=>`<code>${esc(x)}</code>`).join(", ")}${split.length>8?"…":""}.`]);
@@ -408,7 +428,7 @@ function render(res,label){
   const numCols=new Set(Object.keys(rep.fmts).map(Number).filter(i=>i>0));
   let h="<thead><tr>"+rep.cols.map((c,i)=>`<th class="${rep.calc.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
   for(const row of res.rows.slice(0,PREVIEW)){
-    h+="<tr>"+row.map((v,i)=>{
+    h+="<tr>"+row.slice(0,rep.cols.length).map((v,i)=>{
       let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=rep.fmts[i]==="0.0000"?Number(v).toFixed(4):rep.fmts[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
       return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
   }
@@ -419,7 +439,7 @@ function render(res,label){
 
 /* ---------- build xlsx ---------- */
 function buildWorkbook(res){
-  const rep=res.rep, aoa=[rep.cols,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])];
+  const rep=res.rep, aoa=[rep.cols,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1,rep.cols.length)])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(rep.fmts)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
   ws["!cols"]=rep.widths.map(w=>({wch:w}));
@@ -459,7 +479,7 @@ async function download(){
 /* Fallback: tab-separated copy that pastes straight into Excel as columns */
 function toTSV(res){
   const f=(v,i)=>{if(v===null||v===undefined) return ""; if(i===0&&v instanceof Date) return `${v.getDate()}-${v.toLocaleString("en-GB",{month:"short"})}-${String(v.getFullYear()).slice(2)}`; return String(v).replace(/[\t\r\n]+/g," ");};
-  return [res.rep.cols.join("\t"),...res.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+  return [res.rep.cols.join("\t"),...res.rows.map(r=>r.slice(0,res.rep.cols.length).map(f).join("\t"))].join("\r\n");
 }
 async function copyTSV(){
   const st=document.getElementById("dlstatus"), txt=toTSV(result);
@@ -505,21 +525,53 @@ saveBtn.addEventListener("click",async()=>{
   const st=document.getElementById("dlstatus");
   saveBtn.disabled=true; saveBtn.textContent="Saving…"; st.className="status"; st.textContent="";
   try{
-    const rows=result.rows.map(r=>({
-      date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
-      product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
-      voucher_ref_no:r[5], gst:r[6], quantity:r[7], unit_of_measure:r[8],
-      rate_usd:r[9], gross_total_usd:r[10], gross_total_rs:r[11],
-      roe:r[12], purchase_rate_per_qty_rs_exc_gst:r[13]
-    }));
-    const CHUNK=500; let done=0;
-    for(let i=0;i<rows.length;i+=CHUNK){
-      const {error}=await sb.from("purchase_ledger_import").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
-      if(error) throw error;
-      done+=Math.min(CHUNK,rows.length-i);
-      st.textContent=`Saving… ${done}/${rows.length} rows`;
+    // Row shape depends on which report type was parsed: a Cost ledger (CHA/Freight/Custom Duty/
+    // SWS/CAIDC/Cess — report key "ledger", buildLedger) has a totally different, shorter shape
+    // than Import of Goods (report key "import", buildImport). Both still save into the same
+    // purchase_ledger_import table (every Import-specific column is nullable) — a Cost ledger row
+    // just leaves quantity/rate/ROE null (not undefined — important for the RPC's JSON handling)
+    // and uses gross_total_rs for its allocated Value. ledger_name records which specific ledger a
+    // row came from (e.g. "CHA Charges", "Import of Goods").
+    //
+    // Voucher-level REPLACE, not per-line upsert — confirmed 2026-10-14: no line-level key survives
+    // Tally's own export inconsistency between two runs of the same file (product-name spacing
+    // drifts AND line order can reorder between exports). Each upload deletes-and-reinserts every
+    // (Date, Voucher Type, Voucher No.) voucher's lines as one atomic unit via the
+    // replace_voucher_lines_import() RPC. Since the same vno can legitimately repeat as separate
+    // Cost-ledger blocks (a "ledger" report quirk — see buildLedger's own comments), the voucher key
+    // used here also includes ledger_name so each cost ledger's own block is replaced independently
+    // rather than one ledger's upload wiping out another's rows for the same voucher.
+    const rows=result.key==="ledger"
+      ? result.rows.map(r=>({
+          date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
+          product_name:r[1], vendor_name:r[2]||"", voucher_type:r[3], voucher_no:r[4],
+          voucher_ref_no:null, gst:r[5]||null, quantity:null, unit_of_measure:null,
+          rate_usd:null, gross_total_usd:null, gross_total_rs:r[6],
+          roe:null, purchase_rate_per_qty_rs_exc_gst:null, line_no:r[7], ledger_name:r[8]||""
+        }))
+      : result.rows.map(r=>({
+          date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
+          product_name:r[1], vendor_name:r[2]||"", voucher_type:r[3], voucher_no:r[4],
+          voucher_ref_no:r[5]||null, gst:r[6]||null, quantity:r[7], unit_of_measure:r[8]||null,
+          rate_usd:r[9], gross_total_usd:r[10], gross_total_rs:r[11],
+          roe:r[12], purchase_rate_per_qty_rs_exc_gst:r[13], line_no:r[14], ledger_name:r[15]||""
+        }));
+    const vouchers=new Map();
+    for(const r of rows){
+      const key=`${r.date}::${r.voucher_type}::${r.voucher_no}::${r.ledger_name}`;
+      if(!vouchers.has(key)) vouchers.set(key,{date:r.date,voucher_type:r.voucher_type,voucher_no:r.voucher_no,ledger_name:r.ledger_name,lines:[]});
+      vouchers.get(key).lines.push(r);
     }
-    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows to Supabase.`;
+    let done=0;
+    for(const v of vouchers.values()){
+      const {error}=await sb.rpc("replace_voucher_lines_import",{
+        p_date:v.date, p_voucher_type:v.voucher_type, p_voucher_no:v.voucher_no, p_ledger_name:v.ledger_name, p_rows:v.lines
+      });
+      if(error) throw error;
+      done+=v.lines.length;
+      st.textContent=`Saving… ${done}/${rows.length} rows (${vouchers.size} vouchers)`;
+    }
+    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows across ${vouchers.size} vouchers to Supabase.`;
     saveBtn.textContent="Saved ✓";
   }catch(e){
     st.className="status err"; st.textContent="Save failed: "+(e.message||e);

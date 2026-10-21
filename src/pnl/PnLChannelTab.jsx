@@ -110,6 +110,65 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
   )
 }
 
+// Contribution waterfall — Gross → Returns → Net Revenue → COGS → Gross Margin → SnD → CM1 →
+// Mktg Spend → CM2, the same whole-range KPI-card figures already shown above (no new data,
+// purely a different view of numbers this tab already computes), as a single bar-to-scale step
+// chain so "where does revenue actually leak" reads at a glance instead of requiring someone to
+// read 8 separate % tiles and do the subtraction mentally. Same visual language (bars scaled to
+// the Gross/top-of-waterfall value, cost lines in a muted tone, total lines in the accent/red)
+// as the Breakeven ROAS Calculator / PO Approval Checker's own waterfall-style cost breakdowns —
+// reused here for visual consistency rather than inventing a third bar-chart style in this file.
+// A GM/CM1/CM2 figure can be null (no cost data at all for this channel/range) — that step is
+// skipped entirely rather than drawn as a zero-width bar, so the chain only shows the steps this
+// channel actually has real numbers for. Trimmed to just these 5 headline steps (not every
+// intermediate cost line) per explicit request — Returns/COGS/SnD/Mktg Spend stay visible in
+// their own KPI tiles above, this card is the five-figure summary view only.
+function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing }) {
+  const steps = [
+    { label: 'Gross Revenue', value: gross, tone: 'start' },
+    { label: 'Net Revenue', value: net, tone: 'subtotal' },
+    gm != null && { label: 'Gross Margin', value: gm, tone: 'subtotal' },
+    cm1 != null && { label: 'CM1', value: cm1, tone: 'subtotal' },
+    showMarketing && cm2 != null && { label: 'CM2', value: cm2, tone: 'total' },
+  ].filter(Boolean)
+  const scaleMax = Math.max(gross, 1)
+  return (
+    <Card fill title="Contribution Waterfall" style={{ width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', justifyContent: 'center' }}>
+        {steps.map((s, i) => {
+          const barPct = Math.max(Math.abs(s.value) > 0 ? 3 : 0, Math.min(100, (Math.abs(s.value) / scaleMax) * 100))
+          const negative = s.value < 0
+          const color = s.tone === 'cost' ? C.t3 : s.tone === 'total' ? (s.value < 0 ? C.red.tx : C.green.tx) : s.tone === 'subtotal' ? C.acm : C.acc
+          // Vertical light-to-dark gradient fill per bar (matches the reference chart's shaded-bar
+          // look) rather than a flat tone — top edge lightened toward the card background, bottom
+          // edge deepened toward near-black, same tone hue throughout so bars stay color-coded by
+          // step type (cost/subtotal/total) while reading as solid, dimensional columns.
+          const gradient = `linear-gradient(180deg, ${color}CC 0%, ${color} 55%, ${color}E6 100%)`
+          // % shown next to each value is relative to Net Revenue (= 100%), per explicit request —
+          // Gross Revenue therefore reads as >100% (it's larger than Net), while bars themselves
+          // stay scaled to Gross (scaleMax above) so bar LENGTH still reflects true relative size;
+          // only the printed %, not the bar width, changes basis.
+          const pctOfNet = net > 0 ? (s.value / net * 100) : 0
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: s.tone === 'start' || s.tone === 'total' ? 12.5 : 11.5, fontWeight: s.tone === 'start' || s.tone === 'total' ? 700 : 500, color: s.tone === 'start' || s.tone === 'total' ? C.t1 : C.t2 }}>
+                <span>{s.label}</span>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  {s.tone !== 'start' && <span style={{ fontSize: 10.5, fontWeight: 600, color: C.t3 }}>{pctOfNet.toFixed(1)}%</span>}
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: negative ? C.red.tx : C.t1 }}>{negative ? '−' : ''}{fmt(Math.abs(s.value))}</span>
+                </span>
+              </div>
+              <div style={{ position: 'relative', height: 14, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${barPct}%`, background: gradient, borderRadius: 4, transition: 'width 120ms ease-out' }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
 // Trend chart for PnL only — same Gross/Net/Units base as the shared TrendAnalysisCard
 // (deliberately NOT extending that component: it's shared with the Sales tab, and adding %-based
 // margin lines there would risk changing Sales tab charts too) plus a metric slicer letting the
@@ -293,7 +352,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
@@ -309,8 +368,8 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
   // `gross` exactly — both GST-inclusive, pre-returns) and prevExcRev (GST-exclusive, NOT
   // returns-adjusted). Every other KPI here (Net Revenue, Returns, COGS, GM, SnD, CM1, Mktg
   // Spend, ROAS, CM2) has NO real previous-period figure anywhere in the backend — they're all
-  // derived client-side from a static per-SKU cost sheet (cogs-data.json) applied to the CURRENT
-  // period's units only.
+  // derived client-side from the month-aware per-SKU cost table (cogsMonthlyMap) applied to the
+  // CURRENT period's units only.
   //
   // Rather than leave those un-badged or add ~12 new heavy BigQuery queries, this estimates each
   // one's previous-period value by applying the current period's own ratio for that metric
@@ -450,8 +509,15 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           </div>
         </div>
       )}
-      <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={300} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} />
+      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', flexWrap: 'wrap' }}>
+        <div style={{ flex: '2 1 480px', display: 'flex' }}>
+          <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={300} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
+        </div>
+        <div style={{ flex: '1 1 260px', display: 'flex' }}>
+          <PnLWaterfallCard gross={gross} net={net} gm={kpiSummary.gm} cm1={kpiSummary.cm1} cm2={kpiSummary.cm2} showMarketing={showMarketing} />
+        </div>
+      </div>
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} />
     </div>
   )
 }

@@ -30,8 +30,12 @@ async function run() {
       CREATE TABLE IF NOT EXISTS item_master (
         product_code TEXT PRIMARY KEY,
         category_name TEXT, sub_category TEXT, lead_time TEXT,
-        product_source TEXT, sku_first_sales_date TEXT, type TEXT
+        product_source TEXT, sku_first_sales_date TEXT, type TEXT,
+        name TEXT
       )`)
+    // name: sku_master.Name — added 2026-10-15 so Tally-product-name -> SKU joins (via sku_mapping)
+    // can also show the product's real name, not just category/sub_category.
+    await db.query(`ALTER TABLE item_master ADD COLUMN IF NOT EXISTS name TEXT`)
     await db.query(`
       CREATE TABLE IF NOT EXISTS sku_mapping (
         productid TEXT PRIMARY KEY, masterskucode TEXT
@@ -74,28 +78,38 @@ async function run() {
         uniware_channels TEXT PRIMARY KEY, unified_channel TEXT, unified_channel2 TEXT,
         channel_description TEXT, flex_location TEXT
       )`)
+    // Packaging SKU master — synced from the Sheet-backed BigQuery table (all columns arrive as
+    // STRING since it's a Sheet import; numeric fields are cast on read by the consuming page/API,
+    // not here, since the sheet is still being actively filled in and values may be blank).
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS packaging_sku_master (
+        packaging_sku TEXT PRIMARY KEY, packaging_type TEXT, packaging_name TEXT,
+        length_cm TEXT, breadth_cm TEXT, height_cm TEXT, vol_weight_gm TEXT,
+        cost_per_unit TEXT, vendor TEXT, is_active TEXT, linked_product TEXT, uom TEXT
+      )`)
     console.log('Tables created ✅')
 
     // Fetch all from BQ in parallel
     console.log('Fetching from BQ in parallel...')
     const [
       [itemRows], [skuRows], [invRows], [salesRows], [last90Rows], [shopifyRows],
-      [facilityRows], [regionRows], [channelRows],
+      [facilityRows], [regionRows], [channelRows], [packagingSkuRows],
     ] = await Promise.all([
-      bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
+      bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type, Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
       bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')` }),
-      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt, RawBlockedInvt FROM \`frido-429506.production.shelfwise_inventory_corrected\`` }),
+      bq.query({ query: `SELECT ItemSkuCode, Facility, MAX(Updated) AS Updated, SUM(Inventory) AS Inventory, SUM(InventoryBlocked) AS InventoryBlocked, SUM(RtdInvt) AS RtdInvt, SUM(RawInvt) AS RawInvt, SUM(RawBlockedInvt) AS RawBlockedInvt FROM \`frido-429506.production.shelfwise_inventory_corrected\` GROUP BY ItemSkuCode, Facility` }),
       bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\`` }),
       bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\`` }),
       bq.query({ query: `SELECT sku, available FROM \`frido-429506.production.inventory_shopify_hourly\`` }),
       bq.query({ query: `SELECT Facility, Facility2, Location, FCs_Status_for_Invt, FacilityType, Store_Location FROM \`frido-429506.inventory_sales_allocation.facility_master\`` }),
       bq.query({ query: `SELECT shipping_address_state, region, nearest_wh FROM \`frido-429506.inventory_sales_allocation.state_region_nearest_wh\`` }),
       bq.query({ query: `SELECT uniware_channels, unified_channel, unified_channel2, channel_description, Flex_Location FROM \`frido-429506.inventory_sales_allocation.uc_channel_desc\`` }),
+      bq.query({ query: `SELECT packaging_sku, packaging_type, packaging_name, length_cm, breadth_cm, height_cm, vol_weight_gm, cost_per_unit, vendor, isActive, linked_product, UOM FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__packaging_sku_master\` WHERE packaging_sku IS NOT NULL AND TRIM(packaging_sku) != ''` }),
     ])
-    console.log(`Fetched: item_master=${itemRows.length}, sku_mapping=${skuRows.length}, inv_snapshot=${invRows.length}, sales_window=${salesRows.length}, sales_90d=${last90Rows.length}, shopify=${shopifyRows.length}, facility_master=${facilityRows.length}, state_region=${regionRows.length}, channel_desc=${channelRows.length}`)
+    console.log(`Fetched: item_master=${itemRows.length}, sku_mapping=${skuRows.length}, inv_snapshot=${invRows.length}, sales_window=${salesRows.length}, sales_90d=${last90Rows.length}, shopify=${shopifyRows.length}, facility_master=${facilityRows.length}, state_region=${regionRows.length}, channel_desc=${channelRows.length}, packaging_sku_master=${packagingSkuRows.length}`)
 
-    await bulkLoad(db, 'item_master', itemRows, ['a','b','c','d','e','f','g'],
-      r => [r.Product_Code||null, r.Category_Name||null, r.Sub_category||null, String(r.Lead_Time??''), r.Product_Source||null, r.SKU_First_Sales_Date||null, r.Type||null])
+    await bulkLoad(db, 'item_master', itemRows, ['a','b','c','d','e','f','g','h'],
+      r => [r.Product_Code||null, r.Category_Name||null, r.Sub_category||null, String(r.Lead_Time??''), r.Product_Source||null, r.SKU_First_Sales_Date||null, r.Type||null, r.Name||null])
 
     await bulkLoad(db, 'sku_mapping', skuRows, ['a','b'],
       r => [r.productid||null, r.masterskucode||null])
@@ -136,6 +150,21 @@ async function run() {
 
     await bulkLoad(db, 'uc_channel_desc', channelRows, ['a','b','c','d','e'],
       r => [r.uniware_channels||null, r.unified_channel||null, r.unified_channel2||null, r.channel_description||null, r.Flex_Location||null])
+
+    // Dedupe by packaging_sku (sheet currently has ~31 duplicate SKU rows, confirmed 2026-10-11,
+    // user is cleaning these up separately) — keep the LAST occurrence so a later row in the sheet
+    // (presumably the more recent edit) wins rather than silently failing the PK insert.
+    const packagingSkuMap = new Map()
+    for (const r of packagingSkuRows) {
+      const sku = (r.packaging_sku || '').trim()
+      if (sku) packagingSkuMap.set(sku, r)
+    }
+    const dedupedPackagingSkuRows = [...packagingSkuMap.values()]
+    if (dedupedPackagingSkuRows.length !== packagingSkuRows.length) {
+      console.log(`  packaging_sku_master: ${packagingSkuRows.length - dedupedPackagingSkuRows.length} duplicate SKU row(s) collapsed`)
+    }
+    await bulkLoad(db, 'packaging_sku_master', dedupedPackagingSkuRows, ['a','b','c','d','e','f','g','h','i','j','k','l'],
+      r => [r.packaging_sku.trim(), r.packaging_type||null, r.packaging_name||null, r.length_cm||null, r.breadth_cm||null, r.height_cm||null, r.vol_weight_gm||null, r.cost_per_unit||null, r.vendor||null, r.isActive||null, r.linked_product||null, r.UOM||null])
 
     console.log('\n✅ All done!')
   } finally {

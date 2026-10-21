@@ -254,16 +254,15 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
     if (!cached) return
-    // If cache has rawRows, always use it for client-side date filtering — never fall back to BQ.
-    // (Raw rows cover the full FY window; dates before cache start simply yield no data rows,
-    // which is correct. Avoids live BQ calls that time out on Vercel's 60s limit.)
-    if (cachedDataRef.current?.rawRows) {
+    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    // If cache has rawRows and selected range is within the cached window, use client-side filtering.
+    // If outside the cache window (e.g. prior FY), fall through to BQ API.
+    if (cachedDataRef.current?.rawRows && withinCache) {
       setData(cachedDataRef.current)
       return
     }
-    // No rawRows in cache — fall back to API only if date range is outside cached window
-    const withinCache = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
-    if (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current))) {
+    // No rawRows, or range is outside cache — fall back to API
+    if (!cachedDataRef.current?.rawRows && (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current)))) {
       if (cachedDataRef.current) setData(cachedDataRef.current)
       return
     }
@@ -289,8 +288,9 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       }
     }
     if (!cached) return // still on initial load
-    // If static file has rawRows, client-side filtering handles it instantly
-    if (cachedDataRef.current?.rawRows) return
+    // If static file has rawRows AND date is within cache window, client-side filtering handles it instantly
+    const withinCacheF = start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    if (cachedDataRef.current?.rawRows && withinCacheF) return
     clearTimeout(filterTimerRef.current)
     filterTimerRef.current = setTimeout(() => fetchFromAPI(start, end), 600)
     return () => clearTimeout(filterTimerRef.current)
@@ -360,7 +360,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
+export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -663,14 +663,14 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <LoadingOverlay loading={active.loading && !active.data} label="Loading inventory" />
+        <LoadingOverlay loading={active.loading} label="Loading inventory" />
         {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>

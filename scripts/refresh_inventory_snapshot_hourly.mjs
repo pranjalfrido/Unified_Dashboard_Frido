@@ -40,7 +40,8 @@ const query = `
 CREATE OR REPLACE TABLE \`frido-429506.production.shelfwise_inventory_corrected\` AS
 WITH base AS (
   SELECT
-    Facility, ItemTypeSKUCode, Shelf, InventoryType,
+    Facility, ItemTypeSKUCode, ItemTypeName, Shelf, InventoryType,
+    InventoryAllocation, InventorySync,
     SAFE_CAST(NULLIF(TRIM(Quantity_st), '') AS FLOAT64) AS Quantity,
     SAFE_CAST(NULLIF(TRIM(QuantityBlocked_st), '') AS FLOAT64) AS QuantityBlocked,
     SAFE_CAST(NULLIF(TRIM(QuantityNotFound_st), '') AS FLOAT64) AS QuantityNotFound,
@@ -55,16 +56,19 @@ latest_ts_per_key AS (
 -- Sum all rows sharing a key's own latest sync timestamp (NOT dedupe-to-one-row — a single
 -- sync can carry multiple additive line items for the same key, e.g. Return_dump shelves).
 raw_latest AS (
-  SELECT b.Facility, b.ItemTypeSKUCode, b.Shelf, b.InventoryType,
+  SELECT b.Facility, b.ItemTypeSKUCode, b.ItemTypeName, b.Shelf, b.InventoryType,
+    b.InventoryAllocation, b.InventorySync,
     SUM(b.Quantity) AS Quantity, SUM(b.QuantityBlocked) AS QuantityBlocked,
     SUM(b.QuantityNotFound) AS QuantityNotFound, t.max_ts AS last_seen_ts
   FROM base b JOIN latest_ts_per_key t
     ON b.Facility = t.Facility AND b.ItemTypeSKUCode = t.ItemTypeSKUCode
     AND b.Shelf = t.Shelf AND b.InventoryType = t.InventoryType AND b.batch_ts = t.max_ts
-  GROUP BY b.Facility, b.ItemTypeSKUCode, b.Shelf, b.InventoryType, t.max_ts
+  GROUP BY b.Facility, b.ItemTypeSKUCode, b.ItemTypeName, b.Shelf, b.InventoryType,
+    b.InventoryAllocation, b.InventorySync, t.max_ts
 ),
 corrected AS (
-  SELECT Facility, ItemTypeSKUCode, Shelf, InventoryType, last_seen_ts,
+  SELECT Facility, ItemTypeSKUCode, ItemTypeName, Shelf, InventoryType,
+    InventoryAllocation, InventorySync, last_seen_ts,
     CASE
       WHEN Quantity > 0
         AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), last_seen_ts, HOUR) > ${STALE_HOURS_THRESHOLD}
@@ -94,29 +98,54 @@ corrected AS (
         AND NOT REGEXP_CONTAINS(Shelf, r'^(RTN|DEMO)')
       THEN 0
       ELSE IFNULL(QuantityNotFound, 0)
-    END AS QuantityNotFound
+    END AS QuantityNotFound,
+    -- pack_qty for Frido_Sudhawadi RAW shelves only — extract PO## from SKU name
+    CASE
+      WHEN Facility = 'Frido_Sudhawadi' AND REGEXP_CONTAINS(Shelf, r'RAW')
+      THEN GREATEST(1, COALESCE(
+        SAFE_CAST(REGEXP_EXTRACT(ItemTypeSKUCode, r'(?i)P[O0][_\\s]*(\\d+)') AS INT64), 1
+      ))
+      ELSE 1
+    END AS pack_qty
   FROM raw_latest
 )
 SELECT
   ItemTypeSKUCode AS ItemSkuCode,
+  ItemTypeName,
   Facility,
+  Shelf,
+  InventoryAllocation,
+  InventorySync,
   MAX(last_seen_ts) AS Updated,
   SUM(IF(InventoryType = 'GOOD_INVENTORY', Quantity_Final, 0)) AS Inventory,
   SUM(QuantityBlocked) AS InventoryBlocked,
-  -- Vadgaon_OPS only: RTD/Raw split by shelf-name substring, not the pack-qty/raw-SKU-text
-  -- heuristic every other facility uses. A shelf containing "RTD" is RTD (RTD-RACK-* shelves
-  -- included — RTD wins the tie over RACK); a shelf containing "RACK" but not "RTD" is Raw.
-  -- Shelves matching neither (PKG/RTN/QC/...) are excluded from both — Vadgaon_OPS's Total
-  -- Inventory is RtdInvt + RawInvt only, deliberately smaller than its full GOOD_INVENTORY sum.
-  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND REGEXP_CONTAINS(Shelf, r'RTD'), Quantity_Final, 0)) AS RtdInvt,
-  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'RACK'), Quantity_Final, 0)) AS RawInvt,
-  -- Same shelf-substring rule applied to Quantity Blocked, so Vadgaon_OPS's blocked stock is
-  -- no longer silently dropped (it was previously uncounted anywhere in the dashboard).
-  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY' AND NOT REGEXP_CONTAINS(Shelf, r'RTD') AND REGEXP_CONTAINS(Shelf, r'RACK'), QuantityBlocked, 0)) AS RawBlockedInvt,
+  -- Vadgaon_OPS: RTD shelves excluding RTN/QC contaminated (e.g. RTN-RTD-01)
+  -- Frido_Sudhawadi: RTD shelves (no pack_qty scaling — RTD stock is finished goods)
+  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY'
+      AND REGEXP_CONTAINS(Shelf, r'RTD')
+      AND NOT REGEXP_CONTAINS(Shelf, r'RTN|QC'), Quantity_Final, 0)
+  + IF(Facility = 'Frido_Sudhawadi' AND InventoryType = 'GOOD_INVENTORY'
+      AND REGEXP_CONTAINS(Shelf, r'RTD'), Quantity_Final, 0)) AS RtdInvt,
+  -- Vadgaon_OPS: RACK shelves excluding RTN/QC (e.g. QC-RACK-2)
+  -- Frido_Sudhawadi: RAW shelves with pack_qty scaling
+  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY'
+      AND NOT REGEXP_CONTAINS(Shelf, r'RTD')
+      AND REGEXP_CONTAINS(Shelf, r'RACK')
+      AND NOT REGEXP_CONTAINS(Shelf, r'RTN|QC'), Quantity_Final, 0)
+  + IF(Facility = 'Frido_Sudhawadi' AND InventoryType = 'GOOD_INVENTORY'
+      AND REGEXP_CONTAINS(Shelf, r'RAW'), Quantity_Final * pack_qty, 0)) AS RawInvt,
+  -- Vadgaon_OPS: RACK blocked excluding RTN/QC
+  -- Frido_Sudhawadi: RAW blocked with pack_qty scaling
+  SUM(IF(Facility = 'Vadgaon_OPS' AND InventoryType = 'GOOD_INVENTORY'
+      AND NOT REGEXP_CONTAINS(Shelf, r'RTD')
+      AND REGEXP_CONTAINS(Shelf, r'RACK')
+      AND NOT REGEXP_CONTAINS(Shelf, r'RTN|QC'), QuantityBlocked, 0)
+  + IF(Facility = 'Frido_Sudhawadi' AND InventoryType = 'GOOD_INVENTORY'
+      AND REGEXP_CONTAINS(Shelf, r'RAW'), QuantityBlocked * pack_qty, 0)) AS RawBlockedInvt,
   SUM(QuantityNotFound) AS QuantityNotFound,
   -SUM(QuantityNotFound) AS NetVariance
 FROM corrected
-GROUP BY ItemTypeSKUCode, Facility
+GROUP BY ItemTypeSKUCode, ItemTypeName, Facility, Shelf, InventoryAllocation, InventorySync
 `
 
 const [job] = await bq.createQueryJob({ query })

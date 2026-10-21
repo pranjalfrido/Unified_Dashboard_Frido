@@ -239,6 +239,27 @@ function readExport(ws){
    present at all. A line with neither (e.g. "Packing and courier charges", or a value-only
    debit note) is genuinely blank; if it's the only such line on the invoice it takes whatever's
    left of the taxable value, otherwise the remainder is left unassigned instead of guessed. */
+// Wrong-file guard: catches a Cost-ledger export (CAIDC, CHA, Freight, SWS, Cess, Custom Duty —
+// the Import tab's territory) uploaded here by mistake instead. Confirmed 2026-10-13: a real CAIDC
+// file landed in this table with vendor_name "Duty Payable" on every line and Quantity/Rate blank
+// throughout — nothing in the parser caught it since the file still has a Date+Particulars+ledger
+// column shape this parser accepts. Two independent signals, either one is enough to flag:
+// (1) the detected ledger column's own name doesn't look like a goods/purchase ledger, or
+// (2) the vendor name is overwhelmingly a duty/tax/cost-ledger term, not a real vendor.
+const NON_GOODS_LEDGER_HINT=/\b(duty|cess|caidc|cha\b|freight|sws|social welfare|custom|clearing|forwarding|agency|handling)\b/i;
+const NON_VENDOR_HINT=/^(duty payable|igst payable|cess payable|customs? duty|freight charges|cha charges)$/i;
+function wrongFileChecks(x,inv){
+  const checks=[]
+  if(NON_GOODS_LEDGER_HINT.test(x.ledger.name)&&!/goods/i.test(x.ledger.name)){
+    checks.push(["error",`This looks like a Cost ledger export ("${esc(x.ledger.name)}"), not a domestic goods purchase — Custom Duty, CHA, Freight, SWS, CAIDC and Cess belong in the <b>Import</b> tab's Cost ledger upload instead. Nothing has been saved.`])
+  }
+  const named=inv.filter(iv=>iv.vendor)
+  const nonVendorCount=named.filter(iv=>NON_VENDOR_HINT.test(iv.vendor)).length
+  if(named.length&&nonVendorCount/named.length>0.5){
+    checks.push(["error",`${nonVendorCount} of ${named.length} invoices show a duty/tax ledger name ("${esc(named.find(iv=>NON_VENDOR_HINT.test(iv.vendor))?.vendor||"")}") instead of a real vendor — this looks like a Cost ledger export uploaded here by mistake. Use the <b>Import</b> tab's Cost ledger upload instead. Nothing has been saved.`])
+  }
+  return checks
+}
 function build(x){
   const checks=[...x.colChecks], rows=[];
   const inv=x.vouchers.map(v=>{
@@ -256,6 +277,7 @@ function build(x){
     return {r,date:v.date,vno:clean(x.get(r,"Voucher No.")?.v),ref:clean(x.get(r,"Voucher Ref. No.")?.v),vtype:clean(x.get(r,"Voucher Type")?.v),
       vendor:clean(x.get(r,"Buyer/Supplier")?.v)||clean(x.get(r,"Particulars")?.v),taxable,sign,lines,unassigned};
   });
+  checks.push(...wrongFileChecks(x,inv));
   // rows
   let exc=0, unassigned=0; const diffs=[], missing=[]; let fromValueLines=0; const fromValueInv=new Set();
   for(const iv of inv){
@@ -263,13 +285,27 @@ function build(x){
     if(iv.unassigned){unassigned+=iv.unassigned; missing.push(`${iv.vno} (₹${inr(iv.unassigned)})`);}
     const sumLines=iv.lines.reduce((a,l)=>a+(l.v||0),0);
     if(!iv.unassigned&&Math.abs(sumLines-iv.taxable)>1) diffs.push(`${iv.vno} (lines ₹${inr(sumLines)} vs ledger ₹${inr(iv.taxable)})`);
-    for(const l of iv.lines){
+    // lineNo: the line's POSITION within this voucher (1st product listed, 2nd, 3rd…), NOT a count
+    // of repeated (Product, Vendor) text — confirmed 2026-10-14: found a real case where the SAME
+    // file, re-uploaded a few hours apart, produced ~5,600 duplicate rows because Tally's own
+    // export reformatted product-name spacing between the two runs ("Olive Green-6UK" became
+    // "Olive Green - 6UK" for the exact same line). Since product_name was part of the uniqueness
+    // key, that tiny text drift made the re-upload look like new lines instead of corrections.
+    // Position-in-voucher is derived purely from row order in the file, which Tally preserves
+    // consistently across re-exports (verified directly against both upload batches of the
+    // duplicated file — every line landed in identical order both times), so it survives a Tally
+    // text-formatting change in a way free-text product_name cannot. A product name correction, a
+    // Quantity/Rate/Date fix, or a formatting-only change on re-upload now all cleanly replace the
+    // existing row; only a line actually being added, removed, or reordered within the voucher
+    // shifts positions (an accepted, rare edge case — see parser legend note).
+    iv.lines.forEach((l,posIdx)=>{
       const e=l.v!==null?r2(l.v):null;
       if(e!==null) exc+=e;
       if(l.fromValue){fromValueLines++; fromValueInv.add(iv.vno);}
+      const lineNo=posIdx+1;
       rows.push([iv.date,l.product,iv.vendor,iv.vtype,iv.vno,iv.ref,l.qty!==null?l.qty*iv.sign:null,l.uom,l.rate,e,
-        (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null]);
-    }
+        (e!==null&&l.qty)?Math.round(e/(l.qty*iv.sign)*10000)/10000:null,lineNo]);
+    });
   }
   // checks
   if(fromValueLines) checks.push(["ok",`${fromValueLines} line${fromValueLines>1?"s":""} across ${fromValueInv.size} invoice${fromValueInv.size>1?"s":""} had no Quantity and/or Rate in Tally but did have a "Value" (usually a price revision booked after the original purchase) — used for LineItemGrossTotal_Exc_GST; rate-per-qty is left blank where Quantity is missing, since there's no per-unit split to show.`]);
@@ -314,16 +350,16 @@ function render(res,label,x){
   document.getElementById("extras").innerHTML=x.extras.length?`<b>Ignored</b>: ${x.extras.map(esc).join(", ")}`:"";
   const numCols=new Set(Object.keys(FMTS).map(Number).filter(i=>i>0));
   let h="<thead><tr>"+COLS.map((c,i)=>`<th class="${CALC.has(c)?"calc ":""}${numCols.has(i)?"n":""}">${c}</th>`).join("")+"</tr></thead><tbody>";
-  for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
+  for(const row of res.rows.slice(0,PREVIEW)) h+="<tr>"+row.slice(0,COLS.length).map((v,i)=>{let s=v; if(i===0) s=fmtDate(v); else if(v!==null&&v!==undefined&&numCols.has(i)) s=FMTS[i]==="0.00"?pct(v):FMTS[i]==="#,##0.##"?Number(v).toLocaleString("en-IN"):inr(v);
     return `<td class="${numCols.has(i)?"n":""}${i===1?" prod":""}" ${i===1?`title="${esc(v)}"`:""}>${esc(s??"")}</td>`;}).join("")+"</tr>";
   document.getElementById("tbl").innerHTML=h+"</tbody>";
   document.getElementById("tablemeta").textContent=res.rows.length>PREVIEW?`first ${PREVIEW} of ${res.rows.length} lines`:`${res.rows.length} lines`;
-  document.getElementById("legend").innerHTML="<b>Blue</b> columns are calculated. LineItemGrossTotal_Exc_GST = Quantity × Rate, taken from Tally's own taxable-value column for the invoice · PurchaseRateperqty_Rs_Exc_GST = LineItemGrossTotal_Exc_GST ÷ Quantity. No GST is read or computed by this parser.";
+  document.getElementById("legend").innerHTML="<b>Blue</b> columns are calculated. LineItemGrossTotal_Exc_GST = Quantity × Rate, taken from Tally's own taxable-value column for the invoice · PurchaseRateperqty_Rs_Exc_GST = LineItemGrossTotal_Exc_GST ÷ Quantity. No GST is read or computed by this parser. <b>Re-uploading:</b> saving replaces data per voucher — re-uploading a file will fully replace all lines for every (Date, Voucher Type, Voucher No.) it contains with the new data, so corrections of any kind (Rate, Quantity, Product Name, Vendor Name, adding/removing a line) are handled automatically. Just make sure the file you upload has the complete, correct set of lines for each voucher it covers.";
 }
 
 /* ---------- xlsx / download / copy ---------- */
 function buildWorkbook(res){
-  const aoa=[COLS,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1)])], ws=XLSX.utils.aoa_to_sheet(aoa);
+  const aoa=[COLS,...res.rows.map(r=>[toSerial(r[0]),...r.slice(1,COLS.length)])], ws=XLSX.utils.aoa_to_sheet(aoa);
   for(let r=1;r<aoa.length;r++) for(const [c,z] of Object.entries(FMTS)){const a=ws[XLSX.utils.encode_cell({r,c:+c})]; if(a&&a.t==="n") a.z=z;}
   ws["!cols"]=WIDTHS.map(w=>({wch:w})); ws["!autofilter"]={ref:ws["!ref"]};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
@@ -349,7 +385,7 @@ async function download(){
 async function copyTSV(){
   const st=document.getElementById("dlstatus");
   const f=(v,i)=>v===null||v===undefined?"":i===0&&v instanceof Date?fmtDate(v):String(v).replace(/[\t\r\n]+/g," ");
-  const txt=[COLS.join("\t"),...result.rows.map(r=>r.map(f).join("\t"))].join("\r\n");
+  const txt=[COLS.join("\t"),...result.rows.map(r=>r.slice(0,COLS.length).map(f).join("\t"))].join("\r\n");
   try{await navigator.clipboard.writeText(txt); st.className="status"; st.textContent=`Copied ${result.rows.length} lines with headers. Paste into cell A1 of a blank sheet.`;}
   catch(e){const ta=document.getElementById("tsv"); ta.hidden=false; ta.value=txt; ta.focus(); ta.select(); st.className="status err"; st.textContent="Copy was blocked here. The data is selected in the box below: press Ctrl+C (Cmd+C on Mac).";}
 }
@@ -387,21 +423,39 @@ saveBtn.addEventListener("click",async()=>{
   const st=document.getElementById("dlstatus");
   saveBtn.disabled=true; saveBtn.textContent="Saving…"; st.className="status"; st.textContent="";
   try{
+    // Voucher-level REPLACE, not per-line upsert — confirmed 2026-10-14: no combination of
+    // product_name/line-position/quantity/rate survives Tally's own export inconsistency between
+    // two runs of the same file (product-name spacing drifts, AND line order can reorder between
+    // exports — verified directly: 1,071 of 6,630 position-pairs and 466 of 1,288 shared vouchers
+    // differed between two uploads of the identical source file). (Date, Voucher Type, Voucher No.)
+    // DOES uniquely identify one real voucher (verified: 0 cases of >1 vendor for the same key), so
+    // each upload now deletes-and-reinserts every voucher's lines as one atomic unit via the
+    // replace_voucher_lines_domestic() RPC (a single Postgres function call = one implicit
+    // transaction), instead of trying to match individual lines across uploads at all.
     const rows=result.rows.map(r=>({
       date:r[0] instanceof Date?r[0].toISOString().slice(0,10):r[0],
-      product_name:r[1], vendor_name:r[2], voucher_type:r[3], voucher_no:r[4],
+      product_name:r[1], vendor_name:r[2]||"", voucher_type:r[3], voucher_no:r[4],
       voucher_ref_no:r[5], quantity:r[6], unit_of_measure:r[7], rate:r[8],
       line_item_gross_total_exc_gst:r[9],
-      purchase_rate_per_qty_rs_exc_gst:r[10]
+      purchase_rate_per_qty_rs_exc_gst:r[10],
+      line_no:r[11]
     }));
-    const CHUNK=500; let done=0;
-    for(let i=0;i<rows.length;i+=CHUNK){
-      const {error}=await sb.from("purchase_ledger_domestic").upsert(rows.slice(i,i+CHUNK),{onConflict:"voucher_no,product_name,quantity"});
-      if(error) throw error;
-      done+=Math.min(CHUNK,rows.length-i);
-      st.textContent=`Saving… ${done}/${rows.length} rows`;
+    const vouchers=new Map();
+    for(const r of rows){
+      const key=`${r.date}::${r.voucher_type}::${r.voucher_no}`;
+      if(!vouchers.has(key)) vouchers.set(key,{date:r.date,voucher_type:r.voucher_type,voucher_no:r.voucher_no,lines:[]});
+      vouchers.get(key).lines.push(r);
     }
-    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows to Supabase.`;
+    let done=0;
+    for(const v of vouchers.values()){
+      const {error}=await sb.rpc("replace_voucher_lines_domestic",{
+        p_date:v.date, p_voucher_type:v.voucher_type, p_voucher_no:v.voucher_no, p_rows:v.lines
+      });
+      if(error) throw error;
+      done+=v.lines.length;
+      st.textContent=`Saving… ${done}/${rows.length} rows (${vouchers.size} vouchers)`;
+    }
+    st.className="status"; st.textContent=`✓ Saved ${rows.length} rows across ${vouchers.size} vouchers to Supabase.`;
     saveBtn.textContent="Saved ✓";
   }catch(e){
     st.className="status err"; st.textContent="Save failed: "+(e.message||e);

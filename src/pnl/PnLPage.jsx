@@ -3,7 +3,9 @@ import PnLChannelTab from './PnLChannelTab.jsx'
 import StorePnLTable from './StorePnLTable.jsx'
 import PriceSimulator from './PriceSimulator.jsx'
 import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
-import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
+import B2BCostingCalculator from './B2BCostingCalculator.jsx'
+import POApprovalChecker from './POApprovalChecker.jsx'
+import { netRevenueOf, estimateCogsPerUnit, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 import { C } from '../utils.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
@@ -12,6 +14,15 @@ import { C } from '../utils.js'
 const PNL_TOOLS = [
   { id: 'priceSimulator', label: 'Price Simulator' },
   { id: 'breakevenRoas', label: 'Breakeven ROAS' },
+]
+
+// Offline's own planning tool — a forward cost-plus pricing calculator (see
+// B2BCostingCalculator.jsx), not a what-if on an existing live price like D2C's Price Simulator,
+// since Offline has no tracked Listing Price/Discount to flex. Kept as its own single-item list
+// (not merged into PNL_TOOLS) since it's gated on activeTab === 'offline', not 'shopify'.
+const OFFLINE_TOOLS = [
+  { id: 'b2bCosting', label: 'B2B Costing Calculator' },
+  { id: 'poApproval', label: 'PO Approval Checker' },
 ]
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
@@ -88,13 +99,23 @@ function fulfilmentForWeight(slabs, weightGm) {
   return match || slabs[0]
 }
 
-// Flat per-SKU COGS rate sheet (public/cogs-data.json), same file PnLFinancialTable.jsx fetches
-// for the whole-range table — fetched again here (browser HTTP cache makes this free) so the
-// day-wise trend chart can compute its own GM%/CM1% without threading cogsMap down as a prop.
-let cogsMapPromise = null
-function loadCogsMap() {
-  if (!cogsMapPromise) cogsMapPromise = fetch('/cogs-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
-  return cogsMapPromise
+// Month-aware per-SKU COGS (replaces the flat public/cogs-data.json rate card, 2026-10-18) —
+// api/cogs-monthly.js serves public.product_cogs_monthly. Cached per (startMonth, endMonth) key
+// so switching date ranges that land on the same month pair is free, same spirit as the old
+// cogsMapPromise singleton. Returns shape via cogsMonthlyMapOf(): { [sku]: { [month]: {...} } }.
+const cogsMonthlyCache = new Map()
+function loadCogsMonthly(startDate, endDate) {
+  const startMonth = `${String(startDate).slice(0, 7)}-01`
+  const endMonth = `${String(endDate).slice(0, 7)}-01`
+  const key = `${startMonth}|${endMonth}`
+  if (!cogsMonthlyCache.has(key)) {
+    cogsMonthlyCache.set(key, fetch('/api/cogs-monthly', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startMonth, endMonth }),
+    }).then(r => r.ok ? r.json() : { rows: [] }).then(d => cogsMonthlyMapOf(d.rows)).catch(() => ({})))
+  }
+  return cogsMonthlyCache.get(key)
 }
 
 export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs }) {
@@ -109,7 +130,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // Which of the two planning tools (if any) is showing INSTEAD of the normal channel view —
   // null means "show the normal channel tab content". Independent of activeTab so switching back
   // just restores whichever channel was already selected.
-  const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas'
+  const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas' | 'b2bCosting' | 'poApproval'
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -119,10 +140,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const d2cSubCh = d2cSubChProp !== undefined ? d2cSubChProp : d2cSubChLocal
   const setD2cSubCh = setD2cSubChProp || setD2cSubChLocal
   const [sndRates, setSndRates] = useState(null)
-  const [cogsMap, setCogsMap] = useState(null)
+  const [cogsMonthlyMap, setCogsMonthlyMap] = useState(null)
 
   useEffect(() => { loadSndRates().then(setSndRates) }, [])
-  useEffect(() => { loadCogsMap().then(setCogsMap) }, [])
+  useEffect(() => {
+    if (!filters?.start || !filters?.end) return
+    loadCogsMonthly(filters.start, filters.end).then(setCogsMonthlyMap)
+  }, [filters?.start, filters?.end])
 
   // Per-SKU D2C cost breakdown: logistics, fulfilment, payment gateway, software fee.
   // Logistics cost depends on Order_Status; fulfilment applies to all orders incl. cancelled.
@@ -307,7 +331,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       })
     }
     // COGS per (store, sku) — net units (gross − cancelled/RTO/CIR/return/exchange) × a per-unit
-    // COGS rate. The rate itself (real cogsMap entry, or the ASP-based estimate fallback) is
+    // COGS rate. The rate itself (real cogsMonthlyMap entry, blended across the months this
+    // range touches, or the ASP-based estimate fallback) is
     // computed ONCE per SKU at the CHANNEL-WIDE grain (same ASP the Financial View's skuMap/
     // costsForSkus() uses — gross ÷ units summed across every store), not re-derived per store from
     // that store's own narrower ASP — confirmed 2026-08-20 the user wants Store-wise's Total row to
@@ -316,7 +341,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // number whenever a SKU's per-store ASP differs from its channel-wide ASP — a real, if small
     // (~0.15% of COGS observed), rounding gap versus the Financial View's one-rate-per-SKU figure.
     const perUnitCogsBySku = {}
-    if (cogsMap) {
+    if (cogsMonthlyMap) {
       const channelUnitsBySku = {}
       const channelGrossBySku = {}
       skuCostRows.forEach(row => {
@@ -326,14 +351,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         channelGrossBySku[sku] = (channelGrossBySku[sku] || 0) + grossIncGst
       })
       Object.keys(channelUnitsBySku).forEach(sku => {
-        const entry = cogsMap[sku]
         const units = channelUnitsBySku[sku] || 0
         const asp = units > 0 ? (channelGrossBySku[sku] || 0) / units : 0
-        perUnitCogsBySku[sku] = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        perUnitCogsBySku[sku] = getCogsForRange({ sku, units, startDate: filters.start, endDate: filters.end, cogsMonthlyMap, asp }).perUnitBlended
       })
     }
     const cogsByStoreSku = {}
-    if (cogsMap) {
+    if (cogsMonthlyMap) {
       const netUnitsByStoreSku = {}
       skuCostRows.forEach(row => {
         const { storeName, sku, orderStatus, totalQty } = row
@@ -429,7 +453,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const ebitda = cm2 != null ? cm2 - totalFixedCosts : null
       return { ...s, cogs, gm, snd, cm1, spend, cm2, totalFixedCosts, ebitda }
     }).sort((a, b) => b.gross - a.gross)
-  }, [data, sndRates, cogsMap])
+  }, [data, sndRates, cogsMonthlyMap])
 
   // Offline S&D: ₹8/kg transport (on total net weight moved) + a weight-wise fulfilment cost
   // (confirmed 2026-08-20, supersedes the earlier flat ₹9/kg-only formula). Fulfilment reuses the
@@ -491,6 +515,17 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     return out
   }, [data, offlineSub, sndRates])
+
+  // Per-SKU weight (constant, item-master value) used by offSndBySku above — re-derived here as
+  // its own small map so offlineProductList below can look up a SKU's weight without re-scanning
+  // data.offline.skuRows a second time per product.
+  const offlineSkuWeightGm = useMemo(() => {
+    const rows = data?.offline?.skuRows
+    if (!rows?.length) return {}
+    const out = {}
+    rows.forEach(r => { if (r.sku && !out[r.sku] && r.unitWeightGms) out[r.sku] = r.unitWeightGms })
+    return out
+  }, [data])
 
   // Amazon Seller Central S&D: real per-MasterSKU cost from the settlement report (see
   // amzSCSettlement in api/bq.js) — no rate-card estimate needed, unlike Shopify. Only
@@ -834,9 +869,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // the whole-range sndBySku, just also keyed by date). Scoped to the selected amzChannelView
     // the same way subCatData/skuData above are (SC only / VC only / SC+VC summed), so switching
     // the toggle changes the trend the same way it changes every other number on the page. COGS
-    // is applied per day using the same flat per-unit rate (cogsMap) the whole-range table uses —
-    // only the day's own units/net revenue vary, not the rate itself. CM2 uses the ACTUAL day's
-    // Amazon ad spend (data.ads.adsDailyByCategory, already daily/real — not a share of the
+    // is applied per day using that day's own month's rate (cogsMonthlyMap) — unlike the
+    // whole-range table's blended rate, a day right at a month boundary picks up the new month's
+    // rate exactly on that day, not averaged across the whole selected range. CM2 uses the ACTUAL
+    // day's Amazon ad spend (data.ads.adsDailyByCategory, already daily/real — not a share of the
     // whole-range total spread out) summed across every SubCategory, only ever shown on the
     // combined "All" view (amzChannelView === 'all'), matching showMarketing's own gating.
     const amzDailyPnL = (() => {
@@ -852,15 +888,16 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         d.totalReturnRev += x.totalReturnRev || 0
         const rowSndCovered = x.snd != null
         if (rowSndCovered) { d.snd += x.snd || 0; d.sndNetCovered += x.net || 0; d.anySnd = true }
-        // Same ASP-based COGS fallback PnLFinancialTable.jsx's costsForSkus() uses (via shared
-        // estimateCogsPerUnit in ./pnlUtils.js) for any SKU missing a real cogs-data.json entry —
-        // previously this trend calc read cogsMap[x.sku].cogs directly with NO fallback, so a day
-        // with SKUs not yet in the cost sheet showed a different (lower-coverage) COGS%/GM%/
-        // CM1%/CM2% here than the whole-range Financial View table for the identical date range.
+        // Month-aware COGS (replaces the old flat cogs-data.json lookup, 2026-10-18): this row's
+        // own date picks that month's rate from cogsMonthlyMap, falling back to the SAME
+        // ASP-based estimateCogsPerUnit PnLFinancialTable.jsx's costsForSkus() uses for any
+        // sku+month missing a real entry — previously this trend calc read cogsMap[x.sku].cogs
+        // directly with NO fallback, so a day with SKUs not yet in the cost sheet showed a
+        // different (lower-coverage) COGS%/GM%/CM1%/CM2% here than the whole-range Financial View
+        // table for the identical date range.
         const netUnits = Math.max((x.units || 0) - (x.returnedUnits || 0), 0)
-        const entry = cogsMap?.[x.sku]
         const asp = (x.units || 0) > 0 ? (x.gross || 0) / x.units : 0
-        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const perUnitCogs = getCogsPerUnit({ sku: x.sku, date: x.date, cogsMonthlyMap, asp })
         const rowCosted = perUnitCogs > 0 || netUnits > 0
         if (rowCosted) {
           d.cogs += perUnitCogs * netUnits
@@ -961,9 +998,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const snd = shDailySndBySku[`${x.date}::${x.sku}`]
         const rowSndCovered = snd != null
         if (rowSndCovered) { d.snd += snd; d.sndNetCovered += r.net; d.anySnd = true }
-        const entry = cogsMap?.[x.sku]
         const asp = r.units > 0 ? r.gross / r.units : 0
-        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const perUnitCogs = getCogsPerUnit({ sku: x.sku, date: x.date, cogsMonthlyMap, asp })
         const rowCosted = perUnitCogs > 0 || r.netUnits > 0
         if (rowCosted) {
           d.cogs += perUnitCogs * r.netUnits
@@ -1077,9 +1113,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const rowSndCovered = x.snd != null
         if (rowSndCovered) { d.snd += x.snd || 0; d.sndNetCovered += x.net || 0; d.anySnd = true }
         const netUnits = Math.max((x.units || 0) - (x.returnedUnits || 0), 0)
-        const entry = cogsMap?.[x.sku]
         const asp = (x.units || 0) > 0 ? (x.gross || 0) / x.units : 0
-        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const perUnitCogs = getCogsPerUnit({ sku: x.sku, date: x.date, cogsMonthlyMap, asp })
         const rowCosted = perUnitCogs > 0 || netUnits > 0
         if (rowCosted) {
           d.cogs += perUnitCogs * netUnits
@@ -1319,7 +1354,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n, prevGross, prevExcRev, prevOrders }
       })(),
     }
-  }, [data, amzChannelView, offlineSub, d2cSubCh, cogsMap, sndRates])
+  }, [data, amzChannelView, offlineSub, d2cSubCh, cogsMonthlyMap, sndRates])
 
   const activeData = channelData ? (channelData[activeTab] || channelData.all) : null
   const activeTabMeta = PNL_TABS.find(t => t.id === activeTab)
@@ -1392,15 +1427,15 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           const r = netRevenueOf(d, sc, {}, cat, 1)
           if (r.units <= 0) return
           const asp = r.units > 0 ? r.gross / r.units : 0
-          const cogsEntry = cogsMap?.[sku]
-          const cogsPerUnit = (cogsEntry && cogsEntry.cogs != null) ? cogsEntry.cogs : estimateCogsPerUnit(asp)
+          const { perUnitBlended: cogsPerUnit } = getCogsForRange({ sku, units: r.units, startDate: filters.start, endDate: filters.end, cogsMonthlyMap, asp })
+          const cogsMonthEntry = cogsMonthlyMap?.[sku] ? Object.values(cogsMonthlyMap[sku])[0] : null
           const sndTotal = shSndBySku?.[sku] ?? null
           const lp = listingPriceBySku[sku]
           const prepaid = prepaidAspBySku[sku]
           const rr = resolveReturnRate(sku)
           rows.push({
             sku, category: cat, subCategory: sc,
-            name: cogsEntry?.subCategory || sc,
+            name: cogsMonthEntry?.subCategory || sc,
             units: r.units, gross: r.gross, net: r.net,
             // Gross Ex GST BEFORE any return/RTO/cancel deduction — a stable revenue figure
             // return-status can't distort, unlike `net` (which nets out whatever return status
@@ -1443,7 +1478,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       })
     })
     return rows.sort((a, b) => b.gross - a.gross)
-  }, [channelData, cogsMap, shSndBySku, data, shSkuWeightSlab, daysInRange])
+  }, [channelData, cogsMonthlyMap, shSndBySku, data, shSkuWeightSlab, daysInRange])
 
   // Product-level (not variant-level) rollup for the Price Simulator's "Product-wise" mode —
   // groups d2cProductList's per-SKU rows by SubCategory (each SKU is one color/size VARIANT of a
@@ -1506,6 +1541,50 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       adSpend: data?.pnlAdSpendMap?.[g.subCategory] ?? null,
     })).sort((a, b) => b.gross - a.gross)
   }, [d2cProductList, daysInRange, data])
+
+  // Product-level (SubCategory grain, same convention as d2cProductGroups above) rollup for the
+  // B2B Costing Calculator — built from data.offline.skuRows (ALL sub-channels combined,
+  // independent of the offlineSub toggle, since the calculator is a forward pricing tool for a
+  // product in general, not scoped to "what already sold through B2B vs Stockist this range").
+  // COGS/unit comes from the same cogsMonthlyMap/estimateCogsPerUnit fallback every other per-SKU
+  // consumer in this file uses; Vol. Weight (kg) comes from offlineSkuWeightGm (item-master
+  // unitWeightGms, grams → kg). Offline has no Listing_Price/GST tracked per SKU (confirmed: no
+  // such columns in the offlineSKU query) and no RTO/CIR/Return/Cancel order-status concept (its
+  // "return" is a Credit Note, not a per-unit outcome rate) — so unlike d2cProductGroups, this
+  // list deliberately carries NO listingPrice/discount/returnRevRate/adSpend fields; the B2B
+  // Costing Calculator asks the user for Listing Price and GST% directly per product, matching
+  // the original B2B Costing Calculator spreadsheet's own manual-entry convention for those two.
+  const offlineProductGroups = useMemo(() => {
+    const rows = data?.offline?.skuRows
+    if (!rows?.length) return []
+    const bySubCat = {}
+    rows.forEach(r => {
+      if (!r.sku) return
+      const key = `${r.category}::${r.subCategory}`
+      if (!bySubCat[key]) bySubCat[key] = { key, name: r.subCategory, category: r.category, subCategory: r.subCategory, units: 0, gross: 0, excRev: 0, cogsTotal: 0, weightTotal: 0, weightKnownUnits: 0, variantCount: 0, skus: new Set() }
+      const g = bySubCat[key]
+      g.units += r.units || 0
+      g.gross += r.rev || 0
+      g.excRev += r.excRev || 0
+      const asp = r.units > 0 ? (r.rev || 0) / r.units : 0
+      const { perUnitBlended: cogsPerUnit } = getCogsForRange({ sku: r.sku, units: r.units || 0, startDate: filters.start, endDate: filters.end, cogsMonthlyMap, asp })
+      g.cogsTotal += cogsPerUnit * (r.units || 0)
+      const weightGm = offlineSkuWeightGm[r.sku]
+      if (weightGm != null) { g.weightTotal += weightGm * (r.units || 0); g.weightKnownUnits += (r.units || 0) }
+      if (!g.skus.has(r.sku)) { g.skus.add(r.sku); g.variantCount += 1 }
+    })
+    return Object.values(bySubCat).map(g => ({
+      sku: g.key, // same convention as d2cProductGroups — reuses `sku` as the picker's lookup key
+      category: g.category, subCategory: g.subCategory, name: g.name,
+      units: g.units, gross: g.gross, excRev: g.excRev,
+      asp: g.units > 0 ? g.gross / g.units : 0,
+      cogsPerUnit: g.units > 0 ? g.cogsTotal / g.units : 0,
+      // kg, not grams — the B2B Costing Calculator's Vol. Weight field is in kg (matching the
+      // original spreadsheet), unlike D2C's weightGm (grams) convention elsewhere in this file.
+      weightKg: g.weightKnownUnits > 0 ? (g.weightTotal / g.weightKnownUnits) / 1000 : null,
+      variantCount: g.variantCount,
+    })).sort((a, b) => b.gross - a.gross)
+  }, [data, cogsMonthlyMap, offlineSkuWeightGm])
   // Sourced from channelData's reconciled version (activeData.mobilityNetBySubCat), NOT the raw
   // data.shopify.mobilityNetBySubCat server payload — the raw version's SubCategory keys can
   // include names (e.g. a null-SubCategory row normalizing to 'Frido' server-side) that don't
@@ -1582,15 +1661,16 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             : skRStandard
           const skNet = skR.net
           const netUnits = skR.netUnits
-          const entry = cogsMap?.[sku]
-          // Same ASP-fallback estimate PnLFinancialTable.jsx's costsForSkus() and this file's own
-          // amzDailyPnL already use for any SKU missing a real cogs-data.json entry — without this,
-          // this block silently dropped uncosted SKUs from both cogs and netCovered instead of
-          // estimating them, so kpiSummary's COGS%/GM%/CM1%/CM2% covered a DIFFERENT set of SKUs
-          // than the Financial View table's identical-looking %s for the same date range.
+          // Month-aware COGS, split proportionally across the months this date range touches
+          // (same as PnLFinancialTable.jsx's costsForSkus() and this file's own amzDailyPnL),
+          // falling back to the ASP-based estimate for any sku+month missing a real entry —
+          // without this fallback, this block silently dropped uncosted SKUs from both cogs and
+          // netCovered instead of estimating them, so kpiSummary's COGS%/GM%/CM1%/CM2% covered a
+          // DIFFERENT set of SKUs than the Financial View table's identical-looking %s for the
+          // same date range.
           const skUnits = skR.units || 0
           const skAsp = skUnits > 0 ? skR.gross / skUnits : 0
-          const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(skAsp)
+          const perUnitCogs = getCogsForRange({ sku, units: skUnits, startDate: filters.start, endDate: filters.end, cogsMonthlyMap, asp: skAsp }).perUnitBlended
           if (perUnitCogs > 0 || netUnits > 0) { rowCogs += perUnitCogs * netUnits; rowNetCovered += skNet; rowAnyCosted = true }
           if (activeSndBySku && activeSndBySku[sku] != null) { rowSnd += activeSndBySku[sku]; rowSndNetCovered += skNet; rowAnySnd = true }
         })
@@ -1629,7 +1709,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       spendPct: net > 0 ? (spend / net * 100) : null,
       cm2Pct: cm2 != null && cm2NetCovered > 0 ? (cm2 / cm2NetCovered * 100) : null,
     }
-  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap, activeMobilityNetBySubCat, activeNetScale])
+  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMonthlyMap, activeMobilityNetBySubCat, activeNetScale])
 
   // Real (not ratio-estimated) previous-period COGS/GM — re-runs the exact same per-unit
   // cogs-data.json lookup kpiSummary uses above, against last period's real per-SKU unit counts
@@ -1651,14 +1731,18 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           const netUnits = skR.netUnits
           const skUnits = skR.units || 0
           const skAsp = skUnits > 0 ? skR.gross / skUnits : 0
-          const entry = cogsMap?.[sku]
-          const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(skAsp)
+          // prevSkuData carries no date metadata locally (see api/bq.js's prevXSKU query), so
+          // which month(s) it actually covers can't be derived here the way kpiSummary's own
+          // filters.start/end-based lookup above can — falls straight to the ASP-based estimate
+          // rather than risk applying the CURRENT period's month to what might be a different
+          // prior month's units. Flagged as a known gap, not a silent wrong-month lookup.
+          const perUnitCogs = estimateCogsPerUnit(skAsp)
           if (perUnitCogs > 0 || netUnits > 0) { cogs += perUnitCogs * netUnits; netCovered += skR.net; anyCosted = true }
         })
       })
     })
     return { cogs: anyCosted ? cogs : null, gm: anyCosted ? netCovered - cogs : null }
-  }, [activeData, cogsMap, activeNetScale])
+  }, [activeData, cogsMonthlyMap, activeNetScale])
 
   if (!data || !channelData) return null
 
@@ -1726,12 +1810,38 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             ))
           )}
           {activeTab === 'offline' && (
-            [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
-              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
+            <>
+              {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
+                <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                  {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                  <button onClick={() => { setActiveTool(null); setOfflineSub(opt.id) }} style={{ fontSize: 12, fontWeight: !activeTool && offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !activeTool && offlineSub === opt.id ? C.acs : 'transparent', color: C.t1, cursor: 'pointer' }}>{opt.label}</button>
+                </div>
+              ))}
+              {/* Offline's own planning tool — same gold-brown pill treatment as D2C's tools,
+                  pushed to the right (marginLeft: auto) since it's a forward pricing calculator
+                  unrelated to the B2B/Stockist/MT GT/Misc sub-channel toggle to its left. */}
+              <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid ${C.border}`, gap: 4 }}>
+                {OFFLINE_TOOLS.map(tool => {
+                  const isActive = activeTool === tool.id
+                  return (
+                    <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
+                      className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
+                      {tool.id === 'b2bCosting' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                        </svg>
+                      )}
+                      {tool.label}
+                    </button>
+                  )
+                })}
               </div>
-            ))
+            </>
           )}
           {!['shopify', 'amazon', 'offline'].includes(activeTab) && (
             <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: C.t1, display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
@@ -1743,6 +1853,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           <PriceSimulator variantProducts={d2cProductList} productGroups={d2cProductGroups} />
         ) : activeTool === 'breakevenRoas' ? (
           <BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} />
+        ) : activeTool === 'b2bCosting' ? (
+          <B2BCostingCalculator productGroups={offlineProductGroups} />
+        ) : activeTool === 'poApproval' ? (
+          <POApprovalChecker productGroups={offlineProductGroups} />
         ) : (
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}
@@ -1770,10 +1884,14 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           noReturnAccent={activeTab === 'amazon' && amzChannelView === 'vc'}
           grossColor={C.acc}
           gradId={`pnl${activeTab}Grad`}
+          hasReturnBreakdown={['shopify', 'amazon', 'ebo'].includes(activeTab)}
           includeUnmatched={activeIncludeUnmatched}
           mobilityNetBySubCat={activeMobilityNetBySubCat}
           netScale={activeData?.netScale ?? 1}
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
+          cogsMonthlyMap={cogsMonthlyMap}
+          startDate={filters.start}
+          endDate={filters.end}
         />
         )}
         {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
