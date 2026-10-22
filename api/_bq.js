@@ -499,6 +499,11 @@ SELECT
     100 + COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64))
   ), 2) AS GST_Amount,
   u.masterskucode AS MasterSKU,
+  -- Channel_Group / Category_Finance / SubCategory_Finance are raw passthrough columns from the
+  -- fact table, additive-only (not used by any existing caller) — added for Financial MIS, which
+  -- needs the finance-facing taxonomy/grouping instead of the regular Category/SubCategory/Channel
+  -- fields above.
+  u.Channel_Group, u.Category_Finance, u.SubCategory_Finance,
   -- RefundStatus is BOOL in the source table as of the current schema, but was a STRING
   -- ('true'/'1') at some point historically — CAST to STRING so this keeps working across
   -- either representation instead of erroring on a BOOL/STRING type mismatch.

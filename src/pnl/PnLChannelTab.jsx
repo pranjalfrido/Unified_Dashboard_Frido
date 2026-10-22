@@ -485,8 +485,8 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           {heroCard}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.ceil((showMarketing ? 9 : 7) / 2)},1fr)`, gridTemplateRows: 'repeat(2,1fr)', gap: 10, alignItems: 'stretch' }}>
             {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" plain />}
+            <KPICard label="Net Revenue" value={fmt(net)} sub={gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
             <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />
-            <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns" badge={netBadge} plain />
             <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of Net Rev`} badge={cogsBadge} plain />
             <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}`} badge={gmBadge} plain />
             <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} badge={sndBadge} plain />
@@ -502,7 +502,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <div className={isMob ? 'mob-hidden' : ''} style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
           {heroCard}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, alignItems: 'stretch' }}>
-            <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns/cancellations" badge={netBadge} plain />
+            <KPICard label="Net Revenue" value={fmt(net)} sub={gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
             <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of gross`} accent={parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />
             <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units`} badge={ordersBadge} plain />
             <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} plain />

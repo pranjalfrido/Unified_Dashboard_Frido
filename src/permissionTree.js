@@ -20,6 +20,10 @@ export const PERMISSION_TREE = [
           { key: 'sales:myntra',        label: 'Myntra' },
           { key: 'sales:international', label: 'International' },
           { key: 'sales:offline',       label: 'Offline Sales' },
+          // Reached via a link in Sales → Overall (AllTab in App.jsx), not its own sidebar nav
+          // item — nested under Sales so it's grantable per-user the same as any other Sales
+          // sub-tab, and locked by default like every key here (no automatic access).
+          { key: 'sales:financial-mis', label: 'Financial MIS' },
         ],
       },
       {
@@ -79,9 +83,6 @@ export const PERMISSION_TREE = [
     ],
   },
   { key: 'customer',  label: 'Customer',  children: [] },
-  // 'financial-mis' (Financial MIS) hidden for now (2026-10-20) — page/route/sidebar entry all
-  // still exist in src/App.jsx, just not surfaced; re-add this line to make it grantable again.
-  // { key: 'financial-mis', label: 'Financial MIS', children: [] },
   { key: 'documents', label: 'Documents', children: [] },
 ]
 

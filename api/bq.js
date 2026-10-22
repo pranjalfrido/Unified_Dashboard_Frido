@@ -1,4 +1,5 @@
 import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
+import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
 import { getStoreIdMap, getStoreCosts, getCostForMonth } from './_store_pnl.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
@@ -114,7 +115,7 @@ const SLOW_QUERY_KEYS = new Set([
   'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
   'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
   'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','amzSCReturnRateMature','fkReturnRateMature','mnReturnRateMature','offlineCreditNoteRateMature','eboReturnRateMature','overallReturnRateMature','allTabReturnRateMature',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','shComponentRateMature','amzSCReturnRateMature','amzSCComponentRateMature','fkReturnRateMature','fkComponentRateMature','fkDailySKUComponents','mnReturnRateMature','mnComponentRateMature','mnDailySKUComponents','offlineCreditNoteRateMature','offComponentRateMature','offDailySKUComponents','eboReturnRateMature','eboComponentRateMature','eboDailySKUComponents','crComponentRateMature','crDailySKUComponents','fcComponentRateMature','fcDailySKUComponents','shStateComponentRateMature','shDailyStateComponents','shCityComponentRateMature','shDailyCityComponents','amzVCComponentRateMature','amzVCDailySKUComponents','amzSCStateComponentRateMature','amzSCDailyStateComponents','amzSCCityComponentRateMature','amzSCDailyCityComponents','fkStateComponentRateMature','fkDailyStateComponents','fkCityComponentRateMature','fkDailyCityComponents2','mnStateComponentRateMature','mnDailyStateComponents','mnCityComponentRateMature','mnDailyCityComponents','eboStateComponentRateMature','eboDailyStateComponents','eboCityComponentRateMature','eboDailyCityComponents','overallReturnRateMature','allTabReturnRateMature',
   'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
   'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
   'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
@@ -336,7 +337,10 @@ export default async function handler(req, res) {
     // SubChannel included (not just filtered on) so the frontend can slice day-wise data by the
     // Overall/MyFrido/Mobility toggle — without it, every sub-channel view showed identical
     // (unfiltered, combined) day-wise COGS%/GM%/SnD%/CM1% regardless of the selected toggle.
-    shDailySKU: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, MasterSKU AS sku, SubChannel AS sub_channel, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, ROUND(SUM(SellingPrice_Inc_GST),2) AS rev, ROUND(SUM(SellingPrice_Exc_GST),2) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cod_cancel_rev, ROUND(SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END),2) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cir_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY date, sku, sub_channel ORDER BY date`,
+    // exchange_rev added (2026-10-22) — additive only, every existing column stays as-is — so the
+    // new resolveD2CReturnComponents() engine (api/_returnComponents.js) can resolve Exchange% the
+    // same way it resolves RTO/CIR/Cancelled, without a second query.
+    shDailySKU: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, MasterSKU AS sku, SubChannel AS sub_channel, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, ROUND(SUM(SellingPrice_Inc_GST),2) AS rev, ROUND(SUM(SellingPrice_Exc_GST),2) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cod_cancel_rev, ROUND(SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END),2) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS exchange_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY date, sku, sub_channel ORDER BY date`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
     // Real listing price / discount for the Price Simulator's "current discount" readout —
     // Listing_Price and Discount live directly on the fact table (confirmed via
@@ -437,6 +441,26 @@ export default async function handler(req, res) {
     // mature-window volume to trust its own rate (the fallback floor), even though the rate itself
     // is revenue-share, not unit-share.
     shReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // Per-component (RTO/CIR/Cancelled/Exchange) rolling rate, SKU-wise, same rolling window as
+    // shReturnRateMature above — feeds resolveD2CReturnComponents() (api/_returnComponents.js),
+    // which substitutes each component's OWN rolling rate for any day inside the last 15 days,
+    // instead of one blended Total-Return rate (confirmed design 2026-10-22). Purely additive: a
+    // new query, doesn't touch shReturnRateMature or anything that already consumes it.
+    // Grouped by (sku, SubChannel) — not just sku — so MyFrido/Mobility sub-tabs (confirmed
+    // 2026-10-22) each get their own rolling rate per SKU rather than inheriting a blended
+    // whole-D2C rate; the same SKU can legitimately have a different return profile per
+    // sub-channel. sub_channel is lowercased to match dailySKU's own convention.
+    shComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        MasterSKU AS sku, LOWER(SubChannel) AS sub_channel,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+        SUM(CASE WHEN Order_Status = 'Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exchange_rev
+      FROM q
+      WHERE Channel = 'Shopify' AND SubChannel != 'Shopify International'
+        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku, sub_channel`,
     // amzSCReturnRateMature — same mature-rolling-window pattern as shReturnRateMature above
     // (confirmed 2026-10-19), replicated for Amazon Seller Central: Order_Status carries genuine
     // separate Cancelled/RTO/CIR/Return values on this channel too (see amzSCSubCatChannel/
@@ -445,6 +469,20 @@ export default async function handler(req, res) {
     // so the same netRevenueSelectFragment formula applies unchanged, just filtered to
     // SubChannel='Amazon Seller Central' instead of Channel='Shopify'.
     amzSCReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE SubChannel='Amazon Seller Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY category, subcategory, sku`,
+    // Per-component (RTO/Return/CIR/Cancelled) rolling rate, SKU-wise, same rolling window as
+    // amzSCReturnRateMature above — feeds resolveDailySkuComponents() (api/_returnComponents.js)
+    // for Amazon Seller Central's own resolvedDailySKU, same pattern as D2C's shComponentRateMature.
+    amzSCComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        MasterSKU AS sku,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+        AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)'
+      GROUP BY sku`,
     // fkReturnRateMature — Flipkart's OWN simpler formula, NOT the shared netRevenueSelectFragment
     // (confirmed 2026-10-19): Flipkart's data genuinely has no separate CIR status, Return+RTO are
     // always combined into one Order_Status bucket, and cancellation is tracked via
@@ -454,6 +492,36 @@ export default async function handler(req, res) {
     // where return_rev = Order_Status IN ('Return','RTO') only — no cancellation, no CIR — see
     // that query above and its payload builder), so the two numbers are directly comparable.
     fkReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),2) AS total_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // Per-component (RTO/Return/CIR/Cancelled) rolling rate + day-wise SKU grain, same resolved-
+    // rate engine as D2C/Amazon SC above (api/_returnComponents.js) — new queries, purely additive,
+    // nothing existing (fkReturnRateMature, fkDailyCat, etc.) is touched.
+    fkComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        MasterSKU AS sku,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) so the Flipkart tab's Category/SubCategory
+    // filter can narrow resolvedDailySKU the same way it already narrows totals/dailyCat — without
+    // this, selecting a category left Net Revenue pinned to the whole-Flipkart total while Gross
+    // Revenue/Orders correctly narrowed (confirmed bug, fixed). A SKU can map to only one Category/
+    // SubCategory per row here since the GROUP BY includes them, matching shSKU's own grain.
+    // units added (2026-10-22) for per-component resolved units (same pattern as other channels).
+    fkDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date,
+        Category AS category, SubCategory AS subcategory,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku, order_date, category, subcategory`,
     // mnReturnRateMature — same pattern as shReturnRateMature (confirmed 2026-10-19): Myntra's
     // mnTotals already uses the shared netRevenueSelectFragment with genuine separate Cancelled/
     // RTO/CIR/Return Order_Status values (see mnSubCategories, which already breaks them out
@@ -461,6 +529,35 @@ export default async function handler(req, res) {
     // Return+full Cancellation ÷ Gross Inc GST) — so the shared fragment/aggregator applies
     // unchanged, just filtered to Channel='Myntra'.
     mnReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Myntra' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // Per-component (RTO/Return/CIR/Cancelled) rolling rate + day-wise SKU grain, same resolved-
+    // rate engine as D2C/Amazon SC/Flipkart above — new queries, purely additive.
+    mnComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        MasterSKU AS sku,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Myntra' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) so mn.subCategories' returnRev can be
+    // overridden with this resolved engine, same as other channels. Note: this query groups by
+    // MasterSKU, while mnSKUMatrix (PnL's SKU-level table) groups by ChannelSKUCode — a different
+    // SKU identity with no direct join available, so only the Category/SubCategory-level override
+    // is applied for Myntra; SKU-level stays on its own raw query for now.
+    // units added (2026-10-22) for per-component resolved units (same pattern as other channels).
+    mnDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date,
+        Category AS category, SubCategory AS subcategory,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Myntra' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku, order_date, category, subcategory`,
     // eboReturnRateMature — same pattern as shReturnRateMature/mnReturnRateMature (confirmed
     // 2026-10-19): EBO (Channel='Retail') carries the full genuine RTO/CIR/Return/Cancelled/
     // Exchange vocabulary (see eboTotals/eboSKU, which already break them out individually), and
@@ -468,6 +565,40 @@ export default async function handler(req, res) {
     // already matches netRevenueReturnPct exactly, so the shared fragment/aggregator applies
     // unchanged, just filtered to Channel='Retail'.
     eboReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // Per-component (RTO/Return/CIR/Cancelled/Exchange) rolling rate + day-wise SKU grain, same
+    // resolved-rate engine as other channels — new queries, purely additive. EBO/Retail is the
+    // only Marketplace-shaped channel (besides D2C) with an Exchange status (confirmed live
+    // 2026-10-22), tracked separately here same as D2C.
+    eboComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        MasterSKU AS sku,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+        SUM(CASE WHEN Order_Status = 'Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exchange_rev
+      FROM q
+      WHERE Channel = 'Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) so ebo.subCatMap/skuMap (PnL's source) can
+    // be overridden with this SAME resolved engine ebo.resolvedDailySKU already uses for the Sales
+    // tab — confirmed bug: eboSubCategory/eboSKU (PnL's prior source) computed RTO+Return combined
+    // and used raw/live Order_Status sums only, producing EBO Returns% of 4.0% in PnL vs the
+    // correct resolved 7.8% in Sales for the same date range ("check the return% in both for ebo").
+    // units added (2026-10-22) so resolveDailySkuComponents() can compute per-component resolved
+    // units (rtoUnits/cirUnits/cancelUnits/exchUnits) the same way D2C's shDailySKU feeds netUnits.
+    eboDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date,
+        Category AS category, SubCategory AS subcategory,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+        SUM(CASE WHEN Order_Status = 'Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exchange_rev
+      FROM q
+      WHERE Channel = 'Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+      GROUP BY sku, order_date, category, subcategory`,
     // overallReturnRateMature — the ALL-CHANNEL version (confirmed 2026-10-19), for Overview's
     // headline "Return %" tile, which blends every channel via byOrderStatus (no Channel= filter
     // at all — see that query above) using the exact same (cancelRev+rtoRev+returnRev+cirRev) ÷
@@ -498,6 +629,12 @@ export default async function handler(req, res) {
     // to attach a Provisional number to — a new "Credit Note %" tile is being added alongside this
     // query, matching OfflineTab's own existing formula (|Credit Note revenue| ÷ Sales revenue).
     offlineCreditNoteRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, { includeCreditNotes: true })}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty WHEN Order_Status='Credit Note' THEN -ItemQty ELSE 0 END) AS units, ROUND(SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS sales_rev, ROUND(SUM(CASE WHEN Order_Status='Credit Note' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cn_rev FROM q WHERE Channel='offline_sales' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
+    // Same resolved-rate engine as other channels, one component (Credit Note) — gross here is
+    // Sales-status revenue only (matches offlineCreditNoteRateMature's own sales_rev), and the
+    // Credit Note amount is taken as ABS() since it's stored negative/offsetting in the raw data
+    // (same convention offlineCreditNoteRateMature above already uses).
+    offComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, { includeCreditNotes: true })}) SELECT MasterSKU AS sku, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS gross_inc_gst, SUM(CASE WHEN Order_Status='Credit Note' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END) AS credit_note_rev FROM q WHERE Channel='offline_sales' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku`,
+    offDailySKUComponents: `WITH q AS (${buildQuery(start, end, { includeCreditNotes: true })}) SELECT MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS gross_inc_gst, SUM(CASE WHEN Order_Status='Credit Note' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END) AS credit_note_rev FROM q WHERE Channel='offline_sales' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku, order_date`,
     // PnL cost rows — per SKU × Order_Status × weight_slab for D2C India (Shopify, non-international).
     // Weight slab: if Weight_gms <= 500 → 500, else CEIL(Weight_gms / 1000) * 1000.
     // Client applies snd-rates.json lookup per slab + status to get logistics & fulfilment costs.
@@ -569,11 +706,55 @@ export default async function handler(req, res) {
     GROUP BY date, sku, sub_channel, order_status, weight_slab
     ORDER BY date`,
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
+    // Day-wise, State-wise component revenue + rolling-window rate, same resolved-rate engine as
+    // the SKU-grain queries above (confirmed 2026-10-22) — Top States' Return% was still using the
+    // raw live-only rtoPct from shState (RTO+Return+CIR, missing Cancelled entirely), so this adds
+    // the missing geography dimension. Day-wise query is NOT LIMITed (unlike shState's top-30) —
+    // needs every state's real daily data for the resolution/mature-vs-immature split to be
+    // correct, only the final aggregated rows get capped when displayed.
+    shStateComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        UPPER(TRIM(State)) AS state,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Shopify' AND SubChannel != 'Shopify International' AND State IS NOT NULL AND TRIM(State) != ''
+      GROUP BY state`,
+    shDailyStateComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        UPPER(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Shopify' AND SubChannel != 'Shopify International' AND State IS NOT NULL AND TRIM(State) != ''
+      GROUP BY state, order_date`,
     // shStateTotal removed — derived from shState rows in payload
     shStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
     shRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
     shTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND City_Tier IS NOT NULL GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
     shCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
+    // Day-wise, City-wise (keyed city::state since city names repeat across states) component
+    // revenue + rolling-window rate, same resolved-rate engine as State above.
+    shCityComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Shopify' AND SubChannel != 'Shopify International' AND City IS NOT NULL AND TRIM(City) != ''
+      GROUP BY city, state`,
+    shDailyCityComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE Channel = 'Shopify' AND SubChannel != 'Shopify International' AND City IS NOT NULL AND TRIM(City) != ''
+      GROUP BY city, state, order_date`,
     // shCityTotal removed — derived from shCity rows in payload
     shCityPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State))`,
     byRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
@@ -681,6 +862,42 @@ export default async function handler(req, res) {
     // ever needed again.
     amzSCStates: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(State)) AS ship_state, OrderId, Order_Status, SellingPrice_Inc_GST, FulfilmentStatus FROM q WHERE SubChannel = 'Amazon Seller Central') SELECT ship_state, COUNT(DISTINCT CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY ship_state ORDER BY rev DESC`,
     amzSCCities: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(City_L2)) AS city, OrderId, Order_Status, SellingPrice_Inc_GST FROM q WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '') SELECT city, COUNT(DISTINCT CASE WHEN COALESCE(Order_Status,'') != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN COALESCE(Order_Status,'') != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY city ORDER BY rev DESC LIMIT 50`,
+    // Day-wise, State/City-wise component revenue + rolling-window rate, same resolved-rate engine
+    // as shStateComponentRateMature/shDailyStateComponents for D2C (confirmed 2026-10-22) —
+    // amzSCStates/amzSCCities' returnRev was still the raw live-only RTO+Return figure. RTO
+    // dropped, Cancelled added (confirmed live: Amazon SC has no RTO status at all).
+    amzSCStateComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        UPPER(TRIM(State)) AS state,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND State IS NOT NULL AND TRIM(State) != ''
+      GROUP BY state`,
+    amzSCDailyStateComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        UPPER(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND State IS NOT NULL AND TRIM(State) != ''
+      GROUP BY state, order_date`,
+    amzSCCityComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT
+        UPPER(TRIM(City_L2)) AS city,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != ''
+      GROUP BY city`,
+    amzSCDailyCityComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT
+        UPPER(TRIM(City_L2)) AS city, CAST(OrderDate AS STRING) AS order_date,
+        SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+        SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != ''
+      GROUP BY city, order_date`,
     amzSCStatesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS ship_state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY ship_state`,
     amzSCCitiesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND COALESCE(Order_Status,'') != 'Cancelled' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city`,
     // amzSCStateTotal removed — derived from amzSCStates rows in payload
@@ -699,8 +916,11 @@ export default async function handler(req, res) {
     // already excluded in buildQuery's base, but re-asserted explicitly here too (belt and
     // suspenders) since these are the exact queries that feed COGS/ASP in the PnL table and
     // must never let RTV units leak into a per-unit-cost calculation.
-    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
-    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC`,
+    // FulfilmentStatus != 'Cancelled' added to both (2026-10-22, confirmed bug fix) — amzSCFulfillment
+    // (feeds Sales tab's Units KPI) already excludes these; amzSCSubCatChannel/amzSCSKUChannel (feed
+    // PnL's Category/SKU tables) didn't, producing a ~1.85% Units mismatch between Sales and PnL.
+    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL AND FulfilmentStatus != 'Cancelled' AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
+    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL AND FulfilmentStatus != 'Cancelled' AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC`,
     amzSCCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category`,
     amzSCSubCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory`,
     amzSCSKUChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku`,
@@ -948,6 +1168,14 @@ export default async function handler(req, res) {
         ${vcReturnsSelectFragment()}
       FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL
       GROUP BY order_date, category, subcategory, sku`,
+    // Amazon Vendor Central has only a Return status (confirmed via vcReturnsSelectFragment's own
+    // CASE WHEN above), same resolved-rate engine as other single-component channels.
+    amzVCComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) — same reason as fkDailySKUComponents/
+    // eboDailySKUComponents: lets amzVCMatrix.catData/subCatData/skuData be overridden with this
+    // resolved engine instead of their own raw vcReturnsSelectFragment()-based sums.
+    // units added (2026-10-22) for per-component resolved units (same pattern as other channels).
+    amzVCDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku, order_date, category, subcategory`,
     amzSCRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND COALESCE(Order_Status,'') != 'Cancelled' AND Region IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Region ORDER BY rev DESC`,
     amzSCTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND COALESCE(Order_Status,'') != 'Cancelled' AND City_Tier IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
     // returns/return_rev now real (Order_Status='Return') — see the comment above amzVCCat for
@@ -981,6 +1209,13 @@ export default async function handler(req, res) {
     fkCategories: `WITH q AS (${fkBase}) SELECT Category AS category, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS delivered_rev FROM q WHERE Channel='Flipkart' GROUP BY category, sub ORDER BY rev DESC`,
     fkStates: `WITH q AS (${fkBase}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'), 'OTHERS') AS state, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS delivered_rev FROM q WHERE Channel='Flipkart' GROUP BY state, sub ORDER BY rev DESC`,
     fkCities: `WITH q AS (${fkBase}) SELECT UPPER(TRIM(City_L2)) AS city, UPPER(TRIM(State)) AS state, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS delivered_rev FROM q WHERE Channel='Flipkart' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city, state, sub ORDER BY rev DESC`,
+    // Day-wise, State/City-wise component revenue + rolling-window rate, same resolved-rate engine
+    // as Amazon SC's geography fix above — fkStates/fkCities' return_rev was still raw live-only.
+    // RTO dropped, Cancelled added (confirmed live: Flipkart has no RTO status at all).
+    fkStateComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'), 'OTHERS') AS state, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Flipkart' GROUP BY state`,
+    fkDailyStateComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'), 'OTHERS') AS state, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Flipkart' GROUP BY state, order_date`,
+    fkCityComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT UPPER(TRIM(City_L2)) AS city, UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Flipkart' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city, state`,
+    fkDailyCityComponents2: `WITH q AS (${buildQuery(start, end, {})}) SELECT UPPER(TRIM(City_L2)) AS city, UPPER(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Flipkart' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city, state, order_date`,
     fkStatesPrev: `WITH q AS (${prevBase}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'), 'OTHERS') AS state, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' GROUP BY state, sub`,
     fkCitiesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city, sub`,
     fkReturnRate: `WITH q AS (${fkBase}) SELECT CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Flipkart' GROUP BY sub`,
@@ -1076,6 +1311,13 @@ export default async function handler(req, res) {
     // zpCatPrev + zpSubCatPrev removed — derived from zpSKUPrev in payload (confirmed perfect match)
     zpSKUPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
     crTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days, ${netRevenueSelectFragment()} FROM q WHERE Channel='CRED'`,
+    // CRED has only a Return status (confirmed live 2026-10-22, no RTO/CIR/Cancelled at this
+    // grain) — same resolved-rate engine as other channels, just the one component.
+    crComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'CRED' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) so cr.subCategories/skuMatrix can be
+    // overridden with this resolved engine instead of their own raw cancel/return_rev sums.
+    // units added (2026-10-22) for per-component resolved units.
+    crDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'CRED' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku, order_date, category, subcategory`,
     crDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' GROUP BY date ORDER BY date`,
     crSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, MAX(COALESCE(NULLIF(TRIM(ChannelSKUCode),''), ChannelSKUCode)) AS sku_name, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND ChannelSKUCode IS NOT NULL GROUP BY sku ORDER BY rev DESC LIMIT 30`,
     // Category/SubCategory/SKU grain now also carries the same return-classification fields
@@ -1111,6 +1353,11 @@ export default async function handler(req, res) {
     intlCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='International' GROUP BY category`,
     intlSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='International' GROUP BY category, subcategory`,
     fcTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days, ${netRevenueSelectFragment()} FROM q WHERE Channel='Firstcry'`,
+    // Firstcry has only a Return status, same as CRED — same resolved-rate engine, one component.
+    fcComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Firstcry' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku`,
+    // Category/SubCategory added (2026-10-22, additive) — same reason as crDailySKUComponents.
+    // units added (2026-10-22) for per-component resolved units.
+    fcDailySKUComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT MasterSKU AS sku, CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel = 'Firstcry' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY sku, order_date, category, subcategory`,
     fcDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' GROUP BY date ORDER BY date`,
     fcSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, MAX(COALESCE(NULLIF(TRIM(ChannelSKUCode),''), ChannelSKUCode)) AS sku_name, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND ChannelSKUCode IS NOT NULL GROUP BY sku ORDER BY rev DESC LIMIT 30`,
     fcCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' GROUP BY category ORDER BY rev DESC`,
@@ -1132,9 +1379,24 @@ export default async function handler(req, res) {
     mnStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
     mnCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' GROUP BY category ORDER BY rev DESC`,
     mnSubCategories: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Myntra' AND SubCategory IS NOT NULL GROUP BY category, subcategory ORDER BY rev DESC`,
-    mnSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, ChannelSKUCode AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra' AND ChannelSKUCode IS NOT NULL GROUP BY category, subcategory, sku ORDER BY rev DESC`,
+    // Switched from ChannelSKUCode to MasterSKU (2026-10-22, confirmed bug fix) — ChannelSKUCode
+    // has no overlap with MasterSKU, the identity mnDailySKUComponents/mnComponentRateMature (the
+    // resolved engine) and every other channel's SKU-level query use. The old ChannelSKUCode key
+    // meant mnResolvedBySku[sku] (src/App.jsx) and the PnL skuMatrix override always missed, so
+    // EVERY Myntra SKU row showed a flat 0% Cancellation/RTO/CIR/Returns regardless of actual
+    // returns — a total blackout, not a numeric drift, versus the correctly-resolved ~19% aggregate
+    // one level up at Category/SubCategory. Total revenue confirmed unchanged (₹2.17Cr either way).
+    mnSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra' AND MasterSKU IS NOT NULL GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     mnSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' AND ChannelSKUCode IS NOT NULL GROUP BY sku, category ORDER BY rev DESC LIMIT 30`,
     mnStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    // Day-wise, State/City-wise component revenue + rolling-window rate, same resolved-rate engine
+    // as other channels' geography fixes above.
+    // RTO/CIR dropped (confirmed 2026-10-22: Myntra has neither status at all), Cancelled added —
+    // see CHANNEL_COMPONENTS.myntraGeo's comment for the full correction.
+    mnStateComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state`,
+    mnDailyStateComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT INITCAP(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state, order_date`,
+    mnCityComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT City AS city, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city`,
+    mnDailyCityComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT City AS city, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city, order_date`,
     mnStatesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(State)) AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state`,
     // mnStateTotal removed — derived from mnStates rows in payload
     // mnCityTotal removed — derived from mnCities rows in payload
@@ -1310,8 +1572,15 @@ export default async function handler(req, res) {
     eboState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     // eboStateTotal removed — derived from eboState rows in payload
     eboStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
+    // Day-wise, State-wise component revenue + rolling-window rate, same resolved-rate engine as
+    // other channels' geography fixes above.
+    // RTO dropped, Cancelled added (confirmed live: EBO/Retail has no RTO status at all).
+    eboStateComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY state`,
+    eboDailyStateComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT UPPER(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY state, order_date`,
     eboCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
     // eboCityTotal removed — derived from eboCity rows in payload
+    eboCityComponentRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city, state`,
+    eboDailyCityComponents: `WITH q AS (${buildQuery(start, end, {})}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, CAST(OrderDate AS STRING) AS order_date, SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city, state, order_date`,
     eboCityPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State))`,
     eboRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Retail' AND Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
     eboTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Retail' AND City_Tier IS NOT NULL GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
@@ -1555,7 +1824,12 @@ export default async function handler(req, res) {
       const offOrders = r.offlineTotals.reduce((s, x) => s + (parseInt(x.orders) || 0), 0)
       const offUnits = r.offlineTotals.reduce((s, x) => s + (parseInt(x.units) || 0), 0)
       const offCnExcRev = Math.abs(r.offlineTotals.reduce((s, x) => s + (parseFloat(x.cn_exc_rev) || 0), 0))
-      chMap['offline_sales'] = { rev: offRevSales, excRev: offExcRevSales, netRev: offExcRevSales - offCnExcRev, orders: offOrders, qty: offUnits }
+      // Credit Notes count as a real return for the company (confirmed 2026-10-22: "this is
+      // actually a return for me") — surfaced as returnRev (Inc-GST, matching every other
+      // channel's returnRev convention) so the Overall tab's Return% numerator includes Offline's
+      // Credit Notes too, not just e-commerce RTO/CIR/Cancelled/Return.
+      const offCnRev = Math.abs(r.offlineTotals.reduce((s, x) => s + (parseFloat(x.cn_rev) || 0), 0))
+      chMap['offline_sales'] = { rev: offRevSales, excRev: offExcRevSales, netRev: offExcRevSales - offCnExcRev, orders: offOrders, qty: offUnits, returnRev: offCnRev }
     }
 
     const orderStatusMap = {}
@@ -1695,8 +1969,31 @@ export default async function handler(req, res) {
         // key) plotted `undefined` for every Flipkart data point as a result, rendering as a flat
         // line pinned to 0 for the whole chart. Confirmed live via a screenshot showing exactly
         // that. Added here to match every other channel's daily mapping.
-        const fkRealDaily = (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, estimated: false }))
-        const fkDates = [...new Set(fkRealDaily.map(x => x.date))].sort()
+        const fkRealDailyRaw = (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, estimated: false }))
+        const fkDatesRaw = [...new Set(fkRealDailyRaw.map(x => x.date))].sort()
+        // Partial-sync detection (confirmed 2026-10-22, "the last sync was happened [mid-day]..
+        // what it's considering is that we have the data till 18th.. taking rolling avg for 19,20,
+        // 21") — a sync that stops mid-day leaves that day's date WITH a row, just a tiny one (e.g.
+        // ₹6.1K vs a normal ₹9L day), so the old "latest date with any row = complete" check treated
+        // it as real and only backfilled days strictly after it. Flag the LATEST date as partial
+        // (and keep walking backward through consecutive still-partial latest dates) whenever its
+        // revenue is under 30% of the prior 7 real days' average — a full day's real variance
+        // doesn't get anywhere near that low, so this only ever catches genuine sync cutoffs, not a
+        // slow sales day. Only ever checks the tail (never a complete day buried mid-range), so a
+        // real slow day in the middle of the range is never misflagged.
+        const PARTIAL_DAY_THRESHOLD = 0.4
+        const fkDayTotals = {}
+        fkRealDailyRaw.forEach(x => { if (!fkDayTotals[x.date]) fkDayTotals[x.date] = 0; fkDayTotals[x.date] += x.rev })
+        let fkDates = [...fkDatesRaw]
+        while (fkDates.length > 1) {
+          const lastDate = fkDates[fkDates.length - 1]
+          const priorDates = fkDates.slice(0, -1).slice(-7)
+          const priorAvg = priorDates.reduce((s, d) => s + (fkDayTotals[d] || 0), 0) / priorDates.length
+          if (priorAvg > 0 && fkDayTotals[lastDate] < priorAvg * PARTIAL_DAY_THRESHOLD) fkDates.pop()
+          else break
+        }
+        const partialDates = new Set(fkDatesRaw.filter(d => !fkDates.includes(d)))
+        const fkRealDaily = fkRealDailyRaw.filter(x => !partialDates.has(x.date))
         // When selected range is entirely after latest FK data, fall back to fkLast7 for avg baseline
         const fkLast7Rows = (r.fkLast7 || []).map(x => ({ date: x.date, sub: x.sub === 'FBF' ? 'FBF' : 'NON-FBF', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 }))
         const fkLast7Dates = [...new Set(fkLast7Rows.map(x => x.date))].sort()
@@ -1723,6 +2020,10 @@ export default async function handler(req, res) {
             const avgExcRev = Math.round(last7.reduce((s, d) => s + (d.excRev || 0), 0) / last7.length)
             const avgOrders = Math.round(last7.reduce((s, d) => s + d.orders, 0) / last7.length)
             const avgUnits = Math.round(last7.reduce((s, d) => s + d.units, 0) / last7.length)
+            // Start the backfill from the day AFTER latestFkDate — any day flagged partial above
+            // (dropped from fkDates but still present in fkDatesRaw) falls inside [latestFkDate+1,
+            // end] here too, so it gets a full estimated row instead of its tiny real one, and its
+            // real sliver is excluded below (fkRealDaily/partialRevBySub) so it isn't double-counted.
             const cur = new Date(latestFkDate), end_ = new Date(end)
             cur.setDate(cur.getDate() + 1)
             while (cur <= end_) {
@@ -1737,14 +2038,83 @@ export default async function handler(req, res) {
         const estTotalRev = estimatedDaily.reduce((s, d) => s + d.rev, 0)
         const estTotalOrders = estimatedDaily.reduce((s, d) => s + d.orders, 0)
         const estTotalUnits = estimatedDaily.reduce((s, d) => s + d.units, 0)
+        // partialBySub: the tiny real revenue/orders/units sitting inside r.fkTotals' SQL-summed
+        // total for each now-excluded partial day — must be subtracted before adding the estimate,
+        // or the partial day's real sliver AND its full estimated replacement both land in the
+        // total, double-counting it.
+        const partialBySub = { FBF: { rev: 0, orders: 0, units: 0, excRev: 0 }, 'NON-FBF': { rev: 0, orders: 0, units: 0, excRev: 0 } }
+        fkRealDailyRaw.filter(x => partialDates.has(x.date)).forEach(x => {
+          const s = x.sub === 'FBF' ? 'FBF' : 'NON-FBF'
+          partialBySub[s].rev += x.rev; partialBySub[s].excRev += x.excRev || 0; partialBySub[s].orders += x.orders; partialBySub[s].units += x.units
+        })
         const realTotals = (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, cancelOrders: parseInt(x.cancel_orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, returnRev: parseFloat(x.return_rev)||0, totalReturnRev: parseFloat(x.total_return_rev)||0 }))
         const patchedTotals = realTotals.map(t => {
           const e = estBySub[t.sub] || { rev: 0, orders: 0, units: 0 }
+          const p = partialBySub[t.sub] || { rev: 0, orders: 0, units: 0, excRev: 0 }
           // Only patch rev/excRev with estimated — orders/units stay as real COUNT(DISTINCT) to avoid inflation
-          return { ...t, rev: t.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev + e.rev }
+          return { ...t, rev: t.rev - p.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev - p.excRev + e.rev }
         })
         if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'], excRev: estBySub['NON-FBF'].rev })
-        return { estTotalRev, estTotalOrders, estTotalUnits, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
+        return { estTotalRev, estTotalOrders, estTotalUnits, estBySub, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
+    })()
+
+    // Myntra — same "estimate missing recent days via 7-day trailing average" mechanism as
+    // Flipkart's fkBlock above (confirmed 2026-10-22: "go through the same what we are doing in
+    // flipkart.. and then we will implement the same in myntra as well"), simplified since Myntra
+    // has no FBF/NON-FBF-style sub-channel split — one trailing average across whole-Myntra
+    // rev/excRev/orders/units, not per-sub. Myntra's feed lags a few days behind BigQuery sync the
+    // same way Flipkart's does.
+    const mnBlock = (() => {
+      const mnRealDailyRaw = (r.mnDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, estimated: false }))
+      const mnDatesRaw = [...new Set(mnRealDailyRaw.map(x => x.date))].sort()
+      // Partial-sync detection — same mechanism as fkBlock above (confirmed 2026-10-22, "same may be
+      // happening in the myntra too"): a sync that stops mid-day still leaves that date WITH a tiny
+      // row, which the old "latest date with any row = complete" check wrongly treated as a real,
+      // complete day. Flag the tail as partial whenever its revenue is under 40% of the prior 7 real
+      // days' average.
+      const PARTIAL_DAY_THRESHOLD = 0.4
+      const mnDayTotals = {}
+      mnRealDailyRaw.forEach(x => { mnDayTotals[x.date] = (mnDayTotals[x.date] || 0) + x.rev })
+      let mnDates = [...mnDatesRaw]
+      while (mnDates.length > 1) {
+        const lastDate = mnDates[mnDates.length - 1]
+        const priorDates = mnDates.slice(0, -1).slice(-7)
+        const priorAvg = priorDates.reduce((s, d) => s + (mnDayTotals[d] || 0), 0) / priorDates.length
+        if (priorAvg > 0 && mnDayTotals[lastDate] < priorAvg * PARTIAL_DAY_THRESHOLD) mnDates.pop()
+        else break
+      }
+      const partialDates = new Set(mnDatesRaw.filter(d => !mnDates.includes(d)))
+      const mnRealDaily = mnRealDailyRaw.filter(x => !partialDates.has(x.date))
+      const latestMnDate = mnDates[mnDates.length - 1]
+      const estimatedDaily = []
+      if (latestMnDate && latestMnDate < end) {
+        const last7Dates = mnDates.slice(-7)
+        const last7 = last7Dates.map(d => mnRealDaily.find(x => x.date === d) || { rev: 0, excRev: 0, orders: 0, units: 0 })
+        const avgRev = Math.round(last7.reduce((s, d) => s + d.rev, 0) / last7.length)
+        const avgExcRev = Math.round(last7.reduce((s, d) => s + d.excRev, 0) / last7.length)
+        const avgOrders = Math.round(last7.reduce((s, d) => s + d.orders, 0) / last7.length)
+        const avgUnits = Math.round(last7.reduce((s, d) => s + d.units, 0) / last7.length)
+        // Starts the day after latestMnDate — any day flagged partial above falls inside this
+        // range too, so it gets a full estimated row in place of its tiny real one.
+        const cur = new Date(latestMnDate), end_ = new Date(end)
+        cur.setDate(cur.getDate() + 1)
+        while (cur <= end_) {
+          const d = cur.toISOString().slice(0, 10)
+          estimatedDaily.push({ date: d, rev: avgRev, excRev: avgExcRev, orders: avgOrders, units: avgUnits, estimated: true })
+          cur.setDate(cur.getDate() + 1)
+        }
+      }
+      // partialReal: the tiny real revenue/orders/units sitting inside r.mnTotals' SQL-summed total
+      // for each now-excluded partial day — subtracted before adding the estimate below (in the
+      // myntra payload block's totals override), same double-count guard as fkBlock's partialBySub.
+      const partialReal = mnRealDailyRaw.filter(x => partialDates.has(x.date)).reduce((a, x) => ({
+        rev: a.rev + x.rev, excRev: a.excRev + x.excRev, orders: a.orders + x.orders, units: a.units + x.units,
+      }), { rev: 0, excRev: 0, orders: 0, units: 0 })
+      const estTotalRev = estimatedDaily.reduce((s, d) => s + d.rev, 0) - partialReal.rev
+      const estTotalExcRev = estimatedDaily.reduce((s, d) => s + d.excRev, 0) - partialReal.excRev
+      const estTotalOrders = estimatedDaily.reduce((s, d) => s + d.orders, 0) - partialReal.orders
+      const estTotalUnits = estimatedDaily.reduce((s, d) => s + d.units, 0) - partialReal.units
+      return { estTotalRev, estTotalExcRev, estTotalOrders, estTotalUnits, latestMnDate, estimatedDays: estimatedDaily.length, daily: [...mnRealDaily, ...estimatedDaily] }
     })()
 
     // Patch overall totals with Flipkart estimated days
@@ -1773,6 +2143,17 @@ export default async function handler(req, res) {
         chMap['Flipkart'].netRev = fkM.netRevenueExcGst
       }
     }
+    // Myntra — same estimated-days patch as Flipkart above. netRev itself is NOT set here (unlike
+    // Flipkart's block, which predates the resolved engine) — the Overall-tab reconciliation block
+    // further down overrides chMap['Myntra'].netRev from mnResolvedForMaps/resolvedDailySKU using
+    // this patched excRev for its GST ratio, so there's only one place computing Myntra's Net
+    // Revenue, not two independently-patched ones.
+    if (chMap['Myntra']) {
+      chMap['Myntra'].rev += mnBlock.estTotalRev
+      chMap['Myntra'].excRev += mnBlock.estTotalExcRev
+      chMap['Myntra'].orders += mnBlock.estTotalOrders
+      chMap['Myntra'].qty += mnBlock.estTotalUnits
+    }
     // Now that every chMap[channel].netRev override (Shopify, Flipkart) has been applied, finalize
     // netRevenueCalc as their sum — same number the "All" tab's Net Revenue KPI derives client-side
     // from chMap (AllTab, App.jsx), so the two can never drift apart.
@@ -1782,6 +2163,11 @@ export default async function handler(req, res) {
       const entry = dailyArr.find(d => d.date === x.date)
       if (entry) { entry['Flipkart'] = (entry['Flipkart'] || 0) + x.rev; entry['Flipkart_o'] = (entry['Flipkart_o'] || 0) + x.orders; entry['Flipkart_u'] = (entry['Flipkart_u'] || 0) + x.units }
       else dailyArr.push({ date: x.date, Flipkart: x.rev, Flipkart_o: x.orders, Flipkart_u: x.units })
+    })
+    mnBlock.daily.filter(x => x.estimated).forEach(x => {
+      const entry = dailyArr.find(d => d.date === x.date)
+      if (entry) { entry['Myntra'] = (entry['Myntra'] || 0) + x.rev; entry['Myntra_o'] = (entry['Myntra_o'] || 0) + x.orders; entry['Myntra_u'] = (entry['Myntra_u'] || 0) + x.units }
+      else dailyArr.push({ date: x.date, Myntra: x.rev, Myntra_o: x.orders, Myntra_u: x.units })
     })
     dailyArr.sort((a, b) => a.date?.localeCompare(b.date))
 
@@ -1999,6 +2385,324 @@ export default async function handler(req, res) {
       prevDailyByChannelMap[x.Channel].push({ date: x.date, rev: parseFloat(x.rev) || 0 })
     })
 
+    // ── Single source of truth for D2C's resolved RTO/CIR/Cancelled/Exchange revenue (NEW,
+    // 2026-10-22) — computed ONCE here and used below to override catMap/subCatMap/skuMap's
+    // cancelRev/rtoRev/cirRev/exchRev fields, so Sales (App.jsx, which reads these same maps) and
+    // PnL (PnLPage.jsx/PnLFinancialTable.jsx, via netRevenueOf()) can never silently compute two
+    // different Return%/Net Revenue numbers for the same D2C SKU/Category/SubCategory/date range
+    // again — confirmed explicit requirement 2026-10-22: "ensure we are not duplicating anything."
+    // Keyed by (sku, sub_channel) composite, matching resolvedDailySKU's own grain, then summed up
+    // to whole-Category/SubCategory totals (applying skuMap's own Mobility-reassignment rule, so
+    // the two can never diverge) for catMap/subCatMap's grain.
+    //
+    // KNOWN, ACCEPTED RESIDUAL GAP (confirmed 2026-10-22, by design, not a bug): shCategory (feeds
+    // catMap's gross revenue) has no MasterSKU filter, while shSKU (the source of this resolved
+    // override) requires MasterSKU IS NOT NULL — so a tiny slice of D2C gross revenue (~0.01% in
+    // live testing — 10-11 orders with a null/blank MasterSKU, a real upstream data-entry gap) has
+    // no SKU to resolve a rolling rate against and is left on its own live/raw return rate inside
+    // catMap's total. This makes catMap's Category-level Return% differ from the SKU-level true
+    // figure by a few hundredths of a percentage point — accepted as negligible rather than
+    // fabricating a SKU for revenue that genuinely has none recorded.
+    // skuMap/catMap/subCatMap (via shSKU, which carries Category) reassign any 'mobility'
+    // subChannelRows entry whose product Category ISN'T Mobility/Sparepart into 'myfrido' — an
+    // order-level SubChannel='Mobility' tag can carry a non-Mobility product (e.g. a Mobility-
+    // storefront customer buying a pillow). shDailySKU has no Category column to apply that same
+    // rule directly, so build a sku -> primary-Category lookup from shSKU (same source skuMap
+    // already uses) and apply the identical reassignment here, so resolvedDailySKU's subChannel
+    // split can never diverge from skuMap/catMap/subCatMap's (confirmed live 2026-10-22: a ~0.06pp
+    // Return% gap existed between the two before this fix, from Mobility-tagged non-Mobility rows
+    // counted under 'mobility' in one map and 'myfrido' in the other).
+    const skuPrimaryCategory = {}
+    ;(r.shSKU || []).forEach(x => { if (!skuPrimaryCategory[x.sku]) skuPrimaryCategory[x.sku] = x.Category || 'Others' })
+    const reassignSubCh = (sku, subCh) => {
+      if (subCh !== 'mobility') return subCh
+      const cat = skuPrimaryCategory[sku]
+      return (cat && cat !== 'Mobility' && !/^sparepart/i.test(cat)) ? 'myfrido' : subCh
+    }
+    const shResolvedForMaps = resolveDailySkuComponents(
+      (r.shDailySKU || []).map(x => { const subChannel = reassignSubCh(x.sku, (x.sub_channel || '').toLowerCase()); return { skuKey: `${x.sku}::${subChannel}`, sku: x.sku, subChannel, order_date: x.date, gross_inc_gst: x.rev, units: x.units, rto_rev: x.rto_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev, exchange_rev: x.exchange_rev } }),
+      buildRollingRateMap((r.shComponentRateMature || []).map(x => { const subChannel = reassignSubCh(x.sku, (x.sub_channel || '').toLowerCase()); return { ...x, skuKey: `${x.sku}::${subChannel}` } }), CHANNEL_COMPONENTS.shopify, x => x.skuKey),
+      CHANNEL_COMPONENTS.shopify,
+      x => x.skuKey,
+    )
+    // Per-component units (rtoUnits/cirUnits/cancelUnits/exchUnits) alongside each component's
+    // revenue (confirmed 2026-10-22: "cir_units = resolved_cir%*units, rto_units =
+    // resolved_rto%*units.. etc.. so we have to now go like this") — each resolved independently
+    // the SAME way its revenue counterpart already is (live rate on mature days, rolling-30d rate
+    // on immature days), not one blended returnUnits total. returnUnits (the isReturn-only
+    // components summed) is kept too, for callers that just need the netUnits total.
+    const shResolvedBySkuSubCh = {} // key: 'sku::subchannel' -> { rtoRev, cirRev, cancelRev, exchRev, rtoUnits, cirUnits, cancelUnits, exchUnits, returnUnits }
+    shResolvedForMaps.forEach(row => {
+      const key = `${row.sku}::${row.subChannel}`
+      const e = shResolvedBySkuSubCh[key] || (shResolvedBySkuSubCh[key] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0 })
+      e.rtoRev += row.components?.rto?.rev || 0
+      e.cirRev += row.components?.cir?.rev || 0
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.exchRev += row.components?.exchange?.rev || 0
+      e.rtoUnits += row.components?.rto?.units || 0
+      e.cirUnits += row.components?.cir?.units || 0
+      e.cancelUnits += row.components?.cancel?.units || 0
+      e.exchUnits += row.components?.exchange?.units || 0
+      e.returnUnits += row.resolvedReturnUnits || 0
+    })
+    // skuSubChGross: a SKU's resolved total is per (sku, subChannel) — a COARSER grain than shSKU's
+    // own (Category, SubCategory, SubChannel, MasterSKU) rows, so a SKU with 2+ such rows (e.g.
+    // split across SubCategory due to miscategorization) must have its resolved total distributed
+    // proportionally by each row's own gross-revenue share, computed once here and reused by both
+    // shResolvedByCatSubCat below and skuMap's own build loop further down.
+    const skuSubChGross = {}
+    ;(r.shSKU || []).forEach(x => {
+      const subCh = reassignSubCh(x.sku, (x.SubChannel||'').toLowerCase())
+      const key = `${x.sku}::${subCh}`
+      skuSubChGross[key] = (skuSubChGross[key] || 0) + (parseFloat(x.rev)||0)
+    })
+    const shResolvedByCatSubCat = {} // key: 'Category' or 'Category::SubCategory' -> { rtoRev, cirRev, cancelRev, exchRev, rtoUnits, cirUnits, cancelUnits, exchUnits, returnUnits }
+    ;(r.shSKU || []).forEach(x => {
+      const cat = x.Category || 'Others', sc = x.SubCategory || 'Others', sku = x.sku
+      const subCh = reassignSubCh(sku, (x.SubChannel || '').toLowerCase())
+      const key = `${sku}::${subCh}`
+      const resolved = shResolvedBySkuSubCh[key]
+      if (!resolved) return
+      // Confirmed bug fix 2026-10-22: the full resolved total was previously added on EVERY shSKU
+      // row for this (sku, subChannel), double/triple-counting any SKU with 2+ rows (e.g. split
+      // across SubCategory) — catMap/subCatMap showed ₹40.19L more returnRev than the correctly
+      // de-duplicated skuMap for the identical date range (concentrated in Pillows/Cushions/
+      // Personal Care/Mattress Topper). Same proportional-share fix as skuMap's own build loop below.
+      const rowGross = parseFloat(x.rev)||0
+      const share = skuSubChGross[key] > 0 ? rowGross / skuSubChGross[key] : 0
+      const catAcc = shResolvedByCatSubCat[cat] || (shResolvedByCatSubCat[cat] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0 })
+      catAcc.rtoRev += resolved.rtoRev*share; catAcc.cirRev += resolved.cirRev*share; catAcc.cancelRev += resolved.cancelRev*share; catAcc.exchRev += resolved.exchRev*share
+      catAcc.rtoUnits += resolved.rtoUnits*share; catAcc.cirUnits += resolved.cirUnits*share; catAcc.cancelUnits += resolved.cancelUnits*share; catAcc.exchUnits += resolved.exchUnits*share; catAcc.returnUnits += resolved.returnUnits*share
+      const subCatKey = `${cat}::${sc}`
+      const subCatAcc = shResolvedByCatSubCat[subCatKey] || (shResolvedByCatSubCat[subCatKey] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0 })
+      subCatAcc.rtoRev += resolved.rtoRev*share; subCatAcc.cirRev += resolved.cirRev*share; subCatAcc.cancelRev += resolved.cancelRev*share; subCatAcc.exchRev += resolved.exchRev*share
+      subCatAcc.rtoUnits += resolved.rtoUnits*share; subCatAcc.cirUnits += resolved.cirUnits*share; subCatAcc.cancelUnits += resolved.cancelUnits*share; subCatAcc.exchUnits += resolved.exchUnits*share; subCatAcc.returnUnits += resolved.returnUnits*share
+    })
+
+    // ── Amazon Seller Central — single source of truth for Category/SubCategory/SKU tables (NEW,
+    // 2026-10-22, confirmed bug fix) — amzSCSubCatChannel/amzSCSKUChannel (raw, FBA/MFN-split
+    // queries) previously fed subCatChannel/skuChannel directly with unresolved Order_Status sums,
+    // while the KPI card already read the resolved amzSCDailyNetBySKU-based engine — confirmed
+    // live: Sales tab KPI showed 16.8% Return%, the Category table beneath it (and PnL, which reads
+    // the same subCatChannel) showed 12.8%, for the identical date range. amzSCDailyNetBySKU has no
+    // FBA/MFN split, so the resolved per-SKU total is distributed across a SKU's FBA/MFN rows by
+    // each row's own share of that SKU's combined gross revenue (same proportional-share pattern as
+    // D2C's skuMap fix, needed since amzSCSKUChannel can have 2 rows per SKU — one per channel).
+    const amzSCResolvedForMaps = resolveDailySkuComponents(
+      (r.amzSCDailyNetBySKU || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross, units: x.units, rto_rev: x.rto_rev, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+      buildRollingRateMap(r.amzSCComponentRateMature || [], CHANNEL_COMPONENTS.amazonSC),
+      CHANNEL_COMPONENTS.amazonSC,
+    )
+    // Per-component units (rtoUnits/cirUnits/cancelUnits — Amazon SC has no Exchange status)
+    // alongside revenue (confirmed 2026-10-22, same pattern as D2C/EBO).
+    const amzSCResolvedBySku = {} // sku -> { rtoRev, returnRev, cirRev, cancelRev, rtoUnits, cirUnits, cancelUnits, returnUnits }
+    amzSCResolvedForMaps.forEach(row => {
+      const e = amzSCResolvedBySku[row.sku] || (amzSCResolvedBySku[row.sku] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, returnUnits: 0 })
+      e.rtoRev += row.components?.rto?.rev || 0
+      e.returnRev += row.components?.return?.rev || 0
+      e.cirRev += row.components?.cir?.rev || 0
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.rtoUnits += row.components?.rto?.units || 0
+      e.cirUnits += row.components?.cir?.units || 0
+      e.cancelUnits += row.components?.cancel?.units || 0
+      // returnUnits is the GRAND TOTAL of every isReturn component (resolvedReturnUnits) — this is
+      // intentional and safe here: the only consumer of amzSCResolvedBySku.returnUnits is the single
+      // combined `returnedUnits` field in catChannel/subCatChannel/skuChannel below, never summed
+      // alongside rtoUnits/cirUnits/cancelUnits (those stay unused dead fields for now, kept for a
+      // future per-component SnD cost formula). Contrast with Myntra, where returnUnits previously
+      // held this same grand total AND was summed together with cancelUnits/rtoUnits/cirUnits by a
+      // downstream consumer (simpleSubCatOf in PnLPage.jsx) — a genuine double-count there, fixed
+      // to use the Return-status-only component instead. Not the same bug here.
+      e.returnUnits += row.resolvedReturnUnits || 0
+    })
+    const amzSCResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> same shape, SKU-deduped
+    amzSCResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      const resolved = amzSCResolvedBySku[row.sku]
+      if (!resolved) return
+      const catAcc = amzSCResolvedByCatSubCat[cat] || (amzSCResolvedByCatSubCat[cat] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() })
+      const subCatKey = `${cat}::${sc}`
+      const subCatAcc = amzSCResolvedByCatSubCat[subCatKey] || (amzSCResolvedByCatSubCat[subCatKey] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() })
+      if (!catAcc._seen.has(row.sku)) { catAcc._seen.add(row.sku); catAcc.rtoRev += resolved.rtoRev; catAcc.returnRev += resolved.returnRev; catAcc.cirRev += resolved.cirRev; catAcc.cancelRev += resolved.cancelRev; catAcc.rtoUnits += resolved.rtoUnits; catAcc.cirUnits += resolved.cirUnits; catAcc.cancelUnits += resolved.cancelUnits; catAcc.returnUnits += resolved.returnUnits }
+      if (!subCatAcc._seen.has(row.sku)) { subCatAcc._seen.add(row.sku); subCatAcc.rtoRev += resolved.rtoRev; subCatAcc.returnRev += resolved.returnRev; subCatAcc.cirRev += resolved.cirRev; subCatAcc.cancelRev += resolved.cancelRev; subCatAcc.rtoUnits += resolved.rtoUnits; subCatAcc.cirUnits += resolved.cirUnits; subCatAcc.cancelUnits += resolved.cancelUnits; subCatAcc.returnUnits += resolved.returnUnits }
+    })
+
+    // ── Amazon Vendor Central — single source of truth for Category/SubCategory/SKU tables (NEW,
+    // 2026-10-22, confirmed bug fix) — amzVCMatrix.catData/subCatData/skuData previously used their
+    // own raw vcReturnsSelectFragment()-based return_rev, unresolved. Single Return-only component,
+    // no FBA/MFN-style channel split, so no proportional-share distribution needed here.
+    const amzVCResolvedForMaps = resolveDailySkuComponents(
+      (r.amzVCDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, return_rev: x.return_rev })),
+      buildRollingRateMap(r.amzVCComponentRateMature || [], CHANNEL_COMPONENTS.amazonVC),
+      CHANNEL_COMPONENTS.amazonVC,
+    )
+    // returnUnits tracked alongside returnRev (confirmed 2026-10-22, same per-component resolved-
+    // units pattern — VC has only one component, Return, so returnUnits IS its resolved units).
+    const amzVCResolvedBySku = {} // sku -> { returnRev, returnUnits }
+    amzVCResolvedForMaps.forEach(row => {
+      const e = amzVCResolvedBySku[row.sku] || (amzVCResolvedBySku[row.sku] = { returnRev: 0, returnUnits: 0 })
+      e.returnRev += row.components?.return?.rev || 0
+      e.returnUnits += row.resolvedReturnUnits || 0
+    })
+    const amzVCResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> {returnRev, returnUnits}, SKU-deduped
+    amzVCResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      const resolved = amzVCResolvedBySku[row.sku]
+      if (!resolved) return
+      if (!amzVCResolvedByCatSubCat[cat]) amzVCResolvedByCatSubCat[cat] = { returnRev: 0, returnUnits: 0, _seen: new Set() }
+      const subCatKey = `${cat}::${sc}`
+      if (!amzVCResolvedByCatSubCat[subCatKey]) amzVCResolvedByCatSubCat[subCatKey] = { returnRev: 0, returnUnits: 0, _seen: new Set() }
+      if (!amzVCResolvedByCatSubCat[cat]._seen.has(row.sku)) { amzVCResolvedByCatSubCat[cat]._seen.add(row.sku); amzVCResolvedByCatSubCat[cat].returnRev += resolved.returnRev; amzVCResolvedByCatSubCat[cat].returnUnits += resolved.returnUnits }
+      if (!amzVCResolvedByCatSubCat[subCatKey]._seen.has(row.sku)) { amzVCResolvedByCatSubCat[subCatKey]._seen.add(row.sku); amzVCResolvedByCatSubCat[subCatKey].returnRev += resolved.returnRev; amzVCResolvedByCatSubCat[subCatKey].returnUnits += resolved.returnUnits }
+    })
+
+    // ── Flipkart — single source of truth for Category/SubCategory/SKU tables (NEW, 2026-10-22,
+    // confirmed bug fix) — fk.subCategories/skuMatrix previously used their own raw returnRev
+    // (from fkSubCategory/fkSKUMatrix), unresolved, confirmed live: KPI card 26.5% Return% vs
+    // Category table's 16.3% for the same date range. No SKU spans multiple Category/SubCategory
+    // in live data (confirmed), so the per-SKU resolved total is summed once per bucket, no
+    // proportional-share distribution needed (Flipkart's FBF/NON-FBF split happens one level
+    // below SKU, inside fkSubCategory/fkSKUMatrix's own `sub` rows, which this override doesn't
+    // touch — only returnRev is replaced, rev/units/orders stay exactly as queried).
+    const fkResolvedForMaps = resolveDailySkuComponents(
+      (r.fkDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, rto_rev: x.rto_rev, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+      buildRollingRateMap(r.fkComponentRateMature || [], CHANNEL_COMPONENTS.flipkart),
+      CHANNEL_COMPONENTS.flipkart,
+    )
+    // Tracks cancelRev and returnRev (RTO+Return+CIR combined, Flipkart's existing convention)
+    // SEPARATELY — confirmed bug fix 2026-10-22: PnL's fkSubCatData computed its OWN independent
+    // cancelRev as `rev - deliveredRev`, a stale pre-resolved-engine formula never updated when
+    // returnRev was fixed, producing a 6x-inflated Cancellation figure (₹39.3L vs the resolved
+    // engine's real ₹6.39L for the same date range) that silently fed Returns%/Net Revenue even
+    // after returnRev itself was correctly resolved — caught via "do u see the difference" (PnL
+    // showed 36.1% Returns vs Sales tab's correct 22.3% for the identical Flipkart/date range).
+    // cancelUnits/returnUnits (RTO+Return+CIR units combined, same convention as returnRev) added
+    // alongside (confirmed 2026-10-22, per-component resolved units).
+    const fkResolvedBySku = {} // sku -> {cancelRev, returnRev, cancelUnits, returnUnits}
+    fkResolvedForMaps.forEach(row => {
+      const e = fkResolvedBySku[row.sku] || (fkResolvedBySku[row.sku] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0 })
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.returnRev += (row.components?.rto?.rev || 0) + (row.components?.return?.rev || 0) + (row.components?.cir?.rev || 0)
+      e.cancelUnits += row.components?.cancel?.units || 0
+      e.returnUnits += (row.components?.rto?.units || 0) + (row.components?.return?.units || 0) + (row.components?.cir?.units || 0)
+    })
+    const fkResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> {cancelRev, returnRev, cancelUnits, returnUnits}, SKU-deduped
+    fkResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      const resolved = fkResolvedBySku[row.sku]
+      if (!resolved) return
+      if (!fkResolvedByCatSubCat[cat]) fkResolvedByCatSubCat[cat] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      const subCatKey = `${cat}::${sc}`
+      if (!fkResolvedByCatSubCat[subCatKey]) fkResolvedByCatSubCat[subCatKey] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      if (!fkResolvedByCatSubCat[cat]._seen.has(row.sku)) { fkResolvedByCatSubCat[cat]._seen.add(row.sku); fkResolvedByCatSubCat[cat].cancelRev += resolved.cancelRev; fkResolvedByCatSubCat[cat].returnRev += resolved.returnRev; fkResolvedByCatSubCat[cat].cancelUnits += resolved.cancelUnits; fkResolvedByCatSubCat[cat].returnUnits += resolved.returnUnits }
+      if (!fkResolvedByCatSubCat[subCatKey]._seen.has(row.sku)) { fkResolvedByCatSubCat[subCatKey]._seen.add(row.sku); fkResolvedByCatSubCat[subCatKey].cancelRev += resolved.cancelRev; fkResolvedByCatSubCat[subCatKey].returnRev += resolved.returnRev; fkResolvedByCatSubCat[subCatKey].cancelUnits += resolved.cancelUnits; fkResolvedByCatSubCat[subCatKey].returnUnits += resolved.returnUnits }
+    })
+
+    // ── Myntra — single source of truth for Category/SubCategory/SKU tables (NEW, 2026-10-22,
+    // confirmed bug fix) — mn.subCategories previously used its own raw cancel/rto/cir/return_rev
+    // sums, unresolved, confirmed live: KPI card 19.4% Return% vs Category table's 14.6% for the
+    // same date range. SKU-level (mnSKUMatrix) is NOW also covered — it used to group by
+    // ChannelSKUCode (no overlap with this resolved engine's MasterSKU identity, so every SKU row
+    // showed a flat 0% Cancellation/RTO/CIR/Returns), switched to MasterSKU (same query fix,
+    // confirmed revenue total unchanged) so the per-SKU resolved override below can actually join.
+    const mnResolvedForMaps = resolveDailySkuComponents(
+      (r.mnDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, rto_rev: x.rto_rev, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+      buildRollingRateMap(r.mnComponentRateMature || [], CHANNEL_COMPONENTS.myntra),
+      CHANNEL_COMPONENTS.myntra,
+    )
+    // Per-component units alongside revenue (confirmed 2026-10-22, same pattern as other channels).
+    const mnResolvedBySku = {} // sku -> {cancelRev, rtoRev, cirRev, returnRev, cancelUnits, rtoUnits, cirUnits, returnUnits}
+    mnResolvedForMaps.forEach(row => {
+      const e = mnResolvedBySku[row.sku] || (mnResolvedBySku[row.sku] = { cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0, cancelUnits: 0, rtoUnits: 0, cirUnits: 0, returnUnits: 0 })
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.rtoRev += row.components?.rto?.rev || 0
+      e.cirRev += row.components?.cir?.rev || 0
+      e.returnRev += row.components?.return?.rev || 0
+      e.cancelUnits += row.components?.cancel?.units || 0
+      e.rtoUnits += row.components?.rto?.units || 0
+      e.cirUnits += row.components?.cir?.units || 0
+      // returnUnits is the Return-STATUS-only component (components.return.units), matching
+      // returnRev's own convention above — NOT resolvedReturnUnits (the grand total of every
+      // isReturn component), which would double-count cancelUnits/rtoUnits/cirUnits when all four
+      // fields are summed together downstream (confirmed bug fix 2026-10-22: Myntra's categories/
+      // subCategories/skuMatrix showed 24.7-25.0% return-unit rate vs the correct resolvedDailySKU
+      // rate of 18.9% for the same range).
+      e.returnUnits += row.components?.return?.units || 0
+    })
+    const mnResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> same shape as mnResolvedBySku
+    mnResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      ;[cat, `${cat}::${sc}`].forEach(key => {
+        const e = mnResolvedByCatSubCat[key] || (mnResolvedByCatSubCat[key] = { cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0, cancelUnits: 0, rtoUnits: 0, cirUnits: 0, returnUnits: 0 })
+        e.cancelRev += row.components?.cancel?.rev || 0
+        e.rtoRev += row.components?.rto?.rev || 0
+        e.cirRev += row.components?.cir?.rev || 0
+        e.returnRev += row.components?.return?.rev || 0
+        e.cancelUnits += row.components?.cancel?.units || 0
+        e.rtoUnits += row.components?.rto?.units || 0
+        e.cirUnits += row.components?.cir?.units || 0
+        // returnUnits = Return-status-only component (matches returnRev's convention) — see
+        // mnResolvedBySku's note above for why this must not be resolvedReturnUnits.
+        e.returnUnits += row.components?.return?.units || 0
+      })
+    })
+
+    // ── CRED / Firstcry — single source of truth for Category/SubCategory/SKU tables (NEW,
+    // 2026-10-22, confirmed bug fix) — cr/fc.categories/subCategories/skuMatrix previously used
+    // their own raw cancel/return_rev sums, unresolved. Both share the same MasterSKU identity
+    // between their *DailySKUComponents and *SKUMatrix queries, so SKU-level override applies
+    // directly (no proportional distribution needed — no FBA/MFN-style sub-split for either).
+    const crResolvedForMaps = resolveDailySkuComponents(
+      (r.crDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+      buildRollingRateMap(r.crComponentRateMature || [], CHANNEL_COMPONENTS.cred),
+      CHANNEL_COMPONENTS.cred,
+    )
+    // Per-component units alongside revenue (confirmed 2026-10-22, same pattern as other channels).
+    const crResolvedBySku = {} // sku -> {cancelRev, returnRev, cancelUnits, returnUnits}
+    crResolvedForMaps.forEach(row => {
+      const e = crResolvedBySku[row.sku] || (crResolvedBySku[row.sku] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0 })
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.returnRev += row.components?.return?.rev || 0
+      e.cancelUnits += row.components?.cancel?.units || 0
+      e.returnUnits += row.components?.return?.units || 0
+    })
+    const crResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> same shape as crResolvedBySku, SKU-deduped
+    crResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      const resolved = crResolvedBySku[row.sku]
+      if (!resolved) return
+      if (!crResolvedByCatSubCat[cat]) crResolvedByCatSubCat[cat] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      const subCatKey = `${cat}::${sc}`
+      if (!crResolvedByCatSubCat[subCatKey]) crResolvedByCatSubCat[subCatKey] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      if (!crResolvedByCatSubCat[cat]._seen.has(row.sku)) { crResolvedByCatSubCat[cat]._seen.add(row.sku); crResolvedByCatSubCat[cat].cancelRev += resolved.cancelRev; crResolvedByCatSubCat[cat].returnRev += resolved.returnRev; crResolvedByCatSubCat[cat].cancelUnits += resolved.cancelUnits; crResolvedByCatSubCat[cat].returnUnits += resolved.returnUnits }
+      if (!crResolvedByCatSubCat[subCatKey]._seen.has(row.sku)) { crResolvedByCatSubCat[subCatKey]._seen.add(row.sku); crResolvedByCatSubCat[subCatKey].cancelRev += resolved.cancelRev; crResolvedByCatSubCat[subCatKey].returnRev += resolved.returnRev; crResolvedByCatSubCat[subCatKey].cancelUnits += resolved.cancelUnits; crResolvedByCatSubCat[subCatKey].returnUnits += resolved.returnUnits }
+    })
+
+    const fcResolvedForMaps = resolveDailySkuComponents(
+      (r.fcDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+      buildRollingRateMap(r.fcComponentRateMature || [], CHANNEL_COMPONENTS.firstcry),
+      CHANNEL_COMPONENTS.firstcry,
+    )
+    const fcResolvedBySku = {} // sku -> {cancelRev, returnRev, cancelUnits, returnUnits}
+    fcResolvedForMaps.forEach(row => {
+      const e = fcResolvedBySku[row.sku] || (fcResolvedBySku[row.sku] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0 })
+      e.cancelRev += row.components?.cancel?.rev || 0
+      e.returnRev += row.components?.return?.rev || 0
+      e.cancelUnits += row.components?.cancel?.units || 0
+      e.returnUnits += row.components?.return?.units || 0
+    })
+    const fcResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> same shape as fcResolvedBySku, SKU-deduped
+    fcResolvedForMaps.forEach(row => {
+      const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+      const resolved = fcResolvedBySku[row.sku]
+      if (!resolved) return
+      if (!fcResolvedByCatSubCat[cat]) fcResolvedByCatSubCat[cat] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      const subCatKey = `${cat}::${sc}`
+      if (!fcResolvedByCatSubCat[subCatKey]) fcResolvedByCatSubCat[subCatKey] = { cancelRev: 0, returnRev: 0, cancelUnits: 0, returnUnits: 0, _seen: new Set() }
+      if (!fcResolvedByCatSubCat[cat]._seen.has(row.sku)) { fcResolvedByCatSubCat[cat]._seen.add(row.sku); fcResolvedByCatSubCat[cat].cancelRev += resolved.cancelRev; fcResolvedByCatSubCat[cat].returnRev += resolved.returnRev; fcResolvedByCatSubCat[cat].cancelUnits += resolved.cancelUnits; fcResolvedByCatSubCat[cat].returnUnits += resolved.returnUnits }
+      if (!fcResolvedByCatSubCat[subCatKey]._seen.has(row.sku)) { fcResolvedByCatSubCat[subCatKey]._seen.add(row.sku); fcResolvedByCatSubCat[subCatKey].cancelRev += resolved.cancelRev; fcResolvedByCatSubCat[subCatKey].returnRev += resolved.returnRev; fcResolvedByCatSubCat[subCatKey].cancelUnits += resolved.cancelUnits; fcResolvedByCatSubCat[subCatKey].returnUnits += resolved.returnUnits }
+    })
+
     const payload = {
       source: 'postgres-aggregated',
       prevRev: parseFloat(r.prevTotals?.[0]?.total_rev) || 0,
@@ -2125,7 +2829,25 @@ export default async function handler(req, res) {
         daily: (r.shDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
         // Day-wise per-SKU rows (see shDailySKU query above) — feeds PnLPage.jsx's day-wise
         // COGS%/GM%/SnD%/CM1%/CM2% trend lines the same way Amazon's dailyPnLBySku does.
-        dailySKU: (r.shDailySKU || []).map(x => ({ date: x.date, sku: x.sku, subChannel: (x.sub_channel || '').toLowerCase(), units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0 })),
+        // exchangeRev added 2026-10-22 (additive) for resolvedDailySKU below — every other
+        // consumer of this array is unaffected since they just don't read the new field.
+        dailySKU: (r.shDailySKU || []).map(x => ({ date: x.date, sku: x.sku, subChannel: (x.sub_channel || '').toLowerCase(), units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchangeRev: parseFloat(x.exchange_rev)||0 })),
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — confirmed design: for any day older than 15 days, uses that day's own real
+        // RTO/CIR/Cancelled/Exchange revenue; for any day within the last 15 days, substitutes that
+        // SKU's own rolling 30-day-window rate per component instead (not one blended rate), scaled
+        // to that day's own real gross. See api/_returnComponents.js for the full rationale. This
+        // is a NEW, separate array — nothing above (dailySKU, totals, shNetCalc, etc.) is touched,
+        // so every existing page/number stays exactly as it was until something explicitly reads
+        // resolvedDailySKU instead.
+        // Keyed by (sku, sub_channel) composite (confirmed 2026-10-22) — MyFrido/Mobility sub-tabs
+        // each resolve against their OWN rolling rate, not a blended whole-D2C one. subChannel is
+        // passed through on each resolved row (lowercased, matching dailySKU's convention) so
+        // src/App.jsx can filter resolvedDailySKU by sub-channel the same way it filters dailySKU.
+        // Reuses shResolvedForMaps (computed once, above the payload object, confirmed 2026-10-22)
+        // instead of re-running resolveDailySkuComponents a second time with identical inputs —
+        // single computation feeds both this array and catMap/subCatMap/skuMap's overrides.
+        resolvedDailySKU: shResolvedForMaps,
         prevRev: parseFloat(r.prevShopify?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevShopify?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevShopify?.[0]?.orders) || 0,
@@ -2135,9 +2857,20 @@ export default async function handler(req, res) {
         prevExchangeOrders: parseInt(r.prevShopify?.[0]?.exchange_orders) || 0,
         prevCancelledOrders: parseInt(r.prevShopify?.[0]?.cancelled_orders) || 0,
         prevDaily: (r.prevShopifyDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
-        catMap: Object.fromEntries((r.shCategory || []).map(x => [x.Category || 'Others', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+        // cancelRev/rtoRev/cirRev/exchRev overridden from shResolvedByCatSubCat (resolved engine,
+        // confirmed 2026-10-22) — both Sales (this map) and PnL (via netRevenueOf()) read catMap,
+        // so this is the single place both sides' Category-grain Return%/Net Revenue come from.
+        catMap: Object.fromEntries((r.shCategory || []).map(x => { const cat = x.Category || 'Others'; const resolved = shResolvedByCatSubCat[cat]; return [cat, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), exchRev: resolved?.exchRev ?? (parseFloat(x.exch_rev)||0), rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, exchUnits: resolved?.exchUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 }] })),
         catPrevMap: (() => { const m = {}; (r.shSubCategoryPrev || []).forEach(x => { const cat = x.Category || 'Others'; m[cat] = (m[cat] || 0) + (parseFloat(x.rev) || 0) }); return m })(),
-        subCatMap: Object.fromEntries((r.shSubCategory || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+        // Same shResolvedByCatSubCat override as catMap above, for the single source of truth
+        // both Sales and PnL read at SubCategory grain.
+        // returnUnits overridden from shResolvedByCatSubCat's resolved returnUnits (confirmed
+        // 2026-10-22: "net qty now should be calculated based on the revised return%... same logic
+        // for the net units across dates") — units × totalReturnPct per (sku, day), summed up, so
+        // PnLFinancialTable's COGS/GM% use the same resolved rate for units that Return%/Net
+        // Revenue already use, instead of a raw returnUnits count that stays near-zero on recent
+        // (immature) days even while the resolved Return% already discounts a rolling-rate share.
+        subCatMap: Object.fromEntries((r.shSubCategory || []).map(x => { const key = `${x.Category||'Others'}::${x.SubCategory||'Others'}`; const resolved = shResolvedByCatSubCat[key]; return [key, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, returnUnits: resolved ? resolved.returnUnits : parseInt(x.return_units)||0, rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, exchUnits: resolved?.exchUnits ?? 0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), exchRev: resolved?.exchRev ?? (parseFloat(x.exch_rev)||0) }] })),
         subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
         subCatDateMap: (() => { const m = {}; (r.shDailySubCat || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', date = x.date; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][date] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
         // shSKU groups by (Category, SubCategory, SubChannel) straight off the raw fact table
@@ -2149,14 +2882,36 @@ export default async function handler(req, res) {
         // only ever shows Mobility-category rows, consistent with pnlSalesRows/mobilityNetCalc.
         skuMap: (() => {
           const m = {}
-          const mergeRow = (a, b) => a ? { rev: a.rev+(b.rev||0), excRev: a.excRev+(b.excRev||0), orders: a.orders+(b.orders||0), units: a.units+(b.units||0), returnUnits: a.returnUnits+(b.returnUnits||0), cancelled: a.cancelled+(b.cancelled||0), rto: a.rto+(b.rto||0), cir: a.cir+(b.cir||0), exch: a.exch+(b.exch||0), cancelRev: a.cancelRev+(b.cancelRev||0), codCancelRev: a.codCancelRev+(b.codCancelRev||0), rtoRev: a.rtoRev+(b.rtoRev||0), cirRev: a.cirRev+(b.cirRev||0), exchRev: a.exchRev+(b.exchRev||0) } : b
+          const mergeRow = (a, b) => a ? { rev: a.rev+(b.rev||0), excRev: a.excRev+(b.excRev||0), orders: a.orders+(b.orders||0), units: a.units+(b.units||0), returnUnits: a.returnUnits+(b.returnUnits||0), rtoUnits: a.rtoUnits+(b.rtoUnits||0), cirUnits: a.cirUnits+(b.cirUnits||0), cancelUnits: a.cancelUnits+(b.cancelUnits||0), exchUnits: a.exchUnits+(b.exchUnits||0), cancelled: a.cancelled+(b.cancelled||0), rto: a.rto+(b.rto||0), cir: a.cir+(b.cir||0), exch: a.exch+(b.exch||0), cancelRev: a.cancelRev+(b.cancelRev||0), codCancelRev: a.codCancelRev+(b.codCancelRev||0), rtoRev: a.rtoRev+(b.rtoRev||0), cirRev: a.cirRev+(b.cirRev||0), exchRev: a.exchRev+(b.exchRev||0) } : b
+          // shSKU groups by (Category, SubCategory, SubChannel, MasterSKU) — the SAME MasterSKU
+          // can legitimately appear in >1 row here (e.g. split across SubCategories for a
+          // miscategorized SKU). The resolved override below is per (sku, subChannel), a COARSER
+          // grain, so it must be distributed proportionally by each row's own gross-revenue share
+          // within that (sku, subChannel) group — applying the FULL resolved total to every row
+          // independently (the original version of this fix) silently doubled it whenever a SKU
+          // had 2+ such rows (confirmed live 2026-10-22, e.g. FR-TNP-CB1::myfrido was exactly 2x).
+          // skuSubChGross is computed once, above, before shResolvedByCatSubCat — reused here.
           ;(r.shSKU || []).forEach(x => {
             const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku
-            let subCh = (x.SubChannel||'').toLowerCase()
-            if (subCh === 'mobility' && cat !== 'Mobility' && !/^sparepart/i.test(cat)) subCh = 'myfrido'
+            const subCh = reassignSubCh(sku, (x.SubChannel||'').toLowerCase())
             if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; if (!m[cat][sc][sku]) m[cat][sc][sku] = { subChannelRows: {} }
             const e = m[cat][sc][sku]
-            const row = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }
+            // cancelRev/rtoRev/cirRev/exchRev overridden from shResolvedBySkuSubCh (resolved
+            // engine, confirmed 2026-10-22) — same single source of truth as catMap/subCatMap
+            // above, now at SKU grain, so Sales and PnL's per-product Return%/Net Revenue can
+            // never diverge either. Scaled by this row's gross share of the (sku, subChannel)
+            // total so a multi-row SKU's resolved total isn't counted once per row.
+            const resolvedRow = shResolvedBySkuSubCh[`${sku}::${subCh}`]
+            const key = `${sku}::${subCh}`
+            const rowGross = parseFloat(x.rev)||0
+            const share = skuSubChGross[key] > 0 ? rowGross / skuSubChGross[key] : 0
+            // returnUnits/rtoUnits/cirUnits/cancelUnits/exchUnits overridden from resolvedRow
+            // (confirmed 2026-10-22: resolved engine's per-component units × totalReturnPct — "cir_
+            // units = resolved_cir%*units, rto_units = resolved_rto%*units.. this will be helping us
+            // in snd logistics calculation" — same share-scaling as cancelRev/rtoRev/cirRev above)
+            // instead of raw status-count columns, so SKU-level COGS/GM AND any per-component SnD
+            // cost (rtoCost = rtoUnits × slab rate, etc.) use the same resolved units everywhere.
+            const row = { rev: rowGross, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, returnUnits: resolvedRow ? resolvedRow.returnUnits * share : (parseInt(x.return_units)||0), rtoUnits: resolvedRow ? resolvedRow.rtoUnits * share : 0, cirUnits: resolvedRow ? resolvedRow.cirUnits * share : 0, cancelUnits: resolvedRow ? resolvedRow.cancelUnits * share : 0, exchUnits: resolvedRow ? resolvedRow.exchUnits * share : 0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolvedRow ? resolvedRow.cancelRev * share : (parseFloat(x.cancel_rev)||0), codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: resolvedRow ? resolvedRow.rtoRev * share : (parseFloat(x.rto_rev)||0), cirRev: resolvedRow ? resolvedRow.cirRev * share : (parseFloat(x.cir_rev)||0), exchRev: resolvedRow ? resolvedRow.exchRev * share : (parseFloat(x.exch_rev)||0) }
             e.subChannelRows[subCh] = mergeRow(e.subChannelRows[subCh], row)
           })
           return m
@@ -2234,9 +2989,33 @@ export default async function handler(req, res) {
         // dict. Each row is one (SKU, order_weight) pair with the summed weight_share the
         // client multiplies by that order_weight's slab rate (from public/snd-rates.json).
         skuWeightShares: (r.shOrderLineWeights || []).map(x => ({ category: x.Category||'Others', subCategory: x.SubCategory||'Others', sku: x.sku, orderWeight: parseFloat(x.order_weight)||0, weightShare: parseFloat(x.weight_share)||0 })),
-        stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
+        // Resolved per-State/per-City Return Revenue (NEW, additive, 2026-10-22) — Top States/Top
+        // Cities' returnRev was still the raw live-only RTO+Return+CIR figure (missing Cancelled
+        // entirely); this overrides it with the same mature/immature-resolved engine used for the
+        // SKU-grain numbers above, now at State/City grain.
+        ...(() => {
+          const stateResolved = resolveDailySkuComponents(
+            (r.shDailyStateComponents || []).map(x => ({ state: x.state, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, rto_rev: x.rto_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.shStateComponentRateMature || [], CHANNEL_COMPONENTS.shopify.filter(c => c.isReturn), x => x.state),
+            CHANNEL_COMPONENTS.shopify.filter(c => c.isReturn),
+            x => x.state,
+          )
+          const resolvedByState = {}
+          stateResolved.forEach(x => { resolvedByState[x.sku] = (resolvedByState[x.sku] || 0) + x.totalReturnRev })
+          const cityResolved = resolveDailySkuComponents(
+            (r.shDailyCityComponents || []).map(x => ({ cityKey: `${x.city}::${x.state}`, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, rto_rev: x.rto_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap((r.shCityComponentRateMature || []).map(x => ({ ...x, cityKey: `${x.city}::${x.state}` })), CHANNEL_COMPONENTS.shopify.filter(c => c.isReturn), x => x.cityKey),
+            CHANNEL_COMPONENTS.shopify.filter(c => c.isReturn),
+            x => x.cityKey,
+          )
+          const resolvedByCity = {}
+          cityResolved.forEach(x => { resolvedByCity[x.sku] = (resolvedByCity[x.sku] || 0) + x.totalReturnRev })
+          return {
+            stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByState[x.state] ?? (parseFloat(x.return_rev)||0) }])),
+            cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByCity[`${x.city}::${x.state}`] ?? (parseFloat(x.return_rev)||0) })).filter(x => x.city),
+          }
+        })(),
         statePrevMap: Object.fromEntries((r.shStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
-        cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
         cityPrevMap: Object.fromEntries((r.shCityPrev || []).filter(x => x.city).map(x => [`${x.city}|${x.state||''}`, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
         cityTotal: { rev: (r.shCity||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0), orders: (r.shCity||[]).reduce((s,x)=>s+(parseInt(x.orders)||0),0) },
         stateTotal: { rev: (r.shState||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0), orders: (r.shState||[]).reduce((s,x)=>s+(parseInt(x.orders)||0),0) },
@@ -2263,7 +3042,55 @@ export default async function handler(req, res) {
         }
         const pncM = computeNetRevenueMeasures(r.prevEboNetCalc?.[0] || {})
         const prevNetCalc = { gross: pncM.grossIncGst, excRev: pncM.grossExcGst, cancelRev: pncM.cancelRev, rtoRev: pncM.rtoRev, returnRev: pncM.returnRev, cirRev: pncM.cirRev, netRev: pncM.netRevenueExcGst }
+        // Resolved per-(sku,Category,SubCategory) totals (2026-10-22, confirmed bug fix) — built
+        // once here from the SAME resolveDailySkuComponents() output as resolvedDailySKU below, then
+        // used to override catMap/subCatMap/skuMap's cancelRev/rtoRev/cirRev/exchRev fields further
+        // down, so PnL (which reads those maps, not resolvedDailySKU directly) can never again show
+        // a different Returns%/Net Revenue than the Sales tab for EBO — confirmed live: PnL showed
+        // 4.0% Returns (from eboSubCategory/eboSKU's raw, RTO+Return-combined Order_Status sums)
+        // vs Sales tab's correct resolved 7.8% for the same date range. Same pattern as D2C's
+        // shResolvedByCatSubCat/shResolvedBySkuSubCh override.
+        const eboResolvedForMaps = resolveDailySkuComponents(
+          (r.eboDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, category: x.category || 'Others', subCategory: x.subcategory || 'Others', gross_inc_gst: x.gross_inc_gst, units: x.units, rto_rev: x.rto_rev, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev, exchange_rev: x.exchange_rev })),
+          buildRollingRateMap(r.eboComponentRateMature || [], CHANNEL_COMPONENTS.ebo),
+          CHANNEL_COMPONENTS.ebo,
+        )
+        // Per-component units (rtoUnits/cirUnits/cancelUnits/exchUnits) alongside revenue (confirmed
+        // 2026-10-22: "cir_units = resolved_cir%*units, rto_units = resolved_rto%*units.. this will
+        // be helping us in snd logistics calculation") — same pattern as D2C's shResolvedBySkuSubCh.
+        const eboResolvedBySkuForMaps = {} // sku -> { rtoRev, returnRev, cirRev, cancelRev, exchRev, rtoUnits, cirUnits, cancelUnits, exchUnits, returnUnits }
+        eboResolvedForMaps.forEach(row => {
+          const e = eboResolvedBySkuForMaps[row.sku] || (eboResolvedBySkuForMaps[row.sku] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0 })
+          e.rtoRev += row.components?.rto?.rev || 0
+          e.returnRev += row.components?.return?.rev || 0
+          e.cirRev += row.components?.cir?.rev || 0
+          e.cancelRev += row.components?.cancel?.rev || 0
+          e.exchRev += row.components?.exchange?.rev || 0
+          e.rtoUnits += row.components?.rto?.units || 0
+          e.cirUnits += row.components?.cir?.units || 0
+          e.cancelUnits += row.components?.cancel?.units || 0
+          e.exchUnits += row.components?.exchange?.units || 0
+          e.returnUnits += row.resolvedReturnUnits || 0
+        })
+        const eboResolvedByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> same shape
+        eboResolvedForMaps.forEach(row => {
+          const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+          const resolved = eboResolvedBySkuForMaps[row.sku]
+          if (!resolved) return
+          const catKey = cat
+          const catAcc = eboResolvedByCatSubCat[catKey] || (eboResolvedByCatSubCat[catKey] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0, _seen: new Set() })
+          const subCatKey = `${cat}::${sc}`
+          const subCatAcc = eboResolvedByCatSubCat[subCatKey] || (eboResolvedByCatSubCat[subCatKey] = { rtoRev: 0, returnRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0, returnUnits: 0, _seen: new Set() })
+          // Guard against summing the same SKU's whole-range resolved total more than once — a SKU
+          // can appear in multiple (sku, day) resolvedDailySKU rows, but its PER-SKU resolved total
+          // (eboResolvedBySkuForMaps) must only be added ONCE per Category/SubCategory bucket.
+          if (!catAcc._seen.has(row.sku)) { catAcc._seen.add(row.sku); catAcc.rtoRev += resolved.rtoRev; catAcc.returnRev += resolved.returnRev; catAcc.cirRev += resolved.cirRev; catAcc.cancelRev += resolved.cancelRev; catAcc.exchRev += resolved.exchRev; catAcc.rtoUnits += resolved.rtoUnits; catAcc.cirUnits += resolved.cirUnits; catAcc.cancelUnits += resolved.cancelUnits; catAcc.exchUnits += resolved.exchUnits; catAcc.returnUnits += resolved.returnUnits }
+          if (!subCatAcc._seen.has(row.sku)) { subCatAcc._seen.add(row.sku); subCatAcc.rtoRev += resolved.rtoRev; subCatAcc.returnRev += resolved.returnRev; subCatAcc.cirRev += resolved.cirRev; subCatAcc.cancelRev += resolved.cancelRev; subCatAcc.exchRev += resolved.exchRev; subCatAcc.rtoUnits += resolved.rtoUnits; subCatAcc.cirUnits += resolved.cirUnits; subCatAcc.cancelUnits += resolved.cancelUnits; subCatAcc.exchUnits += resolved.exchUnits; subCatAcc.returnUnits += resolved.returnUnits }
+        })
         return {
+          // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+          // 2026-10-22) — same engine as other channels. Purely additive.
+          resolvedDailySKU: eboResolvedForMaps,
           netCalc,
           prevNetCalc,
           // Mature-window (today-44d to today-14d) return rate, replicated from Shopify's pattern
@@ -2307,20 +3134,53 @@ export default async function handler(req, res) {
           prevRtoOrders: parseInt(r.prevEbo?.[0]?.rto_orders) || 0,
           prevCirOrders: parseInt(r.prevEbo?.[0]?.cir_orders) || 0,
           prevExchangeOrders: parseInt(r.prevEbo?.[0]?.exchange_orders) || 0,
-          catMap: Object.fromEntries((r.eboCategory || []).map(x => [x.Category || 'Others', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+          // cancelRev/rtoRev/cirRev/exchRev below are overridden from eboResolvedByCatSubCat/
+          // eboResolvedBySkuForMaps (built above from the SAME resolveDailySkuComponents() output
+          // as resolvedDailySKU) wherever resolved data exists — falls back to the raw query's own
+          // value only when a Category/SubCategory/SKU has no resolved coverage (shouldn't normally
+          // happen; eboSubCategory/eboSKU and eboDailySKUComponents share the same Channel='Retail'
+          // scope). Note: eboSubCategory/eboSKU's own rto_rev combines RTO+Return together — the
+          // resolved override also fixes that, exposing them as genuinely separate figures.
+          catMap: Object.fromEntries((r.eboCategory || []).map(x => { const cat = x.Category || 'Others'; const resolved = eboResolvedByCatSubCat[cat]; return [cat, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), exchRev: resolved?.exchRev ?? (parseFloat(x.exch_rev)||0), returnRev: resolved?.returnRev ?? 0, rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, exchUnits: resolved?.exchUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 }] })),
           catPrevMap: Object.fromEntries((r.eboCategoryPrev || []).map(x => [x.Category || 'Others', parseFloat(x.rev)||0])),
-          subCatMap: Object.fromEntries((r.eboSubCategory || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+          subCatMap: Object.fromEntries((r.eboSubCategory || []).map(x => { const key = `${x.Category||'Others'}::${x.SubCategory||'Others'}`; const resolved = eboResolvedByCatSubCat[key]; return [key, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, returnUnits: resolved?.returnUnits ?? (parseInt(x.return_units)||0), rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, exchUnits: resolved?.exchUnits ?? 0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), exchRev: resolved?.exchRev ?? (parseFloat(x.exch_rev)||0), returnRev: resolved?.returnRev ?? 0 }] })),
           subCatPrevMap: Object.fromEntries((r.eboSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
           subCatDateMap: (() => { const m = {}; (r.eboDailySubCat || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', date = x.date; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][date] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
-          skuMap: (() => { const m = {}; (r.eboSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
+          // returnUnits/rtoUnits/cirUnits/cancelUnits/exchUnits overridden from eboResolvedBySkuForMaps
+          // (confirmed 2026-10-22, same per-component resolved-units pattern as D2C) instead of raw
+          // return_units, so SKU-level COGS/GM and any SnD cost formula built on top use the same
+          // resolved units everywhere.
+          skuMap: (() => { const m = {}; (r.eboSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; const resolved = eboResolvedBySkuForMaps[sku]; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, returnUnits: resolved?.returnUnits ?? (parseInt(x.return_units)||0), rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, exchUnits: resolved?.exchUnits ?? 0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), exchRev: resolved?.exchRev ?? (parseFloat(x.exch_rev)||0), returnRev: resolved?.returnRev ?? 0 } }); return m })(),
           // Previous-period per-SKU units/rev — feeds PnLPage.jsx's real (not ratio-estimated)
           // previous-period COGS/GM/SnD/CM1/ROAS/CM2 recomputation, re-running the exact same
           // cogs-data.json per-unit lookup against last period's real unit counts.
           prevSkuMap: (() => { const m = {}; (r.prevEboSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0 } }); return m })(),
-          stateMap: Object.fromEntries((r.eboState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
+          // Resolved per-State/City Return Revenue (NEW, additive, 2026-10-22) — same engine as
+          // other channels' geography fixes.
+          ...(() => {
+            const stateResolved = resolveDailySkuComponents(
+              (r.eboDailyStateComponents || []).map(x => ({ state: x.state, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+              buildRollingRateMap(r.eboStateComponentRateMature || [], CHANNEL_COMPONENTS.eboGeo, x => x.state),
+              CHANNEL_COMPONENTS.eboGeo,
+              x => x.state,
+            )
+            const resolvedByState = {}
+            stateResolved.forEach(x => { resolvedByState[x.sku] = (resolvedByState[x.sku] || 0) + x.totalReturnRev })
+            const cityResolved = resolveDailySkuComponents(
+              (r.eboDailyCityComponents || []).map(x => ({ cityKey: `${x.city}::${x.state}`, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev })),
+              buildRollingRateMap((r.eboCityComponentRateMature || []).map(x => ({ ...x, cityKey: `${x.city}::${x.state}` })), CHANNEL_COMPONENTS.eboGeo, x => x.cityKey),
+              CHANNEL_COMPONENTS.eboGeo,
+              x => x.cityKey,
+            )
+            const resolvedByCity = {}
+            cityResolved.forEach(x => { resolvedByCity[x.sku] = (resolvedByCity[x.sku] || 0) + x.totalReturnRev })
+            return {
+              stateMap: Object.fromEntries((r.eboState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByState[x.state] ?? (parseFloat(x.return_rev)||0) }])),
+              cityRows: (r.eboCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByCity[`${x.city}::${x.state}`] ?? (parseFloat(x.return_rev)||0) })).filter(x => x.city),
+            }
+          })(),
           statePrevMap: Object.fromEntries((r.eboStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
           stateTotal: { rev: (r.eboState||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0), orders: (r.eboState||[]).reduce((s,x)=>s+(parseInt(x.orders)||0),0) },
-          cityRows: (r.eboCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
           cityPrevMap: Object.fromEntries((r.eboCityPrev || []).filter(x => x.city).map(x => [`${x.city}|${x.state||''}`, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
           cityTotal: { rev: (r.eboCity||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0), orders: (r.eboCity||[]).reduce((s,x)=>s+(parseInt(x.orders)||0),0) },
           regionRows: (r.eboRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
@@ -2386,11 +3246,40 @@ export default async function handler(req, res) {
         prevCancelledOrders: parseInt((r.prevAmzSC || []).find(x => x.SubChannel === 'Amazon Seller Central')?.cancelled_orders) || 0,
         prevShippedOrders: parseInt((r.prevAmzSC || []).find(x => x.SubChannel === 'Amazon Seller Central')?.shipped_orders) || 0,
         prevDaily: prevDailyByChannelMap['Amazon'] || [],
-        fulfillment: (r.amzSCFulfillment || []).map(x => ({ type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 })),
+        // rev/excRev/units now summed from amzSCSubCatChannel (the SAME query subCatChannel/
+        // catChannel/skuChannel below already read) instead of amzSCFulfillment's own independent
+        // SUM — confirmed bug fix 2026-10-22: the two queries had different WHERE clauses
+        // (amzSCFulfillment additionally filtered FulfilmentStatus != 'Cancelled' and
+        // SellingPrice_Inc_GST > 0), so Sales tab's FBA/MFN units/revenue silently diverged from
+        // PnL's Category/SubCategory tables by ~1.85%. `orders` still comes from amzSCFulfillment's
+        // own COUNT(DISTINCT OrderId) — that can't be safely summed from amzSCSubCatChannel's rows
+        // without double-counting any order spanning multiple SubCategories.
+        fulfillment: (() => {
+          const orderCountByCh = Object.fromEntries((r.amzSCFulfillment || []).map(x => [x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', parseInt(x.orders) || 0]))
+          const sums = { FBA: { rev: 0, excRev: 0, units: 0 }, MFN: { rev: 0, excRev: 0, units: 0 } }
+          ;(r.amzSCSubCatChannel || []).forEach(x => {
+            const s = sums[x.ch]
+            if (!s) return
+            s.rev += parseFloat(x.rev) || 0; s.excRev += parseFloat(x.exc_rev) || 0; s.units += parseInt(x.units) || 0
+          })
+          return ['FBA', 'MFN'].map(type => ({ type, orders: orderCountByCh[type] || 0, rev: sums[type].rev, excRev: sums[type].excRev, units: sums[type].units }))
+        })(),
         status: (r.amzSCStatus || []).map(x => ({ status: x.order_status, orders: parseInt(x.orders)||0 })),
         // orderStatusDebug removed 2026-10-19 alongside its source query (confirmed dead, see
         // amzSCOrderStatusDebug removal comment above).
-        states: (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // Resolved per-State Return Revenue (NEW, additive, 2026-10-22) — overrides the raw
+        // live-only RTO+Return figure, same resolved-rate engine as D2C's geography fix.
+        states: (() => {
+          const stateResolved = resolveDailySkuComponents(
+            (r.amzSCDailyStateComponents || []).map(x => ({ state: x.state, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.amzSCStateComponentRateMature || [], CHANNEL_COMPONENTS.amazonSCGeo, x => x.state),
+            CHANNEL_COMPONENTS.amazonSCGeo,
+            x => x.state,
+          )
+          const resolvedByState = {}
+          stateResolved.forEach(x => { resolvedByState[x.sku] = (resolvedByState[x.sku] || 0) + x.totalReturnRev })
+          return (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByState[x.ship_state] ?? (parseFloat(x.return_rev)||0) }))
+        })(),
         statePrevMap: Object.fromEntries((r.amzSCStatesPrev||[]).map(x => [x.ship_state, parseFloat(x.rev)||0])),
         cityPrevMap: Object.fromEntries((r.amzSCCitiesPrev||[]).map(x => [x.city, parseFloat(x.rev)||0])),
         stateTotal: (r.amzSCStates||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0),
@@ -2413,31 +3302,71 @@ export default async function handler(req, res) {
         regionRows: (r.amzSCRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.amzSCTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         topStates: (r.amzSCStates || []).slice(0, 6).map(x => ({ name: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
-        cities: (r.amzSCCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // Resolved per-City Return Revenue (NEW, additive, 2026-10-22) — same engine as states above.
+        cities: (() => {
+          const cityResolved = resolveDailySkuComponents(
+            (r.amzSCDailyCityComponents || []).map(x => ({ city: x.city, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.amzSCCityComponentRateMature || [], CHANNEL_COMPONENTS.amazonSCGeo, x => x.city),
+            CHANNEL_COMPONENTS.amazonSCGeo,
+            x => x.city,
+          )
+          const resolvedByCity = {}
+          cityResolved.forEach(x => { resolvedByCity[x.sku] = (resolvedByCity[x.sku] || 0) + x.totalReturnRev })
+          return (r.amzSCCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: resolvedByCity[x.city] ?? (parseFloat(x.return_rev)||0) }))
+        })(),
+        // cancelRev/rtoRev/cirRev/returnRev below are overridden from amzSCResolvedByCatSubCat/
+        // amzSCResolvedBySku (built above from the SAME resolveDailySkuComponents() output as
+        // resolvedDailySKU) — confirmed bug fix 2026-10-22, same class of fix as D2C/EBO. No
+        // FBA/MFN split exists in the resolved source, so each row's resolved share is this row's
+        // own gross ÷ the SKU's (catChannel: Category's) total gross across both channels.
         catChannel: (() => {
           const map = {}
+          const catGrossByCh = {}
+          ;(r.amzSCCatChannel || []).forEach(x => { catGrossByCh[x.Category] = (catGrossByCh[x.Category] || 0) + (parseFloat(x.rev) || 0) })
           ;(r.amzSCCatChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
-            map[x.Category][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
+            const resolved = amzSCResolvedByCatSubCat[x.Category]
+            const rowRev = parseFloat(x.rev) || 0
+            const share = resolved && catGrossByCh[x.Category] > 0 ? rowRev / catGrossByCh[x.Category] : 0
+            // returnedUnits added from resolved.returnUnits*share (confirmed 2026-10-22, same
+            // per-component resolved-units pattern as revenue) — the field netRevenueOf() reads
+            // for COGS netUnits, same proportional distribution as the revenue fields above.
+            map[x.Category][x.ch] = { rev: rowRev, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: resolved ? resolved.returnUnits*share : 0, orders: parseInt(x.orders)||0, cancelRev: resolved ? resolved.cancelRev*share : (parseFloat(x.cancel_rev)||0), rtoRev: resolved ? resolved.rtoRev*share : (parseFloat(x.rto_rev)||0), cirRev: resolved ? resolved.cirRev*share : (parseFloat(x.cir_rev)||0), exchRev: parseFloat(x.exch_rev)||0, returnRev: resolved ? resolved.returnRev*share : (parseFloat(x.return_rev)||0) }
           })
           return map
         })(),
         subCatChannel: (() => {
           const map = {}
+          const subCatGrossByCh = {}
+          ;(r.amzSCSubCatChannel || []).forEach(x => { const k = `${x.Category}::${x.SubCategory}`; subCatGrossByCh[k] = (subCatGrossByCh[k] || 0) + (parseFloat(x.rev) || 0) })
           ;(r.amzSCSubCatChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: parseInt(x.returned_units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
+            const key = `${x.Category}::${x.SubCategory}`
+            const resolved = amzSCResolvedByCatSubCat[key]
+            const rowRev = parseFloat(x.rev) || 0
+            const share = resolved && subCatGrossByCh[key] > 0 ? rowRev / subCatGrossByCh[key] : 0
+            // returnedUnits overridden from resolved.returnUnits*share (confirmed 2026-10-22, same
+            // per-component resolved-units pattern as revenue) instead of the raw returned_units
+            // count, so COGS/GM stays consistent with the resolved Return%/Net Revenue.
+            map[x.Category][x.SubCategory][x.ch] = { rev: rowRev, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: resolved ? resolved.returnUnits*share : (parseInt(x.returned_units)||0), orders: parseInt(x.orders)||0, cancelRev: resolved ? resolved.cancelRev*share : (parseFloat(x.cancel_rev)||0), rtoRev: resolved ? resolved.rtoRev*share : (parseFloat(x.rto_rev)||0), cirRev: resolved ? resolved.cirRev*share : (parseFloat(x.cir_rev)||0), exchRev: parseFloat(x.exch_rev)||0, returnRev: resolved ? resolved.returnRev*share : (parseFloat(x.return_rev)||0) }
           })
           return map
         })(),
         skuChannel: (() => {
           const map = {}
+          const skuGrossByCh = {}
+          ;(r.amzSCSKUChannel || []).forEach(x => { skuGrossByCh[x.sku] = (skuGrossByCh[x.sku] || 0) + (parseFloat(x.rev) || 0) })
           ;(r.amzSCSKUChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
             if (!map[x.Category][x.SubCategory][x.sku]) map[x.Category][x.SubCategory][x.sku] = {}
-            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: parseInt(x.returned_units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
+            const resolved = amzSCResolvedBySku[x.sku]
+            const rowRev = parseFloat(x.rev) || 0
+            const share = resolved && skuGrossByCh[x.sku] > 0 ? rowRev / skuGrossByCh[x.sku] : 0
+            // returnedUnits overridden from resolved.returnUnits*share — same pattern as catChannel/
+            // subCatChannel above (confirmed 2026-10-22).
+            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: rowRev, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: resolved ? resolved.returnUnits*share : (parseInt(x.returned_units)||0), orders: parseInt(x.orders)||0, cancelRev: resolved ? resolved.cancelRev*share : (parseFloat(x.cancel_rev)||0), rtoRev: resolved ? resolved.rtoRev*share : (parseFloat(x.rto_rev)||0), cirRev: resolved ? resolved.cirRev*share : (parseFloat(x.cir_rev)||0), exchRev: parseFloat(x.exch_rev)||0, returnRev: resolved ? resolved.returnRev*share : (parseFloat(x.return_rev)||0) }
           })
           return map
         })(),
@@ -2582,14 +3511,28 @@ export default async function handler(req, res) {
           // snd} — units/returnedUnits let the frontend derive netUnits for COGS (same formula
           // as PnLFinancialTable's mapRow), gross/excRev/net/totalReturnRev feed the trend
           // chart's revenue/returns/ROAS lines, snd feeds the SnD%/CM1% lines.
+          // totalReturnRev below now comes from amzSCResolvedForMaps (the SAME per-(sku,day)
+          // resolved engine as resolvedDailySKU/catChannel/subCatChannel/skuChannel above), keyed
+          // by (date, sku) — NOT this row's own raw cancel_rev/rto_rev/cir_rev/return_rev columns,
+          // confirmed bug fix 2026-10-22: same stale-formula class as Flipkart's dailyPnLBySku bug
+          // (bypassed the resolved engine's 15-day immature-window substitution entirely), here
+          // understating recent-day returns instead of overstating them — feeds the Financial
+          // Table's Amazon SC SKU rows and the trend chart's day-wise Returns/Net Revenue line.
+          const amzSCResolvedByDateSku = {}
+          amzSCResolvedForMaps.forEach(row => { amzSCResolvedByDateSku[`${row.date}::${row.sku}`] = row.totalReturnRev })
           const dailyBySkuMap = {}
           rows.forEach(x => {
             const key = `${x.order_date}::${x.sku}`
             if (!dailyBySkuMap[key]) dailyBySkuMap[key] = { date: x.order_date, sku: x.sku, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, units: 0, returnedUnits: 0 }
-            dailyBySkuMap[key].gross += parseFloat(x.gross) || 0
-            dailyBySkuMap[key].excRev += parseFloat(x.exc_rev) || 0
-            dailyBySkuMap[key].net += netRevOf(x)
-            dailyBySkuMap[key].totalReturnRev += (parseFloat(x.cancel_rev)||0) + (parseFloat(x.rto_rev)||0) + (parseFloat(x.cir_rev)||0) + (parseFloat(x.return_rev)||0)
+            const totalReturnRev = amzSCResolvedByDateSku[key] ?? ((parseFloat(x.cancel_rev)||0) + (parseFloat(x.rto_rev)||0) + (parseFloat(x.cir_rev)||0) + (parseFloat(x.return_rev)||0))
+            const gross = parseFloat(x.gross) || 0
+            const excRev = parseFloat(x.exc_rev) || 0
+            const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
+            const net = Math.max(gross - totalReturnRev, 0) * (1 - gstRatio)
+            dailyBySkuMap[key].gross += gross
+            dailyBySkuMap[key].excRev += excRev
+            dailyBySkuMap[key].net += net
+            dailyBySkuMap[key].totalReturnRev += totalReturnRev
             dailyBySkuMap[key].units += parseInt(x.units) || 0
             dailyBySkuMap[key].returnedUnits += parseInt(x.returned_units) || 0
           })
@@ -2597,18 +3540,32 @@ export default async function handler(req, res) {
 
           return { sndBySku, dailyPnLBySku }
         })(),
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — same engine as Shopify/D2C's resolvedDailySKU: mature days use real
+        // per-day RTO/Return/CIR/Cancelled revenue, immature days (last 15 days) substitute each
+        // SKU's own rolling 30-day-window rate per component. Amazon Seller Central has no
+        // Exchange status (confirmed live 2026-10-22), so all 4 tracked components count toward
+        // Total Return Revenue/%. Purely additive — amzSCDailyNetBySKU/dailyPnLBySku/sndBySku
+        // above are untouched.
+        resolvedDailySKU: amzSCResolvedForMaps,
       },
       amzVCMatrix: {
+        // returnRev below overridden from amzVCResolvedByCatSubCat/amzVCResolvedBySku (built above
+        // from the SAME resolveDailySkuComponents() output as amzVC.resolvedDailySKU) — confirmed
+        // bug fix 2026-10-22, same class of fix as Amazon SC/D2C/EBO above.
         catData: (() => {
           const map = {}
-          ;(r.amzVCCat || []).forEach(x => { map[x.Category] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 } })
+          ;(r.amzVCCat || []).forEach(x => { const resolved = amzVCResolvedByCatSubCat[x.Category]; map[x.Category] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnRev: resolved?.returnRev ?? 0 } })
           return map
         })(),
         subCatData: (() => {
           const map = {}
           ;(r.amzVCSubCat || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
-            map[x.Category][x.SubCategory] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: parseInt(x.returned_units)||0, returnRev: parseFloat(x.return_rev)||0 }
+            const resolved = amzVCResolvedByCatSubCat[`${x.Category}::${x.SubCategory}`]
+            // returnedUnits overridden from resolved.returnUnits (confirmed 2026-10-22, same
+            // per-component resolved-units pattern as revenue).
+            map[x.Category][x.SubCategory] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: resolved?.returnUnits ?? (parseInt(x.returned_units)||0), returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0) }
           })
           return map
         })(),
@@ -2617,7 +3574,8 @@ export default async function handler(req, res) {
           ;(r.amzVCSKU || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            map[x.Category][x.SubCategory][x.sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: parseInt(x.returned_units)||0, returnRev: parseFloat(x.return_rev)||0 }
+            const resolved = amzVCResolvedBySku[x.sku]
+            map[x.Category][x.SubCategory][x.sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: resolved?.returnUnits ?? (parseInt(x.returned_units)||0), returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0) }
           })
           return map
         })(),
@@ -2648,11 +3606,18 @@ export default async function handler(req, res) {
           const STOCK_MOVEMENT_RATE_PER_KG = 4
           const sndBySku = {}
           const dailyPnLBySku = []
+          // returnRev below now comes from amzVCResolvedForMaps (the SAME per-(sku,day) resolved
+          // engine as resolvedDailySKU/catData/subCatData/skuData above), keyed by (date, sku) —
+          // NOT this row's own raw vcReturnsSelectFragment()-based return_rev column, confirmed bug
+          // fix 2026-10-22: same stale-formula class as Flipkart/Amazon SC's dailyPnLBySku bugs
+          // (bypassed the resolved engine's 15-day immature-window substitution entirely).
+          const amzVCResolvedByDateSku = {}
+          amzVCResolvedForMaps.forEach(row => { amzVCResolvedByDateSku[`${row.date}::${row.sku}`] = row.totalReturnRev })
           ;(r.amzVCDailySKU || []).forEach(x => {
             const units = parseFloat(x.units) || 0
             const gross = parseFloat(x.gross) || 0
             const excRev = parseFloat(x.exc_rev) || 0
-            const returnRev = parseFloat(x.return_rev) || 0
+            const returnRev = amzVCResolvedByDateSku[`${x.order_date}::${x.sku}`] ?? (parseFloat(x.return_rev) || 0)
             const returnedUnits = parseInt(x.returned_units) || 0
             const salesUnits = units - returnedUnits
             const salesGross = gross - returnRev
@@ -2686,10 +3651,27 @@ export default async function handler(req, res) {
               dailyPnLBySku.push({ date: x.order_date, sku: x.sku, gross, excRev, net, totalReturnRev: returnRev, units, returnedUnits, snd })
             }
           })
+          // Pure-return days (a SKU's return posted on a day with zero sales for that SKU) never
+          // appear in r.amzVCDailySKU at all — that query only returns rows with real sale activity
+          // — so amzVCResolvedForMaps (built from amzVCDailySKUComponents, which DOES carry these
+          // zero-gross rows) has ~10.8K more (date,sku) rows than dailyPnLBySku for a typical range,
+          // worth ~₹1.7L of totalReturnRev (confirmed live 2026-10-22). Patched in here so the trend
+          // chart's day-wise Returns line doesn't silently drop real, already-resolved return
+          // revenue just because the day had no matching sale.
+          const coveredKeys = new Set(dailyPnLBySku.map(d => `${d.date}::${d.sku}`))
+          amzVCResolvedForMaps.forEach(row => {
+            const key = `${row.date}::${row.sku}`
+            if (coveredKeys.has(key) || row.gross > 0) return
+            dailyPnLBySku.push({ date: row.date, sku: row.sku, gross: 0, excRev: 0, net: -row.totalReturnRev, totalReturnRev: row.totalReturnRev, units: 0, returnedUnits: 0, snd: 0 })
+          })
           return { sndBySku, dailyPnLBySku }
         })(),
       },
       amzVC: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — Amazon Vendor Central has only a Return status, single-component
+        // resolution, same engine as CRED/Firstcry.
+        resolvedDailySKU: amzVCResolvedForMaps,
         prevRev: parseFloat((r.prevAmzSC || []).find(x => x.SubChannel === 'Amazon Vendor Central')?.rev) || 0,
         prevExcRev: parseFloat((r.prevAmzSC || []).find(x => x.SubChannel === 'Amazon Vendor Central')?.exc_rev) || 0,
         prevUnits: parseInt((r.prevAmzSC || []).find(x => x.SubChannel === 'Amazon Vendor Central')?.units) || 0,
@@ -2726,6 +3708,12 @@ export default async function handler(req, res) {
       // above (`grep -rn "amzIntl" src/` = 0 matches anywhere in the frontend). See git history
       // for the removed object if ever needed again.
       flipkart: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — same engine as Shopify/Amazon SC. Flipkart's own Order_Status vocabulary
+        // includes RTO/Return/CIR/Cancelled (confirmed against fkReturnRateMature's existing
+        // Order_Status IN ('Return','RTO') check); no Exchange status for this channel. Purely
+        // additive — fkDailyCat/netCalc/totals below are untouched.
+        resolvedDailySKU: fkResolvedForMaps,
         prevRev: parseFloat(r.prevFk?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevFk?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevFk?.[0]?.orders) || 0,
@@ -2746,7 +3734,14 @@ export default async function handler(req, res) {
         })(),
         estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
         daily: fkBlock.daily,
-        latestRealDate: fkLatestDate || fkBlock.latestFkDate || null,
+        // fkBlock.latestFkDate checked FIRST (confirmed bug fix 2026-10-22, "the last sync was
+        // happened [mid-day].. what it's considering is that we have the data till 18th") — it's
+        // partial-sync-aware (walks back past any tail day whose revenue is <40% of its trailing
+        // 7-day average), unlike fkLatestDate, which is a raw MAX(OrderDate) over the whole table
+        // (used only to shift fkStart/fkEnd for future-dated ranges) and would still show the
+        // partial day itself as "the latest real date" even though its value on screen is now the
+        // estimated replacement, not the real one.
+        latestRealDate: fkBlock.latestFkDate || fkLatestDate || null,
         estimatedDays: fkBlock.estimatedDays,
         dataShifted: fkStart !== start,
         status: (r.fkStatus || []).map(x => ({ status: x.status, sub: x.sub, orders: parseInt(x.orders)||0 })),
@@ -2767,8 +3762,44 @@ export default async function handler(req, res) {
         // Provisional Return % shown alongside the live returnRate above, never replacing it.
         returnRateMature: buildFkReturnRateMature(r.fkReturnRateMature),
         categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0, excRev: parseFloat(x.exc_rev)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
-        states: (r.fkStates || []).map(x => ({ state: (!x.state || x.state.trim() === '-' || x.state.trim() === '') ? 'Others' : x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
-        cities: (r.fkCities || []).map(x => ({ city: x.city, state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
+        // Resolved per-State/City Return Revenue (NEW, additive, 2026-10-22) — fkStates/fkCities
+        // are grouped by (state, sub)/(city, state, sub), but the resolved rate is computed at the
+        // combined state/city grain (no FBF/NON-FBF split); since the frontend sums returnRev
+        // ACROSS sub rows per state/city anyway (stateMap[x.state].returnRev += ...), the full
+        // resolved total is placed on each state/city's FIRST row only and 0 on the rest, so the
+        // frontend's own sum still lands on the correct resolved total without double-counting.
+        states: (() => {
+          const stateResolved = resolveDailySkuComponents(
+            (r.fkDailyStateComponents || []).map(x => ({ state: x.state, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.fkStateComponentRateMature || [], CHANNEL_COMPONENTS.flipkartGeo, x => x.state),
+            CHANNEL_COMPONENTS.flipkartGeo,
+            x => x.state,
+          )
+          const resolvedByState = {}
+          stateResolved.forEach(x => { resolvedByState[x.sku] = (resolvedByState[x.sku] || 0) + x.totalReturnRev })
+          const seenState = new Set()
+          return (r.fkStates || []).map(x => {
+            const state = (!x.state || x.state.trim() === '-' || x.state.trim() === '') ? 'Others' : x.state
+            const first = !seenState.has(state); seenState.add(state)
+            return { state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: first ? (resolvedByState[state] ?? (parseFloat(x.return_rev)||0)) : 0, deliveredRev: parseFloat(x.delivered_rev)||0 }
+          })
+        })(),
+        cities: (() => {
+          const cityResolved = resolveDailySkuComponents(
+            (r.fkDailyCityComponents2 || []).map(x => ({ cityKey: `${x.city}::${x.state}`, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap((r.fkCityComponentRateMature || []).map(x => ({ ...x, cityKey: `${x.city}::${x.state}` })), CHANNEL_COMPONENTS.flipkartGeo, x => x.cityKey),
+            CHANNEL_COMPONENTS.flipkartGeo,
+            x => x.cityKey,
+          )
+          const resolvedByCity = {}
+          cityResolved.forEach(x => { resolvedByCity[x.sku] = (resolvedByCity[x.sku] || 0) + x.totalReturnRev })
+          const seenCity = new Set()
+          return (r.fkCities || []).map(x => {
+            const key = `${x.city}::${x.state}`
+            const first = !seenCity.has(key); seenCity.add(key)
+            return { city: x.city, state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: first ? (resolvedByCity[key] ?? (parseFloat(x.return_rev)||0)) : 0, deliveredRev: parseFloat(x.delivered_rev)||0 }
+          })
+        })(),
         statePrevMap: (r.fkStatesPrev||[]).reduce((m,x) => { const k = `${(!x.state||x.state.trim()==='-'||x.state.trim()==='')?'Others':x.state}::${x.sub}`; m[k] = (m[k]||0) + (parseFloat(x.rev)||0); return m }, {}),
         cityPrevMap: (r.fkCitiesPrev||[]).reduce((m,x) => { const k = `${x.city}::${x.sub}`; m[k] = (m[k]||0) + (parseFloat(x.rev)||0); return m }, {}),
         stateTotalMap: (r.fkStates||[]).reduce((m,x) => { m[x.sub] = (m[x.sub]||0)+(parseFloat(x.rev)||0); return m }, {}),
@@ -2777,15 +3808,56 @@ export default async function handler(req, res) {
         subCatPrevMap: (r.fkSubCatPrev||[]).reduce((m,x) => { const k = `${x.category}::${x.subcategory}::${x.sub}`; m[k] = (m[k]||0)+(parseFloat(x.rev)||0); return m }, {}),
         skuPrevMap: (r.fkSKUPrev||[]).reduce((m,x) => { const k = `${x.category}::${x.subcategory}::${x.sku}::${x.sub}`; m[k] = (m[k]||0)+(parseFloat(x.rev)||0); return m }, {}),
         regions: (r.fkRegions || []).map(x => ({ region: x.region, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        subCategories: (r.fkSubCategory || []).map(x => ({ category: x.category, subcategory: x.subcategory, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 })),
+        // Distributed proportionally by each (subcategory, sub) row's own revenue share of its
+        // fulfilment type's real total (2026-10-22, confirmed bug fix) — Sales tab's fk.totals
+        // already gets patched with fkBlock's "estimated missing recent days" amount (Flipkart's
+        // feed lags a few days; estimated from a 7-day rolling average), but this subCategories
+        // array never received the same patch, so PnL's Category/SubCategory tables (which derive
+        // from this array, not fk.totals) silently undercounted Flipkart's recent revenue by up to
+        // ~10.5% in live testing. No per-category estimate detail exists, so the patch is spread by
+        // revenue share rather than fabricated per-category data — keeps PnL's grand total tied
+        // exactly to Sales tab's fk.totals while leaving relative category proportions unchanged.
+        // returnRev below overridden from fkResolvedByCatSubCat (built above, same resolved engine
+        // as resolvedDailySKU) — confirmed bug fix 2026-10-22. subCategories keeps its FBF/NON-FBF
+        // `sub` split, which the resolved source doesn't carry, so the Category::SubCategory
+        // resolved total is distributed across its `sub` rows by each row's own revenue share
+        // (same pattern as Amazon SC's FBA/MFN distribution above).
+        // cancelRev added (2026-10-22, confirmed bug fix) — fkSubCatData in PnLPage.jsx previously
+        // computed its OWN independent cancelRev as `rev - deliveredRev`, a stale pre-resolved-
+        // engine formula that produced a 6x-inflated Cancellation figure (confirmed live: ₹39.3L
+        // vs the resolved engine's real ₹6.39L), silently feeding Returns%/Net Revenue even after
+        // returnRev itself was fixed. Exposed here from fkResolvedByCatSubCat so PnL can read it
+        // directly instead of recomputing from deliveredRev.
+        subCategories: (() => {
+          const rows = (r.fkSubCategory || []).map(x => ({ category: x.category, subcategory: x.subcategory, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, returnRev: parseFloat(x.return_rev)||0, deliveredRev: parseFloat(x.delivered_rev)||0 }))
+          const subRevTotal = rows.reduce((m, x) => { m[x.sub] = (m[x.sub] || 0) + x.rev; return m }, {})
+          const subCatRevTotal = rows.reduce((m, x) => { const k = `${x.category}::${x.subcategory}`; m[k] = (m[k] || 0) + x.rev; return m }, {})
+          // cancelUnits/returnUnits added from fkResolvedByCatSubCat (confirmed 2026-10-22, same
+          // per-component resolved-units pattern as revenue — shares the same `share` scaling).
+          return rows.map(x => {
+            const est = fkBlock.estBySub[x.sub === 'FBF' ? 'FBF' : 'NON-FBF']?.rev || 0
+            const subCatKey = `${x.category}::${x.subcategory}`
+            const resolved = fkResolvedByCatSubCat[subCatKey]
+            const share = resolved && subCatRevTotal[subCatKey] > 0 ? x.rev / subCatRevTotal[subCatKey] : 0
+            const returnRev = resolved ? resolved.returnRev * share : x.returnRev
+            const cancelRev = resolved ? resolved.cancelRev * share : Math.max(x.rev - x.deliveredRev, 0)
+            const returnUnits = resolved ? resolved.returnUnits * share : 0
+            const cancelUnits = resolved ? resolved.cancelUnits * share : 0
+            if (est <= 0 || !subRevTotal[x.sub]) return { ...x, returnRev, cancelRev, returnUnits, cancelUnits }
+            const estShare = x.rev / subRevTotal[x.sub]
+            return { ...x, rev: x.rev + est * estShare, excRev: x.excRev + est * estShare, returnRev, cancelRev, returnUnits, cancelUnits }
+          })
+        })(),
         dailyCat: (r.fkDailyCat || []).map(x => ({ date: x.date, category: x.category, subcategory: x.subcategory, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
+        // returnUnits/cancelUnits added from fkResolvedBySku (confirmed 2026-10-22, same
+        // per-component resolved-units pattern as revenue).
         skuMatrix: (() => {
           const map = {}
           ;(r.fkSKUMatrix || []).forEach(x => {
             const cat = x.category || 'Others', sc = x.subcategory || 'Others', sku = x.sku, sub = x.sub
             if (!map[cat]) map[cat] = {}
             if (!map[cat][sc]) map[cat][sc] = {}
-            if (!map[cat][sc][sku]) map[cat][sc][sku] = { rev: 0, excRev: 0, units: 0, orders: 0 }
+            if (!map[cat][sc][sku]) map[cat][sc][sku] = { rev: 0, excRev: 0, units: 0, orders: 0, cancelRev: fkResolvedBySku[sku]?.cancelRev ?? 0, returnRev: fkResolvedBySku[sku]?.returnRev ?? 0, returnUnits: fkResolvedBySku[sku]?.returnUnits ?? 0, cancelUnits: fkResolvedBySku[sku]?.cancelUnits ?? 0 }
             map[cat][sc][sku].rev += parseFloat(x.rev)||0
             map[cat][sc][sku].excRev += parseFloat(x.exc_rev)||0
             map[cat][sc][sku].units += parseInt(x.units)||0
@@ -2804,32 +3876,64 @@ export default async function handler(req, res) {
           const ratecard = loadFkSndRatecard()
           const rows = r.fkSKUMatrixDaily || []
 
-          const netRevOf = row => {
+          // totalReturnRev below now comes from fkResolvedForMaps (the SAME per-(sku,day) resolved
+          // engine as resolvedDailySKU/skuMatrix/subCategories above), keyed by (date, sku) — NOT
+          // this row's own raw cancel_rev/return_rev (FulfilmentStatus='Cancelled' + Order_Status
+          // IN ('Return','RTO')), confirmed bug fix 2026-10-22: this was the SAME stale formula
+          // class that inflated fkSubCatData's Cancellation figure 6x, just at the SKU/day grain —
+          // feeds fkSkuData's Financial Table rows AND the trend chart's day-wise Returns line.
+          const fkResolvedByDateSku = {}
+          const fkResolvedUnitsByDateSku = {}
+          fkResolvedForMaps.forEach(row => {
+            const key = `${row.date}::${row.sku}`
+            fkResolvedByDateSku[key] = row.totalReturnRev
+            fkResolvedUnitsByDateSku[key] = row.resolvedReturnUnits
+          })
+
+          const netRevOf = (row, totalReturnRev) => {
             const gross = parseFloat(row.gross) || 0
             const excRev = parseFloat(row.exc_rev) || 0
-            const totalReturnRev = (parseFloat(row.cancel_rev) || 0) + (parseFloat(row.return_rev) || 0)
             const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
             return Math.max(gross - totalReturnRev, 0) * (1 - gstRatio)
           }
+
+          // fkSKUMatrixDaily groups by (order_date, category, subcategory, sku, sub) — sub being
+          // FBF/NON-FBF — so a (date, sku) can have 2 rows here, but fkResolvedByDateSku's lookup is
+          // already the FULL resolved total for that (date, sku), not per-sub. Distributing it by
+          // each row's own gross share (computed first, below) avoids adding the full amount twice
+          // — confirmed bug fix 2026-10-22: this exact double-count (no share applied at all)
+          // overstated Flipkart's day-wise Returns by ~₹7-15L depending on date range, the same
+          // double-counting class as D2C's catMap/subCatMap bug fixed earlier this session.
+          const dateSkuGross = {}
+          rows.forEach(x => { const key = `${x.order_date}::${x.sku}`; dateSkuGross[key] = (dateSkuGross[key] || 0) + (parseFloat(x.gross) || 0) })
 
           const sndBySku = {}
           const dailyBySkuMap = {}
           rows.forEach(x => {
             const month = (x.order_date || '').slice(0, 7)
             const resolved = resolveFkRate(ratecard, month, x.category, x.subcategory, x.sub)
-            const net = netRevOf(x)
+            const key = `${x.order_date}::${x.sku}`
+            const fullResolved = fkResolvedByDateSku[key]
+            const rowGross = parseFloat(x.gross) || 0
+            const share = fullResolved != null && dateSkuGross[key] > 0 ? rowGross / dateSkuGross[key] : 0
+            const totalReturnRev = fullResolved != null ? fullResolved * share : ((parseFloat(x.cancel_rev) || 0) + (parseFloat(x.return_rev) || 0))
+            // returnedUnits distributed by the same share as totalReturnRev above (confirmed
+            // 2026-10-22, per-component resolved units) — was still reading the raw returned_units
+            // SQL column, same stale-pattern class as totalReturnRev's bug.
+            const fullResolvedUnits = fkResolvedUnitsByDateSku[key]
+            const returnedUnits = fullResolvedUnits != null ? fullResolvedUnits * share : (parseInt(x.returned_units) || 0)
+            const net = netRevOf(x, totalReturnRev)
             const snd = resolved.pct != null ? net * (resolved.pct / 100) : 0
 
             if (resolved.pct != null) sndBySku[x.sku] = (sndBySku[x.sku] || 0) + snd
 
-            const key = `${x.order_date}::${x.sku}`
             if (!dailyBySkuMap[key]) dailyBySkuMap[key] = { date: x.order_date, sku: x.sku, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, units: 0, returnedUnits: 0, snd: 0 }
-            dailyBySkuMap[key].gross += parseFloat(x.gross) || 0
+            dailyBySkuMap[key].gross += rowGross
             dailyBySkuMap[key].excRev += parseFloat(x.exc_rev) || 0
             dailyBySkuMap[key].net += net
-            dailyBySkuMap[key].totalReturnRev += (parseFloat(x.cancel_rev) || 0) + (parseFloat(x.return_rev) || 0)
+            dailyBySkuMap[key].totalReturnRev += totalReturnRev
             dailyBySkuMap[key].units += parseInt(x.units) || 0
-            dailyBySkuMap[key].returnedUnits += parseInt(x.returned_units) || 0
+            dailyBySkuMap[key].returnedUnits += returnedUnits
             if (resolved.pct != null) dailyBySkuMap[key].snd += snd
           })
 
@@ -2837,6 +3941,9 @@ export default async function handler(req, res) {
         })(),
       },
       cred: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — CRED has only a Return status, so this is a single-component resolution.
+        resolvedDailySKU: crResolvedForMaps,
         // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab.
         netCalc: (() => {
           const m = computeNetRevenueMeasures(r.crTotals?.[0] || {})
@@ -2853,11 +3960,15 @@ export default async function handler(req, res) {
         totals: r.crTotals?.[0] ? { orders: parseInt(r.crTotals[0].orders)||0, units: parseInt(r.crTotals[0].units)||0, rev: parseFloat(r.crTotals[0].rev)||0, excRev: parseFloat(r.crTotals[0].exc_rev)||0, skus: parseInt(r.crTotals[0].skus)||0, cities: parseInt(r.crTotals[0].cities)||0, days: parseInt(r.crTotals[0].days)||0 } : {},
         daily: (r.crDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skus: (r.crSKUs || []).map(x => ({ sku: x.sku, name: x.sku_name, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
-        categories: (r.crCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
-        subCategories: (r.crSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // cancelRev/returnRev below overridden from crResolvedByCatSubCat/crResolvedBySku (built
+        // above, same resolved engine as resolvedDailySKU) — confirmed bug fix 2026-10-22. rtoRev/
+        // cirRev stay on the raw query (CRED genuinely has no RTO/CIR status — CHANNEL_COMPONENTS.
+        // cred only tracks return+cancel — so these are always 0 either way).
+        categories: (r.crCategories || []).map(x => { const resolved = crResolvedByCatSubCat[x.category]; return { category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0), cancelUnits: resolved?.cancelUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 } }),
+        subCategories: (r.crSubCategories || []).map(x => { const resolved = crResolvedByCatSubCat[`${x.category}::${x.subcategory}`]; return { category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0), cancelUnits: resolved?.cancelUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 } }),
         catPrevMap: Object.fromEntries((r.crCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.crSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
-        skuMatrix: (() => { const m = {}; (r.crSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0,cancelRev:parseFloat(x.cancel_rev)||0,rtoRev:parseFloat(x.rto_rev)||0,cirRev:parseFloat(x.cir_rev)||0,returnRev:parseFloat(x.return_rev)||0} }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.crSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; const resolved = crResolvedBySku[sku]; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0,cancelRev:resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0),rtoRev:parseFloat(x.rto_rev)||0,cirRev:parseFloat(x.cir_rev)||0,returnRev:resolved?.returnRev ?? (parseFloat(x.return_rev)||0),cancelUnits:resolved?.cancelUnits ?? 0,returnUnits:resolved?.returnUnits ?? 0} }); return m })(),
         states: (r.crStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.crStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: (r.crStates||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0),
@@ -2891,6 +4002,9 @@ export default async function handler(req, res) {
         skuMatrix: (() => { const m = {}; (r.intlSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
       },
       firstcry: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — Firstcry has only a Return status, single-component resolution.
+        resolvedDailySKU: fcResolvedForMaps,
         // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab.
         netCalc: (() => {
           const m = computeNetRevenueMeasures(r.fcTotals?.[0] || {})
@@ -2907,9 +4021,13 @@ export default async function handler(req, res) {
         totals: r.fcTotals?.[0] ? { orders: parseInt(r.fcTotals[0].orders)||0, units: parseInt(r.fcTotals[0].units)||0, rev: parseFloat(r.fcTotals[0].rev)||0, excRev: parseFloat(r.fcTotals[0].exc_rev)||0, skus: parseInt(r.fcTotals[0].skus)||0, cities: parseInt(r.fcTotals[0].cities)||0, days: parseInt(r.fcTotals[0].days)||0 } : {},
         daily: (r.fcDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skus: (r.fcSKUs || []).map(x => ({ sku: x.sku, name: x.sku_name, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
-        categories: (r.fcCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        subCategories: (r.fcSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
-        skuMatrix: (() => { const m = {}; (r.fcSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
+        // cancelRev/returnRev added to categories and overridden on subCategories/skuMatrix from
+        // fcResolvedByCatSubCat/fcResolvedBySku (built above, same resolved engine as
+        // resolvedDailySKU) — confirmed bug fix 2026-10-22. categories/skuMatrix previously had no
+        // cancelRev/returnRev fields at all.
+        categories: (r.fcCategories || []).map(x => { const resolved = fcResolvedByCatSubCat[x.category]; return { category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: resolved?.cancelRev ?? 0, returnRev: resolved?.returnRev ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 } }),
+        subCategories: (r.fcSubCategories || []).map(x => { const resolved = fcResolvedByCatSubCat[`${x.category}::${x.subcategory}`]; return { category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0), cancelUnits: resolved?.cancelUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 } }),
+        skuMatrix: (() => { const m = {}; (r.fcSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; const resolved = fcResolvedBySku[sku]; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0,cancelRev:resolved?.cancelRev ?? 0,returnRev:resolved?.returnRev ?? 0,cancelUnits:resolved?.cancelUnits ?? 0,returnUnits:resolved?.returnUnits ?? 0} }); return m })(),
         states: (r.fcStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.fcStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: (r.fcStates||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0),
@@ -2973,6 +4091,9 @@ export default async function handler(req, res) {
         ...computeQcSnd(r.inDailySKU),
       },
       myntra: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — same engine as other channels. Purely additive.
+        resolvedDailySKU: mnResolvedForMaps,
         // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab. Overrides the
         // old "excRev shown directly as net" approach (platform data isn't actually net-of-returns).
         netCalc: (() => {
@@ -2984,24 +4105,79 @@ export default async function handler(req, res) {
         prevExcRev: parseFloat(r.prevMn?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevMn?.[0]?.orders) || 0,
         prevDaily: prevDailyByChannelMap['Myntra'] || [],
-        totals: r.mnTotals?.[0] ? { orders: parseInt(r.mnTotals[0].orders)||0, units: parseInt(r.mnTotals[0].units)||0, rev: parseFloat(r.mnTotals[0].rev)||0, excRev: parseFloat(r.mnTotals[0].exc_rev)||0, skus: parseInt(r.mnTotals[0].skus)||0, cities: parseInt(r.mnTotals[0].cities)||0, days: parseInt(r.mnTotals[0].days)||0, returnRev: parseFloat(r.mnTotals[0].return_rev)||0, returnOrders: parseInt(r.mnTotals[0].return_orders)||0 } : {},
+        // rev/excRev/orders/units patched with mnBlock's estimated-recent-days amount (Myntra's
+        // feed lags behind BigQuery sync the same way Flipkart's does) — confirmed 2026-10-22, same
+        // "estimate what we can, never fabricate what we can't" mechanism as Flipkart's fkBlock.
+        totals: r.mnTotals?.[0] ? { orders: (parseInt(r.mnTotals[0].orders)||0) + mnBlock.estTotalOrders, units: (parseInt(r.mnTotals[0].units)||0) + mnBlock.estTotalUnits, rev: (parseFloat(r.mnTotals[0].rev)||0) + mnBlock.estTotalRev, excRev: (parseFloat(r.mnTotals[0].exc_rev)||0) + mnBlock.estTotalExcRev, skus: parseInt(r.mnTotals[0].skus)||0, cities: parseInt(r.mnTotals[0].cities)||0, days: parseInt(r.mnTotals[0].days)||0, returnRev: parseFloat(r.mnTotals[0].return_rev)||0, returnOrders: parseInt(r.mnTotals[0].return_orders)||0 } : {},
         // Mature-window (today-44d to today-14d) return rate, replicated from Shopify's pattern
         // (confirmed 2026-10-19) — mnReturnPct's own live-range formula already matches
         // netRevenueReturnPct exactly, so the shared fragment/aggregator applies unchanged.
         returnRateMature: buildReturnRateMature(r.mnReturnRateMature),
-        daily: (r.mnDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
+        daily: mnBlock.daily,
+        estimatedDays: mnBlock.estimatedDays,
+        latestRealDate: mnBlock.latestMnDate,
         status: (r.mnStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        categories: (r.mnCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        subCategories: (r.mnSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // cancelRev/rtoRev/cirRev/returnRev added from mnResolvedByCatSubCat (built above, keyed by
+        // bare Category here — confirmed bug fix 2026-10-22, this field set didn't exist before).
+        // rev/excRev also patched with mnBlock's estimated-recent-days amount, distributed across
+        // categories by each one's own revenue share — same proportional-share mechanism as
+        // Flipkart's subCategories patch, so this array's total ties to mnBlock.estTotalRev exactly.
+        categories: (() => {
+          const rows = (r.mnCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 }))
+          const catRevTotal = rows.reduce((s, x) => s + x.rev, 0)
+          return rows.map(x => {
+            const resolved = mnResolvedByCatSubCat[x.category]
+            const share = catRevTotal > 0 ? x.rev / catRevTotal : 0
+            return { ...x, rev: x.rev + mnBlock.estTotalRev * share, excRev: x.excRev + mnBlock.estTotalExcRev * share, cancelRev: resolved?.cancelRev ?? 0, rtoRev: resolved?.rtoRev ?? 0, cirRev: resolved?.cirRev ?? 0, returnRev: resolved?.returnRev ?? 0, cancelUnits: resolved?.cancelUnits ?? 0, rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 }
+          })
+        })(),
+        // cancelRev/rtoRev/cirRev/returnRev below overridden from mnResolvedByCatSubCat (built
+        // above from the same resolved engine as resolvedDailySKU) — confirmed bug fix 2026-10-22.
+        // rev/excRev distributed with mnBlock's estimate the same way categories above are.
+        subCategories: (() => {
+          const rows = (r.mnSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cancel_rev: x.cancel_rev, rto_rev: x.rto_rev, cir_rev: x.cir_rev, return_rev: x.return_rev }))
+          const subCatRevTotal = rows.reduce((s, x) => s + x.rev, 0)
+          return rows.map(x => {
+            const resolved = mnResolvedByCatSubCat[`${x.category}::${x.subcategory}`]
+            const share = subCatRevTotal > 0 ? x.rev / subCatRevTotal : 0
+            return { category: x.category, subcategory: x.subcategory, orders: x.orders, units: x.units, rev: x.rev + mnBlock.estTotalRev * share, excRev: x.excRev + mnBlock.estTotalExcRev * share, cancelRev: resolved?.cancelRev ?? (parseFloat(x.cancel_rev)||0), rtoRev: resolved?.rtoRev ?? (parseFloat(x.rto_rev)||0), cirRev: resolved?.cirRev ?? (parseFloat(x.cir_rev)||0), returnRev: resolved?.returnRev ?? (parseFloat(x.return_rev)||0), cancelUnits: resolved?.cancelUnits ?? 0, rtoUnits: resolved?.rtoUnits ?? 0, cirUnits: resolved?.cirUnits ?? 0, returnUnits: resolved?.returnUnits ?? 0 }
+          })
+        })(),
         catPrevMap: Object.fromEntries((r.mnCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.mnSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
-        skuMatrix: (() => { const m = {}; (r.mnSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
+        // cancelRev/rtoRev/cirRev/returnRev added from mnResolvedBySku (built above, same resolved
+        // engine as resolvedDailySKU/subCategories) — confirmed bug fix 2026-10-22, now that
+        // mnSKUMatrix groups by MasterSKU (same identity) instead of ChannelSKUCode.
+        skuMatrix: (() => { const m = {}; (r.mnSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; const resolved = mnResolvedBySku[sku]; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0,cancelRev:resolved?.cancelRev ?? 0,rtoRev:resolved?.rtoRev ?? 0,cirRev:resolved?.cirRev ?? 0,returnRev:resolved?.returnRev ?? 0,cancelUnits:resolved?.cancelUnits ?? 0,rtoUnits:resolved?.rtoUnits ?? 0,cirUnits:resolved?.cirUnits ?? 0,returnUnits:resolved?.returnUnits ?? 0} }); return m })(),
         skus: (r.mnSKUs || []).map(x => ({ sku: x.sku, category: x.category || '', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        states: (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // Resolved per-State Return Revenue (NEW, additive, 2026-10-22) — same engine as other
+        // channels' geography fixes.
+        states: (() => {
+          const stateResolved = resolveDailySkuComponents(
+            (r.mnDailyStateComponents || []).map(x => ({ state: x.state, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.mnStateComponentRateMature || [], CHANNEL_COMPONENTS.myntraGeo, x => x.state),
+            CHANNEL_COMPONENTS.myntraGeo,
+            x => x.state,
+          )
+          const resolvedByState = {}
+          stateResolved.forEach(x => { resolvedByState[x.sku] = (resolvedByState[x.sku] || 0) + x.totalReturnRev })
+          return (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: resolvedByState[x.state] ?? (parseFloat(x.return_rev)||0) }))
+        })(),
         statePrevMap: Object.fromEntries((r.mnStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: (r.mnStates||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0),
         cityTotal: (r.mnCities||[]).reduce((s,x)=>s+(parseFloat(x.rev)||0),0),
-        cities: (r.mnCities || []).map(x => ({ city: x.city, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        // Resolved per-City Return Revenue (NEW, additive, 2026-10-22) — same engine as states above.
+        cities: (() => {
+          const cityResolved = resolveDailySkuComponents(
+            (r.mnDailyCityComponents || []).map(x => ({ city: x.city, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, return_rev: x.return_rev, cancel_rev: x.cancel_rev })),
+            buildRollingRateMap(r.mnCityComponentRateMature || [], CHANNEL_COMPONENTS.myntraGeo, x => x.city),
+            CHANNEL_COMPONENTS.myntraGeo,
+            x => x.city,
+          )
+          const resolvedByCity = {}
+          cityResolved.forEach(x => { resolvedByCity[x.sku] = (resolvedByCity[x.sku] || 0) + x.totalReturnRev })
+          return (r.mnCities || []).map(x => ({ city: x.city, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: resolvedByCity[x.city] ?? (parseFloat(x.return_rev)||0) }))
+        })(),
         cityPrevMap: Object.fromEntries((r.mnCitiesPrev || []).map(x => [x.city, parseFloat(x.rev)||0])),
       },
       blinkit: {
@@ -3029,6 +4205,16 @@ export default async function handler(req, res) {
         ...computeQcSnd(r.blDailySKU),
       },
       offline: {
+        // ── Resolved per-component Return Revenue/Net Revenue, SKU x day grain (NEW, additive,
+        // 2026-10-22) — offline_sales' own single component is Credit Note (its own vocabulary,
+        // no RTO/CIR/Return/Cancelled lifecycle). Field renamed credit_note_rev -> creditNote_rev
+        // to match CHANNEL_COMPONENTS.offline's key, since the query groups Sales-vs-Credit-Note
+        // directly rather than via per-status columns like every other channel's query does.
+        resolvedDailySKU: resolveDailySkuComponents(
+          (r.offDailySKUComponents || []).map(x => ({ sku: x.sku, order_date: x.order_date, gross_inc_gst: x.gross_inc_gst, creditNote_rev: x.credit_note_rev })),
+          buildRollingRateMap((r.offComponentRateMature || []).map(x => ({ sku: x.sku, gross_inc_gst: x.gross_inc_gst, creditNote_rev: x.credit_note_rev })), CHANNEL_COMPONENTS.offline),
+          CHANNEL_COMPONENTS.offline,
+        ),
         // Mature-window (today-44d to today-14d) Credit Note % — new metric, replicated from the
         // same pattern as the other channels' returnRateMature (confirmed 2026-10-19), using
         // Offline's own Sales-vs-Credit-Note vocabulary since it has no RTO/CIR/Return lifecycle.
@@ -3299,6 +4485,91 @@ export default async function handler(req, res) {
         repeatCusts: parseInt(r.shopifyNewCusts?.[0]?.repeat_custs) || 0,
       },
     }
+
+    // ── Overall ("All") Sales tab reconciliation to the resolved engine (NEW, 2026-10-22) ──
+    // chMap[channel].netRev above was computed from each channel's raw/live netCalc-style query
+    // (shNetCalc, amzSCNetCalc, Flipkart's fkBlock.patchedTotals, Myntra/EBO/CRED/Firstcry's
+    // generic byChannel aggregation) — none of them resolved via the rolling-30-day engine, so the
+    // Overall tab's Net Revenue/Return% KPIs silently disagreed with each channel's own tab (same
+    // class of bug just fixed for D2C's Sales-vs-PnL mismatch, and for PnL's EBO/Amazon/Flipkart/
+    // Myntra/CRED/Firstcry tabs). Each channel's own resolvedDailySKU (already computed above, same
+    // single source every tab now reads) is summed here and used to override chMap[channel].netRev/
+    // grossRev — "no duplicacy", confirmed 2026-10-22: Overall must use the same resolved numbers
+    // every per-channel tab shows, not recompute its own.
+    ;(() => {
+      const resolvedByChannel = {
+        Shopify: payload.shopify?.resolvedDailySKU,
+        Amazon: (payload.amzSC?.resolvedDailySKU || []).concat(payload.amzVC?.resolvedDailySKU || []),
+        Flipkart: payload.flipkart?.resolvedDailySKU,
+        Myntra: payload.myntra?.resolvedDailySKU,
+        EBO: payload.ebo?.resolvedDailySKU,
+        CRED: payload.cred?.resolvedDailySKU,
+        Firstcry: payload.firstcry?.resolvedDailySKU,
+      }
+      Object.entries(resolvedByChannel).forEach(([ch, rows]) => {
+        if (!rows || !rows.length || !chMap[ch]) return
+        const gross = rows.reduce((s, x) => s + (x.gross || 0), 0)
+        const returnRev = rows.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
+        if (gross <= 0) return
+        // chMap[ch].excRev already holds this channel's real exc-GST total (set by the per-channel
+        // override blocks above, or the generic byChannel loop) — reuse it for the GST ratio rather
+        // than recomputing, same whole-range-GST-ratio formula every resolved-engine consumer uses.
+        const gstRatio = 1 - ((chMap[ch].excRev || 0) / gross)
+        chMap[ch].netRev = (gross - returnRev) * (1 - gstRatio)
+        chMap[ch].returnRev = returnRev
+      })
+      // Shopify's chMap entry includes Shopify International (no resolvedDailySKU coverage, no
+      // returns tracked for it) on top — keep that add-on by re-adding its exc-GST net share,
+      // mirroring the original override's `+ intlExcRev` term, so International isn't silently
+      // dropped out of the Overall tab's Shopify net figure.
+      if (resolvedByChannel.Shopify?.length) {
+        const intlExcRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_exc_rev) || 0
+        chMap['Shopify'].netRev += intlExcRev
+      }
+      payload.netRevenueCalc = Object.values(chMap).reduce((s, v) => s + (v.netRev || 0), 0)
+      payload.rtoRev = (resolvedByChannel.Shopify || []).concat(resolvedByChannel.Amazon, resolvedByChannel.Myntra, resolvedByChannel.EBO).reduce((s, x) => s + (x.components?.rto?.rev || 0), 0)
+      payload.cirRev = (resolvedByChannel.Shopify || []).concat(resolvedByChannel.Myntra, resolvedByChannel.EBO).reduce((s, x) => s + (x.components?.cir?.rev || 0), 0)
+      payload.cancellRev = Object.values(resolvedByChannel).flat().reduce((s, x) => s + (x?.components?.cancel?.rev || 0), 0)
+      // 'Return'-status component (Amazon/Flipkart/Myntra/EBO/CRED/Firstcry) — AllTab's
+      // returnNumeratorRev = cancellRev + rtoRev + returnRev + cirRev reads this field directly.
+      // Offline's Credit Notes (chMap.offline_sales.returnRev, set above) are added on too — a
+      // credit note is a real return for the company, same as an e-commerce RTO/CIR/Cancelled/
+      // Return (confirmed 2026-10-22).
+      payload.returnRev = resolvedByChannel.Amazon.concat(resolvedByChannel.Flipkart, resolvedByChannel.Myntra, resolvedByChannel.EBO, resolvedByChannel.CRED, resolvedByChannel.Firstcry).reduce((s, x) => s + (x?.components?.return?.rev || 0), 0) + (chMap['offline_sales']?.returnRev || 0)
+      payload.rtoRevDirect = payload.rtoRev
+
+      // ── Cross-channel catMap/subCatMap (Overview's "Product Performance" table AND the Overall
+      // Sales tab's own "Category Revenue Matrix · All Channels" table — both read data.catMap/
+      // data.subCatMap directly, confirmed 2026-10-22) — these were still built from r.byCategory/
+      // r.bySubCategory, a single ALL-CHANNEL raw query with no Channel filter, never touched by any
+      // of the per-channel resolved-engine fixes above. Overridden here by summing every channel's
+      // own resolvedDailySKU (same single source every per-channel tab/PnL now reads) grouped by
+      // (Category, SubCategory) — "no duplicacy": this cross-channel view must use the exact same
+      // resolved totals as every individual channel tab, not its own independent aggregation.
+      const crossChResolved = Object.values(resolvedByChannel).flat().filter(Boolean)
+        .concat(payload.offline?.resolvedDailySKU || [])
+      const crossChByCatSubCat = {} // 'Category' or 'Category::SubCategory' -> {cancelRev, rtoRev, cirRev, returnRev}
+      crossChResolved.forEach(row => {
+        const cat = row.category || 'Others', sc = row.subCategory || 'Others'
+        ;[cat, `${cat}::${sc}`].forEach(key => {
+          const e = crossChByCatSubCat[key] || (crossChByCatSubCat[key] = { cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 })
+          e.cancelRev += row.components?.cancel?.rev || 0
+          e.rtoRev += row.components?.rto?.rev || 0
+          e.cirRev += row.components?.cir?.rev || 0
+          e.returnRev += row.components?.return?.rev || 0
+        })
+      })
+      Object.entries(catMap).forEach(([cat, v]) => {
+        const resolved = crossChByCatSubCat[cat]
+        if (!resolved) return
+        v.cancelRev = resolved.cancelRev; v.rtoRev = resolved.rtoRev; v.cirRev = resolved.cirRev; v.returnRev = resolved.returnRev
+      })
+      Object.entries(subCatMap).forEach(([key, v]) => {
+        const resolved = crossChByCatSubCat[key]
+        if (!resolved) return
+        v.cancelRev = resolved.cancelRev; v.rtoRev = resolved.rtoRev; v.cirRev = resolved.cirRev; v.returnRev = resolved.returnRev
+      })
+    })()
 
     // Additional Spend KPI — D2C additional spends from markting_spend (Supabase),
     // prorated day-wise by actual D2C sales when the selected range is a partial month.

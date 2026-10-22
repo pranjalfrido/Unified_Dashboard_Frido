@@ -10,17 +10,31 @@ import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.j
 // COGS/GM are real, sourced from public.product_cogs_monthly (Supabase) via cogsMonthlyMap,
 // passed down from PnLPage.jsx — a per-(sku, month) cost table covering Feb 2022-present (see
 // scripts/sync-cogs-monthly-rest.mjs), replacing the old flat public/cogs-data.json. COGS value
-// = per-unit cost × net units sold (gross units minus cancelled/RTO/returned/CIR units) — only
-// Amazon SC currently reports returnedUnits (see amzSCSubCatChannel/amzSCSKUChannel in
-// api/bq.js), so other channels fall back to gross units in mapRow() until they're wired up the
-// same way. COGS % is COGS ÷ Net Revenue (netCovered), unaffected by which unit count feeds the
-// COGS value itself. SnD/CM1
-// are real for Shopify (sndBySku, computed in PnLPage.jsx from each SKU's actual order
-// weight-share against public/snd-rates.json) and for Amazon Seller Central (sndBySku sourced
-// from the real settlement report — see amzSCSettlement in api/bq.js and PNL_TAB_ROADMAP.md for
-// the verified charge-column mapping). Other channels don't have per-SKU cost data wired yet.
-// CM2 (SnD − Marketing Spend − COGS, i.e. after ad spend) still needs product-level ad-spend
-// attribution, not yet wired.
+// = per-unit cost × net units sold (gross units minus cancelled/RTO/returned/CIR units). netUnits
+// comes from mapRow()/netRevenueOf(), which is fed by the resolved-rate engine
+// (api/_returnComponents.js) for EVERY channel (D2C, EBO, Amazon SC/VC, Flipkart, Myntra, CRED,
+// Firstcry) — each return component (RTO/CIR/Cancel/Exchange/Return) is resolved per SKU/date
+// against either the live same-day rate or, for immature recent dates, a rolling 30-day rate, and
+// netUnits = units − sum of resolved return-component units. This is no longer Amazon-SC-only.
+// COGS % is COGS ÷ Net Revenue (netCovered), unaffected by which unit count feeds the COGS value
+// itself. SnD/CM1 coverage by channel (confirmed 2026-10-22):
+//   - Shopify (D2C) and EBO: resolved-rate SnD — RTO/CIR/Exchange/Delivered logistics legs,
+//     Fulfilment, Payment Gateway and Software Fee all keyed off each SKU's resolved units/rates
+//     (PnLPage.jsx's shSkuCosts/eboSkuCosts) against public/snd-rates.json. An ESTIMATE from a
+//     weight-slab rate card, not real settlement data, but immature-day-safe since it derives from
+//     the same resolved units Net Revenue/COGS already use.
+//   - Flipkart: a verified flat all-in % rate card (see scripts/generate-flipkart-snd-ratecard.mjs)
+//     applied to resolved Net Revenue — also immature-day-safe, different mechanism (no per-outcome
+//     split) by design, not a gap.
+//   - Amazon Seller Central: REAL settlement-report data (see amzSCSettlement in api/bq.js and
+//     PNL_TAB_ROADMAP.md for the verified charge-column mapping) — the only channel whose SnD is
+//     actual incurred cost rather than a rate-card estimate.
+//   - Myntra, CRED, Firstcry, Amazon Vendor Central, Blinkit/Instamart/Zepto, Offline Sales:
+//     no per-SKU SnD cost data wired into this table — sndBySku has no entries for these, so
+//     cm1Covered is false for every row on those channels' Financial Views.
+// CM2 (CM1 − Marketing Spend) is wired at SubCategory grain via activeAdSpendMap/adSpendMap
+// (keyed by SubCategory name), not product/SKU-level attribution — still a coarser grain than
+// COGS/SnD, which are per-SKU.
 // Missing-cost columns render a muted "—" placeholder rather than a fabricated number. A SKU
 // with no COGS/SnD entry also renders "—" for its own row, and a Product/Category row shows
 // COGS/GM/SnD/CM1 only for the portion of its revenue covered by SKUs that DO have that cost
