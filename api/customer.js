@@ -23,6 +23,18 @@ export default async function handler(req, res) {
     const dur = me - ms
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
+    // Mature-window return rate (same RATE_COVERAGE_FLOOR/rollingStart/rollingEnd convention as
+    // api/bq.js's shReturnRateMature etc.) — orders in the last 14 days haven't fully settled their
+    // RTO/CIR/Cancelled status yet, so net_revenue below must NOT deduct those flags directly off
+    // recent orders (confirmed bug 2026-10-22: this silently overstated net_revenue for any recent
+    // date range, since an order that will eventually turn out RTO'd/cancelled still reads as
+    // "clean" until Order_Status settles — the same bug class D2C/EBO had before the resolved-engine
+    // fix). Immature orders instead get this rolling 30-day rate applied to their revenue.
+    const todayD = new Date()
+    const matureEndD = new Date(todayD); matureEndD.setDate(matureEndD.getDate() - 14)
+    const matureEnd = matureEndD.toISOString().slice(0, 10)
+    const rollingStartD = new Date(matureEndD); rollingStartD.setDate(rollingStartD.getDate() - 29)
+    const rollingStart = rollingStartD.toISOString().slice(0, 10)
 
     const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis] = await Promise.all([
 
@@ -33,6 +45,15 @@ export default async function handler(req, res) {
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
+mature_rate AS (
+  SELECT SAFE_DIVIDE(
+    SUM(CASE WHEN LOWER(Order_Status) IN ('rto','rto initiated','rto delivered','cir return','cir','cancelled','cancel') THEN SellingPrice_Exc_GST ELSE 0 END),
+    SUM(SellingPrice_Exc_GST)
+  ) AS return_rate
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND DATE(OrderDate) BETWEEN '${rollingStart}' AND '${matureEnd}'
+    AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
@@ -40,13 +61,14 @@ period AS (
     CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
     CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
     CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled,
+    DATE(o.OrderDate) <= DATE('${matureEnd}') AS is_mature,
     f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
-   
+
 ),
 order_agg AS (
   SELECT OrderId, first_date,
@@ -55,6 +77,7 @@ order_agg AS (
     MAX(is_rto) AS is_rto,
     MAX(is_cir) AS is_cir,
     MAX(is_cancelled) AS is_cancelled,
+    MAX(is_mature) AS is_mature,
     ANY_VALUE(CustomerId) AS CustomerId,
     ANY_VALUE(voucher_code) AS voucher_code
   FROM period
@@ -69,10 +92,17 @@ SELECT
   ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
-  ROUND(SUM(order_rev_exc)
-    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue,
+  -- Mature orders: real RTO/CIR/Cancelled deduction (settled, trustworthy). Immature orders (last
+  -- 14 days): Order_Status hasn't settled, so apply the rolling 30-day return rate to revenue
+  -- instead of the live (incomplete) flags — same fix class as D2C/EBO's resolved-engine rollout.
+  ROUND(
+    SUM(CASE WHEN is_mature THEN
+      order_rev_exc
+      - CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END
+    ELSE order_rev_exc * (1 - COALESCE((SELECT return_rate FROM mature_rate), 0)) END)
+  , 0) AS net_revenue,
   COUNT(DISTINCT CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN OrderId END) AS discounted_orders,
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
 FROM order_agg`),
@@ -374,13 +404,23 @@ GROUP BY day ORDER BY day`),
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') GROUP BY CustomerId
 ),
+mature_rate AS (
+  SELECT SAFE_DIVIDE(
+    SUM(CASE WHEN LOWER(Order_Status) IN ('rto','rto initiated','rto delivered','cir return','cir','cancelled','cancel') THEN SellingPrice_Exc_GST ELSE 0 END),
+    SUM(SellingPrice_Exc_GST)
+  ) AS return_rate
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND DATE(OrderDate) BETWEEN '${rollingStart}' AND '${matureEnd}'
+    AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
     f.first_date,
     CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
     CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
-    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled
+    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled,
+    DATE(o.OrderDate) <= DATE('${matureEnd}') AS is_mature
   FROM ${TBL} o JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
 ),
@@ -388,6 +428,7 @@ order_agg AS (
   SELECT OrderId, first_date,
     SUM(rev_inc) AS order_rev_inc, SUM(rev_exc) AS order_rev_exc,
     MAX(is_rto) AS is_rto, MAX(is_cir) AS is_cir, MAX(is_cancelled) AS is_cancelled,
+    MAX(is_mature) AS is_mature,
     ANY_VALUE(CustomerId) AS CustomerId
   FROM period GROUP BY OrderId, first_date
 )
@@ -400,10 +441,15 @@ SELECT
   ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
-  ROUND(SUM(order_rev_exc)
-    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue
+  -- Same mature/immature split as Q1 above — see its comment for the bug this fixes.
+  ROUND(
+    SUM(CASE WHEN is_mature THEN
+      order_rev_exc
+      - CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END
+    ELSE order_rev_exc * (1 - COALESCE((SELECT return_rate FROM mature_rate), 0)) END)
+  , 0) AS net_revenue
 FROM order_agg`),
 
       // Q13 — prev period ads
