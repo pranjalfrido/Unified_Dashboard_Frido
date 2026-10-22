@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
 import { C, fmt } from '../utils.js'
 import { perUnitWaterfall, rateForWeightGm } from './pnlUtils.js'
 
@@ -478,21 +478,26 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
           <Card>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 13 }}>{productName || '(unnamed product)'}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || '(unnamed product)'}</div>
+                <div style={{ height: 3, marginBottom: 10, borderRadius: 2, background: 'linear-gradient(90deg, rgba(27,94,32,0.22) 0%, rgba(27,94,32,0.05) 60%, rgba(27,94,32,0) 100%)' }} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 14, rowGap: 6, paddingTop: 8 }}>
                   {[
-                    ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—'],
-                    ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—'],
-                    ['GST', `${gstPct}%`],
-                    ['Return %', `${((rtoPct || 0) + (cancelPct || 0) + (cirPct || 0)).toFixed(1)}%`],
-                  ].map(([label, value]) => (
-                    <span key={label} style={{
-                      display: 'inline-flex', alignItems: 'baseline', gap: 4, padding: '3px 8px',
-                      borderRadius: 999, background: C.bg, border: `1px solid ${C.border}`,
-                    }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: C.t3 }}>{label}</span>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: C.t1 }}>{value}</span>
-                    </span>
+                    ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
+                    ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—', false],
+                    ['GST', `${gstPct}%`, false],
+                    ['Return %', `${((rtoPct || 0) + (cancelPct || 0) + (cirPct || 0)).toFixed(1)}%`, false],
+                  ].map(([label, value, isHero], i) => (
+                    <Fragment key={label}>
+                      {i > 0 && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', height: '1em' }}>
+                          <span style={{ width: 2, height: 16, background: '#d8dce1', borderRadius: 1, display: 'inline-block' }} />
+                        </span>
+                      )}
+                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: isHero ? 18 : 15, fontWeight: isHero ? 800 : 700, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: C.t3 }}>{label}</span>
+                      </span>
+                    </Fragment>
                   ))}
                 </div>
               </div>
