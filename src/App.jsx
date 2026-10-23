@@ -6904,7 +6904,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap: subCatDateMapProp = {}, channel = null, netScale = 1 }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap: subCatDateMapProp = {}, channel = null, netScale = 1 }) {
   // Daily run rate divides by every day in the selected range, so each row uses the
   // same divisor and rows stay comparable. Without a range the column is hidden
   // rather than shown with a wrong or invented divisor.
@@ -7101,7 +7101,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
     { id: 'prevGross', label: 'vs Prev', sortKey: 'prevGross', width: 9,
       row: r => <td style={tdStyle}>{vsPrevCell(r.net, r.prevNet)}</td>,
-      sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.prevGross > 0 ? vsPrevCell(sk.net, sk.prevGross * netShrink) : <span style={{ color: C.t3 }}>—</span>}</td>,
       total: () => <td style={totalTdStyle}>{vsPrevCell(tot.net, tot.prevGross * netShrink, plainHeader)}</td> },
     { id: 'units', label: 'Units', sortKey: 'units', width: 8,
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
@@ -7212,7 +7212,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               const isFirstOfCat = i === 0 || rows[i - 1].cat !== r.cat
               const isLastOfCat = i === rows.length - 1 || rows[i + 1].cat !== r.cat
               const isDateExpanded = expandedDateCat[r.cat]
-              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => { const prevGross = skuPrevMap?.[r.cat]?.[r.sc]?.[sku] || 0; return { sku, ...mapRow(d), prevGross } }).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
               if (isMob) {
@@ -9409,7 +9409,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
           })
           return rawTotal > 0 ? netRev / rawTotal : 1
         })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={d2cMatrixNetScale} />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={d2cMatrixNetScale} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
