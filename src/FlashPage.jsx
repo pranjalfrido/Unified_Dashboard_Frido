@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const FLASH_API_BASE = import.meta.env.VITE_FLASH_API_URL || 'http://localhost:3001/api';
+const FLASH_API_BASE = import.meta.env.VITE_FLASH_API_URL || '/api/flash-proxy';
 // When using the Vercel proxy, paths become query params to avoid SPA rewrite conflicts
 const flashUrl = (path) => FLASH_API_BASE.includes('flash-proxy')
   ? `${FLASH_API_BASE}?path=/${path}`
