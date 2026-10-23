@@ -239,14 +239,14 @@ function ShareToggle({ mode, setMode }) {
 // compares against them. With a single period on screen the previous one is shown beside it
 // (PREV | CURRENT | VS PREV); with several, the earlier ones are muted and the latest is bold.
 function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) {
-  const th = { padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.07em', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }
+  const th = { padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.07em', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}`, position: 'sticky', top: 0, zIndex: 1, background: C.card }
   const td = { padding: '13px 12px', fontSize: 13, borderTop: `1px solid ${C.border}`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   const shownModel = model.slice(hidden)
   const withPrev = shownModel.length === 1 && model.length > 1       // show the day before beside the single column
   const cols = withPrev ? model.slice(-2) : shownModel
   let lastGroup = null
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 240 + (cols.length + 1) * 96 }}>
         <thead>
           <tr>
@@ -352,7 +352,7 @@ function TtrTable({ data, model, grain, hidden }) {
     { id: 'ttr', label: 'TTR', get: x => (x.n ? x.h / x.n : null), fmt: hrs, good: 'down' },
   ]
   const W = 62
-  const head = { padding: '8px 6px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, textAlign: 'center', borderBottom: `1px solid ${C.border2}` }
+  const head = { padding: '8px 6px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, textAlign: 'center', borderBottom: `1px solid ${C.border2}`, position: 'sticky', zIndex: 1, background: C.card }
   const cell = { padding: '10px 6px', fontSize: 12.5, borderTop: `1px solid ${C.border}`, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: W }
   const tone = (good, cur, prev) => {
     if (!good || cur == null || prev == null || prev === 0 || cur === prev) return C.t1
@@ -360,18 +360,18 @@ function TtrTable({ data, model, grain, hidden }) {
     return better ? C.green.tx : C.red.tx
   }
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 230 + shown.length * SUB.length * W }}>
         <thead>
           <tr>
-            <th rowSpan={2} style={{ ...head, textAlign: 'left', minWidth: 200, position: 'sticky', left: 0, background: C.card, zIndex: 2, verticalAlign: 'bottom' }}>Resolver group</th>
+            <th rowSpan={2} style={{ ...head, top: 0, textAlign: 'left', minWidth: 200, position: 'sticky', left: 0, background: C.card, zIndex: 3, verticalAlign: 'bottom' }}>Resolver group</th>
             {shown.map((p, i) => (
-              <th key={p.key} colSpan={SUB.length} style={{ ...head, background: i === shown.length - 1 ? C.ach : C.acl, borderLeft: `2px solid ${C.card}` }}>{periodLabel(grain, p.key)}</th>
+              <th key={p.key} colSpan={SUB.length} style={{ ...head, top: 0, background: i === shown.length - 1 ? C.ach : C.acl, borderLeft: `2px solid ${C.card}` }}>{periodLabel(grain, p.key)}</th>
             ))}
           </tr>
           <tr>
             {shown.flatMap((p, i) => SUB.map((m, j) => (
-              <th key={`${p.key}-${m.id}`} style={{ ...head, fontSize: 9.5, color: C.t3, borderLeft: j === 0 ? `2px solid ${C.card}` : undefined, background: i === shown.length - 1 ? 'rgba(' + C.accRgb + ',0.07)' : 'transparent' }}>{m.label}</th>
+              <th key={`${p.key}-${m.id}`} style={{ ...head, top: 33, fontSize: 9.5, color: C.t3, borderLeft: j === 0 ? `2px solid ${C.card}` : undefined, background: i === shown.length - 1 ? 'rgba(' + C.accRgb + ',0.07)' : C.card }}>{m.label}</th>
             )))}
           </tr>
         </thead>
