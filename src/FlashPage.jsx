@@ -307,11 +307,44 @@ export default function FlashPage({ userEmail = '' }) {
 
 function RenderAnswer({ text }) {
   if (!text) return null;
-  // Split on **bold** markers and render inline
-  const parts = text.split(/\*\*(.+?)\*\*/g);
-  return parts.map((part, i) =>
-    i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
-  );
+
+  const lines = text.split('\n');
+  const output = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    // Detect markdown table: line has | and next line is a separator (---|---)
+    if (line.includes('|') && lines[i + 1] && /^\s*\|?[\s\-|:]+\|/.test(lines[i + 1])) {
+      const tableLines = [];
+      while (i < lines.length && lines[i].includes('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const parseRow = (r) => r.split('|').map(c => c.trim()).filter((c, idx, arr) => idx > 0 && idx < arr.length - 1);
+      const headers = parseRow(tableLines[0]);
+      const dataRows = tableLines.slice(2).map(parseRow);
+      output.push(
+        <div key={`tbl-${output.length}`} className="flash-table-wrap" style={{ overflowX: 'auto', margin: '8px 0' }}>
+          <table className="flash-table">
+            <thead><tr>{headers.map((h, j) => <th key={j}>{h}</th>)}</tr></thead>
+            <tbody>{dataRows.map((row, ri) => (
+              <tr key={ri}>{row.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>
+            ))}</tbody>
+          </table>
+        </div>
+      );
+    } else {
+      const parts = line.split(/\*\*(.+?)\*\*/g);
+      const rendered = parts.map((part, pi) =>
+        pi % 2 === 1 ? <strong key={pi}>{part}</strong> : <span key={pi}>{part}</span>
+      );
+      output.push(<span key={`l-${output.length}`}>{rendered}<br /></span>);
+      i++;
+    }
+  }
+
+  return <>{output}</>;
 }
 
 function downloadCSV(data, keys) {
