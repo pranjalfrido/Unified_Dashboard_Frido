@@ -196,12 +196,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     loadCogsMonthly(filters.start, filters.end).then(setCogsMonthlyMap)
   }, [filters?.start, filters?.end])
 
-  // Units-weighted average weight-slab per SKU — sourced from the same raw skuCostRows shSkuCosts
-  // reads below, just kept at its own pre-aggregation grain here since shSkuCosts's own output
-  // collapses weight into logistics ₹ totals. Used both by shSkuCosts' resolved-rate-based logistics
-  // formula below (for the "sku/slab wise rate" lookup) and by the Price Simulator's incremental
-  // RTO/reverse-logistics cost lookup (Return Rate Impact lever) via snd-rates.json — so a marginal
-  // returned/RTO'd unit is priced with this SKU's own real shipping weight, not a portfolio guess.
+  // Units-weighted average weight-SLAB per SKU — this is a courier-BILLING weight (real per-unit
+  // weight × units in that order, bucketed to the courier's rate-card slabs), NOT the product's
+  // actual single-unit weight. It's a legitimate input to a COST lookup (a fallback when a SKU's
+  // real per-bucket distribution — shSkuWeightBuckets — isn't available, e.g. the Price
+  // Simulator's incremental RTO/reverse-logistics cost lookup via snd-rates.json), but must NEVER
+  // be shown to the user or treated as "this product weighs X" — see shSkuWeightGm below for that.
   const shSkuWeightSlab = useMemo(() => {
     const rows = data?.shopify?.skuCostRows
     if (!rows?.length) return {}
@@ -215,6 +215,57 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     const out = {}
     Object.entries(totals).forEach(([sku, t]) => { if (t.qty > 0) out[sku] = t.weightedSum / t.qty })
+    return out
+  }, [data])
+
+  // Real, single-unit item-master weight per SKU (confirmed bug fix 2026-10-23) — sourced from
+  // data.shopify.skuWeightGm (api/bq.js's shSKUWeight query, a plain per-SKU Weight_gms lookup,
+  // never multiplied by units). THIS is "the product's weight" for display (Breakeven ROAS'
+  // reference-product seed, Price Simulator's product picker) and for any single-unit cost model
+  // — shSkuWeightSlab above is a different, courier-billing-weight concept and must not be used
+  // for this purpose. Root cause of the bug this fixes: "Ultimate Cozy Pillow" showed 8.4-8.5kg
+  // in Breakeven ROAS/Price Simulator (shSkuWeightSlab's blended shipment-weight average, inflated
+  // by real 2-4 unit orders) when its actual item-master weight is 3.48kg.
+  const shSkuWeightGm = useMemo(() => data?.shopify?.skuWeightGm || {}, [data])
+
+  // Per-SKU weight-slab BUCKET shares (confirmed bug fix 2026-10-23: "Ultimate Cozy Pillow" showed
+  // 77.5% SnD — a bulk order for 18 units landed at a 63kg slab (Weight_gms × ItemQty is computed
+  // PER ORDER LINE, not per unit), which pulled the SKU's units-weighted AVERAGE slab up to 8.5kg
+  // even though the real single-pillow weight is ~3.5kg — that inflated blended rate then applied
+  // flat across every unit sold, including the many single-pillow orders that should ship much
+  // cheaper, silently overstating SnD/understating CM1-CM2 for any SKU with a minority of bulk
+  // orders). Replaces the single blended shSkuWeightSlab scalar for the outcome-dependent logistics
+  // legs below with each SKU's own REAL weight-slab bucket distribution — e.g. {500: 0.82, 2000:
+  // 0.15, 63000: 0.03} — so the resolved RTO/CIR/Exchange/Delivered/Fulfilment costs are priced
+  // bucket-by-bucket at each bucket's own real weight, then summed, instead of one blended average
+  // weight applied to every unit regardless of which real orders they came from.
+  const shSkuWeightBuckets = useMemo(() => {
+    const rows = data?.shopify?.skuCostRows
+    if (!rows?.length) return {}
+    const bySku = {}
+    rows.forEach(row => {
+      const { sku, weightSlab, totalQty, lineCount } = row
+      if (!sku || weightSlab == null || !totalQty) return
+      if (!bySku[sku]) bySku[sku] = { buckets: {}, totalQty: 0 }
+      const b = bySku[sku].buckets[weightSlab] || (bySku[sku].buckets[weightSlab] = { qty: 0, lineCount: 0 })
+      b.qty += totalQty
+      b.lineCount += lineCount || 0
+      bySku[sku].totalQty += totalQty
+    })
+    const out = {}
+    Object.entries(bySku).forEach(([sku, { buckets, totalQty }]) => {
+      if (totalQty <= 0) return
+      // unitsPerOrder: the shipment this bucket's weight slab represents is ONE physical box
+      // containing, on average, qty÷lineCount units — confirmed bug fix 2026-10-23 ("the shipment
+      // will be one only.. pack of two will be dispatched.. but in our calculation we are going
+      // component level qty wise.. so we need to get the logistics based on a unit"). The courier
+      // bill (rate.forward etc, looked up per bucket) is a PER-SHIPMENT cost, not per-unit — a
+      // 7kg/2-unit shipment's ₹198 forward leg must be split 2 ways (₹99/unit), not charged in
+      // full to each of the 2 units it contains. Without this division, every unit in a bucket was
+      // charged as if it alone caused the ENTIRE shipment's cost, inflating SnD by roughly the
+      // average order size in that bucket (e.g. ~2x for 2-unit orders, ~4x for 4-unit orders).
+      out[sku] = Object.entries(buckets).map(([slab, b]) => ({ slab: Number(slab), share: b.qty / totalQty, unitsPerOrder: b.lineCount > 0 ? b.qty / b.lineCount : 1 }))
+    })
     return out
   }, [data])
 
@@ -283,35 +334,45 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     // Logistics' outcome-dependent leg (forward/rto/reverse), Fulfilment, Payment Gateway, and
     // Software Fee are ALL now resolved-units/resolved-gross-based per SKU (confirmed 2026-10-22,
-    // "i would suggest to change that too"), using that SKU's own units-weighted average weight
-    // slab (shSkuWeightSlab) for the logistics/fulfilment rate lookup. Payment Gateway/Software Fee
-    // don't depend on return outcome any more than Fulfilment does, but are moved here anyway for
-    // full consistency — every cost line in D2C's SnD now derives from the SAME resolved per-SKU
-    // totals (units, gross) Net Revenue/COGS already use, none left on raw per-line-item sums:
+    // "i would suggest to change that too"). Payment Gateway/Software Fee don't depend on return
+    // outcome any more than Fulfilment does, but are moved here anyway for full consistency — every
+    // cost line in D2C's SnD now derives from the SAME resolved per-SKU totals (units, gross) Net
+    // Revenue/COGS already use, none left on raw per-line-item sums:
     //   paymentGwCost  = resolvedGross × 1.1%
     //   softwareFeeCost = resolvedUnits × ₹15
+    // Logistics/Fulfilment are priced PER WEIGHT-SLAB BUCKET (shSkuWeightBuckets), not one blended
+    // average slab (confirmed bug fix 2026-10-23 — see shSkuWeightBuckets' own comment) — the SKU's
+    // resolved RTO%/CIR%/Exchange%/Delivered% split is applied identically within EACH bucket, and
+    // each bucket is priced at its own real weight, then summed across buckets.
     Object.entries(shResolvedRatesBySku).forEach(([sku, r]) => {
       if (!r.units) return
-      const slab = shSkuWeightSlab[sku] != null ? shSkuWeightSlab[sku] : 2000
-      const rate = rateForSlab(sndRates, slab)
       if (!bySku[sku]) bySku[sku] = { logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0 }
       bySku[sku].paymentGw += r.gross * 0.011
       bySku[sku].softwareFee += r.units * 15
-      if (!rate) return
       const { rtoPct, cirPct, cancelPct, exchPct, deliveredPct } = normalizeOutcomePcts(
         r.rtoUnits / r.units, r.cirUnits / r.units, r.cancelUnits / r.units, r.exchUnits / r.units
       )
-      const outcomeLogistics =
-        r.units * rtoPct * (rate.forward + rate.rto) +
-        r.units * cirPct * (rate.forward + rate.reverse) +
-        r.units * exchPct * (rate.forward + rate.reverse + rate.forward) +
-        r.units * deliveredPct * rate.forward
-      const fulfilment = r.units * rate.fulfilment
-      bySku[sku].logistics += outcomeLogistics
-      bySku[sku].fulfilment += fulfilment
+      const buckets = shSkuWeightBuckets[sku] || [{ slab: shSkuWeightSlab[sku] != null ? shSkuWeightSlab[sku] : 2000, share: 1, unitsPerOrder: 1 }]
+      buckets.forEach(({ slab, share, unitsPerOrder }) => {
+        const rate = rateForSlab(sndRates, slab)
+        if (!rate) return
+        const bucketUnits = r.units * share
+        // rate.forward/.rto/.reverse are PER-SHIPMENT costs — a shipment containing unitsPerOrder
+        // units must divide that cost across them, not charge it in full to each unit (confirmed
+        // bug fix 2026-10-23, see shSkuWeightBuckets' own comment for the "pack of 2 ships as ONE
+        // box" business confirmation this corrects).
+        const perUnitDivisor = unitsPerOrder > 0 ? unitsPerOrder : 1
+        const outcomeLogistics =
+          bucketUnits * rtoPct * (rate.forward + rate.rto) / perUnitDivisor +
+          bucketUnits * cirPct * (rate.forward + rate.reverse) / perUnitDivisor +
+          bucketUnits * exchPct * (rate.forward + rate.reverse + rate.forward) / perUnitDivisor +
+          bucketUnits * deliveredPct * rate.forward / perUnitDivisor
+        bySku[sku].logistics += outcomeLogistics
+        bySku[sku].fulfilment += bucketUnits * rate.fulfilment / perUnitDivisor
+      })
     })
     return bySku
-  }, [sndRates, data, d2cSubCh, shResolvedRatesBySku, shSkuWeightSlab])
+  }, [sndRates, data, d2cSubCh, shResolvedRatesBySku, shSkuWeightSlab, shSkuWeightBuckets])
 
   // D2C S&D summed to the same {sku: totalCost} shape the Amazon-architecture `sndBySku` prop
   // expects (PnLFinancialTable's costsForSkus() only ever consumes a single combined number per
@@ -343,6 +404,29 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     const out = {}
     Object.entries(totals).forEach(([sku, t]) => { if (t.qty > 0) out[sku] = t.weightedSum / t.qty })
+    return out
+  }, [data])
+
+  // Per-SKU weight-slab BUCKET shares for EBO — same fix/purpose as shSkuWeightBuckets above.
+  const eboSkuWeightBuckets = useMemo(() => {
+    const rows = data?.ebo?.skuCostRows
+    if (!rows?.length) return {}
+    const bySku = {}
+    rows.forEach(row => {
+      const { sku, weightSlab, totalQty, lineCount } = row
+      if (!sku || weightSlab == null || !totalQty) return
+      if (!bySku[sku]) bySku[sku] = { buckets: {}, totalQty: 0 }
+      const b = bySku[sku].buckets[weightSlab] || (bySku[sku].buckets[weightSlab] = { qty: 0, lineCount: 0 })
+      b.qty += totalQty
+      b.lineCount += lineCount || 0
+      bySku[sku].totalQty += totalQty
+    })
+    const out = {}
+    Object.entries(bySku).forEach(([sku, { buckets, totalQty }]) => {
+      if (totalQty <= 0) return
+      // unitsPerOrder — same per-shipment-cost-division fix as D2C's shSkuWeightBuckets above.
+      out[sku] = Object.entries(buckets).map(([slab, b]) => ({ slab: Number(slab), share: b.qty / totalQty, unitsPerOrder: b.lineCount > 0 ? b.qty / b.lineCount : 1 }))
+    })
     return out
   }, [data])
 
@@ -383,26 +467,31 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const bySku = {}
     Object.entries(eboResolvedRatesBySku).forEach(([sku, r]) => {
       if (!r.units) return
-      const slab = eboSkuWeightSlab[sku] != null ? eboSkuWeightSlab[sku] : 2000
-      const rate = rateForSlab(sndRates, slab)
       if (!bySku[sku]) bySku[sku] = { logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0 }
       bySku[sku].paymentGw += r.gross * 0.011
       bySku[sku].softwareFee += r.units * 15
-      if (!rate) return
       const { rtoPct, cirPct, cancelPct, exchPct, deliveredPct } = normalizeOutcomePcts(
         r.rtoUnits / r.units, r.cirUnits / r.units, r.cancelUnits / r.units, r.exchUnits / r.units
       )
-      const outcomeLogistics =
-        r.units * rtoPct * (rate.forward + rate.rto) +
-        r.units * cirPct * (rate.forward + rate.reverse) +
-        r.units * exchPct * (rate.forward + rate.reverse + rate.forward) +
-        r.units * deliveredPct * rate.forward
-      const fulfilment = r.units * rate.fulfilment
-      bySku[sku].logistics += outcomeLogistics
-      bySku[sku].fulfilment += fulfilment
+      // Priced per weight-slab bucket, not one blended average slab — same fix as D2C's shSkuCosts.
+      const buckets = eboSkuWeightBuckets[sku] || [{ slab: eboSkuWeightSlab[sku] != null ? eboSkuWeightSlab[sku] : 2000, share: 1, unitsPerOrder: 1 }]
+      buckets.forEach(({ slab, share, unitsPerOrder }) => {
+        const rate = rateForSlab(sndRates, slab)
+        if (!rate) return
+        const bucketUnits = r.units * share
+        // Per-shipment rate divided across the shipment's real unit count — same fix as D2C.
+        const perUnitDivisor = unitsPerOrder > 0 ? unitsPerOrder : 1
+        const outcomeLogistics =
+          bucketUnits * rtoPct * (rate.forward + rate.rto) / perUnitDivisor +
+          bucketUnits * cirPct * (rate.forward + rate.reverse) / perUnitDivisor +
+          bucketUnits * exchPct * (rate.forward + rate.reverse + rate.forward) / perUnitDivisor +
+          bucketUnits * deliveredPct * rate.forward / perUnitDivisor
+        bySku[sku].logistics += outcomeLogistics
+        bySku[sku].fulfilment += bucketUnits * rate.fulfilment / perUnitDivisor
+      })
     })
     return bySku
-  }, [sndRates, eboResolvedRatesBySku, eboSkuWeightSlab])
+  }, [sndRates, eboResolvedRatesBySku, eboSkuWeightSlab, eboSkuWeightBuckets])
   const eboSndBySku = useMemo(() => {
     const out = {}
     Object.entries(eboSkuCosts).forEach(([sku, c]) => {
@@ -1090,23 +1179,28 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const out = {}
       filtered.forEach(r => {
         if (!r.sku || !r.units) return
-        const slab = shSkuWeightSlab[r.sku] != null ? shSkuWeightSlab[r.sku] : 2000
-        const rate = rateForSlab(sndRates, slab)
         const paymentGw = (r.gross || 0) * 0.011
         const softwareFee = r.units * 15
         let logistics = 0, fulfilment = 0
-        if (rate) {
-          const { rtoPct, cirPct, cancelPct, exchPct, deliveredPct } = normalizeOutcomePcts(
-            (r.components?.rto?.units || 0) / r.units, (r.components?.cir?.units || 0) / r.units,
-            (r.components?.cancel?.units || 0) / r.units, (r.components?.exchange?.units || 0) / r.units
-          )
-          logistics =
-            r.units * rtoPct * (rate.forward + rate.rto) +
-            r.units * cirPct * (rate.forward + rate.reverse) +
-            r.units * exchPct * (rate.forward + rate.reverse + rate.forward) +
-            r.units * deliveredPct * rate.forward
-          fulfilment = r.units * rate.fulfilment
-        }
+        const { rtoPct, cirPct, cancelPct, exchPct, deliveredPct } = normalizeOutcomePcts(
+          (r.components?.rto?.units || 0) / r.units, (r.components?.cir?.units || 0) / r.units,
+          (r.components?.cancel?.units || 0) / r.units, (r.components?.exchange?.units || 0) / r.units
+        )
+        // Priced per weight-slab bucket, not one blended average slab — same fix as shSkuCosts.
+        const buckets = shSkuWeightBuckets[r.sku] || [{ slab: shSkuWeightSlab[r.sku] != null ? shSkuWeightSlab[r.sku] : 2000, share: 1, unitsPerOrder: 1 }]
+        buckets.forEach(({ slab, share, unitsPerOrder }) => {
+          const rate = rateForSlab(sndRates, slab)
+          if (!rate) return
+          const bucketUnits = r.units * share
+          // Per-shipment rate divided across the shipment's real unit count — same fix as shSkuCosts.
+          const perUnitDivisor = unitsPerOrder > 0 ? unitsPerOrder : 1
+          logistics +=
+            bucketUnits * rtoPct * (rate.forward + rate.rto) / perUnitDivisor +
+            bucketUnits * cirPct * (rate.forward + rate.reverse) / perUnitDivisor +
+            bucketUnits * exchPct * (rate.forward + rate.reverse + rate.forward) / perUnitDivisor +
+            bucketUnits * deliveredPct * rate.forward / perUnitDivisor
+          fulfilment += bucketUnits * rate.fulfilment / perUnitDivisor
+        })
         const key = `${r.date}::${r.sku}`
         out[key] = (out[key] || 0) + logistics + fulfilment + paymentGw + softwareFee
       })
@@ -1626,7 +1720,18 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             // the selected range, so callers can fall back to the blended `asp` instead.
             prepaidAsp: prepaid?.asp ?? null,
             prepaidUnits: prepaid?.units ?? 0,
-            weightGm: shSkuWeightSlab[sku] ?? null,
+            // Real single-unit item-master weight (confirmed bug fix 2026-10-23) — was previously
+            // shSkuWeightSlab[sku], a blended courier-billing SHIPMENT weight, not this product's
+            // actual weight (see shSkuWeightGm's own comment for the "Ultimate Cozy Pillow" case
+            // this fixes: 8.4kg shown instead of the real 3.48kg).
+            weightGm: shSkuWeightGm[sku] ?? null,
+            // Real weight-SLAB BUCKET shares for this SKU (confirmed bug fix 2026-10-23) — e.g.
+            // [{slab: 7000, share: 0.52}, {slab: 14000, share: 0.22}, ...], same shape/source as
+            // shSkuWeightBuckets. Lets Price Simulator price its own logistics simulation against
+            // this product's REAL order-size mix (most orders are 2-4 units, shipping at 2-4x the
+            // single-unit weight) instead of assuming every unit ships alone — the same "one unit
+            // = one shipment" assumption shSkuCosts had before today's bucket fix.
+            weightBuckets: shSkuWeightBuckets[sku] || null,
             // Kept flat (not nested under a sub-object) so PriceSimulator.jsx and
             // d2cProductGroups' units-weighted blend below can read/aggregate each field directly.
             returnRevRate: rr.components?.netRevenueReturnPct ?? null,
@@ -1653,7 +1758,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const bySubCat = {}
     d2cProductList.forEach(p => {
       const key = `${p.category}::${p.subCategory}`
-      if (!bySubCat[key]) bySubCat[key] = { key, name: p.subCategory, category: p.category, subCategory: p.subCategory, units: 0, gross: 0, net: 0, excRev: 0, cogsTotal: 0, sndTotal: 0, sndKnownUnits: 0, variantCount: 0, listingTotal: 0, listingKnownUnits: 0, discountTotal: 0, prepaidAspTotal: 0, prepaidKnownUnits: 0, returnRevTotal: 0, rtoTotal: 0, cirTotal: 0, returnStatusTotal: 0, cancelTotal: 0, exchTotal: 0, weightTotal: 0, weightKnownUnits: 0, sourceTiers: new Set() }
+      if (!bySubCat[key]) bySubCat[key] = { key, name: p.subCategory, category: p.category, subCategory: p.subCategory, units: 0, gross: 0, net: 0, excRev: 0, cogsTotal: 0, sndTotal: 0, sndKnownUnits: 0, variantCount: 0, listingTotal: 0, listingKnownUnits: 0, discountTotal: 0, prepaidAspTotal: 0, prepaidKnownUnits: 0, returnRevTotal: 0, rtoTotal: 0, cirTotal: 0, returnStatusTotal: 0, cancelTotal: 0, exchTotal: 0, weightTotal: 0, weightKnownUnits: 0, weightBucketUnits: {}, weightBucketTotalUnits: 0, sourceTiers: new Set() }
       const g = bySubCat[key]
       g.units += p.units
       g.gross += p.gross
@@ -1664,6 +1769,16 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       if (p.listingPrice != null) { g.listingTotal += p.listingPrice * p.units; g.discountTotal += (p.currentDiscount || 0) * p.units; g.listingKnownUnits += p.units }
       if (p.prepaidAsp != null && p.prepaidUnits > 0) { g.prepaidAspTotal += p.prepaidAsp * p.prepaidUnits; g.prepaidKnownUnits += p.prepaidUnits }
       if (p.weightGm != null) { g.weightTotal += p.weightGm * p.units; g.weightKnownUnits += p.units }
+      // Combine this variant's real weight-bucket shares into the SubCategory's pooled bucket
+      // distribution, in ABSOLUTE units (share × this variant's own units), not shares directly —
+      // shares from different variants aren't on the same base until converted to absolute units
+      // first, then re-normalized to shares once at the very end (see weightBuckets below).
+      if (p.weightBuckets?.length) {
+        p.weightBuckets.forEach(({ slab, share }) => {
+          g.weightBucketUnits[slab] = (g.weightBucketUnits[slab] || 0) + share * p.units
+        })
+        g.weightBucketTotalUnits += p.units
+      }
       g.returnRevTotal += (p.returnRevRate || 0) * p.units
       g.rtoTotal += (p.rtoPct || 0) * p.units
       g.cirTotal += (p.cirPct || 0) * p.units
@@ -1685,6 +1800,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       currentDiscount: g.listingKnownUnits > 0 ? g.discountTotal / g.listingKnownUnits : null,
       prepaidAsp: g.prepaidKnownUnits > 0 ? g.prepaidAspTotal / g.prepaidKnownUnits : null,
       weightGm: g.weightKnownUnits > 0 ? g.weightTotal / g.weightKnownUnits : null,
+      // Pooled real weight-bucket shares across this SubCategory's variants (confirmed bug fix
+      // 2026-10-23) — re-normalized to shares (÷ weightBucketTotalUnits) once, here, at the end.
+      weightBuckets: g.weightBucketTotalUnits > 0
+        ? Object.entries(g.weightBucketUnits).map(([slab, units]) => ({ slab: Number(slab), share: units / g.weightBucketTotalUnits }))
+        : null,
       returnRevRate: g.units > 0 ? g.returnRevTotal / g.units : 0,
       rtoPct: g.units > 0 ? g.rtoTotal / g.units : 0,
       cirPct: g.units > 0 ? g.cirTotal / g.units : 0,

@@ -262,6 +262,49 @@ export function rateForWeightGm(slabs, weightGm) {
   return slab
 }
 
+// Exact-match slab lookup for a real, already-bucketed weight_slab value (e.g. from
+// shSkuWeightBuckets/weightBuckets — these are already rounded to a real courier slab, unlike
+// rateForWeightGm's input which rounds UP from a raw/hypothetical gram value) — brackets to the
+// nearest slab <= the value as a defensive fallback, same convention as PnLPage.jsx's rateForSlab.
+function rateForBucketSlab(slabs, weightSlab) {
+  if (!slabs?.length || weightSlab == null) return null
+  const exact = slabs.find(s => s.weightGm === weightSlab)
+  if (exact) return exact
+  let match = null
+  for (const s of slabs) { if (s.weightGm <= weightSlab) match = s; else break }
+  return match || slabs[0]
+}
+
+// Per-weight-BUCKET logistics/fulfilment, averaged across a product's REAL order-size mix
+// (confirmed bug fix 2026-10-23) — e.g. [{slab: 7000, share: 0.52, unitsPerOrder: 2}, {slab:
+// 14000, share: 0.22, unitsPerOrder: 4}] for a product mostly sold in 2-4 unit orders. A courier
+// bills per SHIPMENT, not per unit — a 7kg box holding 2 units costs roughly double a single
+// unit's shipment, but that cost must then be DIVIDED by the 2 units inside it to get a per-unit
+// figure, not charged in full to each of the 2 (confirmed business fact: "the shipment will be
+// one only.. pack of two will be dispatched.. but in our calculation we are going component level
+// qty wise.. so we need to get the logistics based on a unit" — this was a second, compounding bug
+// found AFTER the initial per-bucket-weight fix: pricing the right bucket weight is necessary but
+// not sufficient; the per-shipment cost also has to be divided by that shipment's real unit count).
+// Falls back to blendedLogisticsPerUnit at weightGm's own single-unit rate (unitsPerOrder=1, no
+// division) when no real bucket distribution exists yet (e.g. a brand-new product with no order
+// history), so callers never silently get zero/wrong cost while data is still loading.
+export function blendedLogisticsForBuckets(slabs, weightBuckets, weightGm, outcomePcts) {
+  if (!weightBuckets?.length) {
+    const rate = rateForWeightGm(slabs, weightGm)
+    return blendedLogisticsPerUnit(rate, outcomePcts)
+  }
+  let logistics = 0, fulfilment = 0
+  weightBuckets.forEach(({ slab, share, unitsPerOrder }) => {
+    const rate = rateForBucketSlab(slabs, slab)
+    if (!rate) return
+    const perUnitDivisor = unitsPerOrder > 0 ? unitsPerOrder : 1
+    const { logistics: l, fulfilment: f } = blendedLogisticsPerUnit(rate, outcomePcts)
+    logistics += (l / perUnitDivisor) * share
+    fulfilment += (f / perUnitDivisor) * share
+  })
+  return { logistics, fulfilment }
+}
+
 // Full per-unit waterfall for a hypothetical/simulated unit at a given selling price (Inc GST).
 // gstRate is a fraction (e.g. 0.18), not a percentage. Both fallback rules from the real PnL
 // formula are preserved here so a SKU with incomplete data never silently costs less than it
