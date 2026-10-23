@@ -432,7 +432,7 @@ function PendencyTable({ data, kind }) {
   const { rows, all, total } = useMemo(() => pendencyRows(data, kind), [data, kind])
   if (!total) return <div style={{ color: C.t3, fontSize: 12.5, padding: 20 }}>No pending {kind.toLowerCase()} tickets.</div>
   const max = Math.max(...rows.flatMap(r => Object.values(r.v)), 1)
-  const th = { padding: '9px 10px', fontSize: 10.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: 'right', borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap' }
+  const th = { padding: '9px 10px', fontSize: 10.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: 'right', borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1, background: C.card }
   const td = { padding: '10px', fontSize: 12.5, borderTop: `1px solid ${C.border}`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const heat = (n) => (n ? `rgba(${C.accRgb},${(0.08 + 0.5 * (n / max)).toFixed(2)})` : 'transparent')
   return (
