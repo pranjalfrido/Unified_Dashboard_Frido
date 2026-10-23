@@ -5725,7 +5725,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
         {topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
-          const filteredSubCat = q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat
+          const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
           return (
           <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
