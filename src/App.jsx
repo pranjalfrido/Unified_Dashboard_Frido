@@ -5825,14 +5825,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <Section first>
                 <SecHdr info="% of total shipments in range. FASR% = delivered on 1st OFD attempt.">Ops Performance</SecHdr>
                 <StatStrip items={[
-                  { label: 'Del. %', val: `${lDelPct.toFixed(1)}%`, color: lDelPct >= 80 ? C.green.tx : lDelPct >= 60 ? C.amber.tx : C.red.tx },
-                  { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: lRtoPct <= 8 ? C.green.tx : lRtoPct <= 10 ? C.amber.tx : C.red.tx },
-                  { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: lSlaPct <= 5 ? C.green.tx : lSlaPct <= 15 ? C.amber.tx : C.red.tx },
-                  { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: lZRtoPct <= 3 ? C.green.tx : lZRtoPct <= 8 ? C.amber.tx : C.red.tx },
+                  { label: 'Del. %', val: `${lDelPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: C.t1 },
                   { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : '—', color: C.t1 },
-                  { label: 'RASR %', val: lRasr !== null ? `${lRasr.toFixed(1)}%` : '—', color: lRasr === null ? C.t3 : lRasr >= 10 ? C.green.tx : lRasr >= 5 ? C.amber.tx : C.red.tx },
-                  { label: 'NDR %', val: lNdrPct !== null ? `${lNdrPct.toFixed(1)}%` : '—', color: lNdrPct === null ? C.t3 : lNdrPct <= 10 ? C.green.tx : lNdrPct <= 20 ? C.amber.tx : C.red.tx },
-                  { label: 'NDR Resolved %', val: lNdrResolvedPct !== null ? `${lNdrResolvedPct.toFixed(1)}%` : '—', color: lNdrResolvedPct === null ? C.t3 : lNdrResolvedPct >= 70 ? C.green.tx : lNdrResolvedPct >= 50 ? C.amber.tx : C.red.tx },
+                  { label: 'RASR %', val: lRasr !== null ? `${lRasr.toFixed(1)}%` : '—', color: lRasr === null ? C.t3 : C.t1 },
+                  { label: 'NDR %', val: lNdrPct !== null ? `${lNdrPct.toFixed(1)}%` : '—', color: lNdrPct === null ? C.t3 : C.t1 },
+                  { label: 'NDR Resolved %', val: lNdrResolvedPct !== null ? `${lNdrResolvedPct.toFixed(1)}%` : '—', color: lNdrResolvedPct === null ? C.t3 : C.t1 },
                 ]} />
               </Section>
 
@@ -5843,14 +5843,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <Section>
                 <SecHdr info="Avg days per shipment stage, order to delivery. RTO Mark → RTO Delivered only counts RTOs that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
                 <StatStrip items={[
-                  { label: 'Order → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : lAvgPickup <= 1 ? C.green.tx : lAvgPickup <= 2 ? C.amber.tx : C.red.tx },
-                  { label: 'Order → Dispatch', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : lAvgProcessing <= 2 ? C.green.tx : lAvgProcessing <= 4 ? C.amber.tx : C.red.tx },
-                  { label: 'Pickup → Del.', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : lAvgIntransit <= 3 ? C.green.tx : lAvgIntransit <= 6 ? C.amber.tx : C.red.tx },
-                  { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : lAvgFul <= 3 ? C.green.tx : lAvgFul <= 5 ? C.amber.tx : C.red.tx },
-                  { label: 'RTO Mark → Del.', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : lAvgRtoTat <= 5 ? C.green.tx : lAvgRtoTat <= 10 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : lAvgRvpCreatedToPickup <= 2 ? C.green.tx : lAvgRvpCreatedToPickup <= 4 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : lAvgRvpPickupToDelivery <= 5 ? C.green.tx : lAvgRvpPickupToDelivery <= 8 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : lAvgRvpTat <= 7 ? C.green.tx : lAvgRvpTat <= 12 ? C.amber.tx : C.red.tx },
+                  { label: 'Order → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
+                  { label: 'Order → Dispatch', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
+                  { label: 'Pickup → Del.', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
+                  { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : C.t1 },
+                  { label: 'RTO Mark → Del.', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : C.t1 },
+                  { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : C.t1 },
+                  { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : C.t1 },
                 ]} />
               </Section>
 
@@ -5862,14 +5862,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <Section>
                 <SecHdr info="% only of orders/shipments that reached that stage, not all shipments. Covers forward delivery, courier RTO, and customer-return (RVP) thresholds.">SLA Thresholds — Forward, RTO & RVP</SecHdr>
                 <StatStrip items={[
-                  { label: 'Processed ≤24h', val: lProcessedWithin24hPct !== null ? `${lProcessedWithin24hPct.toFixed(1)}%` : '—', color: lProcessedWithin24hPct === null ? C.t3 : lProcessedWithin24hPct >= 80 ? C.green.tx : lProcessedWithin24hPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersWithOrderDate > 0 ? `${fmtN(lProcessedWithin24h)} of ${fmtN(lOrdersWithOrderDate)}` : '—' },
-                  { label: 'Picked Up ≤24h', val: lPickedUpWithin24hPct !== null ? `${lPickedUpWithin24hPct.toFixed(1)}%` : '—', color: lPickedUpWithin24hPct === null ? C.t3 : lPickedUpWithin24hPct >= 80 ? C.green.tx : lPickedUpWithin24hPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersPickedUp > 0 ? `${fmtN(lPickedUpWithin24h)} of ${fmtN(lOrdersPickedUp)}` : '—' },
-                  { label: 'Del. ≤3d of Pickup', val: lDeliveredWithin3dPickupPct !== null ? `${lDeliveredWithin3dPickupPct.toFixed(1)}%` : '—', color: lDeliveredWithin3dPickupPct === null ? C.t3 : lDeliveredWithin3dPickupPct >= 80 ? C.green.tx : lDeliveredWithin3dPickupPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin3dPickup)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
-                  { label: 'Del. ≤5d of Order', val: lDeliveredWithin5dOrderPct !== null ? `${lDeliveredWithin5dOrderPct.toFixed(1)}%` : '—', color: lDeliveredWithin5dOrderPct === null ? C.t3 : lDeliveredWithin5dOrderPct >= 80 ? C.green.tx : lDeliveredWithin5dOrderPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin5dOrder)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
-                  { label: 'RTO ≤5d of Mark', val: lRtoDeliveredWithin5dMarkPct !== null ? `${lRtoDeliveredWithin5dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin5dMarkPct === null ? C.t3 : lRtoDeliveredWithin5dMarkPct >= 80 ? C.green.tx : lRtoDeliveredWithin5dMarkPct >= 60 ? C.amber.tx : C.red.tx, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin5dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
-                  { label: 'RTO ≤10d of Mark', val: lRtoDeliveredWithin10dMarkPct !== null ? `${lRtoDeliveredWithin10dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin10dMarkPct === null ? C.t3 : lRtoDeliveredWithin10dMarkPct >= 80 ? C.green.tx : lRtoDeliveredWithin10dMarkPct >= 60 ? C.amber.tx : C.red.tx, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin10dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
-                  { label: 'RVP ≤2d of Created', val: lRvpDoneWithin2dPct !== null ? `${lRvpDoneWithin2dPct.toFixed(1)}%` : '—', color: lRvpDoneWithin2dPct === null ? C.t3 : lRvpDoneWithin2dPct >= 80 ? C.green.tx : lRvpDoneWithin2dPct >= 60 ? C.amber.tx : C.red.tx, sub: lRvpCreated > 0 ? `${fmtN(lRvpDoneWithin2d)} of ${fmtN(lRvpCreated)}` : '—' },
-                  { label: 'RVP Del. ≤5d of Done', val: lRvpDeliveredWithin5dPct !== null ? `${lRvpDeliveredWithin5dPct.toFixed(1)}%` : '—', color: lRvpDeliveredWithin5dPct === null ? C.t3 : lRvpDeliveredWithin5dPct >= 80 ? C.green.tx : lRvpDeliveredWithin5dPct >= 60 ? C.amber.tx : C.red.tx, sub: lRvpDone > 0 ? `${fmtN(lRvpDeliveredWithin5d)} of ${fmtN(lRvpDone)}` : '—' },
+                  { label: 'Processed ≤24h', val: lProcessedWithin24hPct !== null ? `${lProcessedWithin24hPct.toFixed(1)}%` : '—', color: lProcessedWithin24hPct === null ? C.t3 : C.t1, sub: lOrdersWithOrderDate > 0 ? `${fmtN(lProcessedWithin24h)} of ${fmtN(lOrdersWithOrderDate)}` : '—' },
+                  { label: 'Picked Up ≤24h', val: lPickedUpWithin24hPct !== null ? `${lPickedUpWithin24hPct.toFixed(1)}%` : '—', color: lPickedUpWithin24hPct === null ? C.t3 : C.t1, sub: lOrdersPickedUp > 0 ? `${fmtN(lPickedUpWithin24h)} of ${fmtN(lOrdersPickedUp)}` : '—' },
+                  { label: 'Del. ≤3d of Pickup', val: lDeliveredWithin3dPickupPct !== null ? `${lDeliveredWithin3dPickupPct.toFixed(1)}%` : '—', color: lDeliveredWithin3dPickupPct === null ? C.t3 : C.t1, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin3dPickup)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
+                  { label: 'Del. ≤5d of Order', val: lDeliveredWithin5dOrderPct !== null ? `${lDeliveredWithin5dOrderPct.toFixed(1)}%` : '—', color: lDeliveredWithin5dOrderPct === null ? C.t3 : C.t1, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin5dOrder)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
+                  { label: 'RTO ≤5d of Mark', val: lRtoDeliveredWithin5dMarkPct !== null ? `${lRtoDeliveredWithin5dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin5dMarkPct === null ? C.t3 : C.t1, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin5dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
+                  { label: 'RTO ≤10d of Mark', val: lRtoDeliveredWithin10dMarkPct !== null ? `${lRtoDeliveredWithin10dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin10dMarkPct === null ? C.t3 : C.t1, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin10dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
+                  { label: 'RVP ≤2d of Created', val: lRvpDoneWithin2dPct !== null ? `${lRvpDoneWithin2dPct.toFixed(1)}%` : '—', color: lRvpDoneWithin2dPct === null ? C.t3 : C.t1, sub: lRvpCreated > 0 ? `${fmtN(lRvpDoneWithin2d)} of ${fmtN(lRvpCreated)}` : '—' },
+                  { label: 'RVP Del. ≤5d of Done', val: lRvpDeliveredWithin5dPct !== null ? `${lRvpDeliveredWithin5dPct.toFixed(1)}%` : '—', color: lRvpDeliveredWithin5dPct === null ? C.t3 : C.t1, sub: lRvpDone > 0 ? `${fmtN(lRvpDeliveredWithin5d)} of ${fmtN(lRvpDone)}` : '—' },
                 ]} />
               </Section>
 
@@ -18939,15 +18939,29 @@ function AppInner() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const [profileError, setProfileError] = useState(false)
+
   useEffect(() => {
     if (!session || session === 'recovery') return
+    setProfileError(false)
+    // Confirmed fix 2026-10-23: Supabase outages/503s on user_profiles previously left the app
+    // stuck on LoadingScreen forever (the .then() callback just never fires), with no visible
+    // error — indistinguishable from a blank/broken page. A 15s timeout now degrades to an error
+    // screen with a retry button instead of hanging silently; a slow-but-successful real response
+    // still wins the race normally (clearTimeout below) and nothing changes for the happy path.
+    let settled = false
+    const timeout = setTimeout(() => { if (!settled) setProfileError(true) }, 15000)
     supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
       .then(({ data, error }) => {
-        if (error) console.error('profile fetch error:', error)
+        settled = true
+        clearTimeout(timeout)
+        if (error) { console.error('profile fetch error:', error); setProfileError(true); return }
         setProfile(data || { is_admin: false })
       })
+      .catch(err => { settled = true; clearTimeout(timeout); console.error('profile fetch error:', err); setProfileError(true) })
     supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
       .then(({ data }) => setAllowedTabs(data ? data.map(r => r.tab) : []))
+      .catch(() => setAllowedTabs([]))
   }, [session])
 
   if (session === undefined) return (
@@ -18965,6 +18979,19 @@ function AppInner() {
   }
 
   if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+
+  // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
+  // hanging on LoadingScreen forever with no indication anything is wrong.
+  if (profileError) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 16, fontFamily: 'inherit' }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>Couldn't load your profile</div>
+      <div style={{ fontSize: 13, color: '#777', maxWidth: 360, textAlign: 'center' }}>This usually means our data service is temporarily unavailable. Please try again in a moment.</div>
+      <button onClick={() => { setProfile(null); setProfileError(false); setSession(s => ({ ...s })) }}
+        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+        Retry
+      </button>
+    </div>
+  )
 
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (

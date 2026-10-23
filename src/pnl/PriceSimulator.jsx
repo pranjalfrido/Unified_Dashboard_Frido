@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { C, fmt, fmtN, pct } from '../utils.js'
-import { blendedLogisticsPerUnit, rateForWeightGm } from './pnlUtils.js'
+import { blendedLogisticsPerUnit, blendedLogisticsForBuckets, rateForWeightGm } from './pnlUtils.js'
 
 // Per-unit price values (Listing Price, ASP, Selling Price) are always shown in plain rupees —
 // never abbreviated to K/L like the aggregate totals (Gross/Net/CM) do via the shared fmt() —
@@ -468,10 +468,17 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const cogs = grossCogs * (1 - matureReturnRevRate)
     const gm = net - cogs
 
-    const rate = sndRateSlabs ? rateForWeightGm(sndRateSlabs, selectedProduct.weightGm ?? null) : null
+    // Priced against this product's REAL weight-bucket order-size mix (confirmed bug fix
+    // 2026-10-23), not a single-unit-shipment assumption — see blendedLogisticsForBuckets' own
+    // comment. Falls back to the single-unit rate (old behavior) when no real bucket distribution
+    // exists yet, so a brand-new/low-volume product still gets a reasonable estimate.
+    const hasRate = sndRateSlabs?.length && (selectedProduct.weightGm != null || selectedProduct.weightBuckets?.length)
     let snd
-    if (rate) {
-      const { logistics, fulfilment } = blendedLogisticsPerUnit(rate, { rtoPct, returnPct: nonRtoReturnPct, exchangePct: exchPct, cancelPct })
+    if (hasRate) {
+      const { logistics, fulfilment } = blendedLogisticsForBuckets(
+        sndRateSlabs, selectedProduct.weightBuckets, selectedProduct.weightGm ?? null,
+        { rtoPct, returnPct: nonRtoReturnPct, exchangePct: exchPct, cancelPct }
+      )
       const paymentGw = (gross / units) * PAYMENT_GW_RATE // per-unit gross Inc GST × PG rate
       const softwareFee = 15
       snd = (logistics + fulfilment + paymentGw + softwareFee) * units
