@@ -9886,7 +9886,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           })
           return rawTotal > 0 ? netRev / rawTotal : 1
         })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns channel="ebo" netScale={eboMatrixNetScale} />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} skuPrevMap={ebo.skuPrevMap || {}} showReturnPct={true} detailedReturns channel="ebo" netScale={eboMatrixNetScale} />
       })()}
       {/* Store-wise table */}
       {(() => {
@@ -10582,7 +10582,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
               })
               return rawTotal > 0 ? amzKpiNetTarget / rawTotal : 1
             })()
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="amazon" netScale={amzMatrixNetScale} />
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={amzMatrixNetScale} />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -11000,7 +11000,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
           })
           return rawTotal > 0 ? fkNetRev / rawTotal : 1
         })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={fkMatrixNetScale} />
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fk.skuPrevMap || {}} simpleReturns showReturnPct channel="flipkart" netScale={fkMatrixNetScale} />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -13537,7 +13537,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13826,7 +13826,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
         )
       })()}
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -14119,7 +14119,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
