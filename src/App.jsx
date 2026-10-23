@@ -3524,12 +3524,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
-        <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
+        {(!allowedTabs || allowedTabs.includes('flash')) && <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
           onClick={() => setPage('flash')}
           style={{ cursor: 'pointer' }}>
           <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
           <span className="sb-label">FLASH</span>
-        </div>
+        </div>}
         <ThemePicker theme={theme} setTheme={setTheme} />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>

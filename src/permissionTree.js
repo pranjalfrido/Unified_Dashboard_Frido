@@ -89,6 +89,7 @@ export const PERMISSION_TREE = [
     ],
   },
   { key: 'documents', label: 'Documents', children: [] },
+  { key: 'flash', label: 'FLASH', children: [] },
 ]
 
 export function hasPermission(allowedTabs, key) {
