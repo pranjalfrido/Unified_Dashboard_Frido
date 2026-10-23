@@ -436,7 +436,7 @@ function PendencyTable({ data, kind }) {
   const td = { padding: '10px', fontSize: 12.5, borderTop: `1px solid ${C.border}`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const heat = (n) => (n ? `rgba(${C.accRgb},${(0.08 + 0.5 * (n / max)).toFixed(2)})` : 'transparent')
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 240 + (AGE_BUCKETS.length + 1) * 84 }}>
         <thead>
           <tr>
