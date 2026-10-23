@@ -17,6 +17,7 @@ import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
+import CustomerSupportPage, { ExportMenu as CsExportMenu } from './CustomerSupportPage.jsx'
 import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
 import PackagingBomPage from './PackagingBomPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
@@ -3316,6 +3317,9 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
   // means they no longer inherit the row's position and have to be told where to sit.
   const [invHoverTop, setInvHoverTop] = useState(0)
   const [logHoverTop, setLogHoverTop] = useState(0)
+  const [cusHover, setCusHover] = useState(false)
+  const [cusHoverTop, setCusHoverTop] = useState(0)
+  const cusHoverTimerRef = useRef(null)
   const allItems = [
     { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
     { id: 'sales',     label: 'Sales',     Icon: ChartBar },
@@ -3335,6 +3339,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
 if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
     if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
+    if (i.id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
     return allowedTabs.includes(i.id)
   }) : allItems
   const dims = [
@@ -3457,6 +3462,55 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
             </Fragment>
           )
         }
+        if (item.id === 'customer') {
+          // Same flyout as Logistics: Customer Intelligence (the original Customer page) and
+          // Customer Support (Freshdesk / Ozonetel). Each is gated by its own permission key.
+          const hasIntel = !allowedTabs || allowedTabs.includes('customer')
+          const hasSupport = !allowedTabs || allowedTabs.includes('customer:support')
+          const cusSubTabs = [
+            ...(hasIntel ? [{ id: 'customer', label: 'Customer Intelligence' }] : []),
+            ...(hasSupport ? [{ id: 'customer-support', label: 'Customer Support' }] : []),
+          ]
+          const defaultCusPage = hasIntel ? 'customer' : 'customer-support'
+          const cusActive = page === 'customer' || page === 'customer-support'
+          const showPopup = cusSubTabs.length > 1
+          return (
+            <Fragment key="customer">
+            <div onClick={() => setPage(defaultCusPage)}
+              className={`sb-item${cusActive ? ' active' : ''}`}
+              style={{ position: 'relative' }}
+              onMouseEnter={e => { if (showPopup) { clearTimeout(cusHoverTimerRef.current); setCusHoverTop(e.currentTarget.getBoundingClientRect().top); setCusHover(true) } }}
+              onMouseLeave={() => { cusHoverTimerRef.current = setTimeout(() => setCusHover(false), 200) }}>
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={cusActive ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
+              {showPopup && cusHover && (
+                <div style={{
+                  position: 'fixed', left: 'var(--sb)', top: cusHoverTop, marginLeft: 6, zIndex: 999,
+                  background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 200,
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  {cusSubTabs.map(sub => (
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage(sub.id); setCusHover(false) }}
+                      style={{
+                        padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12,
+                        fontWeight: page === sub.id ? 700 : 500,
+                        color: page === sub.id ? C.t1 : C.t2,
+                        background: page === sub.id ? C.acl : 'transparent',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={e => { if (page !== sub.id) e.currentTarget.style.background = C.bg }}
+                      onMouseLeave={e => { if (page !== sub.id) e.currentTarget.style.background = 'transparent' }}>
+                      {sub.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <hr className="sb-sep" />
+            </Fragment>
+          )
+        }
         return (
           <Fragment key={item.id}>
             <div onClick={() => setPage(item.id)}
@@ -3510,6 +3564,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
             item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
             item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
             item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
+            item.id === 'customer' ? (!allowedTabs || allowedTabs.includes('customer') || allowedTabs.includes('customer:support')) :
             !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
@@ -4816,9 +4871,9 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -4862,11 +4917,17 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, invTab, setInvT
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
           </div>
+        </div>
+      )}
+      {page === 'customer-support' && csRange && (
+        <div className="tnav-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <DateRangePicker filters={csRange} setFilters={setCsRange} onRefresh={onCsRefresh} />
+          <CsExportMenu data={csExport} />
         </div>
       )}
       {page === 'logistics' && logisticsFilterUI && (
@@ -19348,11 +19409,12 @@ const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sale
 const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
 const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
 const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
-const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'documents']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'customer:support', 'documents']
 const permKeyToPage = {
   'logistics': 'logistics',
   'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
   'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory',
+  'customer:support': 'customer-support',
   ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
   ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
   ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
@@ -19475,6 +19537,16 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const [customerTab, setCustomerTab] = useState('overview')
+  // Customer Support date range — shared by the top-bar picker and the page. Defaults to the
+  // last day (yesterday): today's tickets and calls are still arriving.
+  const [csRange, setCsRange] = useState(() => {
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const y = new Date(); y.setDate(y.getDate() - 1)
+    return { start: iso(y), end: iso(y) }
+  })
+  const [csRefresh, setCsRefresh] = useState(0)
+  // Export list + download function registered by the Customer Support page for the top bar's Export menu.
+  const [csExport, setCsExport] = useState(null)
 
   // Redirect to default page if URL is '/' or unknown
   const getDefaultPage = () => {
@@ -19496,6 +19568,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // user with cost access is bounced straight back to their default page.
       page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
+      page === 'customer-support' ? (!allowedTabs || allowedTabs.includes('customer:support')) :
       page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
@@ -20044,8 +20117,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis'} />
+        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -20053,7 +20126,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -20106,6 +20179,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
+            </div>
+          )}
+          {page === 'customer-support' && (!allowedTabs || allowedTabs.includes('customer:support')) && (
+            <div className="page-scroll" style={{ padding: 0 }}>
+              <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} />
             </div>
           )}
           {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (

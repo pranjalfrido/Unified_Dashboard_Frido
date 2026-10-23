@@ -82,7 +82,12 @@ export const PERMISSION_TREE = [
       { key: 'inventory:sales', label: 'Sales & Allocation' },
     ],
   },
-  { key: 'customer',  label: 'Customer',  children: [] },
+  {
+    key: 'customer', label: 'Customer', isGroup: true, children: [
+      { key: 'customer',         label: 'Customer Intelligence' },
+      { key: 'customer:support', label: 'Customer Support' },
+    ],
+  },
   { key: 'documents', label: 'Documents', children: [] },
 ]
 
