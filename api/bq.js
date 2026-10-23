@@ -340,8 +340,30 @@ export default async function handler(req, res) {
     // exchange_rev added (2026-10-22) — additive only, every existing column stays as-is — so the
     // new resolveD2CReturnComponents() engine (api/_returnComponents.js) can resolve Exchange% the
     // same way it resolves RTO/CIR/Cancelled, without a second query.
-    shDailySKU: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, MasterSKU AS sku, SubChannel AS sub_channel, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, ROUND(SUM(SellingPrice_Inc_GST),2) AS rev, ROUND(SUM(SellingPrice_Exc_GST),2) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cod_cancel_rev, ROUND(SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END),2) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS exchange_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY date, sku, sub_channel ORDER BY date`,
+    // Category/SubCategory added (confirmed bug fix 2026-10-23) — shResolvedForMaps (built from
+    // this query's rows below) feeds payload.shopify.resolvedDailySKU, which the cross-channel
+    // Overview/Sales "All Channels" subCatMap override (crossChByCatSubCat, further down this
+    // file) groups by row.category/row.subCategory. Without these columns every Shopify row's
+    // category/subCategory came through as undefined, so ALL of D2C's real resolved RTO/CIR/
+    // Cancel revenue was silently pooled into a generic 'Others::Others' bucket instead of each
+    // SKU's real SubCategory — live-confirmed: 'Orthotics Posture Corrector'/'...Pro' showed 0%
+    // Return% in Sales/Overview despite real ₹6.1M/₹15.2M RTO revenue, while 'Others::Others'
+    // absorbed ₹86.8M of RTO revenue that belonged to dozens of real SubCategories. One SKU maps
+    // to exactly one Category/SubCategory via the item master join, so adding them to GROUP BY
+    // cannot fan out rows beyond the existing (date, sku, sub_channel) grain.
+    shDailySKU: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, MasterSKU AS sku, SubChannel AS sub_channel, Category AS category, SubCategory AS subcategory, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, ROUND(SUM(SellingPrice_Inc_GST),2) AS rev, ROUND(SUM(SellingPrice_Exc_GST),2) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cod_cancel_rev, ROUND(SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END),2) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS exchange_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY date, sku, sub_channel, category, subcategory ORDER BY date`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
+    // Real, single-unit item-master weight per SKU (confirmed bug fix 2026-10-23) — NEVER
+    // multiplied by ItemQty, unlike shSkuCosts'/shDailySkuCosts' weight_slab (that's a SHIPMENT
+    // billing weight, used only internally to pick a courier rate — it is NOT "the product's
+    // weight" and must never be shown to the user or fed into a per-unit cost model as if it were).
+    // This was the actual root cause of "Ultimate Cozy Pillow" showing 8.4-8.5kg in Breakeven
+    // ROAS/Price Simulator's product picker: those tools read shSkuWeightSlab (the units-weighted
+    // AVERAGE shipment weight across all real orders, inflated by bulk 2-4 unit orders) as if it
+    // were the single-unit weight, when the real item-master value is 3.48kg. MAX() here is a
+    // no-op aggregator (Weight_gms is constant per SKU in the item master; this just collapses the
+    // row count to one per SKU) — not a derivation of any kind.
+    shSKUWeight: `WITH q AS (${base}) SELECT MasterSKU AS sku, MAX(Weight_gms) AS weight_gms FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND Weight_gms IS NOT NULL GROUP BY sku`,
     // Real listing price / discount for the Price Simulator's "current discount" readout —
     // Listing_Price and Discount live directly on the fact table (confirmed via
     // INFORMATION_SCHEMA), NOT through buildQuery's base CTE, which doesn't select them — a
@@ -384,16 +406,26 @@ export default async function handler(req, res) {
     // ₹1003), so leaving them in this query while shSKU's ASP excludes them produced an
     // impossible Listing Price < ASP (i.e. a negative "current discount") purely from the two
     // queries scoping different row sets, not from any real pricing anomaly.
-    shListingPrice: `SELECT masterskucode AS sku,
+    // sku backfilled the SAME way as _bq.js buildQuery's MasterSKU (see that file's comment) —
+    // this query reads the fact table directly, bypassing buildQuery's base CTE entirely, so
+    // without this fallback it would group the corrupted/null-masterskucode rows (e.g.
+    // FR-OCVP-PB1's 85,647-row ingestion-bug slice) under a literal null key, and the Price
+    // Simulator's listingPriceBySku[sku] lookup — keyed off shSKU's now-backfilled MasterSKU —
+    // would silently find nothing for that SKU's real majority of sales.
+    shListingPrice: `SELECT COALESCE(
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(masterskucode)), r'[^A-Z0-9-]', ''), ''),
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(ProductId)), r'[^A-Z0-9-]', ''), '')
+        ) AS sku,
         SUM(Listing_Price) / SUM(ItemQty) AS avg_listing_price,
         SUM(Discount * ItemQty) / SUM(ItemQty) AS avg_discount,
         SUM(ItemQty) AS units
       FROM \`frido-429506.production.fact_all_platform_sales_report\`
       WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
-        AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
         AND Listing_Price IS NOT NULL AND Listing_Price > 0 AND ItemQty > 0
         AND NOT (OrderId LIKE '%_EX%')
-      GROUP BY masterskucode`,
+      GROUP BY sku
+      HAVING sku IS NOT NULL`,
     // Prepaid-only ASP per SKU — the Price Simulator's "Current Discount" needs Listing Price
     // compared against a selling price that's actually comparable to it. Confirmed via live
     // BigQuery (order-level detail, e.g. #MF0223605498 and 1,382 others on FR-OPPC-L1 in Sep 2026):
@@ -409,15 +441,22 @@ export default async function handler(req, res) {
     // (which still blends both payment types for Gross Revenue/CM1/CM2/etc — nothing else in the
     // app changes) — used ONLY by the Price Simulator's Current Discount / reference-price
     // calculations, per explicit user decision to keep COD units in every other KPI.
-    shPrepaidAsp: `SELECT masterskucode AS sku,
+    // sku backfilled the same way as shListingPrice above (see its comment) — same bypass-of-base
+    // reasoning applies here.
+    shPrepaidAsp: `SELECT COALESCE(
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(masterskucode)), r'[^A-Z0-9-]', ''), ''),
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+          NULLIF(REGEXP_REPLACE(UPPER(TRIM(ProductId)), r'[^A-Z0-9-]', ''), '')
+        ) AS sku,
         SUM(SellingPrice_Inc_GST) / SUM(ItemQty) AS prepaid_asp,
         SUM(ItemQty) AS prepaid_units
       FROM \`frido-429506.production.fact_all_platform_sales_report\`
       WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
-        AND masterskucode IS NOT NULL AND TRIM(masterskucode) != '' AND ItemQty > 0
+        AND ItemQty > 0
         AND NOT (OrderId LIKE '%_EX%')
         AND payment_type = 'Prepaid'
-      GROUP BY masterskucode`,
+      GROUP BY sku
+      HAVING sku IS NOT NULL`,
     // Return-rate baseline for the Price Simulator's "Return Rate Impact" lever — reuses the EXACT
     // SAME formula as the D2C Return Analysis tab's headline "Return%" KPI (api/return-analysis.js),
     // via the shared netRevenueSelectFragment/computeNetRevenueMeasures helpers (_bq.js) —
@@ -2420,7 +2459,7 @@ export default async function handler(req, res) {
       return (cat && cat !== 'Mobility' && !/^sparepart/i.test(cat)) ? 'myfrido' : subCh
     }
     const shResolvedForMaps = resolveDailySkuComponents(
-      (r.shDailySKU || []).map(x => { const subChannel = reassignSubCh(x.sku, (x.sub_channel || '').toLowerCase()); return { skuKey: `${x.sku}::${subChannel}`, sku: x.sku, subChannel, order_date: x.date, gross_inc_gst: x.rev, units: x.units, rto_rev: x.rto_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev, exchange_rev: x.exchange_rev } }),
+      (r.shDailySKU || []).map(x => { const subChannel = reassignSubCh(x.sku, (x.sub_channel || '').toLowerCase()); return { skuKey: `${x.sku}::${subChannel}`, sku: x.sku, subChannel, category: x.category || 'Others', subCategory: x.subcategory || 'Others', order_date: x.date, gross_inc_gst: x.rev, units: x.units, rto_rev: x.rto_rev, cir_rev: x.cir_rev, cancel_rev: x.cancel_rev, exchange_rev: x.exchange_rev } }),
       buildRollingRateMap((r.shComponentRateMature || []).map(x => { const subChannel = reassignSubCh(x.sku, (x.sub_channel || '').toLowerCase()); return { ...x, skuKey: `${x.sku}::${subChannel}` } }), CHANNEL_COMPONENTS.shopify, x => x.skuKey),
       CHANNEL_COMPONENTS.shopify,
       x => x.skuKey,
@@ -2970,6 +3009,12 @@ export default async function handler(req, res) {
           totalQty: parseInt(x.total_qty) || 0,
           grossIncGst: parseFloat(x.gross_inc_gst) || 0,
         })),
+        // Real, single-unit item-master weight per SKU (see shSKUWeight query above) — this is
+        // "the product's weight" everywhere one needs to be shown or used in a per-unit model
+        // (Breakeven ROAS seed, Price Simulator). NEVER the shSkuCosts weight_slab/skuCostRows
+        // figure above, which is a courier-billing SHIPMENT weight (real weight × units in that
+        // order), not a per-unit value.
+        skuWeightGm: Object.fromEntries((r.shSKUWeight || []).map(x => [x.sku, parseFloat(x.weight_gms) || null])),
         // Same shape as skuCostRows above, plus `date` — day-wise weight-slab cost lines for the
         // PnL trend chart's real per-day SnD computation (see shDailySkuCosts query above).
         dailySkuCostRows: (r.shDailySkuCosts || []).map(x => ({
@@ -5018,7 +5063,7 @@ export default async function handler(req, res) {
       fastPayload.prevAdsTotals = fastPayload.prevAdsTotals ?? []
       // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
       const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
-        'dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap',
+        'dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap',
         'cityRows','cityPrevMap','cityTotal','returnReasons',
         'catChannel','subCatChannel','skuChannel','sndBySku','dailyPnLBySku','dailyCat',
         'catChannelPrev','subCatChannelPrev','skuChannelPrev','returnCat','returnSubCat','returnSKU',
@@ -5074,7 +5119,7 @@ export default async function handler(req, res) {
         pnlAdSpendMap: payload.pnlAdSpendMap,
         pnlRawAdSpend: payload.pnlRawAdSpend,
         masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
+        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
         _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
         _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
         _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),

@@ -349,13 +349,22 @@ export function buildQuery(s, e, filters = {}) {
     else if (vals.length > 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (sku) {
+    // Matches against the same backfilled/normalized key the base CTE outputs as MasterSKU (see
+    // its comment) — not the raw u.masterskucode column — so filtering by a SKU that has
+    // corrupted-ChannelSKUCode/null-masterskucode rows (e.g. FR-OCVP-PB1) doesn't silently miss
+    // the bulk of that SKU's real sales.
+    const resolvedSkuKeyExpr = `COALESCE(
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', ''), ''),
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ProductId)), r'[^A-Z0-9-]', ''), '')
+    )`
     const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
     if (skuList.length === 1) {
-      const s1 = skuList[0].replace(/'/g, "''")
-      whereClauses.push(`u.masterskucode = '${s1}'`)
+      const s1 = skuList[0].replace(/'/g, "''").toUpperCase().replace(/[^A-Z0-9-]/g, '')
+      whereClauses.push(`${resolvedSkuKeyExpr} = '${s1}'`)
     } else if (skuList.length > 1) {
-      const inList = skuList.map(s => `'${s.replace(/'/g, "''")}'`).join(', ')
-      whereClauses.push(`u.masterskucode IN (${inList})`)
+      const inList = skuList.map(s => `'${s.replace(/'/g, "''").toUpperCase().replace(/[^A-Z0-9-]/g, '')}'`).join(', ')
+      whereClauses.push(`${resolvedSkuKeyExpr} IN (${inList})`)
     }
   }
   if (subChannel) {
@@ -498,7 +507,24 @@ SELECT
     COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64)),
     100 + COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64))
   ), 2) AS GST_Amount,
-  u.masterskucode AS MasterSKU,
+  -- MasterSKU backfill (2026-10-23): a real, ongoing ingestion bug — some Shopify/MyFrido rows
+  -- land with masterskucode genuinely NULL, their ChannelSKUCode/ProductId corrupted by an
+  -- invisible Unicode word-joiner (U+2060) glued to the front (e.g. raw hex e281a0 prefixing an
+  -- otherwise-valid SKU string). This silently broke the item-master join for these rows, which
+  -- then fell through to "Others"/"Others"/ASP-estimated-COGS as if they were genuinely unmapped
+  -- new SKUs — confirmed live: FR-OCVP-PB1 alone had 85,647 rows / ₹11.8 Cr landing this way
+  -- against a real sku_key, vs. only 2,558 rows with a clean masterskucode. COALESCE falls back to
+  -- ChannelSKUCode then ProductId (same invisible-char/case/whitespace stripping as item_master's
+  -- own sku_key normalization below) whenever masterskucode is null/blank after stripping — a
+  -- 781-row/₹1.84 Cr slice (Oct 2026 sample) still has no resolvable key in ANY of the three
+  -- fields and correctly stays unmapped, not silently papered over. This becomes the MasterSKU
+  -- every downstream consumer (COGS/SnD/listing-price/return-rate lookups, all keyed by sku) sees
+  -- — so the fix propagates everywhere automatically instead of needing a separate patch per caller.
+  COALESCE(
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ProductId)), r'[^A-Z0-9-]', ''), '')
+  ) AS MasterSKU,
   -- Channel_Group / Category_Finance / SubCategory_Finance are raw passthrough columns from the
   -- fact table, additive-only (not used by any existing caller) — added for Financial MIS, which
   -- needs the finance-facing taxonomy/grouping instead of the regular Category/SubCategory/Channel
@@ -513,7 +539,11 @@ SELECT
 FROM \`frido-429506.production.fact_all_platform_sales_report\` u
 LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS STRING)) = pm.pincode
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
-LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key
+LEFT JOIN item_master im ON COALESCE(
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(u.ProductId)), r'[^A-Z0-9-]', ''), '')
+  ) = im.sku_key
 WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
   -- NOT (... = 'x') evaluates to NULL (not TRUE) whenever Order_Status IS NULL, and a WHERE
   -- clause drops any row whose condition isn't TRUE — so an unguarded NOT(...) here silently
