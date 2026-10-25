@@ -3852,7 +3852,8 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
           {/* Backdrop */}
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9998 }} />
           <div style={{
-            position: 'fixed', bottom: 'var(--bot)', left: 0, right: 0, zIndex: 9999,
+            // Above the bottom nav, which grows by the iPhone home-indicator inset.
+            position: 'fixed', bottom: 'calc(var(--bot) + var(--safe-bottom))', left: 0, right: 0, zIndex: 9999,
             background: T.card, borderRadius: '16px 16px 0 0',
             boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
             maxHeight: '90vh', overflowY: 'auto', paddingRight: 10,
