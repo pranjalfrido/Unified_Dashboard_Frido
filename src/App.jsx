@@ -31,6 +31,7 @@ import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
+import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
 import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
 import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
@@ -5580,6 +5581,22 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     }
   })
 
+  // Logistics & Ops, mobile. Badge: same maturity logic as the logistics fetch, friendlier wording.
+  const logM = logisticsMetrics(logisticsData)
+  const logRangeM = filters?.start && filters?.end ? getMaturityAdjustedRange(filters) : null
+  const logBadge = logRangeM ? `Showing ${fmtDateRange(logRangeM.start, logRangeM.end)}${logRangeM.isFallback ? ' · latest complete data' : ''}` : ''
+  // Previous period = the equal-length window before the (maturity-adjusted) window shown, loaded with
+  // the same /api/logistics request and run through the same logisticsMetrics().
+  const prevLogRange = logRangeM ? prevRange(logRangeM.start, logRangeM.end) : null
+  const logPrev = usePrevPeriod(
+    ovMobile && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
+    async () => {
+      const x = logisticsMetrics(await prevLoaders.logistics(prevLogRange.start, prevLogRange.end))
+      return { range: prevLogRange, lTotal: x.lTotal, lDelPct: x.lDelPct, lRtoPct: x.lRtoPct, lZRtoPct: x.lZRtoPct, lNdrPct: x.lNdrPct, lNdrResolvedPct: x.lNdrResolvedPct, lFasr: x.lFasr, lRasr: x.lRasr, lSlaPct: x.lSlaPct }
+    },
+    { ready: !!logisticsData },
+  )
+
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
@@ -5840,6 +5857,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
 
+        {ovMobile ? (
+          // Mobile: one title, date badge, hero + grouped tiles + Speed & SLA (overview/LogisticsOpsMobile.jsx).
+          <div style={{ gridColumn: '1 / -1' }}>
+            <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge}
+              info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
+          </div>
+        ) : (
+          <>
         {deckSectionLabel('Logistics & Ops Performance')}
 
         {/* One consolidated card for Ops + Logistics Performance — both are facets of the same
@@ -5976,6 +6001,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             )
           })()}
         </WideCard>
+          </>
+        )}
 
         {/* Logistics cost cards (Total Logistics Cost, Cost % of Shipment Value, Cost per Shipment,
             Forward vs RTO Cost) were deliberately removed from Overview — unit-economics/cost detail
