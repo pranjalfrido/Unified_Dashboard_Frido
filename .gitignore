@@ -40,3 +40,7 @@ sa_key*.json
 
 # Ad-hoc analysis output (pincode extracts etc) — regenerate on demand, not source.
 exports/
+
+# Playwright-saved login session for the responsive-overhaul audit (scripts/save-auth.mjs) — a
+# live auth credential, never commit it.
+docs/responsive/.auth/
