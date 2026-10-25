@@ -1054,3 +1054,10 @@ svg text, svg tspan{
   .master-card{ padding:12px !important }
   .master-tiles{ gap:6px !important }
 }
+
+/* Overview filter icon (OverviewFilterButton): lives in the green phone header only. */
+.ov-filter-slot{ display:none }
+@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav[data-page="overview"] .ov-filter-slot{ display:flex; flex-shrink:0 }
+  .filtered-strip::-webkit-scrollbar{ display:none }
+}
