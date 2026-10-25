@@ -5603,25 +5603,26 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // 1024px and up returns the desktop deck further down, unchanged.
   const renderProductListMobile = () => {
     // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
-    // (Others excluded, as in the table), same cell values; it has its own 🔍 search.
+    // (Others excluded, as in the table), same cell values; "Show all" opens the full-screen list
+    // with search and category chips.
     const rows = topProductsBySubCat.filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
     const share = g => (totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0')
     const asp = g => (g.units > 0 ? g.rev / g.units : null)
     const rupees = v => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
     const pctText = g => (g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—')
     return (
-      <div style={{ gridColumn: '1 / -1', background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1 }}>
+      <div style={{ gridColumn: '1 / -1', background: C.m.card, borderRadius: C.m.radius.card, padding: 16, boxShadow: C.m.cardShadow }}>
         <MobileRankedList title="Product Performance" noun="sub-categories" items={rows} itemKey={g => g.subCategory}
-          name={g => g.subCategory} searchText={g => `${g.subCategory} ${g.category}`}
+          name={g => g.subCategory} sub={g => g.category} groupOf={g => g.category} searchText={g => `${g.subCategory} ${g.category}`}
           sheetSubtitle={fmtDateRange(filters?.start, filters?.end)}
           sorts={[
-            { key: 'rev', label: 'Revenue', value: g => g.rev, format: g => fmt(g.rev) },
-            { key: 'netRev', label: 'Net Rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+            { key: 'rev', label: 'Gross rev', value: g => g.rev, format: g => fmt(g.rev) },
+            { key: 'netRev', label: 'Net rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
             { key: 'units', label: 'Units', value: g => g.units, format: g => fmtN(g.units) },
             { key: 'asp', label: 'ASP', value: asp, format: g => rupees(asp(g)) },
             { key: 'returnPct', label: 'Return %', value: g => g.returnPct, format: pctText, bar: 'bad' },
           ]}
-          secondary={(g, k) => (k === 'rev' ? `${share(g)}% share · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Rev ${fmt(g.rev)}`)}
+          secondary={(g, k) => (k === 'rev' ? `${share(g)}% · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Gross ${fmt(g.rev)}`)}
           details={[
             { label: 'Category', value: g => g.category },
             { label: 'Revenue (Inc. GST)', value: g => fmt(g.rev) },

@@ -77,7 +77,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
           </div>
         )}
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', background: '#fff', padding: `4px 14px calc(20px + var(--safe-bottom))` }}>
+      <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', background: '#fff', padding: `4px 14px calc(20px + var(--safe-bottom))` }}>
         {!list.length && <div style={{ padding: 16, textAlign: 'center', color: M.muted, fontSize: 13 }}>No {noun} match.</div>}
         {list.slice(0, shown).map((it, i) => (
           <RankedRow key={i + '-' + name(it)} rank={i + 1} name={name(it)} sub={sub?.(it)} value={sort.format(it)} secondary={secondary?.(it, sortKey)}
