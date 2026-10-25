@@ -125,5 +125,5 @@ export default function BusinessStateMobile({ cust, custPrevKpis, ltvPrev, ltvPr
 
   return twoCol
     ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 12, alignItems: 'start' }}>{customers}{inventory}</div>
-    : <div style={{ display: 'grid', gap: 12 }}>{customers}{inventory}</div>
+    : <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>{customers}{inventory}</div>
 }

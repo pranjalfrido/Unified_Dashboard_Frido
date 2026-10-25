@@ -19,6 +19,9 @@ const outDir = resolve(repoRoot, outArg)
 mkdirSync(outDir, { recursive: true })
 const onlyIdx = rest.indexOf('--only')
 const only = onlyIdx !== -1 ? new Set(rest[onlyIdx + 1].split(',')) : null
+// --expand-all: open every collapsible Overview section (responsive/useCollapsible.js stores
+// ui.section.<id>) before the page loads, so a full-page capture shows all content.
+const expandAll = rest.includes('--expand-all')
 
 // Runs in the page. .page-scroll has overflow-x:hidden, so content wider than the screen is cut
 // off silently instead of making the page scroll sideways. Counts visible elements whose right edge
@@ -88,6 +91,7 @@ async function stitchedScreenshot(page, outPath) {
 const report = { route, capturedAt: new Date().toISOString(), viewports: {} }
 for (const vp of VIEWPORTS.filter(v => !only || only.has(v.name))) {
   const { browser, ctx } = await launch(vp)
+  if (expandAll) await ctx.addInitScript(() => { for (const id of ['overview.salesTrend', 'overview.whereRevenue', 'overview.logistics', 'overview.business']) localStorage.setItem(`ui.section.${id}`, '1') })
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(String(e.message || e)))

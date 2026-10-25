@@ -5677,7 +5677,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
         <CollapsibleSection title="Where Revenue Came From" open={secWhereOpen} onToggle={toggleSecWhere}
           summary={`${sortedCh.length} channels${topCh && totalRev > 0 ? ` · ${chName(topCh[0])} ${(topCh[1].rev / totalRev * 100).toFixed(1)}% of revenue` : ''}`}>
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
             <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
             {topProductsBySubCat.length > 0 && renderProductListMobile()}
             <div style={{ background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1, overflow: 'hidden' }}>

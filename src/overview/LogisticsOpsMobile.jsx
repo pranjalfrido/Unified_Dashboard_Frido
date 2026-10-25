@@ -182,7 +182,7 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
 
   return twoCol
     ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 12, alignItems: 'start' }}>
-        <div style={{ display: 'grid', gap: 12 }}>{heroCard}{speedCard}</div>{tilesCard}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>{heroCard}{speedCard}</div>{tilesCard}
       </div>
-    : <div style={{ display: 'grid', gap: 12 }}>{heroCard}{tilesCard}{speedCard}</div>
+    : <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>{heroCard}{tilesCard}{speedCard}</div>
 }
