@@ -30,6 +30,7 @@ import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
+import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -4864,7 +4865,7 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsR
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   return (
-    <div className="topnav">
+    <div className="topnav" data-page={page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
         {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads' || page === 'pnl') && (
           <>
@@ -5225,27 +5226,6 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-// Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
-// weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM. Shared by the desktop
-// Sales Trend chart and the mobile card (src/overview/SalesTrendMobile.jsx) so both aggregate the
-// same way.
-function groupHeroTrend(rows, groupBy) {
-  if (groupBy === 'daily') return rows
-  const buckets = {}
-  rows.forEach(d => {
-    const key = groupBy === 'weekly'
-      ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
-      : d.date.slice(0, 7)
-    if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, orders: 0, prevRevenue: 0 }
-    buckets[key].revenue += d.revenue
-    buckets[key].netRevenue += d.netRevenue
-    buckets[key].units += d.units
-    buckets[key].orders += d.orders || 0
-    if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
-  })
-  return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
-}
-
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
@@ -5263,13 +5243,16 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const kpiGrid = phonePortrait ? 2 : (phone || bp.isTablet) ? 4 : null
   // xs/sm only (< 768px): the redesigned mobile Sales Trend card. Phone landscape keeps the grid.
   const phoneTrend = bp.width < 768
-  const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
+  // The mobile Overview redesign (docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md): every width
+  // below 1024px, which also covers phones in landscape. 1024px and up keeps the desktop layout as is.
+  const ovMobile = bp.width < 1024 || bp.isPhoneLandscape
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
   // returns-excluded unit count ShopifyTab uses for its own ASP figure; falls back to totalQty.
   // Inc-GST (totalRev, not totalExcRev) to stay on the same basis as blendedAOV below — both
   // tiles read directly comparable this way instead of silently differing by the GST rate.
-  const blendedASP = (aspQty || totalQty) > 0 ? totalRev / (aspQty || totalQty) : 0
+  const { blendedASP, totalReturnPct } = salesMetrics(data)
   const sh = data.shopify || {}
   const [trendGroupBy, setTrendGroupBy] = useState('daily')
   const ads = data.ads || {}
@@ -5322,15 +5305,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // Amazon_net, ...), not flat daily totals, so gross + net are summed per day here. No per-day
   // return-rate series exists in this data source (unlike /api/return-analysis) — plotting
   // Revenue + Net Revenue honestly instead of fabricating a %-line the data doesn't have.
-  const heroTrendRaw = (dailyArr || []).map((d, i) => {
-    const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
-    const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
-    const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
-    // Orders: same per-channel sum as units (the _o keys). Only the mobile card plots it.
-    const orders = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_o') && typeof v === 'number' ? s + v : s), 0)
-    const prevRev = prevDailyArr?.[i]?.rev ?? null
-    return { date: d.date, revenue, netRevenue, units, orders, prevRevenue: prevRev }
-  })
+  const heroTrendRaw = trendRows(dailyArr, prevDailyArr)
   const heroTrendGrouped = groupHeroTrend(heroTrendRaw, trendGroupBy)
   const heroTrendXFmt = d => trendGroupBy === 'daily' ? d?.slice(5) : trendGroupBy === 'monthly' ? d?.slice(0, 7) : d
 
@@ -5377,12 +5352,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // Overall-tab reconciliation patch, confirmed 2026-10-22) — each channel's own rolling-30-day
   // resolved RTO/CIR/Cancelled/Return revenue. No more separate "Provisional Return%" estimate
   // alongside a raw one — the resolved number IS the number now, same convention as every other tab.
-  const cancelRev = data.cancellRev || 0
-  const cancelPct = totalRev > 0 ? cancelRev / totalRev * 100 : 0
-  const rtoPct = totalRev > 0 ? ((rtoRevDirect || 0) + (returnRev || 0)) / totalRev * 100 : 0
-  const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
-  const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
-  const totalReturnPct = cancelPct + rtoPct + cirPct
+  // cancelPct / rtoPct / cirPct / exchPct / totalReturnPct: salesMetrics(data) above (overview/overviewMetrics.js).
 
   // ── Ads ──
   const adsTotals = ads.totals || []
@@ -5423,71 +5393,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   }).sort((a, b) => b.rev - a.rev)
 
   // ── Logistics ──
-  const lkpi = logisticsData?.kpis || {}
-  const lTotal = parseInt(lkpi.total_shipments) || 0
-  const lDelivered = parseInt(lkpi.delivered) || 0
-  const lRto = parseInt(lkpi.rto) || 0
-  const lZRto = parseInt(lkpi.z_rto) || 0
-  const lSla = parseInt(lkpi.sla_breach) || 0
-  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
-  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
-  const lZRtoPct = lTotal > 0 ? lZRto / lTotal * 100 : 0
-  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
-  const lFasr = lkpi.delivered_1attempt && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_1attempt) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
-  const lRasr = lkpi.delivered_multi && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_multi) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
-  const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
+  const { lTotal, lDelPct, lRtoPct, lZRtoPct, lSlaPct, lFasr, lRasr, lAvgFul, lAvgProcessing, lAvgPickup, lAvgIntransit,
+    lOrdersWithOrderDate, lOrdersPickedUp, lOrdersDeliveredTotal, lProcessedWithin24h, lPickedUpWithin24h, lDeliveredWithin3dPickup, lDeliveredWithin5dOrder,
+    lProcessedWithin24hPct, lPickedUpWithin24hPct, lDeliveredWithin3dPickupPct, lDeliveredWithin5dOrderPct, lNdrPct, lNdrResolvedPct,
+    lAvgRtoTat, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
+    lRvpCreated, lRvpDone, lRvpDoneWithin2d, lRvpDeliveredWithin5d, lRvpDoneWithin2dPct, lRvpDeliveredWithin5dPct,
+    lAvgRvpCreatedToPickup, lAvgRvpPickupToDelivery, lAvgRvpTat } = logisticsMetrics(logisticsData)
+  // (formulas and their reasoning: overview/overviewMetrics.js, unchanged from the inline versions)
   const couriers = (logisticsData?.byCourier || []).filter(c => parseInt(c.total) > 0).sort((a, b) => parseInt(b.total) - parseInt(a.total)).slice(0, 5)
-  // TAT breakdown — all already computed server-side in generate-logistics-cache.mjs's kpis CTE,
-  // just never surfaced client-side before now. Four stages of the shipment lifecycle:
-  // order→pickup (avg_pickup), pickup→delivery/transit (avg_intransit), order→delivery (avg_fulfilment,
-  // already shown elsewhere as "Avg Fulfilment"), and order→dispatch (avg_processing).
-  const lAvgProcessing = parseFloat(lkpi.avg_processing) || null
-  const lAvgPickup = parseFloat(lkpi.avg_pickup) || null
-  const lAvgIntransit = parseFloat(lkpi.avg_intransit) || null
-  // SLA-threshold counts (api/logistics.js kpis CTE) — % is against the orders that actually have
-  // both relevant dates (e.g. delivered_within_5d ÷ orders_delivered_total), not ÷ total shipments,
-  // since most shipments mid-flight haven't reached that stage yet and would silently deflate the %.
-  const lOrdersWithOrderDate = parseInt(lkpi.orders_with_order_date) || 0
-  const lOrdersPickedUp = parseInt(lkpi.orders_picked_up) || 0
-  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
-  const lProcessedWithin24h = parseInt(lkpi.processed_within_24h) || 0
-  const lPickedUpWithin24h = parseInt(lkpi.picked_up_within_24h) || 0
-  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
-  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
-  const lProcessedWithin24hPct = lOrdersWithOrderDate > 0 ? lProcessedWithin24h / lOrdersWithOrderDate * 100 : null
-  const lPickedUpWithin24hPct = lOrdersPickedUp > 0 ? lPickedUpWithin24h / lOrdersPickedUp * 100 : null
-  const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
-  const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
-  // NDR (Non-Delivery Reattempt): forward shipment with ofd_attempts >= 2 (first delivery attempt
-  // failed, courier re-attempted). Denominator is shipments with any attempt on file (ofd_attempts
-  // >= 1), not all shipments. Successfully Delivered NDR = NDR'd shipments that eventually got
-  // delivered regardless of attempt count, ÷ all NDR'd shipments.
-  const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
-  const lNdrCount = parseInt(lkpi.ndr_count) || 0
-  const lNdrResolvedDelivered = parseInt(lkpi.ndr_resolved_delivered) || 0
-  const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
-  const lNdrResolvedPct = lNdrCount > 0 ? lNdrResolvedDelivered / lNdrCount * 100 : null
-  // Reverse shipment (RTO) TAT & SLA thresholds — mirrors the forward-shipment section above but
-  // for the return leg: RTO marked -> RTO delivered back to warehouse.
-  const lAvgRtoTat = parseFloat(lkpi.avg_rto_tat) || null
-  const lRtoCompleted = parseInt(lkpi.rto_completed) || 0
-  const lRtoDeliveredWithin5dMark = parseInt(lkpi.rto_delivered_within_5d_of_mark) || 0
-  const lRtoDeliveredWithin10dMark = parseInt(lkpi.rto_delivered_within_10d_of_mark) || 0
-  const lRtoDeliveredWithin5dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin5dMark / lRtoCompleted * 100 : null
-  const lRtoDeliveredWithin10dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin10dMark / lRtoCompleted * 100 : null
-  // RVP (Reverse Pickup) — customer-return shipments (shipment_type='Reverse'). Created = order
-  // created; Done = picked up from customer; Delivered = reached warehouse. Thresholds: Done <=2d
-  // of Created, Delivered <=5d of Done.
-  const lRvpCreated = parseInt(lkpi.rvp_created) || 0
-  const lRvpDone = parseInt(lkpi.rvp_done) || 0
-  const lRvpDelivered = parseInt(lkpi.rvp_delivered) || 0
-  const lRvpDoneWithin2d = parseInt(lkpi.rvp_done_within_2d_of_created) || 0
-  const lRvpDeliveredWithin5d = parseInt(lkpi.rvp_delivered_within_5d_of_done) || 0
-  const lRvpDoneWithin2dPct = lRvpCreated > 0 ? lRvpDoneWithin2d / lRvpCreated * 100 : null
-  const lRvpDeliveredWithin5dPct = lRvpDone > 0 ? lRvpDeliveredWithin5d / lRvpDone * 100 : null
-  const lAvgRvpCreatedToPickup = parseFloat(lkpi.avg_rvp_created_to_pickup) || null
-  const lAvgRvpPickupToDelivery = parseFloat(lkpi.avg_rvp_pickup_to_delivery) || null
-  const lAvgRvpTat = parseFloat(lkpi.avg_rvp_tat) || null
   // KNOWN LIMITATION (flagged, not silently hidden): /logistics-data.json is generated as a fixed
   // "month-to-date through yesterday" snapshot server-side (scripts/generate-logistics-cache.mjs)
   // with no per-order maturity filter applied at generation time — so RTO%/SLA%/Z-RTO% here can
@@ -5528,15 +5441,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // genuine backend gap, not something derivable client-side. Showing the new-vs-repeat revenue
   // split and LTV (which DO exist), and calling out the gap explicitly rather than pretending a
   // top-customers table exists — see the header's own italic note below.
-  const custKpis = overviewCustData?.kpis || {}
-  const custRepeatRev = custKpis.repeatRevenue || 0
-  // Guarded against repeatRevenue exceeding grossSales (possible if the two are computed over
-  // slightly different windows/cohorts server-side) — clamp at 0 rather than show a nonsensical
-  // negative "New Customer Revenue" figure.
-  const custNewRev = Math.max(0, (custKpis.grossSales || 0) - custRepeatRev)
-  const custLtv = custKpis.ltv12 || 0
-  const custTotalCustomers = custKpis.totalCustomers || 0
-  const custNewCustomers = custKpis.newCustomers || 0
+  const { custKpis, custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers } = customerMetrics(overviewCustData)
 
   // ── Inventory Snapshot (from invSnapshotData / inv-data-7d.json) ──
   // Verified: no ₹ dead-stock VALUE field exists — only unit quantities (summary.deadStockUnits)
@@ -5616,7 +5521,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+    <div className={ovMobile ? 'ov-mobile' : undefined} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
 
       {/* ══════════════════════════════ THE DECK ══════════════════════════════
           One consistent card treatment throughout (KpiCard = single number,

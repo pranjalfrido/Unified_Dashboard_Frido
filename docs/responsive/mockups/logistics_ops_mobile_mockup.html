@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logistics Ops Mockup</title>
+<style>
+  :root{--bg:#efebe4;--ink:#1c2420;--muted:#7b847f;--line:#eeebe4;--green:#1f5a3d;--soft:#f4f2ed;--good:#1f8a4c;--warn:#c8860a;--bad:#c0392b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);
+       display:flex;gap:40px;justify-content:center;align-items:flex-start;padding:32px 16px;flex-wrap:wrap}
+  .phone{width:375px;height:667px;background:#f4f2ed;border-radius:36px;box-shadow:0 20px 50px rgba(0,0,0,.18);border:10px solid #111;position:relative;overflow:hidden;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;background:#fff;border-bottom:1px solid var(--line)}
+  .topbar h1{font-size:17px;margin:0;font-weight:600}
+  .datepill{font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff}
+  .scroll{flex:1;overflow:auto;padding:12px;font-variant-numeric:tabular-nums}
+  .card{background:#fff;border-radius:18px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px}
+  .title{display:flex;justify-content:space-between;align-items:center}
+  h2{font-size:16px;margin:0;font-weight:700}
+  .info{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--muted);cursor:pointer}
+  .badge{display:inline-flex;gap:6px;align-items:center;margin-top:8px;font-size:12px;background:#fff6e0;color:#7a5a0e;border-radius:8px;padding:5px 8px}
+  .hero{display:flex;align-items:flex-end;justify-content:space-between;margin-top:14px}
+  .hero .v{font-size:30px;font-weight:700;letter-spacing:-.02em}
+  .hero .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .ring{width:64px;height:64px;position:relative}
+  .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:700}
+  .sec{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:4px 0 10px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{background:var(--soft);border-radius:12px;padding:10px 12px;cursor:pointer;border-left:3px solid transparent}
+  .tile.good{border-left-color:var(--good)} .tile.warn{border-left-color:var(--warn)} .tile.bad{border-left-color:var(--bad)}
+  .tile .k{font-size:11.5px;color:var(--muted);font-weight:600}
+  .tile .v{font-size:19px;font-weight:700;margin-top:2px}
+  .tile .d{font-size:11.5px;font-weight:600;white-space:nowrap}
+  .vr{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-top:2px}
+  .vr .v{margin-top:0}
+  .up{color:var(--good)} .dn{color:var(--bad)}
+  .flow{display:flex;align-items:center;gap:0;margin-top:4px}
+  .node{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--muted);width:58px;text-align:center}
+  .node i{width:12px;height:12px;border-radius:50%;background:var(--green);margin-bottom:6px}
+  .seg{flex:1;text-align:center;font-size:14px;font-weight:700;position:relative;padding-bottom:20px}
+  .seg::after{content:"";position:absolute;left:0;right:0;bottom:24px;height:3px;background:#cfe0d6;border-radius:2px;top:auto}
+  .seg span{position:relative;top:-14px}
+  .total{margin-top:6px;font-size:13px;color:var(--muted)}
+  .total b{color:var(--ink)}
+  .tip{position:absolute;left:12px;right:12px;bottom:80px;background:#1c2420;color:#fff;border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.45;display:none}
+  .nav{display:flex;justify-content:space-around;background:#fff;border-top:1px solid var(--line);padding:6px 0 14px}
+  .nav div{display:flex;flex-direction:column;align-items:center;font-size:10.5px;color:var(--muted);gap:3px;min-width:56px}
+  .nav div.on{color:var(--green);font-weight:700}.nav span{font-size:18px}
+  .notes{max-width:380px;font-size:14px;line-height:1.55}
+  .notes h2{font-size:18px;margin:4px 0 10px}.notes li{margin-bottom:8px}
+  .tag{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:14px;color:#6b5414}
+  .seg3{display:flex;background:var(--soft);border-radius:10px;padding:3px;margin:12px 0 14px}
+  .seg3 button{flex:1;border:none;background:none;padding:7px 0;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .seg3 button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .e2e{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .e2e .v{font-size:26px;font-weight:700}
+  .stage{display:grid;grid-template-columns:118px 1fr 42px;align-items:center;gap:8px;margin:7px 0;font-size:12.5px}
+  .stage .lbl{color:var(--muted);font-weight:600}
+  .stage .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+  .stage .bar i{display:block;height:100%;background:#9cc4ad;border-radius:4px}
+  .stage .n{text-align:right;font-weight:700}
+  .sla{margin:10px 0}
+  .sla .top{display:flex;justify-content:space-between;font-size:12.5px}
+  .sla .top b{font-size:14px}
+  .sla .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:5px}
+  .sla .bar i{display:block;height:100%;background:var(--green);border-radius:4px}
+  .sla .cnt{font-size:11px;color:var(--muted);margin-top:3px}
+  .sub2{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar"><h1>Overview</h1><div class="datepill">📅 1 Oct – 24 Oct</div></div>
+  <div class="scroll">
+    <div class="card">
+      <div class="title"><h2>Logistics &amp; Ops</h2><div class="info" data-t="Shipments and delivery performance for the latest complete 30 days.">i</div></div>
+      <div class="badge">⏱ Showing 10 Sep – 10 Oct · latest complete data</div>
+      <div class="hero">
+        <div><div class="v">2,54,115</div><div class="k">Total shipments</div></div>
+        <div class="ring">
+          <svg viewBox="0 0 36 36" width="64" height="64"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#eeebe4" stroke-width="4"/>
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#1f8a4c" stroke-width="4" stroke-dasharray="87.6 97.4" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+          <b>90%</b>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:-4px">Delivered</div>
+    </div>
+
+    <div class="card">
+      <div class="sec">Delivery health</div>
+      <div class="grid">
+        <div class="tile warn" data-t="RTO % — Return to Origin: shipments that came back undelivered."><div class="k">RTO</div><div class="vr"><div class="v">6.9%</div><div class="d dn">▲ 0.4%</div></div></div>
+        <div class="tile good" data-t="Z-RTO % — zero-attempt RTO: returned without any delivery attempt."><div class="k">Zero-attempt RTO</div><div class="vr"><div class="v">0.7%</div><div class="d up">▼ 0.1%</div></div></div>
+        <div class="tile warn" data-t="NDR % — Non-Delivery Report: delivery attempted but failed."><div class="k">NDR</div><div class="vr"><div class="v">12.0%</div><div class="d up">▼ 0.6%</div></div></div>
+        <div class="tile good" data-t="NDR resolved % — failed deliveries later delivered successfully."><div class="k">NDR resolved</div><div class="vr"><div class="v">67.9%</div><div class="d up">▲ 2.1%</div></div></div>
+      </div>
+      <div class="sec" style="margin-top:16px">Courier quality</div>
+      <div class="grid">
+        <div class="tile good" data-t="FASR % — First Attempt Success Rate."><div class="k">First attempt</div><div class="vr"><div class="v">84.7%</div><div class="d up">▲ 1.2%</div></div></div>
+        <div class="tile warn" data-t="RASR % — reattempt success rate (as defined in your dashboard)."><div class="k">Reattempt</div><div class="vr"><div class="v">8.1%</div><div class="d dn">▼ 0.3%</div></div></div>
+        <div class="tile bad" data-t="SLA breach % — shipments delivered later than the promised time."><div class="k">SLA breach</div><div class="vr"><div class="v">8.7%</div><div class="d dn">▲ 0.9%</div></div></div>
+        <div class="tile good" data-t="Delivered % — share of shipments delivered."><div class="k">Delivered</div><div class="vr"><div class="v">90.0%</div><div class="d up">▲ 0.5%</div></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title"><h2>Speed &amp; SLA</h2><div class="info" data-t="Average days per stage, and the share of shipments that met each SLA. Stage averages are computed on different shipment sets, so they don't add up exactly.">i</div></div>
+      <div class="seg3" id="flowTabs">
+        <button data-f="fwd" class="on">Forward</button><button data-f="rto">RTO</button><button data-f="rvp">Reverse</button>
+      </div>
+      <div id="flowBody"></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:18px 4px 8px">State of the business</div>
+
+    <div class="card">
+      <div class="title"><h2>Customers · D2C</h2><div class="info" data-t="D2C (Shopify) customers only, for the selected date range.">i</div></div>
+      <div style="margin-top:12px;font-size:12px;color:var(--muted);font-weight:600">Revenue split</div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:6px">
+        <div style="width:60.6%;background:#1f5a3d"></div><div style="width:39.4%;background:#9cc4ad"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px">
+        <div><div style="font-size:11.5px;color:var(--muted);font-weight:600">● New customers</div><div style="font-size:18px;font-weight:700">₹15.49 Cr <span style="font-size:12px;color:var(--muted);font-weight:600">61%</span></div></div>
+        <div style="text-align:right"><div style="font-size:11.5px;color:var(--muted);font-weight:600"><span style="color:#9cc4ad">●</span> Repeat customers</div><div style="font-size:18px;font-weight:700">₹10.07 Cr <span style="font-size:12px;color:var(--muted);font-weight:600">39%</span></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px">
+        <div class="tile"><div class="k">Customers</div><div class="v" style="font-size:16px">1,28,477</div><div class="d" style="color:var(--muted)">85,754 new</div></div>
+        <div class="tile"><div class="k">Repeat rate</div><div class="v" style="font-size:16px">33.3%</div><div class="d up">▲ 0.8%</div></div>
+        <div class="tile"><div class="k">LTV</div><div class="v" style="font-size:16px">₹2.29K</div><div class="d up">▲ 1.5%</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title"><h2>Inventory alerts</h2><span style="font-size:11.5px;color:var(--muted)">Updated 25 Oct, 2:33 pm</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+        <div class="tile bad" style="display:flex;justify-content:space-between;align-items:center" data-t="Opens Inventory Health filtered to Critical + Low stock SKUs.">
+          <div><div class="k">Stockout risk</div><div class="v">406 SKUs</div><div class="d" style="color:var(--muted)">Critical + low stock</div></div><div style="font-size:20px;color:#c4c9c6">›</div></div>
+        <div class="tile warn" style="display:flex;justify-content:space-between;align-items:center" data-t="Opens Inventory Health filtered to SKUs with no sale in 90 days.">
+          <div><div class="k">Dead stock</div><div class="v">32,533 units</div><div class="d" style="color:var(--muted)">218 SKUs · no sale in 90 days</div></div><div style="font-size:20px;color:#c4c9c6">›</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tip" id="tip"></div>
+  <div class="nav"><div class="on"><span>▦</span>Overview</div><div><span>▮▮</span>Sales</div><div><span>₹</span>P&amp;L</div><div><span>▢</span>Inventory</div><div><span>⋯</span>More</div></div>
+</div>
+
+<div class="notes">
+  <h2>Logistics &amp; Ops, mobile: proposed</h2>
+  <ul>
+    <li><b>One title</b> instead of the duplicated "LOGISTICS &amp; OPS PERFORMANCE" heading + card title.</li>
+    <li><b>Clear date badge</b> ("Showing 10 Sep – 10 Oct · latest complete data") instead of the long technical sentence.</li>
+    <li><b>Hero</b>: total shipments plus a Delivered % ring.</li>
+    <li><b>Grouped tiles</b> (Delivery health / Courier quality) with a <b>colour edge</b>: green = on target, amber = watch, red = act.</li>
+    <li><b>Plain names</b> on mobile ("First-attempt success" instead of "FASR %"). <b>Tap any tile</b> for the definition.</li>
+    <li><b>▲/▼ on every metric</b>, consistent with the rule for the KPIs.</li>
+    <li><b>Speed &amp; SLA in one card</b> with <b>Forward / RTO / Reverse</b> tabs. Each shows the end-to-end days, stage averages as bars, and <b>SLA met</b> as progress bars with "x of y" counts. All 8 TAT metrics and all SLA thresholds are kept, just grouped by flow instead of one long grid.</li><li>Stage averages are <b>not</b> shown as a chain that adds up: they come from different shipment sets (0.8d + 3.3d ≠ 4.8d), so a chain would mislead.</li>
+  </ul>
+  <h2 style="margin-top:18px">State of the business: proposed</h2>
+  <ul>
+    <li><b>Customers</b>: New vs Repeat revenue as <b>one split bar</b> (61% / 39%), so you see the mix instantly. Customers, Repeat rate and LTV sit in one even row, with no uneven card heights or empty gap.</li>
+    <li><b>Inventory alerts</b>: Stockout risk and Dead stock as <b>actionable rows</b>. Tapping one opens Inventory Health already filtered.</li>
+    <li>Short "Updated 25 Oct, 2:33 pm" instead of "snapshot as of 25/10/2026, 14:33:13".</li>
+    <li>One font, one type scale, and every tile in a row has the same height.</li>
+  </ul>
+  <div class="tag">Mockup only. Shipments, the % values, Order→Pickup and Order→Dispatch are from your screenshot. <b>The ▲/▼ changes, the colour bands and the definitions are illustrative.</b> Colour bands need your real targets. TAT and SLA values are from your screenshot; the two Reverse SLA values were cut off, so they show "—".</div>
+</div>
+<script>
+const tip=document.getElementById('tip');let t;
+document.querySelectorAll('[data-t]').forEach(el=>el.onclick=()=>{tip.textContent=el.dataset.t;tip.style.display='block';clearTimeout(t);t=setTimeout(()=>tip.style.display='none',3500)});
+
+const flows={
+ fwd:{e2e:['Order → delivered','4.8d'],stages:[['Order → pickup',0.8],['Order → dispatch',1.2],['Pickup → delivered',3.3]],
+      sla:[['Processed ≤ 24h',74.6,'1,67,127 of 2,24,091'],['Picked up ≤ 24h',70.8,'1,76,336 of 2,49,101'],['Delivered ≤ 3d of pickup',58.1,'1,32,776 of 2,28,608'],['Delivered ≤ 5d of order',61.5,'1,40,670 of 2,28,608']]},
+ rto:{e2e:['RTO mark → delivered back','4.7d'],stages:[],
+      sla:[['RTO ≤ 5d of mark',71.3,'11,913 of 16,702'],['RTO ≤ 10d of mark',97.1,'16,215 of 16,702']]},
+ rvp:{e2e:['Return created → delivered','6.6d'],stages:[['Created → pickup',1.3],['Pickup → delivered',5.2]],
+      sla:[['Picked up ≤ 2d of created',null,'value cut off in screenshot'],['Delivered ≤ 5d of done',null,'value cut off in screenshot']]}
+};
+function renderFlow(f){
+  const d=flows[f];const max=Math.max(...d.stages.map(x=>x[1]),1);
+  let h=`<div class="e2e"><span class="lbl" style="font-size:12.5px;color:var(--muted);font-weight:600">${d.e2e[0]}</span><span class="v">${d.e2e[1]}</span></div>`;
+  if(d.stages.length){h+=`<div class="sub2" style="margin-top:4px">Stage averages</div>`+d.stages.map(x=>`<div class="stage"><span class="lbl">${x[0]}</span><span class="bar"><i style="width:${x[1]/max*100}%"></i></span><span class="n">${x[1]}d</span></div>`).join('');}
+  h+=`<div class="sub2">SLA met</div>`+d.sla.map(x=>`<div class="sla"><div class="top"><span>${x[0]}</span><b>${x[1]==null?'—':x[1]+'%'}</b></div><div class="bar"><i style="width:${x[1]||0}%"></i></div><div class="cnt">${x[2]}</div></div>`).join('');
+  document.getElementById('flowBody').innerHTML=h;
+  document.querySelectorAll('#flowTabs button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
+}
+document.querySelectorAll('#flowTabs button').forEach(b=>b.onclick=()=>renderFlow(b.dataset.f));
+renderFlow('fwd');
+</script>
+</body>
+</html>

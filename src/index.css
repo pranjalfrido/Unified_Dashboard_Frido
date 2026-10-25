@@ -1001,3 +1001,30 @@ svg text, svg tspan{
 
 /* Chart legend chips scroll sideways on phones; hide the scrollbar track. */
 .chart-legend-chips::-webkit-scrollbar{ display:none }
+
+/* ══════════════════════════════════════════════
+   OVERVIEW MOBILE (< 1024px and phone landscape)
+   ══════════════════════════════════════════════ */
+
+/* One font family: numbers use the main font with tabular figures instead of the monospace one.
+   Cards set fontFamily:'var(--mono)' inline, so redefining --mono inside the scope is enough. */
+.ov-mobile{ --mono: var(--font); font-variant-numeric: tabular-nums }
+
+/* ▲/▼ placeholder while previous-period data loads. Never intercepts taps. */
+.delta-shimmer{ pointer-events:none; background:linear-gradient(90deg, var(--b1) 0%, var(--hov) 50%, var(--b1) 100%); background-size:200% 100%; animation:deltaShimmer 1.2s ease-in-out infinite }
+@keyframes deltaShimmer{ 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+
+/* Collapsible sections: content slides in when opened. */
+.section-body-open{ animation:sectionOpen 200ms ease-out }
+.section-chevron{ transition:transform 200ms ease }
+@keyframes sectionOpen{ from{ opacity:0; transform:translateY(-4px) } to{ opacity:1; transform:none } }
+@media (prefers-reduced-motion:reduce){
+  .delta-shimmer{ animation:none }
+  .section-body-open{ animation:none }
+  .section-chevron{ transition:none }
+}
+
+/* Page title 17/600 on the mobile Overview. */
+@media (max-width:1023px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav[data-page="overview"] .tnav-title{ font-size:17px; font-weight:600 }
+}

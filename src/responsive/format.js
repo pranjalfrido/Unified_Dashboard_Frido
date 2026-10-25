@@ -24,3 +24,10 @@ export function fmtCountCompact(v) {
   if (a >= 1e3) return `${sign(v)}${trim((a / 1e3).toFixed(1))}K`
   return `${sign(v)}${Math.round(a).toLocaleString('en-IN')}`
 }
+
+// Change vs the previous period, for the mobile Overview. Same formula the dashboard already uses
+// for every ▲/▼ (revDelta, ordDelta, returnBadge): (cur − prev) / prev × 100.
+export function pctChange(cur, prev) {
+  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev) || prev === 0) return null
+  return (cur - prev) / prev * 100
+}

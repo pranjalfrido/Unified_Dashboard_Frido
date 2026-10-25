@@ -52,6 +52,18 @@ export const C = {
   // Breakpoint minimum widths - same scale as src/responsive/useBreakpoint.js.
   bp: { xs: 0, sm: 480, md: 768, lg: 1024, xl: 1280, '2xl': 1536 },
   motion: { fast: '150ms', base: '200ms', slow: '250ms' },
+  // Mobile type scale (Overview mobile redesign): { size (px), weight }. Nothing on mobile goes
+  // below 12px; labels are uppercase + muted (C.t3) at the `label` size.
+  type: {
+    pageTitle: { size: 17, weight: 600 },
+    cardTitle: { size: 16, weight: 700 },
+    hero: { size: 31, weight: 700 },
+    value: { size: 19, weight: 700 },
+    secondary: { size: 14.5, weight: 600 },
+    label: { size: 12, weight: 600 },
+    body: { size: 13, weight: 400 },
+    min: 12,
+  },
   get display(){ return tok("--display","Arial,Helvetica,sans-serif") },
   // Chart series palette as a SET. The accent leads, so it tracks the theme; the
   // rest are fixed hues chosen to stay distinguishable beside either accent.
