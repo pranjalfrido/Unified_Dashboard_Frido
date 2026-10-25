@@ -5,6 +5,7 @@ import InfoPopover from '../responsive/InfoPopover.jsx'
 import KpiTile from '../responsive/KpiTile.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import InfoStrip from '../responsive/InfoStrip.jsx'
+import Skeleton from '../responsive/Skeleton.jsx'
 import { pctChange } from '../responsive/format.js'
 import { metricStatus } from '../config/metricTargets.js'
 import { METRICS, SPEED_INFO } from './metricLabels.js'
@@ -32,14 +33,15 @@ function GroupLabel({ children, style }) {
 }
 const cardTitle = { fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink }
 
-function Tile({ k, value, cur, prevValue, loading, hidden }) {
+function Tile({ k, value, cur, prevValue, loading, hidden, dataLoading }) {
   const meta = METRICS[k]
-  return <KpiTile label={meta.label} value={value} def={meta.def} status={metricStatus(k, cur)} lowerIsBetter={!!meta.lowerIsBetter}
+  return <KpiTile label={meta.label} value={value} loading={dataLoading} def={meta.def} status={metricStatus(k, cur)} lowerIsBetter={!!meta.lowerIsBetter}
     delta={pctChange(cur, prevValue)} deltaLoading={loading} deltaHidden={hidden} />
 }
 
-function Ring({ value }) {
+function Ring({ value, loading }) {
   const r = 15.5, circ = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value || 0))
+  if (loading) return <Skeleton round width={68} height={68} label="Loading delivered %" />
   return (
     <div style={{ width: 68, height: 68, position: 'relative', flexShrink: 0 }} role="img" aria-label={`Delivered ${pct(value)}`}>
       <svg viewBox="0 0 36 36" width="68" height="68" aria-hidden="true">
@@ -52,33 +54,35 @@ function Ring({ value }) {
   )
 }
 
-function StageBar({ label, value, max }) {
+function StageBar({ label, value, max, loading }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '118px 1fr 44px', alignItems: 'center', gap: 8, margin: '8px 0', fontSize: 13 }}>
       <span style={{ color: M.muted, fontWeight: 600, fontSize: 12.5 }}>{label}</span>
       <span aria-hidden="true" style={{ height: 8, background: M.line, borderRadius: 4, overflow: 'hidden' }}>
-        <i style={{ display: 'block', height: '100%', width: `${value != null && max ? (value / max) * 100 : 0}%`, background: M.g3, borderRadius: 4 }} />
+        <i style={{ display: 'block', height: '100%', width: `${!loading && value != null && max ? (value / max) * 100 : 0}%`, background: M.g3, borderRadius: 4 }} />
       </span>
-      <span style={{ textAlign: 'right', fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{days(value)}</span>
+      <span style={{ textAlign: 'right', fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width={36} height={13} /> : days(value)}</span>
     </div>
   )
 }
 
-function SlaBar({ label, value, num, den }) {
+function SlaBar({ label, value, num, den, loading }) {
   return (
     <div style={{ margin: '10px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13, color: M.ink }}>
-        <span>{label}</span><b style={{ fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{pct(value)}</b>
+        <span>{label}</span><b style={{ fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width={44} height={14} /> : pct(value)}</b>
       </div>
       <div aria-hidden="true" style={{ height: 8, background: M.line, borderRadius: 4, overflow: 'hidden', marginTop: 5 }}>
-        <i style={{ display: 'block', height: '100%', width: `${value != null ? Math.min(100, value) : 0}%`, background: M.green, borderRadius: 4 }} />
+        <i style={{ display: 'block', height: '100%', width: `${!loading && value != null ? Math.min(100, value) : 0}%`, background: M.green, borderRadius: 4 }} />
       </div>
-      <div style={{ fontSize: 12, color: M.muted, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>{den > 0 ? `${fmtN(num)} of ${fmtN(den)}` : '—'}</div>
+      <div style={{ fontSize: 12, lineHeight: '16px', color: M.muted, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width={110} height={12} /> : den > 0 ? `${fmtN(num)} of ${fmtN(den)}` : '—'}</div>
     </div>
   )
 }
 
-export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, info, showTitle = true, twoCol = false }) {
+// dataLoading: /api/logistics has not answered yet - every value shows a skeleton (logisticsMetrics()
+// of no data is all zeros, which must never be shown as if it were data).
+export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, info, showTitle = true, twoCol = false, dataLoading = false }) {
   const [flow, setFlow] = useState('fwd')
   const loading = prevStatus === 'loading'
   // All or none per card: no previous-period data (error / flag off) → no ▲/▼ on the whole card.
@@ -105,7 +109,7 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
 
   const tiles = (keys) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
-      {keys.map(([k, cur, prevV]) => <Tile key={k} k={k} value={pct(cur)} cur={cur} prevValue={prevV} loading={loading} hidden={hidden} />)}
+      {keys.map(([k, cur, prevV]) => <Tile key={k} k={k} value={pct(cur)} cur={cur} prevValue={prevV} loading={loading} hidden={hidden} dataLoading={dataLoading} />)}
     </div>
   )
 
@@ -118,19 +122,19 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: showTitle ? 8 : 0 }}>
-        <InfoStrip icon="⏱" text={badgeText} style={{ width: 'auto' }} />
+        {badgeText ? <InfoStrip icon="⏱" text={badgeText} style={{ width: 'auto' }} /> : <Skeleton width={200} height={30} radius={10} />}
         {!showTitle && <InfoPopover title="Logistics & Ops" text={info} />}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, whiteSpace: 'nowrap' }}>
-            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.02em', color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtN(m.lTotal)}</span>
-            <DeltaBadge delta={pctChange(m.lTotal, P.lTotal)} loading={loading} hidden={hidden} size={12} />
+            <span style={{ fontSize: 30, lineHeight: '38px', fontWeight: 700, letterSpacing: '-.02em', color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{dataLoading ? <Skeleton width={120} height={30} label="Loading total shipments" /> : fmtN(m.lTotal)}</span>
+            {!dataLoading && <DeltaBadge delta={pctChange(m.lTotal, P.lTotal)} loading={loading} hidden={hidden} size={12} />}
           </div>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: M.muted }}>Total shipments</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <Ring value={m.lDelPct} />
+          <Ring value={m.lDelPct} loading={dataLoading} />
           <div style={{ fontSize: 12, color: M.muted, marginTop: 2 }}>Delivered</div>
         </div>
       </div>
@@ -156,14 +160,14 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
       <div role="tabpanel" aria-label={`${f.tab} speed and SLA`}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <span style={{ fontSize: 13, color: M.muted, fontWeight: 600 }}>{f.e2eLabel}</span>
-          <span style={{ fontSize: 26, fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{days(f.e2e)}</span>
+          <span style={{ fontSize: 26, lineHeight: '32px', fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{dataLoading ? <Skeleton width={64} height={26} /> : days(f.e2e)}</span>
         </div>
         {f.stages.length > 0 && <>
           <GroupLabel style={{ marginTop: 4, marginBottom: 2 }}>Stage averages</GroupLabel>
-          {f.stages.map(([label, v]) => <StageBar key={label} label={label} value={v} max={stageMax} />)}
+          {f.stages.map(([label, v]) => <StageBar key={label} label={label} value={v} max={stageMax} loading={dataLoading} />)}
         </>}
         <GroupLabel style={{ marginTop: 14, marginBottom: 0 }}>SLA met</GroupLabel>
-        {f.sla.map(([label, v, num, den]) => <SlaBar key={label} label={label} value={v} num={num} den={den} />)}
+        {f.sla.map(([label, v, num, den]) => <SlaBar key={label} label={label} value={v} num={num} den={den} loading={dataLoading} />)}
       </div>
     </Card>
   )

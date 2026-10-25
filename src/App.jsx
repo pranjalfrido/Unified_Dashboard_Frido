@@ -5665,7 +5665,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
-        <LogisticsOpsMobile m={logM} prev={null} prevStatus="off" badgeText={logBadge}
+        <LogisticsOpsMobile m={logM} prev={null} prevStatus="off" badgeText={logBadge} dataLoading={!logisticsData}
           info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
 
         {mobileSectionLabel('State of the Business')}

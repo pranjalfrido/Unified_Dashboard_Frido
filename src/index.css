@@ -1009,7 +1009,8 @@ svg text, svg tspan{
 .ov-mobile{ --mono: var(--font); font-variant-numeric: tabular-nums }
 
 /* ▲/▼ placeholder while previous-period data loads. Never intercepts taps. */
-.delta-shimmer{ pointer-events:none; background:linear-gradient(90deg, var(--b1) 0%, var(--hov) 50%, var(--b1) 100%); background-size:200% 100%; animation:deltaShimmer 1.2s ease-in-out infinite }
+/* Shared loading skeleton (src/responsive/Skeleton.jsx): a shade darker than the tiles (#f4f2ed) so it reads on them. */
+.m-skeleton{ pointer-events:none; background:linear-gradient(90deg, #e6e2d8 0%, #f1eee8 50%, #e6e2d8 100%); background-size:200% 100%; animation:deltaShimmer 1.2s ease-in-out infinite }
 @keyframes deltaShimmer{ 0%{background-position:100% 0} 100%{background-position:-100% 0} }
 
 /* Collapsible sections: content slides in when opened. */
@@ -1017,7 +1018,7 @@ svg text, svg tspan{
 .section-chevron{ transition:transform 200ms ease }
 @keyframes sectionOpen{ from{ opacity:0; transform:translateY(-4px) } to{ opacity:1; transform:none } }
 @media (prefers-reduced-motion:reduce){
-  .delta-shimmer{ animation:none }
+  .m-skeleton{ animation:none }
   .section-body-open{ animation:none }
   .section-chevron{ transition:none }
 }

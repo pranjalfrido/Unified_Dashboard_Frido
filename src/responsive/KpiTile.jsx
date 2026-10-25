@@ -1,6 +1,7 @@
 import { C } from '../utils.js'
 import DeltaBadge from './DeltaBadge.jsx'
 import InfoPopover from './InfoPopover.jsx'
+import Skeleton from './Skeleton.jsx'
 
 // KPI tile (docs/responsive/MOBILE_DESIGN_SYSTEM.md §2): label + ▲/▼ on line 1, value on line 2.
 // Fixed height, so nothing moves when a ▲/▼ arrives or a tile is selected.
@@ -9,9 +10,10 @@ import InfoPopover from './InfoPopover.jsx'
 //   status     → 'good' | 'warn' | 'bad' from config/metricTargets.js: a small dot after the label
 //                (no target = no dot)
 //   onGradient → the tile sits on the master card's gradient (translucent white background)
-export default function KpiTile({ label, value, delta, deltaLoading, deltaHidden, lowerIsBetter, selected, onSelect, def, status, onGradient = false, compact = false }) {
+//   loading    → the value is still loading: a skeleton instead of a placeholder number
+export default function KpiTile({ label, value, loading = false, delta, deltaLoading, deltaHidden, lowerIsBetter, selected, onSelect, def, status, onGradient = false, compact = false }) {
   const M = C.m
-  const dot = status ? { good: M.up, warn: M.amber, bad: M.down }[status] : null
+  const dot = status && !loading ? { good: M.up, warn: M.amber, bad: M.down }[status] : null
   const body = (
     <>
       {/* Tight gaps and letter-spacing so "RETURN % ● ▼16.8%" fits a 375px-wide phone's tile. */}
@@ -22,7 +24,7 @@ export default function KpiTile({ label, value, delta, deltaLoading, deltaHidden
         </span>
         <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} size={12} />
       </span>
-      <span style={{ display: 'block', marginTop: 3, fontSize: compact ? 14.5 : M.type.tileValue, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ display: 'block', marginTop: 3, fontSize: compact ? 14.5 : M.type.tileValue, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
     </>
   )
   const style = {

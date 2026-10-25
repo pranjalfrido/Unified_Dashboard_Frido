@@ -1,6 +1,7 @@
 import { C, fmt, fmtN } from '../utils.js'
 import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import InfoPopover from '../responsive/InfoPopover.jsx'
+import Skeleton from '../responsive/Skeleton.jsx'
 import { pctChange } from '../responsive/format.js'
 import { metricStatus } from '../config/metricTargets.js'
 import { METRICS } from './metricLabels.js'
@@ -35,21 +36,21 @@ function Card({ title, info, right, children }) {
 // Narrow tile (three across on a phone, ~100px): too narrow for a label and a ▲/▼ on one line, so -
 // as in the mockup - the ▲/▼ sits on its own line under the value. Fixed rows (label, value, ▲/▼,
 // note) keep the three tiles aligned whether or not a tile has a note.
-function SmallTile({ k, value, note, delta, loading, hidden }) {
+function SmallTile({ k, value, note, delta, loading, hidden, dataLoading }) {
   const meta = METRICS[k]
   return (
     <InfoPopover asChild title={meta.label} text={meta.def}
-      style={{ ...tileBox, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: hidden ? '18px 24px auto' : '18px 24px 18px auto', rowGap: 2 }}>
+      style={{ ...tileBox, padding: '10px 8px', minWidth: 0, display: 'grid', gridTemplateRows: hidden ? '18px 24px auto' : '18px 24px 18px auto', rowGap: 2 }}>
       <span style={{ fontSize: 12, fontWeight: 600, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
-      <div style={{ fontSize: 16, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{dataLoading ? <Skeleton width="70%" height={16} /> : value}</div>
       {/* No ▲/▼ on this card (all or none): drop the row instead of leaving a gap. */}
       {!hidden && <div style={{ minHeight: 18 }}><DeltaBadge delta={delta} loading={loading} hidden={hidden} size={12} /></div>}
-      <div style={{ fontSize: 12, lineHeight: '16px', color: M.muted, minHeight: 16 }}>{note || ''}</div>
+      <div style={{ fontSize: 12, lineHeight: '16px', color: M.muted, minHeight: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note || ''}</div>
     </InfoPopover>
   )
 }
 
-function AlertRow({ label, value, note, status, onClick, hint }) {
+function AlertRow({ label, value, note, status, onClick, hint, loading }) {
   const dot = DOT(status)
   return (
     <button type="button" onClick={onClick} aria-label={`${label}: ${value}. ${hint}`}
@@ -59,8 +60,9 @@ function AlertRow({ label, value, note, status, onClick, hint }) {
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: M.muted }}>
           {label}{dot && <span aria-label={`status ${status}`} style={{ width: 7, height: 7, borderRadius: '50%', background: dot }} />}
         </span>
-        <span style={{ display: 'block', fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-        <span style={{ display: 'block', fontSize: 12, color: M.muted }}>{note}</span>
+        <span style={{ display: 'block', fontSize: 19, lineHeight: '25px', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width={110} height={19} /> : value}</span>
+        {/* Fixed note line, so the row keeps its height while loading. */}
+        <span style={{ display: 'block', fontSize: 12, lineHeight: '16px', minHeight: 16, color: M.muted }}>{loading ? <Skeleton width={150} height={11} /> : note}</span>
       </span>
       <span aria-hidden="true" style={{ fontSize: 22, color: M.muted }}>›</span>
     </button>
@@ -87,22 +89,22 @@ export default function BusinessStateMobile({ cust, custPrevKpis, ltvPrev, ltvPr
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
         <div>
           <div style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}><span style={{ color: M.green }}>●</span> New customers</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{loaded ? fmt(custNewRev) : '—'} <span style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}>{loaded ? `${newShare.toFixed(0)}%` : ''}</span></div>
+          <div style={{ fontSize: 18, lineHeight: '24px', fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{loaded ? fmt(custNewRev) : <Skeleton width={90} height={18} />} <span style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}>{loaded ? `${newShare.toFixed(0)}%` : ''}</span></div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}><span style={{ color: M.g3 }}>●</span> Repeat customers</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{loaded ? fmt(custRepeatRev) : '—'} <span style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}>{loaded && splitTotal > 0 ? `${(100 - newShare).toFixed(0)}%` : ''}</span></div>
+          <div style={{ fontSize: 18, lineHeight: '24px', fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{loaded ? fmt(custRepeatRev) : <Skeleton width={90} height={18} />} <span style={{ fontSize: 12, color: M.muted, fontWeight: 600 }}>{loaded && splitTotal > 0 ? `${(100 - newShare).toFixed(0)}%` : ''}</span></div>
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginTop: 14 }}>
-        <SmallTile k="customers" value={loaded ? fmtN(custTotalCustomers) : '—'} note={loaded ? `${fmtN(custNewCustomers)} new` : ''}
+        <SmallTile k="customers" dataLoading={!loaded} value={loaded ? fmtN(custTotalCustomers) : ''} note={loaded ? `${fmtN(custNewCustomers)} new` : ''}
           delta={pctChange(custTotalCustomers, custPrevKpis?.totalCustomers)} loading={loading} hidden={hidden} />
         {/* Every tile carries a note line, so the three read as one even row (not one tall tile
             beside two with an empty band): new customers, repeat customers, LTV's window. */}
-        <SmallTile k="repeatRate" value={loaded && repeatRate != null ? `${(repeatRate * 100).toFixed(1)}%` : '—'}
+        <SmallTile k="repeatRate" dataLoading={!loaded} value={repeatRate != null ? `${(repeatRate * 100).toFixed(1)}%` : '—'}
           note={loaded && custKpis.returningCustomers != null ? `${fmtN(custKpis.returningCustomers)} repeat` : ''}
           delta={pctChange(repeatRate, custPrevKpis?.repeatRate)} loading={loading} hidden={hidden} />
-        <SmallTile k="ltv" value={loaded ? fmt(custLtv) : '—'} note={loaded ? '12-month avg' : ''}
+        <SmallTile k="ltv" dataLoading={!loaded} value={loaded ? fmt(custLtv) : ''} note={loaded ? '12-month avg' : ''}
           delta={pctChange(custLtv, ltvPrev)} loading={loading} hidden={hidden} />
       </div>
     </Card>
@@ -112,21 +114,21 @@ export default function BusinessStateMobile({ cust, custPrevKpis, ltvPrev, ltvPr
   const inventory = (
     <Card title="Inventory alerts" right={invUpdated ? <span style={{ fontSize: 12, color: M.muted }}>Updated {invUpdated}</span> : null}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-        <AlertRow label="Stockout risk" value={inv.loaded ? `${fmtN(inv.criticalLowCount)} SKUs` : '—'} note="Critical + low stock"
+        <AlertRow label="Stockout risk" loading={!inv.loaded} value={inv.loaded ? `${fmtN(inv.criticalLowCount)} SKUs` : ''} note="Critical + low stock"
           status={metricStatus('stockoutRiskSkus', inv.criticalLowCount)} hint="Opens Inventory Health filtered to Critical and Low stock."
           onClick={() => onOpenInventory?.({ stockStatus: ['Critical', 'Low'] })} />
-        <AlertRow label="Dead stock" value={inv.loaded ? `${fmtN(inv.deadStockUnits)} units` : '—'} note={inv.loaded ? `${fmtN(inv.deadStockCount)} SKUs · no sale in 90 days` : ''}
+        <AlertRow label="Dead stock" loading={!inv.loaded} value={inv.loaded ? `${fmtN(inv.deadStockUnits)} units` : ''} note={inv.loaded ? `${fmtN(inv.deadStockCount)} SKUs · no sale in 90 days` : ''}
           status={metricStatus('deadStockUnits', inv.deadStockUnits)} hint="Opens Inventory Health at the dead-stock list."
           onClick={() => onOpenInventory?.({ scrollTo: 'inv-dead-stock' })} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginTop: 10 }}>
         {[['Total inventory', inv.loaded ? `${fmtN(inv.totalInvt)}` : '—', inv.loaded ? `units · ${fmtN(inv.skuCount)} SKUs` : ''],
-          ['Days of inventory', inv.loaded && inv.doi != null ? `${inv.doi}d` : '—', doiBand],
+          ['Days of inventory', inv.loaded && inv.doi != null ? `${inv.doi}d` : '—', inv.loaded ? doiBand : ''],
           ['DOI · top 20', inv.top20Doi != null ? `${inv.top20Doi}d` : '—', inv.top20Matched != null ? `${inv.top20Matched} of 20 matched` : '']].map(([k, v, n]) => (
           // Label and note may wrap to two lines (fixed 2-line rows keep the three tiles aligned).
           <div key={k} style={{ ...tileBox, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '32px auto 32px', rowGap: 2 }}>
             <span style={{ fontSize: 12, lineHeight: '16px', fontWeight: 600, color: M.muted, overflow: 'hidden' }}>{k}</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+            <span style={{ fontSize: 16, lineHeight: '21px', fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{inv.loaded ? v : <Skeleton width="70%" height={16} />}</span>
             <span style={{ fontSize: 12, lineHeight: '16px', color: M.muted, overflow: 'hidden' }}>{n}</span>
           </div>
         ))}
