@@ -19055,7 +19055,15 @@ function AppInner() {
   )
 
   const isAdmin = profile.is_admin === true
-  const effectiveTabs = isAdmin ? null : allowedTabs // null means all tabs visible
+  // Frido Pulse is never auto-granted to admins — only these two emails have it by default.
+  // Anyone else (admin or member) must be explicitly granted 'ask' in their allowed_tabs.
+  const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
+  const userEmail = session?.user?.email?.toLowerCase() || '';
+  const hasPulse = PULSE_WHITELIST.includes(userEmail) || (allowedTabs || []).includes('ask');
+  // Admins get null (all tabs) but pulse is added/removed based on whitelist
+  const effectiveTabs = isAdmin
+    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','sales:financial-mis','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
+    : allowedTabs
 
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
