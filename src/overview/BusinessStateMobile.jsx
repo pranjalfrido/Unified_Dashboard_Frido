@@ -29,18 +29,18 @@ function Card({ title, info, right, children }) {
   )
 }
 
-// Narrow tile: label with ▲/▼ in the top-right corner, value under it, optional note.
+// Narrow tile (three across on a phone, ~100px): too narrow for a label and a ▲/▼ on one line, so -
+// as in the mockup - the ▲/▼ sits on its own line under the value. Fixed rows (label, value, ▲/▼,
+// note) keep the three tiles aligned whether or not a tile has a note.
 function SmallTile({ k, value, note, delta, loading, hidden }) {
   const meta = METRICS[k]
   return (
     <InfoPopover asChild title={meta.label} text={meta.def}
-      style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '18px auto 18px', rowGap: 2 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
-        <DeltaBadge delta={delta} loading={loading} hidden={hidden} size={12} />
-      </div>
+      style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '18px auto 18px auto', rowGap: 2 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
       <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note || ''}</div>
+      <div style={{ minHeight: 18 }}><DeltaBadge delta={delta} loading={loading} hidden={hidden} size={12} /></div>
+      <div style={{ fontSize: 12, lineHeight: '16px', color: C.t3, minHeight: 16 }}>{note || ''}</div>
     </InfoPopover>
   )
 }
@@ -113,10 +113,11 @@ export default function BusinessStateMobile({ cust, custPrevKpis, ltvPrev, ltvPr
         {[['Total inventory', inv.loaded ? `${fmtN(inv.totalInvt)}` : '—', inv.loaded ? `units · ${fmtN(inv.skuCount)} SKUs` : ''],
           ['Days of inventory', inv.loaded && inv.doi != null ? `${inv.doi}d` : '—', doiBand],
           ['DOI · top 20', inv.top20Doi != null ? `${inv.top20Doi}d` : '—', inv.top20Matched != null ? `${inv.top20Matched} of 20 matched` : '']].map(([k, v, n]) => (
-          <div key={k} style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '18px auto 18px', rowGap: 2 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k}</span>
+          // Label and note may wrap to two lines (fixed 2-line rows keep the three tiles aligned).
+          <div key={k} style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '32px auto 32px', rowGap: 2 }}>
+            <span style={{ fontSize: 12, lineHeight: '16px', fontWeight: 600, color: C.t3, overflow: 'hidden' }}>{k}</span>
             <span style={{ fontSize: 16, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
-            <span style={{ fontSize: 12, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</span>
+            <span style={{ fontSize: 12, lineHeight: '16px', color: C.t3, overflow: 'hidden' }}>{n}</span>
           </div>
         ))}
       </div>

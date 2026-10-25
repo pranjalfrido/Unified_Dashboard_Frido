@@ -14,6 +14,10 @@ export default function DeltaBadge({ delta, lowerIsBetter = false, loading = fal
   if (delta == null || !isFinite(delta)) {
     return <span aria-label="No previous-period value" style={{ fontSize: size, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', flexShrink: 0 }}>—</span>
   }
+  // A change that rounds to 0.0% gets no arrow and no good/bad colour.
+  if (Math.abs(delta) < 0.05) {
+    return <span aria-label="No change vs previous period" style={{ fontSize: size, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>0.0%</span>
+  }
   const up = delta >= 0
   const good = lowerIsBetter ? !up : up
   return (
