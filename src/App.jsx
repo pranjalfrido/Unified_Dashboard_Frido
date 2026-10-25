@@ -29,6 +29,7 @@ import FlashPage from './FlashPage.jsx'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
+import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -5224,6 +5225,27 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
+// Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
+// weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM. Shared by the desktop
+// Sales Trend chart and the mobile card (src/overview/SalesTrendMobile.jsx) so both aggregate the
+// same way.
+function groupHeroTrend(rows, groupBy) {
+  if (groupBy === 'daily') return rows
+  const buckets = {}
+  rows.forEach(d => {
+    const key = groupBy === 'weekly'
+      ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
+      : d.date.slice(0, 7)
+    if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, orders: 0, prevRevenue: 0 }
+    buckets[key].revenue += d.revenue
+    buckets[key].netRevenue += d.netRevenue
+    buckets[key].units += d.units
+    buckets[key].orders += d.orders || 0
+    if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
+  })
+  return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
+}
+
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
@@ -5239,6 +5261,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const wide = !phone && bp.width >= 1024
   const scorecardCols = phonePortrait ? 2 : (phone || bp.width >= 1024) && bp.width < 1280 ? 4 : bp.isTablet ? 3 : 6
   const kpiGrid = phonePortrait ? 2 : (phone || bp.isTablet) ? 4 : null
+  // xs/sm only (< 768px): the redesigned mobile Sales Trend card. Phone landscape keeps the grid.
+  const phoneTrend = bp.width < 768
   const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
@@ -5302,25 +5326,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
     const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
     const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
+    // Orders: same per-channel sum as units (the _o keys). Only the mobile card plots it.
+    const orders = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_o') && typeof v === 'number' ? s + v : s), 0)
     const prevRev = prevDailyArr?.[i]?.rev ?? null
-    return { date: d.date, revenue, netRevenue, units, prevRevenue: prevRev }
+    return { date: d.date, revenue, netRevenue, units, orders, prevRevenue: prevRev }
   })
-  // Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
-  // weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM.
-  const heroTrendGrouped = trendGroupBy === 'daily' ? heroTrendRaw : (() => {
-    const buckets = {}
-    heroTrendRaw.forEach(d => {
-      const key = trendGroupBy === 'weekly'
-        ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
-        : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, prevRevenue: 0 }
-      buckets[key].revenue += d.revenue
-      buckets[key].netRevenue += d.netRevenue
-      buckets[key].units += d.units
-      if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
-    })
-    return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
-  })()
+  const heroTrendGrouped = groupHeroTrend(heroTrendRaw, trendGroupBy)
   const heroTrendXFmt = d => trendGroupBy === 'daily' ? d?.slice(5) : trendGroupBy === 'monthly' ? d?.slice(0, 7) : d
 
   // ── Channel calcs ──
@@ -5621,6 +5632,29 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
+          {phoneTrend ? (
+            // Phones in portrait: hero + scrub chart + KPI chips (src/overview/SalesTrendMobile.jsx).
+            // Same totals as the card below; Prev Period is folded into the hero's ▲/▼ % here.
+            <SalesTrendMobile rawRows={heroTrendRaw} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+              metrics={[
+                { key: 'gross', label: 'Gross Revenue', chipLabel: 'Gross Rev', value: fmt(totalRev), delta: revDelta, upIsGood: true,
+                  point: r => r.revenue, prevPoint: r => r.prevRevenue, fmtPoint: fmt },
+                { key: 'net', label: 'Net Revenue', chipLabel: 'Net Rev', value: fmt(netRevenueCalc), delta: null, upIsGood: true,
+                  point: r => r.netRevenue, fmtPoint: fmt },
+                { key: 'orders', label: 'Orders', value: fmtN(nOrders), delta: ordDelta, upIsGood: true,
+                  point: r => r.orders, fmtPoint: fmtN },
+                { key: 'units', label: 'Units', value: fmtN(totalQty), delta: null, upIsGood: true,
+                  point: r => r.units, fmtPoint: fmtN },
+                { key: 'aov', label: 'AOV (Inc. GST)', chipLabel: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, delta: null, upIsGood: true,
+                  point: r => (r.orders ? r.revenue / r.orders : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+                { key: 'asp', label: 'ASP (Inc. GST)', chipLabel: 'ASP', value: `₹${Math.round(blendedASP).toLocaleString('en-IN')}`, delta: null, upIsGood: true,
+                  point: r => (r.units ? r.revenue / r.units : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+                // No daily Return % series exists in this data (see heroTrendRaw's note) - the chip
+                // and hero show the period figure; the chart says so rather than inventing one.
+                { key: 'returns', label: 'Return %', value: `${totalReturnPct.toFixed(1)}%`, delta: null, upIsGood: false,
+                  valueColor: totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx },
+              ]} />
+          ) : (
           <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
@@ -5672,6 +5706,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
             </ChartFrame>
           </Card>
+          )}
         </div>
 
         {deckSectionLabel('Where Revenue Came From')}
