@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { C } from '../utils.js'
-import { Card } from '../components.jsx'
+import DeltaBadge from '../responsive/DeltaBadge.jsx'
+import InfoPopover from '../responsive/InfoPopover.jsx'
 
-// Overview "Sales Trend" card for phones in portrait (xs/sm, < 768px). Desktop, tablet and phone
-// landscape keep the original card. Display only: every total shown is the value the page already
-// computed (passed in via `metrics`); the chart plots the same daily rows the desktop chart uses,
+// Overview "Sales Trend" card on mobile (< 1024px, and phones in landscape) - matches
+// docs/responsive/mockups/overview_mobile_mockup.html. Display only: every total is a value the page
+// already computed (passed in via `metrics`); the chart plots the same rows the desktop chart uses,
 // grouped by the same groupTrend() function.
 //
-//   hero      one metric (default Gross Revenue) + ▲/▼ % vs prev period where the page has one
-//   chart     edge-to-edge line, no axes, one faint guide line (the period average);
-//             touch-and-drag scrubs a day/week/month into the hero, lifting the finger restores
-//             the period total
-//   chips     the other KPIs in one swipeable row; tapping one switches hero + chart to it
+//   hero      one metric (default Gross Revenue) + ▲/▼ vs the previous period
+//   chart     edge-to-edge line, no axes, one faint guide line (the period average); the previous
+//             period as a dashed line. Touch-and-drag scrubs a day/week/month into the hero; lifting
+//             the finger restores the period total. Metrics with no daily series (Return %) show
+//             their value with a "No daily breakdown" note instead of a chart.
+//   chips     every KPI; tapping one switches hero + chart. Phones: one swipeable row. Tablet: a
+//             3-column grid. Phone landscape: chips sit in a 2-column grid beside the chart.
 //   ⋯ menu    granularity override (Auto picks it from the date range)
 //
-// metrics: [{ key, label, value, delta (number|null), upIsGood, valueColor, point(row) -> number|null,
-//             fmtPoint, prevPoint(row) -> number|null }]
+// metrics: [{ key, label, chipLabel, def, value, delta, deltaLoading, deltasHidden, lowerIsBetter,
+//             valueColor, point(row) → number|null, prevPoint(row) → number|null, fmtPoint }]
+// layout:  'phone' | 'tablet' | 'landscape'
 
 // ≤ 31 days → daily, ≤ ~6 months → weekly, longer → monthly.
 function autoGranularity(start, end) {
@@ -27,37 +31,16 @@ function autoGranularity(start, end) {
 const GRAN_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
 
 function pointLabel(key, gran) {
-  if (gran === 'monthly') {
-    const d = new Date(`${key}-01T00:00:00`)
-    return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
-  }
-  const d = new Date(`${key}T00:00:00`)
-  const s = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  return gran === 'weekly' ? `Week of ${s}` : d.toLocaleDateString('en-IN', { weekday: 'short' }) + ', ' + s
+  if (gran === 'monthly') return new Date(`${key}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+  const s = new Date(`${key}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  return gran === 'weekly' ? `Week of ${s}` : s
 }
 
-function rangeLabel(start, end) {
-  if (!start || !end) return ''
-  const f = (s, o) => new Date(`${s}T00:00:00`).toLocaleDateString('en-IN', o)
-  return `${f(start, { day: 'numeric', month: 'short' })} – ${f(end, { day: 'numeric', month: 'short', year: 'numeric' })}`
-}
-
-function Delta({ value, upIsGood = true, size = 11 }) {
-  if (value == null || !isFinite(value)) return null
-  const up = value >= 0
-  const good = up === upIsGood
-  return (
-    <span style={{ fontSize: size, fontWeight: 700, color: good ? C.green.tx : C.red.tx, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-      {up ? '▲' : '▼'}{Math.abs(value).toFixed(1)}%
-    </span>
-  )
-}
-
-export default function SalesTrendMobile({ metrics, rawRows, groupTrend, start, end }) {
+export default function SalesTrendMobile({ metrics, rawRows, groupTrend, start, end, layout = 'phone' }) {
   const [selKey, setSelKey] = useState(metrics[0].key)
   const [granOverride, setGranOverride] = useState('auto')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [scrub, setScrub] = useState(null) // index into rows while a finger is down
+  const [scrub, setScrub] = useState(null) // row index while a finger is down
   const menuRef = useRef(null)
   const chipRowRef = useRef(null)
 
@@ -67,16 +50,6 @@ export default function SalesTrendMobile({ metrics, rawRows, groupTrend, start, 
   const m = metrics.find(x => x.key === selKey) || metrics[0]
   const hasSeries = typeof m.point === 'function'
 
-  // Keep the selected chip fully in view (a chip tapped at the faded edge would otherwise stay cut off).
-  useEffect(() => {
-    const row = chipRowRef.current
-    const chip = row?.querySelector('[aria-pressed="true"]')
-    if (!row || !chip) return
-    const left = chip.offsetLeft - 16, right = chip.offsetLeft + chip.offsetWidth + 28 - row.clientWidth
-    if (row.scrollLeft > left) row.scrollTo({ left, behavior: 'smooth' })
-    else if (row.scrollLeft < right) row.scrollTo({ left: right, behavior: 'smooth' })
-  }, [selKey])
-
   useEffect(() => {
     if (!menuOpen) return
     const close = e => { if (!menuRef.current?.contains(e.target)) setMenuOpen(false) }
@@ -84,26 +57,39 @@ export default function SalesTrendMobile({ metrics, rawRows, groupTrend, start, 
     return () => document.removeEventListener('pointerdown', close)
   }, [menuOpen])
 
+  // Keep the selected chip fully in view (a chip tapped at the faded edge would stay cut off).
+  useEffect(() => {
+    const row = chipRowRef.current
+    const chip = row?.querySelector('[aria-pressed="true"]')
+    if (!row || !chip || layout !== 'phone') return
+    const left = chip.offsetLeft - 16, right = chip.offsetLeft + chip.offsetWidth + 28 - row.clientWidth
+    if (row.scrollLeft > left) row.scrollTo({ left, behavior: 'smooth' })
+    else if (row.scrollLeft < right) row.scrollTo({ left: right, behavior: 'smooth' })
+  }, [selKey, layout])
+
   // rows can shrink under a stale index (range or granularity changed mid-scrub) - treat as no scrub.
   const scrubRow = scrub != null ? (rows[scrub] ?? null) : null
-  const heroValue = scrubRow && hasSeries ? (m.point(scrubRow) == null ? '—' : m.fmtPoint(m.point(scrubRow))) : m.value
+  const scrubVal = scrubRow && hasSeries ? m.point(scrubRow) : null
   const scrubPrev = scrubRow && m.prevPoint ? m.prevPoint(scrubRow) : null
+  const prevAvailable = hasSeries && m.prevPoint && rows.some(r => m.prevPoint(r) != null)
 
-  return (
-    <Card style={{ padding: '14px 16px 12px', overflow: 'hidden' }}>
-      {/* header: title + ⋯ (granularity override) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Sales Trend</span>
+  const hero = (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, whiteSpace: 'nowrap' }}>{m.label}</span>
+          {m.def && <InfoPopover title={m.label} text={m.def} />}
+        </span>
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button type="button" onClick={() => setMenuOpen(o => !o)} aria-label="Chart options" aria-haspopup="menu" aria-expanded={menuOpen}
-            style={{ width: 36, height: 30, marginRight: -8, border: 'none', background: 'transparent', color: C.t2, fontSize: 18, lineHeight: 1, cursor: 'pointer', borderRadius: 8 }}>⋯</button>
+            style={{ width: 40, height: 32, marginRight: -10, border: 'none', background: 'transparent', color: C.t3, fontSize: 20, lineHeight: 1, cursor: 'pointer', borderRadius: 8 }}>⋯</button>
           {menuOpen && (
-            <div role="menu" style={{ position: 'absolute', right: -4, top: '100%', zIndex: C.z.dropdown, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: C.sh3, padding: 6, minWidth: 190 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '6px 10px 4px' }}>Show as</div>
+            <div role="menu" style={{ position: 'absolute', right: -6, top: '100%', zIndex: C.z.dropdown, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: C.sh3, padding: 6, minWidth: 200 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '6px 10px 4px' }}>Show as</div>
               {[['auto', `Auto (${GRAN_LABEL[auto]})`], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']].map(([id, label]) => (
                 <button key={id} type="button" role="menuitemradio" aria-checked={granOverride === id}
                   onClick={() => { setGranOverride(id); setScrub(null); setMenuOpen(false) }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 40, padding: '0 10px', border: 'none', borderRadius: 8, background: granOverride === id ? C.acl : 'transparent', color: C.t1, fontSize: 13, fontWeight: granOverride === id ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left' }}>
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 44, padding: '0 10px', border: 'none', borderRadius: 8, background: granOverride === id ? C.acl : 'transparent', color: C.t1, fontSize: 14, fontWeight: granOverride === id ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left' }}>
                   {label}{granOverride === id && <span aria-hidden="true">✓</span>}
                 </button>
               ))}
@@ -111,67 +97,68 @@ export default function SalesTrendMobile({ metrics, rawRows, groupTrend, start, 
           )}
         </div>
       </div>
-
-      {/* hero */}
-      <div aria-live="polite" style={{ minHeight: 70 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3 }}>
-          {m.label}{scrubRow ? <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: C.t2 }}> · {pointLabel(scrubRow.date, gran)}</span> : null}
+      <div aria-live="polite">
+        <div style={{ fontSize: C.type.hero.size, fontWeight: C.type.hero.weight, color: scrubRow ? C.t1 : (m.valueColor || C.t1), letterSpacing: '-.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+          {scrubRow && hasSeries ? (scrubVal == null ? '—' : m.fmtPoint(scrubVal)) : m.value}
         </div>
-        <div style={{ fontSize: 30, fontWeight: 700, color: scrubRow ? C.t1 : (m.valueColor || C.t1), letterSpacing: '-.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{heroValue}</div>
-        <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3, minHeight: 16, display: 'flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: C.t3, marginTop: 2, minHeight: 20, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', whiteSpace: 'nowrap', overflow: 'hidden' }}>
           {scrubRow
-            ? (scrubPrev != null ? <span>Prev period: <b style={{ color: C.t2, fontWeight: 600 }}>{m.fmtPoint(scrubPrev)}</b></span> : <span>{GRAN_LABEL[gran]} value</span>)
-            : (m.delta != null
-              ? <><Delta value={m.delta} upIsGood={m.upIsGood} size={12} /><span>vs prev period</span></>
-              : <span>{rangeLabel(start, end)}</span>)}
+            ? <><span>{pointLabel(scrubRow.date, gran)}</span>{scrubPrev != null && <span>· prev {m.fmtPoint(scrubPrev)}</span>}</>
+            : !m.deltasHidden && <><DeltaBadge delta={m.delta} loading={m.deltaLoading} lowerIsBetter={m.lowerIsBetter} size={13} /><span>vs prev period</span></>}
         </div>
       </div>
+    </div>
+  )
 
-      {/* chart, edge to edge */}
-      <div style={{ margin: '8px -16px 0' }}>
-        {hasSeries
-          ? <ScrubChart rows={rows} point={m.point} prevPoint={m.prevPoint} scrub={scrub} setScrub={setScrub} label={`${m.label}, ${GRAN_LABEL[gran].toLowerCase()}`} />
-          : <div style={{ height: 132, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: C.t3, fontSize: 12, background: `linear-gradient(180deg, ${C.hov}, ${C.card})` }}>
-              No daily breakdown for {m.label} — the period total is shown above.
-            </div>}
+  const chart = (
+    <div style={{ margin: layout === 'landscape' ? '8px 0 0' : '8px -16px 0' }}>
+      {hasSeries
+        ? <ScrubChart rows={rows} point={m.point} prevPoint={prevAvailable ? m.prevPoint : null} scrub={scrub} setScrub={setScrub} label={`${m.label}, ${GRAN_LABEL[gran].toLowerCase()}`} height={layout === 'tablet' ? 200 : 150} />
+        : <div style={{ height: layout === 'tablet' ? 200 : 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px', textAlign: 'center', color: C.t3, fontSize: 13, background: `linear-gradient(180deg, ${C.hov}, ${C.card})` }}>
+            No daily breakdown
+          </div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: layout === 'landscape' ? '6px 0 0' : '6px 16px 0', fontSize: 12, color: C.t3 }}>
+        {hasSeries && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 16, borderTop: `2.5px solid ${C.acc}`, display: 'inline-block' }} />This period</span>}
+        {hasSeries && prevAvailable && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 16, borderTop: `2px dashed ${C.border2}`, display: 'inline-block' }} />Prev period</span>}
+        <span style={{ marginLeft: 'auto' }}>{GRAN_LABEL[gran]}{granOverride === 'auto' ? ' · auto' : ''}</span>
       </div>
+    </div>
+  )
 
-      {/* legend + granularity caption */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6, fontSize: 10.5, color: C.t3 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          {hasSeries && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 12, height: 2, background: C.acc, borderRadius: 1, display: 'inline-block' }} />This period</span>}
-          {hasSeries && m.prevPoint && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 12, borderTop: `2px dashed ${C.border2}`, display: 'inline-block' }} />Prev period</span>}
+  const chipButtons = metrics.map(x => {
+    const sel = x.key === m.key
+    return (
+      <button key={x.key} type="button" aria-pressed={sel} onClick={() => { setSelKey(x.key); setScrub(null) }}
+        style={{ flex: layout === 'phone' ? '0 0 auto' : undefined, scrollSnapAlign: 'start', minWidth: layout === 'phone' ? 124 : 0, minHeight: 60, padding: '9px 12px', borderRadius: 14, textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
+          border: `1.5px solid ${sel ? C.acc : 'transparent'}`, background: sel ? C.card : C.hov, boxShadow: sel ? `0 0 0 3px rgba(${C.accRgb},.12)` : 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* narrow card: ▲/▼ sits top-right next to the label */}
+        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, whiteSpace: 'nowrap' }}>{x.chipLabel || x.label}</span>
+          {!x.deltasHidden && <DeltaBadge delta={x.delta} loading={x.deltaLoading} lowerIsBetter={x.lowerIsBetter} size={12} />}
         </span>
-        <span>{GRAN_LABEL[gran]}{granOverride === 'auto' ? ' · auto' : ''}</span>
-      </div>
+        <span style={{ fontSize: 16, fontWeight: 700, color: x.valueColor || C.t1, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{x.value}</span>
+      </button>
+    )
+  })
+  const chips = layout === 'phone'
+    ? <div ref={chipRowRef} className="trend-chip-row" role="group" aria-label="Choose metric"
+        style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', margin: '14px -16px 0', padding: '2px 16px 4px', scrollPaddingLeft: 16,
+          WebkitMaskImage: 'linear-gradient(90deg, #000 88%, transparent)', maskImage: 'linear-gradient(90deg, #000 88%, transparent)' }}>{chipButtons}</div>
+    : <div role="group" aria-label="Choose metric" style={{ display: 'grid', gridTemplateColumns: `repeat(${layout === 'tablet' ? 3 : 2}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 14 }}>{chipButtons}</div>
 
-      {/* KPI chips */}
-      <div ref={chipRowRef} className="trend-chip-row" role="group" aria-label="Choose metric"
-        style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', margin: '10px -16px 0', padding: '2px 16px 2px', scrollPaddingLeft: 16,
-          WebkitMaskImage: 'linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%)', maskImage: 'linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%)' }}>
-        {metrics.map(x => {
-          const sel = x.key === m.key
-          return (
-            <button key={x.key} type="button" aria-pressed={sel} onClick={() => { setSelKey(x.key); setScrub(null) }}
-              style={{ flex: '0 0 auto', scrollSnapAlign: 'start', minWidth: 96, minHeight: 52, padding: '7px 11px', borderRadius: 12, textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
-                border: `1.5px solid ${sel ? C.acc : C.border}`, background: sel ? C.acl : C.card, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: sel ? C.acd : C.t3, whiteSpace: 'nowrap' }}>{x.chipLabel || x.label}</span>
-              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: x.valueColor || C.t1, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{x.value}</span>
-                <Delta value={x.delta} upIsGood={x.upIsGood} size={10.5} />
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </Card>
+  return (
+    <div style={{ background: C.card, borderRadius: 18, padding: '16px 16px 14px', boxShadow: C.sh1, overflow: 'hidden' }}>
+      {layout === 'landscape'
+        ? <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.25fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}><div>{hero}{chart}</div>{chips}</div>
+        : <>{hero}{chart}{chips}</>}
+    </div>
   )
 }
 
 // SVG line chart with no axes. Scrubbing: pointer down/move maps the finger's x to the nearest
 // point; touch-action pan-y keeps vertical page scrolling working while horizontal drags scrub.
-function ScrubChart({ rows, point, prevPoint, scrub, setScrub, label }) {
-  const H = 132, PAD_T = 10, PAD_B = 8
+function ScrubChart({ rows, point, prevPoint, scrub, setScrub, label, height: H }) {
+  const PAD_T = 12, PAD_B = 10
   const boxRef = useRef(null)
   const [w, setW] = useState(0)
   useEffect(() => {
@@ -227,19 +214,19 @@ function ScrubChart({ rows, point, prevPoint, scrub, setScrub, label }) {
         <svg width={w} height={H} style={{ display: 'block', overflow: 'visible' }}>
           <defs>
             <linearGradient id="ovMobGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={C.acc} stopOpacity={0.20} />
-              <stop offset="100%" stopColor={C.acc} stopOpacity={0.01} />
+              <stop offset="0%" stopColor={C.acc} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={C.acc} stopOpacity={0} />
             </linearGradient>
           </defs>
-          {avg != null && <line x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke={C.border} strokeWidth={1} strokeDasharray="2 4" />}
-          {prevPoint && <path d={path(prev)} fill="none" stroke={C.border2} strokeWidth={1.5} strokeDasharray="4 4" />}
+          {avg != null && <line x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke={C.border} strokeWidth={1} />}
           {areaPath && <path d={areaPath} fill="url(#ovMobGrad)" />}
-          <path d={curPath} fill="none" stroke={C.acc} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
+          {prevPoint && <path d={path(prev)} fill="none" stroke={C.border2} strokeWidth={1.6} strokeDasharray="4 4" />}
+          <path d={curPath} fill="none" stroke={C.acc} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
           {scrub != null && (
             <g>
-              <line x1={x(scrub)} x2={x(scrub)} y1={0} y2={H} stroke={C.t2} strokeWidth={1} />
+              <line x1={x(scrub)} x2={x(scrub)} y1={0} y2={H} stroke={C.t1} strokeOpacity={0.35} strokeWidth={1} />
               {pv != null && <circle cx={x(scrub)} cy={y(pv)} r={3.5} fill={C.card} stroke={C.border2} strokeWidth={1.5} />}
-              {sv != null && <circle cx={x(scrub)} cy={y(sv)} r={5} fill={C.acc} stroke={C.card} strokeWidth={2} />}
+              {sv != null && <circle cx={x(scrub)} cy={y(sv)} r={5} fill={C.card} stroke={C.acc} strokeWidth={2.5} />}
             </g>
           )}
         </svg>

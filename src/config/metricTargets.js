@@ -1,3 +1,5 @@
+import { C } from '../utils.js'
+
 // Status targets for tile colour edges / value colours (green = on target, amber = watch, red = act).
 //
 // A metric with no target (null) is NEUTRAL: no colour edge, no status colour. Fill targets in here;
@@ -30,4 +32,9 @@ export function metricStatus(key, value) {
   if (!t || value == null || !isFinite(value)) return null
   if (t.lowerIsBetter) return value > t.red ? 'bad' : value > t.amber ? 'warn' : 'good'
   return value < t.red ? 'bad' : value < t.amber ? 'warn' : 'good'
+}
+
+// Text colour for a status (null = default ink).
+export function statusColor(status) {
+  return status === 'bad' ? C.red.tx : status === 'warn' ? C.amber.tx : status === 'good' ? C.green.tx : null
 }

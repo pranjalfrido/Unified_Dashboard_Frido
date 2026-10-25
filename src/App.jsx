@@ -31,6 +31,10 @@ import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
 import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
+import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
+import { METRICS } from './overview/metricLabels.js'
+import { pctChange } from './responsive/format.js'
+import { metricStatus, statusColor } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -5226,7 +5230,7 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
+function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders }) {
   const [productSearch, setProductSearch] = useState('')
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
   // every value shown below is computed exactly as before.
@@ -5241,8 +5245,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const wide = !phone && bp.width >= 1024
   const scorecardCols = phonePortrait ? 2 : (phone || bp.width >= 1024) && bp.width < 1280 ? 4 : bp.isTablet ? 3 : 6
   const kpiGrid = phonePortrait ? 2 : (phone || bp.isTablet) ? 4 : null
-  // xs/sm only (< 768px): the redesigned mobile Sales Trend card. Phone landscape keeps the grid.
-  const phoneTrend = bp.width < 768
   // The mobile Overview redesign (docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md): every width
   // below 1024px, which also covers phones in landscape. 1024px and up keeps the desktop layout as is.
   const ovMobile = bp.width < 1024 || bp.isPhoneLandscape
@@ -5516,6 +5518,51 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   })()
   const topSubCatMaxRev = topProductsBySubCat[0]?.rev || 1
 
+  // ── Previous period for the mobile ▲/▼ (deferred, cached; see overview/usePrevPeriod.js) ──
+  // Same request the page made for this range, for the equal-length range before it, run through
+  // the same salesMetrics()/trendRows() code. Only the small derived result is kept.
+  const prevSalesRange = prevRange(filters?.start, filters?.end)
+  const filterSig = Object.fromEntries(Object.entries(filters || {}).filter(([k]) => k !== 'start' && k !== 'end'))
+  const salesPrev = usePrevPeriod(
+    ovMobile && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
+    async () => {
+      const d = await prevLoaders.sales(prevSalesRange.start, prevSalesRange.end)
+      const m = salesMetrics(d)
+      return {
+        range: prevSalesRange, totalRev: m.totalRev, nOrders: m.nOrders, netRevenueCalc: m.netRevenueCalc, totalQty: m.totalQty,
+        blendedAOV: m.blendedAOV, blendedASP: m.blendedASP, totalReturnPct: m.totalReturnPct,
+        daily: trendRows(d.dailyArr).map(r => ({ netRevenue: r.netRevenue, units: r.units, orders: r.orders })),
+      }
+    },
+    { ready: !!data },
+  )
+  const sp = salesPrev.value
+  const spLoading = salesPrev.status === 'loading'
+  // All or none per card: if the previous period could not be loaded, the whole Sales Trend card
+  // drops its ▲/▼ (including Gross/Orders, which would otherwise be the only two left).
+  const spHidden = salesPrev.status === 'error'
+  const mobileTrendRows = sp?.daily
+    ? heroTrendRaw.map((r, i) => ({ ...r, prevNetRevenue: sp.daily[i]?.netRevenue ?? null, prevUnits: sp.daily[i]?.units ?? null, prevOrders: sp.daily[i]?.orders ?? null }))
+    : heroTrendRaw
+  const rupees = v => `₹${Math.round(v).toLocaleString('en-IN')}`
+  const trendMetrics = [
+    { key: 'gross', label: METRICS.gross.label, chipLabel: METRICS.gross.short, def: METRICS.gross.def, value: fmt(totalRev), delta: revDelta, deltasHidden: spHidden,
+      point: r => r.revenue, prevPoint: r => r.prevRevenue, fmtPoint: fmt },
+    { key: 'net', label: METRICS.net.label, chipLabel: METRICS.net.short, def: METRICS.net.def, value: fmt(netRevenueCalc), delta: pctChange(netRevenueCalc, sp?.netRevenueCalc), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => r.netRevenue, prevPoint: r => r.prevNetRevenue ?? null, fmtPoint: fmt },
+    { key: 'orders', label: METRICS.orders.label, def: METRICS.orders.def, value: fmtN(nOrders), delta: ordDelta, deltasHidden: spHidden,
+      point: r => r.orders, prevPoint: r => r.prevOrders ?? null, fmtPoint: fmtN },
+    { key: 'units', label: METRICS.units.label, def: METRICS.units.def, value: fmtN(totalQty), delta: pctChange(totalQty, sp?.totalQty), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => r.units, prevPoint: r => r.prevUnits ?? null, fmtPoint: fmtN },
+    { key: 'aov', label: METRICS.aov.label, chipLabel: METRICS.aov.short, def: METRICS.aov.def, value: rupees(blendedAOV), delta: pctChange(blendedAOV, sp?.blendedAOV), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => (r.orders ? r.revenue / r.orders : null), prevPoint: r => (r.prevOrders && r.prevRevenue != null ? r.prevRevenue / r.prevOrders : null), fmtPoint: rupees },
+    { key: 'asp', label: METRICS.asp.label, chipLabel: METRICS.asp.short, def: METRICS.asp.def, value: rupees(blendedASP), delta: pctChange(blendedASP, sp?.blendedASP), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => (r.units ? r.revenue / r.units : null), prevPoint: r => (r.prevUnits && r.prevRevenue != null ? r.prevRevenue / r.prevUnits : null), fmtPoint: rupees },
+    // No daily Return % series exists in this data (heroTrendRaw's note): value + "No daily breakdown".
+    { key: 'returns', label: METRICS.returnPct.label, def: METRICS.returnPct.def, value: `${totalReturnPct.toFixed(1)}%`, delta: pctChange(totalReturnPct, sp?.totalReturnPct), deltaLoading: spLoading, deltasHidden: spHidden, lowerIsBetter: true,
+      valueColor: statusColor(metricStatus('returnPct', totalReturnPct)) || undefined },
+  ]
+
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
@@ -5537,28 +5584,13 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          {phoneTrend ? (
-            // Phones in portrait: hero + scrub chart + KPI chips (src/overview/SalesTrendMobile.jsx).
-            // Same totals as the card below; Prev Period is folded into the hero's ▲/▼ % here.
-            <SalesTrendMobile rawRows={heroTrendRaw} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
-              metrics={[
-                { key: 'gross', label: 'Gross Revenue', chipLabel: 'Gross Rev', value: fmt(totalRev), delta: revDelta, upIsGood: true,
-                  point: r => r.revenue, prevPoint: r => r.prevRevenue, fmtPoint: fmt },
-                { key: 'net', label: 'Net Revenue', chipLabel: 'Net Rev', value: fmt(netRevenueCalc), delta: null, upIsGood: true,
-                  point: r => r.netRevenue, fmtPoint: fmt },
-                { key: 'orders', label: 'Orders', value: fmtN(nOrders), delta: ordDelta, upIsGood: true,
-                  point: r => r.orders, fmtPoint: fmtN },
-                { key: 'units', label: 'Units', value: fmtN(totalQty), delta: null, upIsGood: true,
-                  point: r => r.units, fmtPoint: fmtN },
-                { key: 'aov', label: 'AOV (Inc. GST)', chipLabel: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, delta: null, upIsGood: true,
-                  point: r => (r.orders ? r.revenue / r.orders : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-                { key: 'asp', label: 'ASP (Inc. GST)', chipLabel: 'ASP', value: `₹${Math.round(blendedASP).toLocaleString('en-IN')}`, delta: null, upIsGood: true,
-                  point: r => (r.units ? r.revenue / r.units : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-                // No daily Return % series exists in this data (see heroTrendRaw's note) - the chip
-                // and hero show the period figure; the chart says so rather than inventing one.
-                { key: 'returns', label: 'Return %', value: `${totalReturnPct.toFixed(1)}%`, delta: null, upIsGood: false,
-                  valueColor: totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx },
-              ]} />
+          {ovMobile ? (
+            // Mobile Sales Trend (overview/SalesTrendMobile.jsx). Same totals as the desktop card;
+            // Prev Period is folded into the hero's ▲/▼. Gross/Orders ▲/▼ are the page's existing
+            // revDelta/ordDelta; the rest come from the previous-period load (salesPrev).
+            <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+              layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'}
+              metrics={trendMetrics} />
           ) : (
           <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
@@ -19363,6 +19395,46 @@ function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => a
 function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
+// The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect
+// has always applied (productAge → subCategory, D2C sub-channels sharing the ShopifyIndia request, …).
+// Shared with the mobile Overview's previous-period loader so both send the same request shape.
+function buildBqExtra(f, subCatFirstOrderMap) {
+  const { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = f
+  const extra = {}
+  if (category?.length) extra.category = category.join(',')
+
+  // productAge filter: compute subcats from firstOrderMap and inject as subCategory filter
+  let effectiveSubCat = subCategory || []
+  if (productAge && Object.keys(subCatFirstOrderMap).length) {
+    const today = new Date()
+    const ageSubCats = Object.entries(subCatFirstOrderMap)
+      .filter(([, d]) => {
+        const days = Math.floor((today - new Date(d)) / 86400000)
+        return productAge === 'new' ? days <= 90 : days > 90
+      })
+      .map(([sc]) => sc)
+    effectiveSubCat = ageSubCats
+  }
+  if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
+
+  if (sku?.length) extra.sku = sku.join(',')
+  // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
+  // so all three hit the same server-side cache key — switching sub-tabs is instant after the
+  // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
+  const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
+  const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
+  if (bqSubChannel) extra.subChannel = bqSubChannel
+  if (voucher) extra.voucher = voucher
+  if (region?.length) extra.region = region.join(',')
+  if (tier?.length) extra.tier = tier.join(',')
+  if (state?.length) extra.state = state.join(',')
+  if (city) extra.city = city
+  if (country) extra.country = country
+  if (paymentType) extra.paymentType = paymentType
+  if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
+  return extra
+}
+
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   // Colour theme. index.html already applied the stored value to <html> before
   // first paint, so this only mirrors it into React state for the picker.
@@ -19680,39 +19752,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
     const debounceMs = dateChanged ? 600 : 0
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = filtersRef.current
-      const extra = {}
-      if (category?.length) extra.category = category.join(',')
-
-      // productAge filter: compute subcats from firstOrderMap and inject as subCategory filter
-      let effectiveSubCat = subCategory || []
-      if (productAge && Object.keys(subCatFirstOrderMap).length) {
-        const today = new Date()
-        const ageSubCats = Object.entries(subCatFirstOrderMap)
-          .filter(([, d]) => {
-            const days = Math.floor((today - new Date(d)) / 86400000)
-            return productAge === 'new' ? days <= 90 : days > 90
-          })
-          .map(([sc]) => sc)
-        effectiveSubCat = ageSubCats
-      }
-      if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
-
-      if (sku?.length) extra.sku = sku.join(',')
-      // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
-      // so all three hit the same server-side cache key — switching sub-tabs is instant after the
-      // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
-      const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
-      const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
-      if (bqSubChannel) extra.subChannel = bqSubChannel
-      if (voucher) extra.voucher = voucher
-      if (region?.length) extra.region = region.join(',')
-      if (tier?.length) extra.tier = tier.join(',')
-      if (state?.length) extra.state = state.join(',')
-      if (city) extra.city = city
-      if (country) extra.country = country
-      if (paymentType) extra.paymentType = paymentType
-      if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
+      const { start, end } = filtersRef.current
+      const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
       // Gate the ~290-query /api/bq fetch to only the tabs that actually consume its result —
       // confirmed 2026-10-19 by checking every `data={data}`/`data &&` call site in this file:
       // Overview, Sales, PnL, Ads, and Intelligence (IntelPage destructures data.orders directly)
@@ -19779,6 +19820,39 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     }, debounceMs)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
+
+  // ── Previous-period loaders for the mobile Overview's ▲/▼ (overview/usePrevPeriod.js) ──
+  // Each one repeats a request the page already makes, for another date range, and returns the
+  // response without touching any page state. Same endpoints, same bodies, same static-cache
+  // shortcuts, same server-side byte limits - only the dates differ.
+  const loadSalesPeriod = useCallback(async (start, end) => {
+    const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
+    // fetchData's static-cache rule: unfiltered requests whose dates match a pre-computed window
+    // are served from public/pnl-data*.json instead of BigQuery.
+    const { subChannel: _sc, ...withoutSubCh } = extra
+    const hasFilters = Object.keys(withoutSubCh).length > 0 || (extra.subChannel && extra.subChannel !== 'ShopifyIndia')
+    if (!hasFilters) {
+      for (const c of [pnlCacheRef.current, pnlCacheRef.lastMonth]) {
+        if (c && c.mtdStart === start && c.mtdEnd === end) return c
+      }
+    }
+    const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    const json = await res.json()
+    // Same response handling as the page's own `data`.
+    return json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+  }, [API, subCatFirstOrderMap])
+  const loadLogisticsPeriod = useCallback(async (start, end) => {
+    const res = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    return res.json()
+  }, [API])
+  const loadCustomerPeriod = useCallback(async (start, end) => {
+    const res = await fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    return res.json()
+  }, [API])
+  const prevLoaders = useMemo(() => ({ sales: loadSalesPeriod, logistics: loadLogisticsPeriod, customer: loadCustomerPeriod }), [loadSalesPeriod, loadLogisticsPeriod, loadCustomerPeriod])
 
   const adsLoadGenRef = useRef(0)
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
@@ -20088,7 +20162,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
+              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} />}
