@@ -41,6 +41,17 @@ export const C = {
   get sh2(){ return tok("--sh2","0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06)") },
   get sh3(){ return tok("--sh3","0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08)") },
   r: { sm: 8, md: 12, lg: 16, xl: 20 },
+  // Layout tokens (responsive overhaul). Theme-independent, so plain values rather than getters.
+  // Spacing is a 4/8 scale: C.space[4] === 16 (px).
+  space: { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48 },
+  // Page gutters per breakpoint (mobile / tablet / desktop).
+  gutter: { mobile: 16, tablet: 24, desktop: 32 },
+  // Stacking order, low to high. Matches what the shell already uses: topnav 100, sidebar 400,
+  // the mobile filter overlay 499/500.
+  z: { base: 0, raised: 10, dropdown: 60, sticky: 80, nav: 100, drawer: 200, sidebar: 400, overlay: 499, modal: 500, toast: 600 },
+  // Breakpoint minimum widths - same scale as src/responsive/useBreakpoint.js.
+  bp: { xs: 0, sm: 480, md: 768, lg: 1024, xl: 1280, '2xl': 1536 },
+  motion: { fast: '150ms', base: '200ms', slow: '250ms' },
   get display(){ return tok("--display","Arial,Helvetica,sans-serif") },
   // Chart series palette as a SET. The accent leads, so it tracks the theme; the
   // rest are fixed hues chosen to stay distinguishable beside either accent.

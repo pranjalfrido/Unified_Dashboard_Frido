@@ -270,7 +270,7 @@ export default function LoginPage({ onLogin }) {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
         * { box-sizing: border-box; }
         .login-page {
-          display: flex; min-height: 100vh; width: 100%;
+          display: flex; min-height: var(--app-h); width: 100%;
           font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           background: #F0EDE6; align-items: center; justify-content: center; padding: 32px 16px;
         }

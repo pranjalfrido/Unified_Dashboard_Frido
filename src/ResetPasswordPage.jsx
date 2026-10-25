@@ -83,7 +83,7 @@ export default function ResetPasswordPage() {
 }
 
 const s = {
-  page: { fontFamily: "'Manrope', sans-serif", background: '#F5F1E8', minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 },
+  page: { fontFamily: "'Manrope', sans-serif", background: '#F5F1E8', minHeight: 'var(--app-h)', display: 'grid', placeItems: 'center', padding: 24 },
   card: { background: '#fff', borderRadius: 20, padding: '44px 40px', width: '100%', maxWidth: 420, boxShadow: '0 20px 60px -20px rgba(23,33,28,0.2)' },
   logo: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 },
   wordmark: { fontFamily: "'Baloo 2', sans-serif", fontWeight: 700, fontSize: 21, color: '#17211C' },

@@ -26,16 +26,9 @@ import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
 import FlashPage from './FlashPage.jsx'
-
-function useIsMobile() {
-  const [mob, setMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const h = () => setMob(window.innerWidth <= 768)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-  return mob
-}
+import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
+import { ChartFrame } from './responsive/ChartFrame.jsx'
+import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -407,12 +400,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
     if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
@@ -962,7 +950,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         {isMobile ? (
           filterSidebarOpen && <>
             <div onClick={() => setFilterSidebarOpen(false)} style={{ position: 'fixed', inset: 0, top: 'var(--nav)', background: 'rgba(0,0,0,0.35)', zIndex: 199 }} />
-            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(100vh - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: 10 }}>
+            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(var(--app-h) - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px', borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Menu & Filters</span>
                 <button onClick={() => setFilterSidebarOpen(false)} style={{ background: 'none', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
@@ -3597,12 +3585,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
 // only colors are parameterized, all layout/behavior stays identical. Defaults to the
 // app shell's own light theme so every existing call site is unaffected.
 function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters?.start ?? '', end: filters?.end ?? '' })
   const [selecting, setSelecting] = useState('start')
@@ -5196,11 +5179,13 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
 )
 // A single stat tile: big number, label, optional delta/sub-line, optional colored accent bar +
 // tinted background (tint) for an at-a-glance good/bad read, not just a thin top stripe.
-const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3 }) => (
+// compact: two-across on a phone a tile is ~150px wide, so the 20px value ("8,81,914 units")
+// was cut off; the smaller size keeps the full value readable instead.
+const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3, compact }) => (
   <KpiCard span={span} accent={accent} tint={tint} hero={hero}>
     <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 5 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: hero ? 36 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: hero ? 36 : compact ? 17 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: compact ? 1.15 : 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       {deltaVal !== undefined && delta(deltaVal)}
     </div>
     {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>{sub}</div>}
@@ -5212,9 +5197,9 @@ const TrendStatTile = ({ label, value, badge, color, sub }) => (
   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0 }}>
     <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={label}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
+        <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
         {badge}
       </div>
       {sub && <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap' }}>{sub}</span>}
@@ -5241,6 +5226,19 @@ const WideCard = ({ span = 12, children, style }) => (
 
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
   const [productSearch, setProductSearch] = useState('')
+  // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
+  // every value shown below is computed exactly as before.
+  //   phone (portrait)    KPIs 2-up, scorecard 2-up, everything full width
+  //   phone (landscape)   KPIs 4-up, scorecard 4-up, full width
+  //   tablet 768–1023     KPIs 4-up, scorecard 3-up, product table and map full width
+  //   laptop 1024–1279    scorecard 4-up, desktop layout otherwise
+  //   desktop ≥ 1280      unchanged
+  const bp = useBreakpoint()
+  const phone = bp.isMobile
+  const phonePortrait = phone && !bp.isPhoneLandscape
+  const wide = !phone && bp.width >= 1024
+  const scorecardCols = phonePortrait ? 2 : (phone || bp.width >= 1024) && bp.width < 1280 ? 4 : bp.isTablet ? 3 : 6
+  const kpiGrid = phonePortrait ? 2 : (phone || bp.isTablet) ? 4 : null
   const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
@@ -5623,13 +5621,21 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          <Card title="Sales Trend" style={{ height: 420, display: 'flex', flexDirection: 'column' }} action={
+          <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
           }>
             {/* Content-sized (not 1fr-stretched) so short values like "71,495" don't get spread
-                across the full card width with large gaps between them. */}
-            <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                across the full card width with large gaps between them. On phones/tablets the
+                eight tiles used to be forced onto one row and drew over each other (Phase 0 P0:
+                illegible on iPhone SE/14) - there they sit in a 2- or 4-column grid instead, and on
+                laptops the row wraps rather than running off the card's edge. */}
+            <div style={{
+              ...(kpiGrid
+                ? { display: 'grid', gridTemplateColumns: `repeat(${kpiGrid}, minmax(0,1fr))`, gap: '14px 16px' }
+                : { display: 'flex', flexWrap: 'wrap', gap: '14px 40px' }),
+              marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+            }}>
               <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc} />
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
@@ -5639,14 +5645,16 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={heroTrendGrouped} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
+            <ChartFrame title="Sales Trend" height={{ mobile: 240, tablet: 260, desktop: 240 }} loading={!heroTrendGrouped.length}
+              series={[{ key: 'revenue', name: 'Gross Revenue', color: C.acc }, { key: 'prevRevenue', name: 'Prev Period', color: C.t3, dashed: true }]}>
+              {f => (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={heroTrendGrouped} margin={f.margin}>
                   <defs><linearGradient id="ovHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.22} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.02} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={heroTrendXFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
-                  <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                  <CartesianGrid {...f.grid} />
+                  <XAxis dataKey="date" {...f.xAxis} tickFormatter={heroTrendXFmt} />
+                  <YAxis {...f.yAxis} />
+                  <Tooltip {...f.tooltip} content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{heroTrendXFmt(label)}</div>
                       {payload.map(p => (
@@ -5657,12 +5665,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       ))}
                     </div>
                   ) : null} />
-                  <Legend {...chartLegendProps({ fontSize: 11 })} />
-                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
+                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} hide={f.hidden.has('revenue')} />
+                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} hide={f.hidden.has('prevRevenue')} />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+              )}
+            </ChartFrame>
           </Card>
         </div>
 
@@ -5673,7 +5681,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             AOV + Return% brought back into a compact footer row per "more important details". */}
         <WideCard span={12}>
           {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0,1fr))', gap: 16 }}>
+          {/* Six-across was squeezed to unreadable slivers below desktop width (Phase 0: "Channel
+              Scorecard squeezed" on tablet and phone). 2 / 3 / 4 / 6 columns by width instead. */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${scorecardCols}, minmax(0,1fr))`, gap: phonePortrait ? 10 : 16 }}>
             {sortedCh.map(([ch, v]) => {
               const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
               const prevChRev = data.prevChMap?.[ch]?.rev || 0
@@ -5683,8 +5693,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               const chReturnPct = chReturnPctMap[ch] ?? null
               return (
                 <div key={ch} className="card-hoverable channel-card-hover" style={{
-                  background: C.card, border: `1px solid ${C.acc}45`, borderRadius: 14, padding: '15px 16px',
-                  display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
+                  background: C.card, border: `1px solid ${C.acc}45`, borderRadius: 14, padding: phonePortrait ? '12px 12px' : '15px 16px',
+                  display: 'flex', flexDirection: 'column', gap: phonePortrait ? 8 : 10, minWidth: 0,
                   boxShadow: `0 0 14px 1px ${C.acc}28, 0 4px 12px -6px ${C.acc}3D`,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -5693,8 +5703,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       : <span style={{ width: 18, height: 18, borderRadius: 5, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7.5, fontWeight: 700, color: '#fff' }}>{ch.charAt(0)}</span>}
                     <span style={{ fontSize: 12.5, fontWeight: 600, color: C.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 7 }}>
-                    <span style={{ fontSize: 18, fontWeight: 600, color: '#5A5850', fontFamily: 'var(--mono)', letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>{fmt(v.rev)}</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: phonePortrait ? '2px 7px' : 7, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
+                    <span style={{ fontSize: phonePortrait ? 16 : 18, fontWeight: 600, color: '#5A5850', fontFamily: 'var(--mono)', letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>{fmt(v.rev)}</span>
                     {chDelta !== null
                       ? <span style={{ fontSize: 10, fontWeight: 600, color: deltaColor, whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 'auto' }}>{chDelta >= 0 ? '▲' : '▼'}{Math.abs(chDelta).toFixed(1)}%</span>
                       : <span style={{ fontSize: 9.5, fontWeight: 500, color: C.t3, flexShrink: 0, marginLeft: 'auto' }}>New</span>}
@@ -5703,19 +5713,19 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                     <div style={{ height: '100%', width: `${Math.min(100, sharePct)}%`, background: `${C.acc}CC`, borderRadius: 2 }} />
                   </div>
                   <div style={{ fontSize: 9.5, color: C.t3, fontWeight: 400 }}>{sharePct.toFixed(1)}% of revenue · {fmtN(v.orders)} orders</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, paddingTop: 9, borderTop: `1px solid ${C.acc}1F` }}>
-                    <div>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>Net Rev</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.netRev != null ? fmt(v.netRev) : '—'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>AOV</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)' }}>{v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—'}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>Return %</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: chReturnPct !== null ? (chReturnPct > 15 ? '#C97A72' : chReturnPct > 8 ? '#C99A4E' : '#4C9A6A') : C.t3 }}>{chReturnPct !== null ? `${chReturnPct.toFixed(1)}%` : '—'}</div>
-                    </div>
+                  {/* Three mini-stats side by side need ~170px; a two-across phone card is ~150px,
+                      so there they stack as label/value rows instead. Same values, same order. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: phonePortrait ? '1fr' : '1fr 1fr 1fr', gap: phonePortrait ? 4 : 8, paddingTop: 9, borderTop: `1px solid ${C.acc}1F` }}>
+                    {[
+                      { label: 'Net Rev', value: v.netRev != null ? fmt(v.netRev) : '—', style: { color: C.t2, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      { label: 'AOV', value: v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—', style: { color: C.t2, fontFamily: 'var(--mono)' } },
+                      { label: 'Return %', value: chReturnPct !== null ? `${chReturnPct.toFixed(1)}%` : '—', right: true, style: { color: chReturnPct !== null ? (chReturnPct > 15 ? '#C97A72' : chReturnPct > 8 ? '#C99A4E' : '#4C9A6A') : C.t3 } },
+                    ].map(s => (
+                      <div key={s.label} style={phonePortrait ? { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, minWidth: 0 } : { textAlign: s.right ? 'right' : undefined }}>
+                        <div style={{ fontSize: phonePortrait ? 9.5 : 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: phonePortrait ? 0 : 2, whiteSpace: 'nowrap' }}>{s.label}</div>
+                        <div style={{ fontSize: phonePortrait ? 11.5 : 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', ...s.style }}>{s.value}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -5727,10 +5737,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
           return (
-          <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <WideCard span={wide ? 8 : 12} style={wide ? { maxHeight: 520, overflow: 'hidden' } : undefined}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
-              <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
+              <div style={{ position: 'relative', ...(phonePortrait ? { flex: '1 1 100%' } : { width: 230, flexShrink: 0 }) }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -5762,51 +5772,44 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ maxHeight: 450, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10, paddingBottom: 16 }}>
-              <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                  <tr>
-                    {['Sub-Category', 'Category', 'Revenue (Inc. GST)', 'Units', 'ASP', 'Return %', 'Net Revenue'].map((h, i) => (
-                      <th key={h} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: i <= 1 ? 'left' : 'right', padding: '10px 12px', background: C.card, borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSubCat.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: '16px 10px', textAlign: 'center', color: C.t3, fontSize: 11.5 }}>No sub-categories match "{productSearch}".</td></tr>
-                  )}
-                  {filteredSubCat.map((g, i) => {
-                    const asp = g.units > 0 ? g.rev / g.units : 0
-                    return (
-                      <tr key={g.subCategory} style={{ background: i % 2 === 1 ? C.hov : 'transparent' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }} title={g.subCategory}>{g.subCategory}</td>
-                        <td style={{ padding: '8px 12px', color: C.t3 }}>{g.category}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', width: '20%' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                            <div style={{ flex: 1, maxWidth: 60, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${(g.rev / topSubCatMaxRev) * 100}%`, background: C.acc, borderRadius: 3 }} />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 90, justifyContent: 'flex-end' }}>
-                              <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: C.t1 }}>{fmt(g.rev)}</span>
-                              <span style={{ fontSize: 9.5, color: C.t3 }}>{totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0'}%</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t2 }}>{fmtN(g.units)}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.units > 0 ? `₹${Math.round(asp).toLocaleString('en-IN')}` : '—'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: g.returnPct !== null ? (g.returnPct > 15 ? C.red.tx : g.returnPct > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.netRev != null ? fmt(g.netRev) : '—'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* Shared table, Pattern A (priority columns): a phone shows Sub-Category, Revenue and Net
+                Revenue; a tablet adds Units and Return %; desktop shows all seven as before. The
+                "Columns" control brings hidden ones back. Cell contents are unchanged. */}
+            <ResponsiveTable pattern="priority" label="Product performance by sub-category" tableClassName="row-hoverable"
+              maxHeight={wide ? 450 : 420} rows={filteredSubCat} rowKey={g => g.subCategory}
+              cellPadding={phonePortrait ? '8px 8px' : '8px 12px'}
+              emptyText={`No sub-categories match "${productSearch}".`}
+              columns={[
+                { key: 'subCategory', label: 'Sub-Category', priority: 1, cellStyle: { fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: phonePortrait ? 120 : 200 },
+                  render: v => <span title={v}>{v}</span> },
+                { key: 'category', label: 'Category', priority: 3, cellStyle: { color: C.t3 } },
+                { key: 'rev', label: phonePortrait ? 'Revenue' : 'Revenue (Inc. GST)', align: 'right', priority: 1, cellStyle: { width: phonePortrait ? undefined : '20%' },
+                  render: (v, g) => (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                      {!phonePortrait && (
+                        <div style={{ flex: 1, maxWidth: 60, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${(g.rev / topSubCatMaxRev) * 100}%`, background: C.acc, borderRadius: 3 }} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: phonePortrait ? 0 : 90, justifyContent: 'flex-end', flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: C.t1 }}>{fmt(g.rev)}</span>
+                        <span style={{ fontSize: 9.5, color: C.t3 }}>{totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0'}%</span>
+                      </div>
+                    </div>
+                  ) },
+                { key: 'units', label: 'Units', align: 'right', priority: 2, cellStyle: { color: C.t2 }, render: v => fmtN(v) },
+                { key: 'asp', label: 'ASP', align: 'right', priority: 3, mono: true, cellStyle: { color: C.t2 },
+                  render: (_, g) => g.units > 0 ? `₹${Math.round(g.rev / g.units).toLocaleString('en-IN')}` : '—' },
+                { key: 'returnPct', label: 'Return %', align: 'right', priority: 2,
+                  render: v => <span style={{ fontWeight: 600, color: v !== null ? (v > 15 ? C.red.tx : v > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{v !== null ? `${v.toFixed(1)}%` : '—'}</span> },
+                { key: 'netRev', label: phonePortrait ? 'Net Rev' : 'Net Revenue', align: 'right', priority: 1, mono: true, cellStyle: { color: C.t2 },
+                  render: v => v != null ? fmt(v) : '—' },
+              ]} />
           </WideCard>
           )
         })()}
 
-        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
+        <WideCard span={wide ? 4 : 12} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
@@ -5824,7 +5827,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           {/* Soft gold gradient on the header only (not the dense KPI rows below) — same hero
               treatment used for other "headline number" cards (sales-kpi-hero), so this card reads
               as the section's hero summary rather than a flat white panel. */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid ${C.border}`, borderTopLeftRadius: 14, borderTopRightRadius: 14, background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: phonePortrait ? '16px 14px' : '18px 22px', borderBottom: `1px solid ${C.border}`, borderTopLeftRadius: 14, borderTopRightRadius: 14, background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, display: 'flex', alignItems: 'center' }}>
                 Logistics & Ops Performance
@@ -5857,13 +5860,18 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             // every tile across every row is the same width, whether or not that row fills all 8.
             const STAT_GRID_COLS = 8
             const STAT_COL_WIDTH = 145
+            // 8 × 145px + gaps needs ~1330px of card, which only a ≥1536px screen has: below that the
+            // last tiles were cut off at the card edge (Phase 0 audit: NDR Resolved %, RVP → Del.,
+            // RVP Del. ≤5d hidden even at 1440px). Below 2xl the strip wraps into as many equal
+            // columns as fit instead, without the one-row dividers.
+            const fixedStrip = bp.up('2xl') && !phone
             const StatStrip = ({ items }) => (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '16px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: fixedStrip ? `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)` : `repeat(auto-fill, minmax(${phonePortrait ? 130 : 140}px, 1fr))`, gap: fixedStrip ? '16px 24px' : '18px 20px' }}>
                 {items.map((t, i) => (
                   <div key={t.label} style={{
                     minWidth: 0,
-                    paddingRight: i < items.length - 1 ? 24 : 0,
-                    borderRight: i < items.length - 1 ? `1.5px solid ${C.border2}` : 'none',
+                    paddingRight: fixedStrip && i < items.length - 1 ? 24 : 0,
+                    borderRight: fixedStrip && i < items.length - 1 ? `1.5px solid ${C.border2}` : 'none',
                   }}>
                     {/* minHeight fixed regardless of whether this tile has a sub-line — some do
                         (e.g. SLA Threshold tiles' "n of d" caption) and some don't (Ops Performance
@@ -5879,7 +5887,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               </div>
             )
             const Section = ({ children, first }) => (
-              <div style={{ padding: '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
+              <div style={{ padding: phonePortrait ? '16px 14px' : '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
             )
             return (
             <>
@@ -5959,41 +5967,42 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             (ads:all/d2c/amazon/etc. permission keys), which already has it in full. */}
 
         {deckSectionLabel('State of the Business')}
-        {/* Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
+        {/* 2 columns on a phone, 3 on a tablet / phone in landscape.
+            Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
             on this page) — 5 tiles per group needs its own column count to lay out evenly instead
             of wrapping a 5th tile onto its own half-empty row. */}
-        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 14 }}>
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${phonePortrait ? 2 : (phone || bp.isTablet) ? 3 : 5}, minmax(0,1fr))`, gap: phonePortrait ? 10 : 14 }}>
           <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}` }}>Customer (D2C)</div>
-          <StatTile span={1} label="New Customer Revenue" value={overviewCustData ? fmt(custNewRev) : '—'} />
-          <StatTile span={1} label="Repeat Customer Revenue" value={overviewCustData ? fmt(custRepeatRev) : '—'} />
-          <StatTile span={1} label="LTV (lifetime avg)" value={overviewCustData ? fmt(custLtv) : '—'} />
-          <StatTile span={1} label="Repeat Rate" value={overviewCustData && custKpis.repeatRate != null ? `${(custKpis.repeatRate * 100).toFixed(1)}%` : '—'} sub={!overviewCustData ? 'Loading customer data...' : 'D2C (Shopify) only'} />
-          <StatTile span={1} label="Total Customers" value={overviewCustData ? fmtN(custTotalCustomers) : '—'} sub={overviewCustData ? `${fmtN(custNewCustomers)} new this period` : ''} />
+          <StatTile span={1} compact={phonePortrait} label="New Customer Revenue" value={overviewCustData ? fmt(custNewRev) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="Repeat Customer Revenue" value={overviewCustData ? fmt(custRepeatRev) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="LTV (lifetime avg)" value={overviewCustData ? fmt(custLtv) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="Repeat Rate" value={overviewCustData && custKpis.repeatRate != null ? `${(custKpis.repeatRate * 100).toFixed(1)}%` : '—'} sub={!overviewCustData ? 'Loading customer data...' : 'D2C (Shopify) only'} />
+          <StatTile span={1} compact={phonePortrait} label="Total Customers" value={overviewCustData ? fmtN(custTotalCustomers) : '—'} sub={overviewCustData ? `${fmtN(custNewCustomers)} new this period` : ''} />
 
           {/* Stockout-Risk SKUs previously carried a lone red/green accent bar that no sibling tile
               in this grid had — it read as visually isolated rather than as one consistent deck.
               Colour now lives only in the number itself (same treatment as every other tile here),
               keeping the good/bad signal without the mismatched accent stripe. */}
           <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}`, display: 'flex', alignItems: 'center', gap: 8 }}>Inventory{invSnapshotData?.asOf ? <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: C.t3, fontSize: 10 }}>snapshot as of {new Date(invSnapshotData.asOf).toLocaleString()}</span> : null}</div>
-          <StatTile span={1} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
+          <StatTile span={1} compact={phonePortrait} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
             color={(invSummary.criticalLowCount || 0) > 0 ? C.red.tx : C.green.tx}
             sub="Critical + Low stock status" />
-          <StatTile span={1} label="Dead Stock" value={invSnapshotData ? `${fmtN(invSummary.deadStockUnits || 0)} units` : '—'} sub={invSnapshotData ? `${fmtN(invSummary.deadStockCount || 0)} SKUs, no sale in 90d` : 'Loading inventory snapshot...'} />
-          <StatTile span={1} label="Total Inventory" value={invSnapshotData ? `${fmtN(invSummary.totalInvt || 0)} units` : '—'} sub={invSnapshotData ? `Across ${fmtN(invSummary.skuCount || 0)} SKUs` : ''} />
+          <StatTile span={1} compact={phonePortrait} label="Dead Stock" value={invSnapshotData ? `${fmtN(invSummary.deadStockUnits || 0)} units` : '—'} sub={invSnapshotData ? `${fmtN(invSummary.deadStockCount || 0)} SKUs, no sale in 90d` : 'Loading inventory snapshot...'} />
+          <StatTile span={1} compact={phonePortrait} label="Total Inventory" value={invSnapshotData ? `${fmtN(invSummary.totalInvt || 0)} units` : '—'} sub={invSnapshotData ? `Across ${fmtN(invSummary.skuCount || 0)} SKUs` : ''} />
           {/* Sub-label derives a Critical/Low/Sufficient/Excess band from THIS tile's own 57d-style
               DOI figure (thresholds match api/_inventory_shared.js DOI_BANDS: <=2/<=15/<=45/>45).
               Previously showed invSummary.stockStatus, the single most-common per-SKU status across
               thousands of SKUs (a mode, not derived from the aggregate DOI at all) — e.g. it could
               read "Out of Stock" underneath a healthy 57d aggregate, which is contradictory, not
               just uninformative. */}
-          <StatTile span={1} label="Days of Inventory" value={invSnapshotData && invSummary.doi != null ? `${invSummary.doi}d` : '—'}
+          <StatTile span={1} compact={phonePortrait} label="Days of Inventory" value={invSnapshotData && invSummary.doi != null ? `${invSummary.doi}d` : '—'}
             sub={invSnapshotData && invSummary.doi != null
               ? (invSummary.doi <= 2 ? 'Critical' : invSummary.doi <= 15 ? 'Low' : invSummary.doi <= 45 ? 'Sufficient' : 'Excess')
               : '—'} />
           {/* Weighted-average DOI across the top 20 SKUs by revenue — a stockout on a best-seller
               costs far more than the same status on a long-tail SKU, so this is a sharper read on
               inventory health than the blanket all-SKU aggregate DOI tile above. */}
-          <StatTile span={1} label="DOI — Top 20 SKUs" value={top30SkuDoi ? `${top30SkuDoi.doi}d` : '—'}
+          <StatTile span={1} compact={phonePortrait} label="DOI — Top 20 SKUs" value={top30SkuDoi ? `${top30SkuDoi.doi}d` : '—'}
             color={top30SkuDoi ? (top30SkuDoi.doi <= 2 ? C.red.tx : top30SkuDoi.doi <= 15 ? C.amber.tx : C.green.tx) : C.t1}
             sub={top30SkuDoi ? `Weighted by units, ${top30SkuDoi.matched} of 20 matched` : (invSnapshotData ? 'No match' : 'Loading...')} />
         </div>
@@ -11187,12 +11196,7 @@ function AdsMobCatDropdown({ catOptions, subCatOptions, selCat, selSubCat, setSe
 const ADS_KEY_MAP = { 'All': 'ads:all', 'D2C': 'ads:d2c', 'Amazon': 'ads:amazon', 'Blinkit': 'ads:blinkit', 'Zepto': 'ads:zepto', 'Instamart': 'ads:instamart', 'Flipkart': 'ads:flipkart', 'Myntra': 'ads:myntra', 'CRED': 'ads:cred' }
 function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }) {
   const allowedAdsPlatforms = ADS_PLATFORMS.filter(p => !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id]))
-  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMob(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMob = useIsMobile()
   const ads = data.ads || {}
   const totals = ads.totals || []
   const daily = ads.daily || []
@@ -12304,12 +12308,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 }
 
 function AdsCredView({ data, filters = {} }) {
-  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMob(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMob = useIsMobile()
   const cred = data.cred || {}
   const totals = cred.totals || {}
   const daily = cred.daily || []
@@ -19044,7 +19043,7 @@ function AppInner() {
   // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
   // hanging on LoadingScreen forever with no indication anything is wrong.
   if (profileError) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 16, fontFamily: 'inherit' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'var(--app-h)', gap: 16, fontFamily: 'inherit' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>Couldn't load your profile</div>
       <div style={{ fontSize: 13, color: '#777', maxWidth: 360, textAlign: 'center' }}>This usually means our data service is temporarily unavailable. Please try again in a moment.</div>
       <button onClick={() => { setProfile(null); setProfileError(false); setSession(s => ({ ...s })) }}

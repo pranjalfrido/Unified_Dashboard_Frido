@@ -780,7 +780,7 @@ export default function LogisticsLedgerPage({ onBack }) {
   const chipHot = { background: '#FEF3C7', color: '#92400E', borderColor: '#FDE68A' };
 
   return (
-    <div style={{ padding: '24px 32px 48px', minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
+    <div style={{ padding: '24px 32px 48px', minHeight: 'var(--app-h)', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>

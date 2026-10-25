@@ -1,15 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { C, fmt, fmtN, pct } from '../utils.js'
-
-function useIsMobile() {
-  const [mob, setMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const fn = () => setMob(window.innerWidth <= 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
-  return mob
-}
+import { useIsMobile } from '../responsive/useBreakpoint.js'
 
 function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
   const pts = sparkData.slice(-14).map(v => (v == null || isNaN(v)) ? null : v)

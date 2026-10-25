@@ -625,7 +625,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const tabsChanged = JSON.stringify([...localTabs].sort()) !== JSON.stringify([...permissions].sort())
 
   return (
-    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: 'calc(100vh - 220px)', paddingLeft: 20 }}>
+    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: 'calc(var(--app-h) - 220px)', paddingLeft: 20 }}>
       {/* Member header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
@@ -753,7 +753,7 @@ function TeamMembers({ session, showToast }) {
       ) : (
         <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Left pane — member list */}
-          <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #E7E3D8', paddingRight: 16, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', boxSizing: 'border-box' }}>
+          <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #E7E3D8', paddingRight: 16, maxHeight: 'calc(var(--app-h) - 220px)', overflowY: 'auto', boxSizing: 'border-box' }}>
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: 12 }}>
               <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9BA5A1', pointerEvents: 'none' }}>⌕</span>

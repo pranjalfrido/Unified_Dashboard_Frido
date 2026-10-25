@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
+import { useIsMobile } from '../responsive/useBreakpoint.js'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle,
 } from './theme.jsx'
@@ -883,7 +884,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
         ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
         ...(!popover && open ? {
           position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)',
-          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          height: 'calc(var(--app-h) - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
           borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
@@ -1184,12 +1185,7 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
 }
 
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const searchDebounceRef = useRef(null)
   const handleSearchChange = useCallback(e => {

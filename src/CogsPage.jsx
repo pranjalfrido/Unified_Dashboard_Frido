@@ -496,7 +496,7 @@ export default function CogsPage({ onBack }) {
   );
 
   return (
-    <div style={{ padding: '24px 32px 48px', minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
+    <div style={{ padding: '24px 32px 48px', minHeight: 'var(--app-h)', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
       <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
 
       {/* Header */}

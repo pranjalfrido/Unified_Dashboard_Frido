@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
+import { useIsMobile } from '../responsive/useBreakpoint.js'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -170,7 +171,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
         ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
         ...(!popover && open ? {
           position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)',
-          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          height: 'calc(var(--app-h) - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
           borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>
@@ -324,12 +325,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
 }
 
 export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [channelMetric, setChannelMetric] = useState('qty') // 'rev' | 'qty' — Channel-Wise Sales bar list

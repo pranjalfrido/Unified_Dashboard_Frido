@@ -5,7 +5,15 @@
 @tailwind utilities;
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-button,select,input{touch-action:manipulation}
+/* touch-action:manipulation removes the old 300ms tap delay WITHOUT disabling pinch-zoom (the
+   viewport meta no longer sets user-scalable=no). Covers the app's clickable divs too. */
+a,button,select,input,textarea,label,summary,[role=button],[role=tab],[role=menuitem],.sb-item,.bn-item,.card-hoverable,.tnav-btn{touch-action:manipulation}
+
+/* Full-height shell. 100vh on iOS/Android includes the area under the collapsing address bar,
+   so content (the bottom nav, the last table row) hid behind it; dvh tracks the visible height.
+   Use var(--app-h) wherever 100vh was used. */
+:root{--app-h:100vh;--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}
+@supports (height:100dvh){:root{--app-h:100dvh}}
 
 /* ── Theme tokens ───────────────────────────────────────────────
    Colour lives per-theme; everything structural (elevation, radii, type,
@@ -91,7 +99,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 ::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
 
 /* ── App shell ─────────────────────────────── */
-.app-shell{display:flex;height:100vh;overflow:hidden;background:var(--bg)}
+.app-shell{display:flex;height:var(--app-h);overflow:hidden;background:var(--bg)}
 .app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
 
 /* ── Sidebar (desktop) ─────────────────────── */
@@ -122,7 +130,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* ── Bottom nav (mobile) ───────────────────── */
 .bottom-nav{
   display:none;position:fixed;bottom:0;left:0;right:0;
-  height:var(--bot);background:var(--card);border-top:1px solid var(--b1);
+  /* Grows by the home-indicator inset so its icons sit above it, not under it. */
+  height:calc(var(--bot) + var(--safe-bottom));padding-bottom:var(--safe-bottom);
+  padding-left:var(--safe-left);padding-right:var(--safe-right);
+  background:var(--card);border-top:1px solid var(--b1);
   z-index:50;
 }
 .bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 2px;overflow:hidden}
@@ -313,7 +324,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .profile-fields-row{ flex-direction:column !important; align-items:flex-start !important; gap:12px !important }
   .profile-fields-row > div:last-child{ min-width:0 !important; width:100% !important }
   .profile-avatar-col{ flex-direction:row !important; align-items:center !important; gap:14px !important; width:100% !important }
-  .profile-section input{ padding:8px 11px !important; font-size:13px !important }
+  .profile-section input{ padding:8px 11px !important; font-size:16px !important }
   .profile-section label{ font-size:11.5px !important; margin-bottom:4px !important }
   .profile-section > div > div{ gap:10px !important }
   .tnav-mob-only{ display:flex !important }
@@ -337,9 +348,9 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .ads-cat-prod-section > .kpi-card:last-child{ height:auto !important; max-height:600px !important }
   .ads-by-product-card{ height:auto !important; max-height:600px !important; flex:none !important; overflow:visible !important }
 
-  .app-main{ padding-bottom:var(--bot) }
+  .app-main{ padding-bottom:calc(var(--bot) + var(--safe-bottom)) }
 
-  .topnav{ padding:0 12px; gap:6px }
+  .topnav{ padding:0 max(12px, var(--safe-right)) 0 max(12px, var(--safe-left)); gap:6px }
   .tnav-sub{ display:none }
   .tnav-sep{ display:none }
   .tnav-preset{ display:none }
@@ -451,7 +462,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .inv-filter-drawer{
     position:fixed !important; top:var(--nav) !important; left:0 !important;
     width:85vw !important; min-width:85vw !important; max-width:320px !important;
-    height:calc(100vh - var(--nav) - var(--bot)) !important;
+    height:calc(var(--app-h) - var(--nav) - var(--bot) - var(--safe-bottom)) !important;
     z-index:200 !important; box-shadow:4px 0 24px rgba(0,0,0,0.18) !important;
     overflow-y:auto !important; overflow-x:hidden !important;
   }
@@ -960,3 +971,33 @@ svg text, svg tspan{
 .flash-table-download{ background:none; border:1px solid var(--accent,#7c6fff); color:var(--accent,#7c6fff); font-size:11px; border-radius:6px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
 .flash-table-download:hover{ background:var(--accent,#7c6fff); color:#fff; }
 .flash-timing{ font-size:10px; color:var(--t3); margin:4px 0 0; }
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE FOUNDATION (Phase 1)
+   ══════════════════════════════════════════════ */
+
+/* iOS zooms the page into any focused field under 16px. Touch screens only, so the desktop
+   look is unchanged; !important beats the inline fontSize most inputs here carry. */
+@media (hover:none) and (pointer:coarse){
+  html:root body input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  html:root body select,
+  html:root body textarea{ font-size:16px !important }
+}
+
+/* Phone in landscape (wider than 768px, so it used to get the full desktop shell with a sidebar
+   whose items ran off the bottom of a 360-390px-tall screen). Keep a rail - it costs width, which
+   landscape has, instead of height, which it does not - but slim it to icons only and let it
+   scroll, and keep content clear of the notch. Same query as useBreakpoint().isPhoneLandscape. */
+@media (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  :root{ --sb:56px; --nav:42px }
+  .sidebar{ width:calc(var(--sb) + var(--safe-left)); padding:6px 0 6px var(--safe-left); overflow-y:auto; overflow-x:hidden; scrollbar-width:none }
+  .sidebar::-webkit-scrollbar{ display:none }
+  .sb-item{ width:44px; min-height:44px; padding:6px 0; flex-shrink:0 }
+  .sb-item .sb-label{ display:none }
+  .sb-sep{ margin:3px auto }
+  .topnav{ padding-right:max(12px, var(--safe-right)) }
+  .page-scroll{ padding:12px max(12px, var(--safe-right)) 12px 12px }
+}
+
+/* Chart legend chips scroll sideways on phones; hide the scrollbar track. */
+.chart-legend-chips::-webkit-scrollbar{ display:none }

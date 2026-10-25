@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useIsMobile } from './responsive/useBreakpoint.js'
 import { createPortal } from 'react-dom'
 import { IC, getDefaultDates, DateRangeControl, PillToggle } from './inventory/theme.jsx'
 import LoadingOverlay from './LoadingOverlay.jsx'
@@ -361,12 +362,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
 }
 
 export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
   const [healthFilters, setHealthFilters] = useState({})
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
