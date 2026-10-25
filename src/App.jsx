@@ -19655,7 +19655,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
-          const r = await fetch(`${API}/pnl-data.json`)
+          // Relative path, NOT ${API}-prefixed — this is a static file in public/, served by the
+          // frontend's own origin (Vite/Vercel CDN), never by the API server. Prefixing it with
+          // API (VITE_API_URL) sent this request to the wrong host in local dev (API server runs
+          // on a different port than the static file host), 404-ing every page load — harmless in
+          // production only because Vercel happens to serve both from the same domain there.
+          const r = await fetch('/pnl-data.json')
           if (r.ok) pnlCacheRef.current = await r.json()
         }
         const c = pnlCacheRef.current
@@ -19671,7 +19676,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // Last Month static cache
       try {
         if (!pnlCacheRef.lastMonth) {
-          const r = await fetch(`${API}/pnl-data-lastmonth.json`)
+          // Same fix as pnl-data.json above — relative path, not API-prefixed.
+          const r = await fetch('/pnl-data-lastmonth.json')
           if (r.ok) pnlCacheRef.lastMonth = await r.json()
         }
         const lm = pnlCacheRef.lastMonth
@@ -19861,7 +19867,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           setAdsCachedChMap(null)
           return
         }
-        const res = await fetch(`${API}/ads-data.json`)
+        // Same fix as pnl-data.json/pnl-data-lastmonth.json — relative path, not API-prefixed.
+        // This is a static file in public/, served by the frontend's own origin, never the API
+        // server; prefixing it with API (VITE_API_URL) 404'd every page load in local dev.
+        const res = await fetch('/ads-data.json')
         if (!res.ok) return
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
