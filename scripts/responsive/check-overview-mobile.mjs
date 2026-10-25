@@ -19,13 +19,6 @@ const text = loc => loc.innerText().then(t => t.replace(/\s+/g, ' ').trim())
 
 const vp = VIEWPORTS.find(v => v.name === vpName)
 const { browser, ctx } = await launch(vp)
-// Start from the default open/closed state - once per test run only (sessionStorage flag), so the
-// reload check at the end still sees what the user chose.
-await ctx.addInitScript(() => {
-  if (sessionStorage.getItem('check.sectionsReset')) return
-  for (const k of Object.keys(localStorage)) if (k.startsWith('ui.section.')) localStorage.removeItem(k)
-  sessionStorage.setItem('check.sectionsReset', '1')
-})
 const page = await ctx.newPage()
 const apiPosts = []
 page.on('request', r => { if (r.method() === 'POST' && /\/api\//.test(r.url())) apiPosts.push({ path: new URL(r.url()).pathname, body: r.postData() || '' }) })
@@ -34,13 +27,6 @@ await waitStableText(page)
 const cdp = await ctx.newCDPSession(page)
 const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
 const hero = () => page.locator('[aria-live="polite"]').first().innerText().then(t => t.replace(/\s+/g, ' ').trim())
-
-// 1. Section defaults + summaries
-const heads = await page.evaluate(() => [...document.querySelectorAll('section > button[aria-expanded]')].map(b => ({ title: b.innerText.split('\n')[0], open: b.getAttribute('aria-expanded') === 'true', summary: b.innerText.split('\n')[1] || '' })))
-check('sections: Sales Trend + Where Revenue open, Logistics + Business closed', heads.length === 4 && heads[0].open && heads[1].open && !heads[2].open && !heads[3].open, heads.map(h => `${h.title}:${h.open ? 'open' : 'closed'}`).join(', '))
-check('collapsed summaries use page values', /shipments · [\d.]+% delivered/.test(heads[2]?.summary) && /customers · [\d,]+ stockout-risk SKUs/.test(heads[3]?.summary), `"${heads[2]?.summary}" | "${heads[3]?.summary}"`)
-const prevLogWhileClosed = apiPosts.filter(p => p.path === '/api/logistics' && p.body.includes('"2026-08-02"')).length
-check('lazy: no previous-period logistics request while that section is closed', prevLogWhileClosed === 0, `${prevLogWhileClosed} request(s)`)
 
 // 2. First screen (iPhone SE target): hero + chart + chips above the bottom nav
 const fit = await page.evaluate(() => { const c = document.querySelector('.trend-chip-row')?.getBoundingClientRect(); const n = document.querySelector('.bottom-nav')?.getBoundingClientRect(); return { chips: Math.round(c?.bottom), nav: Math.round(n ? n.top : innerHeight) } })
@@ -99,8 +85,7 @@ await shot(page, '3-sheet')
 await page.goBack(); await page.waitForTimeout(400)
 check('Back closes the sheet and stays on Overview', (await page.getByRole('dialog').count()) === 0 && /\/overview$/.test(page.url()))
 
-// 7. Logistics: open, Speed & SLA tabs, definition popover
-await page.getByRole('button', { name: /^Logistics & Ops/ }).click(); await page.waitForTimeout(1500)
+// 7. Logistics: Speed & SLA tabs, definition popover
 const tabs = {}
 for (const t of ['Forward', 'RTO', 'Reverse']) { await page.getByRole('tab', { name: t }).tap(); await page.waitForTimeout(150); tabs[t] = await text(page.getByRole('tabpanel')) }
 const tatCount = Object.values(tabs).join(' ').match(/\d+\.\dd/g)?.length
@@ -111,11 +96,7 @@ const pop = await text(page.getByRole('dialog'))
 check('tile tap shows its definition', /first attempt/i.test(pop), pop)
 await shot(page, '4-popover')
 await page.mouse.click(5, 5)
-const prevLogAfterOpen = apiPosts.filter(p => p.path === '/api/logistics' && p.body.includes('"2026-08-02"')).length
-check('lazy: opening Logistics starts its previous-period request', prevLogAfterOpen === 1, `${prevLogAfterOpen} request(s)`)
-
-// 8. State of the Business: open, inventory alert rows navigate
-await page.getByRole('button', { name: /^State of the Business/ }).click(); await page.waitForTimeout(1000)
+// 8. State of the Business: inventory alert rows navigate
 await shot(page, '5-business')
 await page.getByRole('button', { name: /^Stockout risk/ }).tap()
 await page.waitForURL(/\/inventory\/inventory_health$/, { timeout: 30000 })
@@ -129,13 +110,6 @@ await page.waitForURL(/\/inventory\/inventory_health$/)
 await page.getByText('Inventory Detail', { exact: true }).waitFor({ timeout: 240000 }); await page.waitForTimeout(2500)
 const dead = await page.evaluate(() => { const el = document.getElementById('inv-dead-stock'); const r = el?.getBoundingClientRect(); return r ? { top: Math.round(r.top), vh: innerHeight } : null })
 check('Dead stock opens Inventory Health scrolled to the dead-stock list', dead && dead.top >= 0 && dead.top < dead.vh, JSON.stringify(dead))
-
-// 9. Remembered after reload
-await page.goBack(); await page.waitForURL(/\/overview$/); await waitStableText(page)
-await page.getByRole('button', { name: /^Where Revenue Came From/ }).click()
-await page.reload({ waitUntil: 'networkidle' }); await waitStableText(page)
-const after = await page.evaluate(() => [...document.querySelectorAll('section > button[aria-expanded]')].map(b => b.getAttribute('aria-expanded') === 'true'))
-check('open/closed choices are remembered after reload', JSON.stringify(after) === JSON.stringify([true, false, true, true]), JSON.stringify(after))
 
 await browser.close()
 console.log(fails ? `\n${fails} FAILED` : '\nall checks passed')

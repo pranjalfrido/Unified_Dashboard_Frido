@@ -38,8 +38,6 @@ import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
 import { pctChange, fmtDateRange, fmtUpdated } from './responsive/format.js'
 import MobileRankedList from './responsive/MobileRankedList.jsx'
-import CollapsibleSection from './responsive/CollapsibleSection.jsx'
-import { useCollapsible } from './responsive/useCollapsible.js'
 import { metricStatus, statusColor } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
@@ -5254,12 +5252,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // The mobile Overview redesign (docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md): every width
   // below 1024px, which also covers phones in landscape. 1024px and up keeps the desktop layout as is.
   const ovMobile = bp.width < 1024 || bp.isPhoneLandscape
-  // Collapsible sections (mobile only): Sales Trend + Where Revenue Came From open by default, the
-  // rest closed; each user's choice is remembered (responsive/useCollapsible.js).
-  const [secTrendOpen, toggleSecTrend] = useCollapsible('overview.salesTrend', true)
-  const [secWhereOpen, toggleSecWhere] = useCollapsible('overview.whereRevenue', true)
-  const [secLogOpen, toggleSecLog] = useCollapsible('overview.logistics', false)
-  const [secBizOpen, toggleSecBiz] = useCollapsible('overview.business', false)
   const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
@@ -5536,7 +5528,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const prevSalesRange = prevRange(filters?.start, filters?.end)
   const filterSig = Object.fromEntries(Object.entries(filters || {}).filter(([k]) => k !== 'start' && k !== 'end'))
   const salesPrev = usePrevPeriod(
-    ovMobile && secTrendOpen && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
+    ovMobile && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
     async () => {
       const d = await prevLoaders.sales(prevSalesRange.start, prevSalesRange.end)
       const m = salesMetrics(d)
@@ -5598,7 +5590,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // the same /api/logistics request and run through the same logisticsMetrics().
   const prevLogRange = logRangeM ? prevRange(logRangeM.start, logRangeM.end) : null
   const logPrev = usePrevPeriod(
-    ovMobile && secLogOpen && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
+    ovMobile && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
     async () => {
       const x = logisticsMetrics(await prevLoaders.logistics(prevLogRange.start, prevLogRange.end))
       return { range: prevLogRange, lTotal: x.lTotal, lDelPct: x.lDelPct, lRtoPct: x.lRtoPct, lZRtoPct: x.lZRtoPct, lNdrPct: x.lNdrPct, lNdrResolvedPct: x.lNdrResolvedPct, lFasr: x.lFasr, lRasr: x.lRasr, lSlaPct: x.lSlaPct }
@@ -5611,7 +5603,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // /api/customer request is made for the previous range and only its ltv12 is kept.
   const custPrevRange = prevRange(filters?.start, filters?.end)
   const ltvPrev = usePrevPeriod(
-    ovMobile && secBizOpen && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
+    ovMobile && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
     async () => {
       const x = await prevLoaders.customer(custPrevRange.start, custPrevRange.end)
       const cm = customerMetrics(x)
@@ -5626,9 +5618,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
   // ── Mobile layout (< 1024px, and phones in landscape) ──
   // docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md: the same values as the desktop deck below,
-  // regrouped into collapsible sections (responsive/CollapsibleSection.jsx). Closed sections render
-  // nothing and start no previous-period request until opened. 1024px and up returns the desktop
-  // deck further down, unchanged.
+  // regrouped into mobile cards, all shown (no collapsible sections - removed at the user's request).
+  // 1024px and up returns the desktop deck further down, unchanged.
   const renderProductListMobile = () => {
     // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
     // (Others excluded, as in the table), same cell values; it has its own 🔍 search.
@@ -5665,42 +5656,32 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
   if (ovMobile) {
     const twoUp = bp.isPhoneLandscape || bp.isTablet
-    const topCh = sortedCh[0]
-    const chName = ch => (ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch)
+    // Plain section labels (not collapsible): every section is always shown.
     return (
       <div className="ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
-        <CollapsibleSection title="Sales Trend" open={secTrendOpen} onToggle={toggleSecTrend}
-          summary={`${fmt(totalRev)} gross revenue · ${fmtN(nOrders)} orders`}>
-          <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
-            layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
-        </CollapsibleSection>
+        <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+          layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
 
-        <CollapsibleSection title="Where Revenue Came From" open={secWhereOpen} onToggle={toggleSecWhere}
-          summary={`${sortedCh.length} channels${topCh && totalRev > 0 ? ` · ${chName(topCh[0])} ${(topCh[1].rev / totalRev * 100).toFixed(1)}% of revenue` : ''}`}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
-            <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
-            {topProductsBySubCat.length > 0 && renderProductListMobile()}
-            <div style={{ background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1, overflow: 'hidden' }}>
-              {secHdr('Top States', 'By revenue · tap the map for cities')}
-              <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
-            </div>
+        {deckSectionLabel('Where Revenue Came From')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
+          <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
+          {topProductsBySubCat.length > 0 && renderProductListMobile()}
+          <div style={{ background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1, overflow: 'hidden' }}>
+            {secHdr('Top States', 'By revenue · tap the map for cities')}
+            <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
           </div>
-        </CollapsibleSection>
+        </div>
 
-        <CollapsibleSection title="Logistics & Ops" open={secLogOpen} onToggle={toggleSecLog}
-          summary={logisticsData ? `${fmtN(lTotal)} shipments · ${lDelPct.toFixed(1)}% delivered` : 'Loading…'}>
-          <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge} showTitle={false}
-            info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
-        </CollapsibleSection>
+        {/* One title for this section: the card's own "Logistics & Ops" heading. */}
+        <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge}
+          info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
 
-        <CollapsibleSection title="State of the Business" open={secBizOpen} onToggle={toggleSecBiz}
-          summary={`${overviewCustData ? `${fmtN(custTotalCustomers)} customers` : 'Customers loading'} · ${invSnapshotData ? `${fmtN(invSummary.criticalLowCount || 0)} stockout-risk SKUs` : 'inventory loading'}`}>
-          <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
-            custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
-            inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
-              totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
-            invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={twoUp} />
-        </CollapsibleSection>
+        {deckSectionLabel('State of the Business')}
+        <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
+          custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
+          inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
+            totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
+          invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={twoUp} />
       </div>
     )
   }
