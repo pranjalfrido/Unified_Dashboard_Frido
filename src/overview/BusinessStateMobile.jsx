@@ -36,7 +36,7 @@ function SmallTile({ k, value, note, delta, loading, hidden }) {
   const meta = METRICS[k]
   return (
     <InfoPopover asChild title={meta.label} text={meta.def}
-      style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '18px auto 18px auto', rowGap: 2 }}>
+      style={{ background: C.hov, borderRadius: 12, padding: '10px 10px', minWidth: 0, display: 'grid', gridTemplateRows: '18px 24px 18px auto', rowGap: 2 }}>
       <span style={{ fontSize: 12, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
       <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       <div style={{ minHeight: 18 }}><DeltaBadge delta={delta} loading={loading} hidden={hidden} size={12} /></div>
@@ -90,9 +90,12 @@ export default function BusinessStateMobile({ cust, custPrevKpis, ltvPrev, ltvPr
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginTop: 14 }}>
         <SmallTile k="customers" value={loaded ? fmtN(custTotalCustomers) : '—'} note={loaded ? `${fmtN(custNewCustomers)} new` : ''}
           delta={pctChange(custTotalCustomers, custPrevKpis?.totalCustomers)} loading={loading} hidden={hidden} />
+        {/* Every tile carries a note line, so the three read as one even row (not one tall tile
+            beside two with an empty band): new customers, repeat customers, LTV's window. */}
         <SmallTile k="repeatRate" value={loaded && repeatRate != null ? `${(repeatRate * 100).toFixed(1)}%` : '—'}
+          note={loaded && custKpis.returningCustomers != null ? `${fmtN(custKpis.returningCustomers)} repeat` : ''}
           delta={pctChange(repeatRate, custPrevKpis?.repeatRate)} loading={loading} hidden={hidden} />
-        <SmallTile k="ltv" value={loaded ? fmt(custLtv) : '—'}
+        <SmallTile k="ltv" value={loaded ? fmt(custLtv) : '—'} note={loaded ? '12-month avg' : ''}
           delta={pctChange(custLtv, ltvPrev)} loading={loading} hidden={hidden} />
       </div>
     </Card>
