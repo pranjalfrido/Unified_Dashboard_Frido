@@ -83,6 +83,11 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 - [ ] Numbers identical to desktop/baseline
 - [ ] Laptop 1366 screenshot unchanged
 - [ ] Screenshots iPhone SE / 14 / Pixel / small Android / landscape / iPad portrait
+- [ ] WebKit (iPhone) checks pass: screenshots, overflow, palette and "no resize on touch" on
+      Playwright WebKit with the iPhone SE / iPhone 14 (+ landscape) device profiles (isMobile + hasTouch);
+      `RESPONSIVE_ENGINE=webkit` with the scripts in `scripts/responsive/` (check-touch, check-palette,
+      check-nav-header, …). Report Chromium vs WebKit differences; fix WebKit-only issues in the shared
+      components.
 
 ## 6. Order of pages
 Overview (with alignment addendum) → Sales → P&L (+ Financial MIS) → Ads → Inventory → Logistics → Customer → Profile → internal tools (usable level: COGS, Packaging BOM, ledgers, Courier Allocation, Documents, P&L calculators) → FLASH (minimal; replaced by Ask Frido later).
