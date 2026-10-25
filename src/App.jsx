@@ -30,6 +30,7 @@ import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
+import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
 import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
@@ -5563,6 +5564,21 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
       valueColor: statusColor(metricStatus('returnPct', totalReturnPct)) || undefined },
   ]
 
+  // Channel Scorecard, mobile: the desktop cards' own per-channel figures, pre-formatted.
+  const scorecardChannels = sortedCh.map(([ch, v]) => {
+    const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
+    const prevChRev = data.prevChMap?.[ch]?.rev || 0
+    const aov = v.orders ? v.rev / v.orders : 0
+    return {
+      key: ch, name: ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch,
+      logo: CHANNEL_LOGOS[ch], color: C.ch[ch] || C.acc,
+      value: fmt(v.rev), delta: prevChRev > 0 ? (v.rev - prevChRev) / prevChRev * 100 : null,
+      sharePct, shareText: `${sharePct.toFixed(1)}% of revenue · ${fmtN(v.orders)} orders`,
+      netRev: v.netRev != null ? fmt(v.netRev) : '—', aov: v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—',
+      returnPct: chReturnPctMap[ch] ?? null,
+    }
+  })
+
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
@@ -5651,6 +5667,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             wall of traffic lights) — the deck itself reads as a unified "channel" identity, while
             performance direction stays legible via the small arrow next to each revenue figure.
             AOV + Return% brought back into a compact footer row per "more important details". */}
+        {ovMobile ? (
+          <div style={{ gridColumn: '1 / -1' }}><ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} /></div>
+        ) : (
         <WideCard span={12}>
           {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
           {/* Six-across was squeezed to unreadable slivers below desktop width (Phase 0: "Channel
@@ -5704,6 +5723,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             })}
           </div>
         </WideCard>
+        )}
 
         {topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
