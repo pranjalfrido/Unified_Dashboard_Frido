@@ -32,6 +32,7 @@ import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
+import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
 import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
@@ -5035,7 +5036,9 @@ const INDIA_TOPOJSON = '/india-states.json'
 // guessing scale/center by eye and kept clipping the northeast / leaving dead whitespace.
 // fitSize computes the exact scale+translate needed to fill the given box, so this can't drift
 // out of frame regardless of container size.
-function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
+// tint / hideTop5: the mobile Overview draws the map in the mobile palette's green and lists the
+// states under it (TopStatesMobile), so the Top-5 overlay is dropped there. Defaults = desktop.
+function IndiaChoropleth({ stateMap, totalRev, cityRows = [], tint = C.acc, hideTop5 = false }) {
   const [hovered, setHovered] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [geoData, setGeoData] = useState(null)
@@ -5078,7 +5081,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
             <path
               key={i}
               d={geoData.path(f)}
-              fill={isHovered ? C.acm : rev > 0 ? C.acc : C.bg}
+              fill={isHovered ? (tint === C.acc ? C.acm : tint) : rev > 0 ? tint : C.bg}
               fillOpacity={isHovered ? 0.95 : rev > 0 ? intensity : 1}
               stroke={C.card}
               strokeWidth={0.5}
@@ -5112,7 +5115,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
       )}
       {/* Static top-5 legend, bottom-right — fills otherwise-empty space south of the peninsula
           and stays visible without needing to hover each state one at a time. */}
-      <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
+      {!hideTop5 && <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
         <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 3 }}>Top 5 States</div>
         {top5States.map(([name, v], i) => (
           <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
@@ -5120,10 +5123,10 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
             <span style={{ fontFamily: 'var(--mono)', color: C.t1, fontWeight: 600 }}>{fmt(v.rev)}</span>
           </div>
         ))}
-      </div>
+      </div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: 9.5, color: C.t3 }}>
         <span>Low</span>
-        <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${C.acc}1F, ${C.acc})` }} />
+        <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${tint}1F, ${tint})` }} />
         <span>High</span>
       </div>
     </div>
@@ -5648,10 +5651,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
           {topProductsBySubCat.length > 0 && renderProductListMobile()}
-          <div style={{ background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1, overflow: 'hidden' }}>
-            {secHdr('Top States', 'By revenue · tap the map for cities')}
-            <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
-          </div>
+          <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
+            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} tint={C.m.green} hideTop5 />} />
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
