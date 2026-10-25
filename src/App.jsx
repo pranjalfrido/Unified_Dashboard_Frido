@@ -30,6 +30,7 @@ import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import MasterTrendCard from './responsive/MasterTrendCard.jsx'
+import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
 import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
@@ -3542,51 +3543,48 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
   )
 }
 
-// ── Bottom Nav (mobile) ───────────────────────────────────────
+// ── Bottom Nav (phones: ≤768px and phone landscape) ─────────────
+// Same permission rules as the Sidebar. The first four allowed of Overview / Sales / P&L / Inventory
+// sit in the bar; everything else (Ads, Logistics, Customer, Documents, FLASH, Profile) is in "More".
 function BottomNav({ page, setPage, allowedTabs, profile }) {
-  const allItems = [
-    { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
-    { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
-    { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
-    { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
-    { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
-  ]
-  return (
-    <nav className="bottom-nav">
-      <div className="bottom-nav-inner">
-        {allItems.map(item => {
-          const allowed = item.id === 'sales' ? hasSalesAccess(allowedTabs) :
-            item.id === 'ads' ? hasAdsAccess(allowedTabs) :
-            item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
-            item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
-            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
-            item.id === 'customer' ? (!allowedTabs || allowedTabs.includes('customer') || allowedTabs.includes('customer:support')) :
-            !allowedTabs || allowedTabs.includes(item.id)
-          const isActive = page === item.id
-          return (
-            <div key={item.id}
-              onClick={() => allowed && setPage(item.id)}
-              className={`bn-item${isActive ? ' active' : ''}`}
-              style={{ opacity: allowed ? 1 : 0.3, cursor: allowed ? 'pointer' : 'default' }}>
-              <span className="bn-icon">{item.icon}</span>
-              <span className="bn-label">{item.label}</span>
-            </div>
-          )
-        })}
-        <div onClick={() => setPage('profile')} className={`bn-item${page === 'profile' ? ' active' : ''}`}>
-          <span className="bn-icon">
-            {profile?.avatar_url
-              ? <img src={profile.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
-              : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            }
-          </span>
-          <span className="bn-label">Profile</span>
-        </div>
-      </div>
-    </nav>
-  )
+  const ic = Icon => <Icon size={22} />
+  const can = id => {
+    if (!allowedTabs) return true
+    if (id === 'sales') return hasSalesAccess(allowedTabs)
+    if (id === 'ads') return hasAdsAccess(allowedTabs)
+    if (id === 'pnl') return hasPnlAccess(allowedTabs)
+    if (id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
+    if (id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
+    if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
+    return allowedTabs.includes(id)
+  }
+  const all = [
+    { id: 'overview', label: 'Overview', icon: ic(SquaresFour) },
+    { id: 'sales', label: 'Sales', icon: ic(ChartBar) },
+    { id: 'pnl', label: 'P&L', icon: ic(TrendUp) },
+    { id: 'inventory', label: 'Inventory', icon: ic(Cube) },
+    { id: 'ads', label: 'Ads', icon: ic(PlayCircle) },
+    { id: 'logistics', label: 'Logistics', icon: ic(Truck) },
+    { id: 'customer', label: 'Customer', icon: ic(Users) },
+    { id: 'documents', label: 'Documents', icon: ic(FileText) },
+    { id: 'flash', label: 'FLASH', icon: <span style={{ fontSize: 20, lineHeight: 1 }}>⚡</span> },
+  ].filter(i => can(i.id))
+  const primaryIds = ['overview', 'sales', 'pnl', 'inventory']
+  const primary = all.filter(i => primaryIds.includes(i.id))
+  const more = [...all.filter(i => !primaryIds.includes(i.id)), {
+    id: 'profile', label: profile?.name?.split(' ')[0] || 'Profile',
+    icon: profile?.avatar_url
+      ? <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+      : <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  }]
+  // Sub-pages light up their parent; Logistics / Customer open the sub-page this user may see.
+  const active = page === 'logistics-cost' || page === 'courier-allocation' ? 'logistics' : page === 'customer-support' ? 'customer' : page
+  const onSelect = id => {
+    if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
+    if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
+    setPage(id)
+  }
+  return <MobileBottomNav primary={primary} more={more} active={active} onSelect={onSelect} />
 }
 
 // ── Topnav ─────────────────────────────────────────────────────
@@ -3833,14 +3831,14 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   return (
     <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
       {/* Trigger button */}
-      <button ref={btnRef} onClick={openPicker}
+      <button ref={btnRef} onClick={openPicker} className="drp-trigger"
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
         {calIcon}
         {displayLabel}
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
       {onRefresh && !isMobile && (
-        <button onClick={onRefresh} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
+        <button onClick={onRefresh} className="drp-refresh" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span>
           Refresh
         </button>
@@ -4961,13 +4959,15 @@ function AlertsBell({ alerts }) {
         ref={btnRef}
         onClick={() => setOpen(v => !v)}
         aria-label="Alerts"
+        className="alerts-bell-btn"
         style={{
           position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.border}`,
           background: open ? C.bg : C.card, cursor: 'pointer', fontSize: 16, color: C.t2,
         }}
       >
-        🔔
+        <span className="bell-emoji">🔔</span>
+        <svg className="bell-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         {alerts.length > 0 && (
           <span style={{
             position: 'absolute', top: -5, right: -5, minWidth: 16, height: 16, padding: '0 3px',

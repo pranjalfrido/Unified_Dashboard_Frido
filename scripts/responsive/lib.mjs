@@ -1,7 +1,7 @@
 // Shared Playwright helpers for the responsive-overhaul verification scripts (docs/responsive/).
 // Requires: npm run server (API on :3001), npm run dev (Vite on 127.0.0.1:5173), and a saved
 // session at docs/responsive/.auth/auth.json (scripts/save-auth.mjs; gitignored, never commit).
-import { chromium } from 'playwright'
+import { chromium, webkit, devices } from 'playwright'
 import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -34,9 +34,18 @@ export const VIEWPORTS = [
 const DATE_LABEL = /\d{1,2}\s+[A-Z][a-z]{2,3}(\s+\d{4})?\s*(→|–|-)\s*\d{1,2}\s+[A-Z][a-z]{2,3}/
 const SEPT_LABEL = /1\s+Sept?(\s+2026)?\s*(→|–|-)\s*30\s+Sept?/
 
+// RESPONSIVE_ENGINE=webkit runs the same checks on WebKit (Safari's engine). For the iPhone viewports
+// it uses Playwright's real device profiles (Safari user agent, isMobile, hasTouch, device pixel
+// ratio), so iOS-specific behaviour shows up; screenshots are kept at 1x so they compare with
+// Chromium's.
+export const ENGINE = process.env.RESPONSIVE_ENGINE === 'webkit' ? 'webkit' : 'chromium'
+const IOS_PROFILES = { 'iphoneSE-375x667': 'iPhone SE', 'iphone14-390x844': 'iPhone 14', 'iphone14-landscape-844x390': 'iPhone 14 landscape' }
+
 export async function launch(viewport = VIEWPORTS[1]) {
-  const browser = await chromium.launch()
+  const browser = await (ENGINE === 'webkit' ? webkit : chromium).launch()
+  const profile = ENGINE === 'webkit' && IOS_PROFILES[viewport.name] ? devices[IOS_PROFILES[viewport.name]] : null
   const ctx = await browser.newContext({
+    ...(profile || {}),
     storageState: AUTH_FILE,
     viewport: { width: viewport.width, height: viewport.height },
     isMobile: !!viewport.mobile,

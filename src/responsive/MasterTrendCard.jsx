@@ -115,7 +115,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
 
   const cols = layout === 'tablet' ? 3 : 2
   const tiles = (
-    <div role="group" aria-label="Choose metric" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
+    <div role="group" aria-label="Choose metric" className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
       {metrics.map(x => (
         <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.value} delta={x.delta} deltaLoading={x.deltaLoading} deltaHidden={x.deltasHidden}
           lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient selected={x.key === m.key}
@@ -125,7 +125,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
   )
 
   return (
-    <div style={{ background: M.masterGrad, border: `1px solid ${M.masterBorder}`, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow, overflow: 'hidden' }}>
+    <div className="master-card" style={{ background: M.masterGrad, border: `1px solid ${M.masterBorder}`, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow, overflow: 'hidden' }}>
       {layout === 'landscape'
         ? <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}><div>{hero}{chart}</div>{tiles}</div>
         : <>{hero}{chart}{tiles}</>}

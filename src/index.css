@@ -985,18 +985,16 @@ svg text, svg tspan{
 }
 
 /* Phone in landscape (wider than 768px, so it used to get the full desktop shell with a sidebar
-   whose items ran off the bottom of a 360-390px-tall screen). Keep a rail - it costs width, which
-   landscape has, instead of height, which it does not - but slim it to icons only and let it
-   scroll, and keep content clear of the notch. Same query as useBreakpoint().isPhoneLandscape. */
+   whose items ran off the bottom of a 360-390px-tall screen). Same navigation as phone portrait:
+   no sidebar, the labelled bottom nav (slimmer, height is scarce), content clear of the notch.
+   Same query as useBreakpoint().isPhoneLandscape. */
 @media (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  :root{ --sb:56px; --nav:42px }
-  .sidebar{ width:calc(var(--sb) + var(--safe-left)); padding:6px 0 6px var(--safe-left); overflow-y:auto; overflow-x:hidden; scrollbar-width:none }
-  .sidebar::-webkit-scrollbar{ display:none }
-  .sb-item{ width:44px; min-height:44px; padding:6px 0; flex-shrink:0 }
-  .sb-item .sb-label{ display:none }
-  .sb-sep{ margin:3px auto }
-  .topnav{ padding-right:max(12px, var(--safe-right)) }
-  .page-scroll{ padding:12px max(12px, var(--safe-right)) 12px 12px }
+  :root{ --sb:0px; --nav:42px; --bot:52px }
+  .sidebar{ display:none }
+  .bottom-nav{ display:block }
+  .app-main{ padding-bottom:calc(var(--bot) + var(--safe-bottom)) }
+  .topnav{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
+  .page-scroll{ padding:12px max(12px, var(--safe-right)) 12px max(12px, var(--safe-left)) }
 }
 
 /* Chart legend chips scroll sideways on phones; hide the scrollbar track. */
@@ -1032,3 +1030,27 @@ svg text, svg tspan{
 /* Mobile has one fixed palette (docs/responsive/MOBILE_DESIGN_SYSTEM.md), so the theme picker is
    hidden below 1024px; desktop keeps it. */
 @media (max-width:1023px){ .theme-picker-slot{ display:none !important } }
+
+/* Phone header (MobilePageHeader look, docs/responsive/MOBILE_DESIGN_SYSTEM.md §2): dark-green
+   gradient, white title, translucent date pill and bell. Phones only, Overview only for now; the
+   other pages move over as they are redesigned. !important beats the inline styles. */
+.bell-svg{ display:none }
+@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav[data-page="overview"]{ background:linear-gradient(180deg,#0f2a1d,#1c4630); border-bottom:none; box-shadow:0 2px 8px rgba(0,0,0,.12) }
+  .topnav[data-page="overview"] .tnav-title{ color:#fff }
+  .topnav[data-page="overview"] .drp-trigger,
+  .topnav[data-page="overview"] .drp-refresh,
+  .topnav[data-page="overview"] .alerts-bell-btn{ background:rgba(255,255,255,.08) !important; border:1px solid rgba(255,255,255,.22) !important; color:#fff !important; border-radius:10px !important }
+  .topnav[data-page="overview"] .drp-trigger{ font-size:12.5px !important; padding:6px 10px !important; min-height:34px }
+  .topnav[data-page="overview"] .drp-trigger svg *{ stroke:rgba(255,255,255,.85) }
+  .topnav[data-page="overview"] .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
+  .topnav[data-page="overview"] .bell-emoji{ display:none }
+  .topnav[data-page="overview"] .bell-svg{ display:block }
+}
+
+/* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
+   label + ▲/▼ fits without shrinking text below 12px. */
+@media (max-width:370px){
+  .master-card{ padding:12px !important }
+  .master-tiles{ gap:6px !important }
+}

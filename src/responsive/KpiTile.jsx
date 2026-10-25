@@ -14,9 +14,10 @@ export default function KpiTile({ label, value, delta, deltaLoading, deltaHidden
   const dot = status ? { good: M.up, warn: M.amber, bad: M.down }[status] : null
   const body = (
     <>
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, minWidth: 0 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          <span style={{ fontSize: M.type.label, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      {/* Tight gaps and letter-spacing so "RETURN % ● ▼16.8%" fits a 375px-wide phone's tile. */}
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+          <span style={{ fontSize: M.type.label, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.02em', color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
           {dot && <span aria-label={`status ${status}`} style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />}
         </span>
         <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} size={12} />
@@ -25,7 +26,7 @@ export default function KpiTile({ label, value, delta, deltaLoading, deltaHidden
     </>
   )
   const style = {
-    display: 'block', width: '100%', minWidth: 0, height: 56, padding: '8px 10px', borderRadius: M.radius.tile, textAlign: 'left', fontFamily: 'var(--font)',
+    display: 'block', width: '100%', minWidth: 0, height: 56, padding: '8px 8px', borderRadius: M.radius.tile, textAlign: 'left', fontFamily: 'var(--font)',
     background: selected ? '#fff' : onGradient ? 'rgba(255,255,255,.9)' : M.soft,
     border: `1px solid ${selected ? M.glowBorder : M.tileBorder}`,
     boxShadow: selected ? M.glow : onGradient ? '0 1px 2px rgba(15,42,29,.04)' : 'none',
