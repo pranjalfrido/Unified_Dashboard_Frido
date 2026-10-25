@@ -29,7 +29,7 @@ import FlashPage from './FlashPage.jsx'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
-import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
+import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
 import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
@@ -38,7 +38,7 @@ import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
 import { pctChange, fmtDateRange, fmtUpdated } from './responsive/format.js'
 import MobileRankedList from './responsive/MobileRankedList.jsx'
-import { metricStatus, statusColor } from './config/metricTargets.js'
+import { metricStatus } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -5550,21 +5550,21 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     : heroTrendRaw
   const rupees = v => `₹${Math.round(v).toLocaleString('en-IN')}`
   const trendMetrics = [
-    { key: 'gross', label: METRICS.gross.label, chipLabel: METRICS.gross.short, def: METRICS.gross.def, value: fmt(totalRev), delta: revDelta, deltasHidden: spHidden,
+    { key: 'gross', label: METRICS.gross.label, tileLabel: 'Gross rev', def: METRICS.gross.def, value: fmt(totalRev), delta: revDelta, deltasHidden: spHidden,
+      sub: `${fmtN(nOrders)} orders · ${fmtN(totalQty)} units`,
       point: r => r.revenue, prevPoint: r => r.prevRevenue, fmtPoint: fmt },
-    { key: 'net', label: METRICS.net.label, chipLabel: METRICS.net.short, def: METRICS.net.def, value: fmt(netRevenueCalc), delta: pctChange(netRevenueCalc, sp?.netRevenueCalc), deltaLoading: spLoading, deltasHidden: spHidden,
+    { key: 'net', label: METRICS.net.label, tileLabel: 'Net rev', def: METRICS.net.def, value: fmt(netRevenueCalc), delta: pctChange(netRevenueCalc, sp?.netRevenueCalc), deltaLoading: spLoading, deltasHidden: spHidden,
       point: r => r.netRevenue, prevPoint: r => r.prevNetRevenue ?? null, fmtPoint: fmt },
     { key: 'orders', label: METRICS.orders.label, def: METRICS.orders.def, value: fmtN(nOrders), delta: ordDelta, deltasHidden: spHidden,
       point: r => r.orders, prevPoint: r => r.prevOrders ?? null, fmtPoint: fmtN },
     { key: 'units', label: METRICS.units.label, def: METRICS.units.def, value: fmtN(totalQty), delta: pctChange(totalQty, sp?.totalQty), deltaLoading: spLoading, deltasHidden: spHidden,
       point: r => r.units, prevPoint: r => r.prevUnits ?? null, fmtPoint: fmtN },
-    { key: 'aov', label: METRICS.aov.label, chipLabel: METRICS.aov.short, def: METRICS.aov.def, value: rupees(blendedAOV), delta: pctChange(blendedAOV, sp?.blendedAOV), deltaLoading: spLoading, deltasHidden: spHidden,
+    { key: 'aov', label: METRICS.aov.label, tileLabel: 'AOV', def: METRICS.aov.def, value: rupees(blendedAOV), delta: pctChange(blendedAOV, sp?.blendedAOV), deltaLoading: spLoading, deltasHidden: spHidden,
       point: r => (r.orders ? r.revenue / r.orders : null), prevPoint: r => (r.prevOrders && r.prevRevenue != null ? r.prevRevenue / r.prevOrders : null), fmtPoint: rupees },
-    { key: 'asp', label: METRICS.asp.label, chipLabel: METRICS.asp.short, def: METRICS.asp.def, value: rupees(blendedASP), delta: pctChange(blendedASP, sp?.blendedASP), deltaLoading: spLoading, deltasHidden: spHidden,
-      point: r => (r.units ? r.revenue / r.units : null), prevPoint: r => (r.prevUnits && r.prevRevenue != null ? r.prevRevenue / r.prevUnits : null), fmtPoint: rupees },
+    // ASP is left out on mobile to keep the tile grid even (6); it stays on the desktop card.
     // No daily Return % series exists in this data (heroTrendRaw's note): value + "No daily breakdown".
     { key: 'returns', label: METRICS.returnPct.label, def: METRICS.returnPct.def, value: `${totalReturnPct.toFixed(1)}%`, delta: pctChange(totalReturnPct, sp?.totalReturnPct), deltaLoading: spLoading, deltasHidden: spHidden, lowerIsBetter: true,
-      valueColor: statusColor(metricStatus('returnPct', totalReturnPct)) || undefined },
+      status: metricStatus('returnPct', totalReturnPct) },
   ]
 
   // Channel Scorecard, mobile: the desktop cards' own per-channel figures, pre-formatted.
@@ -5586,31 +5586,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const logM = logisticsMetrics(logisticsData)
   const logRangeM = filters?.start && filters?.end ? getMaturityAdjustedRange(filters) : null
   const logBadge = logRangeM ? `Showing ${fmtDateRange(logRangeM.start, logRangeM.end)}${logRangeM.isFallback ? ' · latest complete data' : ''}` : ''
-  // Previous period = the equal-length window before the (maturity-adjusted) window shown, loaded with
-  // the same /api/logistics request and run through the same logisticsMetrics().
-  const prevLogRange = logRangeM ? prevRange(logRangeM.start, logRangeM.end) : null
-  const logPrev = usePrevPeriod(
-    ovMobile && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
-    async () => {
-      const x = logisticsMetrics(await prevLoaders.logistics(prevLogRange.start, prevLogRange.end))
-      return { range: prevLogRange, lTotal: x.lTotal, lDelPct: x.lDelPct, lRtoPct: x.lRtoPct, lZRtoPct: x.lZRtoPct, lNdrPct: x.lNdrPct, lNdrResolvedPct: x.lNdrResolvedPct, lFasr: x.lFasr, lRasr: x.lRasr, lSlaPct: x.lSlaPct }
-    },
-    { ready: !!logisticsData },
-  )
 
-  // Customers, mobile: Customers + Repeat rate ▲/▼ use /api/customer's own prevKpis (the same
-  // equal-length previous period). LTV has no previous value in that response, so the same
-  // /api/customer request is made for the previous range and only its ltv12 is kept.
-  const custPrevRange = prevRange(filters?.start, filters?.end)
-  const ltvPrev = usePrevPeriod(
-    ovMobile && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
-    async () => {
-      const x = await prevLoaders.customer(custPrevRange.start, custPrevRange.end)
-      const cm = customerMetrics(x)
-      return { range: custPrevRange, ltv: cm.custLtv, totalCustomers: cm.custTotalCustomers, repeatRate: cm.custKpis.repeatRate ?? null }
-    },
-    { ready: !!overviewCustData },
-  )
+  // ▲/▼ are limited to the master card (one previous-period request); the Logistics and Customer
+  // cards show none for now (backlog: pre-computed previous-period values).
 
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
@@ -5659,7 +5637,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     // Plain section labels (not collapsible): every section is always shown.
     return (
       <div className="ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
-        <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+        <MasterTrendCard rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
           layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
 
         {deckSectionLabel('Where Revenue Came From')}
@@ -5673,12 +5651,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
-        <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge}
+        <LogisticsOpsMobile m={logM} prev={null} prevStatus="off" badgeText={logBadge}
           info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
 
         {deckSectionLabel('State of the Business')}
         <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
-          custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
+          custPrevKpis={null} ltvPrev={null} ltvPrevStatus="off"
           inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
             totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
           invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={twoUp} />
