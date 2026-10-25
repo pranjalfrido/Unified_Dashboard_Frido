@@ -52,6 +52,21 @@ export const C = {
   // Breakpoint minimum widths - same scale as src/responsive/useBreakpoint.js.
   bp: { xs: 0, sm: 480, md: 768, lg: 1024, xl: 1280, '2xl': 1536 },
   motion: { fast: '150ms', base: '200ms', slow: '250ms' },
+  // Mobile palette + scale (docs/responsive/MOBILE_DESIGN_SYSTEM.md §1) for everything below
+  // 1024px. One fixed palette - it does not follow the desktop theme picker (forest/gold/indigo),
+  // so desktop keeps its theme and look exactly as before.
+  m: {
+    green: '#1f5a3d', greenDark: '#0f2a1d', header: 'linear-gradient(180deg,#0f2a1d,#1c4630)',
+    g2: '#5f8f75', g3: '#9cc4ad', g4: '#d5dbd7',
+    ink: '#1c2420', muted: '#7b847f', line: '#eeebe4', bg: '#f4f2ed', soft: '#f4f2ed', card: '#fff',
+    up: '#1f8a4c', down: '#c0392b', amber: '#c8860a',
+    masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
+    tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
+    cardShadow: '0 1px 3px rgba(0,0,0,.06)',
+    radius: { card: 18, tile: 12, chip: 999 },
+    // px; nothing below 12
+    type: { pageTitle: 17, cardTitle: 15.5, hero: 28, tileValue: 15.5, listValue: 13.5, body: 13, label: 12 },
+  },
   // Mobile type scale (Overview mobile redesign): { size (px), weight }. Nothing on mobile goes
   // below 12px; labels are uppercase + muted (C.t3) at the `label` size.
   type: {

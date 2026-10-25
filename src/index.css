@@ -1028,3 +1028,7 @@ svg text, svg tspan{
 @media (max-width:1023px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
   .topnav[data-page="overview"] .tnav-title{ font-size:17px; font-weight:600 }
 }
+
+/* Mobile has one fixed palette (docs/responsive/MOBILE_DESIGN_SYSTEM.md), so the theme picker is
+   hidden below 1024px; desktop keeps it. */
+@media (max-width:1023px){ .theme-picker-slot{ display:none !important } }

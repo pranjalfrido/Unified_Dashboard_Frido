@@ -15,7 +15,7 @@ export default function BottomSheet({ open, onClose, title, subtitle, children }
     const prevFocus = document.activeElement
     let poppedByBack = false
     window.history.pushState({ bottomSheet: true }, '')
-    const onPop = () => { poppedByBack = true; closeRef.current() }
+    const onPop = () => { if (window.history.state?.bottomSheet) return; poppedByBack = true; closeRef.current() }
     const onKey = e => { if (e.key === 'Escape') closeRef.current() }
     window.addEventListener('popstate', onPop)
     window.addEventListener('keydown', onKey)

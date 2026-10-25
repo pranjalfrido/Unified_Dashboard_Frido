@@ -3528,7 +3528,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
           <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
           <span className="sb-label">FLASH</span>
         </div>}
-        <ThemePicker theme={theme} setTheme={setTheme} />
+        <div className="theme-picker-slot" style={{ display: 'contents' }}><ThemePicker theme={theme} setTheme={setTheme} /></div>
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
           {profile?.avatar_url

@@ -12,17 +12,17 @@ export default function DeltaBadge({ delta, lowerIsBetter = false, loading = fal
     return <span className="delta-shimmer" aria-label="Loading change vs previous period" style={{ display: 'inline-block', width: size * 3.6, height: size * 0.95, borderRadius: 4, verticalAlign: 'middle', flexShrink: 0 }} />
   }
   if (delta == null || !isFinite(delta)) {
-    return <span aria-label="No previous-period value" style={{ fontSize: size, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', flexShrink: 0 }}>—</span>
+    return <span aria-label="No previous-period value" style={{ fontSize: size, fontWeight: 600, color: C.m.muted, whiteSpace: 'nowrap', flexShrink: 0 }}>—</span>
   }
   // A change that rounds to 0.0% gets no arrow and no good/bad colour.
   if (Math.abs(delta) < 0.05) {
-    return <span aria-label="No change vs previous period" style={{ fontSize: size, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>0.0%</span>
+    return <span aria-label="No change vs previous period" style={{ fontSize: size, fontWeight: 600, color: C.m.muted, whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>0.0%</span>
   }
   const up = delta >= 0
   const good = lowerIsBetter ? !up : up
   return (
     <span aria-label={`${up ? 'up' : 'down'} ${Math.abs(delta).toFixed(1)} percent vs previous period`}
-      style={{ fontSize: size, fontWeight: 700, color: good ? C.green.tx : C.red.tx, whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+      style={{ fontSize: size, fontWeight: 700, color: good ? C.m.up : C.m.down, whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
       {up ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
     </span>
   )
