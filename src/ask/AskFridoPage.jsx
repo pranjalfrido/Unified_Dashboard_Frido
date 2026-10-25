@@ -1,19 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import HistoryPanel from './HistoryPanel.jsx';
 import ChatTopBar from './ChatTopBar.jsx';
 import ChatThread from './ChatThread.jsx';
 import ChatComposer from './ChatComposer.jsx';
-import { MOCK_HISTORY, sendMessage } from './mockData.js';
+import { sendMessage } from './mockData.js';
 
 let nextId = 1000;
 
+const STORAGE_KEY = 'frido_pulse_conversations';
+
+function loadConversations() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveConversations(convs) {
+  try {
+    // Keep only last 50 conversations, trim messages to last 40 per conv to avoid storage limits
+    const trimmed = convs.slice(0, 50).map(c => ({
+      ...c,
+      messages: c.messages.filter(m => !m.thinking).slice(-40),
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {}
+}
+
 export default function AskFridoPage({ userProfile }) {
-  const [conversations, setConversations] = useState(MOCK_HISTORY);
+  const [conversations, setConversations] = useState(() => loadConversations());
   const [activeId, setActiveId] = useState(null);
   const [historyVisible, setHistoryVisible] = useState(true);
   const [sending, setSending] = useState(false);
 
   const active = conversations.find(c => c.id === activeId) || null;
+
+  // Persist to localStorage whenever conversations change
+  useEffect(() => {
+    saveConversations(conversations);
+  }, [conversations]);
 
   function handleNew() {
     const id = 'new-' + (++nextId);
@@ -43,7 +68,7 @@ export default function AskFridoPage({ userProfile }) {
       setActiveId(currentId);
     }
 
-    // If empty conversation, set title from first message
+    // Add user message + thinking bubble
     setConversations(prev => prev.map(c => {
       if (c.id !== currentId) return c;
       const isFirst = c.messages.length === 0;
@@ -60,7 +85,6 @@ export default function AskFridoPage({ userProfile }) {
 
     setSending(true);
     try {
-      // Get current messages to send as context (excluding thinking bubble)
       const currentConv = conversations.find(c => c.id === currentId);
       const history = (currentConv?.messages || []).filter(m => !m.thinking);
       const messagesForApi = [...history, { role: 'user', text }];
@@ -87,13 +111,8 @@ export default function AskFridoPage({ userProfile }) {
     }
   }
 
-  function handleSuggestion(text) {
-    handleSend(text);
-  }
-
-  function handleClarifyChoice(choice) {
-    handleSend(choice);
-  }
+  function handleSuggestion(text) { handleSend(text); }
+  function handleClarifyChoice(choice) { handleSend(choice); }
 
   return (
     <div className={`af-page${historyVisible ? '' : ' af-history-hidden'}`}>

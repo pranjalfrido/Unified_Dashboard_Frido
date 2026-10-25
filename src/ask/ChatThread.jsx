@@ -38,7 +38,7 @@ function renderMarkdown(text) {
     const line = lines[i];
 
     // Markdown table: line with | and next line is separator (---|---)
-    if (line.includes('|') && lines[i + 1] && /^\s*\|?[\s\-|:]+\|?\s*$/.test(lines[i + 1])) {
+    if (line.includes('|') && lines[i + 1] && /^[\s|:\-]+$/.test(lines[i + 1].replace(/\|/g, '|'))) {
       const headers = line.split('|').map(c => c.trim()).filter(c => c);
       i += 2; // skip separator
       const rows = [];
