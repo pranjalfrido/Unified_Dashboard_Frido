@@ -107,7 +107,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
         : <div style={{ height: CHART_H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: M.muted, fontSize: 13 }}>No daily breakdown</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: layout === 'landscape' ? '6px 0 0' : '6px 16px 0', fontSize: 12, color: M.muted, minHeight: 24 }}>
         {hasSeries && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: M.green, display: 'inline-block' }} />This period</span>}
-        {hasSeries && prevAvailable && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: '#c9cfcb', display: 'inline-block' }} />Prev period</span>}
+        {hasSeries && prevAvailable && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: M.prev, display: 'inline-block' }} />Prev period</span>}
         <span style={{ marginLeft: 'auto' }}>{GRAN_LABEL[gran]}{granOverride === 'auto' ? ' · auto' : ''}</span>
       </div>
     </div>
@@ -194,9 +194,9 @@ function ScrubChart({ rows, point, prevPoint, scrub, setScrub, label }) {
               <stop offset="1" stopColor={M.green} stopOpacity={0} />
             </linearGradient>
           </defs>
-          {avg != null && <line x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke="#eeebe4" strokeWidth={1} />}
+          {avg != null && <line x1={0} x2={w} y1={y(avg)} y2={y(avg)} stroke={M.line} strokeWidth={1} />}
           {areaPath && <path d={areaPath} fill="url(#mtcGrad)" />}
-          {prevPoint && <path d={path(prev)} fill="none" stroke="#a3aba6" strokeWidth={1.5} strokeDasharray="4 4" />}
+          {prevPoint && <path d={path(prev)} fill="none" stroke={M.prev} strokeWidth={1.5} strokeDasharray="4 4" />}
           <path d={curPath} fill="none" stroke={M.green} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
           {scrub != null && (
             <g>

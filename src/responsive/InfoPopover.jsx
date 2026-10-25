@@ -39,7 +39,7 @@ export default function InfoPopover({ text, title, asChild = false, children, la
         style={{ cursor: 'pointer', ...style }}>{children}</div>
     : <button ref={btnRef} type="button" aria-expanded={open} aria-label={title ? `${title}: show definition` : label} onClick={() => setOpen(o => !o)}
         style={{ width: 28, height: 28, margin: -3, borderRadius: '50%', border: 'none', background: 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, ...style }}>
-        <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: '50%', border: `1px solid ${C.border2}`, color: C.t3, fontSize: 12, fontWeight: 700, fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>i</span>
+        <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: '50%', border: `1px solid ${C.m.muted}`, color: C.m.muted, fontSize: 12, fontWeight: 700, fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>i</span>
       </button>
 
   return (
@@ -49,7 +49,7 @@ export default function InfoPopover({ text, title, asChild = false, children, la
         <div ref={popRef} role="dialog" aria-label={title || 'Definition'}
           style={{ position: 'fixed', left: pos.left, width: pos.width, zIndex: C.z.modal,
             ...(pos.flipUp ? { bottom: window.innerHeight - pos.anchorTop + 8 } : { top: pos.top }),
-            background: C.t1, color: '#fff', borderRadius: 12, padding: '10px 12px', fontSize: 13, lineHeight: 1.45, boxShadow: C.sh3 }}>
+            background: C.m.ink, color: '#fff', borderRadius: 12, padding: '10px 12px', fontSize: 13, lineHeight: 1.45, boxShadow: C.sh3 }}>
           {title && <div style={{ fontWeight: 700, marginBottom: 3 }}>{title}</div>}
           {text}
         </div>,

@@ -25,7 +25,7 @@ export function OverviewFilterButton({ filters, setFilters }) {
         style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0, borderRadius: 10,
           border: '1px solid rgba(255,255,255,.22)', background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer' }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-        <b style={{ position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: '#fff', color: '#0f2a1d', fontSize: 10.5, fontWeight: 800, lineHeight: '16px', textAlign: 'center' }}>{count}</b>
+        <b style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, background: '#fff', color: '#0f2a1d', fontSize: 12, fontWeight: 800, lineHeight: '18px', textAlign: 'center' }}>{count}</b>
       </button>
       <FilterSheet open={open} onClose={() => setOpen(false)} title="Filters" rows={rows}
         onReset={() => { setFilters(clearAllSalesFilters); setOpen(false) }} />

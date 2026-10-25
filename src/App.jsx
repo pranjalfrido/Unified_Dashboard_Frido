@@ -4973,7 +4973,7 @@ function AlertsBell({ alerts }) {
         <span className="bell-emoji">🔔</span>
         <svg className="bell-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         {alerts.length > 0 && (
-          <span style={{
+          <span className="alerts-badge" data-level={critical > 0 ? 'red' : 'amber'} style={{
             position: 'absolute', top: -5, right: -5, minWidth: 16, height: 16, padding: '0 3px',
             borderRadius: 8, background: critical > 0 ? '#B91C1C' : '#D97706', color: '#fff',
             fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -5036,9 +5036,10 @@ const INDIA_TOPOJSON = '/india-states.json'
 // guessing scale/center by eye and kept clipping the northeast / leaving dead whitespace.
 // fitSize computes the exact scale+translate needed to fill the given box, so this can't drift
 // out of frame regardless of container size.
-// tint / hideTop5: the mobile Overview draws the map in the mobile palette's green and lists the
-// states under it (TopStatesMobile), so the Top-5 overlay is dropped there. Defaults = desktop.
-function IndiaChoropleth({ stateMap, totalRev, cityRows = [], tint = C.acc, hideTop5 = false }) {
+// mobile: the mobile Overview draws the map in the mobile palette (C.m) and lists the states under
+// it (TopStatesMobile), so the Top-5 overlay is dropped and the legend is 12px. Default = desktop.
+function IndiaChoropleth({ stateMap, totalRev, cityRows = [], mobile = false }) {
+  const tint = mobile ? C.m.green : C.acc
   const [hovered, setHovered] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [geoData, setGeoData] = useState(null)
@@ -5081,9 +5082,9 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [], tint = C.acc, hide
             <path
               key={i}
               d={geoData.path(f)}
-              fill={isHovered ? (tint === C.acc ? C.acm : tint) : rev > 0 ? tint : C.bg}
+              fill={isHovered ? (mobile ? tint : C.acm) : rev > 0 ? tint : mobile ? C.m.soft : C.bg}
               fillOpacity={isHovered ? 0.95 : rev > 0 ? intensity : 1}
-              stroke={C.card}
+              stroke={mobile ? '#fff' : C.card}
               strokeWidth={0.5}
               onMouseEnter={() => setHovered({ key, name, rev, cities: citiesFor(key) })}
               onMouseLeave={() => setHovered(null)}
@@ -5115,7 +5116,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [], tint = C.acc, hide
       )}
       {/* Static top-5 legend, bottom-right — fills otherwise-empty space south of the peninsula
           and stays visible without needing to hover each state one at a time. */}
-      {!hideTop5 && <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
+      {!mobile && <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
         <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 3 }}>Top 5 States</div>
         {top5States.map(([name, v], i) => (
           <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
@@ -5124,7 +5125,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [], tint = C.acc, hide
           </div>
         ))}
       </div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: 9.5, color: C.t3 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: mobile ? 12 : 9.5, color: mobile ? C.m.muted : C.t3 }}>
         <span>Low</span>
         <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${tint}1F, ${tint})` }} />
         <span>High</span>
@@ -5220,6 +5221,13 @@ const TrendStatTile = ({ label, value, badge, color, sub }) => (
       </div>
       {sub && <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap' }}>{sub}</span>}
     </div>
+  </div>
+)
+// Mobile Overview: the same section label in the one mobile palette (C.m), independent of the desktop theme.
+const mobileSectionLabel = (text) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, marginBottom: -2 }}>
+    <span style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: C.m.ink }}>{text}</span>
+    <span style={{ flex: 1, height: 2, background: `linear-gradient(90deg, ${C.m.g3}, ${C.m.line} 40%)`, borderRadius: 2 }} />
   </div>
 )
 const deckSectionLabel = (text) => (
@@ -5647,19 +5655,19 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         <MasterTrendCard rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
           layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
 
-        {deckSectionLabel('Where Revenue Came From')}
+        {mobileSectionLabel('Where Revenue Came From')}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
           {topProductsBySubCat.length > 0 && renderProductListMobile()}
           <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
-            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} tint={C.m.green} hideTop5 />} />
+            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
         <LogisticsOpsMobile m={logM} prev={null} prevStatus="off" badgeText={logBadge}
           info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
 
-        {deckSectionLabel('State of the Business')}
+        {mobileSectionLabel('State of the Business')}
         <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
           custPrevKpis={null} ltvPrev={null} ltvPrevStatus="off"
           inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,

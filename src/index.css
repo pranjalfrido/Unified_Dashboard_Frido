@@ -1061,3 +1061,10 @@ svg text, svg tspan{
   .topnav[data-page="overview"] .ov-filter-slot{ display:flex; flex-shrink:0 }
   .filtered-strip::-webkit-scrollbar{ display:none }
 }
+
+/* Alerts count on the green phone header: 12px minimum, palette red / amber (MOBILE_DESIGN_SYSTEM §1). */
+@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav[data-page="overview"] .alerts-badge{ min-width:18px !important; height:18px !important; border-radius:9px !important; font-size:12px !important; top:-6px !important; right:-6px !important }
+  .topnav[data-page="overview"] .alerts-badge[data-level="red"]{ background:#c0392b !important }
+  .topnav[data-page="overview"] .alerts-badge[data-level="amber"]{ background:#c8860a !important }
+}

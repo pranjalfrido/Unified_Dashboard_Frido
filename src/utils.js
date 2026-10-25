@@ -59,7 +59,7 @@ export const C = {
     green: '#1f5a3d', greenDark: '#0f2a1d', header: 'linear-gradient(180deg,#0f2a1d,#1c4630)',
     g2: '#5f8f75', g3: '#9cc4ad', g4: '#d5dbd7',
     ink: '#1c2420', muted: '#7b847f', line: '#eeebe4', bg: '#f4f2ed', soft: '#f4f2ed', card: '#fff',
-    up: '#1f8a4c', down: '#c0392b', amber: '#c8860a',
+    up: '#1f8a4c', down: '#c0392b', amber: '#c8860a', prev: '#a3aba6', // prev: previous-period line + its legend swatch
     masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
     tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
     cardShadow: '0 1px 3px rgba(0,0,0,.06)',
