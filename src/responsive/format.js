@@ -31,3 +31,24 @@ export function pctChange(cur, prev) {
   if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev) || prev === 0) return null
   return (cur - prev) / prev * 100
 }
+
+// Human-readable dates for mobile (no ISO dates, no seconds).
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const ymd = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return { y, m, d } }
+
+// '2026-09-10', '2026-10-10' → "10 Sep – 10 Oct"; adds the year when it differs from this year or
+// between the two ends ("20 Dec 2025 – 5 Jan 2026").
+export function fmtDateRange(start, end) {
+  if (!start || !end) return ''
+  const a = ymd(start), b = ymd(end), thisYear = new Date().getFullYear()
+  const showYear = a.y !== b.y || b.y !== thisYear
+  return `${a.d} ${MONTHS[a.m - 1]}${a.y !== b.y ? ` ${a.y}` : ''} – ${b.d} ${MONTHS[b.m - 1]}${showYear ? ` ${b.y}` : ''}`
+}
+
+// ISO timestamp → "25 Oct, 2:33 pm" (local time).
+export function fmtUpdated(ts) {
+  const d = new Date(ts)
+  if (isNaN(d)) return ''
+  const h = d.getHours(), mm = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${h % 12 || 12}:${mm} ${h < 12 ? 'am' : 'pm'}`
+}

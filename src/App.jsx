@@ -34,7 +34,8 @@ import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
 import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
-import { pctChange } from './responsive/format.js'
+import { pctChange, fmtDateRange } from './responsive/format.js'
+import MobileRankedList from './responsive/MobileRankedList.jsx'
 import { metricStatus, statusColor } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
@@ -5728,6 +5729,39 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         {topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
+          if (ovMobile) {
+            // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
+            // (Others excluded, as in the table), same cell values; it has its own 🔍 search.
+            const rows = topProductsBySubCat.filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
+            const share = g => (totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0')
+            const asp = g => (g.units > 0 ? g.rev / g.units : null)
+            const rupees = v => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
+            const pctText = g => (g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—')
+            return (
+              <div style={{ gridColumn: '1 / -1', background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1 }}>
+                <MobileRankedList title="Product Performance" noun="sub-categories" items={rows} itemKey={g => g.subCategory}
+                  name={g => g.subCategory} searchText={g => `${g.subCategory} ${g.category}`}
+                  sheetSubtitle={fmtDateRange(filters?.start, filters?.end)}
+                  sorts={[
+                    { key: 'rev', label: 'Revenue', value: g => g.rev, format: g => fmt(g.rev) },
+                    { key: 'netRev', label: 'Net Rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+                    { key: 'units', label: 'Units', value: g => g.units, format: g => fmtN(g.units) },
+                    { key: 'asp', label: 'ASP', value: asp, format: g => rupees(asp(g)) },
+                    { key: 'returnPct', label: 'Return %', value: g => g.returnPct, format: pctText, bar: 'bad' },
+                  ]}
+                  secondary={(g, k) => (k === 'rev' ? `${share(g)}% share · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Rev ${fmt(g.rev)}`)}
+                  details={[
+                    { label: 'Category', value: g => g.category },
+                    { label: 'Revenue (Inc. GST)', value: g => fmt(g.rev) },
+                    { label: 'Share', value: g => `${share(g)}%` },
+                    { label: 'Units', value: g => fmtN(g.units) },
+                    { label: 'ASP', value: g => rupees(asp(g)) },
+                    { label: 'Return %', value: pctText },
+                    { label: 'Net Revenue', value: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+                  ]} />
+              </div>
+            )
+          }
           return (
           <WideCard span={wide ? 8 : 12} style={wide ? { maxHeight: 520, overflow: 'hidden' } : undefined}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
