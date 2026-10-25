@@ -38,6 +38,8 @@ import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
 import { pctChange, fmtDateRange, fmtUpdated } from './responsive/format.js'
 import MobileRankedList from './responsive/MobileRankedList.jsx'
+import CollapsibleSection from './responsive/CollapsibleSection.jsx'
+import { useCollapsible } from './responsive/useCollapsible.js'
 import { metricStatus, statusColor } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
@@ -5252,6 +5254,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // The mobile Overview redesign (docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md): every width
   // below 1024px, which also covers phones in landscape. 1024px and up keeps the desktop layout as is.
   const ovMobile = bp.width < 1024 || bp.isPhoneLandscape
+  // Collapsible sections (mobile only): Sales Trend + Where Revenue Came From open by default, the
+  // rest closed; each user's choice is remembered (responsive/useCollapsible.js).
+  const [secTrendOpen, toggleSecTrend] = useCollapsible('overview.salesTrend', true)
+  const [secWhereOpen, toggleSecWhere] = useCollapsible('overview.whereRevenue', true)
+  const [secLogOpen, toggleSecLog] = useCollapsible('overview.logistics', false)
+  const [secBizOpen, toggleSecBiz] = useCollapsible('overview.business', false)
   const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
@@ -5528,7 +5536,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const prevSalesRange = prevRange(filters?.start, filters?.end)
   const filterSig = Object.fromEntries(Object.entries(filters || {}).filter(([k]) => k !== 'start' && k !== 'end'))
   const salesPrev = usePrevPeriod(
-    ovMobile && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
+    ovMobile && secTrendOpen && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
     async () => {
       const d = await prevLoaders.sales(prevSalesRange.start, prevSalesRange.end)
       const m = salesMetrics(d)
@@ -5590,7 +5598,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // the same /api/logistics request and run through the same logisticsMetrics().
   const prevLogRange = logRangeM ? prevRange(logRangeM.start, logRangeM.end) : null
   const logPrev = usePrevPeriod(
-    ovMobile && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
+    ovMobile && secLogOpen && prevLoaders && prevLogRange ? `log:${prevLogRange.start}:${prevLogRange.end}` : null,
     async () => {
       const x = logisticsMetrics(await prevLoaders.logistics(prevLogRange.start, prevLogRange.end))
       return { range: prevLogRange, lTotal: x.lTotal, lDelPct: x.lDelPct, lRtoPct: x.lRtoPct, lZRtoPct: x.lZRtoPct, lNdrPct: x.lNdrPct, lNdrResolvedPct: x.lNdrResolvedPct, lFasr: x.lFasr, lRasr: x.lRasr, lSlaPct: x.lSlaPct }
@@ -5603,7 +5611,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // /api/customer request is made for the previous range and only its ltv12 is kept.
   const custPrevRange = prevRange(filters?.start, filters?.end)
   const ltvPrev = usePrevPeriod(
-    ovMobile && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
+    ovMobile && secBizOpen && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
     async () => {
       const x = await prevLoaders.customer(custPrevRange.start, custPrevRange.end)
       const cm = customerMetrics(x)
@@ -5616,8 +5624,89 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
 
+  // ── Mobile layout (< 1024px, and phones in landscape) ──
+  // docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md: the same values as the desktop deck below,
+  // regrouped into collapsible sections (responsive/CollapsibleSection.jsx). Closed sections render
+  // nothing and start no previous-period request until opened. 1024px and up returns the desktop
+  // deck further down, unchanged.
+  const renderProductListMobile = () => {
+    // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
+    // (Others excluded, as in the table), same cell values; it has its own 🔍 search.
+    const rows = topProductsBySubCat.filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
+    const share = g => (totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0')
+    const asp = g => (g.units > 0 ? g.rev / g.units : null)
+    const rupees = v => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
+    const pctText = g => (g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—')
+    return (
+      <div style={{ gridColumn: '1 / -1', background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1 }}>
+        <MobileRankedList title="Product Performance" noun="sub-categories" items={rows} itemKey={g => g.subCategory}
+          name={g => g.subCategory} searchText={g => `${g.subCategory} ${g.category}`}
+          sheetSubtitle={fmtDateRange(filters?.start, filters?.end)}
+          sorts={[
+            { key: 'rev', label: 'Revenue', value: g => g.rev, format: g => fmt(g.rev) },
+            { key: 'netRev', label: 'Net Rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+            { key: 'units', label: 'Units', value: g => g.units, format: g => fmtN(g.units) },
+            { key: 'asp', label: 'ASP', value: asp, format: g => rupees(asp(g)) },
+            { key: 'returnPct', label: 'Return %', value: g => g.returnPct, format: pctText, bar: 'bad' },
+          ]}
+          secondary={(g, k) => (k === 'rev' ? `${share(g)}% share · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Rev ${fmt(g.rev)}`)}
+          details={[
+            { label: 'Category', value: g => g.category },
+            { label: 'Revenue (Inc. GST)', value: g => fmt(g.rev) },
+            { label: 'Share', value: g => `${share(g)}%` },
+            { label: 'Units', value: g => fmtN(g.units) },
+            { label: 'ASP', value: g => rupees(asp(g)) },
+            { label: 'Return %', value: pctText },
+            { label: 'Net Revenue', value: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+          ]} />
+      </div>
+    )
+  }
+
+  if (ovMobile) {
+    const twoUp = bp.isPhoneLandscape || bp.isTablet
+    const topCh = sortedCh[0]
+    const chName = ch => (ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch)
+    return (
+      <div className="ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
+        <CollapsibleSection title="Sales Trend" open={secTrendOpen} onToggle={toggleSecTrend}
+          summary={`${fmt(totalRev)} gross revenue · ${fmtN(nOrders)} orders`}>
+          <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+            layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Where Revenue Came From" open={secWhereOpen} onToggle={toggleSecWhere}
+          summary={`${sortedCh.length} channels${topCh && totalRev > 0 ? ` · ${chName(topCh[0])} ${(topCh[1].rev / totalRev * 100).toFixed(1)}% of revenue` : ''}`}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
+            {topProductsBySubCat.length > 0 && renderProductListMobile()}
+            <div style={{ background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1, overflow: 'hidden' }}>
+              {secHdr('Top States', 'By revenue · tap the map for cities')}
+              <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Logistics & Ops" open={secLogOpen} onToggle={toggleSecLog}
+          summary={logisticsData ? `${fmtN(lTotal)} shipments · ${lDelPct.toFixed(1)}% delivered` : 'Loading…'}>
+          <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge} showTitle={false}
+            info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="State of the Business" open={secBizOpen} onToggle={toggleSecBiz}
+          summary={`${overviewCustData ? `${fmtN(custTotalCustomers)} customers` : 'Customers loading'} · ${invSnapshotData ? `${fmtN(invSummary.criticalLowCount || 0)} stockout-risk SKUs` : 'inventory loading'}`}>
+          <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
+            custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
+            inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
+              totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
+            invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={twoUp} />
+        </CollapsibleSection>
+      </div>
+    )
+  }
+
   return (
-    <div className={ovMobile ? 'ov-mobile' : undefined} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
 
       {/* ══════════════════════════════ THE DECK ══════════════════════════════
           One consistent card treatment throughout (KpiCard = single number,
@@ -5633,14 +5722,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          {ovMobile ? (
-            // Mobile Sales Trend (overview/SalesTrendMobile.jsx). Same totals as the desktop card;
-            // Prev Period is folded into the hero's ▲/▼. Gross/Orders ▲/▼ are the page's existing
-            // revDelta/ordDelta; the rest come from the previous-period load (salesPrev).
-            <SalesTrendMobile rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
-              layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'}
-              metrics={trendMetrics} />
-          ) : (
           <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
@@ -5692,7 +5773,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
             </ChartFrame>
           </Card>
-          )}
         </div>
 
         {deckSectionLabel('Where Revenue Came From')}
@@ -5700,9 +5780,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             wall of traffic lights) — the deck itself reads as a unified "channel" identity, while
             performance direction stays legible via the small arrow next to each revenue figure.
             AOV + Return% brought back into a compact footer row per "more important details". */}
-        {ovMobile ? (
-          <div style={{ gridColumn: '1 / -1' }}><ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} /></div>
-        ) : (
         <WideCard span={12}>
           {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
           {/* Six-across was squeezed to unreadable slivers below desktop width (Phase 0: "Channel
@@ -5756,44 +5833,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             })}
           </div>
         </WideCard>
-        )}
 
         {topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
-          if (ovMobile) {
-            // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
-            // (Others excluded, as in the table), same cell values; it has its own 🔍 search.
-            const rows = topProductsBySubCat.filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
-            const share = g => (totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0')
-            const asp = g => (g.units > 0 ? g.rev / g.units : null)
-            const rupees = v => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
-            const pctText = g => (g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—')
-            return (
-              <div style={{ gridColumn: '1 / -1', background: C.card, borderRadius: 18, padding: 16, boxShadow: C.sh1 }}>
-                <MobileRankedList title="Product Performance" noun="sub-categories" items={rows} itemKey={g => g.subCategory}
-                  name={g => g.subCategory} searchText={g => `${g.subCategory} ${g.category}`}
-                  sheetSubtitle={fmtDateRange(filters?.start, filters?.end)}
-                  sorts={[
-                    { key: 'rev', label: 'Revenue', value: g => g.rev, format: g => fmt(g.rev) },
-                    { key: 'netRev', label: 'Net Rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
-                    { key: 'units', label: 'Units', value: g => g.units, format: g => fmtN(g.units) },
-                    { key: 'asp', label: 'ASP', value: asp, format: g => rupees(asp(g)) },
-                    { key: 'returnPct', label: 'Return %', value: g => g.returnPct, format: pctText, bar: 'bad' },
-                  ]}
-                  secondary={(g, k) => (k === 'rev' ? `${share(g)}% share · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Rev ${fmt(g.rev)}`)}
-                  details={[
-                    { label: 'Category', value: g => g.category },
-                    { label: 'Revenue (Inc. GST)', value: g => fmt(g.rev) },
-                    { label: 'Share', value: g => `${share(g)}%` },
-                    { label: 'Units', value: g => fmtN(g.units) },
-                    { label: 'ASP', value: g => rupees(asp(g)) },
-                    { label: 'Return %', value: pctText },
-                    { label: 'Net Revenue', value: g => (g.netRev != null ? fmt(g.netRev) : '—') },
-                  ]} />
-              </div>
-            )
-          }
           return (
           <WideCard span={wide ? 8 : 12} style={wide ? { maxHeight: 520, overflow: 'hidden' } : undefined}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
@@ -5872,14 +5915,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
 
-        {ovMobile ? (
-          // Mobile: one title, date badge, hero + grouped tiles + Speed & SLA (overview/LogisticsOpsMobile.jsx).
-          <div style={{ gridColumn: '1 / -1' }}>
-            <LogisticsOpsMobile m={logM} prev={logPrev.value} prevStatus={logisticsData ? logPrev.status : 'loading'} badgeText={logBadge}
-              info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
-          </div>
-        ) : (
-          <>
         {deckSectionLabel('Logistics & Ops Performance')}
 
         {/* One consolidated card for Ops + Logistics Performance — both are facets of the same
@@ -6016,8 +6051,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             )
           })()}
         </WideCard>
-          </>
-        )}
 
         {/* Logistics cost cards (Total Logistics Cost, Cost % of Shipment Value, Cost per Shipment,
             Forward vs RTO Cost) were deliberately removed from Overview — unit-economics/cost detail
@@ -6034,17 +6067,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             deliberately removed from Overview — that detail belongs on the dedicated Ads tab
             (ads:all/d2c/amazon/etc. permission keys), which already has it in full. */}
 
-        {ovMobile ? (
-          // Mobile: Customers split bar + 3 tiles, Inventory alert rows (overview/BusinessStateMobile.jsx).
-          <div style={{ gridColumn: '1 / -1' }}>
-            <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
-              custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
-              inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
-                totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
-              invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={bp.isPhoneLandscape || bp.isTablet} />
-          </div>
-        ) : (
-          <>
         {deckSectionLabel('State of the Business')}
         {/* 2 columns on a phone, 3 on a tablet / phone in landscape.
             Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
@@ -6085,8 +6107,6 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             color={top30SkuDoi ? (top30SkuDoi.doi <= 2 ? C.red.tx : top30SkuDoi.doi <= 15 ? C.amber.tx : C.green.tx) : C.t1}
             sub={top30SkuDoi ? `Weighted by units, ${top30SkuDoi.matched} of 20 matched` : (invSnapshotData ? 'No match' : 'Loading...')} />
         </div>
-          </>
-        )}
 
       </div>
 
