@@ -1738,7 +1738,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
 
-        <div style={{ minWidth: 0 }}>
+        <div id="inv-dead-stock" style={{ minWidth: 0, scrollMarginTop: 12 }}>
         <GlassCard title={<><span className="inv-detail-desktop-only">Dead Stock Sub-categories</span><span className="inv-detail-mobile-only">Dead Stock</span></>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}

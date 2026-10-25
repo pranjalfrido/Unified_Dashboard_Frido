@@ -32,10 +32,11 @@ import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import SalesTrendMobile from './overview/SalesTrendMobile.jsx'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
+import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
 import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
 import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
 import { METRICS } from './overview/metricLabels.js'
-import { pctChange, fmtDateRange } from './responsive/format.js'
+import { pctChange, fmtDateRange, fmtUpdated } from './responsive/format.js'
 import MobileRankedList from './responsive/MobileRankedList.jsx'
 import { metricStatus, statusColor } from './config/metricTargets.js'
 
@@ -5233,7 +5234,7 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders }) {
+function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders, onOpenInventory }) {
   const [productSearch, setProductSearch] = useState('')
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
   // every value shown below is computed exactly as before.
@@ -5595,6 +5596,20 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
       return { range: prevLogRange, lTotal: x.lTotal, lDelPct: x.lDelPct, lRtoPct: x.lRtoPct, lZRtoPct: x.lZRtoPct, lNdrPct: x.lNdrPct, lNdrResolvedPct: x.lNdrResolvedPct, lFasr: x.lFasr, lRasr: x.lRasr, lSlaPct: x.lSlaPct }
     },
     { ready: !!logisticsData },
+  )
+
+  // Customers, mobile: Customers + Repeat rate ▲/▼ use /api/customer's own prevKpis (the same
+  // equal-length previous period). LTV has no previous value in that response, so the same
+  // /api/customer request is made for the previous range and only its ltv12 is kept.
+  const custPrevRange = prevRange(filters?.start, filters?.end)
+  const ltvPrev = usePrevPeriod(
+    ovMobile && prevLoaders && custPrevRange ? `cust:${custPrevRange.start}:${custPrevRange.end}` : null,
+    async () => {
+      const x = await prevLoaders.customer(custPrevRange.start, custPrevRange.end)
+      const cm = customerMetrics(x)
+      return { range: custPrevRange, ltv: cm.custLtv, totalCustomers: cm.custTotalCustomers, repeatRate: cm.custKpis.repeatRate ?? null }
+    },
+    { ready: !!overviewCustData },
   )
 
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
@@ -6019,6 +6034,17 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             deliberately removed from Overview — that detail belongs on the dedicated Ads tab
             (ads:all/d2c/amazon/etc. permission keys), which already has it in full. */}
 
+        {ovMobile ? (
+          // Mobile: Customers split bar + 3 tiles, Inventory alert rows (overview/BusinessStateMobile.jsx).
+          <div style={{ gridColumn: '1 / -1' }}>
+            <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
+              custPrevKpis={overviewCustData?.prevKpis} ltvPrev={ltvPrev.value?.ltv ?? null} ltvPrevStatus={ltvPrev.status}
+              inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
+                totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
+              invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={bp.isPhoneLandscape || bp.isTablet} />
+          </div>
+        ) : (
+          <>
         {deckSectionLabel('State of the Business')}
         {/* 2 columns on a phone, 3 on a tablet / phone in landscape.
             Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
@@ -6059,6 +6085,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             color={top30SkuDoi ? (top30SkuDoi.doi <= 2 ? C.red.tx : top30SkuDoi.doi <= 15 ? C.amber.tx : C.green.tx) : C.t1}
             sub={top30SkuDoi ? `Weighted by units, ${top30SkuDoi.matched} of 20 matched` : (invSnapshotData ? 'No match' : 'Loading...')} />
         </div>
+          </>
+        )}
 
       </div>
 
@@ -19552,6 +19580,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
+  // Opens Inventory Health with a one-shot preset (existing Status filter, or scroll to a section) -
+  // used by the mobile Overview's inventory alert rows.
+  const [invPreset, setInvPreset] = useState(null)
+  const invPresetSeq = useRef(0)
+  const openInventoryHealth = preset => { invPresetSeq.current += 1; setInvPreset({ ...preset, nonce: invPresetSeq.current }); goTo('inventory', 'health') }
   const goTo = (page, sub, sub2) => {
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
@@ -19910,8 +19943,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
     // fetchData's static-cache rule: unfiltered requests whose dates match a pre-computed window
     // are served from public/pnl-data*.json instead of BigQuery.
-    const { subChannel: _sc, ...withoutSubCh } = extra
-    const hasFilters = Object.keys(withoutSubCh).length > 0 || (extra.subChannel && extra.subChannel !== 'ShopifyIndia')
+    const hasFilters = Object.keys(extra).some(k => k !== 'subChannel') || (extra.subChannel && extra.subChannel !== 'ShopifyIndia')
     if (!hasFilters) {
       for (const c of [pnlCacheRef.current, pnlCacheRef.lastMonth]) {
         if (c && c.mtdStart === start && c.mtdEnd === end) return c
@@ -20243,7 +20275,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} />
+              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} onOpenInventory={openInventoryHealth} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} />}
@@ -20276,7 +20308,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} preset={invPreset} />
             </div>
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (

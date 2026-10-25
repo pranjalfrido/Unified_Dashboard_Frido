@@ -361,9 +361,28 @@ function useStaticInv(enabled = true, windowDays = 7) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs }) {
+export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs, preset }) {
   const isMobile = useIsMobile()
   const [healthFilters, setHealthFilters] = useState({})
+  // One-shot preset from the mobile Overview's inventory alert rows: { stockStatus: [...] } applies
+  // Inventory Health's existing Status filter; { scrollTo: id } scrolls to that section once rendered.
+  // Applied once per preset.nonce, adjusting state during render (not in an effect).
+  const [appliedPreset, setAppliedPreset] = useState(null)
+  if (preset?.nonce && preset.nonce !== appliedPreset) {
+    setAppliedPreset(preset.nonce)
+    if (preset.stockStatus) setHealthFilters(f => ({ ...f, stockStatus: preset.stockStatus }))
+  }
+  useEffect(() => {
+    if (!preset?.scrollTo) return
+    let tries = 0, timer
+    const go = () => {
+      const el = document.getElementById(preset.scrollTo)
+      if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      else if (tries++ < 60) timer = setTimeout(go, 250) // the section renders once inventory data has loaded
+    }
+    go()
+    return () => clearTimeout(timer)
+  }, [preset?.nonce, preset?.scrollTo])
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
   const [facilityView, setFacilityView] = useState('regular')
