@@ -9,7 +9,7 @@ export const CATEGORY_COLORS = {
   Customer: { bg: '#E0F2FE', text: '#0C4A6E' },
 };
 
-const CONNECTOR_URL = 'https://frido-data-connector-hjcnlcg4mq-el.a.run.app';
+const CONNECTOR_URL = 'https://frido-data-connector-1012773678578.asia-south1.run.app';
 const CONNECTOR_API_KEY = 'f5e4fd36fe9b0fa4bce39a20b18ec70d78e2e41028a5958bb27c5fdd184fc7b2';
 
 export async function sendMessage(conversationMessages) {
