@@ -211,12 +211,21 @@ function sections(model) {
 }
 
 // ── UI ──
-function Delta({ cur, prev, good }) {
-  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev) || prev === 0) return <span style={{ color: C.t3 }}>—</span>
+// isRate: the metric is itself a % (stored as a fraction), so its change is shown in points
+// ("▲ 3.3 pts"), not as a % of a % (CA11).
+function changeOf(cur, prev, isRate) {
+  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev)) return null
+  if (isRate) { const pts = (cur - prev) * 100; return { v: pts, flat: Math.abs(pts) < 0.05, text: `${Math.abs(pts).toFixed(1)} pts` } }
+  if (prev === 0) return null
   const ch = (cur - prev) / Math.abs(prev)
-  const better = good === 'up' ? ch > 0 : good === 'down' ? ch < 0 : null
-  const color = better == null || Math.abs(ch) < 0.005 ? C.t2 : better ? C.green.tx : C.red.tx
-  return <span style={{ color, fontWeight: 600 }}>{ch > 0 ? '▲' : ch < 0 ? '▼' : ''} {Math.abs(ch * 100).toFixed(1)}%</span>
+  return { v: ch, flat: Math.abs(ch) < 0.005, text: `${Math.abs(ch * 100).toFixed(1)}%` }
+}
+function Delta({ cur, prev, good, isRate = false }) {
+  const c = changeOf(cur, prev, isRate)
+  if (!c) return <span style={{ color: C.t3 }}>—</span>
+  const better = good === 'up' ? c.v > 0 : good === 'down' ? c.v < 0 : null
+  const color = better == null || c.flat ? C.t2 : better ? C.green.tx : C.red.tx
+  return <span style={{ color, fontWeight: 600 }}>{c.v > 0 ? '▲' : c.v < 0 ? '▼' : ''} {c.text}</span>
 }
 
 // Same segmented "% | Count" control as the other dashboard tables.
@@ -280,7 +289,7 @@ function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) 
                   const isLast = j === shown.length - 1
                   return <td key={j} style={{ ...td, textAlign: 'right', fontSize: isLast ? 14 : 12.5, fontWeight: isLast || r.strong ? 700 : 400, color: v == null ? C.t3 : isLast ? C.t1 : C.t3 }}>{fmtV(v)}</td>
                 })}
-                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.at(-2)} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} /></td>
+                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.at(-2)} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} isRate={asPct || r.fmt === pctF} /></td>
               </tr>,
             ]
           })}
@@ -579,15 +588,15 @@ function SectionTitle({ children, note, right }) {
 
 // Change pill: coloured tint + arrow + %, green when the move is good, red when bad, grey when
 // the KPI has no good direction (volumes), too small to matter, or has no previous value.
-function DeltaPill({ cur, prev, good, title }) {
-  const ok = cur != null && prev != null && isFinite(cur) && isFinite(prev) && prev !== 0
-  const ch = ok ? (cur - prev) / Math.abs(prev) : null
-  const flat = ch == null || Math.abs(ch) < 0.005
+function DeltaPill({ cur, prev, good, title, isRate = false }) {
+  const c = changeOf(cur, prev, isRate)
+  const ch = c ? c.v : null
+  const flat = !c || c.flat
   const better = flat || !good ? null : good === 'up' ? ch > 0 : ch < 0
   const tone = better == null ? { bg: C.bg, tx: C.t2 } : better ? C.green : C.red
   return (
     <span title={title} style={{ background: tone.bg, color: tone.tx, fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0 }}>
-      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${Math.abs(ch * 100).toFixed(1)}%`}
+      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${c.text}`}
     </span>
   )
 }
@@ -607,7 +616,7 @@ function KpiCard({ label, values, f, good, prevLabel, detail, noPrev }) {
       <div title={label} style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 24, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1.15 }}>{f(cur)}</div>
-        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} />
+        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} isRate={f === pctF} />
       </div>
       <div title={hasCur && !hasPrev && noPrev ? `${line} · ${noPrev}` : line} style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
       <div style={{ height: 34, marginTop: 'auto', paddingTop: 4 }}>
@@ -717,7 +726,7 @@ function SlaBars({ latest, prev }) {
           <div key={ch + k}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
               <span style={{ color: C.t2 }}><b style={{ color: C.t1 }}>{ch}</b> {lbl}</span>
-              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" /></span></span>
+              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" isRate /></span></span>
             </div>
             <div style={{ position: 'relative', height: 8, borderRadius: 4, background: C.bg }}>
               <div style={{ height: '100%', width: `${Math.min((v || 0) * 100, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.acd}, ${C.acc})` }} />
