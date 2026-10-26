@@ -1,9 +1,12 @@
-import { useEffect } from 'react'
-import { C, fmt, exportCSV } from '../utils.js'
+import { useEffect, useState } from 'react'
+import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import InfoStrip from '../responsive/InfoStrip.jsx'
-import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText } from './returnAnalysisData.js'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
+import CompactRankRow from '../responsive/CompactRankRow.jsx'
+import { Card } from '../responsive/CardKit.jsx'
+import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
 // RETURN_ANALYSIS_PLAN.md). Display only: every number is the desktop page's own field from
@@ -64,6 +67,34 @@ function MasterCard({ data, filters, layout }) {
   )
 }
 
+// ── By payment type: the desktop "Payment Type-wise Return Breakdown", one metric at a time ──
+const PAY_METRICS = [{ id: 'totalReturn', label: 'Total' }, { id: 'cancel', label: 'Cancel' }, { id: 'rto', label: 'RTO' }, { id: 'cir', label: 'CIR' }, { id: 'exchange', label: 'Exch' }]
+const PAY_ORDER = ['COD', 'PPCOD', 'Prepaid']
+function PaymentCard({ rows = [], basis }) {
+  const [metric, setMetric] = useState('totalReturn')
+  const suffix = basis === 'qty' ? 'PctQty' : 'Pct'
+  const denomKey = basis === 'qty' ? 'qty' : 'revenue'
+  const totalDenom = rows.reduce((s, r) => s + (r[denomKey] || 0), 0)
+  // "Overall" exactly as the desktop column: each type's % weighted by its own revenue (or qty).
+  const weighted = id => (totalDenom > 0 ? rows.reduce((s, r) => s + (r[denomKey] || 0) * (r[`${id}${suffix}`] || 0), 0) / totalDenom : 0)
+  const overall = { paymentType: 'Overall', revenue: rows.reduce((s, r) => s + (r.revenue || 0), 0), qty: rows.reduce((s, r) => s + (r.qty || 0), 0) }
+  PAY_METRICS.forEach(m => { overall[`${m.id}${suffix}`] = weighted(m.id) })
+  const ordered = [...rows].sort((a, b) => ((PAY_ORDER.indexOf(a.paymentType) + 1 || 9) - (PAY_ORDER.indexOf(b.paymentType) + 1 || 9)))
+  const list = [...ordered, overall]
+  const val = r => r[`${metric}${suffix}`] || 0
+  const max = Math.max(...list.map(val), 0) || 1
+  return (
+    <Card title="By payment type" sub={basis === 'qty' ? 'Share of units sold' : 'Share of gross revenue'}>
+      <SegmentToggle full label="Metric" value={metric} onChange={setMetric} options={PAY_METRICS} style={{ marginBottom: 6 }} />
+      {rows.length ? list.map((r, i) => (
+        <CompactRankRow key={r.paymentType} name={r.paymentType} value={p1(val(r))} valueColor={isRed(`${metric}Pct`, val(r)) ? M.down : undefined}
+          pct={`${basis === 'qty' ? `${fmtN(r.qty)} units` : fmt(r.revenue)} · ${totalDenom > 0 ? ((r[denomKey] || 0) / totalDenom * 100).toFixed(1) : '0.0'}%`}
+          barPct={(val(r) / max) * 100} last={i === list.length - 1} />
+      )) : <div style={{ fontSize: 13, color: M.muted, padding: '8px 0' }}>No data for this period</div>}
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -87,6 +118,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
     <div className="sales-mobile ra-mobile" data-layout={layout} style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
       {error && <div role="alert" style={{ padding: '10px 13px', borderRadius: 12, background: '#fff', border: `1px solid ${M.down}`, color: M.down, fontSize: 13 }}>Couldn't load return analysis: {error}</div>}
       {data && <MasterCard data={data} filters={filters} layout={layout} />}
+      {data && <PaymentCard rows={data.paymentTypeTable} basis={basis} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
