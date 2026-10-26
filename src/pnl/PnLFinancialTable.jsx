@@ -2,6 +2,7 @@ import { useState, Fragment } from 'react'
 import { C, fmtN, exportCSV } from '../utils.js'
 import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
+import InfoPopover from '../responsive/InfoPopover.jsx'
 import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 
 // Financial View table — Category → Product (→ SKU) grain, same visual language as
@@ -55,7 +56,7 @@ import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.j
 // includeUnmatched/mobilityNetBySubCat: D2C-only — see PnLPage.jsx for how each is computed.
 // spendAllocated: spend is an allocation, not real ad spend (EBO: 1.5% of Net) — the Spend column is
 // labelled as such and RoAS is hidden, since it would only restate the allocation rate.
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, spendAllocated = false }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, spendAllocated = false, headerInfo = null }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -362,7 +363,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   return (
     <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title}</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{title}{headerInfo && <InfoPopover title="GM % / CM1 % and credit notes" text={headerInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} />}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search category / product…"
             style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 200, outline: 'none' }} />

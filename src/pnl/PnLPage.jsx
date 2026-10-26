@@ -5,7 +5,7 @@ import PriceSimulator from './PriceSimulator.jsx'
 import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
 import B2BCostingCalculator from './B2BCostingCalculator.jsx'
 import POApprovalChecker from './POApprovalChecker.jsx'
-import { netRevenueOf, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
+import { fmtSigned, netRevenueOf, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 import { C } from '../utils.js'
 import { prevRange } from '../overview/usePrevPeriod.js'
 
@@ -1500,14 +1500,50 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       offSubCatData[x.category][x.subCategory].returnRev += Math.abs(x.cnRev || 0)
     })
     Object.keys(offSubCatData).forEach(cat => Object.keys(offSubCatData[cat]).forEach(sc => { offSubCatData[cat][sc] = pick(offSubCatData[cat][sc]) }))
-    const offSkuData = {}
+    // Product-level rows carry the credit notes too (fix/pnl-data item 2, decision 3), so the margin
+    // lines are measured on the same Net Revenue as the cards: each sub-category's credit notes are
+    // spread over that sub-tab's SKUs in the same sub-category by revenue share; credit notes with no
+    // sub-category (blank or the server's 'Others' fallback, or none of its SKUs sold) are spread over
+    // the whole sub-tab by revenue share.
+    // COGS stays on gross units — credit notes carry no unit count.
+    const offSubTabOf = sc => (isOffB2B(sc) ? 'b2b' : isOffStockist(sc) ? 'Stockist' : sc === 'MTGT' ? 'MTGT' : 'misc')
+    const offSkuAgg = {}
     filterOffSub(off.skuRows || []).forEach(x => {
-      if (!offSkuData[x.category]) offSkuData[x.category] = {}
-      if (!offSkuData[x.category][x.subCategory]) offSkuData[x.category][x.subCategory] = {}
-      if (!offSkuData[x.category][x.subCategory][x.sku]) offSkuData[x.category][x.subCategory][x.sku] = { rev: 0, excRev: 0, units: 0 }
-      offSkuData[x.category][x.subCategory][x.sku].rev += x.rev || 0
-      offSkuData[x.category][x.subCategory][x.sku].excRev += x.excRev || 0
-      offSkuData[x.category][x.subCategory][x.sku].units += x.units || 0
+      const tab = offSubTabOf(x.subChannel)
+      const k = `${tab}|${x.category}|${x.subCategory}|${x.sku}`
+      if (!offSkuAgg[k]) offSkuAgg[k] = { tab, cat: x.category, sc: x.subCategory, sku: x.sku, rev: 0, excRev: 0, units: 0, returnRev: 0 }
+      offSkuAgg[k].rev += x.rev || 0
+      offSkuAgg[k].excRev += x.excRev || 0
+      offSkuAgg[k].units += x.units || 0
+    })
+    const offSkuList = Object.values(offSkuAgg)
+    const offRevByGroup = {}, offRevByTab = {}
+    offSkuList.forEach(r => {
+      const g = `${r.tab}|${r.cat}|${r.sc}`
+      offRevByGroup[g] = (offRevByGroup[g] || 0) + r.rev
+      offRevByTab[r.tab] = (offRevByTab[r.tab] || 0) + r.rev
+    })
+    const offCnByGroup = {}, offCnPool = {}
+    filterOffSub(off.subCategoryRows || []).forEach(x => {
+      const cn = Math.abs(x.cnRev || 0)
+      if (!cn) return
+      const tab = offSubTabOf(x.subChannel)
+      const g = `${tab}|${x.category}|${x.subCategory}`
+      const noSubCategory = !x.subCategory || x.subCategory === 'Others'
+      if (!noSubCategory && offRevByGroup[g] > 0) offCnByGroup[g] = (offCnByGroup[g] || 0) + cn
+      else offCnPool[tab] = (offCnPool[tab] || 0) + cn
+    })
+    offSkuList.forEach(r => {
+      const g = `${r.tab}|${r.cat}|${r.sc}`
+      if (offCnByGroup[g]) r.returnRev += offCnByGroup[g] * (r.rev / offRevByGroup[g])
+      if (offCnPool[r.tab] && offRevByTab[r.tab] > 0) r.returnRev += offCnPool[r.tab] * (r.rev / offRevByTab[r.tab])
+    })
+    const offSkuData = {}
+    offSkuList.forEach(r => {
+      if (!offSkuData[r.cat]) offSkuData[r.cat] = {}
+      if (!offSkuData[r.cat][r.sc]) offSkuData[r.cat][r.sc] = {}
+      const d = offSkuData[r.cat][r.sc][r.sku] || (offSkuData[r.cat][r.sc][r.sku] = { rev: 0, excRev: 0, units: 0, returnRev: 0 })
+      d.rev += r.rev; d.excRev += r.excRev; d.units += r.units; d.returnRev += r.returnRev
     })
     const offDaily = filterOffSub(off.daily || [])
 
@@ -1654,7 +1690,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const prevGross = prevRows.reduce((s, r) => s + (r.rev || 0), 0)
         const prevExcRev = prevRows.reduce((s, r) => s + (r.excRev || 0), 0)
         const prevOrders = prevRows.reduce((s, r) => s + (r.orders || 0), 0)
-        return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n, prevGross, prevExcRev, prevOrders }
+        // Credit notes spread across a whole sub-tab (no sub-category, or none of its SKUs sold) — named
+        // in the allocation note on the Offline GM/CM1 cards, waterfall and Financial View.
+        const cnUnallocated = Object.values(offCnPool).reduce((a, b) => a + b, 0)
+        return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n, prevGross, prevExcRev, prevOrders, cnUnallocated }
       })(),
     }
   }, [data, amzChannelView, offlineSub, d2cSubCh, cogsMonthlyMap, sndRates])
@@ -2215,6 +2254,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           inProgress={PNL_IN_PROGRESS[activeTab] || null}
           returnsNotCaptured={['blinkit', 'instamart', 'zepto'].includes(activeTab)}
           spendAllocated={activeTab === 'ebo'}
+          creditNotesStep={activeTab === 'offline'}
+          marginInfo={activeTab === 'offline' ? `Credit notes allocated by revenue share within sub-tab and sub-category; ${fmtSigned(activeData.cnUnallocated || 0)} had no sub-category and is spread across the sub-tab.` : null}
           estimatedDays={activeTab === 'flipkart' ? (data.flipkart?.estimatedDays || 0) : activeTab === 'myntra' ? (data.myntra?.estimatedDays || 0) : 0}
           startDate={filters.start}
           endDate={filters.end}

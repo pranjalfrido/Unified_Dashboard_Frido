@@ -43,6 +43,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
 }
 import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, chartLegendProps } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
+import InfoPopover from '../responsive/InfoPopover.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
 // (legend, tooltip, checklist) so it always matches PnLFinancialTable.jsx's column order
@@ -120,13 +121,16 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
 // same base the margin cards use.
 // pcts: the KPI cards' own GM% / CM1% / CM2% (fix/pnl-data item 2) — printed as-is so the waterfall
 // and the cards can never disagree (each % has its own covered-net base in kpiSummary).
-function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing, actualNet = null, pcts = {} }) {
+// creditNotes (Offline): the deduction between Gross and Net as its own step (% of Gross, as the card).
+// marginInfo (Offline): an ⓘ on the GM and CM1 steps explaining how credit notes were allocated.
+function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing, actualNet = null, pcts = {}, creditNotes = null, marginInfo = null }) {
   const steps = [
     { label: 'Gross Revenue', value: gross, tone: 'start' },
+    creditNotes != null && { label: 'Credit notes', value: -creditNotes, tone: 'cost', pct: gross > 0 ? -(creditNotes / gross * 100) : 0 },
     { label: 'Net Revenue', value: net, tone: 'subtotal' },
     actualNet != null && { label: 'Net Revenue, actual (product detail)', value: actualNet, tone: 'subtotal' },
-    gm != null && { label: 'Gross Margin', value: gm, tone: 'subtotal', pct: pcts.gm },
-    cm1 != null && { label: 'CM1', value: cm1, tone: 'subtotal', pct: pcts.cm1 },
+    gm != null && { label: 'Gross Margin', value: gm, tone: 'subtotal', pct: pcts.gm, info: marginInfo },
+    cm1 != null && { label: 'CM1', value: cm1, tone: 'subtotal', pct: pcts.cm1, info: marginInfo },
     showMarketing && cm2 != null && { label: 'CM2', value: cm2, tone: 'total', pct: pcts.cm2 },
   ].filter(Boolean)
   const scaleMax = Math.max(gross, 1)
@@ -151,7 +155,7 @@ function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing, actualNet =
           return (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: s.tone === 'start' || s.tone === 'total' ? 12.5 : 11.5, fontWeight: s.tone === 'start' || s.tone === 'total' ? 700 : 500, color: s.tone === 'start' || s.tone === 'total' ? C.t1 : C.t2 }}>
-                <span>{s.label}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{s.label}{s.info && <InfoPopover title="Credit notes" text={s.info} style={{ width: 20, height: 20, margin: '-4px 0' }} />}</span>
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   {s.tone !== 'start' && <span style={{ fontSize: 10.5, fontWeight: 600, color: C.t3 }}>{pctOfNet.toFixed(1)}%</span>}
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: negative ? C.red.tx : C.t1 }}>{negative ? '−' : ''}{fmt(Math.abs(s.value))}</span>
@@ -351,7 +355,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0 }) {
+export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
@@ -491,9 +495,9 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
               ? <KPICard label="Returns" value="Not available" sub="Not captured for this channel" plain />
               : <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />}
             <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of ${onNet ? 'actual net' : 'Net Rev'}`} badge={cogsBadge} plain />
-            <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}${kpiSummary.gmPct != null ? onNet : ''}`} badge={gmBadge} plain />
+            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Gross Margin<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'Gross Margin'} value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}${kpiSummary.gmPct != null ? onNet : ''}`} badge={gmBadge} plain />
             <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of ${onNet && kpiSummary.sndPct != null ? 'actual net' : 'Net Rev'}`} badge={sndBadge} plain />
-            <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}${kpiSummary.cm1Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
+            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>CM1<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'CM1'} value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}${kpiSummary.cm1Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
             {showMarketing && <>
               <KPICard label={spendAllocated ? 'Mktg (allocated 1.5% of Net)' : 'Mktg Spend'} value={kpiSummary.spend != null ? fmt(kpiSummary.spend) : 'Not available'} sub={kpiSummary.spend != null ? `${fmtPctSub(kpiSummary.spendPct)} of Net Rev` : 'No ad spend source'} badge={spendBadge} plain />
               {!spendAllocated && <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />}
@@ -518,10 +522,10 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
         </div>
         <div style={{ flex: '1 1 260px', display: 'flex' }}>
           <PnLWaterfallCard gross={gross} net={net} gm={kpiSummary.gm} cm1={kpiSummary.cm1} cm2={kpiSummary.cm2} showMarketing={showMarketing} actualNet={actualNet}
-            pcts={{ gm: kpiSummary.gmPct, cm1: kpiSummary.cm1Pct, cm2: kpiSummary.cm2Pct }} />
+            pcts={{ gm: kpiSummary.gmPct, cm1: kpiSummary.cm1Pct, cm2: kpiSummary.cm2Pct }} creditNotes={creditNotesStep ? returnRev : null} marginInfo={marginInfo} />
         </div>
       </div>
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} spendAllocated={spendAllocated} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} spendAllocated={spendAllocated} headerInfo={marginInfo} />
     </div>
   )
 }
