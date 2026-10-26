@@ -11717,7 +11717,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
       const matchedScs = new Set(adsCatRows.map(r => r.subCategory).filter(Boolean))
       for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
         if (!selSubCat.length || matchedScs.has(sc)) {
-          catSpend += Object.values(dayMap).reduce((s, v) => s + (v || 0), 0)
+          // only the selected dates (the live payload's map holds whole months), as getProductAddlSpend
+          catSpend += Object.entries(dayMap).reduce((s, [date, v]) => s + (date >= _addlStart && date <= _addlEnd ? (v || 0) : 0), 0)
         }
       }
     }
@@ -12001,6 +12002,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
                   if (!matchedScs.size || matchedScs.has(sc)) {
                     for (const [date, spend] of Object.entries(dayMap)) {
+                      if (date < _addlStart || date > _addlEnd) continue // selected dates only
                       if (!map[date]) map[date] = { date, spend: 0, revenue: 0 }
                       map[date].spend += spend
                     }
