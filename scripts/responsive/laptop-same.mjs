@@ -15,7 +15,8 @@ for (const r of list.split(',')) {
   await page.mouse.move(1, 760); await page.waitForTimeout(500)
   // the app scrolls inside .page-scroll: unclip it so the full page is captured
   await page.addStyleTag({ content: 'html,body,#root,.app-shell,.app-main{height:auto !important;overflow:visible !important} .page-scroll{height:auto !important;overflow:visible !important;flex:none !important}' })
-  await page.waitForTimeout(800)
+  // unclipping resizes chart containers, and Recharts re-draws its lines (JS animation, ~1.5s)
+  await page.waitForTimeout(3000)
   await page.screenshot({ path: `${out}/${r.replace(/^.*Git\//, '').replace(/[/]/g, '-')}.png`, fullPage: true })
   await browser.close()
 }

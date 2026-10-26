@@ -104,5 +104,22 @@ if (want.has('movers')) {
   })
   same('Biggest movers (sub-cat, risers, units, vs 2nd-last day)', desk.join(' | '), mob.join(' | '))
 }
+if (want.has('daily')) {
+  // desktop default: Units · Date, collapsed category rows → name + Total; plus Grand Total
+  const desk = await D.page.evaluate(() => {
+    const h = [...document.querySelectorAll('*')].find(e => e.childElementCount === 0 && e.textContent.trim() === 'Product-Wise Sales Matrix')
+    let c = h; while (c && !c.querySelector('table')) c = c.parentElement
+    return [...c.querySelectorAll('table tbody tr, table tfoot tr')].map(tr => { const td = [...tr.children]; return `${td[0].innerText.replace(/^[›▸▾\s]+/, '').trim()} ${td.at(-1).innerText.trim()}` })
+  })
+  const mob = await P.page.evaluate(() => {
+    const sec = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Daily sales by product')
+    return [...sec.querySelectorAll('.drill-down > button')].filter(b => b.querySelector('svg, b')).map(b => b.innerText.split('\n').map(x => x.trim()).filter(x => x && x !== '›').join(' '))
+  })
+  const grand = desk.find(r => /^Grand Total/i.test(r)) || ''
+  const deskCats = desk.filter(r => !/^Grand Total/i.test(r))
+  same('Daily sales: category totals (units)', deskCats.join(' | '), mob.join(' | '))
+  const mobSum = mob.reduce((a, r) => a + Number(r.split(' ').at(-1).replace(/,/g, '')), 0)
+  same('Daily sales: grand total', grand.replace(/^Grand Total\s*/i, ''), mobSum.toLocaleString('en-IN'))
+}
 await D.browser.close(); await P.browser.close()
 console.log(fails ? `${fails} difference(s)` : 'ALL MATCH')

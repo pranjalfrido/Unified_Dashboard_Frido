@@ -8,6 +8,8 @@ import SegmentToggle from '../../responsive/SegmentToggle.jsx'
 import { MixLegend } from '../../responsive/MixBar.jsx'
 import { Card, Chips, ShowAllButton } from './ui.jsx'
 import { TopProductsCard, MoversCard } from './SaRankCards.jsx'
+import DailySalesCard from './SaDailySales.jsx'
+import { salesMatrixExport } from './saMobileData.js'
 
 // Sales & Allocation below 1024px (docs/responsive/INVENTORY_MOBILE_REDESIGN_PROMPT.md §3). Display
 // only: every value comes from SalesAllocationPage's own filteredData / memos (or the shared
@@ -93,9 +95,10 @@ export default function SalesAllocMobile({ fd, filters, dateFilters, revenueAvai
   useEffect(() => {
     onMenu?.([
       { id: 'trend', group: 'Export CSV', label: 'Sales trend (daily)', onSelect: () => exportCsv('sales_trend.csv', [{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }], fd.daily || []) },
+      { id: 'matrix', group: 'Export CSV', label: 'Sales matrix (date × SKU × channel)', onSelect: () => { const x = salesMatrixExport({ filteredData: fd, data: fd, dateFilters, filters }); exportCsv(x.filename, x.columns, x.rows) } },
       ...(movers ? [{ id: 'movers', group: 'Export CSV', label: 'Biggest movers (as shown)', onSelect: () => exportCsv('drastic_movers.csv', movers.columns, movers.rows) }] : []),
     ])
-  }, [onMenu, fd, movers])
+  }, [onMenu, fd, movers, dateFilters, filters])
   useEffect(() => () => onMenu?.([]), [onMenu])
   return (
     <div className="inv-mobile sa-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
@@ -104,6 +107,7 @@ export default function SalesAllocMobile({ fd, filters, dateFilters, revenueAvai
       <ContributionCard channels={channels} categories={categories} revenueAvailable={revenueAvailable} />
       <TopProductsCard fd={fd} channels={filters.topChannel} revenueAvailable={revenueAvailable} />
       <MoversCard fd={fd} revenueAvailable={revenueAvailable} onRows={setMovers} />
+      <DailySalesCard fd={fd} revenueAvailable={revenueAvailable} />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
 import SalesAllocMobile from './mobile/SalesAllocMobile.jsx'
-import { topProductsFrom } from './mobile/saMobileData.js'
+import { topProductsFrom, matrixBucketKeyFor, matrixCellsFor, salesMatrixExport } from './mobile/saMobileData.js'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -568,18 +568,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // sub-category names can contain a literal "|" (real data has e.g. "FSS101 | Everyday
   // Foldable Wheelchair"), which corrupted plain |-joined paths and crashed date parsing
   // downstream when the shifted "date" field wasn't a real date.
-  const matrixBucketKeyFor = (granularity, dateStr) => {
-    if (granularity === 'date') return dateStr
-    const d = new Date(dateStr + 'T00:00:00Z')
-    if (granularity === 'week') {
-      const day = (d.getUTCDay() + 6) % 7
-      d.setUTCDate(d.getUTCDate() - day)
-      return d.toISOString().slice(0, 10)
-    }
-    if (granularity === 'month') return dateStr.slice(0, 7)
-    if (granularity === 'quarter') { const [y, m] = dateStr.split('-'); return `${y}-Q${Math.ceil(Number(m) / 3)}` }
-    return dateStr.slice(0, 4) // year
-  }
+  // matrixBucketKeyFor / matrixCellsFor: mobile/saMobileData.js (shared with the mobile drill-down).
 
   const matrixColumns = useMemo(() => {
     if (!filteredData) return []
@@ -590,17 +579,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // daily cells whenever granularity changes.
   const matrixCellsByPath = useMemo(() => {
     if (!filteredData) return new Map()
-    const m = new Map()
-    for (const c of filteredData.matrixCellRows) {
-      const bucketKey = matrixBucketKeyFor(matrixGranularity, c.date)
-      if (!m.has(c.path)) m.set(c.path, new Map())
-      const perBucket = m.get(c.path)
-      if (!perBucket.has(bucketKey)) perBucket.set(bucketKey, { qty: 0, rev: 0 })
-      const cell = perBucket.get(bucketKey)
-      cell.qty += c.qty
-      cell.rev += c.rev
-    }
-    return m
+    return matrixCellsFor(filteredData.matrixCellRows, matrixGranularity)
   }, [filteredData, matrixGranularity])
 
   // Row total (sum across all visible bucket columns) per path — used for the Total column
@@ -982,35 +961,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
               <button
                 onClick={() => {
-                  const raw = filteredData?.rawRows || data?.rawRows || []
-                  const ds = dateFilters?.start, de = dateFilters?.end
-                  const mch = filters.matrixChannel || []
-                  const subset = raw.filter(r => {
-                    if (ds && r.date < ds) return false
-                    if (de && r.date > de) return false
-                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
-                    return true
-                  })
-                  const map = new Map()
-                  for (const r of subset) {
-                    const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
-                    if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
-                    const e = map.get(k); e.qty += r.qty; e.rev += r.rev
-                  }
-                  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
-                  exportCsv(
-                    `sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
-                    [
-                      { label: 'Date', key: 'date' },
-                      { label: 'Category', key: 'category' },
-                      { label: 'Sub-Category', key: 'subCategory' },
-                      { label: 'SKU', key: 'sku' },
-                      { label: 'Channel', key: 'channel' },
-                      { label: 'Units', key: 'qty' },
-                      { label: 'Revenue', key: 'rev' },
-                    ],
-                    rows
-                  )
+                  const x = salesMatrixExport({ filteredData, data, dateFilters, filters })
+                  exportCsv(x.filename, x.columns, x.rows)
                 }}
                 style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
                 ⭳ Export CSV
