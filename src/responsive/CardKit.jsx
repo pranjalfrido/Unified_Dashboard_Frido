@@ -1,6 +1,7 @@
-import { C } from '../../utils.js'
+import { C } from '../utils.js'
 
-// Small building blocks for the Inventory mobile views - same look as src/sales/SalesMobileView.jsx.
+// Small card building blocks for the mobile page views (Inventory, Logistics) - same look as
+// src/sales/SalesMobileView.jsx: Card, ShowAllButton, Chips / ChipRow, KV tiles, RowText.
 const M = C.m
 
 export function Card({ title, right, sub, children, id }) {

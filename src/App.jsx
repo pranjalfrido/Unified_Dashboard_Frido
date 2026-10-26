@@ -41,6 +41,10 @@ import { SalesFilterButton } from './sales/SalesFilters.jsx'
 import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
 import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
 import { invCaption } from './inventory/mobile/invCaption.js'
+import LogPerfFilterButton from './logistics/mobile/LogPerfFilters.jsx'
+import PerfMobile from './logistics/mobile/PerfMobile.jsx'
+import { HeaderFilterIcon, HeaderMonthPill } from './logistics/mobile/LogHeaderBits.jsx'
+import { perfStripItems, perfRemove, perfClear } from './logistics/mobile/logPerfFilterState.js'
 import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
@@ -423,6 +427,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
   const isMobile = useIsMobile()
+  // Below 1024px (and phone landscape) the page renders the mobile layout (PerfMobile) instead.
+  const bpL = useBreakpoint()
+  const logMobile = bpL.width < 1024 || bpL.isPhoneLandscape
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
     if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
@@ -959,9 +966,31 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
   useEffect(() => {
     if (!onFilterUI) return
-    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount })
+    // onRefresh / loading: the top bar's Refresh reloads Logistics data (it used to call the Sales fetch).
+    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount, onRefresh: fetchLogistics, loading })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFilterUI, lFilters, lActiveCount, opts])
+  }, [onFilterUI, lFilters, lActiveCount, opts, fetchLogistics, loading])
+
+  if (logMobile) {
+    // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
+    return (
+      // The page is mounted in a non-scrolling flex box (desktop scrolls its own inner div), so the
+      // mobile view is its own scroll container.
+      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
+        <LoadingOverlay loading={loading} label="Loading logistics" />
+        {error && !rawData && !staleData && (
+          <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
+            Could not load logistics data. <button type="button" onClick={fetchLogistics} style={{ border: 'none', background: 'none', color: C.m.green, fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer' }}>Retry</button>
+          </div>
+        )}
+        {data && (
+          <PerfMobile data={data} prevData={prevData} breakdownSrc={breakdownSrc} filters={filters} lFilters={lFilters}
+            sc={{ cSelected, setCSelected, cPrimary, setCPrimary, cView, cDrill, cTier, setCTier, cPayment, setCPayment }}
+            rtoAgeingBase={rtoAgeingBase} setRtoAgeingBase={setRtoAgeingBase} ndrPayFilter={ndrPayFilter} setNdrPayFilter={setNdrPayFilter} />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -1056,7 +1085,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
               <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} invertColor compact tight={filterSidebarOpen} />
               <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
@@ -4873,7 +4902,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -4892,18 +4921,55 @@ function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirst
     const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
     const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
     const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
-    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} />
+    // Data source / last update live in the "⋯" sheet (note), not under the title: the header stays two rows.
+    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} note={invCaption(tab, ctrl)} />
     return (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Inventory" caption={invCaption(tab, ctrl)}
+        <MobilePageHeader title="Inventory" compact
           right={<>
-            {subTabs.length < 2 && menu}
             {tab === 'sales' && ctrl?.filters && <div className="tnav-right"><DateRangePicker filters={ctrl.filters} setFilters={ctrl.setFilters} onRefresh={ctrl.onRefresh} /></div>}
             <InvFilterButton tab={tab} ctrl={ctrl} />
+            {menu}
           </>}
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={tab} onSub={setInvTab}
-          subRight={subTabs.length > 1 ? menu : null}
           strip={{ items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) }} />
+      </div>
+    )
+  }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'logistics' || page === 'logistics-cost')) {
+    // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §1: "Logistics" with Performance / Cost underline tabs; Cost
+    // adds the slim Overview · B2C · FTL/PTL · 3PL row and the billing-month pill (its sheet and the
+    // filter sheet live in LogisticsCostPage, reached through logCostCtrl). Refresh / Export / info → "⋯".
+    const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
+    const hasCost = hasCostAccess(allowedTabs)
+    const subTabs = [hasPerf && { id: 'logistics', label: 'Performance' }, hasCost && { id: 'logistics-cost', label: 'Cost' }].filter(Boolean)
+    if (page === 'logistics') {
+      const menu = <ActionMenu items={logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : []} title="Logistics · Performance" />
+      return (
+        <div className="topnav m-header" data-page={page}>
+          <MobilePageHeader title="Logistics" compact
+            right={<>
+              <div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={logisticsFilterUI?.onRefresh || onRefresh} loading={logisticsFilterUI ? logisticsFilterUI.loading : loading} /></div>
+              <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />
+              {menu}
+            </>}
+            subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
+            strip={{ items: perfStripItems(lFilters), onRemove: key => perfRemove(setLFilters, key), onClear: () => perfClear(setLFilters) }} />
+        </div>
+      )
+    }
+    const cc = logCostCtrl
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Logistics" compact
+          right={<>
+            {cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />}
+            {cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />}
+            <ActionMenu items={cc?.menu || []} title="Logistics · Cost" />
+          </>}
+          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
+          subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
+          strip={cc?.strip} />
       </div>
     )
   }
@@ -4995,7 +5061,9 @@ function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirst
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
-            <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
+            <DateRangePicker filters={filters} setFilters={setFilters}
+              onRefresh={page === 'logistics' && logisticsFilterUI?.onRefresh ? logisticsFilterUI.onRefresh : onRefresh}
+              loading={page === 'logistics' && logisticsFilterUI ? logisticsFilterUI.loading : loading} />
           </div>
         </div>
       )}
@@ -19997,6 +20065,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Colour theme. index.html already applied the stored value to <html> before
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
+  const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -20703,7 +20772,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {page !== 'ask' && <Topnav allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
+        {page !== 'ask' && <Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
@@ -20747,7 +20816,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
+              <LogisticsCostPage onMobileCtrl={setLogCostCtrl} externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
                 onOpenAllocation={() => goTo('courier-allocation')} />
             </div>
           )}

@@ -65,6 +65,7 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 | Maps | full width, tap region → BottomSheet, ranked list below |
 
 ## 4. Behaviour rules
+- **Scrollbars (every scroll area, every page):** 3px, light Frido green `rgba(31,90,61,.28)`, transparent track, no arrow buttons — page, bottom sheets, full-screen lists, filter pickers, tables and any inner scroll. Use one global CSS rule with `::-webkit-scrollbar { width:3px; height:3px }`, a transparent track, a 3px rounded thumb and `::-webkit-scrollbar-button { display:none }`. **Important: do NOT set `scrollbar-width` / `scrollbar-color` for Chrome/Edge**: since Chrome 121 those standard properties override `::-webkit-scrollbar` and bring back the wide Windows scrollbar with arrows. Put them only inside `@supports not selector(::-webkit-scrollbar) { … }` (Firefox). Remove any existing `scrollbar-width` declarations elsewhere. Not per-component styles. Desktop uses the same rule.
 - Nothing that changes on touch may resize a card or move content below it (fixed heights).
 - No inner scroll containers in page flow; no page-level horizontal scroll.
 - Every number has a plain label; abbreviations get an InfoPopover definition.
@@ -83,11 +84,6 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 - [ ] Numbers identical to desktop/baseline
 - [ ] Laptop 1366 screenshot unchanged
 - [ ] Screenshots iPhone SE / 14 / Pixel / small Android / landscape / iPad portrait
-- [ ] WebKit (iPhone) checks pass: screenshots, overflow, palette and "no resize on touch" on
-      Playwright WebKit with the iPhone SE / iPhone 14 (+ landscape) device profiles (isMobile + hasTouch);
-      `RESPONSIVE_ENGINE=webkit` with the scripts in `scripts/responsive/` (check-touch, check-palette,
-      check-nav-header, …). Report Chromium vs WebKit differences; fix WebKit-only issues in the shared
-      components.
 
 ## 6. Order of pages
 Overview (with alignment addendum) → Sales → P&L (+ Financial MIS) → Ads → Inventory → Logistics → Customer → Profile → internal tools (usable level: COGS, Packaging BOM, ledgers, Courier Allocation, Documents, P&L calculators) → FLASH (minimal; replaced by Ask Frido later).

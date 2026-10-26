@@ -7,7 +7,7 @@ import StatusDot from '../../responsive/StatusDot.jsx'
 import BottomSheet from '../../responsive/BottomSheet.jsx'
 import FullScreenList from '../../responsive/FullScreenList.jsx'
 import InfoPopover from '../../responsive/InfoPopover.jsx'
-import { Card, Chips, KV, RowText, ShowAllButton } from './ui.jsx'
+import { Card, Chips, KV, RowText, ShowAllButton } from '../../responsive/CardKit.jsx'
 import { STATUS_ORDER, MIX_SEGMENTS, statusColor, mixParts } from './invStatus.js'
 import { explorerSkus, groupRows } from './invMobileData.js'
 

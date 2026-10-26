@@ -23,6 +23,8 @@ const { browser, ctx } = await launch(vp)
 const page = await ctx.newPage()
 const ROUTE = '/' + (process.env.ROUTE || 'overview').replace(/^.*Git\//, '').replace(/^\/+/, '') // e.g. ROUTE=sales/shopify/overall (no leading slash on Git Bash)
 await openPage(page, ROUTE)
+// TAB=<name>: tap a header tab first (e.g. a Logistics → Cost sub-tab: TAB=B2C)
+if (process.env.TAB) { await page.getByRole('tab', { name: process.env.TAB, exact: true }).first().tap(); await page.waitForTimeout(3000) }
 await page.waitForFunction(() => !document.querySelector('.delta-shimmer'), null, { timeout: 120000 }).catch(() => {})
 const found = await page.evaluate(({ root, palette }) => {
   const near = (c) => palette.some(p => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) <= 6)

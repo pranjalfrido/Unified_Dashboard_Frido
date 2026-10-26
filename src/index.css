@@ -94,12 +94,14 @@ a,button,select,input,textarea,label,summary,[role=button],[role=tab],[role=menu
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 
-/* Scrollbars: thin and light on every page (2026-10-26). Firefox via scrollbar-width / scrollbar-color. */
-@supports (-moz-appearance:none){ *{scrollbar-width:thin;scrollbar-color:rgba(28,36,32,.16) transparent} } /* Firefox only: in Chrome these would override the 3px bar below */
+/* Scrollbars: 3px light Frido green on every page (MOBILE_DESIGN_SYSTEM.md §4). Firefox via scrollbar-width /
+   scrollbar-color, only where ::-webkit-scrollbar is unsupported: in Chrome 121+ they would override the 3px bar. */
+@supports not selector(::-webkit-scrollbar){ *{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent} }
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:rgba(28,36,32,.32)}
+::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(31,90,61,.45)}
+::-webkit-scrollbar-button{display:none}
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:var(--app-h);overflow:hidden;background:var(--bg)}
@@ -184,7 +186,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* clip-path:none is not enough - the scroll container clips regardless. The side and
    bottom padding above is what actually gives the card hover glow room to render. */
 .page-scroll::-webkit-scrollbar{width:3px}
-.page-scroll::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
+.page-scroll::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
@@ -1625,7 +1627,8 @@ svg text, svg tspan{
   .topnav.m-header .mph-pad{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
   .topnav.m-header .mph-row1{ gap:8px }
   .topnav.m-header .filtered-strip{ padding-left:max(12px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important }
-  .topnav.m-header[data-page="sales"] .tnav-title{ font-size:17px; font-weight:600 }
+  /* Same page-title size on every page that uses the phone header (Overview, Sales, Inventory, Logistics …). */
+  .topnav.m-header .tnav-title{ font-size:17px; font-weight:600 }
   .mph-chips::-webkit-scrollbar{ display:none }
   /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
   .sales-tabs, .fbar{ display:none !important }
@@ -1633,3 +1636,12 @@ svg text, svg tspan{
 
 /* Phone portrait: the plain bar's 6px gap (index.css ≤768 block) also between header items. */
 @media (max-width:768px){ .topnav.m-header .mph-row1{ gap:6px } }
+
+/* Logistics mobile (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §0): no outline on tap for chips and toggles;
+   a focus ring only for keyboard focus. */
+.log-mobile button:focus, .mph-tabs2 button:focus, .mrp-month:focus, .mrp-pill:focus{ outline:none }
+.log-mobile button:focus-visible, .mrp-month:focus-visible, .mrp-pill:focus-visible{ outline:2px solid rgba(31,90,61,.5); outline-offset:1px }
+.mph-tabs2 button:focus-visible{ outline:2px solid rgba(255,255,255,.8); outline-offset:-2px }
+
+/* Phone header: no outline left on a tab or button after a tap; the ring shows for keyboard focus only. */
+.topnav.m-header button:focus:not(:focus-visible){ outline:none }

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Month Picker Mockup</title>
+<style>
+:root{--g:#1f5a3d;--gd:#0f2a1d;--ink:#1c2420;--mut:#7b847f;--line:#eeebe4;--bg:#f4f2ed;--soft:#e9f3ed;--glowb:rgba(31,90,61,.22);--glow:0 0 10px 1px rgba(31,90,61,.10)}
+*{box-sizing:border-box}
+body{margin:0;background:#efebe4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);padding:28px 16px;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus{outline:none}button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+h1.t{font-size:18px;margin:0 0 4px}.cap{font-size:13px;color:var(--mut);margin:0 0 18px}
+.wrap{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+
+/* ---------- LAPTOP ---------- */
+.laptop{width:min(980px,100%);background:var(--bg);border-radius:14px;border:1px solid #ddd8cf;box-shadow:0 14px 40px rgba(0,0,0,.10);overflow:visible}
+.lbar{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#fff;border-bottom:1px solid var(--line);border-radius:14px 14px 0 0;flex-wrap:wrap}
+.lbar h2{font-size:17px;margin:0 auto 0 0}
+.lbar h2 small{display:block;font-size:12px;color:var(--mut);font-weight:500;margin-top:2px}
+.btn{height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn.pri{background:var(--g);color:#fff;border-color:var(--g)}
+.mp{position:relative}
+.trig{height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--glowb);background:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px;box-shadow:var(--glow)}
+.trig .n{font-size:11.5px;font-weight:700;color:var(--g);background:var(--soft);border-radius:999px;padding:2px 8px}
+.trig .car{color:var(--mut);font-size:11px}
+.pop{position:absolute;top:44px;left:0;width:580px;background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 18px 44px rgba(15,42,29,.16);display:none;z-index:5}
+.pop.open{display:block}
+.pbody{display:grid;grid-template-columns:222px 1fr}
+.pre{border-right:1px solid var(--line);padding:10px 8px}
+.pre .lab,.cal .lab{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;padding:4px 8px 6px}
+.pre button{display:flex;justify-content:space-between;width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:500}
+.pre button{white-space:nowrap;gap:8px;align-items:baseline}.pre button small{color:var(--mut);font-size:11.5px}
+.pre button:hover{background:#f6f8f6}
+.pre button.on{background:var(--soft);border-color:var(--glowb);font-weight:700;color:var(--g)}
+.cal{padding:10px 14px 12px}
+.seg{display:flex;background:#f1f3f1;border-radius:10px;padding:3px;margin:0 0 10px}
+.seg button{flex:1 1 0;border:none;background:none;border-radius:8px;padding:6px 0;font-size:12.5px;font-weight:600;color:var(--mut)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.yr{display:flex;align-items:center;justify-content:space-between;margin:2px 0 8px}
+.yr b{font-size:14px}
+.yr button{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--mut)}
+.yr button:disabled{opacity:.35;cursor:default}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;row-gap:6px}
+.m{height:38px;border:none;background:none;font-size:13px;font-weight:600;position:relative;z-index:0}
+.m::before{content:'';position:absolute;inset:0 0;z-index:-1}
+.m span{display:inline-grid;place-items:center;width:52px;height:34px;border-radius:10px}
+.m:hover:not(:disabled) span{background:#f1f5f2}
+.m:disabled{color:#c8ccc9;cursor:default}
+.m.in::before{background:var(--soft)}
+.m.in.s::before{left:50%}.m.in.e::before{right:50%}.m.in.s.e::before{display:none}
+.grid .m:nth-child(4n+1).in::before{border-radius:10px 0 0 10px}.grid .m:nth-child(4n).in::before{border-radius:0 10px 10px 0}
+.m.s span,.m.e span,.m.pk span{background:var(--g)!important;color:#fff}
+.m.now span{box-shadow:inset 0 0 0 1px var(--glowb)}
+.hint{font-size:11.5px;color:var(--mut);margin-top:8px;min-height:16px}
+.pfoot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:10px 14px}
+.pfoot .sum{margin-right:auto;font-size:12.5px}
+.pfoot .sum b{font-size:13px}
+.pfoot .sum div{color:var(--mut);font-size:11.5px;margin-top:1px}
+.ghost{height:34px;padding:0 12px;border:none;background:none;font-size:13px;font-weight:600;color:var(--mut);border-radius:10px}
+.apply{height:34px;padding:0 16px;border:none;background:var(--g);color:#fff;font-size:13px;font-weight:700;border-radius:10px}
+.lcontent{padding:18px;min-height:470px}
+.ph{background:#fff;border-radius:14px;height:110px;margin-bottom:12px;border:1px solid var(--line);display:grid;place-items:center;color:#c4c9c6;font-size:13px}
+.cmp{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center;margin:0 0 12px}
+
+/* ---------- PHONE ---------- */
+.phone{width:375px;height:740px;background:var(--bg);border-radius:36px;border:10px solid #111;box-shadow:0 20px 50px rgba(0,0,0,.18);position:relative;overflow:hidden;display:flex;flex-direction:column}
+.mh{background:linear-gradient(160deg,#0f2a1d,#1c4630);color:#fff;padding:16px 14px 12px}
+.mh .r{display:flex;align-items:center;justify-content:space-between}
+.mh h3{margin:0;font-size:17px}
+.mh small{display:block;color:rgba(255,255,255,.62);font-size:11.5px;margin-top:3px}
+.mpill{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#fff;border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600}
+.mbody{flex:1;padding:12px}
+.mph{background:#fff;border-radius:18px;height:150px;margin-bottom:10px;display:grid;place-items:center;color:#c4c9c6;font-size:12px}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:.2s}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;transform:translateY(100%);transition:.25s;display:flex;flex-direction:column;max-height:88%}
+.phone.open .shade{opacity:1;pointer-events:auto}.phone.open .sheet{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:#ddd;margin:8px auto 6px}
+.sh{padding:0 16px 4px;display:flex;justify-content:space-between;align-items:baseline}
+.sh b{font-size:16px}.sh span{font-size:12px;color:var(--mut)}
+.sbody{padding:6px 16px 8px;overflow:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.chips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600}
+.chips button.on{border-color:var(--glowb);box-shadow:var(--glow);background:var(--soft);color:var(--g)}
+.sheet .m span{width:58px;height:38px}.sheet .m{height:42px}
+.sfoot{display:flex;gap:8px;padding:10px 16px 18px;border-top:1px solid var(--line)}
+.sfoot .ghost{flex:0 0 auto}.sfoot .apply{flex:1;height:44px;font-size:14px}
+
+/* notes */
+.notes{max-width:980px;margin:26px auto 0;font-size:14px;line-height:1.55;background:#fff;border-radius:14px;padding:16px 20px;border:1px solid var(--line)}
+.notes h2{font-size:16px;margin:0 0 8px}.notes li{margin-bottom:6px}
+.tag{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:10px;color:#6b5414}
+@supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent}}*::-webkit-scrollbar{width:3px;height:3px}*::-webkit-scrollbar-track{background:transparent}*::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}*::-webkit-scrollbar-button{display:none;height:0;width:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div style="max-width:980px;margin:0 auto">
+  <h1 class="t">Month picker: one control for laptop and mobile</h1>
+  <p class="cap">Replaces the date pill + "4 of 9" checkbox dropdown. Click the pill on the laptop, or the 📅 pill on the phone.</p>
+</div>
+
+<div class="wrap">
+  <!-- LAPTOP -->
+  <div class="laptop">
+    <div class="lbar">
+      <h2>Logistics Cost Analytics<small id="lsub">Billing months · Apr – Jul 2026</small></h2>
+      <div class="mp">
+        <button class="trig" id="trig">📅 <span id="tlab">Apr – Jul 2026</span><span class="n" id="tn">4 mo</span><span class="car">▾</span></button>
+        <div class="pop" id="pop"></div>
+      </div>
+      <button class="btn">⚲ Filters <span class="trig n" style="all:unset;font-size:11.5px;font-weight:700;color:#1f5a3d;background:#e9f3ed;border-radius:999px;padding:2px 8px">4</span></button>
+      <button class="btn" title="Info">ⓘ</button>
+      <button class="btn">Allocation</button>
+      <button class="btn">⤓ Export</button>
+    </div>
+    <div class="lcontent">
+      <div class="ph">Cost cards (unchanged)</div>
+      <div class="ph">Trend chart (unchanged)</div>
+      <div class="ph">Partners table (unchanged)</div>
+    </div>
+  </div>
+
+  <!-- PHONE -->
+  <div class="phone" id="phone">
+    <div class="mh"><div class="r"><div><h3>Logistics</h3><small id="msub">Billing months · Apr – Jul 2026</small></div><button class="mpill" id="mtrig">📅 <span id="mlab">Apr – Jul 26</span></button></div></div>
+    <div class="mbody"><div class="mph">Master card</div><div class="mph">Partners</div><div class="mph">…</div></div>
+    <div class="shade" id="shade"></div>
+    <div class="sheet" id="sheet"></div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>What changes</h2>
+  <ul>
+    <li><b>One pill instead of two controls.</b> It shows the selection in words ("Apr – Jul 2026") and a count chip ("4 mo"). The separate "4 of 9" dropdown and the search box go away.</li>
+    <li><b>Quick presets on the left</b>: Latest month, Last 3, Last 6, FY 2026–27 to date, All available. Each shows its range, so you know what you'll get.</li>
+    <li><b>Month grid by year</b> (Jan–Dec, ‹ › for years). Months without billing data are greyed and can't be picked, so there's no empty selection.</li>
+    <li><b>Range (default)</b>: click the start month, then the end month; the band between them fills. <b>Pick months</b>: click any months on/off, the same as today's checkboxes, for gaps like "Apr + Jun".</li>
+    <li><b>Apply</b> runs the query once (no reload on every click). <b>Esc</b> or clicking outside cancels. The footer always shows what will be applied.</li>
+    <li><b>Mobile</b>: a bottom sheet with preset chips, the month grid (always visible, bigger tap targets) and a sticky "Apply · Apr – Jul 26". <b>Range only</b> on mobile (no Pick months toggle); if custom months were picked on laptop, the pill shows "5 months" and the first tap starts a new range.</li>
+    <li><b>Numbers unchanged</b>: the picker outputs the same list of billing months the current dropdown sends. Only the control changes.</li>
+  </ul>
+  <div class="tag">Mockup. Data available Feb – Oct 2026 is illustrative; the real list comes from the months the page already loads.</div>
+</div>
+
+<script>
+const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const AV=new Set(); for(let m=1;m<=9;m++) AV.add(2026*12+m); // Feb..Oct 2026
+const AVL=[...AV].sort((a,b)=>a-b), LAST=AVL[AVL.length-1], FIRST=AVL[0];
+const key=(y,m)=>y*12+m, Y=k=>Math.floor(k/12), M=k=>k%12;
+const lab=k=>MN[M(k)]+' '+Y(k);
+let applied={mode:'range',a:key(2026,3),b:key(2026,6),picks:new Set()};
+let st=null, pending=null, year=2026, hover=null;
+
+function clone(s){return {mode:s.mode,a:s.a,b:s.b,picks:new Set(s.picks)}}
+function sel(s){ if(s.mode==='pick') return [...s.picks].sort((a,b)=>a-b);
+  if(s.a==null) return []; const b=s.b??s.a, lo=Math.min(s.a,b), hi=Math.max(s.a,b); return AVL.filter(k=>k>=lo&&k<=hi);}
+function words(s,short){ const L=sel(s); if(!L.length) return 'No months';
+  const contig=L.every((k,i)=>i===0||k===L[i-1]+1);
+  const f=k=>MN[M(k)]+(short?' '+String(Y(k)).slice(2):' '+Y(k));
+  if(L.length===1) return MN[M(L[0])]+' '+Y(L[0]);
+  if(contig) return Y(L[0])===Y(L.at(-1))? MN[M(L[0])]+' – '+f(L.at(-1)) : f(L[0])+' – '+f(L.at(-1));
+  return L.length<=3? L.map(k=>MN[M(k)]).join(', ')+' '+(short?String(Y(L[0])).slice(2):Y(L[0])) : L.length+' months';}
+const presets=[
+ {id:'l1',t:'Latest month',r:()=>[LAST,LAST]},
+ {id:'l3',t:'Last 3 months',r:()=>[LAST-2,LAST]},
+ {id:'l6',t:'Last 6 months',r:()=>[LAST-5,LAST]},
+ {id:'fy',t:'FY 26–27 to date',r:()=>[key(2026,3),LAST]},
+ {id:'all',t:'All available',r:()=>[FIRST,LAST]}];
+function presetOn(s){ if(s.mode!=='range'||s.a==null) return null; const lo=Math.min(s.a,s.b??s.a), hi=Math.max(s.a,s.b??s.a);
+  const p=presets.find(p=>{const [a,b]=p.r(); return Math.max(a,FIRST)===Math.max(lo,FIRST)&&b===hi&&sel(s).length===AVL.filter(k=>k>=a&&k<=b).length}); return p?p.id:null;}
+function short(p){const [a,b]=p.r(); const s={mode:'range',a:Math.max(a,FIRST),b}; return words(s,true);}
+
+function gridHTML(s){
+  const L=new Set(sel(s)); const lo=s.mode==='range'&&s.a!=null?Math.min(s.a,s.b??hover??s.a):null, hi=s.mode==='range'&&s.a!=null?Math.max(s.a,s.b??hover??s.a):null;
+  let h='';
+  for(let m=0;m<12;m++){const k=key(year,m), ok=AV.has(k); let c='m';
+    if(ok){ if(s.mode==='range'&&lo!=null&&k>=lo&&k<=hi){c+=' in'; if(k===lo)c+=' s'; if(k===hi)c+=' e';}
+      if(s.mode==='pick'&&L.has(k)) c+=' pk'; if(k===LAST)c+=' now';}
+    h+=`<button class="${c}" data-k="${k}" ${ok?'':'disabled'} title="${ok?lab(k):'No billing data'}"><span>${MN[m]}</span></button>`;}
+  return h;}
+function hint(s){ if(s.mode==='pick') return 'Click months to add or remove them.';
+  return s.b==null? 'Now click the end month.' : 'Click a month to start a new range.';}
+function footer(s){const n=sel(s).length; return `<b>${words(s)}</b><div>${n} billing month${n===1?'':'s'}</div>`;}
+
+/* ---- laptop popover ---- */
+const pop=document.getElementById('pop');
+function renderPop(){
+  const p=presetOn(st);
+  pop.innerHTML=`<div class="pbody"><div class="pre"><div class="lab">Quick pick</div>
+   ${presets.map(x=>`<button data-p="${x.id}" class="${p===x.id?'on':''}">${x.t}<small>${short(x)}</small></button>`).join('')}</div>
+   <div class="cal"><div class="seg"><button data-mode="range" class="${st.mode==='range'?'on':''}">Range</button><button data-mode="pick" class="${st.mode==='pick'?'on':''}">Pick months</button></div>
+   <div class="yr"><button data-y="-1" ${year<=Y(FIRST)?'disabled':''}>‹</button><b>${year}</b><button data-y="1" ${year>=Y(LAST)?'disabled':''}>›</button></div>
+   <div class="grid" id="lg">${gridHTML(st)}</div><div class="hint">${hint(st)}</div></div></div>
+   <div class="pfoot"><div class="sum">${footer(st)}</div><button class="ghost" data-x="clear">Clear</button><button class="ghost" data-x="cancel">Cancel</button><button class="apply" data-x="apply" ${sel(st).length?'':'disabled style="opacity:.4"'}>Apply</button></div>`;
+}
+function wire(root,render,close){
+  root.onclick=e=>{const b=e.target.closest('button'); if(!b||b.disabled) return; e.stopPropagation();
+    if(b.dataset.p){const [a,c]=presets.find(x=>x.id===b.dataset.p).r(); st={mode:'range',a:Math.max(a,FIRST),b:c,picks:new Set()}; year=Y(c);}
+    else if(b.dataset.mode){ const cur=sel(st); st.mode=b.dataset.mode; if(st.mode==='pick') st.picks=new Set(cur); else {st.a=cur[0]??null; st.b=cur.at(-1)??null;} }
+    else if(b.dataset.y){year+=+b.dataset.y;}
+    else if(b.dataset.k){const k=+b.dataset.k;
+      if(st.mode==='pick'&&root===sheet){st={mode:'range',a:k,b:null,picks:new Set()};}
+      else if(st.mode==='pick'){st.picks.has(k)?st.picks.delete(k):st.picks.add(k);}
+      else if(st.a==null||st.b!=null){st.a=k;st.b=null;} else {st.b=k;} }
+    else if(b.dataset.x==='clear'){st={mode:st.mode,a:null,b:null,picks:new Set()};}
+    else if(b.dataset.x==='cancel'){close();return;}
+    else if(b.dataset.x==='apply'){ if(st.mode==='range'&&st.b==null) st.b=st.a; applied=clone(st); close(); paint(); return;}
+    render();};
+  root.onmouseover=e=>{const b=e.target.closest('.m'); if(st&&st.mode==='range'&&st.a!=null&&st.b==null&&b&&!b.disabled){hover=+b.dataset.k; const g=root.querySelector('.grid'); g.innerHTML=gridHTML(st);}};
+}
+function openPop(){st=clone(applied); year=Y(sel(st).at(-1)??LAST); hover=null; renderPop(); pop.classList.add('open');}
+function closePop(){pop.classList.remove('open');}
+document.getElementById('trig').onclick=e=>{e.stopPropagation(); pop.classList.contains('open')?closePop():openPop();};
+wire(pop,renderPop,closePop);
+document.addEventListener('click',e=>{if(!e.target.closest('.mp')) closePop();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePop();phone.classList.remove('open');}});
+
+/* ---- phone sheet ---- */
+const phone=document.getElementById('phone'), sheet=document.getElementById('sheet');
+function renderSheet(){
+  const p=presetOn(st);
+  sheet.innerHTML=`<div class="grab"></div><div class="sh"><b>Billing months</b><span>${sel(st).length} selected</span></div>
+   <div class="sbody"><div class="chips">${presets.map(x=>`<button data-p="${x.id}" class="${p===x.id?'on':''}">${x.t.replace(' months','M').replace('Latest month','Latest')}</button>`).join('')}</div>
+   <div class="yr"><button data-y="-1" ${year<=Y(FIRST)?'disabled':''}>‹</button><b>${year}</b><button data-y="1" ${year>=Y(LAST)?'disabled':''}>›</button></div>
+   <div class="grid">${gridHTML(st)}</div><div class="hint">${st.mode==='pick'?'Custom months set on laptop. Tap a month to start a new range.':hint(st).replace('Click','Tap')}</div></div>
+   <div class="sfoot"><button class="ghost" data-x="clear">Clear</button><button class="apply" data-x="apply" ${sel(st).length?'':'disabled style="opacity:.4"'}>Apply · ${words(st,true)}</button></div>`;
+}
+wire(sheet,renderSheet,()=>phone.classList.remove('open'));
+document.getElementById('mtrig').onclick=()=>{st=clone(applied); year=Y(sel(st).at(-1)??LAST); renderSheet(); phone.classList.add('open');};
+document.getElementById('shade').onclick=()=>phone.classList.remove('open');
+
+function paint(){const n=sel(applied).length;
+  tlab.textContent=words(applied); tn.textContent=n+' mo'; mlab.textContent=words(applied,true);
+  lsub.textContent=msub.textContent='Billing months · '+words(applied);
+}
+const tlab=document.getElementById('tlab'),tn=document.getElementById('tn'),mlab=document.getElementById('mlab'),lsub=document.getElementById('lsub'),msub=document.getElementById('msub');
+paint();
+</script>
+</body>
+</html>

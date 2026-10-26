@@ -6,7 +6,7 @@ const stamp = iso => new Date(iso).toLocaleString('en-IN', { day: 'numeric', mon
 export function invCaption(tab, ctrl) {
   if (tab === 'sales') {
     const d = day(ctrl?.invSalesLastSales)
-    return d ? `Unicommerce · sales till ${d}` : 'Unicommerce'
+    return d ? `Data source: Unicommerce · sales till ${d}` : 'Data source: Unicommerce'
   }
   const parts = []
   if (ctrl?.invHealthAsOf) parts.push(`Updated ${stamp(ctrl.invHealthAsOf)}`)
