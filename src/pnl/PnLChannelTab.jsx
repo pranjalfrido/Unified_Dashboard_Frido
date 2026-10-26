@@ -59,6 +59,7 @@ import { useMarginRules } from '../responsive/useMarginRules.js'
 import WatchlistCard from '../responsive/WatchlistCard.jsx'
 import MarginMatrix from '../responsive/MarginMatrix.jsx'
 import BiggestFixes from '../responsive/BiggestFixes.jsx'
+import PnLMobileView from './PnLMobileView.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
 // (legend, tooltip, checklist) so it always matches PnLFinancialTable.jsx's column order
@@ -370,7 +371,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null, tab, onSimulate, simulateLabel }) {
+export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null, tab, onSimulate, simulateLabel, mobileLayout = false, mobileExtras = null }) {
   const isMob = useIsMobile()
   // Margin watchlist / matrix / biggest fixes (PNL_MASTER_PLAN.md Part B §3): read the Financial View's
   // own rows, so every % here is the table's. Hidden on In-progress tabs (no new calculations there).
@@ -483,6 +484,15 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
   const heroSub = grossOfTotalPct != null
     ? `${fmtN(units)} units · ${grossOfTotalPct.toFixed(1)}% of total`
     : `${fmtN(units)} units${note ? ` · ${note}` : ''}`
+
+  if (mobileLayout && mobileExtras) {
+    return (
+      <PnLMobileView tab={tab} title={title} {...mobileExtras} start={startDate} end={endDate} gross={gross} net={net} units={units} returnRev={returnRev} prevGross={prevGross}
+        daily={daily} dailyPnL={dailyPnL} kpiSummary={kpiSummary} prevSummary={prevSummary} showMarketing={showMarketing} spendAllocated={spendAllocated}
+        returnsNotCaptured={returnsNotCaptured} inProgress={inProgress} actualNet={actualNet} margin={margin} fvRows={fvRows}
+        adSpendReal={showMarketing && !spendAllocated && adSpendMap != null} onSimulate={onSimulate} simulateLabel={simulateLabel} />
+    )
+  }
 
   const heroCard = (
     <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>

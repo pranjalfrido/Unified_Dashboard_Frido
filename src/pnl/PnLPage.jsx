@@ -8,6 +8,8 @@ import POApprovalChecker from './POApprovalChecker.jsx'
 import { fmtSigned, netRevenueOf, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 import { C } from '../utils.js'
 import { prevRange } from '../overview/usePrevPeriod.js'
+import { useBreakpoint } from '../responsive/useBreakpoint.js'
+import { fmtDateRange } from '../responsive/format.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -26,6 +28,17 @@ const OFFLINE_TOOLS = [
   { id: 'b2bCosting', label: 'B2B Costing Calculator' },
   { id: 'poApproval', label: 'PO Approval Checker' },
 ]
+// Mobile Tools card (PNL_MASTER_PLAN.md Part B §4): the same tools, with a one-line description.
+const MOBILE_TOOLS = {
+  shopify: [
+    { id: 'priceSimulator', label: 'Price Simulator', desc: 'Price, discount, volume, ROAS → CM1 / CM2', icon: '⚙' },
+    { id: 'breakevenRoas', label: 'Breakeven ROAS', desc: 'New or launched product', icon: '◎' },
+  ],
+  offline: [
+    { id: 'b2bCosting', label: 'B2B Costing Calculator', desc: 'Solve for price or profit', icon: '▦' },
+    { id: 'poApproval', label: 'PO Approval Checker', desc: 'Bulk upload stays on laptop', icon: '✓' },
+  ],
+}
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
 // chrome as SalesPage. Every channel's Category→Product(→SKU) map is rebuilt here the same way
@@ -211,6 +224,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // "Simulate ↗" (watchlist / Financial View): opens the channel's tool on that product ('cat::sc').
   // D2C → Price Simulator, Offline → B2B Costing; other channels have no product tool.
   const [toolProduct, setToolProduct] = useState(null)
+  // Phones use the P&L header (channel chips + sub-tabs, App.jsx Topnav) instead of this page's own
+  // tab bars; below 1024px the channel tab renders the mobile layout (PnLMobileView).
+  const bp = useBreakpoint()
+  const phoneHeader = bp.width <= 768 || bp.isPhoneLandscape
+  const mobileLayout = bp.width < 1024 || bp.isPhoneLandscape
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -218,6 +236,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const offlineSub = offlineSubProp !== undefined ? offlineSubProp : offlineSubLocal
   const setOfflineSub = setOfflineSubProp || setOfflineSubLocal
   const d2cSubCh = d2cSubChProp !== undefined ? d2cSubChProp : d2cSubChLocal
+  // A channel / sub-tab change from the header closes an open tool (the page's own buttons already do).
+  const navSig = `${activeTab}|${d2cSubCh}|${offlineSub}|${amzChannelView}`
+  const [lastNavSig, setLastNavSig] = useState(navSig)
+  if (navSig !== lastNavSig) { setLastNavSig(navSig); if (activeTool) setActiveTool(null) }
   const setD2cSubCh = setD2cSubChProp || setD2cSubChLocal
   const [sndRates, setSndRates] = useState(null)
   const [cogsMonthlyMap, setCogsMonthlyMap] = useState(null)
@@ -2140,7 +2162,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
-      <div className="sales-tabs">
+      {!phoneHeader && <div className="sales-tabs">
         {PNL_TABS.map(tab => {
           const allowed = !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[tab.id])
           const isActive = !activeTool && activeTab === tab.id
@@ -2151,8 +2173,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           </button>
           )
         })}
-      </div>
-      {(!activeTool || activeTab === 'shopify') && <div className="fbar">
+      </div>}
+      {!phoneHeader && (!activeTool || activeTab === 'shopify') && <div className="fbar">
         <div className="fbar-inner">
           {activeTab === 'shopify' && (
             [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
@@ -2241,6 +2263,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         </div>
       </div>}
       <div className="page-scroll">
+        {phoneHeader && activeTool && (
+          <button type="button" onClick={() => setActiveTool(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, marginBottom: 8, padding: '0 12px', borderRadius: 12, border: `1px solid ${C.m.line}`, background: '#fff', color: C.m.green, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            ‹ Back to {activeTabMeta?.label || 'P&L'}
+          </button>
+        )}
         {activeTool === 'priceSimulator' ? (
           <PriceSimulator key={toolProduct || 'none'} variantProducts={d2cProductList} productGroups={d2cProductGroups} initialProductKey={toolProduct} />
         ) : activeTool === 'breakevenRoas' ? (
@@ -2293,9 +2321,15 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           tab={activeTab}
           onSimulate={SIM_TOOL[activeTab] ? key => { setToolProduct(key); setActiveTool(SIM_TOOL[activeTab]); window.scrollTo({ top: 0, behavior: 'smooth' }) } : undefined}
           simulateLabel={activeTab === 'offline' ? 'B2B costing' : 'Price simulator'}
+          mobileLayout={mobileLayout}
+          mobileExtras={mobileLayout ? {
+            amzView: amzChannelView, period: fmtDateRange(filters.start, filters.end),
+            tools: MOBILE_TOOLS[activeTab] || [], onTool: id => { setToolProduct(null); setActiveTool(id); window.scrollTo({ top: 0 }) },
+            storeRows: activeTab === 'ebo' ? storePnLRows : null, renderStoreTable: () => <StorePnLTable rows={storePnLRows} stickyFirst />,
+          } : null}
         />
         )}
-        {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
+        {!activeTool && activeTab === 'ebo' && !mobileLayout && <StorePnLTable rows={storePnLRows} />}
         {needPrevPayload && prevView.data && prevPeriodRange && (
           <PnLPage data={prevView.data} filters={{ ...filters, start: prevPeriodRange.start, end: prevPeriodRange.end }} summaryOnly
             onSummary={values => { writePrevSummary(viewSig, values); setPrevSummaryRaw({ sig: viewSig, values }) }}
