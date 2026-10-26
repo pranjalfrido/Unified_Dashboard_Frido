@@ -174,6 +174,12 @@ function loadPnlPrev(loadPeriod, key, start, end) {
   }
   return pnlPrevCache.get(key)
 }
+// The small per-view result (one channel / sub-tab's previous-period KPI totals) is also kept in
+// sessionStorage, so the ▲/▼ come back instantly for the rest of the session — after a reload too —
+// without re-running the ~16 s live load. Storage can be full or disabled: try/catch, then reload.
+const PREV_SS = 'pnl.prev.'
+const readPrevSummary = sig => { try { const v = sessionStorage.getItem(PREV_SS + sig); return v ? JSON.parse(v) : null } catch { return null } }
+const writePrevSummary = (sig, v) => { try { sessionStorage.setItem(PREV_SS + sig, JSON.stringify(v)) } catch { /* quota / private mode */ } }
 function loadCogsMonthly(startDate, endDate) {
   const startMonth = `${String(startDate).slice(0, 7)}-01`
   const endMonth = `${String(endDate).slice(0, 7)}-01`
@@ -222,20 +228,23 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     ? `${prevPeriodRange.start}:${prevPeriodRange.end}:${JSON.stringify({ ...filters, start: undefined, end: undefined })}`
     : null
   const [prevPayload, setPrevPayload] = useState({ key: null, data: null, status: 'loading' })
+  const viewSig = `${prevKey}|${activeTab}|${amzChannelView}|${offlineSub}|${d2cSubCh}`
+  const cachedPrevSummary = prevKey ? readPrevSummary(viewSig) : null
+  const needPrevPayload = !!prevKey && !cachedPrevSummary
   useEffect(() => {
-    if (!prevKey) return
+    if (!needPrevPayload) return
     let cancelled = false
     loadPnlPrev(loadPeriod, prevKey, prevPeriodRange.start, prevPeriodRange.end)
       .then(d => { if (!cancelled) setPrevPayload({ key: prevKey, data: d, status: 'ready' }) })
       .catch(() => { if (!cancelled) setPrevPayload({ key: prevKey, data: null, status: 'error' }) })
     return () => { cancelled = true }
-  }, [prevKey]) // eslint-disable-line react-hooks/exhaustive-deps -- prevKey identifies loadPeriod/range/filters
+  }, [prevKey, needPrevPayload]) // eslint-disable-line react-hooks/exhaustive-deps -- prevKey identifies loadPeriod/range/filters
   const prevView = prevPayload.key === prevKey ? prevPayload : { status: 'loading', data: null }
   // Summary from the hidden instance, tagged with the view it was computed for so a stale one
   // (tab or sub-tab just changed) is never shown.
   const [prevSummaryRaw, setPrevSummaryRaw] = useState(null)
-  const viewSig = `${prevKey}|${activeTab}|${amzChannelView}|${offlineSub}|${d2cSubCh}`
   const prevSummary = !prevKey ? { status: 'off' }
+    : cachedPrevSummary ? { status: 'ready', ...cachedPrevSummary }
     : prevView.status === 'error' ? { status: 'error' }
     : prevSummaryRaw?.sig === viewSig ? { status: 'ready', ...prevSummaryRaw.values }
     : { status: 'loading' }
@@ -2262,9 +2271,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         />
         )}
         {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
-        {prevView.data && prevPeriodRange && (
+        {needPrevPayload && prevView.data && prevPeriodRange && (
           <PnLPage data={prevView.data} filters={{ ...filters, start: prevPeriodRange.start, end: prevPeriodRange.end }} summaryOnly
-            onSummary={values => setPrevSummaryRaw({ sig: viewSig, values })}
+            onSummary={values => { writePrevSummary(viewSig, values); setPrevSummaryRaw({ sig: viewSig, values }) }}
             activeTab={activeTab} amzChannelView={amzChannelView} offlineSub={offlineSub} d2cSubCh={d2cSubCh} allowedTabs={allowedTabs} />
         )}
       </div>
