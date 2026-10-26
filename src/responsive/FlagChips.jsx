@@ -7,19 +7,20 @@ import { RULES } from './useMarginRules.js'
 const M = C.m
 const CHIP_LABEL = Object.fromEntries(RULES.map(r => [r.id, r.chip]))
 
-export default function FlagChips({ ids = [], names = {}, variant = 'laptop', max = 2 }) {
+// labels / redIds (optional): another page's chip names and red rules (Ads); default = the P&L rules.
+export default function FlagChips({ ids = [], names = {}, variant = 'laptop', max = 2, labels = CHIP_LABEL, redIds = ['loss'] }) {
   if (!ids.length) return variant === 'mobile' ? null : <span style={{ color: C.t3 }}>—</span>
-  const full = ids.map(id => names[id] || CHIP_LABEL[id]).join(' · ')
+  const full = ids.map(id => names[id] || labels[id]).join(' · ')
   if (variant === 'mobile') {
     return (
       <span role="img" aria-label={`Flags: ${full}`} title={full} style={{ display: 'inline-flex', gap: 3, marginRight: 6, verticalAlign: 'middle' }}>
-        {ids.slice(0, 3).map(id => <i key={id} style={{ width: 7, height: 7, borderRadius: '50%', background: id === 'loss' ? M.down : M.amber, display: 'inline-block' }} />)}
+        {ids.slice(0, 3).map(id => <i key={id} style={{ width: 7, height: 7, borderRadius: '50%', background: redIds.includes(id) ? M.down : M.amber, display: 'inline-block' }} />)}
       </span>
     )
   }
   const chip = id => (
     <span key={id} style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 999, whiteSpace: 'nowrap',
-      background: id === 'loss' ? C.red.bg : 'rgba(200,134,10,.12)', color: id === 'loss' ? C.red.tx : '#8a5a00' }}>{CHIP_LABEL[id]}</span>
+      background: redIds.includes(id) ? C.red.bg : 'rgba(200,134,10,.12)', color: redIds.includes(id) ? C.red.tx : '#8a5a00' }}>{labels[id]}</span>
   )
   return (
     <span title={full} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', overflow: 'hidden', maxWidth: '100%' }}>
