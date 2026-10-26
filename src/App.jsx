@@ -12835,21 +12835,21 @@ function AdsCredView({ data, filters = {} }) {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                 <defs>
-                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.38}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0.04}/></linearGradient>
-                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.32}/><stop offset="95%" stopColor="#10B981" stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acm} stopOpacity={0.38}/><stop offset="95%" stopColor={C.acm} stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green.tx} stopOpacity={0.32}/><stop offset="95%" stopColor={C.green.tx} stopOpacity={0.04}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                 <YAxis yAxisId="left" tick={isMob ? false : { fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 55} />
-                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
+                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: C.amber.tx }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
                 <Tooltip content={trendTooltip} />
-                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
-                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
-                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke={C.acm} strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke={C.green.tx} strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
+                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 11 }}>
-              {[{ name: 'Spend', color: '#6366F1' }, { name: 'Revenue', color: '#10B981' }, { name: 'ROAS', color: '#F59E0B' }].map(s => (
+              {[{ name: 'Spend', color: C.acm }, { name: 'Revenue', color: C.green.tx }, { name: 'ROAS', color: C.amber.tx }].map(s => (
                 <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
                   <span style={{ color: C.t2 }}>{s.name}</span>
@@ -12864,7 +12864,7 @@ function AdsCredView({ data, filters = {} }) {
       {(byCategory.length > 0 || byProduct.length > 0) && (() => {
         const credCatColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '22%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getCatSpend(r.category))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(catTotalSpend)}</td>,
           },
@@ -12874,7 +12874,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getCatSpend(r.category); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(catTotalRoas)}</td>,
           },
@@ -12883,7 +12883,7 @@ function AdsCredView({ data, filters = {} }) {
 
         const credProdColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '20%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getProdSpend(r.subCategory))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(prodTotalSpend)}</td>,
           },
@@ -12893,7 +12893,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getProdSpend(r.subCategory); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(prodTotalRoas)}</td>,
           },
