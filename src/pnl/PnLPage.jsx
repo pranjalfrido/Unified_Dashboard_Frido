@@ -2190,6 +2190,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
           cogsMonthlyMap={PNL_IN_PROGRESS[activeTab] ? null : cogsMonthlyMap}
           inProgress={PNL_IN_PROGRESS[activeTab] || null}
+          returnsNotCaptured={['blinkit', 'instamart', 'zepto'].includes(activeTab)}
           startDate={filters.start}
           endDate={filters.end}
         />

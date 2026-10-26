@@ -344,7 +344,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
@@ -414,7 +414,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
 
   const mobKpisWithSummary = [
     { label: 'Gross Revenue', value: fmt(gross), spark: revSpark },
-    { label: 'Returns', value: fmt(returnRev), spark: returnSpark, accent: !noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
+    { label: 'Returns', value: returnsNotCaptured ? 'Not available' : fmt(returnRev), spark: returnSpark, accent: !returnsNotCaptured && !noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
     { label: 'Net Revenue', value: fmt(net), spark: netSpark },
     { label: 'COGS', value: kpiSummary?.cogs != null ? fmt(kpiSummary.cogs) : '—', spark: cogsSpark },
     { label: 'Gross Margin', value: kpiSummary?.gm != null ? fmt(kpiSummary.gm) : '—', spark: gmSpark },
@@ -483,8 +483,10 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           {heroCard}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.ceil((showMarketing ? 9 : 7) / 2)},1fr)`, gridTemplateRows: 'repeat(2,1fr)', gap: 10, alignItems: 'stretch' }}>
             {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" plain />}
-            <KPICard label="Net Revenue" value={fmt(net)} sub={gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
-            <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />
+            <KPICard label="Net Revenue" value={fmt(net)} sub={returnsNotCaptured ? '= Gross ex GST (returns not captured)' : gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
+            {returnsNotCaptured
+              ? <KPICard label="Returns" value="Not available" sub="Not captured for this channel" plain />
+              : <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />}
             <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of Net Rev`} badge={cogsBadge} plain />
             <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}`} badge={gmBadge} plain />
             <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} badge={sndBadge} plain />
