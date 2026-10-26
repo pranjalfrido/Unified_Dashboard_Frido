@@ -89,7 +89,7 @@ function WarehouseCard({ locations, onSeeStock }) {
   )
 }
 
-export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead }) {
+export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead, rtdLevel, setRtdLevel, rtdOptions }) {
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const [loc, setLoc] = useState('All')
@@ -99,7 +99,7 @@ export default function InventoryHealthMobile({ data, regular, locations, lastSa
     <div className="inv-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
       {!showDetailOnly && <SummaryCard summary={data.summary} regular={regular} lastSalesDate={lastSalesDate} layout={layout} />}
       {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
-      <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} />
+      <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} rtdLevel={rtdLevel} setRtdLevel={setRtdLevel} rtdOptions={rtdOptions} />
       {!showDetailOnly && <AgeingCard slow={slow} dead={dead} />}
     </div>
   )

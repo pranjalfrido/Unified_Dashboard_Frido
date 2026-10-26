@@ -55,7 +55,9 @@ function SkuSheet({ item, loc, regularLocations, onClose }) {
   )
 }
 
-export default function StockExplorer({ skus, pivot, regularLocations, loc, setLoc, resetKey }) {
+// rtdLevel / setRtdLevel: the shared Inventory filter the desktop Inventory Detail "RTD Level" slicer writes;
+// on phones it sits in this card's "⋯" sheet (and in the filter sheet).
+export default function StockExplorer({ skus, pivot, regularLocations, loc, setLoc, resetKey, rtdLevel = [], setRtdLevel, rtdOptions = [] }) {
   const [status, setStatus] = useState('All')
   const [menuOpen, setMenuOpen] = useState(false)
   const [fullOpen, setFullOpen] = useState(false)
@@ -81,8 +83,8 @@ export default function StockExplorer({ skus, pivot, regularLocations, loc, setL
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 12, color: M.muted, whiteSpace: 'nowrap' }}>{countText}</span>
           <button type="button" aria-label="Search SKUs" onClick={() => setFullOpen(true)} style={iconBtn}>🔍</button>
-          <button type="button" aria-label={status === 'All' ? 'Filter by status' : `Status: ${status}`} aria-haspopup="dialog" onClick={() => setMenuOpen(true)}
-            style={{ ...iconBtn, ...(status !== 'All' ? { background: M.green, color: '#fff', borderColor: M.green } : {}) }}>⋯{status !== 'All' ? ` ${status}` : ''}</button>
+          <button type="button" aria-label={status === 'All' && !rtdLevel.length ? 'Status and RTD level' : `Status: ${status}${rtdLevel.length ? `, RTD ${rtdLevel.join(', ')}` : ''}`} aria-haspopup="dialog" onClick={() => setMenuOpen(true)}
+            style={{ ...iconBtn, ...(status !== 'All' || rtdLevel.length ? { background: M.green, color: '#fff', borderColor: M.green } : {}) }}>⋯{status !== 'All' ? ` ${status}` : ''}{rtdLevel.length ? ` · RTD ${rtdLevel.join(', ')}` : ''}</button>
         </span>
       }>
       <Chips label="Location" options={locChips} value={loc} onChange={setLoc} />
@@ -102,7 +104,15 @@ export default function StockExplorer({ skus, pivot, regularLocations, loc, setL
               value={fmtInt(r.totalInvt)} valueSub={`DOI ${fmtDays(r.doi)}d`} />}
         footer={p => !p.length && <ShowAllButton onClick={() => setFullOpen(true)}>Show all {fmtInt(items.length)} SKUs →</ShowAllButton>} />
 
-      <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Show status">
+      <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Show">
+        {setRtdLevel && rtdOptions.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: M.muted, margin: '2px 0 8px' }}>RTD level</div>
+            <Chips label="RTD level" options={[{ id: 'All', label: 'All' }, ...rtdOptions.map(o => ({ id: o, label: o }))]} value={rtdLevel.length === 1 ? rtdLevel[0] : 'All'}
+              onChange={v => setRtdLevel(v === 'All' ? [] : [v])} />
+          </div>
+        )}
+        <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: M.muted, margin: '2px 0 4px' }}>Stock status</div>
         {['All', ...STATUS_ORDER].map(st => (
           <button key={st} type="button" aria-pressed={st === status} onClick={() => { setStatus(st); setMenuOpen(false) }}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 48, border: 'none', borderTop: `1px solid ${M.line}`, background: 'none', fontFamily: 'var(--font)', cursor: 'pointer', padding: '0 2px' }}>

@@ -45,13 +45,13 @@ export function InvFilterButton({ tab, ctrl, tone = 'dark' }) {
     return [
       row('location', 'locations', (o.locations || []).map(opt)),
       row('stockStatus', 'statuses', statuses.map(opt)),
+      row('rtdLevel', 'levels', (o.rtdLevels || []).map(opt)),
       row('websiteStatus', 'statuses', ['Live', 'Stock Out'].map(opt)),
       { key: 'avgSaleWindowDays', label: 'Avg sale window', toggle: [7, 15, 30].map(d => ({ id: d, label: `${d}d` })), value: f.avgSaleWindowDays || 7, onChange: d => set(p => ({ ...p, avgSaleWindowDays: d })) },
       row('facility', 'facilities', (o.facilities || []).filter(x => x.facilityType === 'Regular').map(x => ({ value: x.facility, sub: x.location }))),
       row('category', 'categories', (o.categories || []).map(opt)),
       row('subCategory', 'sub-categories', (o.subCategories || []).map(opt)),
       row('productId', 'SKUs', (o.productIds || []).map(x => ({ value: x.sku, sub: x.category }))),
-      row('rtdLevel', 'levels', (o.rtdLevels || []).map(opt)),
     ].map(r => (r.toggle ? r : { ...r, set: r.selected.length > 0, summary: summary(r.selected) }))
   }, [tab, ctrl])
 

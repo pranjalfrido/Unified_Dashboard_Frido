@@ -1518,6 +1518,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
         showDetailOnly={showDetailOnly}
         skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)}
+        rtdLevel={filters.rtdLevel || []} setRtdLevel={v => setFilters(f => ({ ...f, rtdLevel: v }))} rtdOptions={data.filterOptions?.rtdLevels || []}
         slow={filteredSlowMoving} dead={filteredDeadStock} />
     )
   }
