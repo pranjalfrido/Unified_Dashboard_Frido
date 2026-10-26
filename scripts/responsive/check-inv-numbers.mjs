@@ -1,5 +1,7 @@
 // Inventory mobile vs desktop numbers (same session data). Desktop at 1366, phone at 390.
-// Usage: node scripts/responsive/check-inv-numbers.mjs [sections,comma]   sections: summary,warehouse
+// Usage: node scripts/responsive/check-inv-numbers.mjs [sections,comma]   sections: summary,warehouse,explorer,status
+//   explorer: category rows at All / PNQ / GGN vs the desktop Location-wise table (Total / location columns)
+//   status:   explorer filtered to Critical / Excess vs Inventory Detail with the same Stock status filter
 import { launch, openPage, VIEWPORTS } from './lib.mjs'
 const want = new Set((process.argv[2] || 'summary,warehouse').split(','))
 const norm = s => (s || '').replace(/\s+/g, ' ').trim()
@@ -51,6 +53,70 @@ if (want.has('warehouse')) {
   for (const d of desk) {
     const m = mob.find(x => x.loc === d.loc) || {}
     same(`${d.loc} units · status · DOI · allocation`, `${d.total} · ${d.status} · ${d.doi} · ${d.alloc}`, `${m.total} · ${m.status} · ${m.doi} · ${m.alloc}`)
+  }
+}
+
+// ── Stock explorer ───────────────────────────────────────────────
+const mobCats = () => P.page.evaluate(() => [...document.querySelectorAll('#inv-stock-explorer .drill-down > button')].filter(b => /avg sale/.test(b.innerText)).map(b => {
+  const l = b.innerText.split('\n').map(x => x.trim()).filter(Boolean)
+  return { name: l[0], avg: (l[1].match(/avg sale ([\d,—]+)/) || [])[1], units: l[2] }
+}))
+const fmtIN = n => (n ? Math.round(n).toLocaleString('en-IN') : '—')
+const locBtn = loc => P.page.locator('#inv-stock-explorer [aria-label="Location"] button').filter({ hasText: new RegExp(`^${loc}$`) })
+if (want.has('explorer')) {
+  const pivot = await D.page.evaluate(() => {
+    const card = [...document.querySelectorAll('div')].find(d => d.innerText?.startsWith('Location-Wise Inventory'))
+    const t = card.querySelector('table')
+    const head = [...t.querySelector('tr').children].map(c => c.innerText.trim().toUpperCase().split(/\s/)[0])
+    return [...t.querySelectorAll('tr')].filter(tr => tr.children[0]?.innerText.trim().startsWith('›')).map(tr => {
+      const c = [...tr.children].map(x => x.innerText.trim())
+      const row = { name: c[0].replace(/^›/, '').trim() }
+      head.forEach((h, i) => { if (i > 0) row[h] = c[i] })
+      return row
+    })
+  })
+  if (process.env.DEBUG) console.log(JSON.stringify(pivot.slice(0, 2)))
+  for (const loc of ['All', 'PNQ', 'GGN']) {
+    await locBtn(loc).click()
+    await P.page.waitForTimeout(500)
+    const mob = await mobCats()
+    let ok = 0, bad = 0
+    for (const r of pivot) {
+      const cell = loc === 'All' ? r.TOTAL : r[loc]
+      const [dInv, dAvg] = loc === 'All' ? cell.split(' / ') : cell.split('\n')
+      const m = mob.find(x => x.name === r.name)
+      const dI = dInv?.trim() || '—', dA = dAvg?.trim() || '—'
+      if (!m && (dI === '—' || dI === '0')) { ok++; continue }
+      const mInv = m ? m.units : '—', mAvg = m ? m.avg : '—'
+      if (dI === mInv && (dA === mAvg || (dA === '—' && mAvg === '0'))) ok++
+      else { bad++; console.log('DIFF', loc, r.name, 'desktop', dI, dA, 'mobile', mInv, mAvg) }
+    }
+    fails += bad
+    console.log(`${bad ? 'DIFF' : 'OK  '} explorer ${loc}: ${ok} categories match, ${bad} differ (${mob.length} shown on mobile)`)
+  }
+  await locBtn('All').click()
+}
+if (want.has('status')) {
+  for (const st of ['Critical', 'Excess']) {
+    // desktop: Filters → Stock status tile → Inventory Detail footer
+    await D.page.getByRole('button', { name: /^Filters/ }).first().click()
+    await D.page.getByRole('button', { name: st, exact: true }).first().click()
+    await D.page.waitForTimeout(800)
+    const foot = await D.page.evaluate(() => [...document.querySelectorAll('.inv-detail-card tfoot tr')].at(-1).innerText.replace(/\s+/g, ' ').trim())
+    await D.page.getByRole('button', { name: st, exact: true }).first().click()
+    await D.page.mouse.click(5, 300); await D.page.waitForTimeout(500)
+    const [, skuN, , , , total, avg] = foot.match(/Total (\d+) SKUs ([\d,—]+) ([\d,—]+) ([\d,—]+) ([\d,—]+) ([\d,—]+)/) || []
+    // mobile: explorer ⋯ → status; sum the category rows; SKU count from "Show all N SKUs"
+    await P.page.locator('#inv-stock-explorer button[aria-haspopup="dialog"]').click()
+    await P.page.locator('[role=dialog] button').filter({ hasText: new RegExp(`^${st}`) }).click()
+    await P.page.waitForTimeout(600)
+    const mob = await mobCats()
+    const sum = k => mob.reduce((a, m) => a + Number((m[k] || '0').replace(/[,—]/g, '') || 0), 0)
+    const showAll = await P.page.locator('#inv-stock-explorer button').filter({ hasText: /^Show all/ }).innerText()
+    same(`status ${st}: SKUs · units · avg sale`, `${skuN} · ${total} · ${avg}`, `${(showAll.match(/[\d,]+/) || [''])[0].replace(/,/g, '')} · ${fmtIN(sum('units'))} · ${fmtIN(sum('avg'))}`)
+    await P.page.locator('#inv-stock-explorer button[aria-haspopup="dialog"]').click()
+    await P.page.locator('[role=dialog] button').filter({ hasText: /^All statuses/ }).click()
+    await P.page.waitForTimeout(400)
   }
 }
 await D.browser.close(); await P.browser.close()

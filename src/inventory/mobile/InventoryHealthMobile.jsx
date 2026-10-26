@@ -9,6 +9,7 @@ import { Card, KV } from './ui.jsx'
 import { statusColor, allocColor } from './invStatus.js'
 import { warehouseRows } from './invMobileData.js'
 import { shortDay } from './invCaption.js'
+import StockExplorer from './StockExplorer.jsx'
 
 // Inventory Health below 1024px (docs/responsive/INVENTORY_MOBILE_REDESIGN_PROMPT.md §2). Display
 // only: every value comes from InventoryHealthPage's own memos (Regular facilities - mobile is
@@ -86,11 +87,15 @@ function WarehouseCard({ locations, onSeeStock }) {
   )
 }
 
-export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, layout, showDetailOnly }) {
+export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, layout, showDetailOnly, skus, pivot, regularLocations, filterKey }) {
+  const [loc, setLoc] = useState('All')
+  // Warehouse sheet → "See PNQ stock": the explorer switches to that location and scrolls into view.
+  const seeStock = l => { setLoc(l); requestAnimationFrame(() => document.getElementById('inv-stock-explorer')?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }
   return (
     <div className="inv-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
       {!showDetailOnly && <SummaryCard summary={data.summary} regular={regular} lastSalesDate={lastSalesDate} layout={layout} />}
-      {!showDetailOnly && <WarehouseCard locations={locations} />}
+      {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
+      <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} />
     </div>
   )
 }

@@ -1512,7 +1512,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   if (invMobile) {
     return (
       <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
-        layout={bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'} showDetailOnly={showDetailOnly} />
+        layout={bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'} showDetailOnly={showDetailOnly}
+        skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)} />
     )
   }
 
