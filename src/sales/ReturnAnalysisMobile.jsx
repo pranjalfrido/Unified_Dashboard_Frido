@@ -167,7 +167,7 @@ function CategoryCard({ data, basis, period }) {
       <SegmentToggle full label="Group by" value={view} onChange={setView} options={[{ id: 'category', label: 'Category' }, { id: 'sub', label: 'Sub-category' }]} style={{ marginBottom: 6 }} />
       <MobileRankedList key={`${view}-${basis}`} title={null} noun={isCat ? 'categories' : 'sub-categories'} items={isCat ? catRows : subRows}
         itemKey={r => (isCat ? r.category : `${r.category}::${r.subCategory}`)} name={r => (isCat ? r.category : r.subCategory)} sub={isCat ? null : r => r.category}
-        groupOf={isCat ? null : r => r.category} searchText={r => `${r.category} ${r.subCategory || ''}`} sorts={sorts} topN={8} sheetSubtitle={period}
+        groupOf={isCat ? null : r => r.category} searchText={r => `${r.category} ${r.subCategory || ''}`} sorts={sorts} topN={8} sheetSubtitle={period} compact={isCat}
         valueColor={(r, k) => (k === 'rev' ? undefined : redIf(`${k}Pct`, r[`${k}${suffix}`]))}
         secondary={(r, k) => (k === 'rev' ? `Return ${p1(r[`totalReturn${suffix}`])}` : `${basis === 'qty' ? '' : 'Rev '}${amount(r)} · Return ${p1(r[`totalReturn${suffix}`])}`)}
         details={[{ label: basis === 'qty' ? 'Qty' : 'Revenue', value: amount }, ...RATE_COLS.map(([id, label]) => ({ label, value: r => p1(r[`${id}${suffix}`]) }))]}

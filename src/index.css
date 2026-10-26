@@ -1649,3 +1649,5 @@ svg text, svg tspan{
 
 /* Phone header: no outline left on a tab or button after a tap; the ring shows for keyboard focus only. */
 .topnav.m-header button:focus:not(:focus-visible){ outline:none }
+/* Return Analysis mobile: no focus ring after a tap on its toggles / chips (keyboard focus still shows one). */
+.ra-mobile button:focus:not(:focus-visible){ outline:none }
