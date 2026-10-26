@@ -11791,7 +11791,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
       const matchedScs = new Set(adsCatRows.map(r => r.subCategory).filter(Boolean))
       for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
         if (!selSubCat.length || matchedScs.has(sc)) {
-          catSpend += Object.values(dayMap).reduce((s, v) => s + (v || 0), 0)
+          // only the selected dates (the live payload's map holds whole months), as getProductAddlSpend
+          catSpend += Object.entries(dayMap).reduce((s, [date, v]) => s + (date >= _addlStart && date <= _addlEnd ? (v || 0) : 0), 0)
         }
       }
     }
@@ -11822,12 +11823,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
   })()
-  const prevCac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
-    return 0
-  })()
+  // No previous-period new-customer count exists, so there is no real previous CAC: no badge.
+  // (It used to divide last period's spend by this period's new customers.)
+  const prevCac = null
 
   // Build daily spend by date, and for D2C/Meta/Google use Shopify daily excRev split by spend share
   const shopifyDailyMap = {}
@@ -11945,6 +11943,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const clicksSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.clicks || 0)
           const impSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.impressions || 0)
           const ordersSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.orders || 0)
+          // The Orders card used the clicks line. The ads data has no daily orders on the cached path
+          // (all 0), so it shows no line there rather than another metric's.
+          const ordersSparkOrNone = ordersSpark.some(v => v > 0) ? ordersSpark : []
           const ctrSpark = _sparkDates.map(dt => { const imp = _dailyClicksMap[dt]?.impressions || 0; const cl = _dailyClicksMap[dt]?.clicks || 0; return imp > 0 ? cl / imp * 100 : 0 })
           const cpcSpark = _sparkDates.map(dt => { const cl = _dailyClicksMap[dt]?.clicks || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return cl > 0 ? sp / cl : 0 })
           const cpoPSark = _sparkDates.map(dt => { const ord = _dailyClicksMap[dt]?.orders || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return ord > 0 ? sp / ord : 0 })
@@ -11963,7 +11964,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             { label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend, true), chgPct: chgPct(d2cMetaSpend, d2cPrevMetaSpend), spark: metaSpendSpark, sub: 'Meta ad spend', accentColor: '#1877F2' },
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend, true), chgPct: chgPct(d2cGoogleSpend, d2cPrevGoogleSpend), spark: googleSpendSpark, sub: 'Google ad spend', accentColor: '#34A853' },
             { label: 'Additional Spend', value: fmt(additionalSpend || 0), spark: spendSpark, sub: 'D2C additional mktg spend' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
           ] : [
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
@@ -11979,7 +11980,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           ] : [
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), chgPct: chgPct(overallCtr, prevCtr), spark: ctrSpark, sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc, true), chgPct: chgPct(overallCpc, prevCpc), spark: cpcSpark, sub: 'Spend / Clicks' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(costPerOrder, prevCpo, true), chgPct: chgPct(costPerOrder, prevCpo), spark: cpcSpark },
             ...(selPlatform === 'Meta' || selPlatform === 'Google'
               ? [{ label: 'CAC (D2C)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(cac, prevCac, true), chgPct: chgPct(cac, prevCac), spark: cpcSpark }]
@@ -12078,6 +12079,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
                   if (!matchedScs.size || matchedScs.has(sc)) {
                     for (const [date, spend] of Object.entries(dayMap)) {
+                      if (date < _addlStart || date > _addlEnd) continue // selected dates only
                       if (!map[date]) map[date] = { date, spend: 0, revenue: 0 }
                       map[date].spend += spend
                     }
@@ -12087,6 +12089,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
             })()
 
+            // Late reports (A7): Flipkart / Myntra revenue arrives days late. Days after the last real
+            // report (latestRealDate, the same late-report logic P&L uses) are "pending": no revenue and
+            // no ROAS point instead of ₹0 / a crashing ROAS. Spend still shows.
+            const pendingAfter = selPlatform === 'Flipkart' ? (data.flipkart?.latestRealDate || null) : selPlatform === 'Myntra' ? (data.myntra?.latestRealDate || null) : null
             const aggTrend = (rows, gran) => {
               const map = {}
               rows.forEach(r => {
@@ -12107,12 +12113,14 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0 }
                 map[key].spend += r.spend
                 map[key].revenue += r.revenue
+                if (pendingAfter && r.date > pendingAfter) map[key].pending = true
               })
-              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
-                ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0
-              }))
+              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => (r.pending
+                ? { ...r, revenue: null, roas: null }
+                : { ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0 }))
             }
             const trendData = aggTrend(filteredDailyArr, trendGran)
+            const pendingDays = pendingAfter ? filteredDailyArr.filter(r => r.date > pendingAfter).length : 0
             const xFmt = d => {
               if (trendGran === 'monthly') return d
               if (trendGran === 'quarterly') return d
@@ -12170,6 +12178,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
                   </ComposedChart>
                 </ResponsiveContainer>
+                {pendingDays > 0 && (
+                  <div style={{ fontSize: 11, color: C.t3, textAlign: 'center', marginTop: 2 }}>◌ Revenue after {new Date(pendingAfter + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} not loaded yet (late report): {pendingDays} day{pendingDays === 1 ? '' : 's'} shown as pending, no revenue or ROAS</div>
+                )}
                 {/* Custom legend, plain HTML — Recharts' built-in <Legend> ignores explicit
                     payload ordering for mixed Area/Line series, so it's replaced entirely to
                     guarantee Spend, Revenue, ROAS always reads left to right in that order. */}
@@ -12912,21 +12923,21 @@ function AdsCredView({ data, filters = {} }) {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                 <defs>
-                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.38}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0.04}/></linearGradient>
-                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.32}/><stop offset="95%" stopColor="#10B981" stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acm} stopOpacity={0.38}/><stop offset="95%" stopColor={C.acm} stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green.tx} stopOpacity={0.32}/><stop offset="95%" stopColor={C.green.tx} stopOpacity={0.04}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                 <YAxis yAxisId="left" tick={isMob ? false : { fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 55} />
-                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
+                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: C.amber.tx }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
                 <Tooltip content={trendTooltip} />
-                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
-                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
-                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke={C.acm} strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke={C.green.tx} strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
+                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 11 }}>
-              {[{ name: 'Spend', color: '#6366F1' }, { name: 'Revenue', color: '#10B981' }, { name: 'ROAS', color: '#F59E0B' }].map(s => (
+              {[{ name: 'Spend', color: C.acm }, { name: 'Revenue', color: C.green.tx }, { name: 'ROAS', color: C.amber.tx }].map(s => (
                 <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
                   <span style={{ color: C.t2 }}>{s.name}</span>
@@ -12941,7 +12952,7 @@ function AdsCredView({ data, filters = {} }) {
       {(byCategory.length > 0 || byProduct.length > 0) && (() => {
         const credCatColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '22%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getCatSpend(r.category))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(catTotalSpend)}</td>,
           },
@@ -12951,7 +12962,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getCatSpend(r.category); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(catTotalRoas)}</td>,
           },
@@ -12960,7 +12971,7 @@ function AdsCredView({ data, filters = {} }) {
 
         const credProdColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '20%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getProdSpend(r.subCategory))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(prodTotalSpend)}</td>,
           },
@@ -12970,7 +12981,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getProdSpend(r.subCategory); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(prodTotalRoas)}</td>,
           },
@@ -20553,6 +20564,24 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
       roas: t.spend > 0 ? t.revenue / t.spend : 0,
     })).sort((a, b) => b.spend - a.spend)
+    // Previous period for the ▲/▼ badges: the same number of days immediately before the range
+    // (same rule as api/bq.js), summed from the cache's own daily rows. The generator's prevTotals
+    // is the 90 days before the whole cache window, which made spend look ▼60–80% on every tab.
+    // If that window isn't fully inside the cache, there's no real previous value: no badge.
+    const prevWindow = (() => {
+      const sD = new Date(start), eD = new Date(end)
+      const n = Math.round((eD - sD) / 86400000) + 1
+      const pE = new Date(sD); pE.setDate(pE.getDate() - 1)
+      const pS = new Date(pE); pS.setDate(pS.getDate() - n + 1)
+      return { ps: pS.toISOString().slice(0, 10), pe: pE.toISOString().slice(0, 10) }
+    })()
+    const slicedPrevTotals = {}
+    if (prevWindow.ps >= json.rollingStart) {
+      ;(ads.daily || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe).forEach(x => {
+        const t = slicedPrevTotals[x.platform] || (slicedPrevTotals[x.platform] = { spend: 0, revenue: 0, impressions: 0, clicks: 0 })
+        t.spend += x.spend || 0; t.revenue += x.revenue || 0; t.impressions += x.impressions || 0; t.clicks += x.clicks || 0
+      })
+    }
     const slicedChannelDailyExcRev = {}
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
@@ -20643,6 +20672,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (Math.abs(res) < 1) return rows
         const oth = rows.find(x => x.category === 'Others' && (isCat || x.subCategory === 'Unspecified'))
         if (oth) { oth.revenue += res; oth.netRevenue += res }
+        // A residual under ₹100 is per-row rounding (channel totals vs category rows are rounded
+        // separately): no new 'Others' row for it (A8: Zepto 'Others' ₹2, Instamart ₹4).
+        else if (Math.abs(res) < 100) return rows
         else rows.push(isCat
           ? { category: 'Others', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 }
           : { category: 'Others', subCategory: 'Unspecified', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 })
@@ -20691,6 +20723,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
+      prevTotals: slicedPrevTotals,
+      // The cache's byAdType is a 90-day total with no date split; the Amazon SP/SB/SD split comes from
+      // the selected range's own payload instead (data.ads.byAdType, merged where AdsTab is rendered).
+      byAdType: [],
       daily: slicedDaily,
       adsDailyByCategory: slicedAdsDBC,
       salesDailyByCategory: slicedSalDBC,
@@ -20808,7 +20844,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
-            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
+            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [] } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
           {page === 'intelligence' && (
             <div className="page-scroll">
