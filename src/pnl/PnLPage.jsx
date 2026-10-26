@@ -10,6 +10,7 @@ import { C } from '../utils.js'
 import { prevRange } from '../overview/usePrevPeriod.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fmtDateRange } from '../responsive/format.js'
+import { buildFinancialRows } from './financialRows.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -208,7 +209,7 @@ function loadCogsMonthly(startDate, endDate) {
   return cogsMonthlyCache.get(key)
 }
 
-export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs, loadPeriod, summaryOnly = false, onSummary }) {
+export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs, loadPeriod, summaryOnly = false, onSummary, withMargins = false }) {
   const PNL_KEY_MAP = { 'all': 'pnl:all', 'shopify': 'pnl:shopify', 'ebo': 'pnl:ebo', 'amazon': 'pnl:amazon', 'flipkart': 'pnl:flipkart', 'blinkit': 'pnl:blinkit', 'cred': 'pnl:cred', 'firstcry': 'pnl:firstcry', 'instamart': 'pnl:instamart', 'zepto': 'pnl:zepto', 'myntra': 'pnl:myntra', 'international': 'pnl:international', 'offline': 'pnl:offline' }
   const allowedPnlTabs = PNL_TABS.filter(t => !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[t.id]))
   const [activeTabLocal, setActiveTabLocal] = useState('all')
@@ -2150,10 +2151,14 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       x.rev += d.rev || 0; x.excRev += d.excRev || 0; x.units += d.units || 0
     })
     ;(activeData.dailyPnL || []).forEach(d => { if (byDate[d.date]) Object.assign(byDate[d.date], d) })
+    // withMargins (Ads watchlist, ADS_MASTER_PLAN.md Part B §1.5): each product's Gross ex GST and CM1 ₹
+    // from this tab's own Financial View rows, for its breakeven ROAS (Gross ex GST ÷ CM1).
+    const margins = withMargins ? Object.fromEntries(buildFinancialRows({ subCatData: activeData.subCatData, skuData: activeData.skuData, adSpendMap: activeAdSpendMap || {}, sndBySku: activeSndBySku, mobilityNetBySubCat: activeMobilityNetBySubCat, netScale: activeNetScale, cogsMonthlyMap, startDate: filters.start, endDate: filters.end })
+      .allRows.filter(r => r.cm1 != null).map(r => [r.sc, { cat: r.cat, excRev: r.excRev, cm1: r.cm1 }])) : null
     onSummary({
       gross: activeData.gross, net: activeData.net, returnRev: activeData.returnRev, orders: activeData.orders, units: activeData.units,
       cogs: kpiSummary.cogs, gm: kpiSummary.gm, snd: kpiSummary.snd, cm1: kpiSummary.cm1, spend: kpiSummary.spend, roas: kpiSummary.roas, cm2: kpiSummary.cm2,
-      rows, daily: Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)),
+      rows, daily: Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)), margins,
     })
   }, [summarySig]) // eslint-disable-line react-hooks/exhaustive-deps -- summarySig captures every reported value
   if (summaryOnly) return null

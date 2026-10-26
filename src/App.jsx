@@ -37,6 +37,10 @@ import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonLis
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
+import MixBar from './responsive/MixBar.jsx'
+import AdsLaptopSections from './ads/AdsSections.jsx'
+import { useAdsMonthly } from './ads/useAdsMonthly.js'
+import { seriesFor, buildDailyByChannel, computeAdsRules, OVERALL_CHANNELS, SHADES } from './ads/adsData.js'
 import { SalesFilterButton } from './sales/SalesFilters.jsx'
 import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
 import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
@@ -11487,6 +11491,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: C.acc, Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
 const ADS_CHART_ROW_H = 330
 const ADS_SPEND_TABLE_H = 460
+// Ads tab → P&L tab whose Financial View has CM1 (for breakeven ROAS); Overall / Myntra / CRED have none.
+const ADS_PNL_TAB = { D2C: 'shopify', Amazon: 'amazon', Flipkart: 'flipkart', Blinkit: 'blinkit', Zepto: 'zepto', Instamart: 'instamart' }
 const ADS_PLATFORMS = [
   { id: 'All', label: 'Overall' },
   { id: 'D2C', label: 'D2C' },
@@ -11655,9 +11661,15 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const [selAdType, setSelAdType] = useState({})
   const [allCatSearch, setAllCatSearch] = useState('')
   const [allProdSearch, setAllProdSearch] = useState('')
+  // Ads Phase 2: watchlist rule filtering the By product table; the last-6-months data (session-cached)
+  const [adsFlagRule, setAdsFlagRule] = useState(null)
+  const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
+  const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
 
-  const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? C.amber.tx : r > 0 ? C.red.tx : C.t3
-  const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? C.amber.bg : r > 0 ? C.red.bg : C.bg
+  // B2: ROAS is plain text; red only where it's below 1x (the product rows use the product's
+  // breakeven ROAS where P&L has it). The old green / amber chips were decorative.
+  const roasColor = r => (r > 0 && r < 1 ? C.red.tx : r > 0 ? C.t1 : C.t3)
+  const roasBg = r => (r > 0 && r < 1 ? C.red.bg : 'transparent')
 
   const chgBadge = (cur, prev, invert = false) => {
     if (!prev || isNaN(prev) || isNaN(cur)) return null
@@ -11856,6 +11868,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   // (It used to divide last period's spend by this period's new customers.)
   const prevCac = null
 
+
   // Build daily spend by date, and for D2C/Meta/Google use Shopify daily excRev split by spend share
   const shopifyDailyMap = {}
   ;(data.shopify?.daily || []).forEach(d => { shopifyDailyMap[d.date] = d.excRev || 0 })
@@ -11910,6 +11923,57 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const dailyArr = isD2C && Object.keys(addlDailySpendMap).length
     ? dailyArrRaw.map(d => ({ ...d, spend: d.spend + (addlDailySpendMap[d.date] || 0) }))
     : dailyArrRaw
+
+  // ── Ads Phase 2 sections (ADS_MASTER_PLAN.md Part B §1): inputs from data already on this page ──
+  const adsSeries = selPlatform === 'CRED' ? [] : seriesFor(selPlatform || null)
+  const adsPendingAfter = { Flipkart: data.flipkart?.latestRealDate || null, Myntra: data.myntra?.latestRealDate || null }
+  const adsDayRows = buildDailyByChannel({ daily, salesByChannel: { ...channelDailyMaps, Shopify: shopifyDailyMap }, series: adsSeries, pendingAfter: adsPendingAfter })
+  const adsPendingDays = adsDayRows.filter(d => adsSeries.some(s => d.pending[s.key])).length
+  const adsPendingNote = adsPendingDays ? `◌ ${adsPendingDays} day${adsPendingDays === 1 ? '' : 's'} with revenue not loaded yet (late Flipkart / Myntra reports): no revenue shown for them` : null
+  const adsPacing = (() => {
+    const now = new Date(); const y = new Date(now); y.setDate(y.getDate() - 1)
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const mStart = iso(new Date(y.getFullYear(), y.getMonth(), 1))
+    if (!filters.start || filters.start > mStart || filters.end < iso(y) || filters.end.slice(0, 7) !== mStart.slice(0, 7)) return null
+    const spent = adsDayRows.filter(d => d.date >= mStart).reduce((t, d) => t + adsSeries.reduce((s, x) => s + (d.spend[x.key] || 0), 0), 0)
+    const daysElapsed = Number(filters.end.slice(8)), daysInMonth = new Date(y.getFullYear(), y.getMonth() + 1, 0).getDate()
+    if (!(spent > 0)) return null
+    return { spent, projected: spent / daysElapsed * daysInMonth, daysElapsed, daysInMonth, monthLabel: y.toLocaleDateString('en-IN', { month: 'long' }) }
+  })()
+  const adsShareRows = (() => {
+    if (selPlatform) return null
+    const spendOf = c => filtTotals.filter(t => c.platforms.includes(t.platform)).reduce((s, t) => s + (t.spend || 0), 0)
+    const list = [...OVERALL_CHANNELS.map(c => ({ key: c.key, label: c.label, spend: spendOf(c), rev: platformNetRev[c.key] || 0 })), { key: 'CRED', label: 'CRED', spend: credAdditionalSpend || 0, rev: platformNetRev.CRED || 0 }]
+      .filter(r => r.spend > 0 || r.rev > 0)
+    const ts = list.reduce((s, r) => s + r.spend, 0), tr = list.reduce((s, r) => s + r.rev, 0)
+    return list.map(r => ({ key: r.key, label: r.label, a: ts > 0 ? r.spend / ts * 100 : 0, b: tr > 0 ? r.rev / tr * 100 : 0 })).sort((p, q) => q.a - p.a)
+  })()
+  const adsDetail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
+  const adsUnattributed = (adsDetail.subCategoryRows || []).filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0)
+  const adsProductRows = (adsDetail.subCategoryRows || []).filter(r => r.subCategory !== 'Unattributed')
+  const adsPrevByProd = (() => {
+    // previous equal-length window's product spend / sales (cached path only; see injectAdsFromCache)
+    if (!ads.prevAdsDailyByCategory) return null
+    const plats = !selPlatform ? null : isD2C ? d2cPlatforms : [selPlatform]
+    const salesCh = !selPlatform ? null : isD2C ? ['Shopify'] : [selPlatform]
+    const m = {}
+    ads.prevAdsDailyByCategory.filter(x => x.subCategory && (!plats || plats.includes(x.platform))).forEach(x => { const o = m[x.subCategory] || (m[x.subCategory] = { spend: 0, revenue: 0 }); o.spend += x.spend || 0 })
+    ;(ads.prevSalesDailyByCategory || []).filter(x => x.subCategory && (!salesCh || salesCh.includes(x.platform))).forEach(x => { const o = m[x.subCategory] || (m[x.subCategory] = { spend: 0, revenue: 0 }); o.revenue += x.revenue || 0 })
+    return m
+  })()
+  // Breakeven ROAS per product from P&L (Gross ex GST ÷ CM1 ₹), channel tabs whose P&L has CM1 only.
+  // CM1 ≤ 0 means no ROAS breaks even (any spend is a loss): Infinity.
+  const adsPnlTab = ADS_PNL_TAB[selPlatform] || null
+  const adsProbeKey = adsPnlTab ? `${adsPnlTab}|${filters.start}|${filters.end}` : null
+  const adsBeRoas = adsPnlTab && adsMargins?.key === adsProbeKey && adsMargins.margins
+    ? Object.fromEntries(Object.entries(adsMargins.margins).map(([sc, m]) => [sc, m.cm1 > 0 ? m.excRev / m.cm1 : Infinity]))
+    : null
+  const adsWatch = selPlatform === 'CRED' ? null : computeAdsRules({
+    rows: adsProductRows, prevByProd: adsPrevByProd, beRoasByProd: adsBeRoas, unattributed: adsUnattributed, totalSpend,
+    cpc: totalClicks > 0 ? totalSpend / totalClicks : null, prevCpc: prevClicks > 0 ? prevSpend / prevClicks : null,
+    channel: ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall', fmt,
+  })
+  const adsFlagKeys = adsFlagRule ? new Set((adsWatch?.rules.find(r => r.id === adsFlagRule)?.items || []).map(x => x.key)) : null
 
   const maxSpend = Math.max(...totals.map(t => t.spend), 1)
   const platformLogo = p => {
@@ -12258,37 +12322,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12 }}>No data</div>
                 ) : (
                   <>
-                    <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="62%" outerRadius="88%" paddingAngle={3} stroke="none">
-                            {pieData.map(d => <Cell key={d.name} fill={d.color} />)}
-                          </Pie>
-                          <Tooltip
-                            formatter={(v, n, entry) => [fmt(v), `${n} (${entry.payload.code})`]}
-                            contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, fontSize: 11, padding: '7px 11px' }}
-                            itemStyle={{ color: C.t1, fontWeight: 400 }}
-                            labelStyle={{ color: C.t1, fontWeight: 600 }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                        <div style={{ fontSize: 10, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Spend</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: C.t1 }}>{fmt(totalTypeSpend)}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                      {pieData.map(d => (
-                        <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11.5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                            <span style={{ color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                            <span style={{ color: C.t3, fontSize: 10, flexShrink: 0 }}>({d.code})</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            <span style={{ color: C.t1, fontWeight: 600 }}>{fmt(d.value)}</span>
-                            <span style={{ color: C.t3, fontSize: 10 }}>{(d.value / totalTypeSpend * 100).toFixed(1)}%</span>
-                          </div>
+                    {/* B2: split bar instead of a donut (design system: no donuts); Frido green shades */}
+                    <div style={{ fontSize: 10, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Spend</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, marginBottom: 10 }}>{fmt(totalTypeSpend)}</div>
+                    <MixBar parts={pieData.map((d, i) => ({ key: d.name, label: d.code, value: d.value, color: [C.m.green, C.m.g2, C.m.g3, C.m.g4][i] || C.m.g4 }))} height={10} fmt={fmt} label="Spend type split" />
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pieData.map((d, i) => (
+                        <div key={d.name} style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto auto', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                          <i style={{ width: 10, height: 10, borderRadius: 2, background: [C.m.green, C.m.g2, C.m.g3, C.m.g4][i] || C.m.g4, display: 'inline-block' }} />
+                          <span style={{ color: C.t1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name} <span style={{ color: C.t3 }}>({d.code})</span></span>
+                          <b style={{ color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{fmt(d.value)}</b>
+                          <span style={{ color: C.t3, fontVariantNumeric: 'tabular-nums', width: 44, textAlign: 'right' }}>{totalTypeSpend > 0 ? (d.value / totalTypeSpend * 100).toFixed(1) : '0'}%</span>
                         </div>
                       ))}
                     </div>
@@ -12452,6 +12496,15 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
         {/* Category table + Product table (with Category column) — same component for every
             sub-tab (All + each platform), reconciled to that tab's own KPI Total Spend. */}
+        {adsPnlTab && data && (
+          <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
+            offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
+            onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
+        )}
+        {!isMob && selPlatform !== 'CRED' && (
+          <AdsLaptopSections watch={adsWatch} activeRule={adsFlagRule} onRule={setAdsFlagRule} channel={ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'}
+            dayRows={adsDayRows} series={adsSeries} fmt={fmt} pendingNote={adsPendingNote} monthly={adsMonthly} pacing={adsPacing} shareRows={adsShareRows} />
+        )}
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
           const catRowsAll = detail.categoryRows || []
@@ -12461,9 +12514,15 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           // Category/sub-category slicers filter these tables down to the selection, same as
           // the trend chart above — one shared selCat/selSubCat state keeps the whole tab
           // consistent: pick "Slippers" once and every section reflects it.
-          const slicedCatRows = selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll
+          // B2: spend not linked to a product is one line above the lists (not a row); the Total rows still include it
+          const unattrSpend = !selCat.length && !selSubCat.length ? subCatRowsAll.filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0) : 0
+          const slicedCatRows = (selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll)
+            .map(r => (unattrSpend > 0 && r.category === 'Others' ? { ...r, spend: Math.max(0, r.spend - unattrSpend), roas: r.spend - unattrSpend > 0 ? r.revenue / (r.spend - unattrSpend) : 0 } : r))
+            .filter(r => r.spend > 0.5 || r.revenue > 0.5)
+          // B2: Unattributed spend is one line above the lists, not a product row; a watchlist tile filters the list
           const slicedProdRows = subCatRowsAll.filter(r =>
-            (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
+            r.subCategory !== 'Unattributed' && (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
+            && (!adsFlagKeys || adsFlagKeys.has(`${r.category}::${r.subCategory}`))
           )
 
           // Same look as the Platform Overview table above: C.bg header band with a 1.5px
@@ -12479,6 +12538,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const catQ = allCatSearch.trim().toLowerCase()
           const prodQ = allProdSearch.trim().toLowerCase()
           const filteredCatRows = catQ ? slicedCatRows.filter(r => r.category.toLowerCase().includes(catQ)) : slicedCatRows
+          // a watchlist tile (adsFlagKeys) already narrowed slicedProdRows
           const filteredProdRows = prodQ ? slicedProdRows.filter(r => r.category.toLowerCase().includes(prodQ) || r.subCategory.toLowerCase().includes(prodQ)) : slicedProdRows
           const sortedCats = catTable.sortRows(filteredCatRows, catGetters)
           const sortedProds = prodTable.sortRows(filteredProdRows, prodGetters)
@@ -12488,16 +12548,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           // ROAS = Revenue (Ex GST) ÷ Spend, same definition as the Platform Overview table above —
           // not the returns/cancel/CIR-adjusted netRevenue, which used to disagree with the top-level
           // ROAS figure.
-          const catTotal = filteredCatRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: 0, revenue: 0 })
+          const catTotal = filteredCatRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: catQ ? 0 : unattrSpend, revenue: 0 })
           const catRoas = catTotal.spend > 0 && catTotal.revenue > 0 ? catTotal.revenue / catTotal.spend : 0
-          const prodTotalAll = filteredProdRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: 0, revenue: 0 })
+          const prodTotalAll = filteredProdRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: prodQ || adsFlagKeys ? 0 : unattrSpend, revenue: 0 })
           const prodRoasAll = prodTotalAll.spend > 0 && prodTotalAll.revenue > 0 ? prodTotalAll.revenue / prodTotalAll.spend : 0
           // Sum addl spend from actual product rows (not KPI card) so total matches row sum
           const catAddlTotal = hasAddlSpendData ? filteredProdRows.reduce((s, r) => s + (getProductAddlSpend(r.subCategory) || 0), 0) : 0
           const prodAddlTotal = catAddlTotal
 
-          const roasCell = r => r > 0
-            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+          // red only below this product's P&L breakeven ROAS (be), else below 1x (roasColor)
+          const roasCell = (r, be) => r > 0
+            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: be != null ? (r < be ? C.red.bg : 'transparent') : roasBg(r), color: be != null ? (r < be ? C.red.tx : C.t1) : roasColor(r) }}>{r.toFixed(2)}x</span>
             : '—'
 
           const catColumnDefs = [
@@ -12559,7 +12620,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
                 const totalProdSpend = r.spend + prodAddlSpend
                 const effectiveRoas = totalProdSpend > 0 && r.revenue > 0 ? r.revenue / totalProdSpend : 0
-                return <td style={tdStyle}>{roasCell(effectiveRoas)}</td>
+                return <td style={tdStyle} title={adsBeRoas?.[r.subCategory] != null && isFinite(adsBeRoas[r.subCategory]) ? `Breakeven ROAS ${adsBeRoas[r.subCategory].toFixed(2)}x (P&L)` : undefined}>{roasCell(effectiveRoas, adsBeRoas?.[r.subCategory])}</td>
               },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(prodRoasAll)}</td>,
             },
@@ -12568,6 +12629,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
           return (
             <div style={{ marginBottom: 16 }}>
+              {unattrSpend > 0 && (
+                <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', marginBottom: 10, borderRadius: 10, background: C.card, border: `1px solid ${C.border}`, fontSize: 12.5, color: C.t2 }}>
+                  <b style={{ color: C.t1 }}>{fmt(unattrSpend)} ({totalSpend > 0 ? (unattrSpend / totalSpend * 100).toFixed(1) : '0'}%) not linked to a product</b>
+                  <span>· e.g. "all products" sale campaigns. Category and product ROAS are on linked spend only; the Total rows include it.</span>
+                </div>
+              )}
               <div className="ads-cat-prod-section" style={{ display: 'flex', flexDirection: window.innerWidth <= 768 ? 'column' : 'row', gap: window.innerWidth <= 768 ? 0 : 14 }}>
               {/* Category table */}
               <div className="kpi-card" style={{ padding: '16px 18px', borderRadius: 13, borderTop: 'none', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column' }}>
@@ -12631,7 +12698,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               {/* Product table — Category column included */}
               <div className="kpi-card ads-by-product-card" style={{ padding: isMob ? '14px 0px' : '16px 18px', borderRadius: 13, borderTop: 'none', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: isMob ? '0 14px 0 18px' : 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
+                    {adsFlagRule && <button type="button" onClick={() => setAdsFlagRule(null)} title="Show all products" style={{ fontSize: 11.5, fontWeight: 600, color: '#8a5a00', background: 'rgba(200,134,10,.12)', border: 'none', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>Flag: {adsWatch?.ruleName?.[adsFlagRule]} ✕</button>}
+                  </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input value={allProdSearch} onChange={e => setAllProdSearch(e.target.value)} placeholder="Search…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 110 : 180, outline: 'none' }} />
@@ -20758,6 +20828,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       byAdType: [],
       daily: slicedDaily,
       adsDailyByCategory: slicedAdsDBC,
+      // previous equal-length window's product rows (Ads watchlist 'ROAS down'); null when not in the cache
+      prevAdsDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.adsDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
+      prevSalesDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.salesDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
       salesDailyByCategory: slicedSalDBC,
       channelDailyExcRev: slicedChannelDailyExcRev,
       allSpendDetail,

@@ -48,6 +48,17 @@ export const PNL_CHANNEL_GROUP = {
 // units in the period, so tiny products (e.g. Firstcry, 2–11 units each) don't flag every row.
 export const PNL_MATERIALITY = { minShareOfGross: 0.01, minUnits: 50 }
 
+// Ads watchlist (ADS_MASTER_PLAN.md Part B §1.5). Products with less than minSpend in the period aren't
+// flagged. ROAS here is total-sales ROAS (channel sales ex GST ÷ spend), the Ads page's own ROAS.
+export const ADS_RULES = {
+  minSpend: 10000,            // ₹ — materiality
+  noSalesSpend: 10000,        // 'Spend, no sales': spend above this …
+  noSalesRoas: 0.5,           // … and ROAS below this
+  unattributedShare: 0.20,    // 'Unattributed spend': share of spend not linked to a product
+  roasDropPct: 20,            // 'ROAS down': ▼ at least this % vs the previous period
+  cpcUpPct: 15,               // 'CPC up': ▲ at least this % vs the previous period
+}
+
 // 'good' | 'warn' | 'bad' | null (null = no target, show neutral)
 export function metricStatus(key, value) {
   const t = METRIC_TARGETS[key]
