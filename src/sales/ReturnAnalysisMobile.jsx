@@ -5,7 +5,8 @@ import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import InfoStrip from '../responsive/InfoStrip.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import CompactRankRow from '../responsive/CompactRankRow.jsx'
-import { Card } from '../responsive/CardKit.jsx'
+import MobileRankedList from '../responsive/MobileRankedList.jsx'
+import { Card, Chips, KV } from '../responsive/CardKit.jsx'
 import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
@@ -95,10 +96,47 @@ function PaymentCard({ rows = [], basis }) {
   )
 }
 
-export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra }) {
+const SheetHeading = ({ children }) => <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: M.muted, margin: '14px 0 6px' }}>{children}</div>
+const redIf = (key, v) => (isRed(key, v) ? M.down : undefined)
+
+// ── Top products · high returns: the desktop ranked list (sub-category level, same API order) ──
+function TopProductsCard({ data, basis, paymentType, setPaymentType, period }) {
+  const opts = [{ id: '', label: 'All' }, ...(data.paymentTypeTable || []).map(p => p.paymentType).filter(Boolean).map(p => ({ id: p, label: p }))]
+  const byProduct = {}
+  ;(data.categoryTable || []).forEach(r => { byProduct[`${r.category}::${r.subCategory}`] = r })
+  const sorts = [
+    { key: 'rev', label: '₹ lost', value: r => r.returnRevLost, format: r => fmt(r.returnRevLost) },
+    { key: 'qty', label: 'Units lost', value: r => r.returnQtyLost, format: r => `${fmtN(r.returnQtyLost)} units` },
+    { key: 'pct', label: '% of gross rev', value: r => r.returnPct, format: r => p1(r.returnPct), bar: 'bad' },
+  ]
+  return (
+    <Card title="Top products · high returns" sub="Revenue lost to returns · % = of the product's gross revenue">
+      <Chips label="Payment type" options={opts} value={paymentType || ''} onChange={setPaymentType} />
+      <MobileRankedList key={basis} title={null} noun="products" items={data.topProducts || []} itemKey={r => `${r.category}::${r.subCategory}`}
+        name={r => r.subCategory} sub={r => `${r.category} · ${p1(r.returnPct)} of gross rev`} groupOf={r => r.category} searchText={r => `${r.subCategory} ${r.category}`}
+        sorts={sorts} defaultSort={basis === 'qty' ? 'qty' : 'rev'} topN={8} sheetSubtitle={[period, paymentType || null].filter(Boolean).join(' · ')}
+        secondary={(r, k) => (k === 'qty' ? fmt(r.returnRevLost) : `${fmtN(r.returnQtyLost)} units`)}
+        details={[{ label: '₹ lost', value: r => fmt(r.returnRevLost) }, { label: 'Units lost', value: r => fmtN(r.returnQtyLost) }, { label: 'Gross revenue', value: r => fmt(r.grossRev) }, { label: '% of gross rev', value: r => p1(r.returnPct) }]}
+        renderSheet={r => {
+          const c = byProduct[`${r.category}::${r.subCategory}`]
+          if (!c) return null
+          return (
+            <>
+              <SheetHeading>By type · all payment types</SheetHeading>
+              <KV items={[['cancel', 'Cancel'], ['rto', 'RTO'], ['cir', 'CIR'], ['exchange', 'Exchange']].map(([id, label]) => ({
+                label: `${label} %`, value: `${p1(c[`${id}Pct`])} · ${fmt(c[`${id}Rev`])}`, color: redIf(`${id}Pct`, c[`${id}Pct`]) }))} />
+            </>
+          )
+        }} />
+    </Card>
+  )
+}
+
+export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
+  const period = filters.start && filters.end ? shortRange(d0(filters.start), d0(filters.end)) : ''
 
   // Header "⋯": page-wide Qty / Rev and the page's CSV exports (the desktop cards' Export buttons).
   useEffect(() => {
@@ -119,6 +157,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {error && <div role="alert" style={{ padding: '10px 13px', borderRadius: 12, background: '#fff', border: `1px solid ${M.down}`, color: M.down, fontSize: 13 }}>Couldn't load return analysis: {error}</div>}
       {data && <MasterCard data={data} filters={filters} layout={layout} />}
       {data && <PaymentCard rows={data.paymentTypeTable} basis={basis} />}
+      {data && <TopProductsCard data={data} basis={basis} paymentType={topProductsPaymentType} setPaymentType={setTopProductsPaymentType} period={period} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
