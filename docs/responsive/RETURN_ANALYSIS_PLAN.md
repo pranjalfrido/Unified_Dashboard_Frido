@@ -87,4 +87,6 @@ The prompt's §0 list matches the code; nothing missing. Only difference: the de
 7. **Entry card numbers** are always all-D2C: the Return Analysis page always opens on all D2C (it clears the MyFrido / Mobility sub-tab today). On a MyFrido / Mobility sub-tab the card says "All D2C" so the numbers aren't mistaken for that sub-tab's.
 8. **Header** on the Return Analysis view has no alerts bell (row 1 has no room at 375px with ‹, title, filter, ⋯ and date). The bell is one tap away on every other page.
 9. **Size-swap chip** uses `top1` only and needs ≥ 50% (the prompt's example, 91%, is top1).
-10. **Pushed `release/responsive`** once, after merging main into it at the start (standing weekly-merge rule), before reading that this run should push only the feature branch. Nothing else was pushed to it.
+10. **"vs" period in the hero** reads "vs 6–30 Sep" for 1–25 Oct, not "vs 1–25 Sep" as in the prompt: the API compares with the same number of days just before the range (25 days ending 30 Sep), and the ▲/▼ on desktop and mobile come from that period. The label shows the real comparison; nothing changed in the calculation.
+11. **Laptop 4b chip** reads "Size swap" (the % is already next to the SKU in that cell); the mobile chip reads "Size swap 91%".
+12. **Pushed `release/responsive`** once, after merging main into it at the start (standing weekly-merge rule), before reading that this run should push only the feature branch. Nothing else was pushed to it.
