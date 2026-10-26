@@ -1440,9 +1440,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   }, [data])
 
   // Slow Moving / Dead Stock — always company-wide from the pre-computed cache,
-  // not affected by sidebar filters.
-  const filteredSlowMoving = data.slowMoving
-  const filteredDeadStock = data.deadStock
+  // not affected by sidebar filters. Spare Parts is left out of both (display filter only,
+  // decided 2026-10-26; the cache's own "sparepart" check never matched "Spare Parts").
+  const filteredSlowMoving = useMemo(() => data.slowMoving.filter(r => r.category !== 'Spare Parts'), [data])
+  const filteredDeadStock = useMemo(() => data.deadStock.filter(r => r.category !== 'Spare Parts'), [data])
 
   // Export rows flatten each sub-category's collapsed `skus[]` array to one row per SKU —
   // the on-screen table stays collapsed-by-default, but the CSV needs the SKU-level detail.
