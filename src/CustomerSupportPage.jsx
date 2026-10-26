@@ -18,6 +18,11 @@ const GRAINS = [
   { id: 'month', label: 'Monthly', n: 2, delta: 'MoM' },
 ]
 const CHANNELS = ['Chat', 'Inbound', 'Email', 'Social media', 'Escalation']
+// Display names (CA12): 'Inbound' here is Freshdesk tickets from the Phone source, a different system from
+// the Ozonetel inbound call line, so the two are named apart.
+const chLabel = ch => (ch === 'Chat' ? 'Chat (WhatsApp)' : ch === 'Inbound' ? 'Inbound (tickets)' : ch)
+// Display only (CA15): dispositions / sub categories sometimes end with dots ('Order Status Query.')
+const trimPunct = x => String(x ?? '').replace(/[.\s]+$/, '')
 
 // ── formatting ──
 const dur = (s) => {
@@ -118,9 +123,9 @@ function sections(model) {
       note: 'Association type Parent + blank. Escalation = tickets in the Escalations / CXO-Escalations groups.',
       rows: [
         ...['Chat', 'Inbound', 'Email', 'Social media', 'Escalation'].map(ch => ({
-          label: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, fmt: int, get: p => p.t(ch)?.interactions,
+          label: chLabel(ch), fmt: int, get: p => p.t(ch)?.interactions,
           pct: p => div(p.t(ch)?.interactions, all(p)?.interactions),
-          hint: { Chat: 'WhatsApp', Inbound: 'Freshdesk phone tickets', Email: 'Email, outbound email and portal', 'Social media': 'Instagram and Facebook', Escalation: 'Tickets in the Escalations / CXO-Escalations groups' }[ch],
+          hint: { Chat: 'WhatsApp', Inbound: 'Freshdesk tickets from the Phone source (logged at any time, Sundays included): not the Ozonetel call line', Email: 'Email, outbound email and portal', 'Social media': 'Instagram and Facebook', Escalation: 'Tickets in the Escalations / CXO-Escalations groups' }[ch],
         })),
         { label: 'Total interactions', fmt: int, strong: true, get: p => all(p)?.interactions, pct: p => div(all(p)?.interactions, all(p)?.interactions) },
         { label: 'Unique interactions', fmt: int, hint: 'Distinct customers (contact id, else phone, else email)', get: p => all(p)?.unique_int, pct: p => div(all(p)?.unique_int, all(p)?.interactions) },
@@ -148,8 +153,8 @@ function sections(model) {
         { group: 'Overall', label: 'Child tickets', fmt: int, get: p => all(p)?.tasks },
         { group: 'Overall', label: 'Parent + blank (interactions)', fmt: int, get: p => all(p)?.interactions },
         ...['Chat', 'Inbound', 'Email', 'Social media'].flatMap(ch => [
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'MCR', fmt: pctF, good: 'down', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'FCR', fmt: pctF, good: 'up', get: p => fcr(p.t(ch)) },
+          { group: chLabel(ch), label: 'MCR', fmt: pctF, good: 'down', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
+          { group: chLabel(ch), label: 'FCR', fmt: pctF, good: 'up', get: p => fcr(p.t(ch)) },
         ]),
       ],
     },
@@ -186,7 +191,7 @@ function sections(model) {
         get: p => p.t(r.ch)?.[r.k], pct: p => div(p.t(r.ch)?.[r.k], p.t(r.ch)?.afrt_n) })),
     },
     {
-      id: 'ozonetel', title: 'Ozonetel — inbound calls',
+      id: 'ozonetel', title: 'Calls (Ozonetel): inbound line',
       note: 'Inbound line Inbound_918045152790 only. One count per call (Ozonetel call_id, not per ringing attempt), first ring 10:00–19:00 IST. Data starts 1 Oct 2026. A unique caller is missed only if none of their calls was answered.',
       rows: [
         // Count = the number; % = share of its base (total calls for the first three, unique callers for the rest).
@@ -489,9 +494,8 @@ function driverRows(data, model) {
     m.get(k).v[r.bucket] = Number(r.n) || 0
   }
   const last = keys.at(-1)
-  const clean = (x) => x.replace(/\.$/, '')
   return [...m.values()].map(({ dispo, sub1, sub2, v }) => ({
-    label: `${sub2} · ${clean(dispo)}`, hint: `${clean(dispo)} › ${sub1} › ${sub2}`, fmt: int, good: 'down',
+    label: `${trimPunct(sub2)} · ${trimPunct(dispo)}`, hint: `${trimPunct(dispo)} › ${trimPunct(sub1)} › ${trimPunct(sub2)}`, fmt: int, good: 'down',
     get: p => v[p.key], pct: p => div(v[p.key], p.t('All')?.interactions),
   })).sort((a, b) => (b.get({ key: last }) || 0) - (a.get({ key: last }) || 0)).slice(0, 15)
 }
@@ -650,7 +654,7 @@ function ChannelTrend({ model, grain }) {
         <Tooltip content={<ChartTooltip formatter={int} />} cursor={{ fill: C.hov }} />
         <Legend {...chartLegendProps()} />
         {MAIN.map((ch, i) => (
-          <Bar key={ch} dataKey={ch} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
+          <Bar key={ch} dataKey={ch} name={chLabel(ch)} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
         ))}
       </BarChart>
     </ResponsiveContainer>
@@ -868,7 +872,7 @@ function ContactHeatmap({ rows }) {
 function DriversChart({ data }) {
   const rows = useMemo(() => (data.dispo7 || [])
     .filter(r => r.dispo !== '(blank)')
-    .map(r => ({ name: r.dispo, cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
+    .map(r => ({ name: trimPunct(r.dispo), cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
     .sort((a, b) => b.cur - a.cur).slice(0, 12), [data])
   const max = Math.max(...rows.map(r => r.cur), 1)
   return (
@@ -909,7 +913,7 @@ function AgentBoard({ rows }) {
               </td>
               <td style={{ ...td, textAlign: 'left' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: C.acd, background: C.acl }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{r.main_channel}
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{chLabel(r.main_channel)}
                 </span>
               </td>
               <td style={td}>
@@ -918,8 +922,10 @@ function AgentBoard({ rows }) {
                   {fmtN(r.interactions)}
                 </div>
               </td>
-              <td style={td}>{dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
-              <td style={td}>{hrs(avg(r, 'res_sum', 'resolved'))}</td>
+              {/* CA13: phone tickets get no public agent reply and are closed when logged, so Agent FRT / ART
+                  don't apply to inbound (voice) agents: say so instead of '—' / 0.0h */}
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets have no agent reply in Freshdesk' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets are closed when logged, so resolution time is ~0' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : hrs(avg(r, 'res_sum', 'resolved'))}</td>
             </tr>
           ))}
         </tbody>
