@@ -11,7 +11,7 @@ import FilterPicker from '../responsive/FilterPicker.jsx'
 import StackedBarChart from '../responsive/StackedBarChart.jsx'
 import MixBar, { MixLegend } from '../responsive/MixBar.jsx'
 import { Card, Chips, KV, ShowAllButton, RowText } from '../responsive/CardKit.jsx'
-import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
+import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed, exchTone, sizeSwapPct, isSizeSwap } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
 // RETURN_ANALYSIS_PLAN.md). Display only: every number is the desktop page's own field from
@@ -305,6 +305,40 @@ function MonthsCard({ rows = [], basis, end }) {
   )
 }
 
+// ── Exchange deep dive: the desktop SKU-wise table as a ranked list ──
+export function SizeSwapChip({ pct }) {
+  return <span style={{ display: 'inline-block', marginRight: 6, padding: '0 6px', borderRadius: 999, background: 'rgba(31,90,61,.08)', color: M.green, fontSize: 12, fontWeight: 600, lineHeight: '15px' }}>Size swap {pct.toFixed(0)}%</span>
+}
+function ExchangeCard({ rows = [], period }) {
+  const toneColor = v => ({ bad: M.down, warn: M.amber }[exchTone(v)])
+  const sorts = [
+    { key: 'exchQty', label: 'Exch qty', value: r => r.exchQty, format: r => fmtN(r.exchQty) },
+    { key: 'exchPct', label: 'Exch %', value: r => r.exchPct, format: r => p1(r.exchPct), bar: 'bad' },
+    { key: 'exchRev', label: 'Exch ₹', value: r => r.exchRev, format: r => fmt(r.exchRev) },
+  ]
+  return (
+    <Card title="Exchange deep dive" sub="SKUs by exchanges · tap for what they were exchanged to">
+      <MobileRankedList title={null} noun="SKUs" items={rows} itemKey={r => r.sku} name={r => r.sku} sub={r => r.subCategory}
+        groupOf={r => r.category} searchText={r => `${r.sku} ${r.subCategory} ${r.category}`} sorts={sorts} topN={10} sheetSubtitle={period}
+        valueColor={(r, k) => (k === 'exchPct' ? toneColor(r.exchPct) : undefined)}
+        badge={r => { const s = sizeSwapPct(r); return s != null ? <SizeSwapChip pct={s} /> : null }}
+        secondary={(r, k) => (k === 'exchQty' ? `${p1(r.exchPct)} · ${fmt(r.exchRev)}` : `${fmtN(r.exchQty)} exch · of ${fmtN(r.totalQty)}`)}
+        details={[{ label: 'Exch qty', value: r => fmtN(r.exchQty) }, { label: 'Exch %', value: r => p1(r.exchPct) }, { label: 'Exch ₹', value: r => fmt(r.exchRev) }, { label: 'Units sold', value: r => fmtN(r.totalQty) }]}
+        renderSheet={r => {
+          const to = [[r.top1Sku, r.top1Pct], [r.top2Sku, r.top2Pct], [r.top3Sku, r.top3Pct]].filter(([s]) => s)
+          return (
+            <>
+              <SheetHeading>Exchanged to</SheetHeading>
+              {to.length ? to.map(([s, p], i) => (
+                <CompactRankRow key={s} name={`${s}${isSizeSwap(r.sku, s) ? ' · other size' : ''}`} value={p != null ? p1(p) : '—'} pct="" barPct={p || 0} last={i === to.length - 1} />
+              )) : <div style={{ fontSize: 13, color: M.muted, padding: '4px 0' }}>No exchange-to data</div>}
+            </>
+          )
+        }} />
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -335,6 +369,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <ReasonsCard reasons={data.returnReasons} period={period} />}
       {data && <CancelCard rows={data.cancelByBucket} />}
       {data && <MonthsCard rows={data.monthlyTable} basis={basis} end={filters.end} />}
+      {data && <ExchangeCard rows={data.exchangeSkuDetail} period={period} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
