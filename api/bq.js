@@ -190,6 +190,34 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
+  // Ads "Last 6 months" (ADS_MASTER_PLAN.md Part B §1.2): monthly ad spend / clicks / impressions per
+  // platform + monthly channel sales ex GST (same base and Channel grouping as the cards' chMap, no
+  // late-report estimates). One extra request, cached here and in the browser session.
+  if (req.body?.adsMonthly) {
+    const { from, to } = req.body
+    const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '')
+    if (!isDate(from) || !isDate(to)) return res.status(400).json({ error: 'Bad from / to' })
+    const ck = `adsMonthly|${from}|${to}`
+    const hit = getFromCache(ck)
+    if (hit) return res.json(hit)
+    try {
+      const bqm = getBQ()
+      const [[spendRows], [salesRows]] = await Promise.all([
+        bqm.query({ query: `SELECT FORMAT_DATE('%Y-%m', report_date) AS month, platform, SUM(spend) AS spend, SUM(clicks) AS clicks, SUM(impressions) AS impressions FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${from}' AND '${to}' GROUP BY 1, 2` }),
+        bqm.query({ query: `WITH q AS (${buildQuery(from, to, {})}) SELECT FORMAT_DATE('%Y-%m', OrderDate) AS month, Channel, SUM(SellingPrice_Exc_GST) AS exc_rev FROM q GROUP BY 1, 2` }),
+      ])
+      const out = {
+        from, to,
+        spend: spendRows.map(x => ({ month: x.month, platform: x.platform, spend: Number(x.spend) || 0, clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0 })),
+        sales: salesRows.map(x => ({ month: x.month, channel: x.Channel === 'Retail' ? 'EBO' : x.Channel, excRev: Number(x.exc_rev) || 0 })),
+      }
+      setInCache(ck, out)
+      return res.json(out)
+    } catch (e) {
+      return res.status(500).json({ error: String(e.message || e).slice(0, 300) })
+    }
+  }
+
   const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup, phase } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
