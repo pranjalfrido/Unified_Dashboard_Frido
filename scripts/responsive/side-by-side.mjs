@@ -29,7 +29,13 @@ await mb.close()
 // 2 Overview parts
 const { browser, ctx } = await launch(vp)
 const page = await ctx.newPage()
-await openPage(page, '/overview')
+const ROUTE = '/' + (process.env.ROUTE || 'overview').replace(/^.*Git\//, '').replace(/^\/+/, '') // ROUTE=sales/all for Sales
+await openPage(page, ROUTE)
+await page.waitForSelector('.master-tiles button', { timeout: 300000 })
+await page.waitForFunction(() => !document.querySelector('.delta-shimmer, .m-skeleton'), null, { timeout: 300000 }).catch(() => {})
+await page.waitForTimeout(4000)
+const prodTab = page.getByRole('tab', { name: 'Product', exact: true }) // Sales: compare the product list
+if (await prodTab.count()) { await prodTab.first().click(); await page.waitForTimeout(300) }
 await page.waitForFunction(() => !document.querySelector('.delta-shimmer'), null, { timeout: 120000 }).catch(() => {})
 const ours = {}
 for (const [part, sel] of [['header', '.topnav'], ['master', '.master-card'], ['list', '.ranked-list'], ['nav', 'nav.bottom-nav']]) {
@@ -48,7 +54,7 @@ const cp = await cb.newPage({ viewport: { width: vp.width * 2 + 60, height: 400 
 for (const part of Object.keys(mock)) {
   await cp.setContent(`<body style="margin:0;background:#e9e7e1;font:600 13px system-ui"><div style="display:flex;gap:20px;padding:20px;align-items:flex-start">
     <div><div style="margin-bottom:6px">Sales mockup</div><img src="data:image/png;base64,${mock[part]}"></div>
-    <div><div style="margin-bottom:6px">Overview (${ENGINE})</div><img src="data:image/png;base64,${ours[part]}"></div></div></body>`)
+    <div><div style="margin-bottom:6px">${ROUTE.slice(1)} (${ENGINE})</div><img src="data:image/png;base64,${ours[part]}"></div></div></body>`)
   await cp.waitForTimeout(200)
   await cp.screenshot({ path: `${out}/sbs-${part}-${ENGINE}-${vp.name}.png`, fullPage: true })
   console.log('wrote', `sbs-${part}-${ENGINE}-${vp.name}.png`)

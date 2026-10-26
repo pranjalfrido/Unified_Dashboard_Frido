@@ -8220,7 +8220,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRevenueCalc / nDays), delta: deskChg(netRevenueCalc / nDays, prevDailyAvg) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units (same channels as AOV).', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, delta: deskChg(scopedASP, prevScopedASP) },
       gst: { label: 'GST', def: 'GST collected.', value: fmt(gstCollected), delta: deskChg(gstCollected, prevGST) },
-      returnPct: { label: 'Returns %', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixDataAll, skuData: skuChannelMapBySku, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
     const gx = allGeoInputs()
@@ -9326,7 +9326,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: chg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units sold.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-      returnPct: { label: 'Returns %', def: `RTO + CIR + cancelled revenue ÷ gross revenue (${fmt(shResolvedReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: chg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `RTO + CIR + cancelled revenue ÷ gross revenue (${fmt(shResolvedReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: chg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
       rtoPct: { label: 'RTO %', def: `RTO revenue ÷ gross revenue (${fmt(shResolvedRtoRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: chg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
       cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(shResolvedCirRevSum)}).`, value: `${shCirPct.toFixed(1)}%`, delta: chg(shCirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(shResolvedCancelRev)}).`, value: `${shResolvedCancelPct.toFixed(1)}%`, delta: chg(shResolvedCancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
@@ -9964,7 +9964,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: deskChg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: deskChg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: deskChg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-      returnPct: { label: 'Returns %', def: `RTO + return + CIR + cancelled revenue ÷ gross revenue (${fmt(eboResolvedTotalReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: deskChg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `RTO + return + CIR + cancelled revenue ÷ gross revenue (${fmt(eboResolvedTotalReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: deskChg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
       rtoPct: { label: 'RTO %', def: `RTO + in-store return revenue ÷ gross revenue (${fmt(rtoRev + returnRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: deskChg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
       cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(cirRev)}).`, value: `${cirPct.toFixed(1)}%`, delta: deskChg(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(cancelRev)}).`, value: `${cancelPct.toFixed(1)}%`, delta: deskChg(cancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
@@ -10585,10 +10585,10 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
       aov: { label: 'AOV', def: 'Seller Central gross revenue ÷ orders (VC has no orders).', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, point: r => (r.orders > 0 ? r.sc / r.orders : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
       cancelPct: { label: 'Cancellation rate', tileLabel: 'Cancel rate', def: `${fmtN(scCancelOrders)} cancelled orders (SC).`, value: `${scCancelRate.toFixed(1)}%`, lowerIsBetter: true },
       returnPct: channelView === 'vc'
-        ? { label: 'Returns % (VC)', tileLabel: 'Returns %', def: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross revenue.`, value: `${vcReturnRate.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', vcReturnRate) }
+        ? { label: 'Returns % (VC)', tileLabel: 'Returns', def: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross revenue.`, value: `${vcReturnRate.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', vcReturnRate) }
         : channelView === 'sc'
-        ? { label: 'Returns % (SC)', tileLabel: 'Returns %', def: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzSCResolvedReturnPct) : null }
-        : { label: 'Returns %', def: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC + VC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzCombinedReturnPct) : null },
+        ? { label: 'Returns % (SC)', tileLabel: 'Returns', def: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzSCResolvedReturnPct) : null }
+        : { label: 'Returns %', tileLabel: 'Returns', def: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC + VC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzCombinedReturnPct) : null },
     }
     const cx = amzCategoryInputs(), mx = amzMatrixInputs()
     const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
@@ -11148,7 +11148,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
       gst: { label: 'GST', def: 'Inc GST − Exc GST.', value: fmt(rev - excRev), delta: chg(rev - excRev, fkPrevGST) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmtN(cancelOrders)} cancelled orders · ${fmt(cancelRev)} revenue.`, value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, delta: fkPrevCancelPct > 0 ? chg(curCancelPct, fkPrevCancelPct) : null, lowerIsBetter: true },
-      returnPct: { label: 'Returns %', def: `${fmt(fkReturnCur.returnRev)} returned of ${fmt(fkReturnCur.deliveredRev)} gross.${totalReturns > 0 ? ` Returns: ${fmtN(totalReturns)}${nOrders > 0 ? ` (${(totalReturns / nOrders * 100).toFixed(1)}% of orders)` : ''}.` : ''} Delivered: ${fkDeliveredPct.pct.toFixed(1)}% (${fmtN(fkDeliveredPct.deliveredOrders)} of ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancelled orders).`,
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(fkReturnCur.returnRev)} returned of ${fmt(fkReturnCur.deliveredRev)} gross.${totalReturns > 0 ? ` Returns: ${fmtN(totalReturns)}${nOrders > 0 ? ` (${(totalReturns / nOrders * 100).toFixed(1)}% of orders)` : ''}.` : ''} Delivered: ${fkDeliveredPct.pct.toFixed(1)}% (${fmtN(fkDeliveredPct.deliveredOrders)} of ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancelled orders).`,
         value: `${fkReturnCur.pct.toFixed(1)}%`, delta: fkPrevReturnPct > 0 ? chg(fkReturnCur.pct, fkPrevReturnPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', fkReturnCur.pct),
         point: r => (r.gross > 0 ? r.retNum / r.gross * 100 : null), fmtPoint: v => `${v.toFixed(1)}%` },
     }
@@ -13775,7 +13775,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
       orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
-      returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: crSkuMatrixResolved, subCatPrevMap, skuPrevMap: cr.skuPrevMap || {}, simpleReturns: true, netScale: crMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
@@ -14092,7 +14092,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
       orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
-      returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: fcSkuMatrixResolved, subCatPrevMap, skuPrevMap: fc.skuPrevMap || {}, simpleReturns: true, netScale: fcMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
@@ -14415,7 +14415,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}` },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
       activeProducts: { label: 'Active products', def: 'Product types sold.', value: fmtN(totals.skus) },
-      returnPct: { label: 'Returns %', def: `${fmt(mnReturnRev)} returned · ${fmtN(mnReturnOrders)} orders.`, value: `${mnReturnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', mnReturnPct) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(mnReturnRev)} returned · ${fmtN(mnReturnOrders)} orders.`, value: `${mnReturnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', mnReturnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: mnSkuMatrixResolved, subCatPrevMap: mnSubCatPrevMap, skuPrevMap: mn.skuPrevMap || {}, simpleReturns: true, netScale: mnMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })

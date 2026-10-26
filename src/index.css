@@ -94,9 +94,12 @@ a,button,select,input,textarea,label,summary,[role=button],[role=tab],[role=menu
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 
-::-webkit-scrollbar{width:4px;height:4px}
+/* Scrollbars: thin and light on every page (2026-10-26). Firefox via scrollbar-width / scrollbar-color. */
+@supports (-moz-appearance:none){ *{scrollbar-width:thin;scrollbar-color:rgba(28,36,32,.16) transparent} } /* Firefox only: in Chrome these would override the 3px bar below */
+::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
+::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(28,36,32,.32)}
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:var(--app-h);overflow:hidden;background:var(--bg)}
@@ -180,8 +183,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .page-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px}
 /* clip-path:none is not enough - the scroll container clips regardless. The side and
    bottom padding above is what actually gives the card hover glow room to render. */
-.page-scroll::-webkit-scrollbar{width:4px}
-.page-scroll::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
+.page-scroll::-webkit-scrollbar{width:3px}
+.page-scroll::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
