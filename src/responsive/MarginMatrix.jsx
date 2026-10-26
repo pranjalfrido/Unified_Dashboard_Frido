@@ -9,18 +9,20 @@ import { QUADRANTS, matrixPoints } from './marginMatrixPoints.js'
 // Dots: red below the bar, light green from the bar to 40%, dark green above 40%. Laptop: click a
 // dot → onSelect(key). Mobile: mini chart + 4 quadrant tiles → onQuadrant(id).
 // Products whose CM1 % isn't known (no SnD or below the table's revenue floor) aren't plotted.
+// x is on a square-root scale: a few large products would otherwise squeeze everything else into
+// the left edge.
 const M = C.m
 const dot = (y, bar) => (y < bar ? M.down : y < 40 ? M.g2 : M.green)
 
 export default function MarginMatrix({ rows, bar, variant = 'laptop', onSelect, onQuadrant, height = 300 }) {
   const { pts, median } = matrixPoints(rows, bar)
   if (!pts.length) return null
-  const maxX = Math.max(...pts.map(p => p.x)) * 1.05
+  const maxX = Math.sqrt(Math.max(...pts.map(p => p.x)) * 1.05)
   const ys = pts.map(p => p.y)
   const minY = Math.min(bar - 10, Math.floor(Math.min(...ys) / 10) * 10)
   const maxY = Math.max(bar + 10, Math.ceil(Math.max(...ys) / 10) * 10)
   const W = 600, H = variant === 'mobile' ? 150 : height, padL = variant === 'mobile' ? 4 : 44, padB = variant === 'mobile' ? 4 : 26, padT = 8, padR = 8
-  const sx = x => padL + (x / maxX) * (W - padL - padR)
+  const sx = x => padL + (Math.sqrt(Math.max(0, x)) / maxX) * (W - padL - padR)
   const sy = y => padT + (1 - (y - minY) / (maxY - minY)) * (H - padT - padB)
   const ticks = []
   for (let t = Math.ceil(minY / 10) * 10; t <= maxY; t += 10) ticks.push(t)
@@ -39,7 +41,7 @@ export default function MarginMatrix({ rows, bar, variant = 'laptop', onSelect, 
           <text x={W - padR - 6} y={padT + 14} textAnchor="end" fontSize="11" fontWeight="700" fill={C.t3}>STARS</text>
           <text x={padL + 6} y={H - padB - 6} fontSize="11" fontWeight="700" fill={C.t3}>REVIEW</text>
           <text x={W - padR - 6} y={H - padB - 6} textAnchor="end" fontSize="11" fontWeight="700" fill={C.t3}>FIX</text>
-          <text x={(W + padL) / 2} y={H - 4} textAnchor="middle" fontSize="11" fill={C.t3}>Gross revenue → (dotted line: median {fmtSigned(median)})</text>
+          <text x={(W + padL) / 2} y={H - 4} textAnchor="middle" fontSize="11" fill={C.t3}>Gross revenue, square-root scale → (dotted line: median {fmtSigned(median)})</text>
         </>
       )}
       {pts.map(p => (
