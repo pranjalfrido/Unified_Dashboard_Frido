@@ -11,7 +11,7 @@ import RankedRow from './RankedRow.jsx'
 //   onSelect(item): open the item's detail (the caller's BottomSheet)
 const PAGE = 20
 
-export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect }) {
+export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, valueColor, badge }) {
   const M = C.m
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState(initialSort || sorts[0].key)
@@ -81,7 +81,8 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
         {!list.length && <div style={{ padding: 16, textAlign: 'center', color: M.muted, fontSize: 13 }}>No {noun} match.</div>}
         {list.slice(0, shown).map((it, i) => (
           <RankedRow key={i + '-' + name(it)} rank={i + 1} name={name(it)} sub={sub?.(it)} value={sort.format(it)} secondary={secondary?.(it, sortKey)}
-            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => onSelect?.(it)} />
+            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => onSelect?.(it)}
+            valueColor={valueColor?.(it, sortKey)} badge={badge?.(it)} />
         ))}
         {list.length > shown && (
           <button type="button" onClick={() => setShown(s => s + PAGE)}

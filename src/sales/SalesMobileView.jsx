@@ -19,6 +19,7 @@ import { SALES_MOBILE, PRODUCT_SORTS } from './mobileChannelConfig.js'
 //   trendRows daily rows for the master card's chart ({ date, ...numbers }, summed per period)
 //   data      section inputs: { channels, categories, products, skus, regions, tiers, states, cities,
 //             stores, storeTotal, accounts, reasons, notes, period }
+//   footer    optional card after the last section (D2C: the Return analysis entry card)
 const M = C.m
 const titleCase = s => (s || '').toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
 const pctText = v => (v == null || !isFinite(v) ? '—' : `${v.toFixed(1)}%`)
@@ -218,7 +219,7 @@ function ReasonsCard({ reasons, sub }) {
 }
 
 // ── View ────────────────────────────────────────────────────────────
-export default function SalesMobileView({ channel, metrics, trendRows, start, end, data = {}, onOpenChannel }) {
+export default function SalesMobileView({ channel, metrics, trendRows, start, end, data = {}, onOpenChannel, footer = null }) {
   const bp = useBreakpoint()
   const cfg = SALES_MOBILE[channel]
   if (!cfg) return null
@@ -251,6 +252,7 @@ export default function SalesMobileView({ channel, metrics, trendRows, start, en
       <MasterTrendCard key={channel} metrics={tiles} rawRows={trendRows || []} groupTrend={groupSumTrend} start={start} end={end} layout={layout}
         note={data.note ? <InfoStrip text={data.note} detail={data.noteDetail} /> : null} />
       {cfg.sections.map(s => sec[s]?.()).filter(Boolean)}
+      {footer}
     </div>
   )
 }

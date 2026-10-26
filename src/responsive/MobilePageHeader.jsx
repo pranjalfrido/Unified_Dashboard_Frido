@@ -16,7 +16,8 @@ import FilteredStrip from './FilteredStrip.jsx'
 // The first row keeps the plain top bar's height and spacing, so a page that only uses row 1 looks
 // exactly like it did before this component.
 // compact: slimmer tab rows for pages whose actions all sit in row 1 (Inventory, Logistics).
-export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, strip, compact = false }) {
+// onBack: a ‹ back arrow before the title (sub-views such as Sales → D2C → Return Analysis).
+export default function MobilePageHeader({ onBack, title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, strip, compact = false }) {
   const chipRow = useRef(null)
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
@@ -29,6 +30,10 @@ export default function MobilePageHeader({ title, sub, caption, right, chips, ac
       {/* Side padding and gap come from index.css (.mph-row1 / .mph-pad): the same values as the plain bar. */}
       <div className="mph-row1 mph-pad" style={{ display: 'flex', alignItems: 'center', height: 'var(--nav)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
+          {onBack && (
+            <button type="button" onClick={onBack} aria-label="Back" className="mph-back"
+              style={{ flex: '0 0 auto', width: 32, height: 40, marginLeft: -8, border: 'none', background: 'transparent', color: '#fff', fontSize: 26, lineHeight: 1, fontFamily: 'var(--font)', cursor: 'pointer', borderRadius: 8 }}>‹</button>
+          )}
           {caption
             ? <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>
