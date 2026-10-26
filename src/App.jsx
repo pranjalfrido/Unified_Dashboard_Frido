@@ -1057,7 +1057,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
               <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} invertColor compact tight={filterSidebarOpen} />
               <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
