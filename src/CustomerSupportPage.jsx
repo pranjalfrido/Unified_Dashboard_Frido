@@ -13,11 +13,16 @@ import { C as BASE_C, fmt, fmtN, exportCSV } from './utils.js'
 const C = BASE_C
 const API = import.meta.env.VITE_API_URL || ''
 const GRAINS = [
-  { id: 'day', label: 'Daily', n: 7, delta: 'DoD' },
+  { id: 'day', label: 'Daily', n: 7, delta: 'vs same weekday last week' },
   { id: 'week', label: 'Weekly', n: 4, delta: 'WoW' },
   { id: 'month', label: 'Monthly', n: 2, delta: 'MoM' },
 ]
 const CHANNELS = ['Chat', 'Inbound', 'Email', 'Social media', 'Escalation']
+// Display names (CA12): 'Inbound' here is Freshdesk tickets from the Phone source, a different system from
+// the Ozonetel inbound call line, so the two are named apart.
+const chLabel = ch => (ch === 'Chat' ? 'Chat (WhatsApp)' : ch === 'Inbound' ? 'Inbound (tickets)' : ch)
+// Display only (CA15): dispositions / sub categories sometimes end with dots ('Order Status Query.')
+const trimPunct = x => String(x ?? '').replace(/[.\s]+$/, '')
 
 // ── formatting ──
 const dur = (s) => {
@@ -107,10 +112,10 @@ function sections(model) {
         { label: 'Task to unit', hint: 'Tasks (Child tickets) / Shopify D2C units sold (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.tasks, units(p)) },
         { label: 'ITO', hint: 'Interaction to order = interactions / Shopify D2C orders (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.interactions, ordersN(p)) },
         { label: 'Task to order', hint: 'Tasks (Child tickets) / Shopify D2C orders (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.tasks, ordersN(p)) },
-        { label: 'UITU', hint: 'Unique interaction to unit = ordered units / unique customers contacting', fmt: ratio, get: p => div(units(p), all(p)?.unique_int) },
-        { label: 'UITO', hint: 'Unique interaction to order = orders / unique customers contacting', fmt: ratio, get: p => div(ordersN(p), all(p)?.unique_int) },
-        { label: 'CITU', hint: 'Customer interaction to unit = units / customer-initiated interactions (outbound excluded)', fmt: ratio, get: p => div(units(p), all(p)?.cust_int) },
-        { label: 'CITO', hint: 'Customer interaction to order = orders / customer-initiated interactions', fmt: ratio, get: p => div(ordersN(p), all(p)?.cust_int) },
+        { label: 'UITU', good: 'up', hint: 'Unique interaction to unit = ordered units / unique customers contacting', fmt: ratio, get: p => div(units(p), all(p)?.unique_int) },
+        { label: 'UITO', good: 'up', hint: 'Unique interaction to order = orders / unique customers contacting', fmt: ratio, get: p => div(ordersN(p), all(p)?.unique_int) },
+        { label: 'CITU', good: 'up', hint: 'Customer interaction to unit = units / customer-initiated interactions (outbound excluded)', fmt: ratio, get: p => div(units(p), all(p)?.cust_int) },
+        { label: 'CITO', good: 'up', hint: 'Customer interaction to order = orders / customer-initiated interactions', fmt: ratio, get: p => div(ordersN(p), all(p)?.cust_int) },
       ],
     },
     {
@@ -118,9 +123,9 @@ function sections(model) {
       note: 'Association type Parent + blank. Escalation = tickets in the Escalations / CXO-Escalations groups.',
       rows: [
         ...['Chat', 'Inbound', 'Email', 'Social media', 'Escalation'].map(ch => ({
-          label: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, fmt: int, get: p => p.t(ch)?.interactions,
+          label: chLabel(ch), fmt: int, get: p => p.t(ch)?.interactions,
           pct: p => div(p.t(ch)?.interactions, all(p)?.interactions),
-          hint: { Chat: 'WhatsApp', Inbound: 'Freshdesk phone tickets', Email: 'Email, outbound email and portal', 'Social media': 'Instagram and Facebook', Escalation: 'Tickets in the Escalations / CXO-Escalations groups' }[ch],
+          hint: { Chat: 'WhatsApp', Inbound: 'Freshdesk tickets from the Phone source (logged at any time, Sundays included): not the Ozonetel call line', Email: 'Email, outbound email and portal', 'Social media': 'Instagram and Facebook', Escalation: 'Tickets in the Escalations / CXO-Escalations groups' }[ch],
         })),
         { label: 'Total interactions', fmt: int, strong: true, get: p => all(p)?.interactions, pct: p => div(all(p)?.interactions, all(p)?.interactions) },
         { label: 'Unique interactions', fmt: int, hint: 'Distinct customers (contact id, else phone, else email)', get: p => all(p)?.unique_int, pct: p => div(all(p)?.unique_int, all(p)?.interactions) },
@@ -148,8 +153,8 @@ function sections(model) {
         { group: 'Overall', label: 'Child tickets', fmt: int, get: p => all(p)?.tasks },
         { group: 'Overall', label: 'Parent + blank (interactions)', fmt: int, get: p => all(p)?.interactions },
         ...['Chat', 'Inbound', 'Email', 'Social media'].flatMap(ch => [
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'MCR', fmt: pctF, good: 'down', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'FCR', fmt: pctF, good: 'up', get: p => fcr(p.t(ch)) },
+          { group: chLabel(ch), label: 'MCR', fmt: pctF, good: 'down', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
+          { group: chLabel(ch), label: 'FCR', fmt: pctF, good: 'up', get: p => fcr(p.t(ch)) },
         ]),
       ],
     },
@@ -186,15 +191,15 @@ function sections(model) {
         get: p => p.t(r.ch)?.[r.k], pct: p => div(p.t(r.ch)?.[r.k], p.t(r.ch)?.afrt_n) })),
     },
     {
-      id: 'ozonetel', title: 'Ozonetel — inbound calls',
+      id: 'ozonetel', title: 'Calls (Ozonetel): inbound line',
       note: 'Inbound line Inbound_918045152790 only. One count per call (Ozonetel call_id, not per ringing attempt), first ring 10:00–19:00 IST. Data starts 1 Oct 2026. A unique caller is missed only if none of their calls was answered.',
       rows: [
         // Count = the number; % = share of its base (total calls for the first three, unique callers for the rest).
-        { label: 'Total calls', fmt: int, get: p => p.calls?.total_calls, pct: p => div(p.calls?.total_calls, p.calls?.total_calls), hint: '% = 100% (the base)' },
-        { label: 'Answered calls', fmt: int, good: 'up', get: p => p.calls?.answered_calls, pct: p => div(p.calls?.answered_calls, p.calls?.total_calls), hint: '% = answered / total calls' },
-        { label: 'Unique calls', fmt: int, get: p => p.calls?.unique_calls, pct: p => div(p.calls?.unique_calls, p.calls?.total_calls), hint: '% = unique callers / total calls (lower = more repeat callers)' },
-        { label: 'Unique calls answered', fmt: int, good: 'up', get: p => p.calls?.unique_answered, pct: p => div(p.calls?.unique_answered, p.calls?.unique_calls), hint: '% = answered / unique callers' },
-        { label: 'Unique calls missed', fmt: int, good: 'down', get: p => p.calls?.unique_missed, pct: p => div(p.calls?.unique_missed, p.calls?.unique_calls), hint: '% = missed / unique callers' },
+        { label: 'Total calls', closedSunday: true, fmt: int, get: p => p.calls?.total_calls, pct: p => div(p.calls?.total_calls, p.calls?.total_calls), hint: '% = 100% (the base)' },
+        { label: 'Answered calls', closedSunday: true, fmt: int, good: 'up', get: p => p.calls?.answered_calls, pct: p => div(p.calls?.answered_calls, p.calls?.total_calls), hint: '% = answered / total calls' },
+        { label: 'Unique calls', closedSunday: true, fmt: int, get: p => p.calls?.unique_calls, pct: p => div(p.calls?.unique_calls, p.calls?.total_calls), hint: '% = unique callers / total calls (lower = more repeat callers)' },
+        { label: 'Unique calls answered', closedSunday: true, fmt: int, good: 'up', get: p => p.calls?.unique_answered, pct: p => div(p.calls?.unique_answered, p.calls?.unique_calls), hint: '% = answered / unique callers' },
+        { label: 'Unique calls missed', closedSunday: true, fmt: int, good: 'down', get: p => p.calls?.unique_missed, pct: p => div(p.calls?.unique_missed, p.calls?.unique_calls), hint: '% = missed / unique callers' },
       ],
     },
     {
@@ -211,12 +216,21 @@ function sections(model) {
 }
 
 // ── UI ──
-function Delta({ cur, prev, good }) {
-  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev) || prev === 0) return <span style={{ color: C.t3 }}>—</span>
+// isRate: the metric is itself a % (stored as a fraction), so its change is shown in points
+// ("▲ 3.3 pts"), not as a % of a % (CA11).
+function changeOf(cur, prev, isRate) {
+  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev)) return null
+  if (isRate) { const pts = (cur - prev) * 100; return { v: pts, flat: Math.abs(pts) < 0.05, text: `${Math.abs(pts).toFixed(1)} pts` } }
+  if (prev === 0) return null
   const ch = (cur - prev) / Math.abs(prev)
-  const better = good === 'up' ? ch > 0 : good === 'down' ? ch < 0 : null
-  const color = better == null || Math.abs(ch) < 0.005 ? C.t2 : better ? C.green.tx : C.red.tx
-  return <span style={{ color, fontWeight: 600 }}>{ch > 0 ? '▲' : ch < 0 ? '▼' : ''} {Math.abs(ch * 100).toFixed(1)}%</span>
+  return { v: ch, flat: Math.abs(ch) < 0.005, text: `${Math.abs(ch * 100).toFixed(1)}%` }
+}
+function Delta({ cur, prev, good, isRate = false }) {
+  const c = changeOf(cur, prev, isRate)
+  if (!c) return <span style={{ color: C.t3 }}>—</span>
+  const better = good === 'up' ? c.v > 0 : good === 'down' ? c.v < 0 : null
+  const color = better == null || c.flat ? C.t2 : better ? C.green.tx : C.red.tx
+  return <span style={{ color, fontWeight: 600 }}>{c.v > 0 ? '▲' : c.v < 0 ? '▼' : ''} {c.text}</span>
 }
 
 // Same segmented "% | Count" control as the other dashboard tables.
@@ -238,7 +252,8 @@ function ShareToggle({ mode, setMode }) {
 // `hidden` leading periods are context only: not shown as columns, but the change pill still
 // compares against them. With a single period on screen the previous one is shown beside it
 // (PREV | CURRENT | VS PREV); with several, the earlier ones are muted and the latest is bold.
-function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) {
+// back: how many periods earlier the change compares with (7 = same weekday last week in Day view, CA10).
+function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0, back = 1 }) {
   const th = { padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.07em', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}`, position: 'sticky', top: 0, zIndex: 1, background: C.card }
   const td = { padding: '13px 12px', fontSize: 13, borderTop: `1px solid ${C.border}`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   const shownModel = model.slice(hidden)
@@ -278,9 +293,10 @@ function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) 
                 </td>
                 {shown.map((v, j) => {
                   const isLast = j === shown.length - 1
-                  return <td key={j} style={{ ...td, textAlign: 'right', fontSize: isLast ? 14 : 12.5, fontWeight: isLast || r.strong ? 700 : 400, color: v == null ? C.t3 : isLast ? C.t1 : C.t3 }}>{fmtV(v)}</td>
+                  const closed = v == null && r.closedSunday && grain === 'day' && new Date(`${cols[j]?.key}T00:00:00`).getDay() === 0
+                  return <td key={j} title={closed ? 'Inbound line is closed on Sundays' : undefined} style={{ ...td, textAlign: 'right', fontSize: isLast ? 14 : 12.5, fontWeight: isLast || r.strong ? 700 : 400, color: v == null ? C.t3 : isLast ? C.t1 : C.t3 }}>{closed ? 'Closed' : fmtV(v)}</td>
                 })}
-                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.at(-2)} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} /></td>
+                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.length > back ? vals.at(-1 - back) : null} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} isRate={asPct || r.fmt === pctF} /></td>
               </tr>,
             ]
           })}
@@ -478,16 +494,15 @@ function driverRows(data, model) {
     m.get(k).v[r.bucket] = Number(r.n) || 0
   }
   const last = keys.at(-1)
-  const clean = (x) => x.replace(/\.$/, '')
   return [...m.values()].map(({ dispo, sub1, sub2, v }) => ({
-    label: `${sub2} · ${clean(dispo)}`, hint: `${clean(dispo)} › ${sub1} › ${sub2}`, fmt: int, good: 'down',
+    label: `${trimPunct(sub2)} · ${trimPunct(dispo)}`, hint: `${trimPunct(dispo)} › ${trimPunct(sub1)} › ${trimPunct(sub2)}`, fmt: int, good: 'down',
     get: p => v[p.key], pct: p => div(v[p.key], p.t('All')?.interactions),
   })).sort((a, b) => (b.get({ key: last }) || 0) - (a.get({ key: last }) || 0)).slice(0, 15)
 }
 
-function Drivers({ data, model, grain, deltaLabel, mode, hidden }) {
+function Drivers({ data, model, grain, deltaLabel, mode, hidden, back = 1 }) {
   const rows = useMemo(() => driverRows(data, model), [data, model])
-  return <Matrix rows={rows} model={model} grain={grain} deltaLabel={deltaLabel} mode={mode} hidden={hidden} />
+  return <Matrix rows={rows} model={model} grain={grain} deltaLabel={deltaLabel} mode={mode} hidden={hidden} back={back} />
 }
 
 // One flat CSV of every detailed table, in the view on screen. Columns: Table, Group, Metric, Unit,
@@ -579,15 +594,15 @@ function SectionTitle({ children, note, right }) {
 
 // Change pill: coloured tint + arrow + %, green when the move is good, red when bad, grey when
 // the KPI has no good direction (volumes), too small to matter, or has no previous value.
-function DeltaPill({ cur, prev, good, title }) {
-  const ok = cur != null && prev != null && isFinite(cur) && isFinite(prev) && prev !== 0
-  const ch = ok ? (cur - prev) / Math.abs(prev) : null
-  const flat = ch == null || Math.abs(ch) < 0.005
+function DeltaPill({ cur, prev, good, title, isRate = false }) {
+  const c = changeOf(cur, prev, isRate)
+  const ch = c ? c.v : null
+  const flat = !c || c.flat
   const better = flat || !good ? null : good === 'up' ? ch > 0 : ch < 0
   const tone = better == null ? { bg: C.bg, tx: C.t2 } : better ? C.green : C.red
   return (
     <span title={title} style={{ background: tone.bg, color: tone.tx, fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0 }}>
-      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${Math.abs(ch * 100).toFixed(1)}%`}
+      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${c.text}`}
     </span>
   )
 }
@@ -595,9 +610,10 @@ function DeltaPill({ cur, prev, good, title }) {
 // KPI card: label, big value with the change pill beside it, one line of context, and a
 // full-width sparkline over the visible periods. Every card has the same rows so a row of
 // cards lines up. `detail` = the counts behind the value; without it the previous value shows.
-function KpiCard({ label, values, f, good, prevLabel, detail, noPrev }) {
-  const cur = values.at(-1), prev = values.at(-2)
-  const series = values.map((v, i) => ({ i, v: v == null || !isFinite(v) ? null : v }))
+function KpiCard({ label, values, f, good, prevLabel, detail, noPrev, back = 1 }) {
+  // back = 7: Day view compares with the same weekday last week (CA10); the sparkline shows the last 7 days
+  const cur = values.at(-1), prev = values.length > back ? values.at(-1 - back) : null
+  const series = (back > 1 ? values.slice(-back) : values).map((v, i) => ({ i, v: v == null || !isFinite(v) ? null : v }))
   const gid = `sp-${label.replace(/\W/g, '')}`
   const hasCur = cur != null && isFinite(cur), hasPrev = prev != null && isFinite(prev)
   const line = detail || (hasPrev ? `Previous: ${f(prev)}` : '\u00a0')
@@ -607,7 +623,7 @@ function KpiCard({ label, values, f, good, prevLabel, detail, noPrev }) {
       <div title={label} style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 24, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1.15 }}>{f(cur)}</div>
-        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} />
+        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} isRate={f === pctF} />
       </div>
       <div title={hasCur && !hasPrev && noPrev ? `${line} · ${noPrev}` : line} style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
       <div style={{ height: 34, marginTop: 'auto', paddingTop: 4 }}>
@@ -638,7 +654,7 @@ function ChannelTrend({ model, grain }) {
         <Tooltip content={<ChartTooltip formatter={int} />} cursor={{ fill: C.hov }} />
         <Legend {...chartLegendProps()} />
         {MAIN.map((ch, i) => (
-          <Bar key={ch} dataKey={ch} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
+          <Bar key={ch} dataKey={ch} name={chLabel(ch)} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
         ))}
       </BarChart>
     </ResponsiveContainer>
@@ -717,7 +733,7 @@ function SlaBars({ latest, prev }) {
           <div key={ch + k}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
               <span style={{ color: C.t2 }}><b style={{ color: C.t1 }}>{ch}</b> {lbl}</span>
-              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" /></span></span>
+              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" isRate /></span></span>
             </div>
             <div style={{ position: 'relative', height: 8, borderRadius: 4, background: C.bg }}>
               <div style={{ height: '100%', width: `${Math.min((v || 0) * 100, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.acd}, ${C.acc})` }} />
@@ -856,7 +872,7 @@ function ContactHeatmap({ rows }) {
 function DriversChart({ data }) {
   const rows = useMemo(() => (data.dispo7 || [])
     .filter(r => r.dispo !== '(blank)')
-    .map(r => ({ name: r.dispo, cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
+    .map(r => ({ name: trimPunct(r.dispo), cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
     .sort((a, b) => b.cur - a.cur).slice(0, 12), [data])
   const max = Math.max(...rows.map(r => r.cur), 1)
   return (
@@ -897,7 +913,7 @@ function AgentBoard({ rows }) {
               </td>
               <td style={{ ...td, textAlign: 'left' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: C.acd, background: C.acl }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{r.main_channel}
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{chLabel(r.main_channel)}
                 </span>
               </td>
               <td style={td}>
@@ -906,8 +922,10 @@ function AgentBoard({ rows }) {
                   {fmtN(r.interactions)}
                 </div>
               </td>
-              <td style={td}>{dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
-              <td style={td}>{hrs(avg(r, 'res_sum', 'resolved'))}</td>
+              {/* CA13: phone tickets get no public agent reply and are closed when logged, so Agent FRT / ART
+                  don't apply to inbound (voice) agents: say so instead of '—' / 0.0h */}
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets have no agent reply in Freshdesk' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets are closed when logged, so resolution time is ~0' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : hrs(avg(r, 'res_sum', 'resolved'))}</td>
             </tr>
           ))}
         </tbody>
@@ -1006,7 +1024,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   useEffect(() => {
     const ctl = new AbortController()
     const end = dateRange?.end
-    const body = dGrain === 'day' && end ? { grain: 'day', start: shiftDay(end, -6), end }
+    const body = dGrain === 'day' && end ? { grain: 'day', start: shiftDay(end, -7), end }
       : { grain: dGrain, end, periods: dGrain === 'week' ? 4 : 3 }
     setDLoading(true); setDError(null)
     fetch(`${API}/api/customer-support`, {
@@ -1028,6 +1046,9 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   const dModel = useMemo(() => (dData ? buildModel(dData) : []), [dData])
   const secs = useMemo(() => (dModel.length ? sections(dModel) : []), [dModel])
   const gd = GRAINS.find(x => x.id === dGrain)
+  // Day view: 8 days fetched, the first is only the comparison base for the 7th (same weekday last week)
+  const dHidden = dGrain === 'day' ? 1 : (dData?.hidden || 0)
+  const dBack = dGrain === 'day' ? 7 : 1
   // Hands the top bar's Export menu its list of tables and a function that downloads one (or all).
   const exportTables = useMemo(() => (dData ? [
     ...secs.map(sec => ({ id: sec.id, title: sec.title, rows: sec.rows })),
@@ -1048,7 +1069,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
         if (one?.csv) { exportCSV(one.csv(), `customer_support_${id}_${new Date().toISOString().slice(0, 10)}.csv`); return }
         const tables = (id === 'all' ? exportTables : exportTables.filter(t => t.id === id)).filter(t => t.rows)
         if (!tables.length || !dData) return
-        exportCSV(detailedCsv(tables, dModel, dData.hidden || 0), `customer_support_${id === 'all' ? 'detailed_kpis' : id}_${dGrain}_${dData.end}.csv`)
+        exportCSV(detailedCsv(tables, dModel, dGrain === 'day' ? 1 : (dData.hidden || 0)), `customer_support_${id === 'all' ? 'detailed_kpis' : id}_${dGrain}_${dData.end}.csv`)
       },
     })
     return () => onExportReady(null)
@@ -1056,7 +1077,10 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   // `hidden` = context periods the API adds so a single day still has a day-before to compare with.
   const hidden = data?.hidden || 0
   const view = model.slice(hidden)
-  const latest = model.at(-1), prev = model.at(-2)
+  // Day view (a single day + 7 context days): compare with the same weekday last week (CA10)
+  const back = grain === 'day' && hidden >= 7 ? 7 : 1
+  const latest = model.at(-1), prev = model.length > back ? model.at(-1 - back) : null
+  const trendModel = back > 1 ? model.slice(-7) : model
 
   const kpis = latest ? [
     { label: 'Interactions', values: model.map(p => p.t('All')?.interactions), f: int, good: null, accent: C.acc },
@@ -1117,18 +1141,18 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
       {data && latest && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${vw < 760 ? 2 : vw < 1100 ? 3 : vw < 1500 ? 4 : 6}, minmax(0, 1fr))`, gap: 12, ...dim }}>
-            {kpis.map(k => <KpiCard key={k.label} {...k} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
+            {kpis.map(k => <KpiCard key={k.label} {...k} back={back} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
           </div>
 
           <SectionTitle note="what came in, on which channel">Volume</SectionTitle>
           <div style={{ ...grid(2, 1), ...dim }}>
-            <Card title="Interactions by channel" note={g.label.toLowerCase()}><ChannelTrend model={model} grain={grain} /></Card>
+            <Card title="Interactions by channel" note={g.label.toLowerCase()}><ChannelTrend model={trendModel} grain={grain} /></Card>
             <Card title="Channel mix" note={periodLabel(grain, latest.key)}><ChannelMix latest={latest} /></Card>
           </div>
 
           <SectionTitle note="how fast we respond">Speed & SLA</SectionTitle>
           <div style={{ ...grid(3, 2), ...dim }}>
-            <Card title="Agent first response time" note="first reply from a real agent, business hours, by channel"><FrtTrend model={model} grain={grain} /></Card>
+            <Card title="Agent first response time" note="first reply from a real agent, business hours, by channel"><FrtTrend model={trendModel} grain={grain} /></Card>
             <Card title="SLA attainment" note={periodLabel(grain, latest.key)}><SlaBars latest={latest} prev={prev} /></Card>
           </div>
 
@@ -1141,7 +1165,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
           <SectionTitle note="when customers contact us, and why">Demand</SectionTitle>
           <div style={{ ...grid(3, 2), ...dim }}>
             <Card fill title="Contact heatmap" note={`interactions by weekday × hour (IST), ${data.trendStart || data.start} → ${data.end}`}><ContactHeatmap rows={data.heat} /></Card>
-            <Card fill title="Orders vs interactions" note="Shopify D2C orders against support interactions"><OrdersVsInteractions model={model} grain={grain} /></Card>
+            <Card fill title="Orders vs interactions" note="Shopify D2C orders against support interactions"><OrdersVsInteractions model={trendModel} grain={grain} /></Card>
           </div>
           <div style={{ ...grid(1, 1), ...dim }}>
             <Card fill title="Top volume drivers" note={`dispositions, last 7 days to ${periodLabel('day', data.end)}`}><DriversChart data={data} /></Card>
@@ -1179,19 +1203,19 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
                 <div key={sec.id} style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                   <Collapsible title={sec.title} note={sec.note} defaultOpen={i === 0}
                     toggle={sec.rows.some(r => r.pct) ? { default: PCT_DEFAULT[sec.id] || 'count' } : null}>
-                    {mode => <Matrix rows={sec.rows} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dData.hidden || 0} />}
+                    {mode => <Matrix rows={sec.rows} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dHidden} back={dBack} />}
                   </Collapsible>
                 </div>
               ))}
               <div style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                 <Collapsible title="TTR — time to resolve, parent and child tickets"
                   note="Parent and child tickets, then each resolver group (top 12), period by period: tickets created, resolved / closed, still pending (as of now) and TTR = average hours from Created to Resolved / Closed. Green = better than the previous period, red = worse.">
-                  <TtrTable data={dData} model={dModel} grain={dGrain} hidden={dData.hidden || 0} />
+                  <TtrTable data={dData} model={dModel} grain={dGrain} hidden={dHidden} />
                 </Collapsible>
               </div>
               <div style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                 <Collapsible title="Volume drivers — top 15 by sub category level 2" note={`ranked on the latest period; each row is Sub category 2 · its disposition (hover for the full path); % = share of that period's interactions`} toggle={{ default: 'count' }}>
-                  {mode => <Drivers data={dData} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dData.hidden || 0} />}
+                  {mode => <Drivers data={dData} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dHidden} back={dBack} />}
                 </Collapsible>
               </div>
             </>

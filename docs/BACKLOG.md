@@ -36,3 +36,5 @@ queries, metric logic or numbers).
 | FIXED | Logistics → Performance: the top-bar Refresh reloaded Sales data instead of Logistics. (5b) | Fixed in f438c91c on feature/responsive-logistics (2026-10-26). |
 | FIXED | Logistics → Performance: Z-RTO ▲/▼ showed green when Z-RTO rose (lower is better). (5c) | Fixed in cf916c66 on feature/responsive-logistics (2026-10-26), desktop and mobile. |
 | FIXED | Logistics → Cost 3PL: the hero badge read "₹/parcel vs 2026-08" (raw month key). (5d) | Mobile shows "vs Aug" — fixed in 3dfa23df on feature/responsive-logistics (2026-10-26); desktop label unchanged (display only, approved). |
+| LOW | Customer Retention: the "Inactive 90+" card's sparkline plots cohort sizes, not inactivity. | `sparkLost90` (App.jsx ~17977). Found in Customer C1. |
+| LOW | Customer cross-sell query is all-time and `LIMIT 500`. | api/customer.js Q4 (~175-236): totals truncated; not date-filtered. |

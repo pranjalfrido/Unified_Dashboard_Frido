@@ -4908,14 +4908,15 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
-  const dateBlurred = page === 'customer' && customerTab === 'rfm'
+  // CA1: Segments & RFM use the 12 months up to the end date (not all-time): the picker stays usable.
+  const dateBlurred = false
   const bp = useBreakpoint()
   // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
   // the other pages keep this bar until they are redesigned.
@@ -4982,7 +4983,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'overview' || page === 'sales')) {
     const dateNode = (
       <div className="tnav-right">
-        <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
+        <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
           <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
         </div>
       </div>
@@ -5066,7 +5067,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
-          <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
+          <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
               onRefresh={page === 'logistics' && logisticsFilterUI?.onRefresh ? logisticsFilterUI.onRefresh : onRefresh}
               loading={page === 'logistics' && logisticsFilterUI ? logisticsFilterUI.loading : loading} />
@@ -16931,7 +16932,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const [ovChartView, setOvChartView] = useState('revenue')
-  const [ovGran, setOvGran] = useState('monthly')
+  const ovAutoGran = (st, en) => { const n = st && en ? Math.round((new Date(en) - new Date(st)) / 86400000) + 1 : 31; return n <= 31 ? 'daily' : n <= 120 ? 'weekly' : 'monthly' }
+  const [ovGran, setOvGran] = useState(() => ovAutoGran(filters?.start, filters?.end))
+  const [ovGranRange, setOvGranRange] = useState(`${filters?.start}|${filters?.end}`)
+  if (ovGranRange !== `${filters?.start}|${filters?.end}`) { setOvGranRange(`${filters?.start}|${filters?.end}`); setOvGran(ovAutoGran(filters?.start, filters?.end)) }
   const [nrMetric, setNrMetric] = useState('customers')
   const [nrGran, setNrGran] = useState('daily')
   const [spendChartGran, setSpendChartGran] = useState('daily')
@@ -17203,7 +17207,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Gross Rev (ex GST)',   cur: kpis.grossExcGst || 0,           prev: prevKpis.grossExcGst || 0,           f: fmt },
             { label: 'Net Rev (ex GST)',     cur: kpis.netRevenue || 0,             prev: prevKpis.netRevenue || 0,            f: fmt },
             { label: 'Repeat Rev %',         cur: (kpis.repeatRevenueRate||0)*100,  prev: (prevKpis.repeatRevenueRate||0)*100, f: v => `${v.toFixed(1)}%` },
-            { label: 'Lifetime LTV',         cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
+            { label: 'LTV (12-mo revenue)',  cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
             { label: 'LTV : CAC',            cur: kpis.ltvCac || 0,                prev: pLtvCac,                             f: v => `${v.toFixed(2)}×`, maturing: !pLtvCac, ltvCacRow: true },
           ]
 
@@ -17273,7 +17277,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       {/* prev */}
                       <div style={{ textAlign: 'right' }}>
                         {row.maturing
-                          ? <span style={{ fontSize: 10, color: CP.ink3, fontStyle: 'italic' }}>Maturing</span>
+                          ? <span title="No previous-period value is calculated for this metric" style={{ fontSize: 10, color: CP.ink3, fontStyle: 'italic' }}>n/a</span>
                           : (row.prev != null && row.prev !== 0)
                             ? <span style={{ fontSize: 11, color: CP.ink3, fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>{row.f(row.prev)}</span>
                             : null
@@ -17328,7 +17332,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LIFETIME VALUE', value: fmt(kpis.ltv12 || 0), sub: 'All-time avg rev / customer', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV (12-MO REVENUE)', value: fmt(kpis.ltv12 || 0), sub: 'Revenue per customer, last 12 months', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: 'Lifetime LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
@@ -17429,7 +17433,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <BarGradient id="gGrossRev" />
                             <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="url(#gGrossRev)" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
+                            <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill={C.m.g3} maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
                             <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke={C.t3} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
@@ -17590,7 +17594,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const pLtvCac = prevKpis.ltvCac || 0
           // Payback Period: cac / (aov * marginPct) in days — approximation
           const avgOrderFreqDays = kpis.totalOrders > 0 && kpis.totalCustomers > 0 ? 30 : 30 // fallback 30d
-          const paybackDays = kpis.aov > 0 && kpis.cac > 0 ? Math.round(kpis.cac / (kpis.aov * MARGIN_PCT)) : null
+          // CA4: CAC ÷ (AOV × margin) counts the ORDERS needed to pay back CAC; it was shown as days ('1d')
+          const paybackOrders = kpis.aov > 0 && kpis.cac > 0 ? kpis.cac / (kpis.aov * MARGIN_PCT) : null
 
           const newCustVals = enriched.map(r => r.newCustomers || 0)
           const cacVals = enriched.filter(r => r.cac > 0).map(r => r.cac)
@@ -17607,14 +17612,14 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
             {
               label: 'LTV : CAC', val: ltvCac > 0 ? `${ltvCac.toFixed(2)}×` : '—',
-              sub: ltvCac > 0 ? (ltvCac >= 3 ? '✦ Healthy' : '⚠ Watch') : 'Needs LTV data',
+              sub: ltvCac > 0 ? (ltvCac >= 3 ? '✦ Healthy (on revenue)' : '⚠ Watch (on revenue)') : 'Needs LTV data',
               subColor: ltvCac >= 3 ? T.green : ltvCac > 0 ? T.amberDeep : T.t3,
               spark: roasVals, cur: ltvCac, prev: pLtvCac,
             },
             {
-              label: 'Payback Period', val: paybackDays != null ? `${paybackDays}d` : '—',
-              sub: `Approx. at ${(MARGIN_PCT*100).toFixed(0)}% margin`, spark: null,
-              cur: paybackDays, prev: null, lowerBetter: true,
+              label: 'Payback (orders)', val: paybackOrders != null ? `${paybackOrders.toFixed(1)} orders` : '—',
+              sub: `Orders to recover CAC at ~${(MARGIN_PCT*100).toFixed(0)}% margin`, spark: null,
+              cur: paybackOrders, prev: null, lowerBetter: true,
             },
           ]
 
@@ -18149,8 +18154,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 {[
                   { label: 'Avg M1 Retention', value: `${avgM1.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM1, cur: avgM1, prev: prevAvgM1 },
                   { label: 'Avg M6 Retention', value: `${avgM6.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM6, cur: avgM6, prev: prevAvgM6 },
-                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'Customers not seen in 90d', spark: sparkLost90, cur: lost90, prev: null },
-                  { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Total orders ÷ unique customers', spark: null, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
+                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'All-time D2C customers, last order 90+ days ago', spark: sparkLost90, cur: lost90, prev: null },
+                  { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Orders ÷ customers, selected period', spark: null, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
                 ].map((s, i) => (
                   <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: CT.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{s.label}</span>
@@ -18399,9 +18404,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* KPI Strip */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
                 {[
-                  { label: 'Repeat Purchase Rate', value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', sub: `${fmtN(pbKpis.repeatCustomers || 0)} of ${fmtN(pbKpis.totalCustomers || 0)} customers` },
-                  { label: 'Avg Orders / Customer', value: pbKpis.avgOrdersPerCustomer ? pbKpis.avgOrdersPerCustomer.toFixed(2) : '—', sub: 'Lifetime order frequency' },
-                  { label: 'Avg Days Between Orders', value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', sub: 'Median repurchase gap' },
+                  { label: 'Repeat Purchase Rate', value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', sub: `${fmtN(pbKpis.repeatCustomers || 0)} of ${fmtN(pbKpis.totalCustomers || 0)} D2C customers (lifetime, to the end date)` },
+                  { label: 'Avg Orders / Customer', value: pbKpis.avgOrdersPerCustomer ? pbKpis.avgOrdersPerCustomer.toFixed(2) : '—', sub: 'Lifetime, to the end date' },
+                  { label: 'Avg Days Between Orders', value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', sub: "Average gap between a customer's orders" },
                   { label: 'Multi-Category Customers', value: pbKpis.multiCatRate != null ? `${pbKpis.multiCatRate}%` : '—', sub: 'Bought 2+ categories ever' },
                   { label: 'Avg Categories / Order', value: basket.avgCategoriesPerOrder ? basket.avgCategoriesPerOrder.toFixed(2) : '—', sub: `${basket.avgItemsPerOrder ? basket.avgItemsPerOrder.toFixed(1) : '—'} items per order` },
                 ].map(({ label, value, sub }) => (
@@ -18455,10 +18460,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               const cnt = countMatrix[f]?.[s] || 0
                               const lv = liftVal(f, s)
                               const rv = rateVal(f, s)
-                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const bgScale = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => (ff === ss ? 0 : countMatrix[ff]?.[ss]) || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const diag = f === s
+                              const bg = diag ? 'rgba(148,147,159,0.16)' : bgScale
                               const display = liftDisplay === 'lift' ? (lv != null && cnt >= 5 ? `${lv}×` : '') : liftDisplay === 'rate' ? (rv > 0 ? `${rv}%` : '') : (cnt > 0 ? fmtN(cnt) : '')
                               return (
-                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
+                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}${diag ? '\nSame category: greyed, not in the colour scale' : ''}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
                                   {display}
                                 </td>
                               )
@@ -18765,19 +18772,19 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── RFM segment taxonomy ────────────────────────────────
           const SEG_META = {
-            'Champions':           { action: 'REWARD VIP',       actionBg: '#166534', actionColor: '#fff', desc: 'Bought recently, buy often, spend the most',         tooltip: 'Bought very recently, buy most often, and spend the most. Your best customers right now. Reward with VIP perks, early access, and referral programs.',             actionTooltip: 'Bought very recently, buy most often, spend the most. Your best customers right now. → Reward VIP: loyalty perks, early access, referral programs.',           gridTooltip: 'Buy often + bought recently. These are your best customers right now.' },
-            'Loyal Customers':     { action: 'UPSELL',            actionBg: '#1e40af', actionColor: '#fff', desc: 'Regular buyers with strong lifetime value',          tooltip: 'Buy regularly with good frequency and decent lifetime value. Not top spenders but very reliable. Introduce premium products or bundles to grow their basket.',    actionTooltip: 'Buy regularly, decent frequency, good lifetime value. Not top spenders but reliable. → Upsell: introduce premium products or bundles.',                        gridTooltip: 'Frequent buyers but not as recent as Champions. Still very valuable — buy often, just need a nudge to come back sooner.' },
-            'Potential Loyalists': { action: 'NURTURE',           actionBg: '#0369a1', actionColor: '#fff', desc: 'Recent customers with repeat potential',             tooltip: 'Recent buyers who have purchased more than once and show signs of becoming loyal. Keep them engaged and build the habit before they go cold.',                  actionTooltip: 'Recent buyers with repeat potential — bought more than once, good recency. On track to become Champions. → Nurture: keep them engaged, build the habit.',      gridTooltip: 'Bought recently but not yet frequent. On track to become Champions if nurtured well. Keep them engaged.' },
-            'New Customers':       { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Bought recently for the first time',                 tooltip: 'Made their first purchase recently. Critical window — nudge them towards a second order quickly to increase retention odds.',                                    actionTooltip: 'Bought recently for the first time. Critical window. → Nudge 2nd order quickly to increase retention odds.',                                                   gridTooltip: 'First-time buyers. Critical window — push for a 2nd order before they forget about you.' },
-            'Promising':           { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Recent buyers, low frequency so far',                tooltip: 'Bought recently but only once or twice. Still forming habits. Nurture with targeted offers to convert them into regulars.',                                        actionTooltip: 'Recent buyers, low frequency so far. Still forming habits. → Nudge towards next order while purchase intent is still fresh.',                                  gridTooltip: 'Bought recently, low frequency so far. Still forming habits. Targeted offers can convert them to regulars.' },
-            'Need Attention':      { action: 'REVIEW',            actionBg: '#b45309', actionColor: '#fff', desc: 'Above average but haven\'t bought recently',         tooltip: 'Had above-average scores before but recency is dropping. At a tipping point — re-engage now before they drift into hibernation.',                                  actionTooltip: 'Customers that don\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency. → Review: analyze deeper before deciding.',                   gridTooltip: 'Mixed signals — recency is dropping. At a tipping point, re-engage now before they drift to hibernation.' },
-            'About To Sleep':      { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Below average — at risk of going dormant',           tooltip: 'Recency and frequency are both declining. On the verge of going fully dormant. A timely win-back offer could recover them.',                                     actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.',                                  gridTooltip: 'Recency and frequency both declining. On the verge of going fully dormant. A timely offer can still recover them.' },
-            'At Risk':             { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Bought often before but not recently',               tooltip: 'Used to buy frequently but have not returned in a while. High churn risk. Personalised win-back campaign recommended urgently.',                                  actionTooltip: 'Used to buy frequently but not recently. High churn risk. → Win-back: personalised campaign referencing their past purchases.',                                gridTooltip: 'Used to buy often but disappeared recently. High churn risk — personalised win-back urgently needed.' },
-            'Cannot Lose Them':    { action: 'URGENT SAVE',       actionBg: '#991b1b', actionColor: '#fff', desc: 'Used to be champions — haven\'t returned',          tooltip: 'Previously your best customers — high spend, high frequency — but they have stopped buying. Most dangerous segment. Reach out immediately with high-value offers.', actionTooltip: 'Previously your best customers — high spend, high frequency — but stopped buying. Most dangerous segment. → Urgent Save: reach out immediately, high priority.', gridTooltip: 'Rare buyers now, but used to be champions. Most dangerous segment — high value at risk. Reach out immediately.' },
-            'Hibernating':         { action: 'WIN-BACK',          actionBg: '#78350f', actionColor: '#fff', desc: 'Last purchase was long ago, low frequency',          tooltip: 'Bought a long time ago and have not come back. Not fully churned yet but going very cold. Win-back campaigns like "we miss you" discounts can reactivate them.',  actionTooltip: 'Bought a long time ago, haven\'t come back. Low frequency, long gap since last order. Not fully churned yet but going cold fast. → Win-Back: discounts, "we miss you" emails.', gridTooltip: 'Rarely bought + last purchase was long ago. Not fully churned yet — "we miss you" campaigns can reactivate them.' },
-            'Lost':                { action: 'WIN-BACK',          actionBg: '#6b7280', actionColor: '#fff', desc: 'Lowest recency, frequency and monetary scores',      tooltip: 'Lowest scores across all three RFM dimensions. Effectively churned. Low ROI to pursue, but a small reactivation campaign may recover a fraction.',               actionTooltip: 'Lowest scores across all RFM dimensions. Effectively churned. → Win-back with a single low-cost campaign; do not invest heavily.',                             gridTooltip: 'Lowest scores on all three dimensions. Effectively churned. Low ROI to pursue — one small campaign is all worth trying.' },
-            'Recent Users':        { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Bought recently but low frequency',                   tooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. Need nurturing before they go cold.',                                              actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.' },
-            'Others':              { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Mixed signals — doesn\'t fit standard RFM buckets',   tooltip: 'Customers that don\'t fit cleanly into standard RFM buckets — mixed signals on recency, frequency, and monetary. Analyze deeper before deciding on action.',    actionTooltip: 'Doesn\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency/monetary. → Review: analyze this group deeper before deciding on action.' },
+            'Champions':           { action: 'REWARD VIP',       actionBg: '#1f5a3d', actionColor: '#fff', desc: 'Bought recently, buy often, spend the most',         tooltip: 'Bought very recently, buy most often, and spend the most. Your best customers right now. Reward with VIP perks, early access, and referral programs.',             actionTooltip: 'Bought very recently, buy most often, spend the most. Your best customers right now. → Reward VIP: loyalty perks, early access, referral programs.',           gridTooltip: 'Buy often + bought recently. These are your best customers right now.' },
+            'Loyal Customers':     { action: 'UPSELL',            actionBg: '#2f6e4d', actionColor: '#fff', desc: 'Regular buyers with strong lifetime value',          tooltip: 'Buy regularly with good frequency and decent lifetime value. Not top spenders but very reliable. Introduce premium products or bundles to grow their basket.',    actionTooltip: 'Buy regularly, decent frequency, good lifetime value. Not top spenders but reliable. → Upsell: introduce premium products or bundles.',                        gridTooltip: 'Frequent buyers but not as recent as Champions. Still very valuable — buy often, just need a nudge to come back sooner.' },
+            'Potential Loyalists': { action: 'NURTURE',           actionBg: '#5f8f75', actionColor: '#fff', desc: 'Recent customers with repeat potential',             tooltip: 'Recent buyers who have purchased more than once and show signs of becoming loyal. Keep them engaged and build the habit before they go cold.',                  actionTooltip: 'Recent buyers with repeat potential — bought more than once, good recency. On track to become Champions. → Nurture: keep them engaged, build the habit.',      gridTooltip: 'Bought recently but not yet frequent. On track to become Champions if nurtured well. Keep them engaged.' },
+            'New Customers':       { action: 'NUDGE 2ND ORDER',   actionBg: '#5f8f75', actionColor: '#fff', desc: 'Bought recently for the first time',                 tooltip: 'Made their first purchase recently. Critical window — nudge them towards a second order quickly to increase retention odds.',                                    actionTooltip: 'Bought recently for the first time. Critical window. → Nudge 2nd order quickly to increase retention odds.',                                                   gridTooltip: 'First-time buyers. Critical window — push for a 2nd order before they forget about you.' },
+            'Promising':           { action: 'NUDGE 2ND ORDER',   actionBg: '#5f8f75', actionColor: '#fff', desc: 'Recent buyers, low frequency so far',                tooltip: 'Bought recently but only once or twice. Still forming habits. Nurture with targeted offers to convert them into regulars.',                                        actionTooltip: 'Recent buyers, low frequency so far. Still forming habits. → Nudge towards next order while purchase intent is still fresh.',                                  gridTooltip: 'Bought recently, low frequency so far. Still forming habits. Targeted offers can convert them to regulars.' },
+            'Need Attention':      { action: 'REVIEW',            actionBg: '#7b847f', actionColor: '#fff', desc: 'Above average but haven\'t bought recently',         tooltip: 'Had above-average scores before but recency is dropping. At a tipping point — re-engage now before they drift into hibernation.',                                  actionTooltip: 'Customers that don\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency. → Review: analyze deeper before deciding.',                   gridTooltip: 'Mixed signals — recency is dropping. At a tipping point, re-engage now before they drift to hibernation.' },
+            'About To Sleep':      { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Below average — at risk of going dormant',           tooltip: 'Recency and frequency are both declining. On the verge of going fully dormant. A timely win-back offer could recover them.',                                     actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.',                                  gridTooltip: 'Recency and frequency both declining. On the verge of going fully dormant. A timely offer can still recover them.' },
+            'At Risk':             { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Bought often before but not recently',               tooltip: 'Used to buy frequently but have not returned in a while. High churn risk. Personalised win-back campaign recommended urgently.',                                  actionTooltip: 'Used to buy frequently but not recently. High churn risk. → Win-back: personalised campaign referencing their past purchases.',                                gridTooltip: 'Used to buy often but disappeared recently. High churn risk — personalised win-back urgently needed.' },
+            'Cannot Lose Them':    { action: 'URGENT SAVE',       actionBg: '#c0392b', actionColor: '#fff', desc: 'Used to be champions — haven\'t returned',          tooltip: 'Previously your best customers — high spend, high frequency — but they have stopped buying. Most dangerous segment. Reach out immediately with high-value offers.', actionTooltip: 'Previously your best customers — high spend, high frequency — but stopped buying. Most dangerous segment. → Urgent Save: reach out immediately, high priority.', gridTooltip: 'Rare buyers now, but used to be champions. Most dangerous segment — high value at risk. Reach out immediately.' },
+            'Hibernating':         { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Last purchase was long ago, low frequency',          tooltip: 'Bought a long time ago and have not come back. Not fully churned yet but going very cold. Win-back campaigns like "we miss you" discounts can reactivate them.',  actionTooltip: 'Bought a long time ago, haven\'t come back. Low frequency, long gap since last order. Not fully churned yet but going cold fast. → Win-Back: discounts, "we miss you" emails.', gridTooltip: 'Rarely bought + last purchase was long ago. Not fully churned yet — "we miss you" campaigns can reactivate them.' },
+            'Lost':                { action: 'WIN-BACK',          actionBg: '#9aa39e', actionColor: '#fff', desc: 'Lowest recency, frequency and monetary scores',      tooltip: 'Lowest scores across all three RFM dimensions. Effectively churned. Low ROI to pursue, but a small reactivation campaign may recover a fraction.',               actionTooltip: 'Lowest scores across all RFM dimensions. Effectively churned. → Win-back with a single low-cost campaign; do not invest heavily.',                             gridTooltip: 'Lowest scores on all three dimensions. Effectively churned. Low ROI to pursue — one small campaign is all worth trying.' },
+            'Recent Users':        { action: 'REVIEW',            actionBg: '#9aa39e', actionColor: '#fff', desc: 'Bought recently but low frequency',                   tooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. Need nurturing before they go cold.',                                              actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.' },
+            'Others':              { action: 'REVIEW',            actionBg: '#9aa39e', actionColor: '#fff', desc: 'Mixed signals — doesn\'t fit standard RFM buckets',   tooltip: 'Customers that don\'t fit cleanly into standard RFM buckets — mixed signals on recency, frequency, and monetary. Analyze deeper before deciding on action.',    actionTooltip: 'Doesn\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency/monetary. → Review: analyze this group deeper before deciding on action.' },
           }
 
           // ── RFM Grid placement (3×3) ────────────────────────────
@@ -18870,7 +18877,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* 2. KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
-                  { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'All RFM segments combined', tooltip: 'Total unique customers across all 7 RFM segments. This is your entire analyzed customer base.' },
+                  { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'D2C customers with an order in the last 12 months', tooltip: 'Unique D2C customers with at least one order in the 12 months up to the end date (one-time buyers included). All RFM segments add up to this.' },
                   { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
                   { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
                   { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },

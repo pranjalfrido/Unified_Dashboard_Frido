@@ -835,11 +835,12 @@ LIMIT 20`),
     // Fetch additional (offline) spend from Postgres for the selected date range.
     // Pro-rate partial months: only include the fraction of each month that falls within [s, e]
     // so a partial-month date range doesn't silently pull the full calendar month's spend.
+    const additionalSpendFor = async (rs, re) => {
     let additionalSpend = 0
     try {
       const db = getPool()
-      const startDate = new Date(s)
-      const endDate = new Date(e)
+      const startDate = new Date(rs)
+      const endDate = new Date(re)
       const months = []
       const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
       while (cur <= endDate) {
@@ -873,6 +874,10 @@ LIMIT 20`),
     } catch (_) {
       additionalSpend = 0
     }
+    return additionalSpend
+    }
+    // CA5: the previous period now includes its own additional spend, so Total Spend / CAC ▲▼ compare like with like
+    const [additionalSpend, pAdditionalSpend] = await Promise.all([additionalSpendFor(s, e), additionalSpendFor(ps, pe)])
 
     const k = kpis[0] || {}
     const metaAds = adsKpis.find(r => r.platform === 'Meta') || {}
@@ -963,7 +968,7 @@ LIMIT 50`)
     const pk = prevKpis[0] || {}
     const pMeta = prevAdsKpis.find(r => r.platform === 'Meta') || {}
     const pGoogle = prevAdsKpis.find(r => r.platform === 'Google') || {}
-    const pTotalSpend = (parseFloat(pMeta.spend) || 0) + (parseFloat(pGoogle.spend) || 0)
+    const pTotalSpend = (parseFloat(pMeta.spend) || 0) + (parseFloat(pGoogle.spend) || 0) + pAdditionalSpend
     const pGrossSales = parseFloat(pk.gross_sales) || 0
     const pTotalCustomers = parseInt(pk.total_customers) || 0
     const pNewCustomers = parseInt(pk.new_customers) || 0
