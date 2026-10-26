@@ -88,3 +88,7 @@ All 12 are in `RETURN_ANALYSIS_PLAN.md`. The ones that change what you see:
 ## Not done / open
 - The prompt file in the repo is `RETURN_ANALYSIS_MOBILE_PROMPT_1.md` (the name in the instructions has no `_1`). It is untracked and was not committed.
 - Nothing is merged. Next step on your OK: merge into `release/responsive`.
+
+## Follow-up (2026-10-26, after review)
+- Category view: rows without the empty gap (compact rows when Category is selected); no focus ring after a tap.
+- Cancellation chart overcount found and fixed with your OK ("count once, keep 6 months"): each cancelled order now counted once, under its main product. Monthly totals = real distinct cancelled D2C orders (May 4,233 · Jun 4,861 · Jul 7,132 · Aug 9,019 · Sep 6,379 · Oct 5,434; was 4,949 … 6,716). Desktop + mobile. Also on `fix/return-analysis-cancel-count` (from main) for the main route, waiting for your OK.
