@@ -4979,6 +4979,35 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       </div>
     )
   }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl') {
+    // PNL_MASTER_PLAN.md Part B §4: "P&L" + date + "⋯" (Refresh, Export), the 13 channels as chips
+    // (amber dot = In progress: Overall, EBO, International, Myntra) and underline sub-tabs for D2C /
+    // Amazon / Offline. Replaces the ☰ channel panel (MobilePnLPanel) on phones.
+    const inProgress = new Set(['all', 'ebo', 'international', 'myntra'])
+    const chips = PNL_TABS_NAV.map(t => ({
+      id: t.id, disabled: !!allowedTabs && !allowedTabs.includes(`pnl:${t.id}`),
+      label: <>{t.id === 'offline' ? 'Offline' : t.label}{inProgress.has(t.id) && <span role="img" aria-label="in progress" title="In progress" style={{ width: 6, height: 6, borderRadius: '50%', background: C.m.amber, display: 'inline-block' }} />}</>,
+    }))
+    const subTabs = pnlActiveTab === 'shopify' ? [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }]
+      : pnlActiveTab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+      : pnlActiveTab === 'offline' ? [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Misc' }]
+      : null
+    const activeSub = pnlActiveTab === 'shopify' ? pnlD2cSubCh : pnlActiveTab === 'amazon' ? pnlAmzView : pnlActiveTab === 'offline' ? pnlOfflineSub : null
+    const onSub = id => { if (pnlActiveTab === 'shopify') setPnlD2cSubCh(id); else if (pnlActiveTab === 'amazon') setPnlAmzView(id); else if (pnlActiveTab === 'offline') setPnlOfflineSub(id) }
+    const chLabel = PNL_TABS_NAV.find(t => t.id === pnlActiveTab)?.label || 'P&L'
+    const menu = <ActionMenu title={`P&L · ${chLabel}`} items={[
+      { id: 'refresh', label: 'Refresh data', onSelect: onRefresh },
+      { id: 'export', label: 'Export Financial view (CSV)', onSelect: () => window.dispatchEvent(new Event('pnl:export')) },
+    ]} />
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="P&L"
+          right={<><div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} /></div>{!subTabs && menu}</>}
+          chips={chips} activeChip={pnlActiveTab} onChip={id => { if (id !== pnlActiveTab) setPnlActiveTab(id) }}
+          subTabs={subTabs} activeSub={activeSub} onSub={onSub} subRight={subTabs ? menu : null} />
+      </div>
+    )
+  }
   if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'overview' || page === 'sales')) {
     const dateNode = (
       <div className="tnav-right">
