@@ -26,19 +26,25 @@ export function ShowAllButton({ children, onClick }) {
 }
 
 // Chip row (location chips, Units / Revenue …): scrolls sideways, active chip filled green.
-export function Chips({ options, value, onChange, label }) {
+// inline: no own scroll row, so two groups can share one line (see ChipRow)
+export function Chips({ options, value, onChange, label, inline = false }) {
   return (
-    <div role="group" aria-label={label} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: '0 -16px 8px', padding: '2px 16px', scrollbarWidth: 'none' }}>
+    <div role="group" aria-label={label} style={inline ? { display: 'flex', gap: 6, flex: '0 0 auto' } : { display: 'flex', gap: 6, overflowX: 'auto', margin: '0 -16px 6px', padding: '1px 16px', scrollbarWidth: 'none' }}>
       {options.map(o => {
         const on = o.id === value
         return (
           <button key={o.id} type="button" aria-pressed={on} onClick={() => onChange(o.id)}
-            style={{ flex: '0 0 auto', minHeight: 32, padding: '0 11px', borderRadius: M.radius.chip, border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink,
-              fontSize: 12.5, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer' }}>{o.label}</button>
+            style={{ flex: '0 0 auto', minHeight: 28, padding: '0 7px', borderRadius: M.radius.chip, border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink,
+              fontSize: 12, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer' }}>{o.label}</button>
         )
       })}
     </div>
   )
+}
+
+// Several chip groups on one line with a wider gap between groups; wraps on very narrow phones.
+export function ChipRow({ children }) {
+  return <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, marginBottom: 6 }}>{children}</div>
 }
 
 // Label / value tiles inside a detail sheet.

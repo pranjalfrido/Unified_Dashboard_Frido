@@ -4,7 +4,7 @@ import { fmtInt, fmtCurrency } from '../theme.jsx'
 import MobileRankedList from '../../responsive/MobileRankedList.jsx'
 import SegmentToggle from '../../responsive/SegmentToggle.jsx'
 import FullScreenList from '../../responsive/FullScreenList.jsx'
-import { Card, Chips, ShowAllButton, RowText } from './ui.jsx'
+import { Card, Chips, ChipRow, ShowAllButton, RowText } from './ui.jsx'
 import { topProductsFrom } from './saMobileData.js'
 
 // Sales & Allocation mobile: Top products and Biggest movers (INVENTORY_MOBILE_REDESIGN_PROMPT.md §3d-e).
@@ -30,7 +30,7 @@ export function TopProductsCard({ fd, channels, revenueAvailable }) {
           { label: 'Units', value: r => fmtInt(r.qty) }, { label: 'Revenue', value: r => fmtCurrency(r.rev) },
           { label: '% of units', value: r => pct1(tu > 0 ? (r.qty / tu) * 100 : 0) }, { label: '% of revenue', value: r => pct1(tr > 0 ? (r.rev / tr) * 100 : 0) },
         ]}
-        searchText={r => r.name} topN={10} />
+        searchText={r => r.name} topN={10} compact />
     </Card>
   )
 }
@@ -57,8 +57,10 @@ export function MoversCard({ fd, revenueAvailable, onRows }) {
   return (
     <Card title="Biggest movers" right={<SegmentToggle label="Direction" options={[{ id: 'risers', label: '▲ Risers' }, { id: 'fallers', label: '▼ Fallers' }]} value={dir} onChange={setDir} />}>
       <Chips label="Compare" options={[{ id: 'day2', label: 'Last vs 2nd-last day' }, { id: 'day7', label: 'Last vs 7th-last day' }]} value={mode} onChange={setMode} />
-      <Chips label="Measure" options={[{ id: 'qty', label: 'Units' }, ...(revenueAvailable ? [{ id: 'rev', label: 'Revenue' }] : [])]} value={metric} onChange={setMetric} />
-      <Chips label="Level" options={[{ id: 'sku', label: 'SKU' }, { id: 'subCategory', label: 'Sub-cat' }, { id: 'category', label: 'Category' }]} value={level} onChange={setLevel} />
+      <ChipRow>
+        <Chips inline label="Measure" options={[{ id: 'qty', label: 'Units' }, ...(revenueAvailable ? [{ id: 'rev', label: 'Revenue' }] : [])]} value={metric} onChange={setMetric} />
+        <Chips inline label="Level" options={[{ id: 'sku', label: 'SKU' }, { id: 'subCategory', label: 'Sub-cat' }, { id: 'category', label: 'Category' }]} value={level} onChange={setLevel} />
+      </ChipRow>
       {!rows.length && <div style={{ padding: '12px 0', fontSize: 13, color: M.muted }}>No data for this comparison.</div>}
       {rows.slice(0, 8).map((r, i) => <div key={i} style={{ padding: '8px 0', borderTop: `1px solid ${M.line}` }}>{row(r)}</div>)}
       {rows.length > 0 && <ShowAllButton onClick={() => setFullOpen(true)}>Show all {rows.length} · search →</ShowAllButton>}

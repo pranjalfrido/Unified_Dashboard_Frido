@@ -15,7 +15,7 @@ import FullScreenList from './FullScreenList.jsx'
 //   searchText  item => string matched by the full-screen list's search
 //   groupOf     item => group name (e.g. category) for the full-screen list's group chips
 //   topN        rows shown in the card; "Show all N →" opens the full-screen list
-export default function MobileRankedList({ title, noun = 'items', items, itemKey, sorts, defaultSort, name, sub, secondary, details, searchText, groupOf, topN = 10, sheetSubtitle, emptyText = 'No data for this period' }) {
+export default function MobileRankedList({ title, noun = 'items', items, itemKey, sorts, defaultSort, name, sub, secondary, details, searchText, groupOf, topN = 10, sheetSubtitle, emptyText = 'No data for this period', compact = false }) {
   const M = C.m
   const [sortKey, setSortKey] = useState(defaultSort || sorts[0].key)
   const [fullOpen, setFullOpen] = useState(false)
@@ -36,8 +36,8 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
           const on = s.key === sortKey
           return (
             <button key={s.key} type="button" aria-pressed={on} onClick={() => setSortKey(s.key)}
-              style={{ flex: '0 0 auto', minHeight: 32, padding: '0 11px', borderRadius: M.radius.chip, border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink,
-                fontSize: 12.5, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer' }}>{s.label}</button>
+              style={{ flex: '0 0 auto', minHeight: compact ? 28 : 32, padding: compact ? '0 10px' : '0 11px', borderRadius: M.radius.chip, border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink,
+                fontSize: compact ? 12 : 12.5, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer' }}>{s.label}</button>
           )
         })}
       </div>
@@ -46,7 +46,7 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
       <div>
         {visible.map((it, i) => (
           <RankedRow key={itemKey(it)} rank={i + 1} name={name(it)} sub={sub?.(it)} value={sort.format(it)} secondary={secondary?.(it, sortKey)}
-            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => setSelected(it)} />
+            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => setSelected(it)} compact={compact} />
         ))}
       </div>
 
