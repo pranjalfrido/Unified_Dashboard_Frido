@@ -959,9 +959,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
   useEffect(() => {
     if (!onFilterUI) return
-    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount })
+    // onRefresh / loading: the top bar's Refresh reloads Logistics data (it used to call the Sales fetch).
+    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount, onRefresh: fetchLogistics, loading })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFilterUI, lFilters, lActiveCount, opts])
+  }, [onFilterUI, lFilters, lActiveCount, opts, fetchLogistics, loading])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -4995,7 +4996,9 @@ function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirst
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
-            <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
+            <DateRangePicker filters={filters} setFilters={setFilters}
+              onRefresh={page === 'logistics' && logisticsFilterUI?.onRefresh ? logisticsFilterUI.onRefresh : onRefresh}
+              loading={page === 'logistics' && logisticsFilterUI ? logisticsFilterUI.loading : loading} />
           </div>
         </div>
       )}
