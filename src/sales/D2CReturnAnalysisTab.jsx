@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
-import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv } from './returnAnalysisData.js'
+import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv, immatureSince, maturityText, sizeSwapPct } from './returnAnalysisData.js'
 import ReturnAnalysisMobile from './ReturnAnalysisMobile.jsx'
 import {
   Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
@@ -32,7 +32,9 @@ function TrendStatTile({ label, value, badge, color }) {
 // Return-metrics trend chart — single ComposedChart, dual y-axis: left = Revenue (₹), right =
 // the 5 return-rate lines (%) — same pairing convention as D2C Overview's own "Revenue & Returns
 // Trend" chart (App.jsx ~line 6008-6050).
-function ReturnTrendChart({ kpis, dailyTrend }) {
+// end: the range end — a one-line maturity note under the tiles when it falls in the last 14 days
+// (RETURN_ANALYSIS_MOBILE_PROMPT §4a, the existing Provisional Return % window).
+function ReturnTrendChart({ kpis, dailyTrend, end }) {
   const [groupBy, setGroupBy] = useState('daily')
   const raw = (dailyTrend || []).map(d => ({ date: d.date, revenue: d.revenue, cancelPct: d.cancelPct, rtoPct: d.rtoPct, cirPct: d.cirPct, exchangePct: d.exchangePct, totalReturnPct: d.totalReturnPct }))
   const grouped = useMemo(() => groupReturnTrend(raw, groupBy), [raw, groupBy])
@@ -56,6 +58,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
           <TrendStatTile label="Exchange %" value={`${kpis.exchangePct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.exchangePct, kpis.prevExchangePct)} />
         </div>
       )}
+      {immatureSince(end) && <div style={{ fontSize: 11.5, color: C.t3, margin: '-6px 0 8px', flexShrink: 0 }}>ⓘ {maturityText(immatureSince(end))}</div>}
       <div style={{ flex: 1, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%" minHeight={240}>
           <ComposedChart data={grouped} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
@@ -718,7 +721,8 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
                       <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: C.t1 }}>{fmtN(r.exchQty)}</td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: exchPctColor }}>{r.exchPct.toFixed(1)}%</td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t2 }}>{fmt(r.exchRev)}</td>
-                      <td style={{ padding: '5px 8px', color: r.top1Sku ? C.t1 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top1Sku ? `${r.top1Sku}${r.top1Pct != null ? ` · ${r.top1Pct.toFixed(1)}%` : ''}` : ''}</td>
+                      <td style={{ padding: '5px 8px', color: r.top1Sku ? C.t1 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top1Sku ? `${r.top1Sku}${r.top1Pct != null ? ` · ${r.top1Pct.toFixed(1)}%` : ''}` : ''}
+                        {sizeSwapPct(r) != null && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 999, background: C.acl, color: C.acd, fontFamily: 'var(--font)', fontSize: 10.5, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>Size swap</span>}</td>
                       <td style={{ padding: '5px 8px', color: r.top2Sku ? C.t2 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top2Sku ? `${r.top2Sku}${r.top2Pct != null ? ` · ${r.top2Pct.toFixed(1)}%` : ''}` : ''}</td>
                       <td style={{ padding: '5px 8px', color: r.top3Sku ? C.t2 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top3Sku ? `${r.top3Sku}${r.top3Pct != null ? ` · ${r.top3Pct.toFixed(1)}%` : ''}` : ''}</td>
                     </tr>
@@ -765,7 +769,7 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
       {data && (
         <>
           <div className="g-2" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
-            <ReturnTrendChart kpis={data.kpis} dailyTrend={data.dailyTrend} />
+            <ReturnTrendChart kpis={data.kpis} dailyTrend={data.dailyTrend} end={filters.end} />
             <TopReturnedProductsCard
               topProducts={data.topProducts}
               paymentTypeOpts={paymentTypeOpts}
