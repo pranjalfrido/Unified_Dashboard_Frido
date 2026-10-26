@@ -344,7 +344,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
@@ -421,7 +421,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
     { label: 'SnD Cost', value: kpiSummary?.snd != null ? fmt(kpiSummary.snd) : '—', spark: sndSpark },
     { label: 'CM1', value: kpiSummary?.cm1 != null ? fmt(kpiSummary.cm1) : '—', spark: cm1Spark, accent: negAccent(kpiSummary?.cm1) },
     ...(showMarketing ? [
-      { label: 'Mktg Spend', value: fmt(kpiSummary?.spend || 0), spark: spendSpark },
+      { label: 'Mktg Spend', value: kpiSummary?.spend != null ? fmt(kpiSummary.spend) : 'Not available', spark: spendSpark },
       { label: 'ROAS', value: kpiSummary?.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—', spark: revSpark, accent: kpiSummary?.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined },
       { label: 'CM2', value: kpiSummary?.cm2 != null ? fmt(kpiSummary.cm2) : '—', spark: cm2Spark, accent: negAccent(kpiSummary?.cm2) },
     ] : []),
@@ -465,6 +465,12 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {inProgress && (
+        <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: C.card, border: `1px solid ${C.border}`, fontSize: 12.5, color: C.t2 }}>
+          <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#B45309', border: '1px solid #B45309', borderRadius: 999, padding: '1px 8px' }}>In progress</span>
+          <span>{inProgress}</span>
+        </div>
+      )}
       {isMob && (
         <div className="ads-kpi-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {(kpiSummary ? mobKpisWithSummary : mobKpisSimple).map(k => (
@@ -484,7 +490,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
             <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} badge={sndBadge} plain />
             <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
             {showMarketing && <>
-              <KPICard label="Mktg Spend" value={fmt(kpiSummary.spend)} sub={`${fmtPctSub(kpiSummary.spendPct)} of Net Rev`} badge={spendBadge} plain />
+              <KPICard label="Mktg Spend" value={kpiSummary.spend != null ? fmt(kpiSummary.spend) : 'Not available'} sub={kpiSummary.spend != null ? `${fmtPctSub(kpiSummary.spendPct)} of Net Rev` : 'No ad spend source'} badge={spendBadge} plain />
               <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />
               <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}`} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
             </>}

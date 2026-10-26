@@ -31,6 +31,15 @@ const OFFLINE_TOOLS = [
 // reading straight off `data`), so this needs no new API endpoint — 100% reuse of /api/bq's
 // existing response shape. See PNL_TAB_ROADMAP.md for the COGS/SnD prerequisites still pending;
 // the Financial View table (PnLFinancialTable.jsx) renders those columns as "—" until then.
+// Tabs whose cost side isn't complete yet (fix/pnl-data item 3): COGS and everything below it show
+// "—" with an "In progress" strip instead of a wrong number. Overall: COGS, SnD and spend aren't
+// wired for every channel, and its product rows carry no ex-GST revenue (GM came out as −COGS).
+// International: SKU COGS is unreliable (₹27.85 K COGS on ₹4.92 K gross for 1–25 Oct 2026).
+const PNL_IN_PROGRESS = {
+  all: "COGS, margins and marketing aren't complete for every channel yet, so they show —. Revenue, returns and units are final.",
+  international: "COGS for International products isn't reliable yet, so margins show —. Revenue, returns and units are final.",
+}
+
 const PNL_TABS = [
   { id: 'all', label: 'Overall' },
   { id: 'shopify', label: 'D2C', logo: '/logo-shopify.png' },
@@ -1899,6 +1908,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // silently disagreed with both of those by a few points whenever coverage is partial (COGS in
   // particular, since not every SKU has a cogs-data.json entry).
   const kpiSummary = useMemo(() => {
+    if (PNL_IN_PROGRESS[activeTab]) {
+      return { net: activeData?.net ?? 0, cogs: null, gm: null, snd: null, cm1: null, spend: null, cm2: null, roas: null, cogsPct: null, gmPct: null, sndPct: null, cm1Pct: null, spendPct: null, cm2Pct: null }
+    }
     let net = 0, grossExcRev = 0, netCovered = 0, cogs = 0, anyCosted = false, snd = 0, sndNetCovered = 0, anySnd = false, spend = 0
     let cm1 = 0, cm1NetCovered = 0, anyCm1 = false, cm2NetCovered = 0
     if (!activeData) {
@@ -1996,7 +2008,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       spendPct: net > 0 ? (spend / net * 100) : null,
       cm2Pct: cm2 != null && cm2NetCovered > 0 ? (cm2 / cm2NetCovered * 100) : null,
     }
-  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMonthlyMap, activeMobilityNetBySubCat, activeNetScale])
+  }, [activeTab, activeData, activeSndBySku, activeAdSpendMap, cogsMonthlyMap, activeMobilityNetBySubCat, activeNetScale])
 
   // Real (not ratio-estimated) previous-period COGS/GM — re-runs the exact same per-unit
   // cogs-data.json lookup kpiSummary uses above, against last period's real per-SKU unit counts
@@ -2176,7 +2188,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           mobilityNetBySubCat={activeMobilityNetBySubCat}
           netScale={activeData?.netScale ?? 1}
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
-          cogsMonthlyMap={cogsMonthlyMap}
+          cogsMonthlyMap={PNL_IN_PROGRESS[activeTab] ? null : cogsMonthlyMap}
+          inProgress={PNL_IN_PROGRESS[activeTab] || null}
           startDate={filters.start}
           endDate={filters.end}
         />
