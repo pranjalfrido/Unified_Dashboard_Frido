@@ -248,7 +248,7 @@ function CancelCard({ rows = [] }) {
   const onlyFirstBucket = rows.length > 0 && rows.every(r => r.bucket === '0-1')
   const selTotal = sel ? BUCKETS.reduce((s, b) => s + (sel.values[b] || 0), 0) : 0
   return (
-    <Card title="Cancellations · days since order" sub="Cancelled orders, last 6 months (not the selected dates)">
+    <Card title="Cancellations · days since order" sub="Last 6 months (not the selected dates) · each cancelled order counted once, under its main product">
       {onlyFirstBucket && <InfoStrip text="Days since order isn't tracked yet: every cancellation is counted as 0–1 days." style={{ marginBottom: 8 }} />}
       <button type="button" onClick={() => setPick(true)}
         style={{ marginBottom: 10, minHeight: 32, maxWidth: '100%', padding: '0 12px', borderRadius: 999, border: `1px solid ${subs.length ? M.green : M.line}`, background: subs.length ? 'rgba(31,90,61,.08)' : '#fff', color: M.ink, fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
