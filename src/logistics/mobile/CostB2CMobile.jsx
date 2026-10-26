@@ -42,7 +42,7 @@ function B2CMaster({ kpis, agg, mom, heroDeltas, reverseBurden, trendRows, trend
   ]
   return (
     <div>
-      <MasterTrendCard metrics={metrics} rawRows={trendWindow} groupTrend={groupTrend} layout={layout} granularity="monthly"
+      <MasterTrendCard small metrics={metrics} rawRows={trendWindow} groupTrend={groupTrend} layout={layout} granularity="monthly"
         windowMenu={{ title: 'Show months', options: B2C_WINDOWS, value: trendMonths, onChange: setTrendMonths }} />
       {trendRows.length > 0 && <ShowAllButton onClick={onShowTable}>Show monthly table →</ShowAllButton>}
     </div>

@@ -41,10 +41,10 @@ export function CostMaster({ overall, months, trendWindow, setTrendWindow, layou
     { key: 'b2b', label: 'FTL/PTL freight cost', tileLabel: 'FTL/PTL freight', value: fmt(o.b2bCost), sub: pctOfSpend(o.b2bCost), deltasHidden: true, ...series('b2b') },
     { key: 'tpl', label: '3PL warehousing cost', tileLabel: '3PL warehousing', value: o.tplCost > 0 ? fmt(o.tplCost) : '—', sub: o.tplCost > 0 ? pctOfSpend(o.tplCost) : 'no 3PL invoices', deltasHidden: true, ...series('tpl') },
     { key: 'partners', label: 'Partners', value: fmtN(o.carriers + o.tplPartners), sub: `${fmtN(o.carriers)} carriers · ${fmtN(o.tplPartners)} 3PL · ${fmtN(o.tplSites)} sites`, deltasHidden: true },
-    { key: 'pct', label: 'Logistics % of value', value: pctValue.value, sub: pctValue.sub, deltasHidden: true, def: 'Logistics cost ÷ shipment value.' },
+    { key: 'pct', label: 'Logistics % of value', tileLabel: '% of value', value: pctValue.value, sub: pctValue.sub, deltasHidden: true, def: 'Logistics cost ÷ shipment value.' },
   ]
   return (
-    <MasterTrendCard metrics={metrics} rawRows={months} groupTrend={groupTrend} layout={layout} granularity="monthly"
+    <MasterTrendCard small metrics={metrics} rawRows={months} groupTrend={groupTrend} layout={layout} granularity="monthly"
       windowMenu={{ title: 'Show months', options: TREND_WINDOWS, value: trendWindow, onChange: setTrendWindow }}
       note={<SplitTop parts={[
         { key: 'b2c', label: 'B2C', value: o.b2cCost, color: M.green },

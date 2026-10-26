@@ -71,7 +71,7 @@ for (const tab of tabs) {
   console.log(`== ${tab} (default months, static file)`)
   const tiles = async pairs => { const dt = await dTiles(D.page, pairs.map(p => p[0])); for (const [d, m] of pairs) same(`${tab} tile ${m}`, dt[d]?.value, mt[m]?.value) }
   if (tab === 'Overview') {
-    await tiles([['Total Logistics Cost', 'TOTAL COST'], ['B2C Courier Cost', 'B2C COURIER'], ['FTL/PTL Freight Cost', 'FTL/PTL FREIGHT'], ['3PL Warehousing Cost', '3PL WAREHOUSING'], ['Partners', 'PARTNERS'], ['Logistics % of Value', 'LOGISTICS % OF VALUE']])
+    await tiles([['Total Logistics Cost', 'TOTAL COST'], ['B2C Courier Cost', 'B2C COURIER'], ['FTL/PTL Freight Cost', 'FTL/PTL FREIGHT'], ['3PL Warehousing Cost', '3PL WAREHOUSING'], ['Partners', 'PARTNERS'], ['Logistics % of Value', '% OF VALUE']])
     for (const [section, label] of [['B2C Courier Partners', 'B2C couriers'], ['FTL/PTL Transport Partners', 'FTL/PTL'], ['3PL Warehousing Partners', '3PL']]) {
       const cards = await dCards(D.page, section)
       await mTab(P.page, 'Partners', label)
@@ -149,7 +149,7 @@ for (const tab of tabs) {
   if (tab === '3PL') {
     const dt = await dTiles(D.page, ['Total Warehousing Cost'])
     same(`${tab} hero cost + ₹/parcel badge`, `${dt['Total Warehousing Cost']?.value} ${dt['Total Warehousing Cost']?.delta}`, `${mt._hero.value} ${(mt._hero.sub.match(/[▲▼][\d.]+%/) || [''])[0]}`)
-    await tiles([['Cost / Parcel', 'COST / PARCEL'], ['Cost / kg', 'COST / KG'], ['Avg Parcel Weight', 'AVG PARCEL WEIGHT'], ['Cost / Site / Month', 'COST / SITE / MONTH'], ['Operations', 'OPERATIONS'], ['Rental', 'RENTAL'], ['Warehousing % of Value', 'WAREHOUSING % OF VALUE']])
+    await tiles([['Cost / Parcel', 'COST / PARCEL'], ['Cost / kg', 'COST / KG'], ['Avg Parcel Weight', 'AVG PARCEL WEIGHT'], ['Cost / Site / Month', 'COST / SITE / MONTH'], ['Operations', 'OPERATIONS'], ['Rental', 'RENTAL'], ['Warehousing % of Value', '% OF VALUE']])
     const wt = await dTable(D.page, ['Facility', 'Pincode', 'Partner'])
     const wm = P.page.locator('section').filter({ has: P.page.locator('h2', { hasText: /^Warehouses/ }) }).locator('button', { hasText: /^Show all/ })
     const mw = await mRows(P.page, 'Warehouses (sites)')

@@ -24,6 +24,7 @@ import KpiTile from './KpiTile.jsx'
 // note:    optional slim info strip at the top of the card (data availability etc.)
 // granularity: fix the chart grain (e.g. 'monthly' for billing-month ledgers); the "⋯" then offers
 //          windowMenu instead: { title, options: [{ id, label }], value, onChange } (e.g. 3M / 6M / 12M / All)
+// small:   denser tiles (KpiTile small) and a 24px hero, for pages with long ₹ values (Logistics → Cost)
 // summary: summary mode for snapshots (no trend): metrics[0] is the hero, metrics[1..] the tiles
 //          (tap = definition, no switching), and this node (e.g. a split bar) sits between them.
 //          No chart, no ⋯; rawRows / groupTrend are not needed.
@@ -43,7 +44,7 @@ function pointLabel(key, gran) {
 
 const CHART_H = 120
 
-export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null, summary = null, granularity = null, windowMenu = null }) {
+export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null, summary = null, granularity = null, windowMenu = null, small = false }) {
   const M = C.m
   const [selKey, setSelKey] = useState(metrics[0].key)
   const [granOverride, setGranOverride] = useState('auto')
@@ -98,7 +99,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
         </div>}
       </div>
       <div aria-live="polite">
-        <div style={{ fontSize: M.type.hero, fontWeight: 700, color: (!scrubRow && m.valueColor) || M.ink, letterSpacing: '-.02em', lineHeight: 1.2, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+        <div style={{ fontSize: small ? 24 : M.type.hero, fontWeight: 700, color: (!scrubRow && m.valueColor) || M.ink, letterSpacing: '-.02em', lineHeight: 1.2, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
           {scrubRow && hasSeries ? (scrubVal == null ? '—' : m.fmtPoint(scrubVal)) : m.value}
         </div>
         {/* Fixed two-line sub-line: the chart and tiles never move when it changes. */}
@@ -135,7 +136,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
     <div role="group" aria-label={isSummary ? 'Metrics' : 'Choose metric'} className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
       {tileMetrics.map(x => (
         <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.value} valueColor={x.valueColor} delta={x.delta} deltaLoading={x.deltaLoading} deltaHidden={isSummary || x.deltasHidden}
-          lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient selected={!isSummary && x.key === m.key} def={x.def}
+          lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient small={small} selected={!isSummary && x.key === m.key} def={x.def}
           onSelect={isSummary ? undefined : () => { setSelKey(x.key); setScrub(null) }} />
       ))}
     </div>

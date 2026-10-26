@@ -41,7 +41,7 @@ function TplMaster({ f, tplTrend, layout }) {
   const { t, share } = f
   const groupTrend = useCallback(rows => (rows || []).map(r => ({ ...r, date: `${r.key}-01` })), [])
   const metrics = [
-    { key: 'cost', label: 'Total warehousing cost', tileLabel: 'Warehousing', value: fmt(t.cost), lowerIsBetter: true,
+    { key: 'cost', label: 'Total warehousing cost', tileLabel: 'Total cost', value: fmt(t.cost), lowerIsBetter: true,
       compare: f.rateDelta != null ? [{ label: `₹/parcel vs ${monShort(f.prev.key)}`, delta: f.rateDelta }] : null, delta: f.rateDelta,
       sub: `${fmt(f.perMonth)} per month · ${fmtN(t.partners)} partners · ${fmtN(t.warehouses)} sites`,
       def: '3PL warehousing for the selected billing months. ▲/▼: change in cost per parcel between the latest two months with volume.', point: r => r.cost, fmtPoint: fmt },
@@ -51,10 +51,10 @@ function TplMaster({ f, tplTrend, layout }) {
     { key: 'site', label: 'Cost / site / month', value: t.warehouses > 0 && t.months > 0 ? fmt(t.cost / t.warehouses / t.months) : '—', sub: `${fmtN(t.warehouses)} sites · ${fmtN(t.months)} months`, deltasHidden: true },
     { key: 'ops', label: 'Operations', value: fmt(t.operation_fee), sub: `${share(t.operation_fee).toFixed(1)}% of spend`, deltasHidden: true, point: r => r.operation_fee, fmtPoint: fmt },
     { key: 'rent', label: 'Rental', value: t.rental_fee > 0 ? fmt(t.rental_fee) : '—', sub: t.rental_fee > 0 ? `${share(t.rental_fee).toFixed(1)}% — fixed, volume-blind` : 'nothing billed', deltasHidden: true, point: r => r.rental_fee, fmtPoint: fmt },
-    { key: 'pct', label: 'Warehousing % of value', tileLabel: 'Warehousing % of value', value: f.tplValuePct != null ? f.tplValuePct.toFixed(2) + '%' : '—', sub: f.tplValuePct != null ? `${fmt(t.cost)} on ${fmt(f.tplShipValue)} shipped` : 'no matching months', deltasHidden: true },
+    { key: 'pct', label: 'Warehousing % of value', tileLabel: '% of value', value: f.tplValuePct != null ? f.tplValuePct.toFixed(2) + '%' : '—', sub: f.tplValuePct != null ? `${fmt(t.cost)} on ${fmt(f.tplShipValue)} shipped` : 'no matching months', deltasHidden: true },
   ]
   return (
-    <MasterTrendCard metrics={metrics} rawRows={tplTrend} groupTrend={groupTrend} layout={layout} granularity="monthly"
+    <MasterTrendCard small metrics={metrics} rawRows={tplTrend} groupTrend={groupTrend} layout={layout} granularity="monthly"
       note={<SplitTop parts={[
         { key: 'ops', label: 'Operations', value: t.operation_fee || 0, color: M.green },
         { key: 'rent', label: 'Rental', value: t.rental_fee || 0, color: M.g3 },
