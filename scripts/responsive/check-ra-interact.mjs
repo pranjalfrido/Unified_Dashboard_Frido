@@ -28,17 +28,17 @@ const entryText = clean(await entry.innerText())
 const pct = (txt, label) => (txt.match(new RegExp(`${label}\\s*([\\d.]+%)`, 'i')) || [])[1]
 const dateBefore = clean(await page.locator('.topnav .drp-trigger').first().innerText())
 const spot = await scrollTop()
-await page.locator('.topnav button[aria-label="More actions"]').first().tap(); await page.waitForTimeout(400)
+await act(page.locator('.topnav button[aria-label="More actions"]').first())
 check('D2C "⋯" has a Return analysis item', (await dialog().getByRole('button', { name: /^Return analysis/ }).count()) > 0)
 await closeSheet()
 await page.evaluate(v => { document.querySelector('.page-scroll').scrollTop = v }, spot)
-await entry.tap(); await page.waitForTimeout(2500)
+await act(entry); await page.waitForTimeout(2200)
 await page.waitForSelector('.master-tiles', { timeout: 240000 })
 const tiles = clean(await page.locator('.master-tiles').innerText())
 const dateAfter = clean(await page.locator('.topnav .drp-trigger').first().innerText())
 const same = ['Return', 'Cancel', 'RTO', 'CIR'].every(l => pct(entryText, l) && tiles.includes(pct(entryText, l)))
 check('entry card → Return Analysis, same numbers and dates', /return_analysis/.test(page.url()) && same && dateBefore === dateAfter, `${entryText.slice(0, 70)} · ${dateBefore} → ${dateAfter}`)
-await page.locator('.topnav button[aria-label="Back"]').tap()
+await act(page.locator('.topnav button[aria-label="Back"]'))
 await page.waitForTimeout(2500)
 const back = await scrollTop()
 check('back arrow returns to Sales → D2C at the same scroll spot', /\/sales\/shopify/.test(page.url()) && !/return_analysis/.test(page.url()) && Math.abs(back - spot) < 40, `${spot} → ${back}px · ${page.url().split('5173')[1]}`)
@@ -52,7 +52,7 @@ const fingerScroll = await page.evaluate(() => {
   return document.scrollingElement.scrollHeight > innerHeight + 1
 })
 check('the page scrolls by finger', fingerScroll)
-if (vp.mobile) {
+if (vp.mobile && ENGINE === 'chromium') { // WebKit (Playwright) has no touch-drag or mobile wheel input; the scroll-box check above covers it
   const sc = page.locator('.page-scroll')
   const b = await sc.boundingBox()
   const t0 = await scrollTop()
@@ -63,7 +63,7 @@ if (vp.mobile) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] })
     for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 + (y1 - y0) * i / 8 }] })
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-  } else { await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.wheel(0, 400) }
+  }
   await page.waitForTimeout(600)
   check('a finger drag moves the page', (await scrollTop()) > t0 + 50, `${t0} → ${await scrollTop()}`)
   await page.evaluate(() => { document.querySelector('.page-scroll').scrollTop = 0 })
