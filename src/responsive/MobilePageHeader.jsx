@@ -15,7 +15,8 @@ import FilteredStrip from './FilteredStrip.jsx'
 //   row 4  strip: the "Filtered:" strip (FilteredStrip props), only when filters are active
 // The first row keeps the plain top bar's height and spacing, so a page that only uses row 1 looks
 // exactly like it did before this component.
-export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, strip }) {
+// compact: slimmer tab rows for pages whose actions all sit in row 1 (Inventory, Logistics).
+export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, strip, compact = false }) {
   const chipRow = useRef(null)
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
@@ -57,13 +58,13 @@ export default function MobilePageHeader({ title, sub, caption, right, chips, ac
         </div>
       )}
       {subTabs?.length > 0 && (
-        <div className="mph-pad" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, paddingTop: 6 }}>
+        <div className="mph-pad" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, paddingTop: compact ? 0 : 6, marginTop: compact ? -4 : 0 }}>
           <div role="tablist" aria-label="View" className="mph-chips" style={{ display: 'flex', gap: 16, overflowX: 'auto', scrollbarWidth: 'none', flex: 1, minWidth: 0 }}>
             {subTabs.map(t => {
               const on = t.id === activeSub
               return (
                 <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => onSub(t.id)}
-                  style={{ flex: '0 0 auto', minHeight: 32, border: 'none', background: 'none', padding: '2px 0 6px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
+                  style={{ flex: '0 0 auto', minHeight: compact ? 30 : 32, border: 'none', background: 'none', padding: compact ? '0 0 5px' : '2px 0 6px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
                     color: on ? '#fff' : 'rgba(255,255,255,.65)', borderBottom: `2px solid ${on ? '#fff' : 'transparent'}` }}>{t.label}</button>
               )
             })}
@@ -87,7 +88,7 @@ export default function MobilePageHeader({ title, sub, caption, right, chips, ac
         </div>
       )}
       {hasStrip && <FilteredStrip {...strip} tone="dark" />}
-      {(chips?.length > 0 || subTabs?.length > 0) && !subTabs2?.length && !hasStrip && <div aria-hidden="true" style={{ height: 8 }} />}
+      {(chips?.length > 0 || subTabs?.length > 0) && !subTabs2?.length && !hasStrip && <div aria-hidden="true" style={{ height: compact ? 2 : 8 }} />}
     </>
   )
 }

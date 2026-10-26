@@ -1642,3 +1642,6 @@ svg text, svg tspan{
 .log-mobile button:focus, .mph-tabs2 button:focus, .mrp-month:focus, .mrp-pill:focus{ outline:none }
 .log-mobile button:focus-visible, .mrp-month:focus-visible, .mrp-pill:focus-visible{ outline:2px solid rgba(31,90,61,.5); outline-offset:1px }
 .mph-tabs2 button:focus-visible{ outline:2px solid rgba(255,255,255,.8); outline-offset:-2px }
+
+/* Phone header: no outline left on a tab or button after a tap; the ring shows for keyboard focus only. */
+.topnav.m-header button:focus:not(:focus-visible){ outline:none }

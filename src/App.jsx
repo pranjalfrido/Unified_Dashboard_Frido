@@ -4921,17 +4921,17 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
     const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
     const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
-    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} />
+    // Data source / last update live in the "⋯" sheet (note), not under the title: the header stays two rows.
+    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} note={invCaption(tab, ctrl)} />
     return (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Inventory" caption={invCaption(tab, ctrl)}
+        <MobilePageHeader title="Inventory" compact
           right={<>
-            {subTabs.length < 2 && menu}
             {tab === 'sales' && ctrl?.filters && <div className="tnav-right"><DateRangePicker filters={ctrl.filters} setFilters={ctrl.setFilters} onRefresh={ctrl.onRefresh} /></div>}
             <InvFilterButton tab={tab} ctrl={ctrl} />
+            {menu}
           </>}
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={tab} onSub={setInvTab}
-          subRight={subTabs.length > 1 ? menu : null}
           strip={{ items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) }} />
       </div>
     )
@@ -4947,12 +4947,13 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       const menu = <ActionMenu items={logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : []} title="Logistics · Performance" />
       return (
         <div className="topnav m-header" data-page={page}>
-          <MobilePageHeader title="Logistics"
+          <MobilePageHeader title="Logistics" compact
             right={<>
               <div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={logisticsFilterUI?.onRefresh || onRefresh} loading={logisticsFilterUI ? logisticsFilterUI.loading : loading} /></div>
               <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />
+              {menu}
             </>}
-            subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage} subRight={menu}
+            subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
             strip={{ items: perfStripItems(lFilters), onRemove: key => perfRemove(setLFilters, key), onClear: () => perfClear(setLFilters) }} />
         </div>
       )
@@ -4960,13 +4961,13 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     const cc = logCostCtrl
     return (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Logistics"
+        <MobilePageHeader title="Logistics" compact
           right={<>
             {cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />}
             {cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />}
+            <ActionMenu items={cc?.menu || []} title="Logistics · Cost" />
           </>}
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
-          subRight={<ActionMenu items={cc?.menu || []} title="Logistics · Cost" />}
           subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
           strip={cc?.strip} />
       </div>
