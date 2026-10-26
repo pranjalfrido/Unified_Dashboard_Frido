@@ -163,7 +163,8 @@ function CategoryCard({ data, basis, period }) {
   ]
   const isCat = view === 'category'
   return (
-    <Card title="Category breakdown" right={<SegmentToggle label="Group by" value={view} onChange={setView} options={[{ id: 'category', label: 'Category' }, { id: 'sub', label: 'Sub-category' }]} />}>
+    <Card title="Category breakdown">
+      <SegmentToggle full label="Group by" value={view} onChange={setView} options={[{ id: 'category', label: 'Category' }, { id: 'sub', label: 'Sub-category' }]} style={{ marginBottom: 6 }} />
       <MobileRankedList key={`${view}-${basis}`} title={null} noun={isCat ? 'categories' : 'sub-categories'} items={isCat ? catRows : subRows}
         itemKey={r => (isCat ? r.category : `${r.category}::${r.subCategory}`)} name={r => (isCat ? r.category : r.subCategory)} sub={isCat ? null : r => r.category}
         groupOf={isCat ? null : r => r.category} searchText={r => `${r.category} ${r.subCategory || ''}`} sorts={sorts} topN={8} sheetSubtitle={period}
