@@ -1,6 +1,12 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Children } from 'react'
 import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import LoadingOverlay from './LoadingOverlay.jsx'
+import { useBreakpoint } from './responsive/useBreakpoint.js'
+import MonthRangePicker from './responsive/MonthRangePicker.jsx'
+import BottomSheet from './responsive/BottomSheet.jsx'
+import CostFilterSheet from './logistics/mobile/CostFilters.jsx'
+import { costFilterCount, costHasFilters, costStripItems, costRemove, costClear } from './logistics/mobile/costFilterState.js'
+import { monthsLabel } from './responsive/monthRange.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -699,7 +705,7 @@ function ExportMenu({ items, suffix, raw }) {
 // Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
 // not click: this is reference material, not an action. The panel carries pointerEvents
 // none so it can never swallow a click meant for the chip beside it.
-function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters, tplMonths, tplTotals }) {
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters, tplMonths, tplTotals, sheet = false }) {
   const [open, setOpen] = useState(false)
   const h = health || {}
   const scoped = Number(h.scoped) || 0
@@ -795,6 +801,26 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
 
   if (!sections.length) return null
 
+  // Phones: the same sections inside the "⋯" → Data information bottom sheet.
+  if (sheet) {
+    const M = BASE_C.m
+    return (
+      <div style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {sections.map(sec => (
+          <div key={sec.title} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: M.muted, padding: '4px 0 6px', borderBottom: `1px solid ${M.line}` }}>{sec.title}</div>
+            {sec.rows.map(([label, value, kind]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', fontSize: 13, borderBottom: `1px solid ${M.line}` }}>
+                <span style={{ color: M.muted }}>{label}</span>
+                <span style={{ color: kind === 'warn' ? M.amber : M.ink, fontWeight: kind === 'warn' ? 700 : 600, textAlign: 'right' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}
       onMouseEnter={() => setOpen(true)}
@@ -846,164 +872,6 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, trans
   )
 }
 
-function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
-  const [open, setOpen] = useState(false)
-  // Typed filter over the month list. Cleared on close so the dropdown never reopens
-  // showing a filtered subset of what the reader takes to be the whole list.
-  const [q, setQ] = useState('')
-  const searchRef = useRef(null)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) { setQ(''); return }
-    // Focus the field so the list is type-to-filter without a second click. Deferred a
-    // tick: the input is not in the DOM until this render commits.
-    const t = setTimeout(() => searchRef.current?.focus(), 0)
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    document.addEventListener('touchstart', h)
-    return () => {
-      clearTimeout(t)
-      document.removeEventListener('mousedown', h)
-      document.removeEventListener('touchstart', h)
-    }
-  }, [open])
-  if (!win) return null
-
-  const label = m => {
-    const [y, mo] = String(m).split('-')
-    const d = new Date(Number(y), Number(mo) - 1, 1)
-    return Number.isFinite(d.getTime())
-      ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
-      : String(m)
-  }
-  const sel = selected || []
-  // Empty selection means "everything" everywhere else in this page, so the checkmarks
-  // have to show every month ticked rather than none.
-  const isOn = m => (sel.length ? sel.includes(m) : true)
-  // Newest first, then narrowed by the query. One derived list, so the rows, the empty
-  // state and the Enter shortcut can never disagree about what is showing.
-  //
-  // Matches the RENDERED label as well as the raw key: "aug", "2026-08" and "aug 2026" all
-  // find the same month. The label is what is on screen; the key is what someone reading a
-  // URL or a CSV export would type.
-  const needle = q.trim().toLowerCase()
-  const shown = [...months].reverse().filter(m =>
-    !needle || String(m).toLowerCase().includes(needle) || label(m).toLowerCase().includes(needle))
-
-  const suffix = win.kind === 'all-short' || win.kind === 'all'
-    ? `all ${win.total} months`
-    : win.kind === 'default'
-      ? `last ${win.count} months`
-      : `${win.count} of ${win.total}`
-
-  const activePreset = win.kind === 'default' ? win.count : (win.kind === 'all' || win.kind === 'all-short') ? 999 : null
-
-  return (
-    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        {/* Both buttons are sized to match Export, which sits next to them in the same
-            cluster: 11.5px text, 5px/11px padding, radius 8. They had been styled after
-            the chart toggle buttons, which are smaller, so the row read as two different
-            control sizes side by side. */}
-        {/* Button 1: date range */}
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 11.5, fontWeight: 600, color: C.t1, fontFamily: 'var(--font)',
-          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
-          padding: '5px 11px', whiteSpace: 'nowrap',
-        }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" />
-          </svg>
-          {win.range}
-        </span>
-        {/* Button 2: preset dropdown — active state matches selected chart button */}
-        <button onClick={() => setOpen(o => !o)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 11.5, fontWeight: open ? 700 : 600, color: C.t1, fontFamily: 'var(--font)',
-            background: open ? C.acl : C.card,
-            border: `1px solid ${open ? C.acm : C.border2}`, borderRadius: 8,
-            padding: '5px 11px', whiteSpace: 'nowrap', cursor: 'pointer',
-            transition: 'background .15s, border-color .15s',
-          }}>
-          {suffix}
-          <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
-        </button>
-      </div>
-
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
-          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
-          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
-        }}>
-          <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
-            <button onClick={() => { onRecent(); setOpen(false) }}
-              style={{
-                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
-                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
-                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
-              }}>Last {defaultCount}</button>
-            <button onClick={() => { onAll(); setOpen(false) }}
-              style={{
-                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
-                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
-                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
-              }}>All {months.length}</button>
-          </div>
-          <div style={{ padding: '7px 9px', borderBottom: `1px solid ${C.border}` }}>
-            <input
-              ref={searchRef}
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Escape') { setQ(''); e.stopPropagation() }
-                // Enter with exactly one match toggles it — the fast path for "aug<enter>".
-                if (e.key === 'Enter' && shown.length === 1) { onToggle(shown[0]); setQ('') }
-              }}
-              placeholder="Search month…"
-              style={{
-                width: '100%', boxSizing: 'border-box', fontSize: 11, fontFamily: 'var(--font)',
-                padding: '5px 8px', borderRadius: 6, color: C.t1, background: C.card,
-                border: `1px solid ${C.border2}`, outline: 'none',
-              }} />
-          </div>
-          {/* Newest first: the recent months are the ones anyone reaches for. */}
-          <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
-            {!shown.length && (
-              <div style={{ padding: '10px 11px', fontSize: 11, color: C.t3 }}>
-                No month matches “{q}”
-              </div>
-            )}
-            {shown.map(m => {
-              const on = isOn(m)
-              return (
-                <div key={m} onClick={() => onToggle(m)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 11px',
-                    fontSize: 11.5, cursor: 'pointer', color: C.t1,
-                    fontWeight: on ? 600 : 400, background: on ? C.acl : 'transparent',
-                  }}
-                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
-                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
-                  <span style={{
-                    width: 13, height: 13, borderRadius: 3, flexShrink: 0,
-                    border: `1.5px solid ${on ? C.acm : C.border2}`,
-                    background: on ? C.acc : C.card,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: C.onAcc, lineHeight: 1,
-                  }}>{on ? '✓' : ''}</span>
-                  {label(m)}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function SlabDropdown({ value, onChange, slabs }) {
   const [open, setOpen] = useState(false)
@@ -1556,7 +1424,7 @@ const W = 104
 // Why the RTO column is not comparable with Forward/Reverse. Shown on hover.
 const RTO_NOTE = "Return-to-origin leg. Six couriers (Delhivery, Ekart, ElasticRun, Shadowfax, SkyAir, Swift) bundle the original forward leg into the RTO invoice, so that portion is subtracted here: this is the return's own incremental cost, not the full invoice. Bluedart and Urbanbolt bill the return separately, so theirs passes through as-is. Not comparable with Forward and Reverse, which are full per-leg costs."
 
-export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation } = {}) {
+export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation, onMobileCtrl } = {}) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
@@ -1594,6 +1462,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   useEffect(() => {
     document.querySelector('.page-scroll')?.scrollTo({ top: 0, behavior: 'instant' })
   }, [scope])
+  // Phones (≤768px, phone landscape): the app header carries the sub-tabs, month pill, filters and
+  // "⋯" (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §1), so this page's toolbar is hidden and the sheets
+  // they open live here. Below 1024px the month picker is a bottom sheet instead of the popover.
+  const bp = useBreakpoint()
+  const costMobile = bp.width < 1024 || bp.isPhoneLandscape
+  const phoneHeader = bp.width <= 768 || bp.isPhoneLandscape
+  const [monthsOpen, setMonthsOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
 
   // Effective filters: the shared object with THIS scope's months layered on. Everything
   // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
@@ -3997,40 +3874,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     return `${scope}_${period}`
   }, [scope, filters.months])
 
-  const monthWindow = useMemo(() => {
-    const all = scopeMonths
-    const sel = (filters.months || []).length ? [...filters.months].sort() : all
-    if (!sel.length) return null
-    const label = m => {
-      const [y, mo] = String(m).split('-')
-      const d = new Date(Number(y), Number(mo) - 1, 1)
-      return Number.isFinite(d.getTime())
-        ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
-        : String(m)
-    }
-    const first = sel[0], last = sel[sel.length - 1]
-    // Four genuinely different situations, each needing its own wording. Two booleans were
-    // not enough and mislabelled two of them: with 9 months uploaded and the 6-month
-    // default it read "6 of 9 months" (sounds like the USER narrowed it), and with every
-    // month selected it read "last 9 months" (not what "last N" means).
-    //   all-short  every uploaded month is shown and there are fewer than the 6 we default
-    //              to — say so, so nobody reads the total as six months of data
-    //   all        every uploaded month is shown, and there are 6 or more
-    //   default    exactly the 6-month default out of a longer history
-    //   custom     the user picked something else
-    const isAll = sel.length === all.length
-    const isDefaultWindow = sel.length === DEFAULT_MONTH_COUNT
-      && sel.join() === all.slice(-DEFAULT_MONTH_COUNT).join()
-    const kind = isAll
-      ? (all.length < DEFAULT_MONTH_COUNT ? 'all-short' : 'all')
-      : (isDefaultWindow ? 'default' : 'custom')
-    return {
-      kind,
-      count: sel.length,
-      total: all.length,
-      range: first === last ? label(first) : `${label(first)} – ${label(last)}`,
-    }
-  }, [scopeMonths, filters.months])
 
   // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
   // that way). SearchSelect matches on the label string and echoes it into the closed
@@ -4067,6 +3910,50 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       <div>{fmtBig(kpis.shipments)} invoices · {fmtKg(kpis.chargedWt)} billed</div>
     </>
   )
+
+  // Phone header control (App → Topnav → MobilePageHeader). Built from memoised values only, so
+  // handing it up does not re-render this page into a loop.
+  const mobileMenu = useMemo(() => {
+    if (!phoneHeader) return []
+    const ready = (exportItems || []).filter(it => (it.rows?.length || 0) > 0)
+    return [
+      ...(scope === 'b2c' && onOpenAllocation ? [{ id: 'alloc', label: 'Courier allocation simulator', group: 'Views', onSelect: onOpenAllocation }] : []),
+      ...ready.map(it => ({ id: `x-${it.file}`, label: it.label, group: 'Export as CSV', onSelect: () => exportCSV(it.rows, `frido_${it.file}${exportSuffix ? `_${exportSuffix}` : ''}.csv`) })),
+      ...(rawExport ? [{ id: 'raw', label: rawExport.label, group: 'Export as CSV', onSelect: () => { rawExport.run().catch(e => window.alert(e.message)) } }] : []),
+      { id: 'info', label: 'Data information', group: 'About', onSelect: () => setInfoOpen(true) },
+    ]
+  }, [phoneHeader, scope, onOpenAllocation, exportItems, exportSuffix, rawExport])
+  // What the header shows, as plain values. It is handed up only when this text changes (allowedTabs
+  // and other props are rebuilt on every App render, so depending on them looped); the actions read
+  // the latest closures through ctrlLive.
+  const scopes = SCOPES.filter(sc => !allowedTabs || allowedTabs.includes(`logistics:cost:${sc.id}`) || allowedTabs.includes('logistics:cost')).map(sc => ({ id: sc.id, label: sc.label }))
+  const stripItems = costStripItems(scope, filters, { bands: WEIGHT_BANDS, slabLabelOf: s => `${s} kg` })
+  const ctrlView = {
+    scope, scopes,
+    pill: monthsLabel(filters.months, scopeMonths, { short: true }),
+    caption: `Billing months · ${monthsLabel(filters.months, scopeMonths)}`,
+    hasFilters: costHasFilters(scope),
+    filterCount: costFilterCount(scope, filters),
+    stripItems,
+    menu: mobileMenu.map(m => ({ id: m.id, label: m.label, group: m.group })),
+  }
+  const ctrlKey = phoneHeader ? JSON.stringify(ctrlView) : ''
+  const ctrlLive = useRef(null)
+  useEffect(() => { ctrlLive.current = { setFilters, scope, mobileMenu } })
+  useEffect(() => {
+    if (!onMobileCtrl) return
+    if (!ctrlKey) { onMobileCtrl(null); return }
+    const v = JSON.parse(ctrlKey)
+    onMobileCtrl({
+      ...v,
+      setScope,
+      openMonths: () => setMonthsOpen(true),
+      openFilters: v.hasFilters ? () => setFiltersOpen(true) : null,
+      strip: { items: v.stripItems, onRemove: key => ctrlLive.current.setFilters(costRemove(key)), onClear: () => ctrlLive.current.setFilters(costClear(ctrlLive.current.scope)) },
+      menu: v.menu.map(m => ({ ...m, onSelect: () => ctrlLive.current.mobileMenu.find(x => x.id === m.id)?.onSelect() })),
+    })
+  }, [onMobileCtrl, ctrlKey])
+  useEffect(() => () => onMobileCtrl?.(null), [onMobileCtrl])
 
   const sidebar = (
     <div style={{ width: sidebarOpen ? 220 : 0, minWidth: sidebarOpen ? 220 : 0, transition: 'width .25s ease, min-width .25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -6932,6 +6819,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 24px 40px 14px' }}>
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
+          {!phoneHeader && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
             <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
               {SCOPES.filter(sc => !allowedTabs || allowedTabs.includes(`logistics:cost:${sc.id}`) || allowedTabs.includes('logistics:cost')).map(sc => {
@@ -7017,21 +6905,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   everywhere else on this page, so onAll clears rather than listing every
                   month — that keeps the request on the prewarmed {billing:"all"} cache key
                   instead of minting a new one for an equivalent selection. */}
-              <PeriodChip
-                window={monthWindow}
-                months={scopeMonths}
-                selected={filters.months}
-                onToggle={m => setFilters(f => {
-                  const all = scopeMonths
-                  const cur = (f.months || []).length ? f.months : all
-                  const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
-                  return { ...f, months: next.length === all.length || !next.length ? [] : next }
-                })}
-                onAll={() => setOne('months', [])}
-                onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
-                onOne={n => setOne('months', (scopeMonths).slice(-n))}
-                defaultCount={DEFAULT_MONTH_COUNT}
-              />
+              {/* MonthRangePicker (§1a): same output as the old checkbox dropdown — 'YYYY-MM' list,
+                  [] only for "All available" or every month on offer. */}
+              <MonthRangePicker months={scopeMonths} value={filters.months} onApply={v => setOne('months', v)} variant={costMobile ? 'sheet' : 'popover'} />
               {/* Export sits to the RIGHT of the chip: the chip says what period is in
                   view, and this exports exactly that. Last in the cluster so it reads as
                   the action after the state. */}
@@ -7039,6 +6915,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
+          )}
           {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
               no layout jump, per the interaction rules. */}
           <div style={{ opacity: loading && agg ? 0.55 : 1, transition: 'opacity .18s ease' }}>
@@ -7046,6 +6923,17 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           </div>
         </div>
       </div>
+      {phoneHeader && (<>
+        <MonthRangePicker variant="sheet" open={monthsOpen} onClose={() => setMonthsOpen(false)} months={scopeMonths} value={filters.months} onApply={v => setOne('months', v)} />
+        {costHasFilters(scope) && (
+          <CostFilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} scope={scope} filters={filters} setFilters={setFilters} opts={opts}
+            tplPartnerOpts={tplPartnerOpts} tplSiteOpts={tplSiteOpts} tplLocationOpts={tplLocationOpts} slabOptions={slabOptions} slabLabelOf={slabLabelOf} bands={WEIGHT_BANDS} logos={COURIER_LOGOS} />
+        )}
+        <BottomSheet open={infoOpen} onClose={() => setInfoOpen(false)} title="Data information">
+          <DataInfo sheet scope={scope} health={agg?.health} months={opts.months} b2bMonths={b2b?.varMonths} b2bTotals={b2b?.totals}
+            couriers={opts.couriers} transporters={opts.transporters} tplMonths={b2b?.tplWhMonths} tplTotals={tpl?.totals} />
+        </BottomSheet>
+      </>)}
     </div>
   )
 }

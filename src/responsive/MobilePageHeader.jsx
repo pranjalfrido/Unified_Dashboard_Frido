@@ -10,10 +10,12 @@ import FilteredStrip from './FilteredStrip.jsx'
 //   row 2  chips: horizontally scrolling choices (channels, platforms…), active = white chip;
 //          `chipsRight` sits at the row's end (the filter icon with its count)
 //   row 3  subTabs: underline tabs, only when the current choice has them; `subRight` at the end ("⋯")
+//   row 3b subTabs2: a slim second level under row 3 (Logistics → Cost: Overview · B2C · FTL/PTL · 3PL),
+//          evenly spaced 12px text tabs, active = white bold with a short centred underline
 //   row 4  strip: the "Filtered:" strip (FilteredStrip props), only when filters are active
 // The first row keeps the plain top bar's height and spacing, so a page that only uses row 1 looks
 // exactly like it did before this component.
-export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, strip }) {
+export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, strip }) {
   const chipRow = useRef(null)
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
@@ -69,8 +71,23 @@ export default function MobilePageHeader({ title, sub, caption, right, chips, ac
           {subRight && <div style={{ paddingBottom: 4 }}>{subRight}</div>}
         </div>
       )}
+      {subTabs2?.length > 0 && (
+        <div role="tablist" aria-label="Section" className="mph-tabs2" style={{ display: 'flex', height: 26, borderTop: '1px solid rgba(255,255,255,.12)' }}>
+          {subTabs2.map(t => {
+            const on = t.id === activeSub2
+            return (
+              <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => onSub2(t.id)}
+                style={{ position: 'relative', flex: '1 1 0', minWidth: 0, border: 'none', background: 'none', padding: 0, fontSize: 12, fontWeight: on ? 700 : 600, fontFamily: 'var(--font)', cursor: 'pointer',
+                  color: on ? '#fff' : 'rgba(255,255,255,.62)', whiteSpace: 'nowrap' }}>
+                {t.label}
+                {on && <span aria-hidden="true" style={{ position: 'absolute', left: '50%', bottom: 2, width: 24, height: 2, marginLeft: -12, borderRadius: 2, background: '#fff' }} />}
+              </button>
+            )
+          })}
+        </div>
+      )}
       {hasStrip && <FilteredStrip {...strip} tone="dark" />}
-      {(chips?.length > 0 || subTabs?.length > 0) && !hasStrip && <div aria-hidden="true" style={{ height: 8 }} />}
+      {(chips?.length > 0 || subTabs?.length > 0) && !subTabs2?.length && !hasStrip && <div aria-hidden="true" style={{ height: 8 }} />}
     </>
   )
 }
