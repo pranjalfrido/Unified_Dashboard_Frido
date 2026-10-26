@@ -16,7 +16,7 @@ export default function SegmentedToolbar({ segments, label = 'View options' }) {
     <div role="toolbar" aria-label={label} style={{ display: 'flex', alignItems: 'stretch', height: 38, background: M.soft, borderRadius: 10, padding: 3, gap: 0 }}>
       {segments.map((s, i) => (
         <span key={s.id} style={{ display: 'flex', flex: '1 1 0', minWidth: 0, alignItems: 'stretch' }}>
-          {i > 0 && <span aria-hidden="true" style={{ width: 1, margin: '7px 0', background: s.active || segments[i - 1].active ? 'transparent' : '#dcd8cf' }} />}
+          {i > 0 && <span aria-hidden="true" style={{ width: 1, margin: '7px 0', background: s.active || segments[i - 1].active ? 'transparent' : M.g4 }} />}
           <button type="button" aria-label={s.label} aria-haspopup="dialog" onClick={s.onClick}
             style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--font)',
               fontSize: 12.5, fontWeight: 600, color: s.active ? M.green : M.ink, background: s.active ? '#fff' : 'transparent', boxShadow: s.active ? '0 1px 3px rgba(0,0,0,.10)' : 'none', padding: '0 6px' }}>

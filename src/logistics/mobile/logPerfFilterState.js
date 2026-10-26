@@ -10,11 +10,6 @@ const LIST_KEYS = Object.keys(PERF_LABELS)
 export function perfFilterCount(f) {
   return Object.entries(f || {}).reduce((n, [k, v]) => (k === 'shipmentType' || k === 'sddNdd' ? n : n + (Array.isArray(v) ? v.length : v ? 1 : 0)), 0)
 }
-export const perfCaption = f => {
-  const dir = f?.shipmentType === 'reverse' ? 'Reverse' : f?.shipmentType === 'forward' ? 'Forward' : 'Forward + Reverse'
-  const type = f?.sddNdd === 'Regular' ? 'Regular shipments' : f?.sddNdd === 'SDD/NDD' ? 'SDD/NDD shipments' : 'All shipments'
-  return `${dir} · ${type}`
-}
 export const perfStripItems = f => LIST_KEYS.filter(k => f?.[k]?.length).map(k => ({ key: k, label: `${PERF_LABELS[k]}: ${f[k].length > 1 ? `${f[k][0]} +${f[k].length - 1}` : f[k][0]}` }))
 export const perfRemove = (set, key) => set(p => ({ ...p, [key]: [], ...(key === 'category' ? { subCategory: [] } : {}) }))
 export const perfClear = set => set(p => ({ ...p, ...Object.fromEntries(LIST_KEYS.map(k => [k, []])) }))

@@ -13,7 +13,7 @@
 
 ## 1. Header (`MobilePageHeader`)
 - Title **"Logistics"**, underline sub-tabs **Performance / Cost** (replaces the sidebar sub-menu on phones).
-- Line under the title: Performance → current direction · shipment type ("Forward · Regular shipments"); Cost → "Billing months · Apr – Jul 2026" (from the selection).
+- Line under the title: Performance → none (removed on request, 2026-10-26; direction and shipment type are in the filter sheet and the Filtered strip); Cost → "Billing months · Apr – Jul 2026" (from the selection).
 - Date pill: Performance = date range; Cost = billing months via the shared **`MonthRangePicker`** (see 1a).
 - Cost only: **Overview · B2C · FTL/PTL · 3PL** as a **slim, minimal row** (≈26px tall, 4 evenly spaced text tabs, 12px semibold): inactive = plain soft-white text with no background or border; active = white bold text with a **short 2px white underline (≈24px, centred)**, the same selection style as the Performance / Cost tabs but smaller, so the two levels read as main and sub tabs. No boxes or pills. A hairline divider separates the two rows.
 - Filter icon with count → `FilterSheet`:

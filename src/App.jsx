@@ -44,7 +44,7 @@ import { invCaption } from './inventory/mobile/invCaption.js'
 import LogPerfFilterButton from './logistics/mobile/LogPerfFilters.jsx'
 import PerfMobile from './logistics/mobile/PerfMobile.jsx'
 import { HeaderFilterIcon, HeaderMonthPill } from './logistics/mobile/LogHeaderBits.jsx'
-import { perfCaption, perfStripItems, perfRemove, perfClear } from './logistics/mobile/logPerfFilterState.js'
+import { perfStripItems, perfRemove, perfClear } from './logistics/mobile/logPerfFilterState.js'
 import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
@@ -4947,7 +4947,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       const menu = <ActionMenu items={logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : []} title="Logistics · Performance" />
       return (
         <div className="topnav m-header" data-page={page}>
-          <MobilePageHeader title="Logistics" caption={perfCaption(lFilters)}
+          <MobilePageHeader title="Logistics"
             right={<>
               <div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={logisticsFilterUI?.onRefresh || onRefresh} loading={logisticsFilterUI ? logisticsFilterUI.loading : loading} /></div>
               <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />
