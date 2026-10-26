@@ -6,7 +6,8 @@ import InfoStrip from '../responsive/InfoStrip.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import CompactRankRow from '../responsive/CompactRankRow.jsx'
 import MobileRankedList from '../responsive/MobileRankedList.jsx'
-import { Card, Chips, KV } from '../responsive/CardKit.jsx'
+import BottomSheet from '../responsive/BottomSheet.jsx'
+import { Card, Chips, KV, ShowAllButton } from '../responsive/CardKit.jsx'
 import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
@@ -185,6 +186,43 @@ function CategoryCard({ data, basis, period }) {
   )
 }
 
+// ── Return reasons (CIR): the desktop "Return Reasons · Detail" (reason → sub-reasons, Total) ──
+// Every reason row is a CIR order (confirmed for 1–25 Oct 2026, RETURN_ANALYSIS_PLAN.md §2).
+function ReasonsCard({ reasons = [], period }) {
+  const [all, setAll] = useState(false)
+  const [sel, setSel] = useState(null)
+  const totalCount = reasons.reduce((s, r) => s + r.count, 0)
+  const totalRev = reasons.reduce((s, r) => s + (r.revenueImpact || 0), 0)
+  const m = {}
+  reasons.forEach(r => {
+    const g = m[r.reason] || (m[r.reason] = { reason: r.reason, count: 0, revenueImpact: 0, subReasons: [] })
+    g.count += r.count; g.revenueImpact += r.revenueImpact; g.subReasons.push(r)
+  })
+  const grouped = Object.values(m).sort((a, b) => b.count - a.count)
+  const shown = all ? grouped : grouped.slice(0, 6)
+  const mx = grouped[0]?.count || 1
+  const share = c => (totalCount ? (c / totalCount * 100).toFixed(1) : '0.0')
+  return (
+    <Card title="Return reasons (CIR)" sub="Orders · share · revenue impact">
+      {grouped.length ? shown.map((r, i) => (
+        <CompactRankRow key={r.reason} name={r.reason} value={fmtN(r.count)} pct={`${share(r.count)}% · ${fmt(r.revenueImpact)}`} barPct={(r.count / mx) * 100}
+          last={i === shown.length - 1} onClick={() => setSel(r)} />
+      )) : <div style={{ fontSize: 13, color: M.muted, padding: '8px 0' }}>No data for this period</div>}
+      {grouped.length > 6 && <ShowAllButton onClick={() => setAll(a => !a)}>{all ? 'Show top 6' : `Show all ${grouped.length} reasons`}</ShowAllButton>}
+      {grouped.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 10, padding: '9px 12px', borderRadius: M.radius.tile, background: M.soft, fontSize: M.type.listValue, fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>
+          <span>Total</span><span>{fmtN(totalCount)} · {fmt(totalRev)}</span>
+        </div>
+      )}
+      <BottomSheet open={!!sel} onClose={() => setSel(null)} title={sel?.reason || ''} subtitle={sel ? `${fmtN(sel.count)} orders · ${share(sel.count)}% · ${fmt(sel.revenueImpact)} · ${period}` : ''}>
+        {sel && [...sel.subReasons].sort((a, b) => b.count - a.count).map((s, i, a) => (
+          <CompactRankRow key={s.subReason} name={s.subReason} value={fmtN(s.count)} pct={`${share(s.count)}% · ${fmt(s.revenueImpact)}`} barPct={(s.count / (a[0]?.count || 1)) * 100} last={i === a.length - 1} />
+        ))}
+      </BottomSheet>
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -212,6 +250,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <PaymentCard rows={data.paymentTypeTable} basis={basis} />}
       {data && <TopProductsCard data={data} basis={basis} paymentType={topProductsPaymentType} setPaymentType={setTopProductsPaymentType} period={period} />}
       {data && <CategoryCard data={data} basis={basis} period={period} />}
+      {data && <ReasonsCard reasons={data.returnReasons} period={period} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
