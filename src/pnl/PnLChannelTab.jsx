@@ -3,7 +3,15 @@ import { C, fmtN, pct } from '../utils.js'
 import { fmtSigned as fmt } from './pnlUtils.js'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
 
+// value === NOT_AVAILABLE (a card with no number): no sparkline, compact muted text that fits a 375px row.
+// One wording per meaning on the KPI cards (fix/pnl-data): "Not available" = no number can be shown
+// (no data source, tab in progress, or an input it needs is missing); "—" only on ▲/▼ badges
+// (nothing to compare).
+const NOT_AVAILABLE = 'Not available'
+
 function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
+  const unavailable = value === NOT_AVAILABLE
+  if (unavailable) sparkData = []
   const pts = sparkData.slice(-14).map(v => (v == null || isNaN(v)) ? null : v)
   const valid = pts.filter(v => v !== null)
   const min = valid.length ? Math.min(...valid) : 0
@@ -37,7 +45,9 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
             <path d={path} fill="none" stroke={spark} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
           </svg>
         : <div style={{ width: W, flexShrink: 0 }} />}
-      <div style={{ width: 90, fontSize: 15, fontWeight: 800, color: accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{value}</div>
+      <div style={unavailable
+        ? { width: 90, fontSize: 12, fontWeight: 600, color: C.t3, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }
+        : { width: 90, fontSize: 15, fontWeight: 800, color: accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   )
 }
@@ -421,16 +431,16 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
 
   const mobKpisWithSummary = [
     { label: 'Gross Revenue', value: fmt(gross), spark: revSpark },
-    { label: 'Returns', value: returnsNotCaptured ? 'Not available' : fmt(returnRev), spark: returnSpark, accent: !returnsNotCaptured && !noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
+    { label: 'Returns', value: returnsNotCaptured ? NOT_AVAILABLE : fmt(returnRev), spark: returnSpark, accent: !returnsNotCaptured && !noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
     { label: 'Net Revenue', value: fmt(net), spark: netSpark },
-    { label: 'COGS', value: kpiSummary?.cogs != null ? fmt(kpiSummary.cogs) : '—', spark: cogsSpark },
-    { label: 'Gross Margin', value: kpiSummary?.gm != null ? fmt(kpiSummary.gm) : '—', spark: gmSpark },
-    { label: 'SnD Cost', value: kpiSummary?.snd != null ? fmt(kpiSummary.snd) : '—', spark: sndSpark },
-    { label: 'CM1', value: kpiSummary?.cm1 != null ? fmt(kpiSummary.cm1) : '—', spark: cm1Spark, accent: negAccent(kpiSummary?.cm1) },
+    { label: 'COGS', value: kpiSummary?.cogs != null ? fmt(kpiSummary.cogs) : NOT_AVAILABLE, spark: cogsSpark },
+    { label: 'Gross Margin', value: kpiSummary?.gm != null ? fmt(kpiSummary.gm) : NOT_AVAILABLE, spark: gmSpark },
+    { label: 'SnD Cost', value: kpiSummary?.snd != null ? fmt(kpiSummary.snd) : NOT_AVAILABLE, spark: sndSpark },
+    { label: 'CM1', value: kpiSummary?.cm1 != null ? fmt(kpiSummary.cm1) : NOT_AVAILABLE, spark: cm1Spark, accent: negAccent(kpiSummary?.cm1) },
     ...(showMarketing ? [
-      { label: spendAllocated ? 'Mktg (allocated)' : 'Mktg Spend', value: kpiSummary?.spend != null ? fmt(kpiSummary.spend) : 'Not available', spark: spendSpark },
-      ...(spendAllocated ? [] : [{ label: 'ROAS', value: kpiSummary?.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—', spark: revSpark, accent: kpiSummary?.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined }]),
-      { label: 'CM2', value: kpiSummary?.cm2 != null ? fmt(kpiSummary.cm2) : '—', spark: cm2Spark, accent: negAccent(kpiSummary?.cm2) },
+      { label: spendAllocated ? 'Mktg (allocated)' : 'Mktg Spend', value: kpiSummary?.spend != null ? fmt(kpiSummary.spend) : NOT_AVAILABLE, spark: spendSpark },
+      ...(spendAllocated ? [] : [{ label: 'ROAS', value: kpiSummary?.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : NOT_AVAILABLE, spark: revSpark, accent: kpiSummary?.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined }]),
+      { label: 'CM2', value: kpiSummary?.cm2 != null ? fmt(kpiSummary.cm2) : NOT_AVAILABLE, spark: cm2Spark, accent: negAccent(kpiSummary?.cm2) },
     ] : []),
   ]
   const mobKpisSimple = [
@@ -492,16 +502,16 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
             {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" plain />}
             <KPICard label="Net Revenue" value={fmt(net)} sub={returnsNotCaptured ? '= Gross ex GST (returns not captured)' : netSub ? netSub : gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
             {returnsNotCaptured
-              ? <KPICard label="Returns" value="Not available" sub="Not captured for this channel" plain />
+              ? <KPICard label="Returns" value={NOT_AVAILABLE} sub="Not captured for this channel" plain />
               : <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />}
-            <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of ${onNet ? 'actual net' : 'Net Rev'}`} badge={cogsBadge} plain />
-            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Gross Margin<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'Gross Margin'} value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}${kpiSummary.gmPct != null ? onNet : ''}`} badge={gmBadge} plain />
-            <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of ${onNet && kpiSummary.sndPct != null ? 'actual net' : 'Net Rev'}`} badge={sndBadge} plain />
-            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>CM1<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'CM1'} value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}${kpiSummary.cm1Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
+            <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : NOT_AVAILABLE} sub={kpiSummary.cogs != null ? `${fmtPctSub(kpiSummary.cogsPct)} of ${onNet ? 'actual net' : 'Net Rev'}` : undefined} badge={cogsBadge} plain />
+            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Gross Margin<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'Gross Margin'} value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : NOT_AVAILABLE} sub={kpiSummary.gm != null ? `GM% ${fmtPctSub(kpiSummary.gmPct)}${kpiSummary.gmPct != null ? onNet : ''}` : undefined} badge={gmBadge} plain />
+            <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : NOT_AVAILABLE} sub={kpiSummary.snd != null ? `${fmtPctSub(kpiSummary.sndPct)} of ${onNet && kpiSummary.sndPct != null ? 'actual net' : 'Net Rev'}` : undefined} badge={sndBadge} plain />
+            <KPICard label={marginInfo ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>CM1<InfoPopover title="Credit notes" text={marginInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} /></span> : 'CM1'} value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : NOT_AVAILABLE} sub={kpiSummary.cm1 != null ? `CM1% ${fmtPctSub(kpiSummary.cm1Pct)}${kpiSummary.cm1Pct != null ? onNet : ''}` : undefined} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
             {showMarketing && <>
-              <KPICard label={spendAllocated ? 'Mktg (allocated 1.5% of Net)' : 'Mktg Spend'} value={kpiSummary.spend != null ? fmt(kpiSummary.spend) : 'Not available'} sub={kpiSummary.spend != null ? `${fmtPctSub(kpiSummary.spendPct)} of Net Rev` : 'No ad spend source'} badge={spendBadge} plain />
-              {!spendAllocated && <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />}
-              <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}${kpiSummary.cm2Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
+              <KPICard label={spendAllocated ? 'Mktg (allocated 1.5% of Net)' : 'Mktg Spend'} value={kpiSummary.spend != null ? fmt(kpiSummary.spend) : NOT_AVAILABLE} sub={kpiSummary.spend != null ? `${fmtPctSub(kpiSummary.spendPct)} of Net Rev` : 'No ad spend source'} badge={spendBadge} plain />
+              {!spendAllocated && <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : NOT_AVAILABLE} sub={kpiSummary.roas != null ? 'Gross Rev (Ex GST) / Spend' : undefined} accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />}
+              <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : NOT_AVAILABLE} sub={kpiSummary.cm2 != null ? `CM2% ${fmtPctSub(kpiSummary.cm2Pct)}${kpiSummary.cm2Pct != null ? onNet : ''}` : undefined} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
             </>}
           </div>
         </div>
