@@ -38,6 +38,9 @@ import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
 import MixBar from './responsive/MixBar.jsx'
+import WatchlistCard from './responsive/WatchlistCard.jsx'
+import { computeCustomerRules } from './customer/customerRules.js'
+import { SEG_META, GRID_PLACEMENT } from './customer/customerDefs.js'
 import AdsLaptopSections from './ads/AdsSections.jsx'
 import AdsMobileView from './ads/AdsMobileView.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
@@ -17266,6 +17269,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   })
 
   const rfmTotal = rfm.reduce((s, r) => s + (r.customers || 0), 0)
+  const custWatch = computeCustomerRules(custData, filters?.end)
 
   const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
   const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
@@ -17541,6 +17545,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 )
               })()}
 
+
+              {/* B2.1 Customer health watchlist: tap a rule → the sub-tab that explains it */}
+              {custWatch && <WatchlistCard result={custWatch} channel="Customer" title="Customer health watchlist" onRule={id => { const t = custWatch.rules.find(r => r.id === id)?.target; if (t && t !== 'overview') setActiveTab(t) }} />}
 
               {/* Metric tables */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -18961,36 +18968,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }
 
           // ── RFM segment taxonomy ────────────────────────────────
-          const SEG_META = {
-            'Champions':           { action: 'REWARD VIP',       actionBg: '#1f5a3d', actionColor: '#fff', desc: 'Bought recently, buy often, spend the most',         tooltip: 'Bought very recently, buy most often, and spend the most. Your best customers right now. Reward with VIP perks, early access, and referral programs.',             actionTooltip: 'Bought very recently, buy most often, spend the most. Your best customers right now. → Reward VIP: loyalty perks, early access, referral programs.',           gridTooltip: 'Buy often + bought recently. These are your best customers right now.' },
-            'Loyal Customers':     { action: 'UPSELL',            actionBg: '#2f6e4d', actionColor: '#fff', desc: 'Regular buyers with strong lifetime value',          tooltip: 'Buy regularly with good frequency and decent lifetime value. Not top spenders but very reliable. Introduce premium products or bundles to grow their basket.',    actionTooltip: 'Buy regularly, decent frequency, good lifetime value. Not top spenders but reliable. → Upsell: introduce premium products or bundles.',                        gridTooltip: 'Frequent buyers but not as recent as Champions. Still very valuable — buy often, just need a nudge to come back sooner.' },
-            'Potential Loyalists': { action: 'NURTURE',           actionBg: '#5f8f75', actionColor: '#fff', desc: 'Recent customers with repeat potential',             tooltip: 'Recent buyers who have purchased more than once and show signs of becoming loyal. Keep them engaged and build the habit before they go cold.',                  actionTooltip: 'Recent buyers with repeat potential — bought more than once, good recency. On track to become Champions. → Nurture: keep them engaged, build the habit.',      gridTooltip: 'Bought recently but not yet frequent. On track to become Champions if nurtured well. Keep them engaged.' },
-            'New Customers':       { action: 'NUDGE 2ND ORDER',   actionBg: '#5f8f75', actionColor: '#fff', desc: 'Bought recently for the first time',                 tooltip: 'Made their first purchase recently. Critical window — nudge them towards a second order quickly to increase retention odds.',                                    actionTooltip: 'Bought recently for the first time. Critical window. → Nudge 2nd order quickly to increase retention odds.',                                                   gridTooltip: 'First-time buyers. Critical window — push for a 2nd order before they forget about you.' },
-            'Promising':           { action: 'NUDGE 2ND ORDER',   actionBg: '#5f8f75', actionColor: '#fff', desc: 'Recent buyers, low frequency so far',                tooltip: 'Bought recently but only once or twice. Still forming habits. Nurture with targeted offers to convert them into regulars.',                                        actionTooltip: 'Recent buyers, low frequency so far. Still forming habits. → Nudge towards next order while purchase intent is still fresh.',                                  gridTooltip: 'Bought recently, low frequency so far. Still forming habits. Targeted offers can convert them to regulars.' },
-            'Need Attention':      { action: 'REVIEW',            actionBg: '#7b847f', actionColor: '#fff', desc: 'Above average but haven\'t bought recently',         tooltip: 'Had above-average scores before but recency is dropping. At a tipping point — re-engage now before they drift into hibernation.',                                  actionTooltip: 'Customers that don\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency. → Review: analyze deeper before deciding.',                   gridTooltip: 'Mixed signals — recency is dropping. At a tipping point, re-engage now before they drift to hibernation.' },
-            'About To Sleep':      { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Below average — at risk of going dormant',           tooltip: 'Recency and frequency are both declining. On the verge of going fully dormant. A timely win-back offer could recover them.',                                     actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.',                                  gridTooltip: 'Recency and frequency both declining. On the verge of going fully dormant. A timely offer can still recover them.' },
-            'At Risk':             { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Bought often before but not recently',               tooltip: 'Used to buy frequently but have not returned in a while. High churn risk. Personalised win-back campaign recommended urgently.',                                  actionTooltip: 'Used to buy frequently but not recently. High churn risk. → Win-back: personalised campaign referencing their past purchases.',                                gridTooltip: 'Used to buy often but disappeared recently. High churn risk — personalised win-back urgently needed.' },
-            'Cannot Lose Them':    { action: 'URGENT SAVE',       actionBg: '#c0392b', actionColor: '#fff', desc: 'Used to be champions — haven\'t returned',          tooltip: 'Previously your best customers — high spend, high frequency — but they have stopped buying. Most dangerous segment. Reach out immediately with high-value offers.', actionTooltip: 'Previously your best customers — high spend, high frequency — but stopped buying. Most dangerous segment. → Urgent Save: reach out immediately, high priority.', gridTooltip: 'Rare buyers now, but used to be champions. Most dangerous segment — high value at risk. Reach out immediately.' },
-            'Hibernating':         { action: 'WIN-BACK',          actionBg: '#7b847f', actionColor: '#fff', desc: 'Last purchase was long ago, low frequency',          tooltip: 'Bought a long time ago and have not come back. Not fully churned yet but going very cold. Win-back campaigns like "we miss you" discounts can reactivate them.',  actionTooltip: 'Bought a long time ago, haven\'t come back. Low frequency, long gap since last order. Not fully churned yet but going cold fast. → Win-Back: discounts, "we miss you" emails.', gridTooltip: 'Rarely bought + last purchase was long ago. Not fully churned yet — "we miss you" campaigns can reactivate them.' },
-            'Lost':                { action: 'WIN-BACK',          actionBg: '#9aa39e', actionColor: '#fff', desc: 'Lowest recency, frequency and monetary scores',      tooltip: 'Lowest scores across all three RFM dimensions. Effectively churned. Low ROI to pursue, but a small reactivation campaign may recover a fraction.',               actionTooltip: 'Lowest scores across all RFM dimensions. Effectively churned. → Win-back with a single low-cost campaign; do not invest heavily.',                             gridTooltip: 'Lowest scores on all three dimensions. Effectively churned. Low ROI to pursue — one small campaign is all worth trying.' },
-            'Recent Users':        { action: 'REVIEW',            actionBg: '#9aa39e', actionColor: '#fff', desc: 'Bought recently but low frequency',                   tooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. Need nurturing before they go cold.',                                              actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.' },
-            'Others':              { action: 'REVIEW',            actionBg: '#9aa39e', actionColor: '#fff', desc: 'Mixed signals — doesn\'t fit standard RFM buckets',   tooltip: 'Customers that don\'t fit cleanly into standard RFM buckets — mixed signals on recency, frequency, and monetary. Analyze deeper before deciding on action.',    actionTooltip: 'Doesn\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency/monetary. → Review: analyze this group deeper before deciding on action.' },
-          }
 
           // ── RFM Grid placement (3×3) ────────────────────────────
-          const GRID_PLACEMENT = {
-            'Champions':           { row: 0, col: 0 },
-            'Loyal Customers':     { row: 0, col: 1 },
-            'Potential Loyalists': { row: 1, col: 0 },
-            'New Customers':       { row: 0, col: 2 },
-            'Promising':           { row: 1, col: 2 },
-            'Need Attention':      { row: 1, col: 1 },
-            'About To Sleep':      { row: 2, col: 0 },
-            'At Risk':             { row: 1, col: 0 },
-            'Cannot Lose Them':    { row: 2, col: 1 },
-            'Hibernating':         { row: 2, col: 2 },
-            'Lost':                { row: 2, col: 2 },
-          }
 
           // ── RSCard component ────────────────────────────────────
           const RSCard = ({ title, sub, action, children, infoTooltip }) => (
