@@ -92,3 +92,4 @@ All 12 are in `RETURN_ANALYSIS_PLAN.md`. The ones that change what you see:
 ## Follow-up (2026-10-26, after review)
 - Category view: rows without the empty gap (compact rows when Category is selected); no focus ring after a tap.
 - Cancellation chart overcount found and fixed with your OK ("count once, keep 6 months"): each cancelled order now counted once, under its main product. Monthly totals = real distinct cancelled D2C orders (May 4,233 · Jun 4,861 · Jul 7,132 · Aug 9,019 · Sep 6,379 · Oct 5,434; was 4,949 … 6,716). Desktop + mobile. Also on `fix/return-analysis-cancel-count` (from main) for the main route, waiting for your OK.
+- Master card tiles reordered on request: Revenue first (default hero), then Return %, Cancel %, RTO %, CIR %, Exchange %. No black focus ring on the selected tile.

@@ -65,6 +65,8 @@ function MasterCard({ data, filters, layout }) {
   ]
   // The chart's point keys: the API's daily rows carry totalReturnPct for Return %.
   metrics[0].point = r => r.totalReturnPct
+  // Order as the desktop tiles: Revenue first (the default hero), then Return %, then the rest.
+  metrics.unshift(metrics.pop())
   const since = immatureSince(filters.end)
   return (
     <MasterTrendCard metrics={metrics} rawRows={data.dailyTrend || []} groupTrend={groupReturnTrend} start={filters.start} end={filters.end} layout={layout}
