@@ -8,6 +8,7 @@ import CostFilterSheet from './logistics/mobile/CostFilters.jsx'
 import { costFilterCount, costHasFilters, costStripItems, costRemove, costClear } from './logistics/mobile/costFilterState.js'
 import { monthsLabel } from './responsive/monthRange.js'
 import CostOverviewMobile from './logistics/mobile/CostOverviewMobile.jsx'
+import CostB2CMobile from './logistics/mobile/CostB2CMobile.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -6810,6 +6811,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (scope === 'all' && overall) {
       mob = <CostOverviewMobile overall={overall} months={ovTrendWindow} trendWindow={ovTrendMonths} setTrendWindow={setOvTrendMonths}
         b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout} />
+    }
+    if (scope === 'b2c' && agg && kpis) {
+      mob = <CostB2CMobile kpis={kpis} agg={agg} mom={mom} heroDeltas={heroDeltas} reverseBurden={reverseBurden} trendRows={trendRows} trendWindow={trendWindow}
+        trendMonths={trendMonths} setTrendMonths={setTrendMonths} fmtKg={fmtKg} courierRows={courierRows} zoneRows={zoneRowsShown} modeRows={modeRows}
+        zoneSub={zoneSub} setZoneSub={setZoneSub} zoneSubOptions={zoneSubOptions} slabRows={slabRows} bandRows={bandRows} driftRows={driftRows}
+        costToServe={costToServe} activeCell={activeCell} lflOptions={lflOptions} layout={mobileLayout}
+        lfl={{ zones: lflZones, setZones: setLflZones, bands: lflBands, setBands: setLflBands, legs: lflLegs, setLegs: setLflLegs, slab: lflSlab, setSlab: setLflSlab }} />
     }
     if (mob) content = <div className="log-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, background: BASE_C.m.bg, color: BASE_C.m.ink, padding: phoneHeader ? '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' : '4px 0 24px' }}>{mob}</div>
   }
