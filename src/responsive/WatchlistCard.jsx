@@ -13,7 +13,9 @@ const dotColor = r => (r.red ? M.down : M.amber)
 // Optional per rule (Ads): line (custom sub-line), revLabel (instead of 'rev'), valueText (shown instead of the
 // product count, e.g. '33.4%' for a channel-level rule; such a rule has no product list to open).
 const impactLine = r => r.line ?? (r.count ? `${fmtSigned(r.impact)} ${r.what} · ${fmtSigned(r.revenue)} ${r.revLabel || 'rev'}` : 'All clear for this period')
-const hasList = r => r.count > 0 && (r.items?.length ?? 0) > 0
+// target (optional, Customer / Support): a channel-level rule with no product list; tapping it calls
+// onRule / onOpenRule(id) so the page can jump to the section that explains it.
+const hasList = r => r.count > 0 && ((r.items?.length ?? 0) > 0 || !!r.target)
 
 // lines (optional): the rule list to show; default = the P&L bars (PNL_RULE_BARS) of `bars`.
 function RulesPopover({ bars, channel, lines: given }) {
@@ -50,10 +52,11 @@ export default function WatchlistCard({ result, channel, variant = 'laptop', act
   if (!result) return null
   const { rules, triggered, flaggedProducts, smallCount, bars } = result
   const total = rules.length + pendingPrev.length
-  const header = `${triggered} of ${total} rule${total === 1 ? '' : 's'} triggered · ${flaggedProducts} product${flaggedProducts === 1 ? '' : 's'}`
+  // headerText (optional): replaces the product count line (rules without products)
+  const header = result.headerText ?? `${triggered} of ${total} rule${total === 1 ? '' : 's'} triggered · ${flaggedProducts} product${flaggedProducts === 1 ? '' : 's'}`
 
   if (variant === 'mobile') {
-    return <WatchlistMobile title={title} rules={rules} header={`${triggered} of ${total} rules · ${bars.label} bars`} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
+    return <WatchlistMobile title={title} rules={rules} header={result.headerText ?? `${triggered} of ${total} rules · ${bars.label} bars`} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
   }
   return (
     <div className="kpi-card" style={{ padding: '14px 16px' }}>

@@ -21074,7 +21074,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'customer-support' && (!allowedTabs || allowedTabs.includes('customer:support')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} />
+              <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} onNavigate={dest => (dest === 'returns' ? goTo('sales', 'shopify', 'return_analysis') : setPage('logistics'))} />
             </div>
           )}
           {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (

@@ -59,6 +59,26 @@ export const ADS_RULES = {
   cpcUpPct: 15,               // 'CPC up': ▲ at least this % vs the previous period
 }
 
+// Customer health watchlist (CUSTOMER_MASTER_PLAN.md Part B §B2.1).
+export const CUSTOMER_RULES = {
+  cacUpPct: 10,               // 'Acquisition getting expensive': CAC ▲ at least this % while ROAS ▼
+  ltvCacMin: 3,               // 'LTV:CAC below 3x'
+  m1DropPts: 0.5,             // 'M1 retention slipping': latest complete cohort below its 12-cohort average by this many pts
+  m1MinCohort: 1000,          // … only cohorts with at least this many customers
+  repeatRevDropPts: 2,        // 'Repeat revenue share down': ▼ at least this many pts vs the previous period
+  discountGapPts: 5,          // 'Discount dependence': repeat rate of discounted − non-discounted orders
+  winBackSegments: ['Hibernating', 'Cannot Lose Them'],
+}
+
+// Customer Support watchlist (CUSTOMER_MASTER_PLAN.md Part B §B2.4).
+export const SUPPORT_RULES = {
+  pendingDays: 8,             // 'Pending > 8 days': tickets in the 9-10, 11-15 and 15+ day buckets
+  frtTargetSec: { Chat: 40, Email: 15 * 60, 'Social media': 15 * 60 }, // the channel's loosest SLA target
+  frtMinReplies: 20,          // a channel needs this many agent replies to be checked
+  escalationUpPts: 0.3,       // 'Escalation rate up': ▲ at least this many pts
+  per100UpPct: 10,            // 'Contacts per 100 orders up': ▲ at least this %
+}
+
 // 'good' | 'warn' | 'bad' | null (null = no target, show neutral)
 export function metricStatus(key, value) {
   const t = METRIC_TARGETS[key]
