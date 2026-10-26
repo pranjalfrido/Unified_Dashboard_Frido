@@ -8,8 +8,9 @@ import FilterPicker from './FilterPicker.jsx'
 // (a few fixed options) render inline as a segmented toggle instead of a picker.
 //   rows: [{ key, label, summary, set, options, selected, multi, noun, onApply(values) }]
 //         or { key, label, toggle: [{ id, label }], value, onChange(id) }
-//   onReset → clear every filter in the sheet
-export default function FilterSheet({ open, onClose, title = 'Filters', rows, onReset }) {
+//   onReset → clear every filter in the sheet; resetLabel / doneLabel name the two footer buttons
+//   a row's fmtRank / searchAll / searchAllNote pass through to FilterPicker
+export default function FilterSheet({ open, onClose, title = 'Filters', rows, onReset, resetLabel = 'Reset', doneLabel = 'Done' }) {
   const M = C.m
   const [pickKey, setPickKey] = useState(null)
   const close = () => { setPickKey(null); onClose() }
@@ -18,6 +19,7 @@ export default function FilterSheet({ open, onClose, title = 'Filters', rows, on
     <BottomSheet open={open} onClose={close} title={title}>
       {picking ? (
         <FilterPicker key={picking.key} title={picking.label} noun={picking.noun} options={picking.options} selected={picking.selected} multi={picking.multi !== false}
+          fmtRank={picking.fmtRank} searchAll={picking.searchAll} searchAllNote={picking.searchAllNote}
           onBack={() => setPickKey(null)} onApply={v => { picking.onApply(v); setPickKey(null) }} />
       ) : (
         <div>
@@ -44,9 +46,9 @@ export default function FilterSheet({ open, onClose, title = 'Filters', rows, on
           ))}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             {onReset && <button type="button" onClick={onReset}
-              style={{ flex: 1, minHeight: 46, borderRadius: 12, border: `1px solid ${M.line}`, background: '#fff', color: M.ink, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>Reset</button>}
+              style={{ flex: 1, minHeight: 46, borderRadius: 12, border: `1px solid ${M.line}`, background: '#fff', color: M.ink, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>{resetLabel}</button>}
             <button type="button" onClick={close}
-              style={{ flex: 1, minHeight: 46, borderRadius: 12, border: 'none', background: M.green, color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>Done</button>
+              style={{ flex: 1, minHeight: 46, borderRadius: 12, border: 'none', background: M.green, color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>{doneLabel}</button>
           </div>
         </div>
       )}

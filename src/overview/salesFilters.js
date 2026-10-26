@@ -10,7 +10,7 @@ export const SALES_FILTERS = [
   { key: 'category', label: 'Category', multi: true, also: { subCategory: [] } },
   { key: 'subCategory', label: 'Sub-category', multi: true },
   { key: 'sku', label: 'SKU', multi: true },
-  { key: 'productAge', label: 'Launch', show: v => LAUNCH[v] || v },
+  { key: 'productAge', label: 'Launch', show: v => LAUNCH[v] || v, also: { subCategory: [] } },
   { key: 'paymentType', label: 'Payment', multi: true, csv: true },
   { key: 'voucher', label: 'Voucher', multi: true, csv: true },
   { key: 'region', label: 'Region', multi: true },

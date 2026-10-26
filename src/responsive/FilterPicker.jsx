@@ -8,7 +8,10 @@ const SHOWN = 40
 // (type to narrow down, so it stays fast with 1000+ values), Clear, and Apply (n).
 //   options: [{ value, label?, sub?, rank? }]  (rank = revenue or count; omit for A–Z only)
 //   selected: [value]; multi: checkboxes vs single choice; onApply(values); onBack()
-export default function FilterPicker({ title, noun = 'items', options, selected, multi = true, onApply, onBack }) {
+//   fmtRank:  rank → text shown at the row's right (e.g. revenue)
+//   searchAll / searchAllNote: extra values only reachable by search (e.g. the full SKU master behind
+//             the SKUs that sold in the period); they list after the matching options, with the note
+export default function FilterPicker({ title, noun = 'items', options, selected, multi = true, onApply, onBack, fmtRank, searchAll, searchAllNote = '' }) {
   const M = C.m
   const [q, setQ] = useState('')
   const hasRank = options.some(o => o.rank != null)
@@ -18,8 +21,12 @@ export default function FilterPicker({ title, noun = 'items', options, selected,
   const items = useMemo(() => {
     const t = q.trim().toLowerCase()
     const xs = t ? options.filter(o => `${label(o)} ${o.sub || ''}`.toLowerCase().includes(t)) : options
-    return [...xs].sort((a, b) => sort === 'top' ? (b.rank ?? 0) - (a.rank ?? 0) : String(label(a)).localeCompare(String(label(b))))
-  }, [options, q, sort])
+    const sorted = [...xs].sort((a, b) => sort === 'top' ? (b.rank ?? 0) - (a.rank ?? 0) : String(label(a)).localeCompare(String(label(b))))
+    if (!t || !searchAll?.length) return sorted
+    const have = new Set(options.map(o => o.value))
+    const extra = searchAll.filter(v => !have.has(v) && String(v).toLowerCase().includes(t)).slice(0, 200).map(v => ({ value: v, sub: searchAllNote }))
+    return [...sorted, ...extra]
+  }, [options, q, sort, searchAll, searchAllNote])
   const byValue = useMemo(() => new Map(options.map(o => [o.value, o])), [options])
   const toggle = v => setSel(s => {
     const n = new Set(multi ? s : [])
@@ -33,6 +40,7 @@ export default function FilterPicker({ title, noun = 'items', options, selected,
         <span style={{ display: 'block', fontSize: 14, fontWeight: on ? 600 : 500, color: M.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(o)}</span>
         {o.sub && <span style={{ display: 'block', fontSize: 12, color: M.muted }}>{o.sub}</span>}
       </span>
+      {fmtRank && o.rank != null && <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: M.muted, fontVariantNumeric: 'tabular-nums' }}>{fmtRank(o.rank)}</span>}
     </label>
   )
   const groupHead = text => <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: M.muted, padding: '12px 0 6px' }}>{text}</div>
@@ -49,7 +57,7 @@ export default function FilterPicker({ title, noun = 'items', options, selected,
         <span style={{ fontSize: 16, fontWeight: 700, color: M.ink }}>{title}</span>
         <button type="button" onClick={() => setSel(new Set())} style={{ marginLeft: 'auto', border: 'none', background: 'none', color: M.green, fontWeight: 600, fontSize: 13, fontFamily: 'var(--font)', cursor: 'pointer', minHeight: 36 }}>Clear</button>
       </div>
-      <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${options.length} ${noun}…`} aria-label={`Search ${noun}`}
+      <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${searchAll?.length > options.length ? searchAll.length : options.length} ${noun}…`} aria-label={`Search ${noun}`}
         style={{ width: '100%', boxSizing: 'border-box', fontSize: 16, padding: '10px 12px', borderRadius: 12, border: `1px solid ${M.line}`, background: M.soft, color: M.ink, outline: 'none', fontFamily: 'var(--font)' }} />
       {hasRank && <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>{chip('top', 'Top by revenue')}{chip('az', 'A–Z')}</div>}
       {sel.size > 0 && <>{groupHead(`Selected (${sel.size})`)}{[...sel].map(v => row(byValue.get(v) || { value: v }, true))}</>}
