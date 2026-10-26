@@ -35,3 +35,4 @@ queries, metric logic or numbers).
 | FIXED | Logistics → Cost Overview / 3PL: with "All" months the FTL/PTL and 3PL totals kept the previous selection's cost (Overview FTL/PTL 60.48L vs tab 4.23Cr; 3PL 57.77L vs 2.85Cr on Overview and the 3PL tab). (5a) | Fixed in 526bd61f on feature/responsive-logistics (2026-10-26). Check: `scripts/responsive/check-cost-all-months.mjs`. |
 | FIXED | Logistics → Performance: the top-bar Refresh reloaded Sales data instead of Logistics. (5b) | Fixed in f438c91c on feature/responsive-logistics (2026-10-26). |
 | FIXED | Logistics → Performance: Z-RTO ▲/▼ showed green when Z-RTO rose (lower is better). (5c) | Fixed in cf916c66 on feature/responsive-logistics (2026-10-26), desktop and mobile. |
+| FIXED | Logistics → Cost 3PL: the hero badge read "₹/parcel vs 2026-08" (raw month key). (5d) | Mobile shows "vs Aug" — fixed in 3dfa23df on feature/responsive-logistics (2026-10-26); desktop label unchanged (display only, approved). |
