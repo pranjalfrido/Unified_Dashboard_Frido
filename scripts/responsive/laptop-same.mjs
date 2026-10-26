@@ -1,14 +1,15 @@
 // Desktop-unchanged proof for refactors: full-page laptop (1366) screenshots of routes with
 // animations and transitions off (they otherwise catch the tab underline mid-animation).
-// Usage: node scripts/responsive/laptop-same.mjs <outDir> route,route…   then pixel-diff two outDirs.
-import { launch, openPage, waitStableText, VIEWPORTS } from './lib.mjs'
+// Usage: [SEPT=1] node scripts/responsive/laptop-same.mjs <outDir> route,route…   then pixel-diff two outDirs.
+import { launch, openPage, openWithSept, waitStableText, VIEWPORTS } from './lib.mjs'
 import { mkdirSync } from 'fs'
 const [out, list] = process.argv.slice(2)
 mkdirSync(out, { recursive: true })
 for (const r of list.split(',')) {
   const { browser, ctx } = await launch(VIEWPORTS.find(v => v.name === 'laptop-1366x768'))
   const page = await ctx.newPage()
-  await openPage(page, '/' + r.replace(/^.*Git\//, '').replace(/^\/+/, ''))
+  const path = '/' + r.replace(/^.*Git\//, '').replace(/^\/+/, '')
+  if (process.env.SEPT) await openWithSept(page, path); else await openPage(page, path) // SEPT=1: Sept 2026
   await waitStableText(page)
   await page.addStyleTag({ content: '*,*::before,*::after{animation:none !important;transition:none !important} .alerts-badge{visibility:hidden !important}' })
   await page.mouse.move(1, 760); await page.waitForTimeout(500)

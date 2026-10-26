@@ -33,7 +33,7 @@ import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
-import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList } from './sales/salesMobileData.js'
+import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonList, eboStoreRows } from './sales/salesMobileData.js'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
@@ -8224,7 +8224,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixDataAll, skuData: skuChannelMapBySku, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
     const gx = allGeoInputs()
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), channels: sortedCh.map(([ch, v]) => ({ key: ch, id: TABS.find(t => t.ch === ch)?.id, name: ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch, gross: v.rev ?? v.netRev ?? 0, net: v.netRev ?? v.excRev ?? 0 })), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="all" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} onOpenChannel={onOpenChannel} />
   }
 
@@ -9334,7 +9334,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     }
     const mx = d2cMatrixInputs()
     const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(sh.regionRows), tiers: tierList(sh.tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), geoNote: isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : null, categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const rr = isD2CSubChFiltered ? { rows: [] } : reasonList(sh.returnReasons || [])
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), reasons: rr.rows, reasonsSub: rr.sub, regions: regionList(sh.regionRows), tiers: tierList(sh.tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), geoNote: isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : null, categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -9971,7 +9972,10 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     }
     const mx = eboMatrixInputs()
     const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const rr = reasonList(ebo.returnReasons || [])
+    const st = eboStoreRows(ebo.storeRows || [])
+    const stores = st.rows.map(r => ({ name: r.storeName, gross: r.gross, net: r.netRev, orders: r.orders, units: r.units, aov: r.orders ? r.gross / r.orders : 0, sharePct: st.tot.gross > 0 ? r.gross / st.tot.gross * 100 : 0, cancelPct: r.gross > 0 ? r.cancelRev / r.gross * 100 : null, cirPct: r.gross > 0 ? r.cirRev / r.gross * 100 : null, returnPct: r.gross > 0 ? (r.cancelRev + r.rtoRev + r.returnRev + r.cirRev) / r.gross * 100 : null }))
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), reasons: rr.rows, reasonsSub: rr.sub, stores, storeTotal: `${st.rows.length} stores · ${fmt(st.tot.gross)} gross · ${fmt(st.tot.netRev)} net`, regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="ebo" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10097,21 +10101,8 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       {(() => {
         const rawStoreRows = ebo.storeRows || []
         if (!rawStoreRows.length) return null
-        const byStore = {}
-        rawStoreRows.forEach(r => {
-          if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
-          const s = byStore[r.storeName]
-          s.gross += r.gross || 0; s.netRev += r.netRev || 0
-          s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
-          s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
-          s.orders += r.orders || 0; s.units += r.units || 0
-        })
-        const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
-        const tot = rows.reduce((s, r) => ({
-          gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
-          rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
-          orders: s.orders+r.orders, units: s.units+r.units,
-        }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+        // Aggregation shared with the mobile store list (src/sales/salesMobileData.js, moved unchanged).
+        const { rows, tot } = eboStoreRows(rawStoreRows)
         const pctOf = (n, d) => d > 0 ? n / d * 100 : 0
         const thS = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: '1.5px solid ' + C.border, background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
         const thSL = { ...thS, textAlign: 'left' }
@@ -10540,6 +10531,35 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             })
     return { enrichedStates, enrichedCities }
   }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const amzAccountInputs = () => {
+                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
+                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
+                      const rows = (() => {
+                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
+                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
+                        if (channelView === 'vc') {
+                          return (amzVC.accounts || [])
+                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
+                            .sort((a, b) => b.rev - a.rev)
+                        }
+                        // 'all': SC FBA + SC MFN + each VC account
+                        const out = []
+                        if (showSC) {
+                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
+                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
+                        }
+                        if (showVC) {
+                          ;(amzVC.accounts || []).forEach((a, i) => {
+                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
+                          })
+                        }
+                        return out.sort((a, b) => b.rev - a.rev)
+                      })()
+                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
+                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+    return { rows, maxRev, chNote }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
   // below for the active view (Overall / Seller Central / Vendor Central). Desktop shows no ▲/▼ on at
   // least one tile in every view, so the card shows none (config: deltas false).
@@ -10573,7 +10593,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
     const cx = amzCategoryInputs(), mx = amzMatrixInputs()
     const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
     const gx = channelView === 'vc' ? null : amzGeoInputs()
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(amzSC.regionRows), tiers: tierList(amzSC.tierRows), regionNote: 'Seller Central only', ...(gx ? { states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), geoNote: 'Seller Central only' } : { geoUnavailable: 'Not available for Vendor Central: VC data has no state- or city-level granularity.' }), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
+    const ax = channelView === 'sc' ? null : amzAccountInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), accounts: ax ? ax.rows.map(r => ({ name: r.name, rev: r.rev, units: r.units })) : [], accountsNote: ax?.chNote, regions: regionList(amzSC.regionRows), tiers: tierList(amzSC.tierRows), regionNote: 'Seller Central only', ...(gx ? { states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), geoNote: 'Seller Central only' } : { geoUnavailable: 'Not available for Vendor Central: VC data has no state- or city-level granularity.' }), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel={`amazon:${channelView}`} metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10806,31 +10827,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                 {channelView === 'sc'
                   ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
                   : (() => {
-                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
-                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
-                      const rows = (() => {
-                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
-                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
-                        if (channelView === 'vc') {
-                          return (amzVC.accounts || [])
-                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
-                            .sort((a, b) => b.rev - a.rev)
-                        }
-                        // 'all': SC FBA + SC MFN + each VC account
-                        const out = []
-                        if (showSC) {
-                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
-                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
-                        }
-                        if (showVC) {
-                          ;(amzVC.accounts || []).forEach((a, i) => {
-                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
-                          })
-                        }
-                        return out.sort((a, b) => b.rev - a.rev)
-                      })()
-                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
-                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+                      const { rows, maxRev, chNote } = amzAccountInputs()
                       return (
                         <Card fill title="Channel · Account Breakdown" note={chNote} style={{ height: 325 }}>
                           {rows.length === 0

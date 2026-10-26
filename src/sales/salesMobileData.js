@@ -113,3 +113,49 @@ export const tierList = rows => (rows || []).map(r => {
   const key = String(r.tier).replace(/^tier\s*/i, '').trim()
   return { name: TIER_NAMES[key] || r.label || `Tier ${key}`, rev: r.rev }
 })
+
+// Return reasons (ShopifyReturnReasonsTable's grouping): reason → orders, share of all reasons,
+// sub-reasons (share of their reason) and the reason's share within each category's column.
+export function reasonList(reasons = []) {
+  const grouped = {}
+  const catTotals = {}
+  reasons.forEach(r => {
+    catTotals[r.category] = (catTotals[r.category] || 0) + r.orders
+    const g = grouped[r.reason] || (grouped[r.reason] = { catOrders: {}, subs: {} })
+    g.catOrders[r.category] = (g.catOrders[r.category] || 0) + r.orders
+    g.subs[r.subReason] = (g.subs[r.subReason] || 0) + r.orders
+  })
+  const total = r => Object.values(grouped[r].catOrders).reduce((s, v) => s + v, 0)
+  const grand = Object.keys(grouped).reduce((s, r) => s + total(r), 0)
+  const cats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a])
+  const colTotals = Object.fromEntries(cats.map(c => [c, Object.keys(grouped).reduce((s, r) => s + (grouped[r].catOrders[c] || 0), 0)]))
+  const rows = Object.keys(grouped).sort((a, b) => total(b) - total(a)).map(name => {
+    const g = grouped[name], count = total(name)
+    return {
+      name, count, pct: grand > 0 ? count / grand * 100 : 0,
+      children: Object.entries(g.subs).sort((a, b) => b[1] - a[1]).map(([sub, n]) => ({ name: sub, count: n, pct: count > 0 ? n / count * 100 : 0 })),
+      byCategory: cats.filter(c => g.catOrders[c] && colTotals[c]).map(c => ({ name: c, pct: g.catOrders[c] / colTotals[c] * 100 })),
+    }
+  })
+  return { rows, sub: `${rows.length} reasons · ${grand.toLocaleString('en-IN')} orders` }
+}
+
+// EBO Store-wise Sales rows (moved unchanged from EBOTab's render).
+export function eboStoreRows(rawStoreRows = []) {
+  const byStore = {}
+  rawStoreRows.forEach(r => {
+    if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
+    const s = byStore[r.storeName]
+    s.gross += r.gross || 0; s.netRev += r.netRev || 0
+    s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
+    s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
+    s.orders += r.orders || 0; s.units += r.units || 0
+  })
+  const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
+  const tot = rows.reduce((s, r) => ({
+    gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
+    rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
+    orders: s.orders+r.orders, units: s.units+r.units,
+  }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+  return { rows, tot }
+}

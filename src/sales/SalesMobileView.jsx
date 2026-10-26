@@ -167,15 +167,16 @@ function GeoCard({ states, cities, note, period }) {
 }
 
 function StoresCard({ stores, total, period }) {
+  const p2 = v => (v == null || !isFinite(v) ? '—' : `${v.toFixed(2)}%`) // 2 decimals, as the desktop store table
   const sorts = [
     { key: 'gross', label: 'Gross rev', value: r => r.gross, format: r => fmt(r.gross) },
     { key: 'net', label: 'Net rev', value: r => r.net, format: r => fmt(r.net) },
     { key: 'orders', label: 'Orders', value: r => r.orders, format: r => fmtN(r.orders) },
     { key: 'units', label: 'Units', value: r => r.units, format: r => fmtN(r.units) },
     { key: 'aov', label: 'AOV', value: r => r.aov, format: r => fmt(r.aov) },
-    { key: 'cancelPct', label: 'Cancel %', value: r => r.cancelPct, format: r => pctText(r.cancelPct), bar: 'bad' },
-    { key: 'cirPct', label: 'CIR %', value: r => r.cirPct, format: r => pctText(r.cirPct), bar: 'bad' },
-    { key: 'returnPct', label: 'Total return %', value: r => r.returnPct, format: r => pctText(r.returnPct), bar: 'bad' },
+    { key: 'cancelPct', label: 'Cancel %', value: r => r.cancelPct, format: r => p2(r.cancelPct), bar: 'bad' },
+    { key: 'cirPct', label: 'CIR %', value: r => r.cirPct, format: r => p2(r.cirPct), bar: 'bad' },
+    { key: 'returnPct', label: 'Total return %', value: r => r.returnPct, format: r => p2(r.returnPct), bar: 'bad' },
   ]
   return (
     <Card title="Store-wise sales" sub={total}>
@@ -203,7 +204,7 @@ function ReasonsCard({ reasons, sub }) {
       <CompactList rows={rows} top={8} noun="reasons" onSelect={r => setSel(r.item)} />
       <BottomSheet open={!!sel} onClose={() => setSel(null)} title={sel?.name || ''} subtitle={sel ? `${fmtN(sel.count)} orders · ${pctText(sel.pct)}` : ''}>
         {sel && (sel.children || []).map((c, i, a) => (
-          <CompactRankRow key={c.name} name={c.name} value={fmtN(c.count)} pct={pctText(c.pct)} barPct={(c.count / (a[0]?.count || 1)) * 100} last={i === a.length - 1} />
+          <CompactRankRow key={c.name} name={c.name} value={fmtN(c.count)} pct={`${pctText(c.pct)} of reason`} barPct={(c.count / (a[0]?.count || 1)) * 100} last={i === a.length - 1} />
         ))}
         {sel && sel.byCategory?.length > 0 && (
           <>
