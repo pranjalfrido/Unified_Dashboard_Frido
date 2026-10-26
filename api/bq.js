@@ -1,7 +1,7 @@
 import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
 import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
-import { getStoreIdMap, getStoreCosts, getCostForMonth } from './_store_pnl.js'
+import { getStoreIdMap, getStoreCosts, getCostForMonth, storeNameFor } from './_store_pnl.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -3241,12 +3241,11 @@ export default async function handler(req, res) {
           // channel-level netCalc above, just re-run per store×month instead of once for all of
           // EBO. SKU cost rows are exposed separately (storeSkuCostRows) so the frontend can apply
           // the same weight-slab SnD formula the channel-wide skuCostRows uses, scoped per store. Rows whose
-          // store_id has no unifiedstorename mapping (test/junk POS ids, or explicitly-"Ignore"
-          // entries like Exhibition/Retail Inside Sales — see api/_store_pnl.js) are dropped here
-          // rather than surfaced as an "Unknown" store.
+          // store_id has no unifiedstorename mapping go to an "Unmapped / Other" row and explicitly-
+          // "Ignore" ids to "Ignored (UTSAV)" (api/_store_pnl.js storeNameFor) instead of being dropped,
+          // so the store table's Total Gross equals the Financial View (fix/pnl-data item 4).
           storeRows: (r.eboStoreMonthly || []).reduce((acc, x) => {
-            const storeName = storeIdMap[x.store_id]
-            if (!storeName) return acc
+            const storeName = storeNameFor(storeIdMap, x.store_id)
             const sm = computeNetRevenueMeasures({
               gross_inc_gst: x.gross_inc_gst, gross_exc_gst: x.gross_exc_gst,
               cir_rev: x.cir_rev, rto_rev: x.rto_rev, return_rev: x.return_rev, cancel_rev: x.cancel_rev,
@@ -3263,7 +3262,7 @@ export default async function handler(req, res) {
             return acc
           }, []),
           storeSkuCostRows: (r.eboStoreSkuCosts || []).map(x => {
-            const storeName = storeIdMap[x.store_id]
+            const storeName = storeNameFor(storeIdMap, x.store_id)
             return storeName ? {
               storeName, month: x.month, sku: x.sku,
               orderStatus: x.order_status || 'Delivered',

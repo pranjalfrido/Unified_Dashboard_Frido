@@ -607,19 +607,34 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       anyCogsByStore.add(storeName)
     })
 
-    // storeRows is (store, month) grain — collapse to one row per store for the currently
-    // selected date range, summing revenue/units/weight and fixed costs across every month the
-    // range spans (a range crossing a month boundary sums that month's full fixed-cost line once
-    // per month present, not pro-rated — same "whole month" granularity the underlying cost
-    // sheets themselves carry).
+    // storeRows is (store, month) grain — collapse to one row per store for the selected range.
+    // fix/pnl-data item 4:
+    //  - "Unmapped / Other" / "Ignored (UTSAV)" (api/_store_pnl.js) are real EBO sales from POS ids
+    //    that aren't mapped stores; they carry revenue and margins but no store fixed costs.
+    //  - Rent and utilities are monthly figures; each month is pro-rated to the days of it inside
+    //    the selected range (rent from the % of Net fallback already scales with the range, so it
+    //    isn't pro-rated again).
+    //  - A fixed-cost line with no sheet row stays null ("Not available"), never 0.
+    const NOT_A_STORE = new Set(['Unmapped / Other', 'Ignored (UTSAV)'])
+    const rangeStart = filters?.start ? new Date(`${filters.start}T00:00:00`) : null
+    const rangeEnd = filters?.end ? new Date(`${filters.end}T00:00:00`) : null
+    const monthShare = monthKey => {
+      if (!rangeStart || !rangeEnd || !monthKey) return 1
+      const [y, m] = monthKey.split('-').map(Number)
+      const first = new Date(y, m - 1, 1), last = new Date(y, m, 0)
+      const from = rangeStart > first ? rangeStart : first, to = rangeEnd < last ? rangeEnd : last
+      const days = Math.round((to - from) / 86400000) + 1
+      return days > 0 ? days / last.getDate() : 0
+    }
+    const addCost = (cur, v) => (v == null ? cur : (cur || 0) + v)
     const byStore = {}
     storeRows.forEach(row => {
       const { storeName } = row
       if (!byStore[storeName]) {
         byStore[storeName] = {
-          storeName, gross: 0, excRev: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0,
-          orders: 0, units: 0,
-          fixedCosts: { rent: 0, utilities: 0, employeeCost: 0, cam: 0, software: 0, volumetricRent: 0 },
+          storeName, isBucket: NOT_A_STORE.has(storeName), gross: 0, excRev: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0,
+          orders: 0, units: 0, rentProRated: false,
+          fixedCosts: { rent: null, utilities: null, employeeCost: null, cam: null, software: null, volumetricRent: null },
         }
       }
       const s = byStore[storeName]
@@ -632,39 +647,20 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       s.cirRev += row.cirRev || 0
       s.orders += row.orders || 0
       s.units += row.units || 0
+      if (s.isBucket) return
       const fc = row.fixedCosts || {}
-      s.fixedCosts.rent += fc.rent || 0
-      s.fixedCosts.utilities += fc.utilities || 0
-      s.fixedCosts.employeeCost += fc.employeeCost || 0
-      s.fixedCosts.cam += fc.cam || 0
-      s.fixedCosts.software += fc.software || 0
-      s.fixedCosts.volumetricRent += fc.volumetricRent || 0
+      const share = monthShare(row.month)
+      if (share < 1) s.rentProRated = true
+      s.fixedCosts.rent = addCost(s.fixedCosts.rent, fc.rent == null ? null : fc.rentIsPctOfNet ? fc.rent : fc.rent * share)
+      s.fixedCosts.utilities = addCost(s.fixedCosts.utilities, fc.utilities == null ? null : fc.utilities * share)
+      s.fixedCosts.employeeCost = addCost(s.fixedCosts.employeeCost, fc.employeeCost)
+      s.fixedCosts.cam = addCost(s.fixedCosts.cam, fc.cam)
+      s.fixedCosts.software = addCost(s.fixedCosts.software, fc.software)
+      s.fixedCosts.volumetricRent = addCost(s.fixedCosts.volumetricRent, fc.volumetricRent)
     })
 
-    // Rescale each store's netRev so the sum ties out EXACTLY to the Financial View's EBO Net
-    // Revenue (data.ebo.netCalc.netRev, computeNetRevenueMeasures run once for the whole channel)
-    // — confirmed 2026-08-20 the user wants Store-wise's Total row to match the Financial View
-    // bit-for-bit through CM2, not just closely. Per-(store,month) netRev is computed from that
-    // bucket's OWN gross/exc-GST ratio (a real, if tiny, blended-GST-ratio rounding difference vs
-    // computing the ratio once across the whole channel — same class of gap netScale/shNetScale
-    // already reconcile for D2C elsewhere in this file), so raw per-store netRev sums close to but
-    // not exactly the channel figure (~0.1% off, observed). Only `netRev` is rescaled — gross/
-    // units/etc. stay the real, unscaled per-store figures, same convention as every other netScale
-    // use in this file.
-    const rawNetRevTotal = Object.values(byStore).reduce((s, v) => s + v.netRev, 0)
-    // Reconciles to the resolved engine (ebo.resolvedDailySKU), not the old ebo.netCalc.netRev
-    // (raw/live Order_Status revenue) — confirmed 2026-10-22, same fix as the Financial View's
-    // eboNetScale above, so Store-wise's Total ties to the same resolved figure everywhere else in
-    // the app does, not a stale unresolved one.
-    const eboResolved = data?.ebo?.resolvedDailySKU || []
-    const eboResolvedGross = eboResolved.reduce((s, x) => s + (x.gross || 0), 0)
-    const eboResolvedReturnRev = eboResolved.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
-    const eboExcRev = data?.ebo?.totals?.excRev || 0
-    const eboGstRatio = eboResolvedGross > 0 ? 1 - (eboExcRev / eboResolvedGross) : 0
-    const channelNetRev = eboResolvedGross > 0 ? (eboResolvedGross - eboResolvedReturnRev) * (1 - eboGstRatio) : null
-    const netRevScale = (channelNetRev != null && rawNetRevTotal > 0) ? channelNetRev / rawNetRevTotal : 1
-    Object.values(byStore).forEach(s => { s.netRev *= netRevScale })
-
+    // Net Revenue is each store's own (no rescale to the channel total any more: the old ×1.12
+    // factor spread unmapped stores' revenue over the mapped ones — fix/pnl-data item 4).
     return Object.values(byStore).map(s => {
       const cogs = anyCogsByStore.has(s.storeName) ? cogsByStore[s.storeName] : null
       const gm = cogs != null ? s.netRev - cogs : null
@@ -672,15 +668,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const cm1 = gm != null && snd != null ? gm - snd : null
       const spend = s.netRev * EBO_STORE_SPEND_RATE
       const cm2 = cm1 != null ? cm1 - spend : null
-      const totalFixedCosts = Object.values(s.fixedCosts).reduce((a, b) => a + b, 0)
-      // "— (marketing not yet costed)" convention doesn't apply to fixed costs: rent/employee/CAM/
-      // utilities/software each independently default to 0 when that store has no row in its
-      // Supabase sheet (a store simply not yet onboarded into cost tracking), so EBITDA is always
-      // computable once CM2 is — never blocked on every cost line being present.
-      const ebitda = cm2 != null ? cm2 - totalFixedCosts : null
+      const known = Object.values(s.fixedCosts).filter(v => v != null)
+      const totalFixedCosts = known.length ? known.reduce((a, b) => a + b, 0) : null
+      // EBITDA is partial: only the fixed-cost lines that have data (today rent + utilities).
+      const ebitda = !s.isBucket && cm2 != null ? cm2 - (totalFixedCosts || 0) : null
       return { ...s, cogs, gm, snd, cm1, spend, cm2, totalFixedCosts, ebitda }
-    }).sort((a, b) => b.gross - a.gross)
-  }, [data, sndRates, cogsMonthlyMap])
+    }).sort((a, b) => (a.isBucket - b.isBucket) || (b.gross - a.gross))
+  }, [data, sndRates, cogsMonthlyMap, filters?.start, filters?.end])
 
   // Offline S&D: ₹8/kg transport (on total net weight moved) + a weight-wise fulfilment cost
   // (confirmed 2026-08-20, supersedes the earlier flat ₹9/kg-only formula). Fulfilment reuses the
