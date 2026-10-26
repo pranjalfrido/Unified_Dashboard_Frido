@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 6
+const CACHE_VERSION = 7 // 7: cancelByBucket counts each cancelled order once (2026-10-26)
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -201,16 +201,26 @@ export default async function handler(req, res) {
         const sixMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5, 1))
         const sixStart = sixMonthsAgo.toISOString().slice(0, 10)
         const sixEnd = today.toISOString().slice(0, 10)
-        return `SELECT
+        // Each cancelled order is counted once, under its main product (its highest-value line),
+        // so the per-category / per-sub-category counts add up to the month's real number of
+        // cancelled orders. Before 2026-10-26 an order with products from 2+ sub-categories was
+        // counted once per sub-category and the chart's totals ran 14–20% high.
+        return `WITH o AS (
+          SELECT OrderId, OrderDate,
+            COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
+            COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+            ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY SellingPrice_Inc_GST DESC, SubCategory, Category) AS rn
+          FROM \`frido-429506.production.fact_all_platform_sales_report\`
+          WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
+            AND Order_Status = 'Cancelled')
+        SELECT
           FORMAT_DATE('%b %Y', OrderDate) AS month,
           DATE_TRUNC(OrderDate, MONTH) AS month_dt,
-          COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
-          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          category,
+          sub_category,
           '0-1' AS bucket,
           COUNT(DISTINCT OrderId) AS cancel_count
-        FROM \`frido-429506.production.fact_all_platform_sales_report\`
-        WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
-          AND Order_Status = 'Cancelled'
+        FROM o WHERE rn = 1
         GROUP BY month, month_dt, category, sub_category, bucket
         ORDER BY month_dt, category, sub_category, bucket`
       })(),

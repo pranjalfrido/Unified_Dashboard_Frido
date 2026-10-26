@@ -330,7 +330,9 @@ function CancelBucketChart({ cancelByBucket }) {
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No cancellation data</div>
       ) : (
         <div>
-          <ResponsiveContainer width="100%" height={220}>
+          {/* one 14px line; the chart gives up the same 14px so the card looks as before */}
+          <div style={{ fontSize: 11, lineHeight: '14px', height: 14, color: C.t3, margin: '-4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Last 6 months · each cancelled order counted once (main product)</div>
+          <ResponsiveContainer width="100%" height={202}>
             <BarChart data={chartData} margin={{ top: 0, right: 4, bottom: 10, left: 0 }} barCategoryGap="25%">
               <XAxis dataKey="month" tick={{ fontSize: 9, fill: C.t3 }} />
               <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} />
