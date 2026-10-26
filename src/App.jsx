@@ -20592,6 +20592,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (Math.abs(res) < 1) return rows
         const oth = rows.find(x => x.category === 'Others' && (isCat || x.subCategory === 'Unspecified'))
         if (oth) { oth.revenue += res; oth.netRevenue += res }
+        // A residual under ₹100 is per-row rounding (channel totals vs category rows are rounded
+        // separately): no new 'Others' row for it (A8: Zepto 'Others' ₹2, Instamart ₹4).
+        else if (Math.abs(res) < 100) return rows
         else rows.push(isCat
           ? { category: 'Others', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 }
           : { category: 'Others', subCategory: 'Unspecified', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 })
