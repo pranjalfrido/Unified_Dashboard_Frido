@@ -1586,10 +1586,14 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const amzNetScale = resolvedNetScale(amzResolvedRows, amzSubCatData)
         const n = netOf(amzSubCatData, amzNetScale)
         // prevGross/prevExcRev summed the same way as amzTotalGross above — SC-only/VC-only/
-        // SC+VC per the active amzChannelView toggle.
-        const prevGross = (amzChannelView !== 'vc' ? (amzSC.prevRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevRev || 0) : 0)
-        const prevExcRev = (amzChannelView !== 'vc' ? (amzSC.prevExcRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevExcRev || 0) : 0)
-        const prevOrders = (amzChannelView !== 'vc' ? (amzSC.prevOrders || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevOrders || 0) : 0)
+        // SC+VC per the active amzChannelView toggle. Vendor Central's previous period lives on
+        // data.amzVC (prevRev/prevExcRev), not amzVCMatrix (which has none) — reading the matrix
+        // made Overall compare SC+VC against SC alone (▲137% instead of ▲45%, fix/pnl-data 4b).
+        // VC has no order count, so prevOrders stays SC-only.
+        const amzVCPrev = data.amzVC || {}
+        const prevGross = (amzChannelView !== 'vc' ? (amzSC.prevRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCPrev.prevRev || 0) : 0)
+        const prevExcRev = (amzChannelView !== 'vc' ? (amzSC.prevExcRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCPrev.prevExcRev || 0) : 0)
+        const prevOrders = (amzChannelView !== 'vc' ? (amzSC.prevOrders || 0) : 0)
         return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, dailyPnL: amzDailyPnL, amzTotalGross, ...n, netScale: amzNetScale, prevGross, prevExcRev, prevOrders }
       })(),
       flipkart: (() => { const fkNetScale = resolvedNetScale(fk.resolvedDailySKU, fkSubCatData); const n = netOf(fkSubCatData, fkNetScale); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], dailyPnL: fkDailyPnL, ...n, netScale: fkNetScale, prevGross: fk.prevRev || 0, prevExcRev: fk.prevExcRev || 0, prevReturnRev: fk.prevReturnRev || 0, prevOrders: fk.prevOrders || 0 } })(),
