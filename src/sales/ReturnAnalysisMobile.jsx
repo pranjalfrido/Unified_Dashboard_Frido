@@ -132,6 +132,59 @@ function TopProductsCard({ data, basis, paymentType, setPaymentType, period }) {
   )
 }
 
+// ── Category breakdown: the desktop "Category-wise Return Breakdown" (category + sub-category rows) ──
+const RATE_COLS = [['totalReturn', 'Total return %'], ['cancel', 'Cancel %'], ['rto', 'RTO %'], ['cir', 'CIR %'], ['exchange', 'Exchange %']]
+function CategoryCard({ data, basis, period }) {
+  const [view, setView] = useState('category')
+  const suffix = basis === 'qty' ? 'PctQty' : 'Pct'
+  const revKey = basis === 'qty' ? 'qty' : 'revenue'
+  const subRows = data.categoryTable || []
+  // Category view: the sub-category rows summed, each % weighted by revenue (or qty) — the same
+  // weighting the desktop table's Total row uses (search a category there to see these numbers).
+  const groups = {}
+  subRows.forEach(r => {
+    const g = groups[r.category] || (groups[r.category] = { category: r.category, revenue: 0, qty: 0, subs: [] })
+    g.revenue += r.revenue || 0; g.qty += r.qty || 0; g.subs.push(r)
+  })
+  const catRows = Object.values(groups).map(g => {
+    const denom = g.subs.reduce((s, r) => s + (r[revKey] || 0), 0)
+    const out = { ...g }
+    RATE_COLS.forEach(([id]) => { out[`${id}${suffix}`] = denom > 0 ? g.subs.reduce((s, r) => s + (r[revKey] || 0) * (r[`${id}${suffix}`] || 0), 0) / denom : 0 })
+    return out
+  })
+  const amount = r => (basis === 'qty' ? `${fmtN(r.qty)} units` : fmt(r.revenue))
+  const sorts = [
+    { key: 'rev', label: basis === 'qty' ? 'Qty' : 'Revenue', value: r => r[revKey], format: amount },
+    ...RATE_COLS.map(([id, label]) => ({ key: id, label, value: r => r[`${id}${suffix}`], format: r => p1(r[`${id}${suffix}`]), bar: 'bad' })),
+  ]
+  const isCat = view === 'category'
+  return (
+    <Card title="Category breakdown" right={<SegmentToggle label="Group by" value={view} onChange={setView} options={[{ id: 'category', label: 'Category' }, { id: 'sub', label: 'Sub-category' }]} />}>
+      <MobileRankedList key={`${view}-${basis}`} title={null} noun={isCat ? 'categories' : 'sub-categories'} items={isCat ? catRows : subRows}
+        itemKey={r => (isCat ? r.category : `${r.category}::${r.subCategory}`)} name={r => (isCat ? r.category : r.subCategory)} sub={isCat ? null : r => r.category}
+        groupOf={isCat ? null : r => r.category} searchText={r => `${r.category} ${r.subCategory || ''}`} sorts={sorts} topN={8} sheetSubtitle={period}
+        valueColor={(r, k) => (k === 'rev' ? undefined : redIf(`${k}Pct`, r[`${k}${suffix}`]))}
+        secondary={(r, k) => (k === 'rev' ? `Return ${p1(r[`totalReturn${suffix}`])}` : `${basis === 'qty' ? '' : 'Rev '}${amount(r)} · Return ${p1(r[`totalReturn${suffix}`])}`)}
+        details={[{ label: basis === 'qty' ? 'Qty' : 'Revenue', value: amount }, ...RATE_COLS.map(([id, label]) => ({ label, value: r => p1(r[`${id}${suffix}`]) }))]}
+        renderSheet={r => {
+          const list = isCat ? [...r.subs].sort((a, b) => (b[revKey] || 0) - (a[revKey] || 0)).map(s => ({ key: s.subCategory, name: s.subCategory, row: s }))
+            : (data.skuVariants?.[`${r.category}::${r.subCategory}`] || []).slice().sort((a, b) => (b[revKey] || 0) - (a[revKey] || 0)).map(s => ({ key: s.sku, name: s.sku, row: s }))
+          if (!list.length) return null
+          const mx = Math.max(...list.map(x => x.row[`totalReturn${suffix}`] || 0), 0) || 1
+          return (
+            <>
+              <SheetHeading>{isCat ? 'Sub-categories' : 'SKUs'} · total return %</SheetHeading>
+              {list.map((x, i) => (
+                <CompactRankRow key={x.key} name={x.name} value={p1(x.row[`totalReturn${suffix}`])} valueColor={redIf('totalReturnPct', x.row[`totalReturn${suffix}`])}
+                  pct={amount(x.row)} barPct={((x.row[`totalReturn${suffix}`] || 0) / mx) * 100} last={i === list.length - 1} />
+              ))}
+            </>
+          )
+        }} />
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -158,6 +211,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <MasterCard data={data} filters={filters} layout={layout} />}
       {data && <PaymentCard rows={data.paymentTypeTable} basis={basis} />}
       {data && <TopProductsCard data={data} basis={basis} paymentType={topProductsPaymentType} setPaymentType={setTopProductsPaymentType} period={period} />}
+      {data && <CategoryCard data={data} basis={basis} period={period} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
