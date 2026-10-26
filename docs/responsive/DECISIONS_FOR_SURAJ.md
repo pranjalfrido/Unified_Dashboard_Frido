@@ -73,3 +73,14 @@ No CRED-specific date code exists. CRED spend only exists for months with a `mar
 
 ### D6. Ads ROAS vs P&L ROAS (A10)
 Same for D2C (3.74x), Amazon (9.23x), Flipkart (7.04x); Zepto 5.86x vs 5.88x. Different: Blinkit 34.26x vs 39.34x, Instamart 13.53x vs 17.05x (P&L only counts spend on sub-categories that have sales in the tab, the same gap as P&L Overall Mktg vs Ads); Myntra 9.64x vs none (P&L has no Myntra spend source). Decide whether P&L should keep unmatched spend in an "Others" row (P&L ROAS would match Ads).
+
+## Ads Phase 2 (feature/responsive-ads)
+
+### D7. "ROAS down ≥ 20%" is noisy after a sale month
+Product ROAS here is total sales ÷ spend. When spend on a product drops after a sale month, its previous-period ROAS can be very high, so many products show ROAS down. September vs August: 46 products, "−₹20.96 Cr revenue at the old ROAS". 1–25 Oct vs 6–30 Sep (D2C): 8 products, −₹36.68 L.
+- Option a: keep as is (both periods need ≥ ₹10 K spend).
+- Option b: also require ≥ ₹50 K spend in both periods, or cap the impact at this period's revenue.
+- Recommendation: b (₹50 K floor), one constant in `ADS_RULES`.
+
+### D8. Spending at a loss uses total-sales ROAS
+The breakeven ROAS comes from P&L (Gross ex GST ÷ CM1). The product ROAS it is compared with is total sales ÷ ad spend, the same definition P&L uses. So "at a loss" means CM2 < 0 for that product on that channel, as in P&L. No change proposed; noted because Ads' own revenue isn't ad-attributed (A6).
