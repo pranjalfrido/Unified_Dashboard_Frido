@@ -2194,6 +2194,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           cogsMonthlyMap={PNL_IN_PROGRESS[activeTab] ? null : cogsMonthlyMap}
           inProgress={PNL_IN_PROGRESS[activeTab] || null}
           returnsNotCaptured={['blinkit', 'instamart', 'zepto'].includes(activeTab)}
+          spendAllocated={activeTab === 'ebo'}
           startDate={filters.start}
           endDate={filters.end}
         />

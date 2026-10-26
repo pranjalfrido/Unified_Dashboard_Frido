@@ -59,7 +59,7 @@ export default function StorePnLTable({ rows = [] }) {
       'Gross Margin': r.gm != null ? ri(r.gm) : '', 'GM %': p1(r.gm, r.netRev),
       'SnD Cost': r.snd != null ? ri(r.snd) : '', 'SnD %': p1(r.snd, r.netRev),
       CM1: r.cm1 != null ? ri(r.cm1) : '', 'CM1 %': p1(r.cm1, r.netRev),
-      'Marketing Spend': ri(r.spend), 'Spend %': p2(r.spend, r.netRev),
+      'Mktg (allocated 1.5% of Net)': ri(r.spend), 'Mktg % (allocated)': p2(r.spend, r.netRev),
       CM2: r.cm2 != null ? ri(r.cm2) : '', 'CM2 %': p1(r.cm2, r.netRev),
       Rent: ri(r.fixedCosts.rent), 'Employee Cost': ri(r.fixedCosts.employeeCost),
       CAM: ri(r.fixedCosts.cam), Utilities: ri(r.fixedCosts.utilities),
@@ -98,7 +98,7 @@ export default function StorePnLTable({ rows = [] }) {
               <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Mktg % (allocated)" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
