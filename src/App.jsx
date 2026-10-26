@@ -11748,12 +11748,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
   })()
-  const prevCac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
-    return 0
-  })()
+  // No previous-period new-customer count exists, so there is no real previous CAC: no badge.
+  // (It used to divide last period's spend by this period's new customers.)
+  const prevCac = null
 
   // Build daily spend by date, and for D2C/Meta/Google use Shopify daily excRev split by spend share
   const shopifyDailyMap = {}
@@ -20478,6 +20475,24 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
       roas: t.spend > 0 ? t.revenue / t.spend : 0,
     })).sort((a, b) => b.spend - a.spend)
+    // Previous period for the ▲/▼ badges: the same number of days immediately before the range
+    // (same rule as api/bq.js), summed from the cache's own daily rows. The generator's prevTotals
+    // is the 90 days before the whole cache window, which made spend look ▼60–80% on every tab.
+    // If that window isn't fully inside the cache, there's no real previous value: no badge.
+    const prevWindow = (() => {
+      const sD = new Date(start), eD = new Date(end)
+      const n = Math.round((eD - sD) / 86400000) + 1
+      const pE = new Date(sD); pE.setDate(pE.getDate() - 1)
+      const pS = new Date(pE); pS.setDate(pS.getDate() - n + 1)
+      return { ps: pS.toISOString().slice(0, 10), pe: pE.toISOString().slice(0, 10) }
+    })()
+    const slicedPrevTotals = {}
+    if (prevWindow.ps >= json.rollingStart) {
+      ;(ads.daily || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe).forEach(x => {
+        const t = slicedPrevTotals[x.platform] || (slicedPrevTotals[x.platform] = { spend: 0, revenue: 0, impressions: 0, clicks: 0 })
+        t.spend += x.spend || 0; t.revenue += x.revenue || 0; t.impressions += x.impressions || 0; t.clicks += x.clicks || 0
+      })
+    }
     const slicedChannelDailyExcRev = {}
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
@@ -20616,6 +20631,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
+      prevTotals: slicedPrevTotals,
       daily: slicedDaily,
       adsDailyByCategory: slicedAdsDBC,
       salesDailyByCategory: slicedSalDBC,
