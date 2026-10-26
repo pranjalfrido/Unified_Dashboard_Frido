@@ -83,7 +83,7 @@ Mockup: `docs/responsive/mockups/month_picker_mockup.html`. **This is the one de
 - **Transporters**: ranked rows (spend, trips, ₹/trip, share). Transporter trend multi-line → tap a transporter for its monthly line.
 - **Vehicle types**: `SegmentToggle` Total spend / Cost per trip; rows; "Show all 9".
 - **Lanes**: ranked rows "From → To · vehicle" (total, trips, ₹/trip, min–max in sheet); search; "Show all 34" → FullScreenList.
-- **Rate consistency**: rows lane · vehicle with spread % (red).
+- **Rate consistency**: rows lane · vehicle with spread % (no red, same as desktop; decided 2026-10-26).
 - **Freight type mix**: split bar FTL / PTL (no donut).
 
 **3PL**

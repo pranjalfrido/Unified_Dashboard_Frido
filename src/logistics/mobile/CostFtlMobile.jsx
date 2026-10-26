@@ -112,7 +112,7 @@ function RateConsistency({ spreadRows }) {
   if (!spreadRows.length) return null
   return (
     <Card title="Rate consistency" sub="Same lane and vehicle, cheapest vs dearest trip · min 8 trips">
-      {spreadRows.map(r => <PartnerRow key={r.key} name={r.lane} sub={`${r.vehicle} · ${fmtN(r.trips)} trips · ${fmt(r.lo)} – ${fmt(r.hi)}`} value={<span style={{ color: M.down }}>{r.spreadPct.toFixed(0)}%</span>} valueSub={`${fmt(r.spread)} spread`} bar={null} />)}
+      {spreadRows.map(r => <PartnerRow key={r.key} name={r.lane} sub={`${r.vehicle} · ${fmtN(r.trips)} trips · ${fmt(r.lo)} – ${fmt(r.hi)}`} value={`${r.spreadPct.toFixed(0)}%`} valueSub={`${fmt(r.spread)} spread`} bar={null} />)}
     </Card>
   )
 }
