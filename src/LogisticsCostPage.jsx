@@ -1688,21 +1688,23 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         ) || baseData.byProduct,
       }
       setAgg(shapeResponse(merged))
-      // The static JSON sets b2bTotals / tplTotals to all-time sums. When months are
-      // selected, recalculate b2b totals from the month-filtered b2bMonths so the
-      // Overview tiles stay consistent with what FTL/PTL and 3PL tabs show.
-      if (f.months?.length) {
-        const mSet = new Set(f.months)
+      // Recalculate b2b / tpl totals from the month rows for the current selection so the
+      // Overview tiles stay consistent with what FTL/PTL and 3PL tabs show. Also for "All"
+      // (months = []): skipping that case left the previous selection's cost in place, e.g.
+      // FTL/PTL 60.48L instead of 4.23Cr and 3PL 57.77L instead of 2.85Cr.
+      {
+        const mSet = f.months?.length ? new Set(f.months) : null
+        const inSel = k => !mSet || mSet.has(k)
         setB2b(prev => {
           if (!prev) return prev
           const next = { ...prev }
           if (baseData.b2bMonths?.length) {
-            const selMonths = baseData.b2bMonths.filter(r => mSet.has(r.key || r.month_year || r.month))
+            const selMonths = baseData.b2bMonths.filter(r => inSel(r.key || r.month_year || r.month))
             const b2bAgg = selMonths.reduce((acc, r) => ({ trips: acc.trips + (r.trips || 0), cost: acc.cost + (r.cost || 0) }), { trips: 0, cost: 0 })
             next.totals = { ...prev.totals, trips: b2bAgg.trips, cost: b2bAgg.cost, avg_cost: b2bAgg.trips ? b2bAgg.cost / b2bAgg.trips : 0 }
           }
           if (baseData.tplWhMonths?.length) {
-            const tplRows = baseData.tplWhMonths.filter(r => mSet.has(r.month_year))
+            const tplRows = baseData.tplWhMonths.filter(r => inSel(r.month_year))
             const tplCost = tplRows.reduce((a, r) => a + (Number(r.cost) || 0), 0)
             next.tplTotals = prev.tplTotals ? { ...prev.tplTotals, cost: tplCost } : { cost: tplCost }
           }
