@@ -11869,6 +11869,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const clicksSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.clicks || 0)
           const impSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.impressions || 0)
           const ordersSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.orders || 0)
+          // The Orders card used the clicks line. The ads data has no daily orders on the cached path
+          // (all 0), so it shows no line there rather than another metric's.
+          const ordersSparkOrNone = ordersSpark.some(v => v > 0) ? ordersSpark : []
           const ctrSpark = _sparkDates.map(dt => { const imp = _dailyClicksMap[dt]?.impressions || 0; const cl = _dailyClicksMap[dt]?.clicks || 0; return imp > 0 ? cl / imp * 100 : 0 })
           const cpcSpark = _sparkDates.map(dt => { const cl = _dailyClicksMap[dt]?.clicks || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return cl > 0 ? sp / cl : 0 })
           const cpoPSark = _sparkDates.map(dt => { const ord = _dailyClicksMap[dt]?.orders || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return ord > 0 ? sp / ord : 0 })
@@ -11887,7 +11890,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             { label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend, true), chgPct: chgPct(d2cMetaSpend, d2cPrevMetaSpend), spark: metaSpendSpark, sub: 'Meta ad spend', accentColor: '#1877F2' },
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend, true), chgPct: chgPct(d2cGoogleSpend, d2cPrevGoogleSpend), spark: googleSpendSpark, sub: 'Google ad spend', accentColor: '#34A853' },
             { label: 'Additional Spend', value: fmt(additionalSpend || 0), spark: spendSpark, sub: 'D2C additional mktg spend' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
           ] : [
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
@@ -11903,7 +11906,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           ] : [
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), chgPct: chgPct(overallCtr, prevCtr), spark: ctrSpark, sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc, true), chgPct: chgPct(overallCpc, prevCpc), spark: cpcSpark, sub: 'Spend / Clicks' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(costPerOrder, prevCpo, true), chgPct: chgPct(costPerOrder, prevCpo), spark: cpcSpark },
             ...(selPlatform === 'Meta' || selPlatform === 'Google'
               ? [{ label: 'CAC (D2C)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(cac, prevCac, true), chgPct: chgPct(cac, prevCac), spark: cpcSpark }]
