@@ -11,7 +11,7 @@ import FilterPicker from '../responsive/FilterPicker.jsx'
 import StackedBarChart from '../responsive/StackedBarChart.jsx'
 import MixBar, { MixLegend } from '../responsive/MixBar.jsx'
 import { Card, Chips, KV, ShowAllButton, RowText } from '../responsive/CardKit.jsx'
-import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed, exchTone, sizeSwapPct, isSizeSwap } from './returnAnalysisData.js'
+import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed, exchTone, sizeSwapPct, isSizeSwap, REASON_KINDS, reasonsFor, reasonProducts } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
 // RETURN_ANALYSIS_PLAN.md). Display only: every number is the desktop page's own field from
@@ -192,11 +192,16 @@ function CategoryCard({ data, basis, period }) {
   )
 }
 
-// ── Return reasons (CIR): the desktop "Return Reasons · Detail" (reason → sub-reasons, Total) ──
-// Every reason row is a CIR order (confirmed for 1–25 Oct 2026, RETURN_ANALYSIS_PLAN.md §2).
-function ReasonsCard({ reasons = [], period }) {
+// ── Return reasons: the desktop "Return Reasons · Detail" with the same All / CIR / Exch toggle
+// (reason → sub-reasons, Total). Both lists count distinct orders.
+function ReasonsCard({ cir = [], exchange = [], bySub = [], period }) {
+  const [kind, setKind] = useState('all')
+  const [product, setProduct] = useState('') // '' = all products; one sub-category at a time
+  const [pick, setPick] = useState(false)
   const [all, setAll] = useState(false)
   const [sel, setSel] = useState(null)
+  const reasons = reasonsFor(kind, cir, exchange, bySub, product)
+  const products = reasonProducts(bySub)
   const totalCount = reasons.reduce((s, r) => s + r.count, 0)
   const totalRev = reasons.reduce((s, r) => s + (r.revenueImpact || 0), 0)
   const m = {}
@@ -209,7 +214,16 @@ function ReasonsCard({ reasons = [], period }) {
   const mx = grouped[0]?.count || 1
   const share = c => (totalCount ? (c / totalCount * 100).toFixed(1) : '0.0')
   return (
-    <Card title="Return reasons (CIR)" sub="Orders · share · revenue impact">
+    <Card title="Return reasons (CIR & Exchange)" sub={`${{ all: 'CIR + exchange orders', cir: 'CIR orders', exchange: 'Exchange orders' }[kind]} · share · revenue impact`}>
+      <SegmentToggle full label="Reasons for" value={kind} onChange={k => { setKind(k); setAll(false) }} options={REASON_KINDS} style={{ marginBottom: 8 }} />
+      <button type="button" onClick={() => setPick(true)} aria-label="Product"
+        style={{ marginBottom: 6, minHeight: 32, maxWidth: '100%', padding: '0 12px', borderRadius: 999, border: `1px solid ${product ? M.green : M.line}`, background: product ? 'rgba(31,90,61,.08)' : '#fff', color: M.ink, fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {product || 'All products'} ▾
+      </button>
+      <BottomSheet open={pick} onClose={() => setPick(false)} title="Product">
+        <FilterPicker title="Product (sub-category)" noun="products" multi={false} options={products.map(p => ({ value: p.name, rank: p.count }))} fmtRank={fmtN}
+          selected={product ? [product] : []} onBack={() => setPick(false)} onApply={v => { setProduct(v[0] || ''); setAll(false); setPick(false) }} />
+      </BottomSheet>
       {grouped.length ? shown.map((r, i) => (
         <CompactRankRow key={r.reason} name={r.reason} value={fmtN(r.count)} pct={`${share(r.count)}% · ${fmt(r.revenueImpact)}`} barPct={(r.count / mx) * 100}
           last={i === shown.length - 1} onClick={() => setSel(r)} />
@@ -369,7 +383,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <PaymentCard rows={data.paymentTypeTable} basis={basis} />}
       {data && <TopProductsCard data={data} basis={basis} paymentType={topProductsPaymentType} setPaymentType={setTopProductsPaymentType} period={period} />}
       {data && <CategoryCard data={data} basis={basis} period={period} />}
-      {data && <ReasonsCard reasons={data.returnReasons} period={period} />}
+      {data && <ReasonsCard cir={data.returnReasons} exchange={data.exchangeReasons} bySub={data.reasonsBySubCategory} period={period} />}
       {data && <CancelCard rows={data.cancelByBucket} />}
       {data && <MonthsCard rows={data.monthlyTable} basis={basis} end={filters.end} />}
       {data && <ExchangeCard rows={data.exchangeSkuDetail} period={period} />}

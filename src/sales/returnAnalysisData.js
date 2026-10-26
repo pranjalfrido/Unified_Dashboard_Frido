@@ -88,6 +88,30 @@ export function exportExchangeCsv(rows, dateStart, dateEnd) {
   exportCSV(exportRows, `exchange_sku_detail_${dateStart || 'all'}_${dateEnd || 'all'}.csv`)
 }
 
+// Return Reasons card's All / CIR / Exch toggle (laptop and mobile). Both lists count distinct orders;
+// All = the two lists with the same reason + sub-reason added together.
+export const REASON_KINDS = [{ id: 'all', label: 'All' }, { id: 'cir', label: 'CIR' }, { id: 'exchange', label: 'Exch' }]
+// product: one sub-category (the card's slicer) → that product's rows from reasonsBySubCategory.
+export function reasonsFor(kind, cir = [], exchange = [], bySub = [], product = '') {
+  const src = product
+    ? bySub.filter(r => r.subCategory === product && (kind === 'all' || r.kind === kind))
+    : kind === 'cir' ? cir : kind === 'exchange' ? exchange : [...cir, ...exchange]
+  if (!product && kind !== 'all') return src
+  const m = new Map()
+  src.forEach(r => {
+    const k = `${r.reason}|||${r.subReason}`
+    const g = m.get(k)
+    if (g) { g.count += r.count; g.revenueImpact += r.revenueImpact || 0 } else m.set(k, { ...r })
+  })
+  return [...m.values()]
+}
+// The slicer's products: every sub-category with a reason in the period, most orders first.
+export function reasonProducts(bySub = []) {
+  const t = {}
+  bySub.forEach(r => { t[r.subCategory] = (t[r.subCategory] || 0) + r.count })
+  return Object.entries(t).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }))
+}
+
 // The desktop tables' red rule (ReturnBreakdownTable / PaymentTypeTransposedTable RED_THRESH).
 export const RED_THRESH = { cancelPct: 3, rtoPct: 9, cirPct: 9, exchangePct: 6, totalReturnPct: 20 }
 export const isRed = (key, v) => RED_THRESH[key] != null && (v || 0) > RED_THRESH[key]

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
-import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv, immatureSince, maturityText, sizeSwapPct } from './returnAnalysisData.js'
+import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv, immatureSince, maturityText, sizeSwapPct, REASON_KINDS, reasonsFor, reasonProducts } from './returnAnalysisData.js'
 import ReturnAnalysisMobile from './ReturnAnalysisMobile.jsx'
 import {
   Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
@@ -367,8 +367,55 @@ function CancelBucketChart({ cancelByBucket }) {
 // rotating-▶-chevron interaction used elsewhere on this page (ReturnBreakdownTable's variant
 // rows, App.jsx's FlatCategoryProductMatrix) — collapses what was a flat 50+ row list down to
 // one row per Reason by default.
-function ReturnReasonsTable({ returnReasons, height = 420 }) {
+// Product slicer for the Return Reasons card: one sub-category at a time (search + list), styled like
+// CancelBucketChart's sub-category dropdown. '' = all products.
+function ProductSlicer({ products, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ('') } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const list = [{ name: '', count: null }, ...products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()))]
+  const pick = v => { onChange(v); setOpen(false); setQ('') }
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" title={value || 'All products'}
+        style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', width: 130, background: value ? C.acl : undefined, borderColor: value ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{value || 'All products'}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
+          <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search products…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            {list.map(p => (
+              <div key={p.name || '__all'} onClick={() => pick(p.name)} style={{ display: 'flex', gap: 8, padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: p.name === value ? C.acl : undefined, color: p.name === value ? C.t1 : C.t2, fontWeight: p.name === value ? 600 : 400 }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || 'All products'}</span>
+                {p.count != null && <span style={{ color: C.t3 }}>{fmtN(p.count)}</span>}
+              </div>
+            ))}
+            {list.length === 1 && q && <div style={{ padding: 10, fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// All / CIR / Exch: CIR orders (returnReasons), exchange orders (exchangeReasons), or both added up;
+// the product slicer narrows it to one sub-category (reasonsBySubCategory).
+function ReturnReasonsTable({ returnReasons: cirReasons, exchangeReasons, reasonsBySubCategory, height = 420 }) {
   const [expanded, setExpanded] = useState({})
+  const [kind, setKind] = useState('all')
+  const [product, setProduct] = useState('')
+  const products = useMemo(() => reasonProducts(reasonsBySubCategory || []), [reasonsBySubCategory])
+  const returnReasons = useMemo(() => reasonsFor(kind, cirReasons || [], exchangeReasons || [], reasonsBySubCategory || [], product), [kind, cirReasons, exchangeReasons, reasonsBySubCategory, product])
   const totalCount = useMemo(() => (returnReasons || []).reduce((s, r) => s + r.count, 0), [returnReasons])
   const grouped = useMemo(() => {
     const m = {}
@@ -386,7 +433,15 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   const totalRevenueImpact = useMemo(() => (returnReasons || []).reduce((s, r) => s + (r.revenueImpact || 0), 0), [returnReasons])
 
   return (
-    <Card fill title="Return Reasons · Detail">
+    <Card fill title="Return Reasons · Detail" action={
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <ProductSlicer products={products} value={product} onChange={v => { setProduct(v); setExpanded({}) }} />
+        {REASON_KINDS.map(k => (
+          <button key={k.id} onClick={() => { setKind(k.id); setExpanded({}) }} aria-pressed={kind === k.id}
+            style={{ fontSize: 11, fontWeight: kind === k.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: `1px solid ${kind === k.id ? C.acm : C.border2}`, background: kind === k.id ? C.acl : C.card, color: kind === k.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{k.label}</button>
+        ))}
+      </div>
+    }>
       <div style={{ overflowY: 'auto', height: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
@@ -815,7 +870,7 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
 
           <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 0.8fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
-            <ReturnReasonsTable returnReasons={data.returnReasons} />
+            <ReturnReasonsTable returnReasons={data.returnReasons} exchangeReasons={data.exchangeReasons} reasonsBySubCategory={data.reasonsBySubCategory} />
             <CancelBucketChart cancelByBucket={data.cancelByBucket} />
           </div>
 
