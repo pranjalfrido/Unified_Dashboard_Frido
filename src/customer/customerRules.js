@@ -137,6 +137,7 @@ export function computeSupportRules(data, model, back = 1, grain = 'day') {
     info: 'Parent + child tickets still open after more than 8 days (as of now, whatever dates are chosen).',
   })
 
+  const checked = Object.keys(R.frtTargetSec).filter(ch => (latest.t(ch)?.afrt_n || 0) >= R.frtMinReplies)
   const over = Object.entries(R.frtTargetSec).map(([ch, t]) => {
     const row = latest.t(ch)
     const v = avg(row, 'afrt_sum', 'afrt_n')
@@ -145,7 +146,7 @@ export function computeSupportRules(data, model, back = 1, grain = 'day') {
   rules.push({
     id: 'frt', name: 'Agent FRT above target', target: 'speed', red: false, count: over.length,
     valueText: `${over.length} channel${over.length === 1 ? '' : 's'}`,
-    line: over.length ? over.map(x => `${x.ch} ${dur(x.v)} vs ${dur(x.t)}`).join(' · ') : 'Chat, email and social within target',
+    line: over.length ? over.map(x => `${x.ch} ${dur(x.v)} vs ${dur(x.t)}`).join(' · ') : checked.length ? `${checked.join(', ')} within target` : `Not enough agent replies to check (< ${R.frtMinReplies} per channel)`,
     info: `Agent first response time above the channel's loosest SLA target (chat ${dur(R.frtTargetSec.Chat)}, email / social ${dur(R.frtTargetSec.Email)}), channels with at least ${R.frtMinReplies} agent replies.`,
   })
 
