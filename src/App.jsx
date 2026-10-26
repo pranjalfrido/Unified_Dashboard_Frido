@@ -8141,7 +8141,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
     { label: 'Units', value: fmtNShort(aspQtyAll), spark: mobUnitsSpark },
     { label: 'AOV', value: fmtShort(scopedAOV), spark: mobAovSpark },
     { label: 'ASP', value: fmtShort(scopedASP), spark: mobAspSpark },
-    { label: 'Daily Avg Net Rev', value: fmt(totalRev / nDays), spark: mobRevSpark },
+    { label: 'Daily Avg Net Rev', value: fmt(netRevenueCalc / nDays), spark: mobRevSpark },
     { label: 'GST', value: fmt(gstCollected), spark: mobGstSpark },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: mobReturnSpark, accent: returnPct > 10 ? '#7A1A1A' : undefined },
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
@@ -9074,7 +9074,6 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
   })
   const nDays = shDailyArr.filter(d => d.rev > 0).length || sh.nDays || data.nDays || 1
-  const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = (shAspQty || totalQty) > 0 ? totalRev / (shAspQty || totalQty) : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -9239,7 +9238,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: shFmtShort(gst), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gst / totalRev : 0)) },
-    { label: 'Daily Avg Net Rev', value: shFmtShort(dailyAvg), spark: shDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: shFmtShort(netRev / nDays), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: shFmtNShort(shNOrders), spark: shDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: shFmtNShort(totalQty), spark: shDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: shFmtShort(aov), spark: shDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -9771,7 +9770,6 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
 
   const shDailyArr = ebo.daily || []
   const nDays = shDailyArr.length || 1
-  const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = nOrders ? totalRev / nOrders : 0
   const asp = totalQty > 0 ? totalRev / totalQty : 0
 
@@ -9955,7 +9953,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: eboFmtS(totalRev), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: eboFmtS(netRev), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: eboFmtS(gstCollected), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gstCollected / totalRev : 0)) },
-    { label: 'Daily Avg Net Rev', value: eboFmtS(dailyAvg), spark: eboDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: eboFmtS(netRev / nDays), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: eboFmtN(nOrders), spark: eboDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: eboFmtN(totalQty), spark: eboDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: eboFmtS(aov), spark: eboDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -11020,7 +11018,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: fkFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fkFmtS(fkNetRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkNetRev / rev : 0)) },
     { label: 'GST', value: fkFmtS(rev - excRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (rev - excRev) / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: fkFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fkFmtS(fkNetRev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: fkFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -13046,7 +13044,6 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = bl.daily || []
   const blPrevRev = bl.prevRev || 0
@@ -13082,7 +13079,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: blFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: blFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -13239,7 +13236,6 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = ins.daily || []
   const insPrevRev = ins.prevRev || 0
@@ -13275,7 +13271,7 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: insFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: insFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -13428,7 +13424,6 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = zp.daily || []
   const zpPrevRev = zp.prevRev || 0
@@ -13464,7 +13459,7 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: zpFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: zpFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -13618,7 +13613,6 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   const orders = t.orders || 0
   const units = t.units || 0
   const asp = units ? rev / units : 0
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const crPrevRev = cr.prevRev || 0
   const crPrevOrders = cr.prevOrders || 0
@@ -13717,7 +13711,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: crFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: crFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: crFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: crFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: crFmtS(netRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: crFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -13938,7 +13932,6 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
   const orders = t.orders || 0
   const units = t.units || 0
   const asp = units ? rev / units : 0
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const fcPrevRev = fc.prevRev || 0
   const fcPrevOrders = fc.prevOrders || 0
@@ -14034,7 +14027,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: fcFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fcFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: fcFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: fcFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fcFmtS(netRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: fcFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -14346,7 +14339,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: mnFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: mnFmtS(netRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: mnFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: mnFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: mnFmtS(netRev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: mnFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
