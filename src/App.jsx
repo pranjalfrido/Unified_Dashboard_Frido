@@ -39,6 +39,7 @@ import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
 import MixBar from './responsive/MixBar.jsx'
 import AdsLaptopSections from './ads/AdsSections.jsx'
+import AdsMobileView from './ads/AdsMobileView.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
 import { seriesFor, buildDailyByChannel, computeAdsRules, OVERALL_CHANNELS, TOTAL_SALES_ROAS_INFO } from './ads/adsData.js'
 import { SalesFilterButton } from './sales/SalesFilters.jsx'
@@ -4980,6 +4981,22 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
           subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
           strip={cc?.strip} />
+      </div>
+    )
+  }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'ads') {
+    // ADS_MASTER_PLAN.md Part B §3: "Ads" + date + "⋯" (Refresh) and the channels as chips. Replaces the
+    // ☰ platform panel (MobileAdsPanel) on phones.
+    const order = ['All', 'D2C', 'Amazon', 'Flipkart', 'Myntra', 'Blinkit', 'Zepto', 'Instamart', 'CRED']
+    const chips = order.map(id => ADS_PLATFORMS.find(p => p.id === id)).filter(Boolean)
+      .map(p => ({ id: p.id, label: p.label, disabled: !!allowedTabs && !allowedTabs.includes(ADS_KEY_MAP[p.id]) }))
+    const active = adsSelPlatform || 'All'
+    const menu = <ActionMenu title={`Ads · ${ADS_PLATFORMS.find(p => p.id === active)?.label || 'Overall'}`} items={[{ id: 'refresh', label: 'Refresh data', onSelect: onRefresh }]} />
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Ads"
+          right={<><div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} /></div>{menu}</>}
+          chips={chips} activeChip={active} onChip={id => { if (id !== active) setAdsSelPlatform(id === 'All' ? null : id) }} />
       </div>
     )
   }
@@ -11665,6 +11682,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const [adsFlagRule, setAdsFlagRule] = useState(null)
   const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
   const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
+  const adsBp = useBreakpoint()
+  const adsMobileLayout = adsBp.width < 1024 || adsBp.isPhoneLandscape
 
   // B2: ROAS is plain text; red only where it's below 1x (the product rows use the product's
   // breakeven ROAS where P&L has it). The old green / amber chips were decorative.
@@ -11979,6 +11998,70 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const platformLogo = p => {
     const found = ADS_PLATFORMS.find(x => x.id === p)
     return found?.logo || null
+  }
+
+  // ── Below 1024px: the mobile layout (ADS_MASTER_PLAN.md Part B §3), same values as the laptop cards ──
+  if (adsMobileLayout && selPlatform !== 'CRED') {
+    const chg = (cur, prev) => (prev > 0 && cur != null ? (cur - prev) / prev * 100 : null)
+    const metaSp = filtTotals.find(t => t.platform === 'Meta')?.spend || 0
+    const googleSp = filtTotals.find(t => t.platform === 'Google')?.spend || 0
+    const heroSpend = isD2C ? (isCatFiltered ? totalSpend : totalSpend + (additionalSpend || 0)) : totalSpend
+    // daily rows: spend / revenue (dailyArr, as the laptop trend) + clicks / impressions; previous period by day index
+    const clk = {}
+    filtDaily.forEach(d => { const o = clk[d.date] || (clk[d.date] = { clicks: 0, impressions: 0, meta: 0, google: 0 }); o.clicks += d.clicks || 0; o.impressions += d.impressions || 0; if (d.platform === 'Meta') o.meta += d.spend || 0; if (d.platform === 'Google') o.google += d.spend || 0 })
+    const plats = !selPlatform ? null : isD2C ? d2cPlatforms : [selPlatform]
+    const prevByDate = {}
+    ;(ads.prevDaily || []).filter(d => !plats || plats.includes(d.platform)).forEach(d => { const o = prevByDate[d.date] || (prevByDate[d.date] = { spend: 0, clicks: 0, impressions: 0 }); o.spend += d.spend || 0; o.clicks += d.clicks || 0; o.impressions += d.impressions || 0 })
+    const prevDays = Object.keys(prevByDate).sort()
+    const trendRows = dailyArr.map((d, i) => {
+      const p = prevByDate[prevDays[i]]
+      return { date: d.date, spend: d.spend || 0, revenue: d.revenue || 0, clicks: clk[d.date]?.clicks || 0, impressions: clk[d.date]?.impressions || 0, meta: clk[d.date]?.meta || 0, google: clk[d.date]?.google || 0,
+        pSpend: p ? p.spend : null, pClicks: p ? p.clicks : null, pImpr: p ? p.impressions : null }
+    })
+    const money = v => fmt(v)
+    const all = {
+      spend: { label: 'Total spend', tileLabel: 'Spend', value: fmt(heroSpend), delta: chg(heroSpend, prevSpend), lowerIsBetter: true, def: 'Ad spend in the period.',
+        sub: `Ad rev ${fmt(totalRevenue)} · ROAS ${overallRoas.toFixed(2)}x`, point: r => r.spend, prevPoint: r => r.pSpend, fmtPoint: money },
+      revenue: { label: 'Ad revenue (total sales)', tileLabel: 'Ad revenue', value: fmt(totalRevenue), delta: chg(totalRevenue, prevRevenue), def: TOTAL_SALES_ROAS_INFO, point: r => r.revenue, fmtPoint: money },
+      roas: { label: 'Total-sales ROAS', tileLabel: 'ROAS', value: `${overallRoas.toFixed(2)}x`, delta: chg(overallRoas, prevRoas), def: TOTAL_SALES_ROAS_INFO, point: r => (r.spend > 0 ? r.revenue / r.spend : null), fmtPoint: v => `${v.toFixed(2)}x` },
+      orders: { label: 'Orders', value: fmtN(currentOrders), delta: chg(currentOrders, prevOrders), def: 'Distinct orders in the channel.' },
+      cpo: { label: 'Cost per order', tileLabel: 'Cost / order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', delta: chg(costPerOrder, prevCpo), lowerIsBetter: true, def: 'Spend ÷ orders.' },
+      ctr: { label: 'CTR', value: `${overallCtr.toFixed(2)}%`, delta: chg(overallCtr, prevCtr), def: 'Clicks ÷ impressions.', point: r => (r.impressions > 0 ? r.clicks / r.impressions * 100 : null), prevPoint: r => (r.pImpr > 0 ? r.pClicks / r.pImpr * 100 : null), fmtPoint: v => `${v.toFixed(2)}%` },
+      cpc: { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, delta: chg(overallCpc, prevCpc), lowerIsBetter: true, def: 'Spend ÷ clicks.', point: r => (r.clicks > 0 ? r.spend / r.clicks : null), prevPoint: r => (r.pClicks > 0 ? r.pSpend / r.pClicks : null), fmtPoint: v => `₹${v.toFixed(2)}` },
+      cpm: { label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', delta: chg(overallCpm, prevCpm), lowerIsBetter: true, def: 'Cost per 1,000 impressions.', point: r => (r.impressions > 0 ? r.spend / r.impressions * 1000 : null), prevPoint: r => (r.pImpr > 0 ? r.pSpend / r.pImpr * 1000 : null), fmtPoint: v => `₹${Math.round(v)}` },
+      meta: { label: 'Meta spend', tileLabel: 'Meta', value: fmt(metaSp), delta: chg(metaSp, prevTotals.Meta?.spend), lowerIsBetter: true, def: 'Meta ad spend.', point: r => r.meta, fmtPoint: money },
+      google: { label: 'Google spend', tileLabel: 'Google', value: fmt(googleSp), delta: chg(googleSp, prevTotals.Google?.spend), lowerIsBetter: true, def: 'Google ad spend.', point: r => r.google, fmtPoint: money },
+      cac: { label: 'CAC (D2C)', tileLabel: 'CAC', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', delta: null, deltasHidden: true, def: `Meta + Google spend ÷ ${fmtN(shopifyNewCustomers)} new customers. No previous new-customer count, so no ▲/▼.` },
+    }
+    const keys = isD2C ? ['spend', 'meta', 'google', 'revenue', 'roas', 'orders', 'cac', 'ctr'] : ['spend', 'revenue', 'roas', 'orders', 'cpo', 'ctr', 'cpc', 'cpm']
+    const metrics = keys.map(k => ({ key: k, ...all[k] }))
+    const chLabel = ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'
+    const overview = !selPlatform ? (() => {
+      const rows = OVERALL_CHANNELS.map(c => ({ key: c.key, label: c.label, spend: filtTotals.filter(t => c.platforms.includes(t.platform)).reduce((s2, t) => s2 + (t.spend || 0), 0), rev: platformNetRev[c.key] || 0 })).filter(r2 => r2.spend > 0)
+      const top = Math.max(1, ...rows.map(r2 => r2.spend))
+      return rows.sort((p, q) => q.spend - p.spend).map(r2 => ({ ...r2, roas: r2.spend > 0 ? r2.rev / r2.spend : null, share: r2.spend / top * 100 }))
+    })() : null
+    const amazonSplit = selPlatform === 'Amazon' ? ['Sponsored Products', 'Sponsored Brands', 'Sponsored Display'].map((n2, i) => ({ key: n2, label: n2.replace('Sponsored ', ''), value: (ads.byAdType || []).filter(r2 => r2.platform === 'Amazon' && r2.adType === n2).reduce((s2, r2) => s2 + (r2.spend || 0), 0), color: [C.m.green, C.m.g2, C.m.g3][i] })).filter(p => p.value > 0) : null
+    const catRowsM = (() => {
+      const m = {}
+      adsProductRows.forEach(r2 => { const o = m[r2.category] || (m[r2.category] = { isCat: true, category: r2.category, spend: 0, revenue: 0, n: 0 }); o.spend += r2.spend || 0; o.revenue += r2.revenue || 0; o.n++ })
+      return Object.values(m)
+    })()
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
+        {adsPnlTab && data && (
+          <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
+            offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
+            onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
+        )}
+        <div className="page-scroll" style={{ padding: '12px 12px 0' }}>
+          <AdsMobileView channel={chLabel} metrics={metrics} trendRows={trendRows} start={filters.start} end={filters.end} fmt={fmt}
+            watch={adsWatch} dayRows={adsDayRows} series={adsSeries} monthly={adsMonthly} shareRows={adsShareRows} pacing={adsPacing}
+            overview={overview} amazonSplit={amazonSplit} unattributed={adsUnattributed} totalSpend={totalSpend}
+            catRows={catRowsM} prodRows={adsProductRows} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -20829,6 +20912,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       daily: slicedDaily,
       adsDailyByCategory: slicedAdsDBC,
       // previous equal-length window's product rows (Ads watchlist 'ROAS down'); null when not in the cache
+      // previous window's platform-day rows (mobile chart's dashed previous-period line)
+      prevDaily: prevWindow.ps >= json.rollingStart ? (ads.daily || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
       prevAdsDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.adsDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
       prevSalesDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.salesDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
       salesDailyByCategory: slicedSalDBC,
