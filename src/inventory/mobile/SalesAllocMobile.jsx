@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { C } from '../../utils.js'
 import { fmtNum, fmtInt, fmtCurrency, exportCsv } from '../theme.jsx'
 import MasterTrendCard from '../../responsive/MasterTrendCard.jsx'
@@ -91,14 +91,17 @@ export default function SalesAllocMobile({ fd, filters, dateFilters, revenueAvai
   const [movers, setMovers] = useState(null) // the Biggest movers card's current rows, for its CSV export
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
-  // Header "⋯": the desktop Export CSV buttons (Sales trend: the daily rows).
+  // Header "⋯": the desktop Export CSV buttons (Sales trend: the daily rows). Registered once; the
+  // current values are read from a ref when an item is tapped (no parent re-render loop).
+  const cur = useRef(null)
+  useEffect(() => { cur.current = { fd, movers, dateFilters, filters } })
   useEffect(() => {
     onMenu?.([
-      { id: 'trend', group: 'Export CSV', label: 'Sales trend (daily)', onSelect: () => exportCsv('sales_trend.csv', [{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }], fd.daily || []) },
-      { id: 'matrix', group: 'Export CSV', label: 'Sales matrix (date × SKU × channel)', onSelect: () => { const x = salesMatrixExport({ filteredData: fd, data: fd, dateFilters, filters }); exportCsv(x.filename, x.columns, x.rows) } },
-      ...(movers ? [{ id: 'movers', group: 'Export CSV', label: 'Biggest movers (as shown)', onSelect: () => exportCsv('drastic_movers.csv', movers.columns, movers.rows) }] : []),
+      { id: 'trend', group: 'Export CSV', label: 'Sales trend (daily)', onSelect: () => exportCsv('sales_trend.csv', [{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }], cur.current.fd.daily || []) },
+      { id: 'matrix', group: 'Export CSV', label: 'Sales matrix (date × SKU × channel)', onSelect: () => { const c = cur.current; const x = salesMatrixExport({ filteredData: c.fd, data: c.fd, dateFilters: c.dateFilters, filters: c.filters }); exportCsv(x.filename, x.columns, x.rows) } },
+      { id: 'movers', group: 'Export CSV', label: 'Biggest movers (as shown)', onSelect: () => { const m = cur.current.movers; if (m) exportCsv('drastic_movers.csv', m.columns, m.rows) } },
     ])
-  }, [onMenu, fd, movers, dateFilters, filters])
+  }, [onMenu])
   useEffect(() => () => onMenu?.([]), [onMenu])
   return (
     <div className="inv-mobile sa-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>

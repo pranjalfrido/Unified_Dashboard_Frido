@@ -7,7 +7,7 @@ import { C } from '../../utils.js'
 const M = C.m
 export const STATUS_ORDER = ['Out of Stock', 'Critical', 'Low', 'Sufficient', 'Excess', 'No Demand', 'Dead / No Sale']
 export const STATUS_COLOR = {
-  'Out of Stock': '#7a1f1f',
+  'Out of Stock': M.downDark,
   Critical: M.down,
   Low: M.amber,
   Sufficient: M.up,

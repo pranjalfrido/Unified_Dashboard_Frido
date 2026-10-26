@@ -1490,16 +1490,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     )
   }, [detailSkus])
 
-  // Mobile "⋯" menu: the same four CSV exports as the desktop Export buttons.
+  // Mobile "⋯" menu: the same four CSV exports as the desktop Export buttons. Registered once per
+  // mobile/desktop switch (the rows are read from a ref when tapped): some filters rebuild the rows
+  // on every render, and re-registering then would loop through the parent's state.
+  const exportRowsRef = useRef(null)
+  useEffect(() => { exportRowsRef.current = { inventoryDetailExportRows, pivotExportRows, slowMovingExportRows, deadStockExportRows } })
   useEffect(() => {
     if (!onMenu) return
+    const rows = k => exportRowsRef.current?.[k] || []
     onMenu(invMobile ? [
-      { id: 'detail', group: 'Export CSV', label: 'Inventory detail', onSelect: () => exportCsv('inventory_detail.csv', DETAIL_EXPORT_COLS, inventoryDetailExportRows) },
-      { id: 'pivot', group: 'Export CSV', label: 'Location-wise inventory', onSelect: () => exportCsv('location_wise_inventory.csv', PIVOT_EXPORT_COLS, pivotExportRows) },
-      { id: 'slow', group: 'Export CSV', label: 'Slow moving', onSelect: () => exportCsv('slow_moving.csv', AGEING_EXPORT_COLS, slowMovingExportRows) },
-      { id: 'dead', group: 'Export CSV', label: 'Dead stock', onSelect: () => exportCsv('dead_stock.csv', AGEING_EXPORT_COLS, deadStockExportRows) },
+      { id: 'detail', group: 'Export CSV', label: 'Inventory detail', onSelect: () => exportCsv('inventory_detail.csv', DETAIL_EXPORT_COLS, rows('inventoryDetailExportRows')) },
+      { id: 'pivot', group: 'Export CSV', label: 'Location-wise inventory', onSelect: () => exportCsv('location_wise_inventory.csv', PIVOT_EXPORT_COLS, rows('pivotExportRows')) },
+      { id: 'slow', group: 'Export CSV', label: 'Slow moving', onSelect: () => exportCsv('slow_moving.csv', AGEING_EXPORT_COLS, rows('slowMovingExportRows')) },
+      { id: 'dead', group: 'Export CSV', label: 'Dead stock', onSelect: () => exportCsv('dead_stock.csv', AGEING_EXPORT_COLS, rows('deadStockExportRows')) },
     ] : [])
-  }, [onMenu, invMobile, inventoryDetailExportRows, pivotExportRows, slowMovingExportRows, deadStockExportRows])
+  }, [onMenu, invMobile])
 
   if (!data) return null
 
