@@ -1,6 +1,8 @@
 import { useState, Fragment } from 'react'
-import { C, fmt, fmtN, exportCSV } from '../utils.js'
+import { C, fmtN, exportCSV } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
+import InfoPopover from '../responsive/InfoPopover.jsx'
 import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 
 // Financial View table — Category → Product (→ SKU) grain, same visual language as
@@ -52,7 +54,9 @@ import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.j
 // Seller Central and Vendor Central views stop at CM1 % (marketing spend is only mapped on the
 // combined "All" SC+VC view, since that's the grain the Ads tab's Amazon spend reconciles to).
 // includeUnmatched/mobilityNetBySubCat: D2C-only — see PnLPage.jsx for how each is computed.
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true }) {
+// spendAllocated: spend is an allocation, not real ad spend (EBO: 1.5% of Net) — the Spend column is
+// labelled as such and RoAS is hidden, since it would only restate the allocation rate.
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, spendAllocated = false, headerInfo = null }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -178,8 +182,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     totalReturnRev: s.totalReturnRev + r.totalReturnRev, spend: s.spend + r.spend,
     cogs: s.cogs + (r.anyCosted ? r.cogs : 0), netCovered: s.netCovered + (r.anyCosted ? r.netCovered : 0), anyCosted: s.anyCosted || r.anyCosted,
     snd: s.snd + (r.anySnd ? r.snd : 0), sndNetCovered: s.sndNetCovered + (r.anySnd ? r.sndNetCovered : 0), anySnd: s.anySnd || r.anySnd,
-    cm1: s.cm1 + (r.cm1Covered ? r.cm1 : 0), cm1NetCovered: s.cm1NetCovered + (r.cm1Covered ? r.net : 0), anyCm1: s.anyCm1 || r.cm1Covered,
-    cm2: s.cm2 + (r.cm2Covered ? r.cm2 : 0), cm2NetCovered: s.cm2NetCovered + (r.cm2Covered ? r.net : 0), anyCm2: s.anyCm2 || r.cm2Covered,
+    // CM1/CM2 on product-level net (netCovered), the same base as COGS%/GM% — matches kpiSummary.
+    cm1: s.cm1 + (r.cm1Covered ? r.cm1 : 0), cm1NetCovered: s.cm1NetCovered + (r.cm1Covered ? r.netCovered : 0), anyCm1: s.anyCm1 || r.cm1Covered,
+    cm2: s.cm2 + (r.cm2Covered ? r.cm2 : 0), cm2NetCovered: s.cm2NetCovered + (r.cm2Covered ? r.netCovered : 0), anyCm2: s.anyCm2 || r.cm2Covered,
   }), { gross: 0, excRev: 0, net: 0, units: 0, totalReturnRev: 0, spend: 0, cogs: 0, netCovered: 0, anyCosted: false, snd: 0, sndNetCovered: 0, anySnd: false, cm1: 0, cm1NetCovered: 0, anyCm1: false, cm2: 0, cm2NetCovered: 0, anyCm2: false })
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
   const totAsp = tot.units > 0 ? tot.gross / tot.units : 0
@@ -266,7 +271,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._cm1 != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._cm1, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{tot.anyCm1 ? `${totCm1Pct.toFixed(1)}%` : noCostCell}</td> },
     ...(showMarketing ? [
-      { id: 'spendPct', width: 8, label: 'Spend %', sortKey: 'spendPct', style: thStyle,
+      { id: 'spendPct', width: 8, label: spendAllocated ? 'Mktg % (allocated)' : 'Spend %', sortKey: 'spendPct', style: thStyle,
         row: r => <td style={tdStyle}>{r.spend > 0 ? `${r.spendPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
         total: () => <td style={totalTdStyle}>{totSpend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td> },
@@ -279,7 +284,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         sku: () => <td style={{ ...tdStyle, fontSize: 11 }}>{pendingCell}</td>,
         total: () => <td style={totalTdStyle}>{totCm2 != null ? `${totCm2Pct.toFixed(1)}%` : noCostCell}</td> },
     ] : []),
-  ]
+  ].filter(c => !(spendAllocated && c.id === 'roas'))
   const reorder = useReorderableColumns(`pnl-financial-table-cols:${title}`, ALL_COLUMNS)
 
   const handleExport = () => {
@@ -343,13 +348,22 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         r.anyCosted ? r.cogs : null, r.gm, r.anySnd ? r.snd : null, r.cm1, r.spend, r.cm2, r.anyCosted
       )
     })
-    exportCSV(csvRows, `${(title || 'financial_view').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`)
+    // Allocated spend (EBO): same columns as the table — renamed, RoAS left out.
+    const csvOut = !spendAllocated ? csvRows : csvRows.map(row => {
+      const out = {}
+      Object.entries(row).forEach(([k, v]) => {
+        if (k === 'RoAS' || k === 'Net RoAS') return
+        out[k === 'Marketing Spend' ? 'Mktg (allocated 1.5% of Net)' : k === 'Spend %' ? 'Mktg % (allocated)' : k] = v
+      })
+      return out
+    })
+    exportCSV(csvOut, `${(title || 'financial_view').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`)
   }
 
   return (
     <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title}</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{title}{headerInfo && <InfoPopover title="GM % / CM1 % and credit notes" text={headerInfo} style={{ width: 20, height: 20, margin: '-4px 0' }} />}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search category / product…"
             style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 200, outline: 'none' }} />

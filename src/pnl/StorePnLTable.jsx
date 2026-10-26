@@ -1,4 +1,5 @@
-import { C, fmt, exportCSV } from '../utils.js'
+import { C, exportCSV } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable } from '../components.jsx'
 
 // EBO store-wise P&L drill-down, nested inside the EBO PnL tab (confirmed 2026-08-20 — a drill-
@@ -7,12 +8,16 @@ import { useSortableTable } from '../components.jsx'
 // pre-aggregated in PnLPage.jsx's storePnLRows memo — this component only renders them.
 //
 // Fixed costs (rent/employee/CAM/utilities/software/volumetric rent) come from Supabase via
-// api/_store_pnl.js and are NOT gated behind a "some data missing → show —" rule the way
-// COGS/SnD/Marketing are — a store simply not yet onboarded into a given cost sheet defaults to
-// 0 for that line rather than blocking EBITDA (confirmed 2026-08-20: those sheets are still being
-// filled in store-by-store, so blocking would leave EBITDA permanently blank for most stores).
+// api/_store_pnl.js. A line with no sheet row shows "Not available" (was ₹0), and EBITDA is
+// labelled partial — it only subtracts the lines that have data (fix/pnl-data item 4). Rent and
+// utilities are pro-rated to the selected days in PnLPage.jsx. "Unmapped / Other" and "Ignored
+// (UTSAV)" rows are EBO sales from POS ids that aren't mapped stores: revenue and margins only.
 // A JSX element built at module scope would freeze C.t3; a getter rebuilds it per read.
-const CELL = { get noCost(){ return <span style={{ color: C.t3 }}>—</span> } }
+const CELL = {
+  get noCost(){ return <span style={{ color: C.t3 }}>—</span> },
+  get notAvailable(){ return <span style={{ color: C.t3 }} title="No row in the store cost sheet for this period">Not available</span> },
+}
+const FIXED_KEYS = ['rent', 'utilities', 'employeeCost', 'cam', 'software', 'volumetricRent']
 const MIN_REV_FOR_RATIOS = 100
 const pctOf = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : null
 
@@ -39,12 +44,12 @@ export default function StorePnLTable({ rows = [] }) {
     cm1: s.cm1 + (r.cm1 || 0), anyCm1: s.anyCm1 || r.cm1 != null,
     spend: s.spend + r.spend,
     cm2: s.cm2 + (r.cm2 || 0), anyCm2: s.anyCm2 || r.cm2 != null,
-    rent: s.rent + (r.fixedCosts.rent || 0), utilities: s.utilities + (r.fixedCosts.utilities || 0),
-    employeeCost: s.employeeCost + (r.fixedCosts.employeeCost || 0), cam: s.cam + (r.fixedCosts.cam || 0),
-    software: s.software + (r.fixedCosts.software || 0), volumetricRent: s.volumetricRent + (r.fixedCosts.volumetricRent || 0),
-    totalFixedCosts: s.totalFixedCosts + r.totalFixedCosts,
+    ...Object.fromEntries(FIXED_KEYS.map(k => [k, r.fixedCosts[k] == null ? s[k] : (s[k] || 0) + r.fixedCosts[k]])),
+    totalFixedCosts: r.totalFixedCosts == null ? s.totalFixedCosts : (s.totalFixedCosts || 0) + r.totalFixedCosts,
     ebitda: s.ebitda + (r.ebitda || 0), anyEbitda: s.anyEbitda || r.ebitda != null,
-  }), { gross: 0, excRev: 0, netRev: 0, units: 0, cogs: 0, anyCogs: false, gm: 0, anyGm: false, snd: 0, anySnd: false, cm1: 0, anyCm1: false, spend: 0, cm2: 0, anyCm2: false, rent: 0, utilities: 0, employeeCost: 0, cam: 0, software: 0, volumetricRent: 0, totalFixedCosts: 0, ebitda: 0, anyEbitda: false })
+    ebitdaNet: s.ebitdaNet + (r.ebitda != null ? r.netRev : 0), // EBITDA % on the stores that have one
+  }), { gross: 0, excRev: 0, netRev: 0, units: 0, cogs: 0, anyCogs: false, gm: 0, anyGm: false, snd: 0, anySnd: false, cm1: 0, anyCm1: false, spend: 0, cm2: 0, anyCm2: false, rent: null, utilities: null, employeeCost: null, cam: null, software: null, volumetricRent: null, totalFixedCosts: null, ebitda: 0, anyEbitda: false, ebitdaNet: 0 })
+  const proRated = rows.some(r => r.rentProRated)
 
   const handleExport = () => {
     const ri = v => v != null ? Math.round(v) : ''
@@ -58,13 +63,13 @@ export default function StorePnLTable({ rows = [] }) {
       'Gross Margin': r.gm != null ? ri(r.gm) : '', 'GM %': p1(r.gm, r.netRev),
       'SnD Cost': r.snd != null ? ri(r.snd) : '', 'SnD %': p1(r.snd, r.netRev),
       CM1: r.cm1 != null ? ri(r.cm1) : '', 'CM1 %': p1(r.cm1, r.netRev),
-      'Marketing Spend': ri(r.spend), 'Spend %': p2(r.spend, r.netRev),
+      'Mktg (allocated 1.5% of Net)': ri(r.spend), 'Mktg % (allocated)': p2(r.spend, r.netRev),
       CM2: r.cm2 != null ? ri(r.cm2) : '', 'CM2 %': p1(r.cm2, r.netRev),
-      Rent: ri(r.fixedCosts.rent), 'Employee Cost': ri(r.fixedCosts.employeeCost),
-      CAM: ri(r.fixedCosts.cam), Utilities: ri(r.fixedCosts.utilities),
+      [proRated ? 'Rent (pro-rated)' : 'Rent']: ri(r.fixedCosts.rent), 'Employee Cost': ri(r.fixedCosts.employeeCost),
+      CAM: ri(r.fixedCosts.cam), [proRated ? 'Utilities (pro-rated)' : 'Utilities']: ri(r.fixedCosts.utilities),
       Software: ri(r.fixedCosts.software), 'Volumetric Rent': ri(r.fixedCosts.volumetricRent),
       'Total Fixed Costs': ri(r.totalFixedCosts),
-      EBITDA: r.ebitda != null ? ri(r.ebitda) : '', 'EBITDA %': r.ebitda != null ? p1(r.ebitda, r.netRev) : '',
+      'EBITDA (partial)': r.ebitda != null ? ri(r.ebitda) : '', 'EBITDA % (partial)': r.ebitda != null ? p1(r.ebitda, r.netRev) : '',
     }))
     exportCSV(csvRows, 'store_pnl_ebo.csv')
   }
@@ -78,7 +83,10 @@ export default function StorePnLTable({ rows = [] }) {
   return (
     <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', marginTop: 16, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Store-wise P&amp;L · EBO</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Store-wise P&amp;L · EBO</div>
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>EBITDA is partial (rent + utilities only){proRated ? '; rent and utilities pro-rated to the selected days' : ''}. Employee cost, CAM, software and volumetric rent: not available yet.</div>
+        </div>
         <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560, maxWidth: '100%' }}>
@@ -97,18 +105,18 @@ export default function StorePnLTable({ rows = [] }) {
               <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Mktg % (allocated)" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="Utilities" sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label={proRated ? 'Rent (pro-rated)' : 'Rent'} sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label={proRated ? 'Utilities (pro-rated)' : 'Utilities'} sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Employee Cost" sortKey="employeeCost" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="CAM" sortKey="cam" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Software" sortKey="software" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Volumetric Rent" sortKey="volumetricRent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Fixed Costs" sortKey="totalFixedCosts" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="EBITDA" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
-              <Th label="EBITDA %" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA (partial)" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA % (partial)" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
             </tr>
           </thead>
           <tbody>
@@ -121,7 +129,7 @@ export default function StorePnLTable({ rows = [] }) {
               const ebitdaPct = r.ebitda != null ? pctOf(r.ebitda, r.netRev) : null
               return (
                 <tr key={r.storeName} className="tbl-row" style={{ cursor: 'default' }}>
-                  <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.storeName}>{r.storeName}</td>
+                  <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(r.isBucket ? { fontStyle: 'italic', color: C.t2 } : {}) }} title={r.isBucket ? `${r.storeName}: EBO sales from POS ids not mapped to a store` : r.storeName}>{r.storeName}</td>
                   <td style={tdStyle}>{fmt(r.gross)}</td>
                   <td style={tdStyle}>{r.units.toLocaleString('en-IN')}</td>
                   <td style={tdStyle}>{fmt(r.netRev)}</td>
@@ -132,13 +140,8 @@ export default function StorePnLTable({ rows = [] }) {
                   <td style={tdStyle}>{spendPct != null ? `${spendPct.toFixed(2)}%` : CELL.noCost}</td>
                   <td style={tdStyle}>{r.cm2 != null ? fmt(r.cm2) : CELL.noCost}</td>
                   <td style={tdStyle}>{cm2Pct != null ? `${cm2Pct.toFixed(1)}%` : CELL.noCost}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.rent)}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.utilities)}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.employeeCost)}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.cam)}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.software)}</td>
-                  <td style={tdStyle}>{fmt(r.fixedCosts.volumetricRent)}</td>
-                  <td style={tdStyle}>{fmt(r.totalFixedCosts)}</td>
+                  {FIXED_KEYS.map(k => <td key={k} style={tdStyle}>{r.isBucket ? CELL.noCost : r.fixedCosts[k] != null ? fmt(r.fixedCosts[k]) : CELL.notAvailable}</td>)}
+                  <td style={tdStyle}>{r.isBucket ? CELL.noCost : r.totalFixedCosts != null ? fmt(r.totalFixedCosts) : CELL.notAvailable}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>
                     {r.ebitda != null ? fmt(r.ebitda) : CELL.noCost}
                   </td>
@@ -160,15 +163,10 @@ export default function StorePnLTable({ rows = [] }) {
               <td style={totalTdStyle}>{`${pctOf(tot.spend, tot.netRev)?.toFixed(2) ?? '0.00'}%`}</td>
               <td style={totalTdStyle}>{tot.anyCm2 ? fmt(tot.cm2) : CELL.noCost}</td>
               <td style={totalTdStyle}>{tot.anyCm2 ? `${pctOf(tot.cm2, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
-              <td style={totalTdStyle}>{fmt(tot.rent)}</td>
-              <td style={totalTdStyle}>{fmt(tot.utilities)}</td>
-              <td style={totalTdStyle}>{fmt(tot.employeeCost)}</td>
-              <td style={totalTdStyle}>{fmt(tot.cam)}</td>
-              <td style={totalTdStyle}>{fmt(tot.software)}</td>
-              <td style={totalTdStyle}>{fmt(tot.volumetricRent)}</td>
-              <td style={totalTdStyle}>{fmt(tot.totalFixedCosts)}</td>
+              {FIXED_KEYS.map(k => <td key={k} style={totalTdStyle}>{tot[k] != null ? fmt(tot[k]) : CELL.notAvailable}</td>)}
+              <td style={totalTdStyle}>{tot.totalFixedCosts != null ? fmt(tot.totalFixedCosts) : CELL.notAvailable}</td>
               <td style={{ ...totalTdStyle, fontWeight: 700 }}>{tot.anyEbitda ? fmt(tot.ebitda) : CELL.noCost}</td>
-              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.netRev)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
+              <td style={totalTdStyle}>{tot.anyEbitda ? `${pctOf(tot.ebitda, tot.ebitdaNet)?.toFixed(1) ?? '0.0'}%` : CELL.noCost}</td>
             </tr>
           </tfoot>
         </table>
