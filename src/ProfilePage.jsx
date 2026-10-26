@@ -90,10 +90,15 @@ function PermGroupFlat({ node, tabs, setTabs }) {
   )
 }
 
-function PermissionPanel({ tabs, setTabs }) {
+const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
+
+function PermissionPanel({ tabs, setTabs, callerEmail }) {
+  const canGrantPulse = PULSE_WHITELIST.includes((callerEmail || '').toLowerCase());
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {PERMISSION_TREE.map(node => {
+        // Hide Frido Pulse chip from anyone not on the whitelist
+        if (node.key === 'ask' && !canGrantPulse) return null;
         if (!node.isGroup) {
           // Standalone tab — wrap in a card like the groups
           const sel = tabs.includes(node.key)
@@ -471,7 +476,7 @@ function CreateUserModal({ session, onClose, onCreated, existingUsers = [], exis
                   </select>
                 )}
               </div>
-              <PermissionPanel tabs={tabs} setTabs={setTabs} />
+              <PermissionPanel tabs={tabs} setTabs={setTabs} callerEmail={session?.user?.email} />
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8, borderTop: `1px solid #E7E3D8`, paddingTop: 18 }}>
@@ -662,7 +667,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
           {user.is_admin ? 'Admin — select specific tabs to demote to Member' : 'Click chips to grant or remove access'}
         </div>
-        <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
+        <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} callerEmail={session?.user?.email} />
         {tabsChanged && (
           <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
             {saving ? 'Saving…' : user.is_admin ? 'Demote to Member & save' : 'Save permissions'}

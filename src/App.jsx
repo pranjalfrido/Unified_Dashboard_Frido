@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
@@ -25,7 +25,7 @@ import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
-import FlashPage from './FlashPage.jsx'
+import AskFridoPage from './ask/AskFridoPage.jsx'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
@@ -3339,6 +3339,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     // only via a link in Sales → Overall (AllTab), not a nav item. Its route and permission key
     // are both still real/grantable; re-adding a row here would just give it a second entry point.
     { id: 'documents', label: 'Documents', Icon: FileText },
+    { id: 'ask', label: 'Frido Pulse', Icon: Lightning },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -3525,18 +3526,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
             </div>
-            {item.id !== 'documents' && <hr className="sb-sep" />}
+            {item.id !== 'ask' && <hr className="sb-sep" />}
           </Fragment>
         )
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
-        {(!allowedTabs || allowedTabs.includes('flash')) && <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
-          onClick={() => setPage('flash')}
-          style={{ cursor: 'pointer' }}>
-          <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
-          <span className="sb-label">FLASH</span>
-        </div>}
         <div className="theme-picker-slot" style={{ display: 'contents' }}><ThemePicker theme={theme} setTheme={setTheme} /></div>
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
@@ -3553,7 +3548,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 
 // ── Bottom Nav (phones: ≤768px and phone landscape) ─────────────
 // Same permission rules as the Sidebar. The first four allowed of Overview / Sales / P&L / Inventory
-// sit in the bar; everything else (Ads, Logistics, Customer, Documents, FLASH, Profile) is in "More".
+// sit in the bar; everything else (Ads, Logistics, Customer, Documents, Frido Pulse, Profile) is in "More".
 function BottomNav({ page, setPage, allowedTabs, profile }) {
   const ic = Icon => <Icon size={22} />
   const can = id => {
@@ -3575,7 +3570,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
     { id: 'logistics', label: 'Logistics', icon: ic(Truck) },
     { id: 'customer', label: 'Customer', icon: ic(Users) },
     { id: 'documents', label: 'Documents', icon: ic(FileText) },
-    { id: 'flash', label: 'FLASH', icon: <span style={{ fontSize: 20, lineHeight: 1 }}>⚡</span> },
+    { id: 'ask', label: 'Frido Pulse', icon: ic(Lightning) },
   ].filter(i => can(i.id))
   const primaryIds = ['overview', 'sales', 'pnl', 'inventory']
   const primary = all.filter(i => primaryIds.includes(i.id))
@@ -19560,7 +19555,15 @@ function AppInner() {
   )
 
   const isAdmin = profile.is_admin === true
-  const effectiveTabs = isAdmin ? null : allowedTabs // null means all tabs visible
+  // Frido Pulse is never auto-granted to admins — only these two emails have it by default.
+  // Anyone else (admin or member) must be explicitly granted 'ask' in their allowed_tabs.
+  const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
+  const userEmail = session?.user?.email?.toLowerCase() || '';
+  const hasPulse = PULSE_WHITELIST.includes(userEmail) || (allowedTabs || []).includes('ask');
+  // Admins get null (all tabs) but pulse is added/removed based on whitelist
+  const effectiveTabs = isAdmin
+    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','sales:financial-mis','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
+    : allowedTabs
 
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
@@ -20674,9 +20677,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
+        {page !== 'ask' && <Topnav allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -20684,7 +20687,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -20772,15 +20775,13 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <PackagingBomPage onBack={() => goTo('documents')} />
             </div>
           )}
-          {page === 'flash' && (
-            <div className="page-scroll" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <FlashPage userEmail={session?.user?.email || ''} />
-            </div>
-          )}
           {page === 'profile' && (
             <div className="page-scroll">
               <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} />
             </div>
+          )}
+          {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
+            <AskFridoPage userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} />
           )}
         </div>
       </div>
