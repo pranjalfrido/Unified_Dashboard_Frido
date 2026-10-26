@@ -66,7 +66,7 @@ export const C = {
     cardShadow: '0 1px 3px rgba(0,0,0,.06)',
     radius: { card: 18, tile: 12, chip: 999 },
     // px; nothing below 12
-    type: { pageTitle: 17, cardTitle: 15.5, hero: 28, tileValue: 15.5, listValue: 13.5, body: 13, label: 12 },
+    type: { pageTitle: 17, cardTitle: 15.5, hero: 24, tileValue: 14, listValue: 13.5, body: 13, label: 12 }, // hero 24 / tile 14 on every page (2026-10-26)
   },
   // Mobile type scale (Overview mobile redesign): { size (px), weight }. Nothing on mobile goes
   // below 12px; labels are uppercase + muted (C.t3) at the `label` size.
