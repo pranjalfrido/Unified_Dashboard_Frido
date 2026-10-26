@@ -1,7 +1,7 @@
 import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
 import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
-import { getStoreIdMap, getStoreCosts, getCostForMonth } from './_store_pnl.js'
+import { getStoreIdMap, getStoreCosts, getCostForMonth, storeNameFor } from './_store_pnl.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -189,6 +189,34 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Ads "Last 6 months" (ADS_MASTER_PLAN.md Part B §1.2): monthly ad spend / clicks / impressions per
+  // platform + monthly channel sales ex GST (same base and Channel grouping as the cards' chMap, no
+  // late-report estimates). One extra request, cached here and in the browser session.
+  if (req.body?.adsMonthly) {
+    const { from, to } = req.body
+    const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '')
+    if (!isDate(from) || !isDate(to)) return res.status(400).json({ error: 'Bad from / to' })
+    const ck = `adsMonthly|${from}|${to}`
+    const hit = getFromCache(ck)
+    if (hit) return res.json(hit)
+    try {
+      const bqm = getBQ()
+      const [[spendRows], [salesRows]] = await Promise.all([
+        bqm.query({ query: `SELECT FORMAT_DATE('%Y-%m', report_date) AS month, platform, SUM(spend) AS spend, SUM(clicks) AS clicks, SUM(impressions) AS impressions FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${from}' AND '${to}' GROUP BY 1, 2` }),
+        bqm.query({ query: `WITH q AS (${buildQuery(from, to, {})}) SELECT FORMAT_DATE('%Y-%m', OrderDate) AS month, Channel, SUM(SellingPrice_Exc_GST) AS exc_rev FROM q GROUP BY 1, 2` }),
+      ])
+      const out = {
+        from, to,
+        spend: spendRows.map(x => ({ month: x.month, platform: x.platform, spend: Number(x.spend) || 0, clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0 })),
+        sales: salesRows.map(x => ({ month: x.month, channel: x.Channel === 'Retail' ? 'EBO' : x.Channel, excRev: Number(x.exc_rev) || 0 })),
+      }
+      setInCache(ck, out)
+      return res.json(out)
+    } catch (e) {
+      return res.status(500).json({ error: String(e.message || e).slice(0, 300) })
+    }
+  }
 
   const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup, phase } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
@@ -3241,12 +3269,11 @@ export default async function handler(req, res) {
           // channel-level netCalc above, just re-run per store×month instead of once for all of
           // EBO. SKU cost rows are exposed separately (storeSkuCostRows) so the frontend can apply
           // the same weight-slab SnD formula the channel-wide skuCostRows uses, scoped per store. Rows whose
-          // store_id has no unifiedstorename mapping (test/junk POS ids, or explicitly-"Ignore"
-          // entries like Exhibition/Retail Inside Sales — see api/_store_pnl.js) are dropped here
-          // rather than surfaced as an "Unknown" store.
+          // store_id has no unifiedstorename mapping go to an "Unmapped / Other" row and explicitly-
+          // "Ignore" ids to "Ignored (UTSAV)" (api/_store_pnl.js storeNameFor) instead of being dropped,
+          // so the store table's Total Gross equals the Financial View (fix/pnl-data item 4).
           storeRows: (r.eboStoreMonthly || []).reduce((acc, x) => {
-            const storeName = storeIdMap[x.store_id]
-            if (!storeName) return acc
+            const storeName = storeNameFor(storeIdMap, x.store_id)
             const sm = computeNetRevenueMeasures({
               gross_inc_gst: x.gross_inc_gst, gross_exc_gst: x.gross_exc_gst,
               cir_rev: x.cir_rev, rto_rev: x.rto_rev, return_rev: x.return_rev, cancel_rev: x.cancel_rev,
@@ -3263,7 +3290,7 @@ export default async function handler(req, res) {
             return acc
           }, []),
           storeSkuCostRows: (r.eboStoreSkuCosts || []).map(x => {
-            const storeName = storeIdMap[x.store_id]
+            const storeName = storeNameFor(storeIdMap, x.store_id)
             return storeName ? {
               storeName, month: x.month, sku: x.sku,
               orderStatus: x.order_status || 'Delivered',

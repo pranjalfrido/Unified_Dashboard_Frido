@@ -15,7 +15,10 @@ import FullScreenList from './FullScreenList.jsx'
 //   searchText  item => string matched by the full-screen list's search
 //   groupOf     item => group name (e.g. category) for the full-screen list's group chips
 //   topN        rows shown in the card; "Show all N →" opens the full-screen list
-export default function MobileRankedList({ title, noun = 'items', items, itemKey, sorts, defaultSort, name, sub, secondary, details, searchText, groupOf, topN = 10, sheetSubtitle, emptyText = 'No data for this period', compact = false }) {
+//   badge       item => node before the name (P&L flag dots); valueColor: (item, sortKey) => colour
+//   renderSheet item => the detail sheet's content instead of the `details` grid (P&L product sheet)
+//   onSelect    item => handled by the caller instead of the built-in sheet (e.g. a category → products)
+export default function MobileRankedList({ title, noun = 'items', items, itemKey, sorts, defaultSort, name, sub, secondary, details, searchText, groupOf, topN = 10, sheetSubtitle, emptyText = 'No data for this period', compact = false, badge, valueColor, renderSheet, onSelect }) {
   const M = C.m
   const [sortKey, setSortKey] = useState(defaultSort || sorts[0].key)
   const [fullOpen, setFullOpen] = useState(false)
@@ -46,7 +49,8 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
       <div>
         {visible.map((it, i) => (
           <RankedRow key={itemKey(it)} rank={i + 1} name={name(it)} sub={sub?.(it)} value={sort.format(it)} secondary={secondary?.(it, sortKey)}
-            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => setSelected(it)} compact={compact} />
+            barPct={((sort.value(it) || 0) / max) * 100} barTone={sort.bar} onClick={() => (onSelect ? onSelect(it) : setSelected(it))} compact={compact}
+            badge={badge?.(it)} valueColor={valueColor?.(it, sortKey)} />
         ))}
       </div>
 
@@ -58,10 +62,11 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
       )}
 
       <FullScreenList open={fullOpen} onClose={() => setFullOpen(false)} title={`All ${noun}`} noun={noun} items={items} sorts={sorts} initialSort={sortKey}
-        name={name} sub={sub} secondary={secondary} searchText={searchText} groupOf={groupOf} onSelect={setSelected} />
+        name={name} sub={sub} secondary={secondary} searchText={searchText} groupOf={groupOf} onSelect={onSelect ? it => { setFullOpen(false); onSelect(it) } : setSelected} badge={badge} valueColor={valueColor} />
 
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected ? name(selected) : ''} subtitle={selected && sub ? [sub(selected), sheetSubtitle].filter(Boolean).join(' · ') : sheetSubtitle}>
-        {selected && (
+        {selected && renderSheet && renderSheet(selected)}
+        {selected && !renderSheet && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
             {details.map(d => (
               <div key={d.label} style={{ background: M.soft, borderRadius: M.radius.tile, padding: '10px 12px', minWidth: 0 }}>
