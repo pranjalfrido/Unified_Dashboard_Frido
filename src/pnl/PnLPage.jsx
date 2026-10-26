@@ -5,8 +5,9 @@ import PriceSimulator from './PriceSimulator.jsx'
 import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
 import B2BCostingCalculator from './B2BCostingCalculator.jsx'
 import POApprovalChecker from './POApprovalChecker.jsx'
-import { netRevenueOf, estimateCogsPerUnit, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
+import { netRevenueOf, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 import { C } from '../utils.js'
+import { prevRange } from '../overview/usePrevPeriod.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -161,6 +162,18 @@ function fulfilmentForWeight(slabs, weightGm) {
 // so switching date ranges that land on the same month pair is free, same spirit as the old
 // cogsMapPromise singleton. Returns shape via cogsMonthlyMapOf(): { [sku]: { [month]: {...} } }.
 const cogsMonthlyCache = new Map()
+
+// Previous-period payloads for the KPI cards' ▲/▼ (fix/pnl-data item 1), loaded through App's shared
+// loader (same /api/bq request and static-file shortcuts as the page itself, previous equal-length
+// range). In memory per (range, filters) for the session; only the last few kept — they're large.
+const pnlPrevCache = new Map()
+function loadPnlPrev(loadPeriod, key, start, end) {
+  if (!pnlPrevCache.has(key)) {
+    pnlPrevCache.set(key, loadPeriod(start, end).catch(e => { pnlPrevCache.delete(key); throw e }))
+    while (pnlPrevCache.size > 4) pnlPrevCache.delete(pnlPrevCache.keys().next().value)
+  }
+  return pnlPrevCache.get(key)
+}
 function loadCogsMonthly(startDate, endDate) {
   const startMonth = `${String(startDate).slice(0, 7)}-01`
   const endMonth = `${String(endDate).slice(0, 7)}-01`
@@ -175,7 +188,7 @@ function loadCogsMonthly(startDate, endDate) {
   return cogsMonthlyCache.get(key)
 }
 
-export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs }) {
+export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs, loadPeriod, summaryOnly = false, onSummary }) {
   const PNL_KEY_MAP = { 'all': 'pnl:all', 'shopify': 'pnl:shopify', 'ebo': 'pnl:ebo', 'amazon': 'pnl:amazon', 'flipkart': 'pnl:flipkart', 'blinkit': 'pnl:blinkit', 'cred': 'pnl:cred', 'firstcry': 'pnl:firstcry', 'instamart': 'pnl:instamart', 'zepto': 'pnl:zepto', 'myntra': 'pnl:myntra', 'international': 'pnl:international', 'offline': 'pnl:offline' }
   const allowedPnlTabs = PNL_TABS.filter(t => !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[t.id]))
   const [activeTabLocal, setActiveTabLocal] = useState('all')
@@ -200,6 +213,32 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const [cogsMonthlyMap, setCogsMonthlyMap] = useState(null)
 
   useEffect(() => { loadSndRates().then(setSndRates) }, [])
+
+  // Previous period (fix/pnl-data item 1): the page's own payload for the previous equal-length range.
+  // A hidden summary-only PnLPage (rendered below) runs the identical calculations on it — same
+  // channel, sub-tab, COGS-by-month and costs — and reports the KPI totals the cards compare against.
+  const prevPeriodRange = useMemo(() => prevRange(filters?.start, filters?.end), [filters?.start, filters?.end])
+  const prevKey = !summaryOnly && loadPeriod && prevPeriodRange
+    ? `${prevPeriodRange.start}:${prevPeriodRange.end}:${JSON.stringify({ ...filters, start: undefined, end: undefined })}`
+    : null
+  const [prevPayload, setPrevPayload] = useState({ key: null, data: null, status: 'loading' })
+  useEffect(() => {
+    if (!prevKey) return
+    let cancelled = false
+    loadPnlPrev(loadPeriod, prevKey, prevPeriodRange.start, prevPeriodRange.end)
+      .then(d => { if (!cancelled) setPrevPayload({ key: prevKey, data: d, status: 'ready' }) })
+      .catch(() => { if (!cancelled) setPrevPayload({ key: prevKey, data: null, status: 'error' }) })
+    return () => { cancelled = true }
+  }, [prevKey]) // eslint-disable-line react-hooks/exhaustive-deps -- prevKey identifies loadPeriod/range/filters
+  const prevView = prevPayload.key === prevKey ? prevPayload : { status: 'loading', data: null }
+  // Summary from the hidden instance, tagged with the view it was computed for so a stale one
+  // (tab or sub-tab just changed) is never shown.
+  const [prevSummaryRaw, setPrevSummaryRaw] = useState(null)
+  const viewSig = `${prevKey}|${activeTab}|${amzChannelView}|${offlineSub}|${d2cSubCh}`
+  const prevSummary = !prevKey ? { status: 'off' }
+    : prevView.status === 'error' ? { status: 'error' }
+    : prevSummaryRaw?.sig === viewSig ? { status: 'ready', ...prevSummaryRaw.values }
+    : { status: 'loading' }
   useEffect(() => {
     if (!filters?.start || !filters?.end) return
     loadCogsMonthly(filters.start, filters.end).then(setCogsMonthlyMap)
@@ -616,8 +655,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     //    isn't pro-rated again).
     //  - A fixed-cost line with no sheet row stays null ("Not available"), never 0.
     const NOT_A_STORE = new Set(['Unmapped / Other', 'Ignored (UTSAV)'])
-    const rangeStart = filters?.start ? new Date(`${filters.start}T00:00:00`) : null
-    const rangeEnd = filters?.end ? new Date(`${filters.end}T00:00:00`) : null
+    const rangeStart = filters.start ? new Date(`${filters.start}T00:00:00`) : null
+    const rangeEnd = filters.end ? new Date(`${filters.end}T00:00:00`) : null
     const monthShare = monthKey => {
       if (!rangeStart || !rangeEnd || !monthKey) return 1
       const [y, m] = monthKey.split('-').map(Number)
@@ -674,7 +713,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const ebitda = !s.isBucket && cm2 != null ? cm2 - (totalFixedCosts || 0) : null
       return { ...s, cogs, gm, snd, cm1, spend, cm2, totalFixedCosts, ebitda }
     }).sort((a, b) => (a.isBucket - b.isBucket) || (b.gross - a.gross))
-  }, [data, sndRates, cogsMonthlyMap, filters?.start, filters?.end])
+  }, [data, sndRates, cogsMonthlyMap, filters.start, filters.end])
 
   // Offline S&D: ₹8/kg transport (on total net weight moved) + a weight-wise fulfilment cost
   // (confirmed 2026-08-20, supersedes the earlier flat ₹9/kg-only formula). Fulfilment reuses the
@@ -2013,38 +2052,19 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     }
   }, [activeTab, activeData, activeSndBySku, activeAdSpendMap, cogsMonthlyMap, activeMobilityNetBySubCat, activeNetScale])
 
-  // Real (not ratio-estimated) previous-period COGS/GM — re-runs the exact same per-unit
-  // cogs-data.json lookup kpiSummary uses above, against last period's real per-SKU unit counts
-  // (activeData.prevSkuData, from a new prevXSKU BigQuery query — see api/bq.js). Only wired for
-  // EBO so far (prevSkuData is empty {} for every other channel until they get the same
-  // treatment) — PnLChannelTab.jsx falls back to the ratio-based estimate whenever this is null,
-  // so no channel silently regresses. SnD/CM1/Mktg Spend/ROAS/CM2 aren't included here even for
-  // EBO: EBO's SnD is a flat 1.5%-of-net assumption with no real prior-period net to anchor it
-  // beyond what kpiSummary already computes for the CURRENT period, and no channel has a
-  // previous-period per-SKU settlement/weight source for real SnD — those stay ratio-estimated.
-  const prevKpiSummary = useMemo(() => {
-    const prevSkuData = activeData?.prevSkuData
-    if (!prevSkuData || Object.keys(prevSkuData).length === 0) return { cogs: null, gm: null }
-    let cogs = 0, netCovered = 0, anyCosted = false
-    Object.values(prevSkuData).forEach(scMap => {
-      Object.values(scMap).forEach(skMap => {
-        Object.entries(skMap).forEach(([sku, sd]) => {
-          const skR = netRevenueOf(sd, undefined, {}, undefined, activeNetScale)
-          const netUnits = skR.netUnits
-          const skUnits = skR.units || 0
-          const skAsp = skUnits > 0 ? skR.gross / skUnits : 0
-          // prevSkuData carries no date metadata locally (see api/bq.js's prevXSKU query), so
-          // which month(s) it actually covers can't be derived here the way kpiSummary's own
-          // filters.start/end-based lookup above can — falls straight to the ASP-based estimate
-          // rather than risk applying the CURRENT period's month to what might be a different
-          // prior month's units. Flagged as a known gap, not a silent wrong-month lookup.
-          const perUnitCogs = estimateCogsPerUnit(skAsp)
-          if (perUnitCogs > 0 || netUnits > 0) { cogs += perUnitCogs * netUnits; netCovered += skR.net; anyCosted = true }
-        })
-      })
+
+  // Summary-only instance (the previous period, see prevSummary above): report this view's KPI totals
+  // once COGS-by-month and the rate card have loaded, render nothing.
+  const summaryReady = summaryOnly && !!channelData && !!cogsMonthlyMap && !!sndRates && !!activeData
+  const summarySig = summaryReady ? JSON.stringify([activeData.gross, activeData.net, kpiSummary.cogs, kpiSummary.snd, kpiSummary.spend, kpiSummary.cm2]) : null
+  useEffect(() => {
+    if (!summaryReady || !onSummary) return
+    onSummary({
+      gross: activeData.gross, net: activeData.net, returnRev: activeData.returnRev, orders: activeData.orders,
+      cogs: kpiSummary.cogs, gm: kpiSummary.gm, snd: kpiSummary.snd, cm1: kpiSummary.cm1, spend: kpiSummary.spend, roas: kpiSummary.roas, cm2: kpiSummary.cm2,
     })
-    return { cogs: anyCosted ? cogs : null, gm: anyCosted ? netCovered - cogs : null }
-  }, [activeData, cogsMonthlyMap, activeNetScale])
+  }, [summarySig]) // eslint-disable-line react-hooks/exhaustive-deps -- summarySig captures every reported value
+  if (summaryOnly) return null
 
   if (!data || !channelData) return null
 
@@ -2181,7 +2201,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           daily={activeData.daily}
           dailyPnL={activeData.dailyPnL}
           kpiSummary={kpiSummary}
-          prevKpiSummary={prevKpiSummary}
+          prevSummary={prevSummary}
           grossOfTotalPct={activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc') && activeData.amzTotalGross > 0 ? (activeData.gross / activeData.amzTotalGross * 100) : null}
           noReturnAccent={activeTab === 'amazon' && amzChannelView === 'vc'}
           grossColor={C.acc}
@@ -2201,6 +2221,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         />
         )}
         {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
+        {prevView.data && prevPeriodRange && (
+          <PnLPage data={prevView.data} filters={{ ...filters, start: prevPeriodRange.start, end: prevPeriodRange.end }} summaryOnly
+            onSummary={values => setPrevSummaryRaw({ sig: viewSig, values })}
+            activeTab={activeTab} amzChannelView={amzChannelView} offlineSub={offlineSub} d2cSubCh={d2cSubCh} allowedTabs={allowedTabs} />
+        )}
       </div>
     </div>
   )

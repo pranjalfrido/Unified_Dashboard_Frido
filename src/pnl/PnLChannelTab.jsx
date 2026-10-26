@@ -351,7 +351,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0 }) {
+export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0 }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
@@ -370,48 +370,37 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
   // App.jsx): green/up for a good move, red/down for a bad one, invert=true flips that (used for
   // Returns/COGS/SnD/Mktg Spend, where a DECREASE is the good direction).
   //
-  // The backend only ever computes two whole-channel previous-period totals: prevGross (matches
-  // `gross` exactly — both GST-inclusive, pre-returns) and prevExcRev (GST-exclusive, NOT
-  // returns-adjusted). Every other KPI here (Net Revenue, Returns, COGS, GM, SnD, CM1, Mktg
-  // Spend, ROAS, CM2) has NO real previous-period figure anywhere in the backend — they're all
-  // derived client-side from the month-aware per-SKU cost table (cogsMonthlyMap) applied to the
-  // CURRENT period's units only.
-  //
-  // Rather than leave those un-badged or add ~12 new heavy BigQuery queries, this estimates each
-  // one's previous-period value by applying the current period's own ratio for that metric
-  // (metric ÷ its natural base) to prevExcRev — the exact same proportional-estimate technique
-  // already used for this file's day-wise trend sparklines (cogsSpark/gmSpark/etc. below, which
-  // scale each day's revenue by kpiSummary.cogs/net). It assumes the current period's cost/margin
-  // ratios roughly held in the prior period too — a real but approximate comparison, not a
-  // fabricated one, and consistent with how this tab already estimates these same metrics
-  // elsewhere. Net Revenue reuses the current period's own return-rate (net ÷ excRev) applied to
-  // prevExcRev, for the same reason.
+  // Every ▲/▼ is a real comparison (fix/pnl-data item 1): Gross and Orders use the payload's own
+  // previous-period totals; every other line comes from prevSummary — the identical calculation run
+  // on the previous period's payload (PnLPage.jsx). Until it arrives, or if it fails or a value
+  // doesn't exist there, the card shows a grey "—" instead (all-or-none per card). The old version
+  // estimated these as (this period's ratio × last period's ex-GST revenue), so every cost line
+  // moved by exactly the same % and ROAS by 0.0%.
   const deltaBadge = (cur, prev, invert = false) => {
     if (prev == null || !(prev > 0)) return null
     const chg = (cur - prev) / prev * 100
     const isGood = invert ? chg < 0 : chg >= 0
     return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: isGood ? C.green.bg : C.red.bg, color: isGood ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
   }
-  const estPrev = (metricVal, base) => (metricVal != null && base > 0 && prevExcRev != null) ? (metricVal / base) * prevExcRev : null
+  const noDelta = title => <span title={title} style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: C.bg, color: C.t3, flexShrink: 0 }}>—</span>
+  const prevStatus = prevSummary?.status || 'off'
+  const prevBadge = (cur, key, invert = false) => {
+    if (prevStatus === 'off' || cur == null) return null
+    if (prevStatus === 'loading') return noDelta('Loading the previous period…')
+    if (prevStatus === 'error') return noDelta('Previous period couldn\'t be loaded')
+    return deltaBadge(cur, prevSummary[key], invert) || noDelta('No previous-period value to compare')
+  }
 
   const grossBadge = deltaBadge(gross, prevGross)
-  const netBadge = deltaBadge(net, estPrev(net, excRev))
-  const returnBadge = deltaBadge(returnRev, estPrev(returnRev, gross), true)
-  // COGS/GM prefer the real previous-period figure (prevKpiSummary — only populated so far for
-  // channels with a prevXSKU query wired in api/bq.js; see PnLPage.jsx) and fall back to the
-  // ratio-based estimate for every channel that doesn't have one yet, so nothing regresses.
-  const cogsBadge = kpiSummary?.cogs != null ? deltaBadge(kpiSummary.cogs, prevKpiSummary?.cogs ?? estPrev(kpiSummary.cogs, net), true) : null
-  const gmBadge = kpiSummary?.gm != null ? deltaBadge(kpiSummary.gm, prevKpiSummary?.gm ?? estPrev(kpiSummary.gm, net)) : null
-  const sndBadge = kpiSummary?.snd != null ? deltaBadge(kpiSummary.snd, estPrev(kpiSummary.snd, net), true) : null
-  const cm1Badge = kpiSummary?.cm1 != null ? deltaBadge(kpiSummary.cm1, estPrev(kpiSummary.cm1, net)) : null
-  const spendBadge = kpiSummary?.spend != null ? deltaBadge(kpiSummary.spend, estPrev(kpiSummary.spend, net), true) : null
-  // ROAS = Gross Rev (Ex GST) / Spend, not itself proportional to net — estimate prev ROAS as
-  // prevExcRev ÷ (spend's own estimated prev value), not by scaling ROAS directly like the other
-  // metrics above.
-  const estPrevSpend = kpiSummary?.spend != null ? estPrev(kpiSummary.spend, net) : null
-  const estPrevRoas = (estPrevSpend > 0 && prevExcRev != null) ? prevExcRev / estPrevSpend : null
-  const roasBadge = kpiSummary?.roas != null ? deltaBadge(kpiSummary.roas, estPrevRoas) : null
-  const cm2Badge = kpiSummary?.cm2 != null ? deltaBadge(kpiSummary.cm2, estPrev(kpiSummary.cm2, net)) : null
+  const netBadge = prevBadge(net, 'net')
+  const returnBadge = prevBadge(returnRev, 'returnRev', true)
+  const cogsBadge = prevBadge(kpiSummary?.cogs, 'cogs', true)
+  const gmBadge = prevBadge(kpiSummary?.gm, 'gm')
+  const sndBadge = prevBadge(kpiSummary?.snd, 'snd', true)
+  const cm1Badge = prevBadge(kpiSummary?.cm1, 'cm1')
+  const spendBadge = prevBadge(kpiSummary?.spend, 'spend', true)
+  const roasBadge = prevBadge(kpiSummary?.roas, 'roas')
+  const cm2Badge = prevBadge(kpiSummary?.cm2, 'cm2')
   const ordersBadge = deltaBadge(orders, prevOrders)
 
   const dailyArr = daily || []
