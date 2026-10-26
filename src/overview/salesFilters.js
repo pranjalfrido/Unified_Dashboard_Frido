@@ -47,3 +47,9 @@ export function clearAllSalesFilters(f) {
   for (const d of SALES_FILTERS) if (d.key in next) next[d.key] = emptyOf(d)
   return next
 }
+
+// Active-filter count for the Sales filter icon (same filters as the desktop Filters popover count).
+export function salesFilterCount(filters) {
+  return (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
+    + list(filters.paymentType).length + list(filters.voucher).length + (filters.productAge ? 1 : 0)
+}

@@ -1037,16 +1037,16 @@ svg text, svg tspan{
    other pages move over as they are redesigned. !important beats the inline styles. */
 .bell-svg{ display:none }
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav[data-page="overview"]{ background:linear-gradient(180deg,#0f2a1d,#1c4630); border-bottom:none; box-shadow:0 2px 8px rgba(0,0,0,.12) }
-  .topnav[data-page="overview"] .tnav-title{ color:#fff }
-  .topnav[data-page="overview"] .drp-trigger,
-  .topnav[data-page="overview"] .drp-refresh,
-  .topnav[data-page="overview"] .alerts-bell-btn{ background:rgba(255,255,255,.08) !important; border:1px solid rgba(255,255,255,.22) !important; color:#fff !important; border-radius:10px !important }
-  .topnav[data-page="overview"] .drp-trigger{ font-size:12.5px !important; padding:6px 10px !important; min-height:34px }
-  .topnav[data-page="overview"] .drp-trigger svg *{ stroke:rgba(255,255,255,.85) }
-  .topnav[data-page="overview"] .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
-  .topnav[data-page="overview"] .bell-emoji{ display:none }
-  .topnav[data-page="overview"] .bell-svg{ display:block }
+  .topnav.m-header{ background:linear-gradient(180deg,#0f2a1d,#1c4630); border-bottom:none; box-shadow:0 2px 8px rgba(0,0,0,.12) }
+  .topnav.m-header .tnav-title{ color:#fff }
+  .topnav.m-header .drp-trigger,
+  .topnav.m-header .drp-refresh,
+  .topnav.m-header .alerts-bell-btn{ background:rgba(255,255,255,.08) !important; border:1px solid rgba(255,255,255,.22) !important; color:#fff !important; border-radius:10px !important }
+  .topnav.m-header .drp-trigger{ font-size:12.5px !important; padding:6px 10px !important; min-height:34px }
+  .topnav.m-header .drp-trigger svg *{ stroke:rgba(255,255,255,.85) }
+  .topnav.m-header .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
+  .topnav.m-header .bell-emoji{ display:none }
+  .topnav.m-header .bell-svg{ display:block }
 }
 
 /* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
@@ -1059,13 +1059,29 @@ svg text, svg tspan{
 /* Overview filter icon (OverviewFilterButton): lives in the green phone header only. */
 .ov-filter-slot{ display:none }
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav[data-page="overview"] .ov-filter-slot{ display:flex; flex-shrink:0 }
+  .topnav.m-header .ov-filter-slot{ display:flex; flex-shrink:0 }
   .filtered-strip::-webkit-scrollbar{ display:none }
 }
 
 /* Alerts count on the green phone header: 12px minimum, palette red / amber (MOBILE_DESIGN_SYSTEM §1). */
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav[data-page="overview"] .alerts-badge{ min-width:18px !important; height:18px !important; border-radius:9px !important; font-size:12px !important; top:-6px !important; right:-6px !important }
-  .topnav[data-page="overview"] .alerts-badge[data-level="red"]{ background:#c0392b !important }
-  .topnav[data-page="overview"] .alerts-badge[data-level="amber"]{ background:#c8860a !important }
+  .topnav.m-header .alerts-badge{ min-width:18px !important; height:18px !important; border-radius:9px !important; font-size:12px !important; top:-6px !important; right:-6px !important }
+  .topnav.m-header .alerts-badge[data-level="red"]{ background:#c0392b !important }
+  .topnav.m-header .alerts-badge[data-level="amber"]{ background:#c8860a !important }
 }
+
+/* Phone header (MobilePageHeader inside the top bar): grows with its optional rows (chips, sub-tabs,
+   "Filtered:" strip). Row 1 keeps the plain bar's height and padding, so Overview looks the same. */
+@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav.m-header{ height:auto; min-height:var(--nav); flex-direction:column; align-items:stretch; padding:0; gap:0 }
+  .topnav.m-header .mph-pad{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
+  .topnav.m-header .mph-row1{ gap:8px }
+  .topnav.m-header .filtered-strip{ padding-left:max(12px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important }
+  .topnav.m-header[data-page="sales"] .tnav-title{ font-size:17px; font-weight:600 }
+  .mph-chips::-webkit-scrollbar{ display:none }
+  /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
+  .sales-tabs, .fbar{ display:none !important }
+}
+
+/* Phone portrait: the plain bar's 6px gap (index.css ≤768 block) also between header items. */
+@media (max-width:768px){ .topnav.m-header .mph-row1{ gap:6px } }

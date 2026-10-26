@@ -33,6 +33,10 @@ import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
+import MobilePageHeader from './responsive/MobilePageHeader.jsx'
+import ActionMenu from './responsive/ActionMenu.jsx'
+import { SalesFilterButton } from './sales/SalesFilters.jsx'
+import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
 import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
@@ -3594,8 +3598,12 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
 // dashboard) reuse this same calendar UI with their own palette instead of forking it —
 // only colors are parameterized, all layout/behavior stays identical. Defaults to the
 // app shell's own light theme so every existing call site is unaffected.
-function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading }) {
+// Phone sheet colours (docs/responsive/MOBILE_DESIGN_SYSTEM.md §1): one mobile palette whatever
+// desktop theme is stored. Keys are the subset of C that this picker reads.
+const DRP_MOBILE_THEME = { acc: C.m.green, acl: '#e9f3ed', bg: C.m.soft, border: C.m.line, border2: C.m.g4, card: '#fff', onAcc: '#fff', t1: C.m.ink, t2: C.m.ink, t3: C.m.muted }
+function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh, loading }) {
   const isMobile = useIsMobile()
+  const T = isMobile && themeProp === C ? DRP_MOBILE_THEME : themeProp
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters?.start ?? '', end: filters?.end ?? '' })
   const [selecting, setSelecting] = useState('start')
@@ -4865,7 +4873,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -4873,6 +4881,54 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsR
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
+  const bp = useBreakpoint()
+  // Phones (≤768px and phone landscape): Overview and Sales use the shared MobilePageHeader; the other
+  // pages keep this bar until they are redesigned.
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'overview' || page === 'sales')) {
+    const dateNode = (
+      <div className="tnav-right">
+        <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
+          <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
+        </div>
+      </div>
+    )
+    if (page === 'overview') {
+      return (
+        <div className="topnav m-header" data-page={page}>
+          <MobilePageHeader title={pageTitle} right={<>
+            {/* Shown while a Sales-tab filter is shaping the Overview numbers. */}
+            <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>
+            <AlertsBell alerts={combinedAlerts} />
+            {dateNode}
+          </>} />
+        </div>
+      )
+    }
+    const tab = salesActiveTab
+    const chips = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id])).map(t => ({ id: t.id, label: t.label }))
+    const d2cSubs = (salesData?.allSubChannels?.length ? salesData.allSubChannels : Object.keys(salesData?.subChannelMap || {}).filter(k => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
+    const d2cActive = (filters.subChannel || '').split(',').map(x => x.trim()).find(v => v && v !== 'ShopifyIndia' && v !== 'International') || null
+    const subTabs = tab === 'shopify' && shopifyView !== 'returns' && d2cSubs.length ? [{ id: 'overall', label: 'Overall' }, ...d2cSubs.map(k => ({ id: k.toLowerCase(), label: k }))]
+      : tab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+      : tab === 'offline' ? OFFLINE_SUB_OPTIONS
+      : null
+    const activeSub = tab === 'shopify' ? (d2cActive ? d2cActive.toLowerCase() : 'overall') : tab === 'amazon' ? salesChannelView : tab === 'offline' ? salesOfflineSub : null
+    const onSub = id => { if (tab === 'shopify') goToSalesSub?.(id); else if (tab === 'amazon') setSalesChannelView(id); else if (tab === 'offline') setSalesOfflineSub(id) }
+    // The sub-channel is the D2C sub-tab, not a filter, so it stays out of the "Filtered:" strip.
+    const stripItems = activeSalesFilters(filters).filter(i => i.key !== 'subChannel')
+    const menu = <ActionMenu items={salesMenu || []} title={`Sales · ${salesChannelLabel}`} />
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Sales" sub={salesChannelLabel}
+          right={<>{!subTabs && menu}<AlertsBell alerts={combinedAlerts} />{dateNode}</>}
+          chips={chips} activeChip={tab}
+          onChip={id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
+          chipsRight={<SalesFilterButton data={salesData} filters={filters} setFilters={setFilters} activeTab={tab} subCatFirstOrderMap={subCatFirstOrderMap} />}
+          subTabs={subTabs} activeSub={activeSub} onSub={onSub} subRight={subTabs ? menu : null}
+          strip={{ items: stripItems, onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) }} />
+      </div>
+    )
+  }
   return (
     <div className="topnav" data-page={page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
@@ -14855,7 +14911,7 @@ function FilterIconPopover({ children, activeCount }) {
 }
 
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage, onMenu }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
 
@@ -15740,6 +15796,25 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 14px', borderRadius: 7, background: C.acs, color: C.acd, display: 'inline-block' }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
+
+  // Phone header "⋯" menu: the desktop Export menu's options and handlers for this tab. D2C's Return
+  // Analysis view is not offered on phones yet (its mobile layout is the next round); a phone that
+  // lands on it by link gets "Back to D2C" instead.
+  useEffect(() => {
+    if (!onMenu) return
+    const std = [['sku', 'Category SKU'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+    const handlers = { amazon: handleAmzExport, flipkart: handleFKExport, blinkit: handleBlExport, instamart: handleInsExport, zepto: handleZtExport, cred: handleCrExport, firstcry: handleFcExport, myntra: handleMnExport, offline: handleOffExport }
+    const opts = activeTab === 'shopify' ? [['sku', 'Day-wise & SKU'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+      : activeTab === 'all' ? [['channel', 'Revenue by Channel'], ['category', 'Category Revenue Matrix'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+      : activeTab === 'amazon' ? std.filter(([key]) => !(key === 'states' && channelView === 'vc'))
+      : handlers[activeTab] ? std : []
+    const run = activeTab === 'shopify' ? handleD2CExport : activeTab === 'all' ? handleAllExport : handlers[activeTab]
+    const items = opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) }))
+    if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') })
+    onMenu(items)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onMenu, activeTab, channelView, shopifyView, data, filters])
+  useEffect(() => () => onMenu?.([]), [onMenu])
 
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
     + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
@@ -19665,6 +19740,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [csRefresh, setCsRefresh] = useState(0)
   // Export list + download function registered by the Customer Support page for the top bar's Export menu.
   const [csExport, setCsExport] = useState(null)
+  // "⋯" actions of the Sales page (exports, …) for the phone header; set by SalesPage.
+  const [salesMenu, setSalesMenu] = useState([])
 
   // Redirect to default page if URL is '/' or unknown
   const getDefaultPage = () => {
@@ -20245,7 +20322,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
+        <Topnav allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support'} />
         {error && (
@@ -20272,7 +20349,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} onOpenInventory={openInventoryHealth} />
             </div>
           )}
-          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
