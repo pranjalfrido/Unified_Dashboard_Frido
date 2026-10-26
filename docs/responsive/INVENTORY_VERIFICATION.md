@@ -45,3 +45,22 @@ vs branch on the same data) are the number proof.
   which has no per-facility-type breakdown, so the desktop Location-wise table shows "—" for stock. Same on
   the original code. `STATIC_INV=1` on the check scripts serves the static file with only `asOf` moved to now.
 - **Check script** — `check-sa-numbers` clicked an ambiguous "Category" tab; now scoped to the Contribution card.
+
+## Regular facilities only (follow-up, 26 Oct)
+
+Reported: the phone showed a DEL warehouse (Frido Store only). Cause: the live-API fallback
+(`/api/inventory`, used when the hourly static file is over 2 hours old) never applied the Regular-only
+rule that `scripts/generate-inv-cache.mjs` applies — DEL was listed and every total counted Frido Store /
+Dark Store / Internal Store stock, on desktop and mobile alike. The static file was already correct.
+
+Fix (approved): `api/inventory.js` now returns the same Regular split as the static file — per-SKU
+`facilities` (with location), per-location `byFacilityType` with no-Regular locations dropped, and
+`byFacilityType` per Location-table cell. Cache key bumped to `inv2|`. No query or metric changes.
+
+Proof:
+- Old vs new API code, same data, one process: summary, all 2,722 SKUs, ageing lists, status counts,
+  lead-time risk, filter options, kept warehouse rows and Location table identical; only the new fields
+  added and DEL dropped. New splits add up exactly to the existing totals.
+- Mobile vs desktop on the API path: ALL MATCH — 7 warehouses (no DEL), PNQ 4.39L Regular (was 4.48L),
+  total 8.38L = sum of the 7 Regular warehouses; Stock explorer All / PNQ / GGN 11/11.
+- Static path re-checked: ALL MATCH, unchanged.

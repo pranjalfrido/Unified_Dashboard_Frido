@@ -72,7 +72,8 @@ export default async function inventoryHandler(req, res) {
 
   const db = getPool()
   // Cache key covers everything that affects computation (attribute filters are re-applied from cached skus)
-  const cacheKey = `inv|${start}|${end}|${location||''}|${facility||''}|${facilityType||''}|${avgSaleWindowDays||7}`
+  // inv2: payload gained facilities / byFacilityType (Regular-only views) — don't serve older entries
+  const cacheKey = `inv2|${start}|${end}|${location||''}|${facility||''}|${facilityType||''}|${avgSaleWindowDays||7}`
   const cached = await getInvCache(db, cacheKey)
   if (cached) {
     const slimLoc = l => ({ location: l.location, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: l.avgSale, doi: l.doi, stockStatus: l.stockStatus })
@@ -379,6 +380,10 @@ export default async function inventoryHandler(req, res) {
           rtdLevel: rtdLevel(s.rtdInvt, avgSale),
           requiredStock: Math.round(requiredStock(avgSale, s.leadTime, s.productSource, s.totalInvt)),
           locations: sortByLocationOrder(s.locations, l => l.location),
+          // Flat per-facility list (with location), same shape as scripts/generate-inv-cache.mjs —
+          // the client sums only Regular facilities from it for the Regular view (KPIs, Inventory
+          // Detail). Without it the client falls back to s.locations, which counts every facility type.
+          facilities: s.locations.flatMap(l => (l.facilities || []).map(f => ({ location: l.location, ...f }))),
           // Website Status — Live if this SKU shows available > 0 on Shopify (either
           // store); Stock Out otherwise, including SKUs Shopify doesn't carry at all.
           websiteStatus: liveOnWebsite.has(normSku(s.sku)) ? 'Live' : 'Stock Out',
@@ -466,7 +471,24 @@ export default async function inventoryHandler(req, res) {
       acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty
       acc.orderAllocation += r.orderAllocation
     }
-    const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.location !== 'Unmapped').map(l => {
+    // byFacilityType: per-location inventory by facility type, as in scripts/generate-inv-cache.mjs —
+    // the Warehouse Health cards show only the Regular part on the Regular view.
+    const locFacilityTypeMap = new Map() // location -> Map(facilityType -> totals)
+    for (const r of scopedSkuLocRows) {
+      if (!r.location || r.location === 'Unmapped') continue
+      if (!locFacilityTypeMap.has(r.location)) locFacilityTypeMap.set(r.location, new Map())
+      const ftMap = locFacilityTypeMap.get(r.location)
+      for (const f of r.facilities || []) {
+        if (!ftMap.has(f.facilityType)) ftMap.set(f.facilityType, { facilityType: f.facilityType, totalInvt: 0, rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0 })
+        const acc = ftMap.get(f.facilityType)
+        acc.totalInvt += f.totalInvt; acc.rtdInvt += f.rtdInvt; acc.rawInvt += f.rawInvt; acc.rawBlockedInvt += f.rawBlockedInvt
+      }
+    }
+    const locations = sortByLocationOrder([...locationMap.values()].filter(l => {
+      if (l.location === 'Unmapped') return false
+      // Exclude locations that have no Regular facility — e.g. DEL only has a Frido Store.
+      return [...(locFacilityTypeMap.get(l.location)?.values() || [])].some(f => f.facilityType === 'Regular')
+    }).map(l => {
       const avgSale = Math.ceil(l.rawAvgSaleQty / daysInRange)
       const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty / daysInRange)
       const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
@@ -475,7 +497,8 @@ export default async function inventoryHandler(req, res) {
       // sales types (matches Sales & Allocation page's Fill % = allocation ÷ sales, which also
       // counts B2C+B2B+PO demand, not B2C-only).
       const allocationPct = totalAvgSale > 0 ? (l.orderAllocation / totalAvgSale) * 100 : null
-      return { ...l, avgSale, totalAvgSale, doi, allocationPct, stockStatus: doi == null ? stockStatus(0, avgSale, l.totalInvt, {}) : stockStatus(doi, avgSale, l.totalInvt, {}) }
+      const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
+      return { ...l, avgSale, totalAvgSale, doi, allocationPct, stockStatus: doi == null ? stockStatus(0, avgSale, l.totalInvt, {}) : stockStatus(doi, avgSale, l.totalInvt, {}), byFacilityType }
     }), l => l.location)
 
     // ── Lead-time risk: imported/outsourced SKUs with low DOI ─────────────────
@@ -553,7 +576,11 @@ export default async function inventoryHandler(req, res) {
     const pivotRows = pivotSkus.map(s => ({
       sku: s.sku, category: s.category, subCategory: s.subCategory,
       totalInvt: Math.round(s.totalInvt), avgSale: s.avgSale,
-      byLocation: Object.fromEntries(s.locations.map(l => [l.location, { totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale }])),
+      // byFacilityType per cell (inventory only; avgSale is location-grain), as in the static cache
+      byLocation: Object.fromEntries(s.locations.map(l => [l.location, {
+        totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale,
+        byFacilityType: (l.facilities || []).reduce((acc, f) => { acc[f.facilityType] = (acc[f.facilityType] || 0) + (f.totalInvt || 0); return acc }, {}),
+      }])),
     }))
 
     const payload = {
