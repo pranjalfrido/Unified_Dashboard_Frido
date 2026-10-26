@@ -9,7 +9,9 @@ import { avg, div, dur, pendencyRows, periodLabel } from './supportModel.js'
 
 const pct = (cur, prev) => (prev ? (cur - prev) / Math.abs(prev) * 100 : null)
 const arrow = v => (v > 0 ? '▲' : v < 0 ? '▼' : '')
-const result = (rules, label, rulesLines) => {
+// Triggered rules first (stable), so the phone card's top 5 shows what needs attention.
+const result = (all, label, rulesLines) => {
+  const rules = [...all.filter(r => r.count > 0), ...all.filter(r => !r.count)]
   const triggered = rules.filter(r => r.count > 0).length
   return {
     rules, triggered, flaggedProducts: 0, smallCount: 0, bars: { label }, rulesLines,

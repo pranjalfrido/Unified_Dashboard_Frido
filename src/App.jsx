@@ -41,6 +41,7 @@ import MixBar from './responsive/MixBar.jsx'
 import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeCustomerRules } from './customer/customerRules.js'
 import { SEG_META, GRID_PLACEMENT } from './customer/customerDefs.js'
+import CustomerMobileView from './customer/CustomerMobileView.jsx'
 import AdsLaptopSections from './ads/AdsSections.jsx'
 import AdsMobileView from './ads/AdsMobileView.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
@@ -4916,7 +4917,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -4985,6 +4986,32 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
           subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
           strip={cc?.strip} />
+      </div>
+    )
+  }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'customer' || page === 'customer-support')) {
+    // CUSTOMER_MASTER_PLAN.md Part B §B3: "Customers" with Intelligence | Support underline tabs (as
+    // Inventory) and, on Intelligence, the slim second row of sub-tabs (as Logistics Cost). Date range
+    // as a pill (as Inventory Sales & Allocation); Refresh / Export in "⋯".
+    const hasIntel = !allowedTabs || allowedTabs.includes('customer')
+    const hasSupport = !allowedTabs || allowedTabs.includes('customer:support')
+    const subTabs = [hasIntel && { id: 'customer', label: 'Intelligence' }, hasSupport && { id: 'customer-support', label: 'Support' }].filter(Boolean)
+    const intel = page === 'customer'
+    const sub2 = [{ id: 'overview', label: 'Overview' }, { id: 'trends', label: 'Acquisition' }, { id: 'cohort', label: 'Retention' }, { id: 'purchase', label: 'Behaviour' }, { id: 'rfm', label: 'Segments' }, { id: 'spend', label: 'Discounts' }]
+    const items = intel ? [{ id: 'refresh', label: 'Refresh data', onSelect: onCustRefresh }]
+      : [{ id: 'refresh', label: 'Refresh data', onSelect: onCsRefresh },
+        ...(csExport && !csExport.busy && csExport.items?.length ? [{ id: 'exp-all', label: 'Export all detailed KPIs (CSV)', onSelect: () => csExport.run('all') }] : [])]
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Customers" compact
+          right={<>
+            <div className="tnav-right">{intel
+              ? <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onCustRefresh} loading={loading} />
+              : csRange && <DateRangePicker filters={csRange} setFilters={setCsRange} onRefresh={onCsRefresh} />}</div>
+            <ActionMenu items={items} title={intel ? 'Customers · Intelligence' : 'Customers · Support'} />
+          </>}
+          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
+          subTabs2={intel ? sub2 : null} activeSub2={customerTab} onSub2={setCustomerTab} subTabs2Scroll />
       </div>
     )
   }
@@ -17117,7 +17144,7 @@ function HeroSparkCard({ c }) {
   )
 }
 
-function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp }) {
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, refreshTick = 0 }) {
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17148,8 +17175,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   const [cwMetric, setCwMetric] = useState('discountedOrderPct')
   const [ssrLine, setSsrLine] = useState('grossSales')
   const API = import.meta.env.VITE_API_URL || ''
+  // Below 1024px the phone view (CUSTOMER_MASTER_PLAN.md Part B §B3); on phones the sub-tabs live in the header
+  const bpCust = useBreakpoint()
+  const custMobile = bpCust.width < 1024
+  const custPhoneHeader = bpCust.width <= 768 || bpCust.isPhoneLandscape
 
-  const custFetchKey = `${filters?.start}|${filters?.end}`
+  const custFetchKey = `${filters?.start}|${filters?.end}|${refreshTick}`
   const prevCustFetchKey = useRef(null)
   useEffect(() => {
     if (!filters?.start || !filters?.end) return
@@ -17167,7 +17198,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
       .catch(e => { setCustError(e.message); setLoading(false) })
   }, [custFetchKey])
 
-  const tabBar = (
+  const tabBar = custMobile && custPhoneHeader ? null : (
     <div className="sales-tabs">
       {[
         { id: 'overview', label: 'Overview' },
@@ -17219,6 +17250,13 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     crossSell = [],
     dailySpend: rawDailySpend = [],
   } = custData
+
+  if (custMobile) return (
+    <>
+      {tabBar}
+      <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
+    </>
+  )
 
   const bucketKey = (dateStr) => {
     if (!dateStr) return 'Unknown'
@@ -20364,6 +20402,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const [customerTab, setCustomerTab] = useState('overview')
+  const [custRefresh, setCustRefresh] = useState(0) // phone header Refresh (Customer Intelligence)
   // Customer Support date range — shared by the top-bar picker and the page. Defaults to the
   // last day (yesterday): today's tickets and calls are still arriving.
   const [csRange, setCsRange] = useState(() => {
@@ -20986,7 +21025,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {page !== 'ask' && <Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
+        {page !== 'ask' && <Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
@@ -21048,7 +21087,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
+              <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} refreshTick={custRefresh} />
             </div>
           )}
           {page === 'customer-support' && (!allowedTabs || allowedTabs.includes('customer:support')) && (
