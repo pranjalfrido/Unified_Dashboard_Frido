@@ -7,6 +7,8 @@ import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import CompactRankRow from '../responsive/CompactRankRow.jsx'
 import MobileRankedList from '../responsive/MobileRankedList.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
+import FilterPicker from '../responsive/FilterPicker.jsx'
+import StackedBarChart from '../responsive/StackedBarChart.jsx'
 import { Card, Chips, KV, ShowAllButton } from '../responsive/CardKit.jsx'
 import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
 
@@ -223,6 +225,49 @@ function ReasonsCard({ reasons = [], period }) {
   )
 }
 
+// ── Cancellations · days since order: the desktop chart (last 6 months, not the date range) ──
+// Stacked by the day buckets the desktop tooltip lists (green shades, fastest darkest).
+const BUCKETS = ['0-1', '2-4', '5-7', '8-10', '10+']
+function CancelCard({ rows = [] }) {
+  const [subs, setSubs] = useState([]) // [] = all sub-categories (desktop default)
+  const [pick, setPick] = useState(false)
+  const [sel, setSel] = useState(null)
+  const colors = [M.greenDark, M.green, M.g2, M.g3, M.g4]
+  const series = BUCKETS.map((b, i) => ({ key: b, label: `${b} days`, color: colors[i] }))
+  const monthMap = {}
+  rows.forEach(r => { monthMap[r.monthDt] = r.month })
+  const months = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0])).map(([, l]) => l)
+  const subOptions = [...new Set(rows.map(r => r.subCategory))].sort()
+  const bars = months.map(month => {
+    const values = Object.fromEntries(BUCKETS.map(b => [b, 0]))
+    rows.filter(r => r.month === month && (subs.length === 0 || subs.includes(r.subCategory))).forEach(r => { values[r.bucket] = (values[r.bucket] || 0) + r.cancelCount })
+    return { key: month, label: (month || '').split(' ')[0], full: month, values }
+  })
+  const onlyFirstBucket = rows.length > 0 && rows.every(r => r.bucket === '0-1')
+  const selTotal = sel ? BUCKETS.reduce((s, b) => s + (sel.values[b] || 0), 0) : 0
+  return (
+    <Card title="Cancellations · days since order" sub="Cancelled orders, last 6 months (not the selected dates)">
+      {onlyFirstBucket && <InfoStrip text="Days since order isn't tracked yet: every cancellation is counted as 0–1 days." style={{ marginBottom: 8 }} />}
+      <button type="button" onClick={() => setPick(true)}
+        style={{ marginBottom: 10, minHeight: 32, maxWidth: '100%', padding: '0 12px', borderRadius: 999, border: `1px solid ${subs.length ? M.green : M.line}`, background: subs.length ? 'rgba(31,90,61,.08)' : '#fff', color: M.ink, fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {subs.length === 0 ? 'All sub-categories' : subs.length === 1 ? subs[0] : `${subs[0]} +${subs.length - 1}`} ▾
+      </button>
+      {bars.length ? <StackedBarChart label="Cancellations by month" bars={bars} series={series} fmt={fmtN} onBar={setSel} height={170} />
+        : <div style={{ fontSize: 13, color: M.muted, padding: '8px 0' }}>No cancellation data</div>}
+      <BottomSheet open={!!sel} onClose={() => setSel(null)} title={sel ? `${sel.full} · ${fmtN(selTotal)} cancellations` : ''}>
+        {sel && BUCKETS.map((b, i) => (
+          <CompactRankRow key={b} name={`${b} days`} value={fmtN(sel.values[b] || 0)} pct={`${selTotal ? ((sel.values[b] || 0) / selTotal * 100).toFixed(0) : 0}%`}
+            barPct={selTotal ? ((sel.values[b] || 0) / selTotal) * 100 : 0} last={i === BUCKETS.length - 1} />
+        ))}
+      </BottomSheet>
+      <BottomSheet open={pick} onClose={() => setPick(false)} title="Sub-category">
+        <FilterPicker title="Sub-category" noun="sub-categories" multi options={subOptions.map(v => ({ value: v }))} selected={subs}
+          onBack={() => setPick(false)} onApply={v => { setSubs(v); setPick(false) }} />
+      </BottomSheet>
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -251,6 +296,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <TopProductsCard data={data} basis={basis} paymentType={topProductsPaymentType} setPaymentType={setTopProductsPaymentType} period={period} />}
       {data && <CategoryCard data={data} basis={basis} period={period} />}
       {data && <ReasonsCard reasons={data.returnReasons} period={period} />}
+      {data && <CancelCard rows={data.cancelByBucket} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
