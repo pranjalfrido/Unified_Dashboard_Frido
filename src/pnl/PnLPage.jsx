@@ -1994,9 +1994,12 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const gm = anyCosted ? netCovered - cogs : null
     const cm1Covered = anyCm1
     const cm1Final = cm1Covered ? cm1 : null
-    const cm2 = cm1Covered ? cm1 - spend : null
+    // No ad-spend source for this channel (CRED, Firstcry, Myntra, …): spend is unknown, not ₹0 —
+    // so Mktg shows "Not available" and CM2 stays — (fix/pnl-data 4d).
+    const hasSpendSource = activeAdSpendMap != null
+    const cm2 = cm1Covered && hasSpendSource ? cm1 - spend : null
     return {
-      net, cogs: anyCosted ? cogs : null, gm, snd: anySnd ? snd : null, cm1: cm1Final, spend, cm2,
+      net, cogs: anyCosted ? cogs : null, gm, snd: anySnd ? snd : null, cm1: cm1Final, spend: hasSpendSource ? spend : null, cm2,
       // ROAS = Gross Revenue (Ex GST, before returns) ÷ Marketing Spend — same formula and same
       // numerator base ("Revenue (Ex GST) / Spend") the Ads tab's own Overall ROAS card uses, so
       // this always matches that number exactly rather than drifting via a different revenue base.
@@ -2005,7 +2008,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       gmPct: gm != null && netCovered > 0 ? (gm / netCovered * 100) : null,
       sndPct: anySnd && sndNetCovered > 0 ? (snd / sndNetCovered * 100) : null,
       cm1Pct: cm1Final != null && cm1NetCovered > 0 ? (cm1Final / cm1NetCovered * 100) : null,
-      spendPct: net > 0 ? (spend / net * 100) : null,
+      spendPct: hasSpendSource && net > 0 ? (spend / net * 100) : null,
       cm2Pct: cm2 != null && cm2NetCovered > 0 ? (cm2 / cm2NetCovered * 100) : null,
     }
   }, [activeTab, activeData, activeSndBySku, activeAdSpendMap, cogsMonthlyMap, activeMobilityNetBySubCat, activeNetScale])
