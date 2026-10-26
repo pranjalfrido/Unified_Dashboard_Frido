@@ -9,6 +9,7 @@ import { costFilterCount, costHasFilters, costStripItems, costRemove, costClear 
 import { monthsLabel } from './responsive/monthRange.js'
 import CostOverviewMobile from './logistics/mobile/CostOverviewMobile.jsx'
 import CostB2CMobile from './logistics/mobile/CostB2CMobile.jsx'
+import CostFtlMobile from './logistics/mobile/CostFtlMobile.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -6818,6 +6819,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         zoneSub={zoneSub} setZoneSub={setZoneSub} zoneSubOptions={zoneSubOptions} slabRows={slabRows} bandRows={bandRows} driftRows={driftRows}
         costToServe={costToServe} activeCell={activeCell} lflOptions={lflOptions} layout={mobileLayout}
         lfl={{ zones: lflZones, setZones: setLflZones, bands: lflBands, setBands: setLflBands, legs: lflLegs, setLegs: setLflLegs, slab: lflSlab, setSlab: setLflSlab }} />
+    }
+    if (scope === 'b2b' && b2b) {
+      mob = <CostFtlMobile b2b={b2b} b2bHead={b2bHead} b2bVariance={b2bVariance} fixedVeh={fixedVeh} vehicleRows={b2bVehicleRows} transRows={b2bTransRows} b2bSole={b2bSole}
+        trendWindow={b2bTrendWindow} trendMonths={b2bTrendMonths} setTrendMonths={setB2bTrendMonths} transTrendRows={b2bTransTrendRows} laneRows={b2bLaneVehRows}
+        spreadRows={b2bSpreadRows} typeRows={b2bTypeRows} invoiceRows={b2bRows} monthLabel={monthLabel} layout={mobileLayout} />
     }
     if (mob) content = <div className="log-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, background: BASE_C.m.bg, color: BASE_C.m.ink, padding: phoneHeader ? '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' : '4px 0 24px' }}>{mob}</div>
   }
