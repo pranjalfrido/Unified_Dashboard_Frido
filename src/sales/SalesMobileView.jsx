@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, fmt, fmtN } from '../utils.js'
+import { C, fmt, fmtN, pct } from '../utils.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import MobileRankedList from '../responsive/MobileRankedList.jsx'
@@ -85,7 +85,7 @@ function CategoriesCard({ data, sorts, period, hasSku }) {
     <Card title={view === 'category' ? 'Categories' : view === 'product' ? 'Products' : 'SKUs'} right={<SegmentToggle label="Show" value={view} onChange={setView} options={opts} />}>
       {view === 'category' && (
         <CompactList noun="categories" top={8}
-          rows={(data.categories || []).map(c => ({ key: c.name, name: c.name, raw: c.rev, value: fmt(c.rev), pct: totalRev > 0 ? `${(c.rev / totalRev * 100).toFixed(1)}%` : '—' }))} />
+          rows={(data.categories || []).map(c => ({ key: c.name, name: c.name, raw: c.rev, value: fmt(c.rev), pct: totalRev > 0 ? pct(c.rev, totalRev) : '—' }))} />
       )}
       {view === 'product' && (
         <MobileRankedList title={null} noun="products" items={data.products || []} itemKey={r => `${r.cat}::${r.sc}`}

@@ -33,7 +33,7 @@ import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
-import { chg } from './sales/salesMobileData.js'
+import { chg, mobileMatrix, matrixRows } from './sales/salesMobileData.js'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
@@ -7089,62 +7089,11 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName, catName, fallbackGstRatio) => {
-    const gross = d.rev || 0
-    const excRev = d.excRev || 0
-    const cancelRev = d.cancelRev || 0  // full cancellation deducted, COD included (confirmed 2026-08-19)
-    const rtoRev = d.rtoRev || 0
-    const cirRev = d.cirRev || 0
-    const exchRev = d.exchRev || 0
-    const returnRev = d.returnRev || 0
-    // When excRev is missing (e.g. SKU-level rows that only carry gross+units), fall back to the
-    // parent product row's gstRatio so net rev isn't zeroed out by a spurious 100% GST ratio.
-    const gstRatio = excRev > 0 ? (gross > 0 ? (gross - excRev) / gross : 0) : (fallbackGstRatio ?? (gross > 0 ? (gross - excRev) / gross : 0))
-    // Exchange is NOT deducted from Net Revenue (reverted 2026-08-19) — the customer keeps a
-    // product either way, so an exchange isn't lost revenue. exchRev is still extracted above for
-    // display (exchPct) only. The recreated '_EX...' OrderId that would otherwise double-count
-    // this same sale is excluded entirely at the base BigQuery query (see api/_bq.js buildQuery).
-    const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
-    // netScale (confirmed 2026-10-22, same reconciliation pattern as pnlUtils.js's netRevenueOf):
-    // this row-level GST ratio, summed across every row, lands a tiny bit apart from the KPI
-    // card's single whole-channel blended GST ratio — two different, both-correct aggregation
-    // orders. netScale = (KPI card's authoritative Net Revenue) / (this table's own raw total),
-    // computed once by the caller and passed through every mapRow() call, so the table's Total row
-    // always sums to EXACTLY the KPI card's number instead of a close-but-different one.
-    const netStandard = grossAfterReturns * (1 - gstRatio) * netScale
-    // Only use Mobility whitelist override for Mobility or Sparepart-category rows — the server
-    // (api/bq.js's mobilityNetBySubCat) already excludes any other stray category, so anything
-    // present here by the time it reaches this component legitimately belongs to one of these two.
-    // Keyed 'Category::SubCategory' (see the reconciledMobilityNetBySubCat build site above) —
-    // NOT bare SubCategory, since the same SubCategory name can exist under two Categories.
-    const whitelistKey = `${catName}::${scName}`
-    const net = ((catName === 'Mobility' || /^sparepart/i.test(catName || '')) && scName && mobilityNetBySubCat[whitelistKey] != null) ? mobilityNetBySubCat[whitelistKey] : netStandard
-    return { gross, net, units: d.units || 0, cancelRev, rtoRev, cirRev, exchRev, returnRev }
-  }
+  // Rows (and mapRow for the SKU rows / CSV) come from the shared builder in src/sales/salesMobileData.js -
+  // moved there unchanged so the mobile Sales view lists exactly the same rows and numbers.
+  const { mapRow, netShrink, allRows } = matrixRows({ subCatData, subCatPrevMap, simpleReturns, mobilityNetBySubCat, netScale })
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
 
-  // Compute overall net shrink factor to approximate prevNet from prevGross
-  const _totGross = Object.values(subCatData || {}).flatMap(m => Object.values(m)).reduce((s, d) => s + (d.rev || 0), 0)
-  const _totNet = Object.entries(subCatData || {}).flatMap(([cat, m]) => Object.entries(m).map(([sc, d]) => mapRow(d, sc, cat).net)).reduce((s, n) => s + n, 0)
-  const netShrink = _totGross > 0 ? _totNet / _totGross : 1
-
-  // Flatten to one row per Category+Product (sub-category) — every product visible immediately.
-  const allRows = []
-  Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
-    Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d, sc, cat)
-      // Marketplaces report one combined return figure (d.returnRev) with no further breakdown;
-      // D2C/EBO sum the four distinct statuses.
-      const totalReturnRev = simpleReturns ? r.returnRev : r.cancelRev + r.rtoRev + r.cirRev + r.returnRev
-      const prevGross = subCatPrevMap[`${cat}::${sc}`] || 0
-      allRows.push({
-        cat, sc, ...r, prevGross, prevNet: prevGross * netShrink,
-        asp: r.units > 0 ? r.gross / r.units : 0,
-        cancelPct: pctOf(r.cancelRev, r.gross), rtoPct: pctOf(r.rtoRev, r.gross), cirPct: pctOf(r.cirRev, r.gross), exchPct: pctOf(r.exchRev, r.gross),
-        totalReturnPct: pctOf(totalReturnRev, r.gross),
-      })
-    })
-  })
   const filteredRows = q ? allRows.filter(r => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || Object.keys(skuData?.[r.cat]?.[r.sc] || {}).some(sku => sku.toLowerCase().includes(q))) : allRows
   const getters = {
     cat: r => r.cat, sc: r => r.sc, gross: r => r.gross, units: r => r.units, asp: r => r.asp,
@@ -8253,7 +8202,8 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       gst: { label: 'GST', def: 'GST collected.', value: fmt(gstCollected), delta: deskChg(gstCollected, prevGST) },
       returnPct: { label: 'Returns %', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixDataAll, skuData: skuChannelMapBySku, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="all" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} onOpenChannel={onOpenChannel} />
   }
 
@@ -9250,6 +9200,101 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${shResolvedCancelPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cancelPct ?? null) },
   ]
 
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const d2cMatrixInputs = () => {
+        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+        // Resolved per-SKU RTO/CIR/Cancel/Exchange revenue (confirmed 2026-10-22) — sums
+        // sh.skuMap's rtoRev/cirRev/cancelRev/exchRev are already resolved-engine-correct
+        // server-side (api/bq.js's shResolvedBySkuSubCh override, confirmed 2026-10-22) — single
+        // source of truth shared with PnL, so no separate client-side override is needed here.
+        // When MyFrido or Mobility subchannel is selected, filter matrix data to that subchannel only
+        const matrixSubCh = (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel.toLowerCase() : null
+        const catData = {}
+        const subCatData = {}
+        const skuData = {}
+        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+          skuData[cat] = {}
+          Object.entries(scMap).forEach(([sc, skuMap_]) => {
+            skuData[cat][sc] = {}
+            Object.entries(skuMap_).forEach(([sku, v]) => {
+              const rows = v.subChannelRows || {}
+              const keys = matrixSubCh ? (rows[matrixSubCh] ? [matrixSubCh] : []) : Object.keys(rows).filter(k => k !== 'shopify international')
+              if (keys.length === 0) return
+              // rtoRev/cirRev/cancelRev/exchRev here are already resolved-engine-correct, summed
+              // from sh.skuMap's subChannelRows (server-resolved, see api/bq.js comment above).
+              const agg = keys.reduce((a, k) => { const r = rows[k]; return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), codCancelRev: a.codCancelRev+(r.codCancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), exchRev: a.exchRev+(r.exchRev||0), returnUnits: a.returnUnits+(r.returnUnits||0) } }, { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
+              skuData[cat][sc][sku] = agg
+              // accumulate into subCatData and catData
+              if (!subCatData[cat]) subCatData[cat] = {}
+              if (!subCatData[cat][sc]) subCatData[cat][sc] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') subCatData[cat][sc][f] = (subCatData[cat][sc][f]||0) + agg[f] })
+              if (!catData[cat]) catData[cat] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') catData[cat][f] = (catData[cat][f]||0) + agg[f] })
+            })
+          })
+        })
+        // When no subchannel filter, use the pre-aggregated maps directly — sh.catMap/sh.subCatMap
+        // are already resolved-engine-correct server-side (api/bq.js's shResolvedByCatSubCat
+        // override, confirmed 2026-10-22), the same single source of truth PnL reads, so pick()
+        // alone is sufficient here with no further client-side re-summing needed.
+        if (!matrixSubCh) {
+          Object.keys(catData).forEach(k => delete catData[k])
+          Object.keys(subCatData).forEach(k => delete subCatData[k])
+          Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
+          Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
+            const [cat, sc] = key.split('::')
+            if (!subCatData[cat]) subCatData[cat] = {}
+            subCatData[cat][sc] = pick(v)
+          })
+        }
+        // Reconcile sh.mobilityNetBySubCat (raw, keyed by bare SubCategory — no Category
+        // dimension) into a 'Category::SubCategory' composite-keyed map before passing it down —
+        // the same SubCategory name can exist under 2 different Categories (e.g. 'Sparepart'
+        // under both 'Mobility' and 'Sparepart (Chair & Mobility)'), and FlatCategoryProductMatrix.
+        // mapRow() looks up by composite key (see its Mobility-override comment), so a bare-keyed
+        // map would apply that one whitelist value to BOTH rows independently, double-counting it
+        // in the table's Total. Mirrors PnLPage.jsx's reconciledMobilityNetBySubCat exactly.
+        let reconciledMobilityNetBySubCat = {}
+        if (filters.subChannel === 'Mobility' && sh.mobilityNetBySubCat) {
+          const scToCats = new Map()
+          Object.entries(subCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
+            if (!scToCats.has(sc)) scToCats.set(sc, [])
+            scToCats.get(sc).push(cat)
+          }))
+          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
+            const cats = scToCats.get(sc) || []
+            if (cats.length <= 1) {
+              const cat = cats[0] || 'Others'
+              reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + val
+            } else {
+              const grossByCat = cats.map(cat => subCatData[cat]?.[sc]?.rev || 0)
+              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
+              cats.forEach((cat, i) => {
+                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
+                reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + share
+              })
+            }
+          })
+        }
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as pnlUtils.js's netScale) —
+        // the table's own row-level-GST-ratio Net Revenue sum lands a hair apart from the KPI
+        // card's single whole-channel blended-GST-ratio Net Revenue (both correct, different
+        // aggregation order). Compute the table's raw total with mapRow's exact formula, then
+        // scale every row so the Total row matches the KPI card's resolved netRev exactly.
+        const d2cMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.entries(subCatData).forEach(([cat, scMap]) => {
+            Object.entries(scMap).forEach(([sc, d]) => {
+              const gross = d.rev || 0, excRev = d.excRev || 0
+              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+              const grossAfterReturns = gross - (d.cancelRev || 0) - (d.rtoRev || 0) - (d.cirRev || 0) - (d.returnRev || 0)
+              rawTotal += grossAfterReturns * (1 - gstRatio)
+            })
+          })
+          return rawTotal > 0 ? netRev / rawTotal : 1
+        })()
+    return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (sh.catPrevMap || {}), subCatPrevMap: (sh.subCatPrevMap || {}), skuPrevMap: (sh.skuPrevMap || {}), mobilityNetBySubCat: (reconciledMobilityNetBySubCat), netScale: (d2cMatrixNetScale) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const cancelledOrders = orderStatusMap['Cancelled'] || 0
@@ -9281,7 +9326,9 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(shResolvedCancelRev)}).`, value: `${shResolvedCancelPct.toFixed(1)}%`, delta: chg(shResolvedCancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
       exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(shResolvedExchangeRev)}).`, value: `${shExchPct.toFixed(1)}%`, delta: chg(shExchPct, prevExchangePct), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mx = d2cMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -9524,98 +9571,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       {isIntl
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
-        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
-        // Resolved per-SKU RTO/CIR/Cancel/Exchange revenue (confirmed 2026-10-22) — sums
-        // sh.skuMap's rtoRev/cirRev/cancelRev/exchRev are already resolved-engine-correct
-        // server-side (api/bq.js's shResolvedBySkuSubCh override, confirmed 2026-10-22) — single
-        // source of truth shared with PnL, so no separate client-side override is needed here.
-        // When MyFrido or Mobility subchannel is selected, filter matrix data to that subchannel only
-        const matrixSubCh = (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel.toLowerCase() : null
-        const catData = {}
-        const subCatData = {}
-        const skuData = {}
-        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
-          skuData[cat] = {}
-          Object.entries(scMap).forEach(([sc, skuMap_]) => {
-            skuData[cat][sc] = {}
-            Object.entries(skuMap_).forEach(([sku, v]) => {
-              const rows = v.subChannelRows || {}
-              const keys = matrixSubCh ? (rows[matrixSubCh] ? [matrixSubCh] : []) : Object.keys(rows).filter(k => k !== 'shopify international')
-              if (keys.length === 0) return
-              // rtoRev/cirRev/cancelRev/exchRev here are already resolved-engine-correct, summed
-              // from sh.skuMap's subChannelRows (server-resolved, see api/bq.js comment above).
-              const agg = keys.reduce((a, k) => { const r = rows[k]; return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), codCancelRev: a.codCancelRev+(r.codCancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), exchRev: a.exchRev+(r.exchRev||0), returnUnits: a.returnUnits+(r.returnUnits||0) } }, { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
-              skuData[cat][sc][sku] = agg
-              // accumulate into subCatData and catData
-              if (!subCatData[cat]) subCatData[cat] = {}
-              if (!subCatData[cat][sc]) subCatData[cat][sc] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
-              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') subCatData[cat][sc][f] = (subCatData[cat][sc][f]||0) + agg[f] })
-              if (!catData[cat]) catData[cat] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
-              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') catData[cat][f] = (catData[cat][f]||0) + agg[f] })
-            })
-          })
-        })
-        // When no subchannel filter, use the pre-aggregated maps directly — sh.catMap/sh.subCatMap
-        // are already resolved-engine-correct server-side (api/bq.js's shResolvedByCatSubCat
-        // override, confirmed 2026-10-22), the same single source of truth PnL reads, so pick()
-        // alone is sufficient here with no further client-side re-summing needed.
-        if (!matrixSubCh) {
-          Object.keys(catData).forEach(k => delete catData[k])
-          Object.keys(subCatData).forEach(k => delete subCatData[k])
-          Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
-          Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
-            const [cat, sc] = key.split('::')
-            if (!subCatData[cat]) subCatData[cat] = {}
-            subCatData[cat][sc] = pick(v)
-          })
-        }
-        // Reconcile sh.mobilityNetBySubCat (raw, keyed by bare SubCategory — no Category
-        // dimension) into a 'Category::SubCategory' composite-keyed map before passing it down —
-        // the same SubCategory name can exist under 2 different Categories (e.g. 'Sparepart'
-        // under both 'Mobility' and 'Sparepart (Chair & Mobility)'), and FlatCategoryProductMatrix.
-        // mapRow() looks up by composite key (see its Mobility-override comment), so a bare-keyed
-        // map would apply that one whitelist value to BOTH rows independently, double-counting it
-        // in the table's Total. Mirrors PnLPage.jsx's reconciledMobilityNetBySubCat exactly.
-        let reconciledMobilityNetBySubCat = {}
-        if (filters.subChannel === 'Mobility' && sh.mobilityNetBySubCat) {
-          const scToCats = new Map()
-          Object.entries(subCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
-            if (!scToCats.has(sc)) scToCats.set(sc, [])
-            scToCats.get(sc).push(cat)
-          }))
-          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
-            const cats = scToCats.get(sc) || []
-            if (cats.length <= 1) {
-              const cat = cats[0] || 'Others'
-              reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + val
-            } else {
-              const grossByCat = cats.map(cat => subCatData[cat]?.[sc]?.rev || 0)
-              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
-              cats.forEach((cat, i) => {
-                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
-                reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + share
-              })
-            }
-          })
-        }
-        // Reconciliation scale (confirmed 2026-10-22, same pattern as pnlUtils.js's netScale) —
-        // the table's own row-level-GST-ratio Net Revenue sum lands a hair apart from the KPI
-        // card's single whole-channel blended-GST-ratio Net Revenue (both correct, different
-        // aggregation order). Compute the table's raw total with mapRow's exact formula, then
-        // scale every row so the Total row matches the KPI card's resolved netRev exactly.
-        const d2cMatrixNetScale = (() => {
-          let rawTotal = 0
-          Object.entries(subCatData).forEach(([cat, scMap]) => {
-            Object.entries(scMap).forEach(([sc, d]) => {
-              const gross = d.rev || 0, excRev = d.excRev || 0
-              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-              const grossAfterReturns = gross - (d.cancelRev || 0) - (d.rtoRev || 0) - (d.cirRev || 0) - (d.returnRev || 0)
-              rawTotal += grossAfterReturns * (1 - gstRatio)
-            })
-          })
-          return rawTotal > 0 ? netRev / rawTotal : 1
-        })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={d2cMatrixNetScale} />
+        const __mx = d2cMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9965,6 +9922,24 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.exchPct ?? null) },
   ]
 
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const eboMatrixInputs = () => {
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon/Flipkart/Myntra)
+        // so the table's Net Revenue Total matches the netRev KPI card exactly.
+        const eboMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.values(subCatDataForMatrix).forEach(scMap => {
+            Object.values(scMap).forEach(d => {
+              const gross = d.rev || 0, excR = d.excRev || 0
+              const gRatio = gross > 0 ? (gross - excR) / gross : 0
+              const afterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0)
+              rawTotal += afterReturns * (1 - gRatio)
+            })
+          })
+          return rawTotal > 0 ? netRev / rawTotal : 1
+        })()
+    return { catData: (catDataForMatrix), subCatData: (subCatDataForMatrix), skuData: (skuDataForMatrix), catPrevMap: (ebo.catPrevMap || {}), subCatPrevMap: (ebo.subCatPrevMap || {}), skuPrevMap: (ebo.skuPrevMap || {}), netScale: (eboMatrixNetScale) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const deskChg = (cur, prev) => chg(cur, prev, { maxAbs: 500 })
@@ -9988,7 +9963,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(cancelRev)}).`, value: `${cancelPct.toFixed(1)}%`, delta: deskChg(cancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
       exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(exchangeRev)}).`, value: `${exchangePct.toFixed(1)}%`, delta: deskChg(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mx = eboMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="ebo" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10107,21 +10084,8 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
       {(() => {
-        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon/Flipkart/Myntra)
-        // so the table's Net Revenue Total matches the netRev KPI card exactly.
-        const eboMatrixNetScale = (() => {
-          let rawTotal = 0
-          Object.values(subCatDataForMatrix).forEach(scMap => {
-            Object.values(scMap).forEach(d => {
-              const gross = d.rev || 0, excR = d.excRev || 0
-              const gRatio = gross > 0 ? (gross - excR) / gross : 0
-              const afterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0)
-              rawTotal += afterReturns * (1 - gRatio)
-            })
-          })
-          return rawTotal > 0 ? netRev / rawTotal : 1
-        })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} skuPrevMap={ebo.skuPrevMap || {}} showReturnPct={true} detailedReturns channel="ebo" netScale={eboMatrixNetScale} />
+        const __mx = eboMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} />
       })()}
       {/* Store-wise table */}
       {(() => {
@@ -10404,6 +10368,150 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
     { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzCombinedReturnPct / 100 : 0)), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
   ]
 
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const amzCategoryInputs = () => {
+                  const catRows = Array.from(new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])).map(cat => {
+                    const scD = showSC ? (amzSC.catChannel?.[cat] || {}) : {}; const vc = showVC ? (amzVCMatrix.catData?.[cat] || {}) : {}
+                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
+                    return { name: cat, rev, units, orders }
+                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
+                  const allScSub = amzSC.subCatChannel || {}; const allVcSub = amzVCMatrix.subCatData || {}
+                  const subCatSet = new Set([...Object.keys(allScSub).flatMap(cat => Object.keys(allScSub[cat]||{}).map(sc => cat+'::'+sc)), ...Object.keys(allVcSub).flatMap(cat => Object.keys(allVcSub[cat]||{}).map(sc => cat+'::'+sc))])
+                  const subCatRows = Array.from(subCatSet).map(key => {
+                    const [cat, sc] = key.split('::'); const scD = showSC ? (allScSub[cat]?.[sc] || {}) : {}; const vc = showVC ? (allVcSub[cat]?.[sc] || {}) : {}
+                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
+                    return { name: sc, category: cat, rev, units, orders }
+                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
+                  const allScSku = amzSC.skuChannel || {}; const allVcSku = amzVCMatrix.skuData || {}
+                  const skuMap = {}
+                  new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)]).forEach(cat => {
+                    skuMap[cat] = {}
+                    new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})]).forEach(sc => {
+                      skuMap[cat][sc] = {}
+                      new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})]).forEach(sku => {
+                        const scD = showSC ? (allScSku[cat]?.[sc]?.[sku] || {}) : {}; const vc = showVC ? (allVcSku[cat]?.[sc]?.[sku] || {}) : {}
+                        skuMap[cat][sc][sku] = { rev: (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0) }
+                      })
+                    })
+                  })
+    return { catRows: (catRows), subCatRows: (subCatRows), skuMap: (skuMap), totalRev: (chScCatRev + chVcCatRev) }
+  }
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const amzMatrixInputs = () => {
+            // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — SC's rtoRev/cirRev/
+            // cancelRev/returnRev and VC's returnRev were still the raw live-only figures; this
+            // sums resolveDailySkuComponents' already-resolved per-SKU totals for each side
+            // separately, so each side can still be toggled on/off (showSC/showVC) independently
+            // while using the resolved (not raw-live) numbers.
+            const scResolvedBySku = {}
+            amzSCResolved.forEach(r => {
+              const s = scResolvedBySku[r.sku] || (scResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, returnRev: 0 })
+              s.rtoRev += r.components?.rto?.rev || 0
+              s.cirRev += r.components?.cir?.rev || 0
+              s.cancelRev += r.components?.cancel?.rev || 0
+              s.returnRev += r.components?.return?.rev || 0
+            })
+            const vcResolvedBySku = {}
+            amzVCResolved.forEach(r => {
+              const s = vcResolvedBySku[r.sku] || (vcResolvedBySku[r.sku] = { returnRev: 0 })
+              s.returnRev += r.components?.return?.rev || 0
+            })
+            const pickAmz = (scChData, vc, sku) => {
+              const r = {}
+              const scResolved = sku ? scResolvedBySku[sku] : null
+              const vcResolved = sku ? vcResolvedBySku[sku] : null
+              ;['rev','excRev','units','exchRev'].forEach(k => { r[k] = (showSC ? (scChData?.FBA?.[k]||0)+(scChData?.MFN?.[k]||0) : 0)+(showVC ? (vc?.[k]||0) : 0) })
+              const scRto = showSC ? (scResolved?.rtoRev ?? ((scChData?.FBA?.rtoRev||0)+(scChData?.MFN?.rtoRev||0))) : 0
+              const scCir = showSC ? (scResolved?.cirRev ?? ((scChData?.FBA?.cirRev||0)+(scChData?.MFN?.cirRev||0))) : 0
+              const scCancel = showSC ? (scResolved?.cancelRev ?? ((scChData?.FBA?.cancelRev||0)+(scChData?.MFN?.cancelRev||0))) : 0
+              const scReturn = showSC ? (scResolved?.returnRev ?? ((scChData?.FBA?.returnRev||0)+(scChData?.MFN?.returnRev||0))) : 0
+              const vcReturn = showVC ? (vcResolved?.returnRev ?? (vc?.returnRev||0)) : 0
+              // FlatCategoryProductMatrix's simpleReturns mode (confirmed 2026-10-22) displays
+              // ONLY d.returnRev as "the" Return% for marketplaces, on the (previously true)
+              // assumption that a marketplace reports one combined return figure — SC's resolved
+              // engine now tracks RTO/CIR/Cancelled as real separate components, so those must be
+              // folded into returnRev here or they'd silently vanish from the displayed %, even
+              // though Net Revenue (which sums all 4 fields regardless of simpleReturns) stays
+              // correct either way. rtoRev/cirRev/cancelRev are still set to 0 (not double-counted
+              // into the detailedReturns sum path, which Amazon never uses — showReturnPct+
+              // simpleReturns only).
+              r.rtoRev = 0; r.cirRev = 0; r.cancelRev = 0
+              r.returnRev = scRto + scCir + scCancel + scReturn + vcReturn
+              return r
+            }
+            const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
+            const catData = {}
+            allCats.forEach(cat => {
+              catData[cat] = pickAmz(amzSC.catChannel?.[cat], amzVCMatrix.catData?.[cat])
+            })
+            const allScSub = amzSC.subCatChannel || {}
+            const allVcSub = amzVCMatrix.subCatData || {}
+            const subCatData = {}
+            const allCatsForSub = new Set([...Object.keys(allScSub), ...Object.keys(allVcSub)])
+            allCatsForSub.forEach(cat => {
+              subCatData[cat] = {}
+              const allSubs = new Set([...Object.keys(allScSub[cat]||{}), ...Object.keys(allVcSub[cat]||{})])
+              allSubs.forEach(sc => {
+                subCatData[cat][sc] = pickAmz(allScSub[cat]?.[sc], allVcSub[cat]?.[sc])
+              })
+            })
+            const allScSku = amzSC.skuChannel || {}
+            const allVcSku = amzVCMatrix.skuData || {}
+            const skuData = {}
+            const allCatsForSku = new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)])
+            allCatsForSku.forEach(cat => {
+              skuData[cat] = {}
+              const allSubs = new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})])
+              allSubs.forEach(sc => {
+                skuData[cat][sc] = {}
+                const allSkus = new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})])
+                allSkus.forEach(sku => {
+                  skuData[cat][sc][sku] = pickAmz(allScSku[cat]?.[sc]?.[sku], allVcSku[cat]?.[sc]?.[sku], sku)
+                })
+              })
+            })
+            // Category/SubCategory grain don't have a per-SKU key to look up the resolved map by —
+            // re-sum returnRev from the now-resolved skuData instead, same reconciliation approach
+            // D2C uses, so Category/SubCategory rows don't silently keep the raw live-only sum
+            // while SKU rows show the resolved one. rtoRev/cirRev/cancelRev are always 0 from
+            // pickAmz above (folded into returnRev — see its comment).
+            Object.keys(catData).forEach(cat => { catData[cat].returnRev = 0 })
+            Object.entries(skuData).forEach(([cat, scMap]) => {
+              Object.entries(scMap).forEach(([sc, skuMap_]) => {
+                const returnRevSum = Object.values(skuMap_).reduce((s, v) => s + (v.returnRev||0), 0)
+                if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev = returnRevSum
+                if (catData[cat]) catData[cat].returnRev += returnRevSum
+              })
+            })
+            // MoM prev maps: SC prev + VC prev combined (filtered by channelView)
+            const scCatPrev = showSC ? (amzSC.catPrevMap || {}) : {}; const vcCatPrev = showVC ? (amzVCMatrix.catPrevMap || {}) : {}
+            const allPrevCats = new Set([...Object.keys(scCatPrev), ...Object.keys(vcCatPrev)])
+            const catPrevMap = {}; allPrevCats.forEach(c => { catPrevMap[c] = (scCatPrev[c]||0) + (vcCatPrev[c]||0) })
+            const scSubPrev = showSC ? (amzSC.subCatPrevMap || {}) : {}; const vcSubPrev = showVC ? (amzVCMatrix.subCatPrevMap || {}) : {}
+            const subCatPrevMap = {}
+            new Set([...Object.keys(scSubPrev), ...Object.keys(vcSubPrev)]).forEach(k => { subCatPrevMap[k] = (scSubPrev[k]||0) + (vcSubPrev[k]||0) })
+            const scSkuPrev = amzSC.skuPrevMap || {}; const vcSkuPrev = amzVCMatrix.skuPrevMap || {}
+            const skuPrevMap = {}
+            const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
+            skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
+            // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C's matrix) — the
+            // table's row-level-GST-ratio Net Revenue sum vs the KPI card's whole-channel blended
+            // ratio. KPI target depends on which side(s) are toggled on.
+            const amzKpiNetTarget = channelView === 'sc' ? scNetRev : channelView === 'vc' ? vcNetRevenue : (scTotalExcRev + vcNetRevenue)
+            const amzMatrixNetScale = (() => {
+              let rawTotal = 0
+              Object.entries(subCatData).forEach(([cat, scMap]) => {
+                Object.values(scMap).forEach(d => {
+                  const gross = d.rev || 0, excRev = d.excRev || 0
+                  const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+                  const grossAfterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0) - (d.returnRev||0)
+                  rawTotal += grossAfterReturns * (1 - gstRatio)
+                })
+              })
+              return rawTotal > 0 ? amzKpiNetTarget / rawTotal : 1
+            })()
+    return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (skuPrevMap), netScale: (amzMatrixNetScale) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
   // below for the active view (Overall / Seller Central / Vendor Central). Desktop shows no ▲/▼ on at
   // least one tile in every view, so the card shows none (config: deltas false).
@@ -10434,7 +10542,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
         ? { label: 'Returns % (SC)', tileLabel: 'Returns %', def: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzSCResolvedReturnPct) : null }
         : { label: 'Returns %', def: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC + VC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzCombinedReturnPct) : null },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const cx = amzCategoryInputs(), mx = amzMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel={`amazon:${channelView}`} metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10653,32 +10763,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                   )}
                 </Card>
                 {(() => {
-                  const catRows = Array.from(new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])).map(cat => {
-                    const scD = showSC ? (amzSC.catChannel?.[cat] || {}) : {}; const vc = showVC ? (amzVCMatrix.catData?.[cat] || {}) : {}
-                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
-                    return { name: cat, rev, units, orders }
-                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
-                  const allScSub = amzSC.subCatChannel || {}; const allVcSub = amzVCMatrix.subCatData || {}
-                  const subCatSet = new Set([...Object.keys(allScSub).flatMap(cat => Object.keys(allScSub[cat]||{}).map(sc => cat+'::'+sc)), ...Object.keys(allVcSub).flatMap(cat => Object.keys(allVcSub[cat]||{}).map(sc => cat+'::'+sc))])
-                  const subCatRows = Array.from(subCatSet).map(key => {
-                    const [cat, sc] = key.split('::'); const scD = showSC ? (allScSub[cat]?.[sc] || {}) : {}; const vc = showVC ? (allVcSub[cat]?.[sc] || {}) : {}
-                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
-                    return { name: sc, category: cat, rev, units, orders }
-                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
-                  const allScSku = amzSC.skuChannel || {}; const allVcSku = amzVCMatrix.skuData || {}
-                  const skuMap = {}
-                  new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)]).forEach(cat => {
-                    skuMap[cat] = {}
-                    new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})]).forEach(sc => {
-                      skuMap[cat][sc] = {}
-                      new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})]).forEach(sku => {
-                        const scD = showSC ? (allScSku[cat]?.[sc]?.[sku] || {}) : {}; const vc = showVC ? (allVcSku[cat]?.[sc]?.[sku] || {}) : {}
-                        skuMap[cat][sc][sku] = { rev: (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0) }
-                      })
-                    })
-                  })
+                  const __mx = amzCategoryInputs()
                   return <CategoryRevenueCard
-                    catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
+                    catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                     height={325}
@@ -10742,119 +10829,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             )
           })()}
           {(() => {
-            // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — SC's rtoRev/cirRev/
-            // cancelRev/returnRev and VC's returnRev were still the raw live-only figures; this
-            // sums resolveDailySkuComponents' already-resolved per-SKU totals for each side
-            // separately, so each side can still be toggled on/off (showSC/showVC) independently
-            // while using the resolved (not raw-live) numbers.
-            const scResolvedBySku = {}
-            amzSCResolved.forEach(r => {
-              const s = scResolvedBySku[r.sku] || (scResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, returnRev: 0 })
-              s.rtoRev += r.components?.rto?.rev || 0
-              s.cirRev += r.components?.cir?.rev || 0
-              s.cancelRev += r.components?.cancel?.rev || 0
-              s.returnRev += r.components?.return?.rev || 0
-            })
-            const vcResolvedBySku = {}
-            amzVCResolved.forEach(r => {
-              const s = vcResolvedBySku[r.sku] || (vcResolvedBySku[r.sku] = { returnRev: 0 })
-              s.returnRev += r.components?.return?.rev || 0
-            })
-            const pickAmz = (scChData, vc, sku) => {
-              const r = {}
-              const scResolved = sku ? scResolvedBySku[sku] : null
-              const vcResolved = sku ? vcResolvedBySku[sku] : null
-              ;['rev','excRev','units','exchRev'].forEach(k => { r[k] = (showSC ? (scChData?.FBA?.[k]||0)+(scChData?.MFN?.[k]||0) : 0)+(showVC ? (vc?.[k]||0) : 0) })
-              const scRto = showSC ? (scResolved?.rtoRev ?? ((scChData?.FBA?.rtoRev||0)+(scChData?.MFN?.rtoRev||0))) : 0
-              const scCir = showSC ? (scResolved?.cirRev ?? ((scChData?.FBA?.cirRev||0)+(scChData?.MFN?.cirRev||0))) : 0
-              const scCancel = showSC ? (scResolved?.cancelRev ?? ((scChData?.FBA?.cancelRev||0)+(scChData?.MFN?.cancelRev||0))) : 0
-              const scReturn = showSC ? (scResolved?.returnRev ?? ((scChData?.FBA?.returnRev||0)+(scChData?.MFN?.returnRev||0))) : 0
-              const vcReturn = showVC ? (vcResolved?.returnRev ?? (vc?.returnRev||0)) : 0
-              // FlatCategoryProductMatrix's simpleReturns mode (confirmed 2026-10-22) displays
-              // ONLY d.returnRev as "the" Return% for marketplaces, on the (previously true)
-              // assumption that a marketplace reports one combined return figure — SC's resolved
-              // engine now tracks RTO/CIR/Cancelled as real separate components, so those must be
-              // folded into returnRev here or they'd silently vanish from the displayed %, even
-              // though Net Revenue (which sums all 4 fields regardless of simpleReturns) stays
-              // correct either way. rtoRev/cirRev/cancelRev are still set to 0 (not double-counted
-              // into the detailedReturns sum path, which Amazon never uses — showReturnPct+
-              // simpleReturns only).
-              r.rtoRev = 0; r.cirRev = 0; r.cancelRev = 0
-              r.returnRev = scRto + scCir + scCancel + scReturn + vcReturn
-              return r
-            }
-            const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
-            const catData = {}
-            allCats.forEach(cat => {
-              catData[cat] = pickAmz(amzSC.catChannel?.[cat], amzVCMatrix.catData?.[cat])
-            })
-            const allScSub = amzSC.subCatChannel || {}
-            const allVcSub = amzVCMatrix.subCatData || {}
-            const subCatData = {}
-            const allCatsForSub = new Set([...Object.keys(allScSub), ...Object.keys(allVcSub)])
-            allCatsForSub.forEach(cat => {
-              subCatData[cat] = {}
-              const allSubs = new Set([...Object.keys(allScSub[cat]||{}), ...Object.keys(allVcSub[cat]||{})])
-              allSubs.forEach(sc => {
-                subCatData[cat][sc] = pickAmz(allScSub[cat]?.[sc], allVcSub[cat]?.[sc])
-              })
-            })
-            const allScSku = amzSC.skuChannel || {}
-            const allVcSku = amzVCMatrix.skuData || {}
-            const skuData = {}
-            const allCatsForSku = new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)])
-            allCatsForSku.forEach(cat => {
-              skuData[cat] = {}
-              const allSubs = new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})])
-              allSubs.forEach(sc => {
-                skuData[cat][sc] = {}
-                const allSkus = new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})])
-                allSkus.forEach(sku => {
-                  skuData[cat][sc][sku] = pickAmz(allScSku[cat]?.[sc]?.[sku], allVcSku[cat]?.[sc]?.[sku], sku)
-                })
-              })
-            })
-            // Category/SubCategory grain don't have a per-SKU key to look up the resolved map by —
-            // re-sum returnRev from the now-resolved skuData instead, same reconciliation approach
-            // D2C uses, so Category/SubCategory rows don't silently keep the raw live-only sum
-            // while SKU rows show the resolved one. rtoRev/cirRev/cancelRev are always 0 from
-            // pickAmz above (folded into returnRev — see its comment).
-            Object.keys(catData).forEach(cat => { catData[cat].returnRev = 0 })
-            Object.entries(skuData).forEach(([cat, scMap]) => {
-              Object.entries(scMap).forEach(([sc, skuMap_]) => {
-                const returnRevSum = Object.values(skuMap_).reduce((s, v) => s + (v.returnRev||0), 0)
-                if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev = returnRevSum
-                if (catData[cat]) catData[cat].returnRev += returnRevSum
-              })
-            })
-            // MoM prev maps: SC prev + VC prev combined (filtered by channelView)
-            const scCatPrev = showSC ? (amzSC.catPrevMap || {}) : {}; const vcCatPrev = showVC ? (amzVCMatrix.catPrevMap || {}) : {}
-            const allPrevCats = new Set([...Object.keys(scCatPrev), ...Object.keys(vcCatPrev)])
-            const catPrevMap = {}; allPrevCats.forEach(c => { catPrevMap[c] = (scCatPrev[c]||0) + (vcCatPrev[c]||0) })
-            const scSubPrev = showSC ? (amzSC.subCatPrevMap || {}) : {}; const vcSubPrev = showVC ? (amzVCMatrix.subCatPrevMap || {}) : {}
-            const subCatPrevMap = {}
-            new Set([...Object.keys(scSubPrev), ...Object.keys(vcSubPrev)]).forEach(k => { subCatPrevMap[k] = (scSubPrev[k]||0) + (vcSubPrev[k]||0) })
-            const scSkuPrev = amzSC.skuPrevMap || {}; const vcSkuPrev = amzVCMatrix.skuPrevMap || {}
-            const skuPrevMap = {}
-            const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
-            skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C's matrix) — the
-            // table's row-level-GST-ratio Net Revenue sum vs the KPI card's whole-channel blended
-            // ratio. KPI target depends on which side(s) are toggled on.
-            const amzKpiNetTarget = channelView === 'sc' ? scNetRev : channelView === 'vc' ? vcNetRevenue : (scTotalExcRev + vcNetRevenue)
-            const amzMatrixNetScale = (() => {
-              let rawTotal = 0
-              Object.entries(subCatData).forEach(([cat, scMap]) => {
-                Object.values(scMap).forEach(d => {
-                  const gross = d.rev || 0, excRev = d.excRev || 0
-                  const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-                  const grossAfterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0) - (d.returnRev||0)
-                  rawTotal += grossAfterReturns * (1 - gstRatio)
-                })
-              })
-              return rawTotal > 0 ? amzKpiNetTarget / rawTotal : 1
-            })()
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={amzMatrixNetScale} />
+            const __mx = amzMatrixInputs()
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -11028,6 +11004,78 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
   ]
 
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const fkCategoryInputs = () => {
+              const catRows = Object.entries((() => { const m = {}; (fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
+              const subCatRows = (() => { const m = {}; (fk.subCategories || []).forEach(x => { const k = x.category+'::'+x.subcategory; if (!m[k]) m[k] = { name: x.subcategory, category: x.category, rev: 0, units: 0, orders: 0 }; m[k].rev += x.rev; m[k].units += x.units; m[k].orders += x.orders }); return Object.values(m).sort((a,b) => b.rev-a.rev) })()
+              const skuMap = {}
+              Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+                skuMap[cat] = {}
+                Object.entries(scMap).forEach(([sc, skMap]) => {
+                  skuMap[cat][sc] = {}
+                  Object.entries(skMap).forEach(([sku, v]) => { skuMap[cat][sc][sku] = { rev: v.rev || 0 } })
+                })
+              })
+    return { catRows: (catRows), subCatRows: (subCatRows), skuMap: (skuMap), totalRev: (rev) }
+  }
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const fkMatrixInputs = () => {
+        // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — fk.skuMatrix carried no
+        // returnRev at all (SKU rows always showed "—" for Return%); this adds it from the
+        // resolved engine, same as D2C/Amazon.
+        const fkResolvedBySku = {}
+        fkResolved.forEach(r => { fkResolvedBySku[r.sku] = (fkResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+        const catAggMatrix = {}
+        ;(fk.categories || []).forEach(x => {
+          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
+          catAggMatrix[x.category].rev += x.rev; catAggMatrix[x.category].excRev += x.excRev || 0; catAggMatrix[x.category].units += x.units
+          catAggMatrix[x.category].orders += x.orders || 0
+        })
+        const subCatData = {}
+        ;(fk.subCategories || []).forEach(x => {
+          if (!subCatData[x.category]) subCatData[x.category] = {}
+          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
+          subCatData[x.category][x.subcategory].rev += x.rev; subCatData[x.category][x.subcategory].excRev += x.excRev || 0; subCatData[x.category][x.subcategory].units += x.units
+          subCatData[x.category][x.subcategory].orders += x.orders || 0
+        })
+        const skuData = {}
+        Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+          skuData[cat] = {}
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            skuData[cat][sc] = {}
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              const returnRev = fkResolvedBySku[sku] || 0
+              skuData[cat][sc][sku] = { rev: v.rev, excRev: v.excRev, units: v.units, returnRev }
+              if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev += returnRev
+              if (catAggMatrix[cat]) catAggMatrix[cat].returnRev += returnRev
+            })
+          })
+        })
+        const catPrevMap = {}
+        ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
+          const [cat] = k.split('::')
+          catPrevMap[cat] = (catPrevMap[cat] || 0) + v
+        })
+        const subCatPrevMap = {}
+        ;(fk.subCatPrevMap ? Object.entries(fk.subCatPrevMap) : []).forEach(([k, v]) => {
+          const parts = k.split('::')
+          const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
+        })
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon) so the table's
+        // Net Revenue Total matches the fkNetRev KPI card exactly.
+        const fkMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.values(subCatData).forEach(scMap => {
+            Object.values(scMap).forEach(d => {
+              const gross = d.rev || 0, excRev = d.excRev || 0
+              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+              rawTotal += (gross - (d.returnRev || 0)) * (1 - gstRatio)
+            })
+          })
+          return rawTotal > 0 ? fkNetRev / rawTotal : 1
+        })()
+    return { catData: (catAggMatrix), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (fk.skuPrevMap || {}), netScale: (fkMatrixNetScale) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   // GST takes Delivered %'s place (no desktop ▲/▼ on Delivered %); Delivered % and the returns count go
   // into the Returns % definition (decision 2026-10-26).
@@ -11048,7 +11096,9 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         value: `${fkReturnCur.pct.toFixed(1)}%`, delta: fkPrevReturnPct > 0 ? chg(fkReturnCur.pct, fkPrevReturnPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', fkReturnCur.pct),
         point: r => (r.gross > 0 ? r.retNum / r.gross * 100 : null), fmtPoint: v => `${v.toFixed(1)}%` },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd),
+    const cx = fkCategoryInputs(), mx = fkMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus,
       note: fkEstimatedDays > 0 ? `⏳ Data available till ${fkLatestReal} · Last ${fkEstimatedDays} day${fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
     return <SalesMobileView channel="flipkart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
@@ -11217,18 +11267,9 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
               </div>
             </Card>
             {(() => {
-              const catRows = Object.entries((() => { const m = {}; (fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
-              const subCatRows = (() => { const m = {}; (fk.subCategories || []).forEach(x => { const k = x.category+'::'+x.subcategory; if (!m[k]) m[k] = { name: x.subcategory, category: x.category, rev: 0, units: 0, orders: 0 }; m[k].rev += x.rev; m[k].units += x.units; m[k].orders += x.orders }); return Object.values(m).sort((a,b) => b.rev-a.rev) })()
-              const skuMap = {}
-              Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
-                skuMap[cat] = {}
-                Object.entries(scMap).forEach(([sc, skMap]) => {
-                  skuMap[cat][sc] = {}
-                  Object.entries(skMap).forEach(([sku, v]) => { skuMap[cat][sc][sku] = { rev: v.rev || 0 } })
-                })
-              })
+              const __mx = fkCategoryInputs()
               return <CategoryRevenueCard
-                catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={rev}
+                catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                 height={320}
@@ -11246,61 +11287,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
       {/* Category Revenue Matrix */}
       {(() => {
-        // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — fk.skuMatrix carried no
-        // returnRev at all (SKU rows always showed "—" for Return%); this adds it from the
-        // resolved engine, same as D2C/Amazon.
-        const fkResolvedBySku = {}
-        fkResolved.forEach(r => { fkResolvedBySku[r.sku] = (fkResolvedBySku[r.sku] || 0) + r.totalReturnRev })
-        const catAggMatrix = {}
-        ;(fk.categories || []).forEach(x => {
-          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
-          catAggMatrix[x.category].rev += x.rev; catAggMatrix[x.category].excRev += x.excRev || 0; catAggMatrix[x.category].units += x.units
-          catAggMatrix[x.category].orders += x.orders || 0
-        })
-        const subCatData = {}
-        ;(fk.subCategories || []).forEach(x => {
-          if (!subCatData[x.category]) subCatData[x.category] = {}
-          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
-          subCatData[x.category][x.subcategory].rev += x.rev; subCatData[x.category][x.subcategory].excRev += x.excRev || 0; subCatData[x.category][x.subcategory].units += x.units
-          subCatData[x.category][x.subcategory].orders += x.orders || 0
-        })
-        const skuData = {}
-        Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
-          skuData[cat] = {}
-          Object.entries(scMap).forEach(([sc, skuMap]) => {
-            skuData[cat][sc] = {}
-            Object.entries(skuMap).forEach(([sku, v]) => {
-              const returnRev = fkResolvedBySku[sku] || 0
-              skuData[cat][sc][sku] = { rev: v.rev, excRev: v.excRev, units: v.units, returnRev }
-              if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev += returnRev
-              if (catAggMatrix[cat]) catAggMatrix[cat].returnRev += returnRev
-            })
-          })
-        })
-        const catPrevMap = {}
-        ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
-          const [cat] = k.split('::')
-          catPrevMap[cat] = (catPrevMap[cat] || 0) + v
-        })
-        const subCatPrevMap = {}
-        ;(fk.subCatPrevMap ? Object.entries(fk.subCatPrevMap) : []).forEach(([k, v]) => {
-          const parts = k.split('::')
-          const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
-        })
-        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon) so the table's
-        // Net Revenue Total matches the fkNetRev KPI card exactly.
-        const fkMatrixNetScale = (() => {
-          let rawTotal = 0
-          Object.values(subCatData).forEach(scMap => {
-            Object.values(scMap).forEach(d => {
-              const gross = d.rev || 0, excRev = d.excRev || 0
-              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-              rawTotal += (gross - (d.returnRev || 0)) * (1 - gstRatio)
-            })
-          })
-          return rawTotal > 0 ? fkNetRev / rawTotal : 1
-        })()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fk.skuPrevMap || {}} simpleReturns showReturnPct channel="flipkart" netScale={fkMatrixNetScale} />
+        const __mx = fkMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -13097,7 +13085,8 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: bl.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="blinkit" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13289,7 +13278,8 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: ins.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="instamart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13477,7 +13467,8 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
       aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: zp.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: (t.rev || 0), products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="zepto" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13734,7 +13725,8 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: crSkuMatrixResolved, subCatPrevMap, skuPrevMap: cr.skuPrevMap || {}, simpleReturns: true, netScale: crMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="cred" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -14050,7 +14042,8 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
       returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: fcSkuMatrixResolved, subCatPrevMap, skuPrevMap: fc.skuPrevMap || {}, simpleReturns: true, netScale: fcMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="firstcry" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -14363,7 +14356,8 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
       returnPct: { label: 'Returns %', def: `${fmt(mnReturnRev)} returned · ${fmtN(mnReturnOrders)} orders.`, value: `${mnReturnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', mnReturnPct) },
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd),
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: mnSkuMatrixResolved, subCatPrevMap: mnSubCatPrevMap, skuPrevMap: mn.skuPrevMap || {}, simpleReturns: true, netScale: mnMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus,
       note: mnEstimatedDays > 0 ? `⏳ Data available till ${mnLatestReal} · Last ${mnEstimatedDays} day${mnEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
     return <SalesMobileView channel="myntra" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
@@ -14775,7 +14769,8 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
       upo: { label: 'Units per order', tileLabel: 'Units / order', def: 'Average units per order.', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', delta: chg(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
       creditNotesPct: { label: 'Credit notes %', tileLabel: 'Credit notes %', def: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders. ▲/▼ compares the credit-note amount, as desktop.`, value: `${cnPct.toFixed(1)}%`, delta: chg(cnRevAbs, prevCnRev) },
     }
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: skuMatrixData, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView key={sub} channel="offline" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
