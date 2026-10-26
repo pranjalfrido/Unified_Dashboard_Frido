@@ -974,7 +974,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   if (logMobile) {
     // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative' }}>
+      // The page is mounted in a non-scrolling flex box (desktop scrolls its own inner div), so the
+      // mobile view is its own scroll container.
+      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
         <LoadingOverlay loading={loading} label="Loading logistics" />
         {error && !rawData && !staleData && (
           <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
