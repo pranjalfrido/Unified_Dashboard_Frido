@@ -104,7 +104,7 @@ export default function SalesAllocMobile({ fd, filters, dateFilters, revenueAvai
   }, [onMenu])
   useEffect(() => () => onMenu?.([]), [onMenu])
   return (
-    <div className="inv-mobile sa-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
+    <div className="inv-mobile sa-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, color: M.ink, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
       <MasterCard fd={fd} revenueAvailable={revenueAvailable} mix={mix} dateFilters={dateFilters} layout={layout} />
       <PairsCard rows={locationRows} />
       <ContributionCard channels={channels} categories={categories} revenueAvailable={revenueAvailable} />

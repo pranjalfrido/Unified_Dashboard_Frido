@@ -61,8 +61,9 @@ if (want.has('contribution')) {
     return out
   }, title)
   const mobRows = async view => {
-    await P.page.getByRole('tab', { name: view, exact: true }).click(); await P.page.waitForTimeout(300)
-    const more = P.page.locator('section').filter({ hasText: 'Contribution' }).locator('button', { hasText: /^Show all/ })
+    const sec = P.page.locator('section').filter({ has: P.page.locator('h2', { hasText: /^Contribution$/ }) })
+    await sec.getByRole('tab', { name: view, exact: true }).click(); await P.page.waitForTimeout(300)
+    const more = sec.locator('button', { hasText: /^Show all/ })
     if (await more.count()) { await more.click(); await P.page.waitForTimeout(200) }
     return P.page.evaluate(() => {
       const sec = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Contribution')

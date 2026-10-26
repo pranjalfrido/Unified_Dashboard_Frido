@@ -11,6 +11,12 @@ const same = (label, a, b) => { const ok = norm(a) === norm(b); if (!ok) fails++
 async function open(vpName, route) {
   const { browser, ctx } = await launch(VIEWPORTS.find(v => v.name === vpName))
   const page = await ctx.newPage()
+  // STATIC_INV=1: use the static inv-data file (the production path) even when the local copy is
+  // older than 2 hours - only its asOf is moved to now, every number is served as-is.
+  if (process.env.STATIC_INV) await page.route('**/inv-data-*.json', async r => {
+    const res = await r.fetch(); const j = await res.json()
+    await r.fulfill({ response: res, json: { ...j, asOf: new Date().toISOString() } })
+  })
   await openPage(page, route)
   return { browser, page }
 }

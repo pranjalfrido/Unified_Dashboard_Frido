@@ -8,6 +8,11 @@ mkdirSync(out, { recursive: true })
 for (const r of list.split(',')) {
   const { browser, ctx } = await launch(VIEWPORTS.find(v => v.name === 'laptop-1366x768'))
   const page = await ctx.newPage()
+  // STATIC_INV=1: use the static inv-data file even when the local copy is older than 2 hours (asOf only)
+  if (process.env.STATIC_INV) await page.route('**/inv-data-*.json', async q => {
+    const res = await q.fetch(); const j = await res.json()
+    await q.fulfill({ response: res, json: { ...j, asOf: new Date().toISOString() } })
+  })
   const path = '/' + r.replace(/^.*Git\//, '').replace(/^\/+/, '')
   if (process.env.SEPT) await openWithSept(page, path); else await openPage(page, path) // SEPT=1: Sept 2026
   await waitStableText(page)
@@ -17,6 +22,10 @@ for (const r of list.split(',')) {
   await page.addStyleTag({ content: 'html,body,#root,.app-shell,.app-main{height:auto !important;overflow:visible !important} .page-scroll{height:auto !important;overflow:visible !important;flex:none !important}' })
   // unclipping resizes chart containers, and Recharts re-draws its lines (JS animation, ~1.5s)
   await page.waitForTimeout(3000)
-  await page.screenshot({ path: `${out}/${r.replace(/^.*Git\//, '').replace(/[/]/g, '-')}.png`, fullPage: true })
+  // grow the viewport to the page height instead of fullPage: Chromium's fullPage capture briefly
+  // resizes the window to 1x1, which (correctly) flips width-based mobile layouts and re-mounts charts
+  await page.setViewportSize({ width: 1366, height: await page.evaluate(() => document.documentElement.scrollHeight) })
+  await page.waitForTimeout(3000)
+  await page.screenshot({ path: `${out}/${r.replace(/^.*Git\//, '').replace(/[/]/g, '-')}.png` })
   await browser.close()
 }
