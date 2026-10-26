@@ -263,8 +263,9 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
   // across (2026-10-19: previously this only copied the 4 outcome %s, leaving Listing
   // Price/COGS/Weight at whatever was last typed — fine for seeding a NEW product's estimate with
   // a comparable's return behavior, but wrong for "what is THIS product's own breakeven ROAS").
-  // GST rate isn't on d2cProductGroups (no GST% tracked per product there) so it's left as the
-  // user's own preset pick, same as before.
+  // GST rate: the product's own effective rate from its sales (Gross Inc GST ÷ Gross Ex GST − 1),
+  // snapped to the nearest preset (fix/pnl-data) — it used to stay at the 18% preset, so a 5% product
+  // (e.g. Orthotics Posture Corrector) got its Net Revenue and breakeven ROAS understated.
   const applyReferenceRates = product => {
     if (!product) return
     setProductName(product.name || '')
@@ -287,6 +288,10 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     setRtoPct(Math.round((product.rtoPct || 0) * 1000) / 10)
     setCirPct(Math.round((product.cirPct || 0) * 1000) / 10)
     setExchangePct(Math.round((product.exchPct || 0) * 1000) / 10)
+    if (product.gross > 0 && product.excRev > 0) {
+      const effective = (product.gross / product.excRev - 1) * 100
+      setGstPct(GST_PRESETS.reduce((best, g) => (Math.abs(g - effective) < Math.abs(best - effective) ? g : best), GST_PRESETS[0]))
+    }
   }
 
   const sellingPrice = useMemo(() => {
