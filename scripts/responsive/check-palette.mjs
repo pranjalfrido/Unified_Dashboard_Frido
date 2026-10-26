@@ -3,6 +3,7 @@
 // palette (C.m in src/utils.js, white, black-ish shadows, transparent, or a translucent version of
 // those), and no visible text may be smaller than 12px. Also checks the header + bottom nav.
 // Usage: node scripts/responsive/check-palette.mjs [viewportName] [root selector]  (RESPONSIVE_ENGINE=webkit ok)
+//        ROUTE=/sales/… runs it on another page with the same mobile components (default /overview)
 import { launch, openPage, VIEWPORTS, ENGINE } from './lib.mjs'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -20,13 +21,14 @@ const palette = [...hex.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 
 
 const { browser, ctx } = await launch(vp)
 const page = await ctx.newPage()
-await openPage(page, '/overview')
+const ROUTE = '/' + (process.env.ROUTE || 'overview').replace(/^.*Git\//, '').replace(/^\/+/, '') // e.g. ROUTE=sales/shopify/overall (no leading slash on Git Bash)
+await openPage(page, ROUTE)
 await page.waitForFunction(() => !document.querySelector('.delta-shimmer'), null, { timeout: 120000 }).catch(() => {})
 const found = await page.evaluate(({ root, palette }) => {
   const near = (c) => palette.some(p => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) <= 6)
   const parse = v => { const m = v && v.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/); return m ? { c: [+m[1], +m[2], +m[3]], a: m[4] == null ? 1 : +m[4] } : null }
   const bad = new Map(), small = new Map()
-  const els = [...document.querySelectorAll(`${root} *, .topnav[data-page=overview] *, .topnav[data-page=overview], nav.bottom-nav[aria-label=Main] *, .filtered-strip *`)]
+  const els = [...document.querySelectorAll(`${root} *, .topnav.m-header *, .topnav.m-header, nav.bottom-nav[aria-label=Main] *, .filtered-strip *`)]
   for (const el of els) {
     const r = el.getBoundingClientRect()
     if (!r.width || !r.height) continue

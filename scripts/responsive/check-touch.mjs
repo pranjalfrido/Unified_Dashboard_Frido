@@ -10,6 +10,7 @@
 // Playwright cannot synthesise a swipe on mobile WebKit, so the drag is sent as touch-type
 // PointerEvents, which is what the scrubber listens to.
 // Usage: node scripts/responsive/check-touch.mjs [viewportName] [outDir]
+//        ROUTE=/sales/… runs it on another page with the same mobile components (default /overview)
 import { launch, openPage, VIEWPORTS, ENGINE } from './lib.mjs'
 import { mkdirSync } from 'fs'
 const vp = VIEWPORTS.find(v => v.name === (process.argv[2] || 'iphone14-390x844'))
@@ -19,7 +20,8 @@ const { browser, ctx } = await launch(vp)
 const page = await ctx.newPage()
 let fail = 0
 const check = (name, ok, extra = '') => { if (!ok) fail++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' - ' + extra : ''}`) }
-await openPage(page, '/overview')
+const ROUTE = '/' + (process.env.ROUTE || 'overview').replace(/^.*Git\//, '').replace(/^\/+/, '') // e.g. ROUTE=sales/shopify/overall (no leading slash on Git Bash)
+await openPage(page, ROUTE)
 await page.waitForFunction(() => !document.querySelector('.delta-shimmer'), null, { timeout: 120000 }).catch(() => {})
 
 // Sizes of every box in the master card + the page's scroll height.
@@ -62,9 +64,9 @@ const pressed = await t.getAttribute('aria-pressed')
 const glow = await t.evaluate(e => getComputedStyle(e).boxShadow)
 const h2 = await hero()
 const afterTile = await sizes()
-const tileSizes = (s) => s.boxes.length === before.boxes.length
 check('tile tap switches the hero and glows', pressed === 'true' && h2 !== h0 && glow !== 'none', `${h0.slice(0, 30)} → ${h2.slice(0, 30)}`)
-check('tile tap: card keeps its size', tileSizes(afterTile) && afterTile.boxes[0] === before.boxes[0], `${before.boxes[0]} → ${afterTile.boxes[0]}`)
+// Card size only: a metric without a daily series swaps the chart for 'No daily breakdown' (same height).
+check('tile tap: card keeps its size', afterTile.boxes[0] === before.boxes[0], `${before.boxes[0]} → ${afterTile.boxes[0]}`)
 await page.screenshot({ path: `${out}/${ENGINE}-${vp.name}-2-tile.png` })
 
 // 3 sticky header

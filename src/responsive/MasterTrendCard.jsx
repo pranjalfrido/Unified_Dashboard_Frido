@@ -18,8 +18,10 @@ import KpiTile from './KpiTile.jsx'
 //   ⋯      granularity override; Auto picks daily ≤ 31 days, weekly ≤ ~6 months, else monthly
 //
 // metrics: [{ key, label, tileLabel, def, value, sub, delta, deltaLoading, deltasHidden, lowerIsBetter,
-//             status, point(row) → number|null, prevPoint(row) → number|null, fmtPoint }]
+//             status, point(row) → number|null, prevPoint(row) → number|null, fmtPoint,
+//             compare: [{ label, delta }] → labelled ▲/▼ in the hero instead of "vs prev" (e.g. MoM, YoY) }]
 // layout:  'phone' | 'tablet' | 'landscape'
+// note:    optional slim info strip at the top of the card (data availability etc.)
 
 function autoGranularity(start, end) {
   if (!start || !end) return 'daily'
@@ -36,7 +38,7 @@ function pointLabel(key, gran) {
 
 const CHART_H = 120
 
-export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone' }) {
+export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null }) {
   const M = C.m
   const [selKey, setSelKey] = useState(metrics[0].key)
   const [granOverride, setGranOverride] = useState('auto')
@@ -94,7 +96,9 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
         <div style={{ fontSize: 12.5, lineHeight: '18px', height: 36, overflow: 'hidden', color: M.muted }}>
           {scrubRow
             ? <>{pointLabel(scrubRow.date, gran)}{scrubPrev != null && <> · prev {m.fmtPoint(scrubPrev)}</>}</>
-            : <>{!m.deltasHidden && <><DeltaBadge delta={m.delta} loading={m.deltaLoading} lowerIsBetter={m.lowerIsBetter} size={12.5} /> vs prev</>}{m.sub ? <>{!m.deltasHidden ? ' · ' : ''}{m.sub}</> : (!m.deltasHidden ? ' period' : '')}</>}
+            : m.compare && !m.deltasHidden
+              ? <>{m.compare.map((c, i) => <span key={c.label}>{i > 0 && ' · '}<DeltaBadge delta={c.delta} lowerIsBetter={m.lowerIsBetter} size={12.5} /> {c.label}</span>)}{m.sub && <> · {m.sub}</>}</>
+              : <>{!m.deltasHidden && <><DeltaBadge delta={m.delta} loading={m.deltaLoading} lowerIsBetter={m.lowerIsBetter} size={12.5} /> vs prev</>}{m.sub ? <>{!m.deltasHidden ? ' · ' : ''}{m.sub}</> : (!m.deltasHidden ? ' period' : '')}</>}
         </div>
       </div>
     </div>
@@ -113,7 +117,10 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
     </div>
   )
 
-  const cols = layout === 'tablet' ? 3 : 2
+  const n = metrics.length
+  // Tablet: 4 or 3 columns so rows fill evenly where they can (8 → 4, 6 → 3); never 5 - at 768px
+  // five tiles across cut their labels.
+  const cols = layout === 'tablet' ? (n % 3 === 0 && n % 4 !== 0 ? 3 : 4) : 2
   const tiles = (
     <div role="group" aria-label="Choose metric" className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
       {metrics.map(x => (
@@ -126,6 +133,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
 
   return (
     <div className="master-card" style={{ background: M.masterGrad, border: `1px solid ${M.masterBorder}`, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow, overflow: 'hidden' }}>
+      {note && <div style={{ marginBottom: 10 }}>{note}</div>}
       {layout === 'landscape'
         ? <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}><div>{hero}{chart}</div>{tiles}</div>
         : <>{hero}{chart}{tiles}</>}

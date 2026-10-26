@@ -32,6 +32,8 @@ import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
+import SalesMobileView from './sales/SalesMobileView.jsx'
+import { chg } from './sales/salesMobileData.js'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
@@ -7983,7 +7985,10 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
   )
 }
 
-function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs }) {
+function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChannel }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, scopedAOV = 0, scopedASP = 0, prevScopedAOV = 0, prevScopedASP = 0, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, prevNCusts = 0, prevRepeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0, netRevenueCalc = 0 } = data
   const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => {
     if (a === 'offline_sales') return 1
@@ -8225,6 +8230,31 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs }) {
       })
       exportCSV(rows, `top_cities_${dateTag}.csv`)
     }
+  }
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view (src/sales/), fed with
+  // the values computed above exactly as the desktop tiles below use them.
+  if (salesMobile) {
+    const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0
+    const prevRetPct = prevRev > 0 ? ((data.prevRtoRev || 0) + (data.prevCirRev || 0)) / prevRev * 100 : 0
+    const deskChg = (cur, prev) => chg(cur, prev, { minPrev: 1, maxAbs: 999 })
+    const momChg = momRev > 0 ? (totalRev - momRev) / momRev * 100 : null
+    const yoyChg = yoyRev > 0 ? (totalRev - yoyRev) / yoyRev * 100 : null
+    const mTrend = trendRows(dailyArr, prevDailyArr).map(r => ({ date: r.date, gross: r.revenue, net: r.netRevenue, orders: r.orders, units: r.units, prevGross: r.prevRevenue }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST, all channels.', value: fmt(totalRev), sub: `${fmtN(nOrders)} orders · ${fmtN(aspQtyAll)} units`,
+        delta: momChg, compare: [momChg != null && { label: 'MoM', delta: momChg }, yoyChg != null && { label: 'YoY', delta: yoyChg }].filter(Boolean),
+        point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRevenueCalc), delta: chg(netRevenueCalc, prevExcRev), point: r => r.net, fmtPoint: fmt },
+      atRisk: { label: 'Revenue at risk', tileLabel: 'Rev at risk', def: 'RTO + return + cancelled + CIR revenue.', value: fmt(atRiskRev), delta: chg(atRiskRev, prevAtRiskEst), lowerIsBetter: true },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders (D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only).', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, delta: deskChg(scopedAOV, prevScopedAOV) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRevenueCalc / nDays), delta: deskChg(netRevenueCalc / nDays, prevDailyAvg) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units (same channels as AOV).', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, delta: deskChg(scopedASP, prevScopedASP) },
+      gst: { label: 'GST', def: 'GST collected.', value: fmt(gstCollected), delta: deskChg(gstCollected, prevGST) },
+      returnPct: { label: 'Returns %', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="all" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} onOpenChannel={onOpenChannel} />
   }
 
   return (
@@ -8905,6 +8935,9 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
 }
 
 function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
@@ -9217,6 +9250,41 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     { label: 'Exchange %', value: `${shExchPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.exchPct ?? null) },
     { label: 'Cancellation %', value: `${shResolvedCancelPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cancelPct ?? null) },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const cancelledOrders = orderStatusMap['Cancelled'] || 0
+    const exchangeOrders = netCalcSrc.exchOrders ?? data.exchangeOrders ?? 0
+    const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
+    const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
+    const exchRevPerOrder = exchangeOrders > 0 ? shResolvedExchangeRev / exchangeOrders : 0
+    const prevExchangePct = prevRev > 0 ? (prevExchangeOrders * exchRevPerOrder) / prevRev * 100 : 0
+    const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
+    const netShrinkFactor = totalRev > 0 ? netRev / totalRev : 0
+    // Same daily series as the desktop "Revenue & Returns Trend" (its return line = RTO + CIR + cancelled).
+    const mTrend = shDailyArr.map((d, i) => {
+      const g = d.rev || 0, rt = shReturnTrendMap[d.date] || {}
+      return { date: d.date, gross: g, net: g * netShrinkFactor, units: d.units ?? null, prevGross: prevDailyArr[i]?.rev ?? null,
+        retNum: g * ((rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0)) / 100, rtoNum: g * (rt.rtoPct || 0) / 100, cirNum: g * (rt.cirPct || 0) / 100,
+        cancelNum: g * (rt.cancelPct || 0) / 100, exchNum: g * (rt.exchPct || 0) / 100 }
+    })
+    const pctPoint = k => r => (r.gross > 0 ? r[k] / r.gross * 100 : null)
+    const pctFmt = v => `${v.toFixed(1)}%`
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(totalRev), sub: `${fmtN(shNOrders)} orders · ${fmtN(shAspQty)} units`, delta: shRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRev), delta: chg(totalExcRev, prevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: chg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units sold.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+      returnPct: { label: 'Returns %', def: `RTO + CIR + cancelled revenue ÷ gross revenue (${fmt(shResolvedReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: chg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      rtoPct: { label: 'RTO %', def: `RTO revenue ÷ gross revenue (${fmt(shResolvedRtoRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: chg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
+      cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(shResolvedCirRevSum)}).`, value: `${shCirPct.toFixed(1)}%`, delta: chg(shCirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(shResolvedCancelRev)}).`, value: `${shResolvedCancelPct.toFixed(1)}%`, delta: chg(shResolvedCancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
+      exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(shResolvedExchangeRev)}).`, value: `${shExchPct.toFixed(1)}%`, delta: chg(shExchPct, prevExchangePct), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -9639,6 +9707,9 @@ const EBO_TREND_GROUP_OPTS = [
 ]
 
 function EBOTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   // The theme's own accent, not a literal. This was '#8B5E3C', a hardcoded brown, which
   // left the EBO sparkline and toggle reading as a different product from every other
@@ -9896,6 +9967,33 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.exchPct ?? null) },
   ]
 
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const deskChg = (cur, prev) => chg(cur, prev, { maxAbs: 500 })
+    const mTrend = shDailyArr.map((d, i) => {
+      const g = d.rev || 0, rt = eboReturnTrendMap[d.date] || {}
+      return { date: d.date, gross: g, net: g * netShrinkFactor, orders: d.orders ?? null, units: d.units ?? null, prevGross: prevDailyArr[i]?.rev ?? null,
+        retNum: g * ((rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0)) / 100, rtoNum: g * (rt.rtoPct || 0) / 100, cirNum: g * (rt.cirPct || 0) / 100,
+        cancelNum: g * (rt.cancelPct || 0) / 100, exchNum: g * (rt.exchPct || 0) / 100 }
+    })
+    const pctPoint = k => r => (r.gross > 0 ? r[k] / r.gross * 100 : null)
+    const pctFmt = v => `${v.toFixed(1)}%`
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(totalRev), sub: `${fmtN(nOrders)} orders · ${fmtN(totalQty)} units`, delta: shRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRev), delta: deskChg(netRev, prevNetRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: deskChg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: deskChg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: deskChg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+      returnPct: { label: 'Returns %', def: `RTO + return + CIR + cancelled revenue ÷ gross revenue (${fmt(eboResolvedTotalReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: deskChg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      rtoPct: { label: 'RTO %', def: `RTO + in-store return revenue ÷ gross revenue (${fmt(rtoRev + returnRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: deskChg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
+      cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(cirRev)}).`, value: `${cirPct.toFixed(1)}%`, delta: deskChg(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(cancelRev)}).`, value: `${cancelPct.toFixed(1)}%`, delta: deskChg(cancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
+      exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(exchangeRev)}).`, value: `${exchangePct.toFixed(1)}%`, delta: deskChg(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="ebo" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list */}
@@ -10148,6 +10246,9 @@ function AmazonChannelViewToggle({ channelView, setChannelView }) {
 }
 
 function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
@@ -10304,6 +10405,40 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
     { label: 'ASP', value: amzFmtS(amzMobASP), spark: scDailyArr.map(d => { const u = (d.FBA_units||0)+(d.MFN_units||0); const r = (d.FBA||0)+(d.MFN||0); return u > 0 ? r / u : null }) },
     { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzCombinedReturnPct / 100 : 0)), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below for the active view (Overall / Seller Central / Vendor Central). Desktop shows no ▲/▼ on at
+  // least one tile in every view, so the card shows none (config: deltas false).
+  if (salesMobile) {
+    const vcDaily = {}
+    ;(amzVC.daily || []).forEach(d => { vcDaily[d.date] = d.estimated ? 0 : (d.orderedRev || 0) })
+    const scDaily = Object.fromEntries(scDailyArr.map(d => [d.date, d]))
+    const mTrend = [...new Set([...scDailyArr.map(d => d.date), ...Object.keys(vcDaily)])].sort().map((date, i) => {
+      const s = scDaily[date], sc = s ? (s.FBA || 0) + (s.MFN || 0) : 0, vc = vcDaily[date] || 0
+      return { date, sc: showSC ? sc : 0, vc: showVC ? vc : 0, gross: (showSC ? sc : 0) + (showVC ? vc : 0),
+        orders: s && showSC ? (s.FBA_orders || 0) + (s.MFN_orders || 0) : 0, prevSc: channelView === 'sc' ? (amzPrevDailyArr[i]?.rev ?? null) : null }
+    })
+    const viewName = channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'
+    const mMetrics = {
+      gross: { label: `Gross revenue · ${viewName}`, tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(chScCatRev + chVcCatRev), sub: `${fmtN(chScCatOrders + chVcCatOrders)} orders · ${fmtN(chScCatUnits + chVcCatUnits)} units`,
+        point: r => r.gross, prevPoint: channelView === 'sc' ? r => r.prevSc : undefined, fmtPoint: fmt },
+      grossSc: { label: 'Gross revenue · Seller Central', tileLabel: 'Gross SC', def: 'Seller Central gross revenue including GST.', value: fmt(chScCatRev), point: r => r.sc, fmtPoint: fmt },
+      grossVc: { label: 'Gross revenue · Vendor Central', tileLabel: 'Gross VC', def: 'Vendor Central ordered revenue including GST.', value: fmt(chVcCatRev), point: r => r.vc, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(chScCatExcRev + chVcNetRevenue) },
+      gst: { label: 'GST', def: `${channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'SC' : 'VC'} GST.`, value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: 'As desktop: gross revenue per day (see backlog).', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}` },
+      aov: { label: 'AOV', def: 'Seller Central gross revenue ÷ orders (VC has no orders).', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, point: r => (r.orders > 0 ? r.sc / r.orders : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+      cancelPct: { label: 'Cancellation rate', tileLabel: 'Cancel rate', def: `${fmtN(scCancelOrders)} cancelled orders (SC).`, value: `${scCancelRate.toFixed(1)}%`, lowerIsBetter: true },
+      returnPct: channelView === 'vc'
+        ? { label: 'Returns % (VC)', tileLabel: 'Returns %', def: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross revenue.`, value: `${vcReturnRate.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', vcReturnRate) }
+        : channelView === 'sc'
+        ? { label: 'Returns % (SC)', tileLabel: 'Returns %', def: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzSCResolvedReturnPct) : null }
+        : { label: 'Returns %', def: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC + VC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzCombinedReturnPct) : null },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel={`amazon:${channelView}`} metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -10763,6 +10898,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
 }
 
 function FlipkartTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [fkTrendGroup, setFkTrendGroup] = useState('daily')
   const [fkTrendMetric, setFkTrendMetric] = useState('rev')
@@ -10891,6 +11029,31 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (nOrders > 0 ? cancelOrders / nOrders : 0) : 0)) },
     { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  // GST takes Delivered %'s place (no desktop ▲/▼ on Delivered %); Delivered % and the returns count go
+  // into the Returns % definition (decision 2026-10-26).
+  if (salesMobile) {
+    const gstR = rev > 0 ? (rev - excRev) / rev : 0
+    const mTrend = subDailyArr.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: Math.max((d.rev || 0) - (d.returnRev || 0), 0) * (1 - gstR), orders: d.orders || 0, units: d.units || 0,
+      retNum: d.returnRev || 0, prevGross: fkPrevDailyArr[i]?.rev ?? null }))
+    const curCancelPct = nOrders > 0 ? cancelOrders / nOrders * 100 : 0
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, delta: fkRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(fkNetRev), delta: chg(fkNetRev, fkPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(fkNetRev / nDays), delta: chg(fkNetRev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
+      gst: { label: 'GST', def: 'Inc GST − Exc GST.', value: fmt(rev - excRev), delta: chg(rev - excRev, fkPrevGST) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmtN(cancelOrders)} cancelled orders · ${fmt(cancelRev)} revenue.`, value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, delta: fkPrevCancelPct > 0 ? chg(curCancelPct, fkPrevCancelPct) : null, lowerIsBetter: true },
+      returnPct: { label: 'Returns %', def: `${fmt(fkReturnCur.returnRev)} returned of ${fmt(fkReturnCur.deliveredRev)} gross.${totalReturns > 0 ? ` Returns: ${fmtN(totalReturns)}${nOrders > 0 ? ` (${(totalReturns / nOrders * 100).toFixed(1)}% of orders)` : ''}.` : ''} Delivered: ${fkDeliveredPct.pct.toFixed(1)}% (${fmtN(fkDeliveredPct.deliveredOrders)} of ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancelled orders).`,
+        value: `${fkReturnCur.pct.toFixed(1)}%`, delta: fkPrevReturnPct > 0 ? chg(fkReturnCur.pct, fkPrevReturnPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', fkReturnCur.pct),
+        point: r => (r.gross > 0 ? r.retNum / r.gross * 100 : null), fmtPoint: v => `${v.toFixed(1)}%` },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd),
+      note: fkEstimatedDays > 0 ? `⏳ Data available till ${fkLatestReal} · Last ${fkEstimatedDays} day${fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
+    return <SalesMobileView channel="flipkart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -12860,6 +13023,9 @@ function AdsCredView({ data, filters = {} }) {
 }
 
 function BlinkitTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const bl = data.blinkit || {}
   const t = bl.totals || {}
   const nDays = t.days || 1
@@ -12922,6 +13088,21 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
     { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: blPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST, at MRP.', value: fmt(rev), sub: `${fmtN(units)} units · ${fmtN(cities)} cities`, delta: blRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, blPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, blPrevRev > 0 ? blPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, blPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="blinkit" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13035,6 +13216,9 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
 }
 
 function InstaTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const ins = data.instamart || {}
   const t = ins.totals || {}
   const nDays = t.days || 1
@@ -13097,6 +13281,21 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
     { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: insPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${nDays} days · ${fmtN(units)} units`, delta: insRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, insPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, insPrevRev > 0 ? insPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, insPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="instamart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13206,6 +13405,9 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
 }
 
 function ZeptoTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const zp = data.zepto || {}
   const t = zp.totals || {}
   const nDays = t.days || 1
@@ -13268,6 +13470,21 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
     { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: zpPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${nDays} days · ${fmtN(orders)} orders · ${fmtN(units)} units`, delta: zpRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, zpPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, zpPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="zepto" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13377,6 +13594,9 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
 }
 
 function CredTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const cr = data.cred || {}
   const t = cr.totals || {}
   const nDays = t.days || 1
@@ -13505,6 +13725,24 @@ function CredTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Returns % and Cancellation % have no ▲/▼ on desktop, so the card shows none (all or none).
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: crPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(orders)} orders · ${fmtN(units)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
+      returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="cred" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13678,6 +13916,9 @@ function CredTab({ data, rangeStart, rangeEnd }) {
 }
 
 function FirstcryTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const fc = data.firstcry || {}
   const t = fc.totals || {}
   const nDays = t.days || 1
@@ -13801,6 +14042,24 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Returns % and Cancellation % have no ▲/▼ on desktop, so the card shows none (all or none).
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: fcPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(orders)} orders · ${fmtN(units)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
+      returnPct: { label: 'Returns %', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView channel="firstcry" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13966,6 +14225,9 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
 }
 
 function MyntraTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const mn = data.myntra || {}
   const totals = mn.totals || {}
   const nDays = totals.days || data.nDays || 1
@@ -14093,6 +14355,25 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : dailyArr.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: mnReturnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Active products / Returns % / Cancellation % have no ▲/▼ on desktop → none on the card.
+  if (salesMobile) {
+    const mTrend = dailyArr.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: (mn.prevDaily || [])[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      activeProducts: { label: 'Active products', def: 'Product types sold.', value: fmtN(totals.skus) },
+      returnPct: { label: 'Returns %', def: `${fmt(mnReturnRev)} returned · ${fmtN(mnReturnOrders)} orders.`, value: `${mnReturnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', mnReturnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd),
+      note: mnEstimatedDays > 0 ? `⏳ Data available till ${mnLatestReal} · Last ${mnEstimatedDays} day${mnEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
+    return <SalesMobileView channel="myntra" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -14277,6 +14558,9 @@ function OfflineSubToggle({ sub, setSub }) {
 }
 
 function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const off = data.offline || {}
   const [catRevView, setCatRevView] = useState('category')
   const [selectedCat, setSelectedCat] = useState(null)
@@ -14484,6 +14768,24 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
     { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, spark: cnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (grossRev > 0 ? cnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: cnPct > 10 ? '#7A1A1A' : undefined },
   ]
 
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below (Daily avg follows desktop: gross per day - see backlog; Credit notes ▲/▼ as desktop).
+  if (salesMobile) {
+    const mTrend = dailyArr.map((d, i) => ({ date: d.date, gross: d.rev ?? d.revSales ?? 0, net: d.net ?? null, orders: d.orders ?? null, units: d.units ?? null, prevGross: (prevDailyArr[i]?.rev ?? prevDailyArr[i]?.revSales) ?? null }))
+    const mMetrics = {
+      gross: { label: `Gross revenue${subLabel}`, tileLabel: 'Gross rev', def: 'Gross sales including GST.', value: fmt(grossRev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, delta: revChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after credit notes.', value: fmt(netRev), delta: chg(netRev, prevNetRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: 'As desktop: gross revenue per day (see backlog).', value: fmt(rev / Math.max(nDays, 1)), delta: chg(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, delta: chg(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
+      orders: { label: 'Orders', def: `${fmtN(qty)} units.`, value: fmtN(nOrders), delta: chg(nOrders, prevOrders), point: r => r.orders, fmtPoint: fmtN },
+      upo: { label: 'Units per order', tileLabel: 'Units / order', def: 'Average units per order.', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', delta: chg(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
+      creditNotesPct: { label: 'Credit notes %', tileLabel: 'Credit notes %', def: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders. ▲/▼ compares the credit-note amount, as desktop.`, value: `${cnPct.toFixed(1)}%`, delta: chg(cnRevAbs, prevCnRev) },
+    }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd) }
+    return <SalesMobileView key={sub} channel="offline" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list */}
@@ -14667,6 +14969,8 @@ function InternationalPlaceholderTab() {
 }
 
 function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd }) {
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   if (channel === 'Shopify') return shopifyView === 'returns'
     ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
     : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} />
@@ -14678,7 +14982,7 @@ function ChannelTab({ data, channel, filters, setFilters, channelView, setChanne
   if (channel === 'CRED') return <CredTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Firstcry') return <FirstcryTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Myntra') return <MyntraTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-  if (channel === 'International') return <InternationalPlaceholderTab />
+  if (channel === 'International') return salesMobile ? <SalesMobileView channel="international" /> : <InternationalPlaceholderTab />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
@@ -16100,7 +16404,8 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       </div>
       {/* Content */}
       <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} setPage={setPage} allowedTabs={allowedTabs} />}
+        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} setPage={setPage} allowedTabs={allowedTabs}
+          onOpenChannel={id => { if (allowedTabs && !allowedTabs.includes(SALES_KEY_MAP[id])) return; setActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} />}
         {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}

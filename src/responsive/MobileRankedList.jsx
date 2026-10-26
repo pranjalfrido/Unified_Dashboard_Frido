@@ -28,7 +28,7 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
 
   return (
     <div className="ranked-list">
-      <div style={{ fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink }}>{title}</div>
+      {title && <div style={{ fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink }}>{title}</div>}
       <div style={{ fontSize: 12, color: M.muted, marginTop: 2 }}>{`Top ${Math.min(topN, items.length)} of ${items.length} ${noun} · by ${sort.label}`}</div>
 
       <div role="group" aria-label="Sort by" style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: '10px -16px 2px', padding: '2px 16px', scrollbarWidth: 'none' }}>
