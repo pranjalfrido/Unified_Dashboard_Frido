@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { C, fmt } from '../utils.js'
-import { rateForWeightGm } from './pnlUtils.js'
+import { C } from '../utils.js'
+// fmtSigned: Indian ₹ format that keeps the minus sign readable (fix/pnl-data item 6)
+import { rateForWeightGm, fmtSigned as fmt } from './pnlUtils.js'
 
 // Checks whether a specific PO a sales person has brought in is actually worth approving — given
 // its real Qty and Selling Price (both already fixed by the deal, not something being planned),
@@ -353,7 +354,7 @@ function CostBar({ label, sub, value, scaleMax, tone, negative }) {
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           {pctOfBase != null && (
             <span style={{ fontSize: 11, fontWeight: 700, color: negative ? C.red.tx : C.t3, fontVariantNumeric: 'tabular-nums' }}>
-              {pctOfBase.toFixed(1)}%
+              {negative ? '−' : ''}{pctOfBase.toFixed(1)}%
             </span>
           )}
           <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: tone ? 800 : 700, color: negative ? C.red.tx : C.t1 }}>

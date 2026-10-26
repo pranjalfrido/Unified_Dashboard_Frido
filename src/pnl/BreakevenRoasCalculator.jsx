@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, Fragment } from 'react'
 import { C, fmt } from '../utils.js'
-import { perUnitWaterfall, rateForWeightGm } from './pnlUtils.js'
+import { perUnitWaterfall, rateForWeightGm, breakevenRoas as breakevenRoasOf, roasForTargetCm2 } from './pnlUtils.js'
 
 // Forward-looking, single-unit calculator for a NOT-YET-LAUNCHED product: given a listing price,
 // a discount (selling price defaults to 7% off listing — Frido's usual launch convention), COGS,
@@ -263,8 +263,9 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
   // across (2026-10-19: previously this only copied the 4 outcome %s, leaving Listing
   // Price/COGS/Weight at whatever was last typed — fine for seeding a NEW product's estimate with
   // a comparable's return behavior, but wrong for "what is THIS product's own breakeven ROAS").
-  // GST rate isn't on d2cProductGroups (no GST% tracked per product there) so it's left as the
-  // user's own preset pick, same as before.
+  // GST rate: the product's own effective rate from its sales (Gross Inc GST ÷ Gross Ex GST − 1),
+  // snapped to the nearest preset (fix/pnl-data) — it used to stay at the 18% preset, so a 5% product
+  // (e.g. Orthotics Posture Corrector) got its Net Revenue and breakeven ROAS understated.
   const applyReferenceRates = product => {
     if (!product) return
     setProductName(product.name || '')
@@ -287,6 +288,10 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     setRtoPct(Math.round((product.rtoPct || 0) * 1000) / 10)
     setCirPct(Math.round((product.cirPct || 0) * 1000) / 10)
     setExchangePct(Math.round((product.exchPct || 0) * 1000) / 10)
+    if (product.gross > 0 && product.excRev > 0) {
+      const effective = (product.gross / product.excRev - 1) * 100
+      setGstPct(GST_PRESETS.reduce((best, g) => (Math.abs(g - effective) < Math.abs(best - effective) ? g : best), GST_PRESETS[0]))
+    }
   }
 
   const sellingPrice = useMemo(() => {
@@ -325,13 +330,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
   // Breakeven ROAS = GrossExGST / CM1 (spend that exactly zeroes CM2). Only meaningful once CM1 > 0
   // — a negative CM1 means the product loses money before a single rupee of ad spend, so no ROAS
   // rescues it.
-  const breakevenRoas = waterfall && waterfall.cm1 > 0 ? waterfall.excGst / waterfall.cm1 : null
+  const breakevenRoas = waterfall ? breakevenRoasOf(waterfall.excGst, waterfall.cm1) : null
   // Breakeven ROAS @ 15% CM2 = GrossExGST / (CM1 − 0.15×NetRevenue) — the 15% CM2 target itself is
   // still defined as a share of Net Revenue (the real, return-adjusted revenue this product keeps),
   // only the ROAS ratio's own numerator switches to gross ex-GST. Needs CM1 to clear the 15% floor
   // BEFORE any ad spend, otherwise the target is unreachable regardless of ROAS.
-  const target15Budget = waterfall ? waterfall.cm1 - 0.15 * waterfall.netRev : null
-  const breakevenRoas15 = waterfall && target15Budget > 0 ? waterfall.excGst / target15Budget : null
+  // (shared with the P&L margin watchlist: pnlUtils.js roasForTargetCm2)
+  const breakevenRoas15 = waterfall ? roasForTargetCm2(waterfall.excGst, waterfall.cm1, waterfall.netRev, 0.15) : null
 
   const totalLossPct = (rtoPct || 0) + (cancelPct || 0) + (cirPct || 0) + (exchangePct || 0)
   const lossOver100 = totalLossPct > 100

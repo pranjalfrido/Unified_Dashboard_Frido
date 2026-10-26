@@ -140,10 +140,14 @@ export function reasonList(reasons = []) {
   return { rows, sub: `${rows.length} reasons · ${grand.toLocaleString('en-IN')} orders` }
 }
 
-// EBO Store-wise Sales rows (moved unchanged from EBOTab's render).
+// EBO Store-wise Sales rows (moved unchanged from EBOTab's render). The P&L store table's
+// "Unmapped / Other" and "Ignored (UTSAV)" bucket rows (api/_store_pnl.js, fix/pnl-data item 4) are
+// left out, so the Sales store list keeps showing mapped stores only, as before.
+const NOT_A_STORE = new Set(['Unmapped / Other', 'Ignored (UTSAV)'])
 export function eboStoreRows(rawStoreRows = []) {
   const byStore = {}
   rawStoreRows.forEach(r => {
+    if (NOT_A_STORE.has(r.storeName)) return
     if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
     const s = byStore[r.storeName]
     s.gross += r.gross || 0; s.netRev += r.netRev || 0

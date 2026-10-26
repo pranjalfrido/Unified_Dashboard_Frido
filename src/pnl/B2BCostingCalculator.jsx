@@ -248,16 +248,18 @@ function ExtraCostRow({ row, onChange, onRemove }) {
   )
 }
 
-export default function B2BCostingCalculator({ productGroups = [] }) {
+// initialProductKey ('cat::sc'): opens with that product applied ("Simulate ↗" from the P&L Offline tab).
+export default function B2BCostingCalculator({ productGroups = [], initialProductKey = null }) {
+  const initProduct = initialProductKey ? productGroups.find(p => p.sku === initialProductKey) || null : null
   const [mode, setMode] = useState('price') // 'price' | 'profit'
   const [assumptions, setAssumptions] = useState(DEFAULT_ASSUMPTIONS)
   const setAssumption = (key, v) => setAssumptions(prev => ({ ...prev, [key]: v }))
 
-  const [productName, setProductName] = useState('')
-  const [cogsPerUnit, setCogsPerUnit] = useState('')
+  const [productName, setProductName] = useState(initProduct?.name || '')
+  const [cogsPerUnit, setCogsPerUnit] = useState(initProduct ? Math.round(initProduct.cogsPerUnit * 100) / 100 : '')
   const [listingPrice, setListingPrice] = useState('')
   const [gstPct, setGstPct] = useState(5)
-  const [volWeightKg, setVolWeightKg] = useState('')
+  const [volWeightKg, setVolWeightKg] = useState(initProduct?.weightKg != null ? Math.round(initProduct.weightKg * 100) / 100 : '')
   const [ebitdaTargetPct, setEbitdaTargetPct] = useState(DEFAULT_EBITDA_TARGET_PCT)
   // Only used in 'profit' mode — the price a buyer has actually named, ex-GST (not Rounded-to-₹10
   // like the solved price in 'price' mode, since this is a real number someone else specified).
