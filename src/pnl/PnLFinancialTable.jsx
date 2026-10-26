@@ -181,8 +181,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     totalReturnRev: s.totalReturnRev + r.totalReturnRev, spend: s.spend + r.spend,
     cogs: s.cogs + (r.anyCosted ? r.cogs : 0), netCovered: s.netCovered + (r.anyCosted ? r.netCovered : 0), anyCosted: s.anyCosted || r.anyCosted,
     snd: s.snd + (r.anySnd ? r.snd : 0), sndNetCovered: s.sndNetCovered + (r.anySnd ? r.sndNetCovered : 0), anySnd: s.anySnd || r.anySnd,
-    cm1: s.cm1 + (r.cm1Covered ? r.cm1 : 0), cm1NetCovered: s.cm1NetCovered + (r.cm1Covered ? r.net : 0), anyCm1: s.anyCm1 || r.cm1Covered,
-    cm2: s.cm2 + (r.cm2Covered ? r.cm2 : 0), cm2NetCovered: s.cm2NetCovered + (r.cm2Covered ? r.net : 0), anyCm2: s.anyCm2 || r.cm2Covered,
+    // CM1/CM2 on product-level net (netCovered), the same base as COGS%/GM% — matches kpiSummary.
+    cm1: s.cm1 + (r.cm1Covered ? r.cm1 : 0), cm1NetCovered: s.cm1NetCovered + (r.cm1Covered ? r.netCovered : 0), anyCm1: s.anyCm1 || r.cm1Covered,
+    cm2: s.cm2 + (r.cm2Covered ? r.cm2 : 0), cm2NetCovered: s.cm2NetCovered + (r.cm2Covered ? r.netCovered : 0), anyCm2: s.anyCm2 || r.cm2Covered,
   }), { gross: 0, excRev: 0, net: 0, units: 0, totalReturnRev: 0, spend: 0, cogs: 0, netCovered: 0, anyCosted: false, snd: 0, sndNetCovered: 0, anySnd: false, cm1: 0, cm1NetCovered: 0, anyCm1: false, cm2: 0, cm2NetCovered: 0, anyCm2: false })
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
   const totAsp = tot.units > 0 ? tot.gross / tot.units : 0

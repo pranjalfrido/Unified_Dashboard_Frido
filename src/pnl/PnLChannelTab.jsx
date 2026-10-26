@@ -115,13 +115,19 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
 // channel actually has real numbers for. Trimmed to just these 5 headline steps (not every
 // intermediate cost line) per explicit request — Returns/COGS/SnD/Mktg Spend stay visible in
 // their own KPI tiles above, this card is the five-figure summary view only.
-function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing }) {
+// actualNet (optional): Net Revenue with product detail, when part of the period is an estimate
+// (Flipkart/Myntra late reports) — shown as its own step, and the % after it is measured on it, the
+// same base the margin cards use.
+// pcts: the KPI cards' own GM% / CM1% / CM2% (fix/pnl-data item 2) — printed as-is so the waterfall
+// and the cards can never disagree (each % has its own covered-net base in kpiSummary).
+function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing, actualNet = null, pcts = {} }) {
   const steps = [
     { label: 'Gross Revenue', value: gross, tone: 'start' },
     { label: 'Net Revenue', value: net, tone: 'subtotal' },
-    gm != null && { label: 'Gross Margin', value: gm, tone: 'subtotal' },
-    cm1 != null && { label: 'CM1', value: cm1, tone: 'subtotal' },
-    showMarketing && cm2 != null && { label: 'CM2', value: cm2, tone: 'total' },
+    actualNet != null && { label: 'Net Revenue, actual (product detail)', value: actualNet, tone: 'subtotal' },
+    gm != null && { label: 'Gross Margin', value: gm, tone: 'subtotal', pct: pcts.gm },
+    cm1 != null && { label: 'CM1', value: cm1, tone: 'subtotal', pct: pcts.cm1 },
+    showMarketing && cm2 != null && { label: 'CM2', value: cm2, tone: 'total', pct: pcts.cm2 },
   ].filter(Boolean)
   const scaleMax = Math.max(gross, 1)
   return (
@@ -140,7 +146,8 @@ function PnLWaterfallCard({ gross, net, gm, cm1, cm2, showMarketing }) {
           // Gross Revenue therefore reads as >100% (it's larger than Net), while bars themselves
           // stay scaled to Gross (scaleMax above) so bar LENGTH still reflects true relative size;
           // only the printed %, not the bar width, changes basis.
-          const pctOfNet = net > 0 ? (s.value / net * 100) : 0
+          const base = actualNet != null ? actualNet : net
+          const pctOfNet = s.pct != null ? s.pct : base > 0 ? (s.value / base * 100) : 0
           return (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: s.tone === 'start' || s.tone === 'total' ? 12.5 : 11.5, fontWeight: s.tone === 'start' || s.tone === 'total' ? 700 : 500, color: s.tone === 'start' || s.tone === 'total' ? C.t1 : C.t2 }}>
@@ -344,12 +351,19 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0 }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
   const fmtPctSub = v => v != null ? `${v.toFixed(1)}%` : '—'
+  // Part of the period is an estimate with no product detail (Flipkart/Myntra late reports): Net
+  // Revenue includes it, the margin lines are measured on the actual (product-level) net only.
+  const actualNet = estimatedDays > 0 && kpiSummary?.actualNet != null && kpiSummary.actualNet < net ? kpiSummary.actualNet : null
+  const onNet = actualNet != null ? ' on actual net' : ''
+  const netSub = actualNet != null
+    ? `incl. ${fmt(net - actualNet)} estimated (${estimatedDays} day${estimatedDays === 1 ? '' : 's'}, no product detail)`
+    : null
   const negAccent = v => v != null && v < 0 ? '#7A1A1A' : undefined
 
   // vs-prior-period delta badges — same shell/colors as Sales' KPI badges (chgBadge pattern in
@@ -483,18 +497,18 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           {heroCard}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.ceil((showMarketing ? (spendAllocated ? 8 : 9) : 7) / 2)},1fr)`, gridTemplateRows: 'repeat(2,1fr)', gap: 10, alignItems: 'stretch' }}>
             {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" plain />}
-            <KPICard label="Net Revenue" value={fmt(net)} sub={returnsNotCaptured ? '= Gross ex GST (returns not captured)' : gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
+            <KPICard label="Net Revenue" value={fmt(net)} sub={returnsNotCaptured ? '= Gross ex GST (returns not captured)' : netSub ? netSub : gross > 0 ? `${(net / gross * 100).toFixed(1)}% of gross` : undefined} badge={netBadge} plain />
             {returnsNotCaptured
               ? <KPICard label="Returns" value="Not available" sub="Not captured for this channel" plain />
               : <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />}
-            <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of Net Rev`} badge={cogsBadge} plain />
-            <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}`} badge={gmBadge} plain />
-            <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} badge={sndBadge} plain />
-            <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
+            <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of ${onNet ? 'actual net' : 'Net Rev'}`} badge={cogsBadge} plain />
+            <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}${kpiSummary.gmPct != null ? onNet : ''}`} badge={gmBadge} plain />
+            <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of ${onNet && kpiSummary.sndPct != null ? 'actual net' : 'Net Rev'}`} badge={sndBadge} plain />
+            <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}${kpiSummary.cm1Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
             {showMarketing && <>
               <KPICard label={spendAllocated ? 'Mktg (allocated 1.5% of Net)' : 'Mktg Spend'} value={kpiSummary.spend != null ? fmt(kpiSummary.spend) : 'Not available'} sub={kpiSummary.spend != null ? `${fmtPctSub(kpiSummary.spendPct)} of Net Rev` : 'No ad spend source'} badge={spendBadge} plain />
               {!spendAllocated && <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />}
-              <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}`} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
+              <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}${kpiSummary.cm2Pct != null ? onNet : ''}`} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
             </>}
           </div>
         </div>
@@ -514,7 +528,8 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={300} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
         </div>
         <div style={{ flex: '1 1 260px', display: 'flex' }}>
-          <PnLWaterfallCard gross={gross} net={net} gm={kpiSummary.gm} cm1={kpiSummary.cm1} cm2={kpiSummary.cm2} showMarketing={showMarketing} />
+          <PnLWaterfallCard gross={gross} net={net} gm={kpiSummary.gm} cm1={kpiSummary.cm1} cm2={kpiSummary.cm2} showMarketing={showMarketing} actualNet={actualNet}
+            pcts={{ gm: kpiSummary.gmPct, cm1: kpiSummary.cm1Pct, cm2: kpiSummary.cm2Pct }} />
         </div>
       </div>
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} spendAllocated={spendAllocated} />

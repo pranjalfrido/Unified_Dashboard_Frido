@@ -1985,8 +1985,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         if (rowAnyCosted && rowAnySnd) {
           const rowGm = rowNetCovered - rowCogs
           cm1 += rowGm - rowSnd
-          cm1NetCovered += rowNet
-          cm2NetCovered += rowNet
+          // Product-level net (same base as COGS%/GM%) — rowNet also counts revenue with no product
+          // detail (Flipkart/Myntra estimated days), which put CM1%/CM2% on a different base from
+          // GM% on the same card (fix/pnl-data item 2).
+          cm1NetCovered += rowNetCovered
+          cm2NetCovered += rowNetCovered
           anyCm1 = true
         }
       })
@@ -2000,6 +2003,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const cm2 = cm1Covered && hasSpendSource ? cm1 - spend : null
     return {
       net, cogs: anyCosted ? cogs : null, gm, snd: anySnd ? snd : null, cm1: cm1Final, spend: hasSpendSource ? spend : null, cm2,
+      // Net Revenue the margin lines are measured on (product-level rows only) — below `net` when
+      // part of the period has no product detail (Flipkart/Myntra estimated days, fix/pnl-data item 2).
+      actualNet: anyCosted ? netCovered : null,
       // ROAS = Gross Revenue (Ex GST, before returns) ÷ Marketing Spend — same formula and same
       // numerator base ("Revenue (Ex GST) / Spend") the Ads tab's own Overall ROAS card uses, so
       // this always matches that number exactly rather than drifting via a different revenue base.
@@ -2195,6 +2201,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           inProgress={PNL_IN_PROGRESS[activeTab] || null}
           returnsNotCaptured={['blinkit', 'instamart', 'zepto'].includes(activeTab)}
           spendAllocated={activeTab === 'ebo'}
+          estimatedDays={activeTab === 'flipkart' ? (data.flipkart?.estimatedDays || 0) : activeTab === 'myntra' ? (data.myntra?.estimatedDays || 0) : 0}
           startDate={filters.start}
           endDate={filters.end}
         />
