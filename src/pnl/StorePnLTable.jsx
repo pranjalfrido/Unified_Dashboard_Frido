@@ -1,4 +1,5 @@
-import { C, fmt, exportCSV } from '../utils.js'
+import { C, exportCSV } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable } from '../components.jsx'
 
 // EBO store-wise P&L drill-down, nested inside the EBO PnL tab (confirmed 2026-08-20 — a drill-

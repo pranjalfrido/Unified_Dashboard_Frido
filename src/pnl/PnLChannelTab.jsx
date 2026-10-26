@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { C, fmt, fmtN, pct } from '../utils.js'
+import { C, fmtN, pct } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
 
 function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {

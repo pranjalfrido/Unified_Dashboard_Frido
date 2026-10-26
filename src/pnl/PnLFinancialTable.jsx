@@ -1,5 +1,6 @@
 import { useState, Fragment } from 'react'
-import { C, fmt, fmtN, exportCSV } from '../utils.js'
+import { C, fmtN, exportCSV } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
 import { netRevenueOf, estimateCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 
