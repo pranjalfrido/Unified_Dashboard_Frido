@@ -100,7 +100,7 @@ export default function CustomerSupportMobile(p) {
   const g = GRAINS.find(x => x.id === grain)
 
   return (
-    <div className="cs-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
+    <div className="cs-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24, color: M.ink }}>
       <SegmentToggle options={GRAINS.map(x => ({ id: x.id, label: x.label }))} value={grain} onChange={setGrain} label="Support view" full />
       <div style={dim}>
         <MasterTrendCard metrics={metrics} rawRows={rows} groupTrend={r => r} start={rows[0]?.date} end={rows.at(-1)?.date} granularity={gran} layout={layout}
