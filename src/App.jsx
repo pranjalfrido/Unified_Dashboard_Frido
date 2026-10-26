@@ -4960,7 +4960,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     const cc = logCostCtrl
     return (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Logistics" caption={cc?.caption}
+        <MobilePageHeader title="Logistics"
           right={<>
             {cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />}
             {cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />}

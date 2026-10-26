@@ -3935,7 +3935,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const ctrlView = {
     scope, scopes,
     pill: monthsLabel(filters.months, scopeMonths, { short: true }),
-    caption: `Billing months · ${monthsLabel(filters.months, scopeMonths)}`,
     hasFilters: costHasFilters(scope),
     filterCount: costFilterCount(scope, filters),
     stripItems,
