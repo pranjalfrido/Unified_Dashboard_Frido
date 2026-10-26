@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
+import { useBreakpoint } from '../responsive/useBreakpoint.js'
+import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv } from './returnAnalysisData.js'
+import ReturnAnalysisMobile from './ReturnAnalysisMobile.jsx'
 import {
   Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -32,20 +35,7 @@ function TrendStatTile({ label, value, badge, color }) {
 function ReturnTrendChart({ kpis, dailyTrend }) {
   const [groupBy, setGroupBy] = useState('daily')
   const raw = (dailyTrend || []).map(d => ({ date: d.date, revenue: d.revenue, cancelPct: d.cancelPct, rtoPct: d.rtoPct, cirPct: d.cirPct, exchangePct: d.exchangePct, totalReturnPct: d.totalReturnPct }))
-  const grouped = useMemo(() => {
-    if (groupBy === 'daily') return raw
-    const buckets = {}
-    raw.forEach(d => {
-      const key = groupBy === 'weekly'
-        ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
-        : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, cancelPct: 0, rtoPct: 0, cirPct: 0, exchangePct: 0, totalReturnPct: 0, _n: 0 }
-      buckets[key].revenue += d.revenue
-      buckets[key].cancelPct += d.cancelPct; buckets[key].rtoPct += d.rtoPct; buckets[key].cirPct += d.cirPct
-      buckets[key].exchangePct += d.exchangePct; buckets[key].totalReturnPct += d.totalReturnPct; buckets[key]._n += 1
-    })
-    return Object.values(buckets).map(b => ({ ...b, cancelPct: b.cancelPct / b._n, rtoPct: b.rtoPct / b._n, cirPct: b.cirPct / b._n, exchangePct: b.exchangePct / b._n, totalReturnPct: b.totalReturnPct / b._n })).sort((a, b) => a.date.localeCompare(b.date))
-  }, [raw, groupBy])
+  const grouped = useMemo(() => groupReturnTrend(raw, groupBy), [raw, groupBy])
   const xFmt = d => groupBy === 'daily' ? d?.slice(5) : groupBy === 'monthly' ? d?.slice(0, 7) : d
 
   const revChg = kpis && kpis.prevTotalRevenue > 0 ? ((kpis.totalRevenue - kpis.prevTotalRevenue) / kpis.prevTotalRevenue * 100) : null
@@ -679,25 +669,7 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
     top3Pct: r => r.top3Pct ?? -1,
   })
 
-  function doExport() {
-    if (!rows.length) return
-    const exportRows = rows.map(r => ({
-      'Category': r.category,
-      'Sub-Category': r.subCategory,
-      'SKU': r.sku,
-      'Total Qty': r.totalQty,
-      'Exchange Qty': r.exchQty,
-      'Exchange %': r.exchPct.toFixed(2),
-      'Gross Rev (Exchange, incl GST)': r.exchRev.toFixed(2),
-      'Top Exchanged Product 1': r.top1Sku || '',
-      'Top 1 Share %': r.top1Pct != null ? r.top1Pct.toFixed(2) : '',
-      'Top Exchanged Product 2': r.top2Sku || '',
-      'Top 2 Share %': r.top2Pct != null ? r.top2Pct.toFixed(2) : '',
-      'Top Exchanged Product 3': r.top3Sku || '',
-      'Top 3 Share %': r.top3Pct != null ? r.top3Pct.toFixed(2) : '',
-    }))
-    exportCSV(exportRows, `exchange_sku_detail_${dateStart || 'all'}_${dateEnd || 'all'}.csv`)
-  }
+  const doExport = () => exportExchangeCsv(rows, dateStart, dateEnd)
 
   return (
     <Card fill title="Exchange Deep Dive · SKU-wise" action={
@@ -761,12 +733,7 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
   )
 }
 
-export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {} }) {
-  const API = import.meta.env.VITE_API_URL || ''
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-
+export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}, onMenuExtra }) {
   const [topProductsBasis, setTopProductsBasis] = useState('revenue')
   const [topProductsPaymentType, setTopProductsPaymentType] = useState('')
   const [catBasis, setCatBasis] = useState('revenue')
@@ -774,41 +741,17 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
   const [monthBasis, setMonthBasis] = useState('revenue')
   const [payBasis, setPayBasis] = useState('revenue')
 
-  const reqIdRef = useRef(0)
-  useEffect(() => {
-    if (!filters.start || !filters.end) return
-    const reqId = ++reqIdRef.current
-    let subCategoryList = filters.subCategory?.length ? [...filters.subCategory] : []
-    if (filters.productAge && Object.keys(subCatFirstOrderMap).length) {
-      const today = new Date()
-      const ageSubs = Object.entries(subCatFirstOrderMap)
-        .filter(([, d]) => { const days = (today - new Date(d)) / 86400000; return filters.productAge === 'new' ? days <= 90 : days > 90 })
-        .map(([sc]) => sc)
-      subCategoryList = ageSubs
-    }
-    const body = {
-      start: filters.start, end: filters.end,
-      subChannel: (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel : '',
-      category: filters.category?.length ? filters.category.join(',') : undefined,
-      subCategory: subCategoryList.length ? subCategoryList.join(',') : undefined,
-      topProductsPaymentType: topProductsPaymentType || undefined,
-    }
-    // Deferred to a microtask so the fetch kickoff (and its setLoading/setError) doesn't run
-    // synchronously inside the effect body itself — same async-boundary shape React's
-    // set-state-in-effect rule wants, without changing request/race-guard behavior.
-    Promise.resolve().then(() => {
-      if (reqId !== reqIdRef.current) return
-      setLoading(true)
-      setError(null)
-      fetch(`${API}/api/return-analysis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
-        .then(json => { if (reqId === reqIdRef.current) setData(json) })
-        .catch(e => { if (reqId === reqIdRef.current) setError(e.message) })
-        .finally(() => { if (reqId === reqIdRef.current) setLoading(false) })
-    })
-  }, [API, filters.start, filters.end, filters.subChannel, filters.category, filters.subCategory, filters.productAge, subCatFirstOrderMap, topProductsPaymentType])
+  const { data, loading, error } = useReturnAnalysis({ filters, subCatFirstOrderMap, topProductsPaymentType })
+  // Below 1024px (and phones in landscape): the mobile layout of the same data.
+  const bp = useBreakpoint()
+  const mobile = bp.width < 1024 || bp.isPhoneLandscape
 
   const paymentTypeOpts = useMemo(() => (data?.paymentTypeTable || []).map(r => r.paymentType).filter(Boolean), [data])
+
+  if (mobile) {
+    return <ReturnAnalysisMobile data={data} loading={loading} error={error} filters={filters} onMenuExtra={onMenuExtra}
+      topProductsPaymentType={topProductsPaymentType} setTopProductsPaymentType={setTopProductsPaymentType} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

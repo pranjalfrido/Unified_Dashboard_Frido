@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
-import { rangeTouchesImmatureWindow, PROVISIONAL_MATURITY_CUTOFF_DAYS } from '../utils.js'
+import { rangeTouchesImmatureWindow, PROVISIONAL_MATURITY_CUTOFF_DAYS, exportCSV } from '../utils.js'
 
 // Shared by the D2C Return Analysis page (desktop and mobile) and the Sales → D2C mobile entry
 // card (docs/responsive/RETURN_ANALYSIS_PLAN.md). Display helpers only: every number still comes
@@ -64,6 +64,28 @@ export function groupReturnTrend(raw, groupBy) {
     buckets[key].exchangePct += d.exchangePct; buckets[key].totalReturnPct += d.totalReturnPct; buckets[key]._n += 1
   })
   return Object.values(buckets).map(b => ({ ...b, cancelPct: b.cancelPct / b._n, rtoPct: b.rtoPct / b._n, cirPct: b.cirPct / b._n, exchangePct: b.exchangePct / b._n, totalReturnPct: b.totalReturnPct / b._n })).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// Exchange Deep Dive "Export CSV", moved here unchanged from ExchangeDeepDiveCard (the mobile "⋯"
+// offers the same file).
+export function exportExchangeCsv(rows, dateStart, dateEnd) {
+  if (!rows.length) return
+  const exportRows = rows.map(r => ({
+    'Category': r.category,
+    'Sub-Category': r.subCategory,
+    'SKU': r.sku,
+    'Total Qty': r.totalQty,
+    'Exchange Qty': r.exchQty,
+    'Exchange %': r.exchPct.toFixed(2),
+    'Gross Rev (Exchange, incl GST)': r.exchRev.toFixed(2),
+    'Top Exchanged Product 1': r.top1Sku || '',
+    'Top 1 Share %': r.top1Pct != null ? r.top1Pct.toFixed(2) : '',
+    'Top Exchanged Product 2': r.top2Sku || '',
+    'Top 2 Share %': r.top2Pct != null ? r.top2Pct.toFixed(2) : '',
+    'Top Exchanged Product 3': r.top3Sku || '',
+    'Top 3 Share %': r.top3Pct != null ? r.top3Pct.toFixed(2) : '',
+  }))
+  exportCSV(exportRows, `exchange_sku_detail_${dateStart || 'all'}_${dateEnd || 'all'}.csv`)
 }
 
 // The desktop tables' red rule (ReturnBreakdownTable / PaymentTypeTransposedTable RED_THRESH).

@@ -32,7 +32,7 @@ export default function MobilePageHeader({ onBack, title, sub, caption, right, c
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
           {onBack && (
             <button type="button" onClick={onBack} aria-label="Back" className="mph-back"
-              style={{ flex: '0 0 auto', width: 32, height: 40, marginLeft: -8, border: 'none', background: 'transparent', color: '#fff', fontSize: 26, lineHeight: 1, fontFamily: 'var(--font)', cursor: 'pointer', borderRadius: 8 }}>‹</button>
+              style={{ flex: '0 0 auto', width: 24, height: 40, marginLeft: -6, marginRight: -4, border: 'none', background: 'transparent', color: '#fff', fontSize: 26, lineHeight: 1, fontFamily: 'var(--font)', cursor: 'pointer', borderRadius: 8 }}>‹</button>
           )}
           {caption
             ? <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
