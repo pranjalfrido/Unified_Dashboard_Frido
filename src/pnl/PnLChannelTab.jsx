@@ -374,9 +374,10 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null, tab, onSimulate, simulateLabel, mobileLayout = false, mobileExtras = null }) {
   const isMob = useIsMobile()
   // Margin watchlist / matrix / biggest fixes (PNL_MASTER_PLAN.md Part B §3): read the Financial View's
-  // own rows, so every % here is the table's. Hidden on In-progress tabs (no new calculations there).
-  const fvRows = useMemo(() => (inProgress ? [] : buildFinancialRows({ subCatData, skuData, adSpendMap: adSpendMap || {}, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate }).allRows),
-    [inProgress, subCatData, skuData, adSpendMap, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate])
+  // own rows, so every % here is the table's. The rules are off on In-progress tabs (no new
+  // calculations there); the rows still feed the mobile Financial view list, as the laptop table.
+  const fvRows = useMemo(() => (buildFinancialRows({ subCatData, skuData, adSpendMap: adSpendMap || {}, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate }).allRows),
+    [subCatData, skuData, adSpendMap, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate])
   const prevStatusM = prevSummary?.status || 'off'
   const margin = useMarginRules({
     rows: fvRows, tab: inProgress ? null : tab,

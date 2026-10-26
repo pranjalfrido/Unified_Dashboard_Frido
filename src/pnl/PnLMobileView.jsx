@@ -349,7 +349,7 @@ export default function PnLMobileView({
         </Card>
       )}
 
-      {!inProgress && (fvRows || []).length > 0 && (
+      {(fvRows || []).length > 0 && (
         <Card title="Financial view" right={<span style={{ fontSize: 12, color: M.muted }}>{grp === 'prod' ? `${fvRows.length} products` : `${catRows.length} categories`}</span>}>
           <SegmentToggle options={[{ id: 'cat', label: 'Category' }, { id: 'prod', label: 'Product' }]} value={grp} onChange={setGrp} label="Group by" full />
           <div style={{ height: 6 }} />
