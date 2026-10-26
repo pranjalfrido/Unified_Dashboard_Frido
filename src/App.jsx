@@ -40,7 +40,7 @@ import ActionMenu from './responsive/ActionMenu.jsx'
 import MixBar from './responsive/MixBar.jsx'
 import AdsLaptopSections from './ads/AdsSections.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
-import { seriesFor, buildDailyByChannel, computeAdsRules, OVERALL_CHANNELS, SHADES } from './ads/adsData.js'
+import { seriesFor, buildDailyByChannel, computeAdsRules, OVERALL_CHANNELS, TOTAL_SALES_ROAS_INFO } from './ads/adsData.js'
 import { SalesFilterButton } from './sales/SalesFilters.jsx'
 import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
 import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
@@ -12102,7 +12102,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     {chgBadge(d2cTotalSpend, prevSpend, true)}
                   </div>
                   <div className="kpi-sub" style={{ fontSize: 13 }}>
-                    Rev <strong>{fmt(totalRevenue)}</strong> · <span style={{ color: roasColor(overallRoas), fontWeight: 700 }}>{overallRoas.toFixed(2)}x</span> ROAS
+                    Rev <strong>{fmt(totalRevenue)}</strong> · <span style={{ color: roasColor(overallRoas), fontWeight: 700 }}>{overallRoas.toFixed(2)}x</span> <span title={TOTAL_SALES_ROAS_INFO} style={{ borderBottom: `1px dotted ${C.t3}`, cursor: 'help' }}>total-sales ROAS</span>
                   </div>
                   <div style={{ height: 30, flexShrink: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -12123,7 +12123,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
                 <SparkKpiCard label="Total Spend" value={fmt(d2cTotalSpend)} chg={chgPct(d2cTotalSpend, prevSpend)} sparkData={spendSpark} />
                 <SparkKpiCard label="Gross Revenue Ex GST" value={fmt(totalRevenue)} chg={chgPct(totalRevenue, prevRevenue)} sparkData={revSpark} />
-                <SparkKpiCard label="Overall ROAS" value={`${overallRoas.toFixed(2)}x`} chg={chgPct(overallRoas, prevRoas)} sparkData={roasSpark} accent={roasColor(overallRoas)} />
+                <SparkKpiCard label="Total-sales ROAS" value={`${overallRoas.toFixed(2)}x`} chg={chgPct(overallRoas, prevRoas)} sparkData={roasSpark} accent={roasColor(overallRoas)} />
                 {allKpis.map(k => (
                   <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={k.chgPct} sparkData={k.spark || []} accent={k.roasVal != null ? roasColor(k.roasVal) : undefined} />
                 ))}
@@ -12404,7 +12404,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               { id: 'rev', label: isMobPlatTable ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'rev',
                 row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
-              { id: 'roas', label: 'ROAS', sortKey: 'roas',
+              { id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas',
                 row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
             ]
@@ -12582,7 +12582,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
+              id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -12615,7 +12615,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: '18%', style: thStyle,
+              id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas', width: '18%', style: thStyle,
               row: r => {
                 const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
                 const totalProdSpend = r.spend + prodAddlSpend
