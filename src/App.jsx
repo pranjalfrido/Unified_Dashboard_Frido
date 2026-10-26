@@ -3581,7 +3581,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // ── Bottom Nav (phones: ≤768px and phone landscape) ─────────────
 // Same permission rules as the Sidebar. The first four allowed of Overview / Sales / P&L / Inventory
 // sit in the bar; everything else (Ads, Logistics, Customer, Documents, Frido Pulse, Profile) is in "More".
-function BottomNav({ page, setPage, allowedTabs, profile }) {
+function BottomNav({ page, setPage, setInvTab, allowedTabs, profile }) {
   const ic = Icon => <Icon size={22} />
   const can = id => {
     if (!allowedTabs) return true
@@ -3617,6 +3617,12 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
   const onSelect = id => {
     if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
     if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
+    // Inventory always opens on Inventory Health (Sales & Allocation if that is all the user may see),
+    // the same as the desktop sidebar; it used to reopen whichever sub-tab was last used.
+    if (id === 'inventory') {
+      const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
+      if (setInvTab) return setInvTab(hasHealth ? 'health' : 'sales') // navigates to inventory + that sub-tab
+    }
     setPage(id)
   }
   return <MobileBottomNav primary={primary} more={more} active={active} onSelect={onSelect} />
@@ -20880,7 +20886,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
         </div>
       </div>
-      <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} profile={profile} />
+      <BottomNav page={page} setPage={setPage} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
     </div>
   )
 }
