@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
+import SalesAllocMobile from './mobile/SalesAllocMobile.jsx'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -324,7 +325,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate, invMobile = false, onMenu }) {
   const isMobile = useIsMobile()
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -766,6 +767,15 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const pct = type => Math.round(((filteredData.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
     return { b2c: pct('B2C Order'), b2b: pct('B2B Order'), po: pct('Purchase Order') }
   })()
+
+  // Below 1024px: the mobile view (INVENTORY_MOBILE_REDESIGN_PROMPT.md §3), from the same values.
+  if (invMobile) {
+    return (
+      <SalesAllocMobile fd={filteredData} dateFilters={dateFilters} revenueAvailable={revenueAvailable} mix={salesTypeMix}
+        locationRows={locationStackedRows} channels={filteredData.channelSales2.map(c => ({ name: c.channel, qty: c.qty, rev: c.rev }))} categories={categoryRollup}
+        onMenu={onMenu} />
+    )
+  }
 
   // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
   // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.

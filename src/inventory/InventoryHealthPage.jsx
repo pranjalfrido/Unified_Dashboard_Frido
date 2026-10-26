@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
-import { useIsMobile, useBreakpoint } from '../responsive/useBreakpoint.js'
+import { useIsMobile } from '../responsive/useBreakpoint.js'
 import InventoryHealthMobile from './mobile/InventoryHealthMobile.jsx'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle, exportCsv,
@@ -1200,7 +1200,6 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
 
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs, invMobile = false, onMenu }) {
   const isMobile = useIsMobile()
-  const bp = useBreakpoint()
   const [search, setSearch] = useState('')
   const searchDebounceRef = useRef(null)
   const handleSearchChange = useCallback(e => {
@@ -1512,7 +1511,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   if (invMobile) {
     return (
       <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
-        layout={bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'} showDetailOnly={showDetailOnly}
+        showDetailOnly={showDetailOnly}
         skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)}
         slow={filteredSlowMoving} dead={filteredDeadStock} />
     )

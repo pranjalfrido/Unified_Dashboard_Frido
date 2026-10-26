@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { C } from '../../utils.js'
 import { fmtNum, fmtInt, fmtDays } from '../theme.jsx'
 import MasterTrendCard from '../../responsive/MasterTrendCard.jsx'
+import { useBreakpoint } from '../../responsive/useBreakpoint.js'
 import MixBar, { MixLegend } from '../../responsive/MixBar.jsx'
 import StatusDot from '../../responsive/StatusDot.jsx'
 import BottomSheet from '../../responsive/BottomSheet.jsx'
@@ -88,7 +89,9 @@ function WarehouseCard({ locations, onSeeStock }) {
   )
 }
 
-export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, layout, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead }) {
+export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead }) {
+  const bp = useBreakpoint()
+  const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const [loc, setLoc] = useState('All')
   // Warehouse sheet → "See PNQ stock": the explorer switches to that location and scrolls into view.
   const seeStock = l => { setLoc(l); requestAnimationFrame(() => document.getElementById('inv-stock-explorer')?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }
