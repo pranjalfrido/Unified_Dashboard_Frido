@@ -12,7 +12,7 @@ import Skeleton from './Skeleton.jsx'
 //   onGradient → the tile sits on the master card's gradient (translucent white background)
 //   loading    → the value is still loading: a skeleton instead of a placeholder number
 //   valueColor → the page's existing colour rule for the value (e.g. a negative momentum in red)
-export default function KpiTile({ label, value, valueColor, loading = false, delta, deltaLoading, deltaHidden, lowerIsBetter, selected, onSelect, def, status, onGradient = false }) {
+export default function KpiTile({ label, value, valueColor, loading = false, delta, deltaLoading, deltaHidden, deltaPts, deltaNeutral, lowerIsBetter, selected, onSelect, def, status, onGradient = false }) {
   const M = C.m
   const dot = status && !loading ? { good: M.up, warn: M.amber, bad: M.down }[status] : null
   const body = (
@@ -23,7 +23,7 @@ export default function KpiTile({ label, value, valueColor, loading = false, del
           <span style={{ fontSize: M.type.label, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
           {dot && <span aria-label={`status ${status}`} style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />}
         </span>
-        <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} size={12} />
+        <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} pts={deltaPts} neutral={deltaNeutral} size={12} />
       </span>
       <span style={{ display: 'block', marginTop: 3, fontSize: M.type.tileValue, fontWeight: 700, color: valueColor || M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
     </>

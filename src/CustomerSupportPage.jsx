@@ -6,6 +6,7 @@ import {
 import MixBar from './responsive/MixBar.jsx'
 import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeSupportRules } from './customer/customerRules.js'
+import CustomerSupportMobile from './customer/CustomerSupportMobile.jsx'
 import { C as BASE_C, fmtN, exportCSV } from './utils.js'
 import { orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
 
@@ -807,6 +808,18 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
     { label: 'Escalation rate', values: model.map(p => div(p.t('All')?.escalations, p.t('All')?.interactions)), f: pctF, good: 'down', accent: C.red.tx,
       detail: `${int(latest.t('All')?.escalations)} of ${int(latest.t('All')?.interactions)} interactions` },
   ] : []
+
+  // Below 1024px: the phone view (CUSTOMER_MASTER_PLAN.md Part B §B4), same data and model
+  if (vw < 1024) {
+    if (error) return <div style={{ margin: 12, background: C.red.bg, color: C.red.tx, padding: '10px 14px', borderRadius: 10, fontSize: 13 }}>Couldn't load support data: {error}</div>
+    if (!data || !latest) return <div aria-busy="true" style={{ margin: 12, height: 360, borderRadius: 18, background: C.m.soft }} />
+    return (
+      <div style={{ padding: '12px 12px 0' }}>
+        <CustomerSupportMobile data={data} grain={grain} setGrain={setGrain} latest={latest} prev={prev} trendModel={trendModel} watch={watch} orders7={orders7} onNavigate={onNavigate} loading={loading}
+          dData={dData} dModel={dModel} dGrain={dGrain} setDGrain={setDGrain} dHidden={dHidden} dBack={dBack} secs={secs} dLoading={dLoading} dError={dError} />
+      </div>
+    )
+  }
 
   const btn = (active) => ({ padding: '6px 14px', fontSize: 12.5, fontWeight: 700, borderRadius: 20, cursor: 'pointer',
     border: `1.5px solid ${active ? C.acc : C.border2}`, background: active ? C.acc : C.card, color: active ? C.onAcc : C.t2 })
