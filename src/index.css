@@ -1627,7 +1627,8 @@ svg text, svg tspan{
   .topnav.m-header .mph-pad{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
   .topnav.m-header .mph-row1{ gap:8px }
   .topnav.m-header .filtered-strip{ padding-left:max(12px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important }
-  .topnav.m-header[data-page="sales"] .tnav-title{ font-size:17px; font-weight:600 }
+  /* Same page-title size on every page that uses the phone header (Overview, Sales, Inventory, Logistics …). */
+  .topnav.m-header .tnav-title{ font-size:17px; font-weight:600 }
   .mph-chips::-webkit-scrollbar{ display:none }
   /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
   .sales-tabs, .fbar{ display:none !important }
