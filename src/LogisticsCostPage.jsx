@@ -7,6 +7,7 @@ import BottomSheet from './responsive/BottomSheet.jsx'
 import CostFilterSheet from './logistics/mobile/CostFilters.jsx'
 import { costFilterCount, costHasFilters, costStripItems, costRemove, costClear } from './logistics/mobile/costFilterState.js'
 import { monthsLabel } from './responsive/monthRange.js'
+import CostOverviewMobile from './logistics/mobile/CostOverviewMobile.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -6801,6 +6802,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     )
   }
 
+  // Below 1024px each sub-tab renders its mobile cards (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §3–5) from the
+  // same memos the desktop sections use.
+  const mobileLayout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
+  if (costMobile) {
+    let mob = null
+    if (scope === 'all' && overall) {
+      mob = <CostOverviewMobile overall={overall} months={ovTrendWindow} trendWindow={ovTrendMonths} setTrendWindow={setOvTrendMonths}
+        b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout} />
+    }
+    if (mob) content = <div className="log-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, background: BASE_C.m.bg, color: BASE_C.m.ink, padding: phoneHeader ? '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' : '4px 0 24px' }}>{mob}</div>
+  }
+
   return (
     <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
       <LoadingOverlay loading={loading} label="Loading costs" />
@@ -6816,7 +6829,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           </button>
         )}
 
-        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 24px 40px 14px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: costMobile && phoneHeader ? 0 : isMobile ? '6px 8px 40px' : '6px 24px 40px 14px', background: costMobile && phoneHeader ? BASE_C.m.bg : undefined }}>
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
           {!phoneHeader && (

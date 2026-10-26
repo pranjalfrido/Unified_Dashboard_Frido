@@ -22,6 +22,8 @@ import KpiTile from './KpiTile.jsx'
 //             compare: [{ label, delta }] → labelled ▲/▼ in the hero instead of "vs prev" (e.g. MoM, YoY) }]
 // layout:  'phone' | 'tablet' | 'landscape'
 // note:    optional slim info strip at the top of the card (data availability etc.)
+// granularity: fix the chart grain (e.g. 'monthly' for billing-month ledgers); the "⋯" then offers
+//          windowMenu instead: { title, options: [{ id, label }], value, onChange } (e.g. 3M / 6M / 12M / All)
 // summary: summary mode for snapshots (no trend): metrics[0] is the hero, metrics[1..] the tiles
 //          (tap = definition, no switching), and this node (e.g. a split bar) sits between them.
 //          No chart, no ⋯; rawRows / groupTrend are not needed.
@@ -41,7 +43,7 @@ function pointLabel(key, gran) {
 
 const CHART_H = 120
 
-export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null, summary = null }) {
+export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null, summary = null, granularity = null, windowMenu = null }) {
   const M = C.m
   const [selKey, setSelKey] = useState(metrics[0].key)
   const [granOverride, setGranOverride] = useState('auto')
@@ -50,7 +52,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
   const menuRef = useRef(null)
 
   const auto = autoGranularity(start, end)
-  const gran = granOverride === 'auto' ? auto : granOverride
+  const gran = granularity || (granOverride === 'auto' ? auto : granOverride)
   const isSummary = summary != null
   const rows = useMemo(() => (isSummary ? [] : groupTrend(rawRows, gran)), [isSummary, rawRows, gran, groupTrend])
   const m = isSummary ? { ...metrics[0], deltasHidden: true, compare: null } : (metrics.find(x => x.key === selKey) || metrics[0])
@@ -80,14 +82,17 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
             style={{ width: 40, height: 30, marginRight: -10, border: 'none', background: 'transparent', color: M.muted, fontSize: 20, lineHeight: 1, cursor: 'pointer', borderRadius: 8 }}>⋯</button>
           {menuOpen && (
             <div role="menu" style={{ position: 'absolute', right: -6, top: '100%', zIndex: C.z.dropdown, background: '#fff', border: `1px solid ${M.line}`, borderRadius: 12, boxShadow: C.sh3, padding: 6, minWidth: 200 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: M.muted, padding: '6px 10px 4px' }}>Show as</div>
-              {[['auto', `Auto (${GRAN_LABEL[auto]})`], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']].map(([id, label]) => (
-                <button key={id} type="button" role="menuitemradio" aria-checked={granOverride === id}
-                  onClick={() => { setGranOverride(id); setScrub(null); setMenuOpen(false) }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 44, padding: '0 10px', border: 'none', borderRadius: 8, background: granOverride === id ? M.soft : 'transparent', color: M.ink, fontSize: 14, fontWeight: granOverride === id ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left' }}>
-                  {label}{granOverride === id && <span aria-hidden="true">✓</span>}
-                </button>
-              ))}
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: M.muted, padding: '6px 10px 4px' }}>{windowMenu ? windowMenu.title : 'Show as'}</div>
+              {(windowMenu ? windowMenu.options.map(o => [o.id, o.label]) : [['auto', `Auto (${GRAN_LABEL[auto]})`], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]).map(([id, label]) => {
+                const on = windowMenu ? windowMenu.value === id : granOverride === id
+                return (
+                  <button key={id} type="button" role="menuitemradio" aria-checked={on}
+                    onClick={() => { if (windowMenu) windowMenu.onChange(id); else setGranOverride(id); setScrub(null); setMenuOpen(false) }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 44, padding: '0 10px', border: 'none', borderRadius: 8, background: on ? M.soft : 'transparent', color: M.ink, fontSize: 14, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left' }}>
+                    {label}{on && <span aria-hidden="true">✓</span>}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>}
@@ -112,11 +117,11 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
     <div style={{ margin: layout === 'landscape' ? '6px 0 0' : '6px -16px 0' }}>
       {hasSeries
         ? <ScrubChart rows={rows} point={m.point} prevPoint={prevAvailable ? m.prevPoint : null} scrub={scrub} setScrub={setScrub} label={`${m.label}, ${GRAN_LABEL[gran].toLowerCase()}`} />
-        : <div style={{ height: CHART_H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: M.muted, fontSize: 13 }}>No daily breakdown</div>}
+        : <div style={{ height: CHART_H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: M.muted, fontSize: 13 }}>No {granularity === 'monthly' ? 'monthly' : 'daily'} breakdown</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: layout === 'landscape' ? '6px 0 0' : '6px 16px 0', fontSize: 12, color: M.muted, minHeight: 24 }}>
         {hasSeries && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: M.green, display: 'inline-block' }} />This period</span>}
         {hasSeries && prevAvailable && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: M.prev, display: 'inline-block' }} />Prev period</span>}
-        <span style={{ marginLeft: 'auto' }}>{GRAN_LABEL[gran]}{granOverride === 'auto' ? ' · auto' : ''}</span>
+        <span style={{ marginLeft: 'auto' }}>{GRAN_LABEL[gran]}{windowMenu ? ` · ${windowMenu.options.find(o => o.id === windowMenu.value)?.label || ''}` : granularity ? '' : granOverride === 'auto' ? ' · auto' : ''}</span>
       </div>
     </div>
   )
