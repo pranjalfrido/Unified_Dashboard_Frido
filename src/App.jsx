@@ -38,6 +38,9 @@ import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
 import { SalesFilterButton } from './sales/SalesFilters.jsx'
+import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
+import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
+import { invCaption } from './inventory/mobile/invCaption.js'
 import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
 import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
 import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
@@ -4879,8 +4882,31 @@ function Topnav({ allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirst
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   const bp = useBreakpoint()
-  // Phones (≤768px and phone landscape): Overview and Sales use the shared MobilePageHeader; the other
-  // pages keep this bar until they are redesigned.
+  // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
+  // the other pages keep this bar until they are redesigned.
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'inventory') {
+    // INVENTORY_MOBILE_REDESIGN_PROMPT.md §1: sub-tabs in the header, no date picker on Health (a
+    // snapshot), the Sales & Allocation range as a pill, filters in a sheet, exports in "⋯".
+    const ctrl = inventoryDateControl
+    const tab = invTab === 'sales' ? 'sales' : 'health'
+    const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
+    const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+    const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
+    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} />
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Inventory" caption={invCaption(tab, ctrl)}
+          right={<>
+            {subTabs.length < 2 && menu}
+            {tab === 'sales' && ctrl?.filters && <div className="tnav-right"><DateRangePicker filters={ctrl.filters} setFilters={ctrl.setFilters} onRefresh={ctrl.onRefresh} /></div>}
+            <InvFilterButton tab={tab} ctrl={ctrl} />
+          </>}
+          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={tab} onSub={setInvTab}
+          subRight={subTabs.length > 1 ? menu : null}
+          strip={{ items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) }} />
+      </div>
+    )
+  }
   if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'overview' || page === 'sales')) {
     const dateNode = (
       <div className="tnav-right">

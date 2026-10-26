@@ -11,7 +11,8 @@ import Skeleton from './Skeleton.jsx'
 //                (no target = no dot)
 //   onGradient → the tile sits on the master card's gradient (translucent white background)
 //   loading    → the value is still loading: a skeleton instead of a placeholder number
-export default function KpiTile({ label, value, loading = false, delta, deltaLoading, deltaHidden, lowerIsBetter, selected, onSelect, def, status, onGradient = false, compact = false }) {
+//   valueColor → the page's existing colour rule for the value (e.g. a negative momentum in red)
+export default function KpiTile({ label, value, valueColor, loading = false, delta, deltaLoading, deltaHidden, lowerIsBetter, selected, onSelect, def, status, onGradient = false, compact = false }) {
   const M = C.m
   const dot = status && !loading ? { good: M.up, warn: M.amber, bad: M.down }[status] : null
   const body = (
@@ -24,7 +25,7 @@ export default function KpiTile({ label, value, loading = false, delta, deltaLoa
         </span>
         <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} size={12} />
       </span>
-      <span style={{ display: 'block', marginTop: 3, fontSize: compact ? 14.5 : M.type.tileValue, fontWeight: 700, color: M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
+      <span style={{ display: 'block', marginTop: 3, fontSize: compact ? 14.5 : M.type.tileValue, fontWeight: 700, color: valueColor || M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
     </>
   )
   const style = {

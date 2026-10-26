@@ -17,11 +17,14 @@ import KpiTile from './KpiTile.jsx'
 //          tapping one switches hero + chart, the selected tile glows
 //   ⋯      granularity override; Auto picks daily ≤ 31 days, weekly ≤ ~6 months, else monthly
 //
-// metrics: [{ key, label, tileLabel, def, value, sub, delta, deltaLoading, deltasHidden, lowerIsBetter,
+// metrics: [{ key, label, tileLabel, def, value, valueColor, sub, delta, deltaLoading, deltasHidden, lowerIsBetter,
 //             status, point(row) → number|null, prevPoint(row) → number|null, fmtPoint,
 //             compare: [{ label, delta }] → labelled ▲/▼ in the hero instead of "vs prev" (e.g. MoM, YoY) }]
 // layout:  'phone' | 'tablet' | 'landscape'
 // note:    optional slim info strip at the top of the card (data availability etc.)
+// summary: summary mode for snapshots (no trend): metrics[0] is the hero, metrics[1..] the tiles
+//          (tap = definition, no switching), and this node (e.g. a split bar) sits between them.
+//          No chart, no ⋯; rawRows / groupTrend are not needed.
 
 function autoGranularity(start, end) {
   if (!start || !end) return 'daily'
@@ -38,7 +41,7 @@ function pointLabel(key, gran) {
 
 const CHART_H = 120
 
-export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null }) {
+export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, end, layout = 'phone', note = null, summary = null }) {
   const M = C.m
   const [selKey, setSelKey] = useState(metrics[0].key)
   const [granOverride, setGranOverride] = useState('auto')
@@ -48,8 +51,9 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
 
   const auto = autoGranularity(start, end)
   const gran = granOverride === 'auto' ? auto : granOverride
-  const rows = useMemo(() => groupTrend(rawRows, gran), [rawRows, gran, groupTrend])
-  const m = metrics.find(x => x.key === selKey) || metrics[0]
+  const isSummary = summary != null
+  const rows = useMemo(() => (isSummary ? [] : groupTrend(rawRows, gran)), [isSummary, rawRows, gran, groupTrend])
+  const m = isSummary ? { ...metrics[0], deltasHidden: true, compare: null } : (metrics.find(x => x.key === selKey) || metrics[0])
   const hasSeries = typeof m.point === 'function'
 
   useEffect(() => {
@@ -71,7 +75,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
           <span style={{ fontSize: M.type.label, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: M.muted, whiteSpace: 'nowrap' }}>{m.label}</span>
           {m.def && <InfoPopover title={m.label} text={m.def} />}
         </span>
-        <div ref={menuRef} style={{ position: 'relative' }}>
+        {!isSummary && <div ref={menuRef} style={{ position: 'relative' }}>
           <button type="button" onClick={() => setMenuOpen(o => !o)} aria-label="Chart options" aria-haspopup="menu" aria-expanded={menuOpen}
             style={{ width: 40, height: 30, marginRight: -10, border: 'none', background: 'transparent', color: M.muted, fontSize: 20, lineHeight: 1, cursor: 'pointer', borderRadius: 8 }}>⋯</button>
           {menuOpen && (
@@ -86,10 +90,10 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
       <div aria-live="polite">
-        <div style={{ fontSize: M.type.hero, fontWeight: 700, color: M.ink, letterSpacing: '-.02em', lineHeight: 1.2, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+        <div style={{ fontSize: M.type.hero, fontWeight: 700, color: (!scrubRow && m.valueColor) || M.ink, letterSpacing: '-.02em', lineHeight: 1.2, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
           {scrubRow && hasSeries ? (scrubVal == null ? '—' : m.fmtPoint(scrubVal)) : m.value}
         </div>
         {/* Fixed two-line sub-line: the chart and tiles never move when it changes. */}
@@ -117,19 +121,30 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
     </div>
   )
 
-  const n = metrics.length
+  const tileMetrics = isSummary ? metrics.slice(1) : metrics
+  const n = tileMetrics.length
   // Tablet: 4 or 3 columns so rows fill evenly where they can (8 → 4, 6 → 3); never 5 - at 768px
   // five tiles across cut their labels.
   const cols = layout === 'tablet' ? (n % 3 === 0 && n % 4 !== 0 ? 3 : 4) : 2
   const tiles = (
-    <div role="group" aria-label="Choose metric" className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
-      {metrics.map(x => (
-        <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.value} delta={x.delta} deltaLoading={x.deltaLoading} deltaHidden={x.deltasHidden}
-          lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient selected={x.key === m.key}
-          onSelect={() => { setSelKey(x.key); setScrub(null) }} />
+    <div role="group" aria-label={isSummary ? 'Metrics' : 'Choose metric'} className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
+      {tileMetrics.map(x => (
+        <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.value} valueColor={x.valueColor} delta={x.delta} deltaLoading={x.deltaLoading} deltaHidden={isSummary || x.deltasHidden}
+          lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient selected={!isSummary && x.key === m.key} def={x.def}
+          onSelect={isSummary ? undefined : () => { setSelKey(x.key); setScrub(null) }} />
       ))}
     </div>
   )
+  if (isSummary) {
+    return (
+      <div className="master-card" style={{ background: M.masterGrad, border: `1px solid ${M.masterBorder}`, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow, overflow: 'hidden' }}>
+        {note && <div style={{ marginBottom: 10 }}>{note}</div>}
+        {layout === 'landscape'
+          ? <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}><div>{hero}{summary}</div>{tiles}</div>
+          : <>{hero}{summary}{tiles}</>}
+      </div>
+    )
+  }
 
   return (
     <div className="master-card" style={{ background: M.masterGrad, border: `1px solid ${M.masterBorder}`, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow, overflow: 'hidden' }}>

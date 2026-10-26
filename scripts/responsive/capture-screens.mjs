@@ -8,7 +8,7 @@
 //   numbers     - number tokens rendered on the page (sorted), for before/after integrity diffs
 import { mkdirSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import { launch, openWithSept, waitStableText, numberTokens, repoRoot, VIEWPORTS } from './lib.mjs'
+import { launch, openPage, openWithSept, waitStableText, numberTokens, repoRoot, VIEWPORTS } from './lib.mjs'
 
 const [routeArg, outArg, ...rest] = process.argv.slice(2)
 if (!routeArg || !outArg) throw new Error('usage: capture-screens.mjs <route> <outDir> [--only a,b]')
@@ -96,7 +96,8 @@ for (const vp of VIEWPORTS.filter(v => !only || only.has(v.name))) {
   const errors = []
   page.on('pageerror', e => errors.push(String(e.message || e)))
   try {
-    await openWithSept(page, route)
+    // NO_SEPT=1: pages without a date picker (Inventory) open on their default dates.
+    if (process.env.NO_SEPT) await openPage(page, route); else await openWithSept(page, route)
     const text = await waitStableText(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     const overflowX = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)

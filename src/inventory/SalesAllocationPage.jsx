@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
+import SalesAllocMobile from './mobile/SalesAllocMobile.jsx'
+import { topProductsFrom, matrixBucketKeyFor, matrixCellsFor, salesMatrixExport } from './mobile/saMobileData.js'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -324,7 +326,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters, asOf, lastSalesDate, invMobile = false, onMenu }) {
   const isMobile = useIsMobile()
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -566,18 +568,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // sub-category names can contain a literal "|" (real data has e.g. "FSS101 | Everyday
   // Foldable Wheelchair"), which corrupted plain |-joined paths and crashed date parsing
   // downstream when the shifted "date" field wasn't a real date.
-  const matrixBucketKeyFor = (granularity, dateStr) => {
-    if (granularity === 'date') return dateStr
-    const d = new Date(dateStr + 'T00:00:00Z')
-    if (granularity === 'week') {
-      const day = (d.getUTCDay() + 6) % 7
-      d.setUTCDate(d.getUTCDate() - day)
-      return d.toISOString().slice(0, 10)
-    }
-    if (granularity === 'month') return dateStr.slice(0, 7)
-    if (granularity === 'quarter') { const [y, m] = dateStr.split('-'); return `${y}-Q${Math.ceil(Number(m) / 3)}` }
-    return dateStr.slice(0, 4) // year
-  }
+  // matrixBucketKeyFor / matrixCellsFor: mobile/saMobileData.js (shared with the mobile drill-down).
 
   const matrixColumns = useMemo(() => {
     if (!filteredData) return []
@@ -588,17 +579,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // daily cells whenever granularity changes.
   const matrixCellsByPath = useMemo(() => {
     if (!filteredData) return new Map()
-    const m = new Map()
-    for (const c of filteredData.matrixCellRows) {
-      const bucketKey = matrixBucketKeyFor(matrixGranularity, c.date)
-      if (!m.has(c.path)) m.set(c.path, new Map())
-      const perBucket = m.get(c.path)
-      if (!perBucket.has(bucketKey)) perBucket.set(bucketKey, { qty: 0, rev: 0 })
-      const cell = perBucket.get(bucketKey)
-      cell.qty += c.qty
-      cell.rev += c.rev
-    }
-    return m
+    return matrixCellsFor(filteredData.matrixCellRows, matrixGranularity)
   }, [filteredData, matrixGranularity])
 
   // Row total (sum across all visible bucket columns) per path — used for the Total column
@@ -725,37 +706,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
   // Sales Change. When top20Channel is active, re-aggregate from rawRows filtered by channel
   // instead of using the pre-aggregated rollups (which don't have a per-channel breakdown).
-  const topProductsRows = useMemo(() => {
-    if (!filteredData) return []
-    let source
-    if (top20Channel.length > 0) {
-      const chRows = filteredData.rawRows.filter(r => top20Channel.includes(r.channel2) || top20Channel.includes(r.channel))
-      const m = new Map()
-      for (const r of chRows) {
-        const key = top20Level === 'sku' ? r.sku : top20Level === 'subCategory' ? r.subCategory : r.category
-        if (!key) continue
-        const ex = m.get(key)
-        if (ex) { ex.qty += r.qty; ex.rev += r.rev }
-        else m.set(key, { name: key, qty: r.qty, rev: r.rev })
-      }
-      source = [...m.values()]
-    } else {
-      const raw = top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
-        : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
-        : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
-      const m = new Map()
-      for (const r of raw) {
-        if (!r.name) continue
-        const ex = m.get(r.name)
-        if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
-        else m.set(r.name, { ...r })
-      }
-      source = [...m.values()]
-    }
-    return source
-      .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
-      .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
-  }, [filteredData, top20Level, top20Metric, top20Channel])
+  // (shared with the mobile Top products card: mobile/saMobileData.js)
+  const topProductsRows = useMemo(() => topProductsFrom(filteredData, top20Level, top20Metric, top20Channel), [filteredData, top20Level, top20Metric, top20Channel])
 
   if (!data) return null
   const revenueAvailable = filteredData.summary.totalRevenue > 0
@@ -766,6 +718,15 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const pct = type => Math.round(((filteredData.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
     return { b2c: pct('B2C Order'), b2b: pct('B2B Order'), po: pct('Purchase Order') }
   })()
+
+  // Below 1024px: the mobile view (INVENTORY_MOBILE_REDESIGN_PROMPT.md §3), from the same values.
+  if (invMobile) {
+    return (
+      <SalesAllocMobile fd={filteredData} dateFilters={dateFilters} revenueAvailable={revenueAvailable} mix={salesTypeMix}
+        filters={filters} locationRows={locationStackedRows} channels={filteredData.channelSales2.map(c => ({ name: c.channel, qty: c.qty, rev: c.rev }))} categories={categoryRollup}
+        onMenu={onMenu} />
+    )
+  }
 
   // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
   // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
@@ -1000,35 +961,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
               <button
                 onClick={() => {
-                  const raw = filteredData?.rawRows || data?.rawRows || []
-                  const ds = dateFilters?.start, de = dateFilters?.end
-                  const mch = filters.matrixChannel || []
-                  const subset = raw.filter(r => {
-                    if (ds && r.date < ds) return false
-                    if (de && r.date > de) return false
-                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
-                    return true
-                  })
-                  const map = new Map()
-                  for (const r of subset) {
-                    const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
-                    if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
-                    const e = map.get(k); e.qty += r.qty; e.rev += r.rev
-                  }
-                  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
-                  exportCsv(
-                    `sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
-                    [
-                      { label: 'Date', key: 'date' },
-                      { label: 'Category', key: 'category' },
-                      { label: 'Sub-Category', key: 'subCategory' },
-                      { label: 'SKU', key: 'sku' },
-                      { label: 'Channel', key: 'channel' },
-                      { label: 'Units', key: 'qty' },
-                      { label: 'Revenue', key: 'rev' },
-                    ],
-                    rows
-                  )
+                  const x = salesMatrixExport({ filteredData, data, dateFilters, filters })
+                  exportCsv(x.filename, x.columns, x.rows)
                 }}
                 style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
                 ⭳ Export CSV

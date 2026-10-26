@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useIsMobile } from './responsive/useBreakpoint.js'
+import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { createPortal } from 'react-dom'
 import { IC, getDefaultDates, DateRangeControl, PillToggle } from './inventory/theme.jsx'
 import LoadingOverlay from './LoadingOverlay.jsx'
@@ -8,6 +8,7 @@ import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
 import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
+import InvTabletBar from './inventory/mobile/InvTabletBar.jsx'
 
 // Inventory Health's Avg Sale/DOI always use useEndpoint's default trailing-7-day window
 // (getDefaultDates()) — no visible date picker for that tab, so those numbers always read
@@ -363,6 +364,13 @@ function useStaticInv(enabled = true, windowDays = 7) {
 
 export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {}, allowedTabs, preset }) {
   const isMobile = useIsMobile()
+  // Below 1024px (and phones in landscape) the sub-pages render their mobile views
+  // (INVENTORY_MOBILE_REDESIGN_PROMPT.md); mobile is locked to Regular facilities.
+  const bp = useBreakpoint()
+  const invMobile = bp.width < 1024 || bp.isPhoneLandscape
+  // "⋯" actions (CSV exports) each mobile sub-page registers for the header's ActionMenu.
+  const [healthMenu, setHealthMenu] = useState([])
+  const [salesMenu, setSalesMenu] = useState([])
   const [healthFilters, setHealthFilters] = useState({})
   // One-shot preset from the mobile Overview's inventory alert rows: { stockStatus: [...] } applies
   // Inventory Health's existing Status filter; { scrollTo: id } scrolls to that section once rendered.
@@ -446,6 +454,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       invSalesAsOf: sales.data?.asOf || null,
       invSalesLastSales: sales.data?.lastSalesDateConsidered || null,
       invActiveTab: tab,
+      invMenu: tab === 'sales' ? salesMenu : healthMenu,
       invFilterCount: Object.values((tab === 'sales' ? salesFilters : healthFilters) || {})
         .reduce((a, v) => a + (Array.isArray(v) ? v.length : v ? 1 : 0), 0),
       invFacilityToggle: tab === 'health' ? (
@@ -471,7 +480,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, inv.data?.lastSalesDateConsidered, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
+  }, [tab, healthMenu, salesMenu, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, inv.data?.lastSalesDateConsidered, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -676,6 +685,17 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
         ))}
       </div>
 
+      {/* Tablets: the phone header's controls (sub-tabs, filters, "⋯") as a row above the content. */}
+      {invMobile && bp.width > 768 && !bp.isPhoneLandscape && (
+        <InvTabletBar tab={tab === 'sales' ? 'sales' : 'health'} setTab={setTab}
+          tabs={[(!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')) && { id: 'health', label: 'Inventory Health' }, (!allowedTabs || allowedTabs.includes('inventory:sales')) && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)}
+          ctrl={{
+            invHealthFilters: healthFilters, setInvHealthFilters: setHealthFilters, invHealthOpts: inv.data?.filterOptions || null,
+            invHealthAsOf: inv.data?.asOf || null, invHealthLastSales: inv.data?.lastSalesDateConsidered || null,
+            invSalesFilters: salesFilters, setInvSalesFilters: setSalesFilters, invSalesOpts: sales.data?.filterOptions || null,
+            invSalesLastSales: sales.data?.lastSalesDateConsidered || null, invMenu: tab === 'sales' ? salesMenu : healthMenu,
+          }} />
+      )}
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <LoadingOverlay loading={active.loading} label="Loading inventory" />
@@ -685,8 +705,8 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} /></div>
-        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={invMobile ? 'regular' : facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} invMobile={invMobile} onMenu={setHealthMenu} /></div>
+        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} invMobile={invMobile} onMenu={setSalesMenu} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
     </div>

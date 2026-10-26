@@ -5,14 +5,15 @@ import FilteredStrip from './FilteredStrip.jsx'
 // Phone page header (docs/responsive/MOBILE_DESIGN_SYSTEM.md §2, mockups/sales_mobile_mockup.html
 // .top). Rendered inside the app's top bar (Topnav adds class `m-header`; index.css draws the dark
 // green gradient and restyles the date pill / bell for it). Every row below the first is optional:
-//   row 1  title (+ " · sub" in soft white) and `right` (bell, filter icon, date pill, "⋯")
+//   row 1  title (+ " · sub" in soft white) and `right` (bell, filter icon, date pill, "⋯");
+//          `caption`: optional small line under the title inside the same row ("Updated … · sales till …")
 //   row 2  chips: horizontally scrolling choices (channels, platforms…), active = white chip;
 //          `chipsRight` sits at the row's end (the filter icon with its count)
 //   row 3  subTabs: underline tabs, only when the current choice has them; `subRight` at the end ("⋯")
 //   row 4  strip: the "Filtered:" strip (FilteredStrip props), only when filters are active
 // The first row keeps the plain top bar's height and spacing, so a page that only uses row 1 looks
 // exactly like it did before this component.
-export default function MobilePageHeader({ title, sub, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, strip }) {
+export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, strip }) {
   const chipRow = useRef(null)
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
@@ -25,7 +26,12 @@ export default function MobilePageHeader({ title, sub, right, chips, activeChip,
       {/* Side padding and gap come from index.css (.mph-row1 / .mph-pad): the same values as the plain bar. */}
       <div className="mph-row1 mph-pad" style={{ display: 'flex', alignItems: 'center', height: 'var(--nav)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
-          <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>
+          {caption
+            ? <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>
+                <span className="mph-caption" style={{ fontSize: 12, lineHeight: '15px', color: 'rgba(255,255,255,.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{caption}</span>
+              </span>
+            : <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>}
         </div>
         {right}
       </div>

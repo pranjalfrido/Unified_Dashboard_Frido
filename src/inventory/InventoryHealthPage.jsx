@@ -1,8 +1,22 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
+import InventoryHealthMobile from './mobile/InventoryHealthMobile.jsx'
 import {
-  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle,
+  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
+
+// CSV columns, shared by the desktop Export buttons and the mobile "⋯" menu.
+const DETAIL_EXPORT_COLS = [
+  { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Location', key: 'location' },
+  { label: 'RTD Inventory', key: 'rtdInvt' }, { label: 'RAW Inventory', key: 'rawInvt' }, { label: 'RAW Blocked Inventory', key: 'rawBlockedInvt' },
+  { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'DOI', key: 'doi' },
+  { label: 'Stock Status', key: 'stockStatus' }, { label: 'Website Status', key: 'websiteStatus' },
+]
+const PIVOT_EXPORT_COLS = [
+  { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' },
+  { label: 'Location', key: 'location' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' },
+]
+const AGEING_EXPORT_COLS = [{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]
 
 // Mobile: horizontal swipe carousel with header + dots. Desktop: normal 7-col grid.
 function KpiCarousel({ children }) {
@@ -1184,7 +1198,7 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
   )
 }
 
-const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs, invMobile = false, onMenu }) {
   const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const searchDebounceRef = useRef(null)
@@ -1427,9 +1441,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   }, [data])
 
   // Slow Moving / Dead Stock — always company-wide from the pre-computed cache,
-  // not affected by sidebar filters.
-  const filteredSlowMoving = data.slowMoving
-  const filteredDeadStock = data.deadStock
+  // not affected by sidebar filters. Spare Parts is left out of both (display filter only,
+  // decided 2026-10-26; the cache's own "sparepart" check never matched "Spare Parts").
+  const filteredSlowMoving = useMemo(() => data.slowMoving.filter(r => r.category !== 'Spare Parts'), [data])
+  const filteredDeadStock = useMemo(() => data.deadStock.filter(r => r.category !== 'Spare Parts'), [data])
 
   // Export rows flatten each sub-category's collapsed `skus[]` array to one row per SKU —
   // the on-screen table stays collapsed-by-default, but the CSV needs the SKU-level detail.
@@ -1475,11 +1490,37 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     )
   }, [detailSkus])
 
+  // Mobile "⋯" menu: the same four CSV exports as the desktop Export buttons. Registered once per
+  // mobile/desktop switch (the rows are read from a ref when tapped): some filters rebuild the rows
+  // on every render, and re-registering then would loop through the parent's state.
+  const exportRowsRef = useRef(null)
+  useEffect(() => { exportRowsRef.current = { inventoryDetailExportRows, pivotExportRows, slowMovingExportRows, deadStockExportRows } })
+  useEffect(() => {
+    if (!onMenu) return
+    const rows = k => exportRowsRef.current?.[k] || []
+    onMenu(invMobile ? [
+      { id: 'detail', group: 'Export CSV', label: 'Inventory detail', onSelect: () => exportCsv('inventory_detail.csv', DETAIL_EXPORT_COLS, rows('inventoryDetailExportRows')) },
+      { id: 'pivot', group: 'Export CSV', label: 'Location-wise inventory', onSelect: () => exportCsv('location_wise_inventory.csv', PIVOT_EXPORT_COLS, rows('pivotExportRows')) },
+      { id: 'slow', group: 'Export CSV', label: 'Slow moving', onSelect: () => exportCsv('slow_moving.csv', AGEING_EXPORT_COLS, rows('slowMovingExportRows')) },
+      { id: 'dead', group: 'Export CSV', label: 'Dead stock', onSelect: () => exportCsv('dead_stock.csv', AGEING_EXPORT_COLS, rows('deadStockExportRows')) },
+    ] : [])
+  }, [onMenu, invMobile])
+
   if (!data) return null
 
   // Users with only inventory:detail access see just the Inventory Detail table — KPIs and
   // Warehouse Health are hidden. Full inventory access (or admin) sees everything.
   const showDetailOnly = allowedTabs != null && !allowedTabs.includes('inventory') && allowedTabs.includes('inventory:detail')
+
+  // Below 1024px: the mobile view (INVENTORY_MOBILE_REDESIGN_PROMPT.md §2), Regular facilities only.
+  if (invMobile) {
+    return (
+      <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
+        showDetailOnly={showDetailOnly}
+        skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)}
+        slow={filteredSlowMoving} dead={filteredDeadStock} />
+    )
+  }
 
   // The collapse-toggle button used to sit in normal document flow right after the fixed
   // sidebar, assuming it would land flush against the sidebar's edge — but a position:fixed
@@ -1558,13 +1599,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                   </button>
                 </span>
               )}
-              <span className="inv-detail-desktop-only"><ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows}
-                columns={[
-                  { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Location', key: 'location' },
-                  { label: 'RTD Inventory', key: 'rtdInvt' }, { label: 'RAW Inventory', key: 'rawInvt' }, { label: 'RAW Blocked Inventory', key: 'rawBlockedInvt' },
-                  { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'DOI', key: 'doi' },
-                  { label: 'Stock Status', key: 'stockStatus' }, { label: 'Website Status', key: 'websiteStatus' },
-                ]} /></span>
+              <span className="inv-detail-desktop-only"><ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows} columns={DETAIL_EXPORT_COLS} /></span>
             </div>
           }
         >
@@ -1708,11 +1743,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             <input type="text" value={pivotSearch} onChange={e => setPivotSearch(e.target.value)}
               placeholder="Search category / sub-category / SKU…"
               style={{ fontSize: 11.5, padding: '6px 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 260, boxSizing: 'border-box' }} />
-            <ExportButton filename="location_wise_inventory.csv" rows={pivotExportRows}
-              columns={[
-                { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' },
-                { label: 'Location', key: 'location' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' },
-              ]} />
+            <ExportButton filename="location_wise_inventory.csv" rows={pivotExportRows} columns={PIVOT_EXPORT_COLS} />
           </div>
         }>
         <PivotTable pivot={filteredPivot} search={pivotSearch} facilityTypeFilter={['Regular']} />
@@ -1731,8 +1762,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             <input placeholder="Search…" value={slowSearch} onChange={e => setSlowSearch(e.target.value)}
               className="inv-detail-search"
               style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
-            <span className="inv-detail-desktop-only"><ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
-              columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
+            <span className="inv-detail-desktop-only"><ExportButton filename="slow_moving.csv" rows={slowMovingExportRows} columns={AGEING_EXPORT_COLS} /></span>
           </div>}>
           <SubCatStockTable rows={filteredSlowMoving} emptyLabel="No slow-moving sub-categories flagged." search={slowSearch} />
         </GlassCard>
@@ -1744,8 +1774,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}
               className="inv-detail-search"
               style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
-            <span className="inv-detail-desktop-only"><ExportButton filename="dead_stock.csv" rows={deadStockExportRows}
-              columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
+            <span className="inv-detail-desktop-only"><ExportButton filename="dead_stock.csv" rows={deadStockExportRows} columns={AGEING_EXPORT_COLS} /></span>
           </div>}>
           <SubCatStockTable rows={filteredDeadStock} emptyLabel="No dead stock right now." search={deadSearch} />
         </GlassCard>
@@ -1765,7 +1794,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   )
 })
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate, allowedTabs }) {
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop, facilityView: facilityViewProp, setFacilityView: setFacilityViewProp, asOf, lastSalesDate, allowedTabs, invMobile, onMenu }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
@@ -1773,7 +1802,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       data={data} filters={filters} setFilters={setFilters}
       sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
       facilityViewProp={facilityViewProp} setFacilityViewProp={setFacilityViewProp}
-      asOf={asOf} lastSalesDate={lastSalesDate} allowedTabs={allowedTabs}
+      asOf={asOf} lastSalesDate={lastSalesDate} allowedTabs={allowedTabs} invMobile={invMobile} onMenu={onMenu}
     />
   )
 }
