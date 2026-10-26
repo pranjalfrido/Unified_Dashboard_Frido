@@ -105,7 +105,7 @@ function CategoriesCard({ data, sorts, period, hasSku }) {
   )
 }
 
-function RegionTierCard({ regions, tiers }) {
+function RegionTierCard({ regions, tiers, note }) {
   const hasTier = (tiers || []).length > 0
   const [view, setView] = useState('region')
   const src = view === 'region' || !hasTier ? regions : tiers
@@ -114,6 +114,7 @@ function RegionTierCard({ regions, tiers }) {
   return (
     <Card title={view === 'region' || !hasTier ? 'Region' : 'City tier'}
       right={hasTier ? <SegmentToggle label="Group by" value={view} onChange={setView} options={[{ id: 'region', label: 'Region' }, { id: 'tier', label: 'City tier' }]} /> : null}>
+      {note && <InfoStrip text={note} style={{ marginBottom: 8 }} />}
       <CompactList rows={rows} top={8} noun={view === 'region' ? 'regions' : 'tiers'} />
     </Card>
   )
@@ -238,7 +239,7 @@ export default function SalesMobileView({ channel, metrics, trendRows, start, en
     stores: () => data.stores?.length > 0 && <StoresCard key="st" stores={data.stores} total={data.storeTotal} period={data.period} />,
     accounts: () => data.accounts?.length > 0 && <AccountsCard key="acc" accounts={data.accounts} note={data.accountsNote} />,
     reasons: () => data.reasons?.length > 0 && <ReasonsCard key="rr" reasons={data.reasons} sub={data.reasonsSub} />,
-    regionTier: () => (data.regions?.length > 0 || data.tiers?.length > 0) && <RegionTierCard key="rt" regions={data.regions || []} tiers={data.tiers || []} />,
+    regionTier: () => (data.regions?.length > 0 || data.tiers?.length > 0) && <RegionTierCard key="rt" regions={data.regions || []} tiers={data.tiers || []} note={data.regionNote} />,
     geo: () => !(data.states || data.cities || data.geoUnavailable) ? null : data.geoUnavailable
       ? <Card key="geo" title="Top states & cities"><InfoStrip text={data.geoUnavailable} /></Card>
       : <GeoCard key="geo" states={data.states || []} cities={data.cities || []} note={data.geoNote} period={data.period} />,

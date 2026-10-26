@@ -33,7 +33,7 @@ import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
-import { chg, mobileMatrix, matrixRows } from './sales/salesMobileData.js'
+import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList } from './sales/salesMobileData.js'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
@@ -8181,6 +8181,26 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
     }
   }
 
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const allGeoInputs = () => {
+        const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+        let cumS = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
+          cumS += sharePct
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cumS }
+        })
+        const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
+        let cumC = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
+          cumC += sharePct
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+        })
+    return { enrichedStates, enrichedCities }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view (src/sales/), fed with
   // the values computed above exactly as the desktop tiles below use them.
   if (salesMobile) {
@@ -8203,7 +8223,8 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       returnPct: { label: 'Returns %', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixDataAll, skuData: skuChannelMapBySku, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const gx = allGeoInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="all" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} onOpenChannel={onOpenChannel} />
   }
 
@@ -8298,22 +8319,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
       {(() => {
-        const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
-        let cumS = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
-          cumS += sharePct
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cumS }
-        })
-        const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
-        let cumC = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
-          cumC += sharePct
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-        })
+        const { enrichedStates, enrichedCities } = allGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
@@ -9328,7 +9334,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     }
     const mx = d2cMatrixInputs()
     const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(sh.regionRows), tiers: tierList(sh.tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), geoNote: isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : null, categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -9965,7 +9971,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     }
     const mx = eboMatrixInputs()
     const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="ebo" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10512,6 +10518,28 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             })()
     return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (skuPrevMap), netScale: (amzMatrixNetScale) }
   }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const amzGeoInputs = () => {
+            const statePrevMap = amzSC.statePrevMap || {}
+            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            let cum = 0
+            const enrichedStates = (amzSC.states||[]).map(s => {
+              const prev = statePrevMap[s.state] || 0
+              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+              cum += sharePct
+              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.rev > 0 ? (s.returnRev||0) / s.rev * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+            })
+            const cityPrevMap = amzSC.cityPrevMap || {}
+            const totalCityRev = amzTotalRev || amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            let cumC = 0
+            const enrichedCities = (amzSC.cities||[]).map(c => {
+              const prev = cityPrevMap[c.city] || 0
+              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+              cumC += sharePct
+              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+            })
+    return { enrichedStates, enrichedCities }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
   // below for the active view (Overall / Seller Central / Vendor Central). Desktop shows no ▲/▼ on at
   // least one tile in every view, so the card shows none (config: deltas false).
@@ -10544,7 +10572,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
     }
     const cx = amzCategoryInputs(), mx = amzMatrixInputs()
     const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
+    const gx = channelView === 'vc' ? null : amzGeoInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(amzSC.regionRows), tiers: tierList(amzSC.tierRows), regionNote: 'Seller Central only', ...(gx ? { states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), geoNote: 'Seller Central only' } : { geoUnavailable: 'Not available for Vendor Central: VC data has no state- or city-level granularity.' }), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel={`amazon:${channelView}`} metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -10833,24 +10862,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} />
           })()}
           {(() => {
-            const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
-            let cum = 0
-            const enrichedStates = (amzSC.states||[]).map(s => {
-              const prev = statePrevMap[s.state] || 0
-              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-              cum += sharePct
-              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.rev > 0 ? (s.returnRev||0) / s.rev * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
-            })
-            const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = amzTotalRev || amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
-            let cumC = 0
-            const enrichedCities = (amzSC.cities||[]).map(c => {
-              const prev = cityPrevMap[c.city] || 0
-              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-              cumC += sharePct
-              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-            })
+            const { enrichedStates, enrichedCities } = amzGeoInputs()
             if (channelView === 'vc') return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
                 <Card title="Top States" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state-level granularity</div></Card>
@@ -11076,6 +11088,53 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         })()
     return { catData: (catAggMatrix), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (fk.skuPrevMap || {}), netScale: (fkMatrixNetScale) }
   }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const fkGeoInputs = () => {
+        const statePrevMap = fk.statePrevMap || {}
+        const cityPrevMap = fk.cityPrevMap || {}
+        const stateTotalMap = fk.stateTotalMap || {}
+        const cityTotalMap = fk.cityTotalMap || {}
+        const stateMap = {}
+        ;(fk.states||[]).forEach(x => {
+          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
+          stateMap[x.state].returnRev += (x.returnRev||0); stateMap[x.state].deliveredRev += (x.deliveredRev||0)
+        })
+        const fkStateTotalBQ = (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
+        const totalStateRev = fkStateTotalBQ || Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
+        let cum = 0
+        const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
+          const prev = (statePrevMap[`${s.state}::FBF`]||0) + (statePrevMap[`${s.state}::NON-FBF`]||0)
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          cum += sharePct
+          const rtoPct = s.rev > 0 ? s.returnRev / s.rev * 100 : 0
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+        })
+        const cityMap = {}
+        ;(fk.cities||[]).forEach(x => {
+          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
+          cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
+        })
+        const fkCityTotalBQ = (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
+        const totalCityRev = rev || fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
+        let cumC = 0
+        const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
+          const prev = (cityPrevMap[`${c.city}::FBF`]||0) + (cityPrevMap[`${c.city}::NON-FBF`]||0)
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cumC += sharePct
+          const rtoPct = c.rev > 0 ? c.returnRev / c.rev * 100 : 0
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const fkRegionInputs = () => {
+              const regionAgg = {}
+              ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
+              const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
+    return { regionRows: (regionRows) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   // GST takes Delivered %'s place (no desktop ▲/▼ on Delivered %); Delivered % and the returns count go
   // into the Returns % definition (decision 2026-10-26).
@@ -11098,7 +11157,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     }
     const cx = fkCategoryInputs(), mx = fkMatrixInputs()
     const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus,
+    const gx = fkGeoInputs(), rx = fkRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList([]), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus,
       note: fkEstimatedDays > 0 ? `⏳ Data available till ${fkLatestReal} · Last ${fkEstimatedDays} day${fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
     return <SalesMobileView channel="flipkart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
@@ -11276,10 +11336,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
               />
             })()}
             {(() => {
-              const regionAgg = {}
-              ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
-              const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={320} />
+              const __mx = fkRegionInputs()
+              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} />
             })()}
           </div>
         )
@@ -11293,42 +11351,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
       {/* Top States + Cities rich tables */}
       {(() => {
-        const statePrevMap = fk.statePrevMap || {}
-        const cityPrevMap = fk.cityPrevMap || {}
-        const stateTotalMap = fk.stateTotalMap || {}
-        const cityTotalMap = fk.cityTotalMap || {}
-        const stateMap = {}
-        ;(fk.states||[]).forEach(x => {
-          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
-          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
-          stateMap[x.state].returnRev += (x.returnRev||0); stateMap[x.state].deliveredRev += (x.deliveredRev||0)
-        })
-        const fkStateTotalBQ = (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
-        const totalStateRev = fkStateTotalBQ || Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
-        let cum = 0
-        const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
-          const prev = (statePrevMap[`${s.state}::FBF`]||0) + (statePrevMap[`${s.state}::NON-FBF`]||0)
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          cum += sharePct
-          const rtoPct = s.rev > 0 ? s.returnRev / s.rev * 100 : 0
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
-        })
-        const cityMap = {}
-        ;(fk.cities||[]).forEach(x => {
-          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
-          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
-          cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
-        })
-        const fkCityTotalBQ = (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
-        const totalCityRev = rev || fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
-        let cumC = 0
-        const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
-          const prev = (cityPrevMap[`${c.city}::FBF`]||0) + (cityPrevMap[`${c.city}::NON-FBF`]||0)
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cumC += sharePct
-          const rtoPct = c.rev > 0 ? c.returnRev / c.rev * 100 : 0
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-        })
+        const { enrichedStates, enrichedCities } = fkGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -13074,6 +13097,34 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
     { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const blGeoInputs = () => {
+        const statePrevMap = bl.statePrevMap || {}
+        const cityPrevMap = bl.cityPrevMap || {}
+        const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const blRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: blPrevDailyArr[i]?.rev ?? null }))
@@ -13086,7 +13137,8 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: bl.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    const gx = blGeoInputs(), rx = blRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="blinkit" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13161,9 +13213,8 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = blRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
@@ -13172,24 +13223,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
 
       {/* Cities + States */}
       {(() => {
-        const statePrevMap = bl.statePrevMap || {}
-        const cityPrevMap = bl.cityPrevMap || {}
-        const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = blGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -13267,6 +13301,34 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
     { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const insGeoInputs = () => {
+        const statePrevMap = ins.statePrevMap || {}
+        const cityPrevMap = ins.cityPrevMap || {}
+        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const insRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: insPrevDailyArr[i]?.rev ?? null }))
@@ -13279,7 +13341,8 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: ins.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    const gx = insGeoInputs(), rx = insRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="instamart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13352,33 +13415,15 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = insRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" />
 
       {(() => {
-        const statePrevMap = ins.statePrevMap || {}
-        const cityPrevMap = ins.cityPrevMap || {}
-        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = insGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -13456,6 +13501,34 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
     { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const zpGeoInputs = () => {
+        const statePrevMap = zp.statePrevMap || {}
+        const cityPrevMap = zp.cityPrevMap || {}
+        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const zpRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: zpPrevDailyArr[i]?.rev ?? null }))
@@ -13468,7 +13541,8 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
       asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: zp.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: (t.rev || 0), products: mCat.products, skus: mCat.skus }
+    const gx = zpGeoInputs(), rx = zpRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: (t.rev || 0), products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="zepto" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -13541,33 +13615,15 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = zpRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" />
 
       {(() => {
-        const statePrevMap = zp.statePrevMap || {}
-        const cityPrevMap = zp.cityPrevMap || {}
-        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = zpGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -13726,7 +13782,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: crSkuMatrixResolved, subCatPrevMap, skuPrevMap: cr.skuPrevMap || {}, simpleReturns: true, netScale: crMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(cr.regionRows), tiers: tierList(cr.tierRows), states: geoRows(enrichedStates, 'state'), cities: geoRows(enrichedCities, 'city'), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="cred" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -14043,7 +14099,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: fcSkuMatrixResolved, subCatPrevMap, skuPrevMap: fc.skuPrevMap || {}, simpleReturns: true, netScale: fcMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(fc.regionRows), tiers: tierList(fc.tierRows), states: geoRows(enrichedStates, 'state'), cities: geoRows(enrichedCities, 'city'), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView channel="firstcry" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
@@ -14342,6 +14398,15 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
     { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: mnReturnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
 
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const mnRegionInputs = () => {
+              // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
+              // inline region/cityTier fields (units aggregated as orders since Myntra city rows
+              // don't carry a units field).
+              const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
+              const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
   // below. Active products / Returns % / Cancellation % have no ▲/▼ on desktop → none on the card.
   if (salesMobile) {
@@ -14357,7 +14422,8 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
       cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: mnSkuMatrixResolved, subCatPrevMap: mnSubCatPrevMap, skuPrevMap: mn.skuPrevMap || {}, simpleReturns: true, netScale: mnMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus,
+    const rx = mnRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(mnEnrichedStates, 'state'), cities: geoRows(mnEnrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus,
       note: mnEstimatedDays > 0 ? `⏳ Data available till ${mnLatestReal} · Last ${mnEstimatedDays} day${mnEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
     return <SalesMobileView channel="myntra" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
@@ -14504,12 +14570,8 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
               height={320}
             />
             {(() => {
-              // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
-              // inline region/cityTier fields (units aggregated as orders since Myntra city rows
-              // don't carry a units field).
-              const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
-              const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+              const __mx = mnRegionInputs()
+              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
             })()}
           </div>
         )
@@ -14770,7 +14832,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
       creditNotesPct: { label: 'Credit notes %', tileLabel: 'Credit notes %', def: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders. ▲/▼ compares the credit-note amount, as desktop.`, value: `${cnPct.toFixed(1)}%`, delta: chg(cnRevAbs, prevCnRev) },
     }
     const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: skuMatrixData, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
-    const mData = { period: fmtDateRange(rangeStart, rangeEnd), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(cityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
     return <SalesMobileView key={sub} channel="offline" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
   }
 
