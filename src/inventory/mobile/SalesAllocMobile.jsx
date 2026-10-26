@@ -7,6 +7,7 @@ import CompactRankRow from '../../responsive/CompactRankRow.jsx'
 import SegmentToggle from '../../responsive/SegmentToggle.jsx'
 import { MixLegend } from '../../responsive/MixBar.jsx'
 import { Card, Chips, ShowAllButton } from './ui.jsx'
+import { TopProductsCard, MoversCard } from './SaRankCards.jsx'
 
 // Sales & Allocation below 1024px (docs/responsive/INVENTORY_MOBILE_REDESIGN_PROMPT.md §3). Display
 // only: every value comes from SalesAllocationPage's own filteredData / memos (or the shared
@@ -84,21 +85,25 @@ function ContributionCard({ channels, categories, revenueAvailable }) {
   )
 }
 
-export default function SalesAllocMobile({ fd, dateFilters, revenueAvailable, mix, locationRows, channels, categories, onMenu }) {
+export default function SalesAllocMobile({ fd, filters, dateFilters, revenueAvailable, mix, locationRows, channels, categories, onMenu }) {
+  const [movers, setMovers] = useState(null) // the Biggest movers card's current rows, for its CSV export
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   // Header "⋯": the desktop Export CSV buttons (Sales trend: the daily rows).
   useEffect(() => {
     onMenu?.([
       { id: 'trend', group: 'Export CSV', label: 'Sales trend (daily)', onSelect: () => exportCsv('sales_trend.csv', [{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }], fd.daily || []) },
+      ...(movers ? [{ id: 'movers', group: 'Export CSV', label: 'Biggest movers (as shown)', onSelect: () => exportCsv('drastic_movers.csv', movers.columns, movers.rows) }] : []),
     ])
-  }, [onMenu, fd])
+  }, [onMenu, fd, movers])
   useEffect(() => () => onMenu?.([]), [onMenu])
   return (
     <div className="inv-mobile sa-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
       <MasterCard fd={fd} revenueAvailable={revenueAvailable} mix={mix} dateFilters={dateFilters} layout={layout} />
       <PairsCard rows={locationRows} />
       <ContributionCard channels={channels} categories={categories} revenueAvailable={revenueAvailable} />
+      <TopProductsCard fd={fd} channels={filters.topChannel} revenueAvailable={revenueAvailable} />
+      <MoversCard fd={fd} revenueAvailable={revenueAvailable} onRows={setMovers} />
     </div>
   )
 }

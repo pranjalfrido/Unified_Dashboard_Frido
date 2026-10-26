@@ -72,5 +72,37 @@ if (want.has('contribution')) {
   same('Channel contribution (units)', (await deskRows('Channel-Wise Sales')).join(' | '), (await mobRows('Channel')).join(' | '))
   same('Category contribution (units)', (await deskRows('Category Contribution')).join(' | '), (await mobRows('Category')).join(' | '))
 }
+if (want.has('top')) {
+  // desktop default: Sub-cat, Units → first 10 rows (name, units, %)
+  const desk = await D.page.evaluate(() => {
+    const h = [...document.querySelectorAll('*')].find(e => e.childElementCount === 0 && e.textContent.trim() === 'Top Products')
+    let c = h; while (c && c.innerText.split('\n').length < 20) c = c.parentElement
+    const l = c.innerText.split('\n').map(x => x.trim()).filter(Boolean)
+    const out = []
+    for (let i = 0; i < l.length - 3 && out.length < 10; i++) if (/^\d+$/.test(l[i]) && /^[\d,]+$/.test(l[i + 2]) && /%$/.test(l[i + 3])) out.push(`${l[i + 1]} ${l[i + 2]} ${l[i + 3]}`)
+    return out
+  })
+  const mob = await P.page.evaluate(() => {
+    const sec = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Top products')
+    return [...sec.querySelectorAll('.ranked-list > div > button')].filter(b => /^\d+\. /.test(b.innerText)).map(b => { const l = b.innerText.split('\n').map(x => x.trim()).filter(Boolean); return `${l[0].replace(/^\d+\. /, '')} ${l[1]} ${l[2]}` })
+  })
+  same('Top products (sub-cat, units, top 10)', desk.join(' | '), mob.join(' | '))
+}
+if (want.has('movers')) {
+  // desktop default: Sub-category · Risers · Units · Last vs 2nd-last day → name, before, now, change
+  const desk = await D.page.evaluate(() => {
+    const h = [...document.querySelectorAll('*')].find(e => e.childElementCount === 0 && e.textContent.trim() === 'Drastic Sales Change')
+    let c = h; while (c && !/\nchange\n/i.test(c.innerText)) c = c.parentElement
+    const l = c.innerText.split('\n').map(x => x.trim()).filter(Boolean)
+    const start = l.findIndex(x => /^change$/i.test(x)) + 1, out = []
+    for (let i = start; i < l.length - 4 && out.length < 8; i += 5) out.push(`${l[i + 1]} ${l[i + 2]} → ${l[i + 3]} ${l[i + 4]}`)
+    return out
+  })
+  const mob = await P.page.evaluate(() => {
+    const sec = [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Biggest movers')
+    return [...sec.querySelectorAll(':scope > div')].filter(d => /→/.test(d.innerText)).map(d => d.innerText.split('\n').map(x => x.trim()).filter(Boolean).join(' '))
+  })
+  same('Biggest movers (sub-cat, risers, units, vs 2nd-last day)', desk.join(' | '), mob.join(' | '))
+}
 await D.browser.close(); await P.browser.close()
 console.log(fails ? `${fails} difference(s)` : 'ALL MATCH')
