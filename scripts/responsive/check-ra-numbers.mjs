@@ -41,6 +41,10 @@ const D = await dp.evaluate(() => {
   out.exch = tableRows(cardOf('Exchange Deep Dive · SKU-wise'))
   return out
 })
+// Return Reasons totals for CIR and Exch (the card opens on All)
+const rcard = dp.getByText('Return Reasons · Detail', { exact: true }).locator('xpath=ancestor::div[contains(@class,"card")][1]')
+D.reasonTotals = {}
+for (const k of ['CIR', 'Exch']) { await rcard.getByRole('button', { name: k, exact: true }).click(); await dp.waitForTimeout(300); D.reasonTotals[k] = clean(await rcard.locator('tfoot').innerText()) }
 await dk.browser.close()
 
 // ── mobile ──
@@ -89,14 +93,19 @@ mc = await rankedRows(cc)
 const byTot = [...deskCat].sort((a, b) => parseFloat(b[ci('total')]) - parseFloat(a[ci('total')]))
 byTot.slice(0, 8).forEach((d, i) => same(`Category by total return % ${i + 1} value`, d[ci('total')], mc[i]?.find(x => /%$/.test(x))))
 // reasons: every reason (count, share, ₹) + Total
-const rc = card('Return reasons (CIR)')
+const rc = card('Return reasons (CIR & Exchange)')
 if (await rc.getByRole('button', { name: /^Show all/ }).count()) await tap(rc.getByRole('button', { name: /^Show all/ }))
 const mReasons = (await rc.locator('button[style*="grid"]').allInnerTexts()).map(t => t.split('\n').map(x => x.trim()).filter(Boolean))
 const dReasons = D.reasons.slice(1).filter(r => r.length === 4)
 const dTotal = dReasons.find(r => r[0] === 'Total'), dList = dReasons.filter(r => r[0] !== 'Total')
 dList.forEach(d => { const m = mReasons.find(x => x[0] === d[0]); same(`Reason ${d[0]}`, `${d[1]} · ${d[2]} · ${d[3]}`, m ? `${m[1]} · ${m[2].replace(' · ', ' · ')}` : 'missing') })
 const totalLine = clean(await rc.locator('div').filter({ hasText: /^Total/ }).last().innerText())
-same('Reasons total', `Total ${dTotal[1]} · ${dTotal[3]}`, totalLine)
+same('Reasons total (All)', `Total ${dTotal[1]} · ${dTotal[3]}`, totalLine)
+for (const k of ['CIR', 'Exch']) {
+  await tap(rc.getByRole('tab', { name: k, exact: true }))
+  const d = D.reasonTotals[k].split(' ') // Total, count, 100%, ₹x, unit
+  same(`Reasons total (${k})`, `Total ${d[1]} · ${d.slice(3).join(' ')}`, clean(await rc.locator('div').filter({ hasText: /^Total/ }).last().innerText()))
+}
 // 12 months
 const mo = card('Last 12 months')
 await tap(mo.getByRole('button', { name: /^Show all/ }))

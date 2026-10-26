@@ -111,13 +111,14 @@ await page.goBack(); await page.waitForTimeout(500)
 check('Back closes the full-screen list', (await fsl.count()) === 0)
 
 // category: toggle + every sort chip, no resize; row → sheet
-const cat = sec('Category breakdown'); const hc = await height(cat)
-let catOk = true
+// Category rows are compact (no sub-line), Sub-category rows are taller: the height is fixed per view.
+const cat = sec('Category breakdown')
+let catOk = true; const hv = {}
 for (const v of ['Sub-category', 'Category']) {
-  await act(cat.getByRole('tab', { name: v, exact: true }))
-  for (const s of ['Total return %', 'Cancel %', 'RTO %', 'CIR %', 'Exchange %', 'Revenue']) { await act(cat.getByRole('button', { name: s, exact: true })); if ((await height(cat)) !== hc) catOk = false }
+  await act(cat.getByRole('tab', { name: v, exact: true })); hv[v] = await height(cat)
+  for (const s of ['Total return %', 'Cancel %', 'RTO %', 'CIR %', 'Exchange %', 'Revenue']) { await act(cat.getByRole('button', { name: s, exact: true })); if ((await height(cat)) !== hv[v]) catOk = false }
 }
-check('category: Category / Sub-category × 6 sorts, card keeps its height', catOk, `${hc}px`)
+check('category: 6 sorts in each view, card keeps its height per view', catOk, JSON.stringify(hv))
 await act(cat.locator('.ranked-list > div:not([role=group]) > button').first())
 check('category row → sheet lists its sub-categories', /SUB-CATEGORIES/i.test(await dialog().innerText()))
 await closeSheet()
@@ -128,6 +129,14 @@ await closeSheet()
 
 // reasons → sub-reasons
 const rs = sec('Return reasons')
+const hr = await height(rs)
+for (const k of ['CIR', 'Exch', 'All']) await act(rs.getByRole('tab', { name: k, exact: true }))
+check('reasons: All / CIR / Exch toggle, card keeps its height', (await height(rs)) === hr)
+await act(rs.getByRole('button', { name: 'Product', exact: true }))
+await dialog().locator('input').first().fill('Orthotics Posture Corrector'); await page.waitForTimeout(400)
+await act(dialog().locator('label').filter({ hasText: /^Orthotics Posture Corrector/ }).first())
+await act(dialog().getByRole('button', { name: /^Apply/ }))
+check('reasons: product slicer narrows to one product', /Orthotics Posture Corrector/.test(await rs.getByRole('button', { name: 'Product', exact: true }).innerText()))
 await act(rs.locator('button[style*="grid"]').first())
 const rsSheet = await dialog().innerText()
 check('reason row → sheet with its sub-reasons', rsSheet.split('\n').filter(Boolean).length > 3, clean(rsSheet).slice(0, 60))
