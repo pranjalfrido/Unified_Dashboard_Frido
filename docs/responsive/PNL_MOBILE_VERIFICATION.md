@@ -1,6 +1,6 @@
 # P&L Phase 2: verification (PNL_MASTER_PLAN.md Part B §10)
 
-Branch `feature/responsive-pnl`, local build. Data path: page default range **1–26 Oct 2026, live API (/api/bq)**, previous period 5–30 Sep from the same API (the hidden summary-only P&L, session cache). Device screenshots and the laptop before/after use **September 2026** (static job file `pnl-data-lastmonth.json`), the same as every earlier page.
+Branch `feature/responsive-pnl`, local build. Screenshots are on Suraj's machine under `docs/responsive/before/pnl-phase2/` and `docs/responsive/after/pnl-*/` (PNGs are git-ignored; the `report.json` files are committed). Data path: page default range **1–26 Oct 2026, live API (/api/bq)**, previous period 5–30 Sep from the same API (the hidden summary-only P&L, session cache). Device screenshots and the laptop before/after use **September 2026** (static job file `pnl-data-lastmonth.json`), the same as every earlier page.
 
 Note on EBO stores locally: this machine's API server has no `SUPABASE_SECRET_KEY`, so live EBO store rows are empty here (laptop and mobile alike). The store list and full store table were checked on September (static file, 29 stores) and work on Vercel, which has the key.
 
