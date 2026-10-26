@@ -298,10 +298,11 @@ function BaselineStat({ label, value, sub, accent, divider = true }) {
   )
 }
 
-export default function PriceSimulator({ variantProducts = [], productGroups = [] }) {
+// initialProductKey ('cat::sc'): opens on that product ("Simulate ↗" from the P&L watchlist / Financial View).
+export default function PriceSimulator({ variantProducts = [], productGroups = [], initialProductKey = null }) {
   const [pickMode, setPickMode] = useState('product')
-  const [selectedSku, setSelectedSku] = useState(null)
-  const [search, setSearch] = useState('')
+  const [selectedSku, setSelectedSku] = useState(() => (initialProductKey && productGroups.some(p => p.sku === initialProductKey) ? initialProductKey : null))
+  const [search, setSearch] = useState(() => productGroups.find(p => p.sku === initialProductKey)?.name || '')
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
   // Listing Price is user-editable (to simulate a hypothetical listing price change), but ALWAYS re-seeds

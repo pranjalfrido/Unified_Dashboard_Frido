@@ -21,6 +21,7 @@ const PNL_TOOLS = [
 // B2BCostingCalculator.jsx), not a what-if on an existing live price like D2C's Price Simulator,
 // since Offline has no tracked Listing Price/Discount to flex. Kept as its own single-item list
 // (not merged into PNL_TOOLS) since it's gated on activeTab === 'offline', not 'shopify'.
+const SIM_TOOL = { shopify: 'priceSimulator', offline: 'b2bCosting' }
 const OFFLINE_TOOLS = [
   { id: 'b2bCosting', label: 'B2B Costing Calculator' },
   { id: 'poApproval', label: 'PO Approval Checker' },
@@ -207,6 +208,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // null means "show the normal channel tab content". Independent of activeTab so switching back
   // just restores whichever channel was already selected.
   const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas' | 'b2bCosting' | 'poApproval'
+  // "Simulate ↗" (watchlist / Financial View): opens the channel's tool on that product ('cat::sc').
+  // D2C → Price Simulator, Offline → B2B Costing; other channels have no product tool.
+  const [toolProduct, setToolProduct] = useState(null)
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -1198,6 +1202,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const cm2 = cm1Covered && amzChannelView === 'all' ? cm1 - spend : null
         return {
           date: d.date,
+          dayNet: d.net, // the day's net (same loop), for the mobile chart
           returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
           cogsPct: d.anyCosted && d.netCovered > 0 ? (d.cogs / d.netCovered * 100) : null,
           sndPct: d.anySnd && d.sndNetCovered > 0 ? (d.snd / d.sndNetCovered * 100) : null,
@@ -1310,6 +1315,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const cm2 = cm1Covered ? cm1 - spend : null
         return {
           date: d.date,
+          dayNet: d.net, // the day's net (same loop), for the mobile chart
           returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
           cogsPct: d.anyCosted && d.netCovered > 0 ? (d.cogs / d.netCovered * 100) : null,
           sndPct: d.anySnd && d.sndNetCovered > 0 ? (d.snd / d.sndNetCovered * 100) : null,
@@ -1431,6 +1437,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const cm2 = cm1Covered ? cm1 - spend : null
         return {
           date: d.date,
+          dayNet: d.net, // the day's net (same loop), for the mobile chart
           returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
           cogsPct: d.anyCosted && d.netCovered > 0 ? (d.cogs / d.netCovered * 100) : null,
           sndPct: d.anySnd && d.sndNetCovered > 0 ? (d.snd / d.sndNetCovered * 100) : null,
@@ -2166,7 +2173,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
               {PNL_TOOLS.map(tool => {
                 const isActive = activeTool === tool.id
                 return (
-                  <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
+                  <button key={tool.id} onClick={() => { setToolProduct(null); setActiveTool(isActive ? null : tool.id) }}
                     className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
                     {tool.id === 'priceSimulator' ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -2209,7 +2216,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
                 {OFFLINE_TOOLS.map(tool => {
                   const isActive = activeTool === tool.id
                   return (
-                    <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
+                    <button key={tool.id} onClick={() => { setToolProduct(null); setActiveTool(isActive ? null : tool.id) }}
                       className={`tool-btn${isActive ? ' is-active' : ''}`} aria-pressed={isActive}>
                       {tool.id === 'b2bCosting' ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -2235,11 +2242,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       </div>}
       <div className="page-scroll">
         {activeTool === 'priceSimulator' ? (
-          <PriceSimulator variantProducts={d2cProductList} productGroups={d2cProductGroups} />
+          <PriceSimulator key={toolProduct || 'none'} variantProducts={d2cProductList} productGroups={d2cProductGroups} initialProductKey={toolProduct} />
         ) : activeTool === 'breakevenRoas' ? (
           <BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} />
         ) : activeTool === 'b2bCosting' ? (
-          <B2BCostingCalculator productGroups={offlineProductGroups} />
+          <B2BCostingCalculator key={toolProduct || 'none'} productGroups={offlineProductGroups} initialProductKey={toolProduct} />
         ) : activeTool === 'poApproval' ? (
           <POApprovalChecker productGroups={offlineProductGroups} />
         ) : (
@@ -2283,6 +2290,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           estimatedDays={activeTab === 'flipkart' ? (data.flipkart?.estimatedDays || 0) : activeTab === 'myntra' ? (data.myntra?.estimatedDays || 0) : 0}
           startDate={filters.start}
           endDate={filters.end}
+          tab={activeTab}
+          onSimulate={SIM_TOOL[activeTab] ? key => { setToolProduct(key); setActiveTool(SIM_TOOL[activeTab]); window.scrollTo({ top: 0, behavior: 'smooth' }) } : undefined}
+          simulateLabel={activeTab === 'offline' ? 'B2B costing' : 'Price simulator'}
         />
         )}
         {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
