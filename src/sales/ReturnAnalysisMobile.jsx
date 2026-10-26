@@ -9,7 +9,8 @@ import MobileRankedList from '../responsive/MobileRankedList.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import FilterPicker from '../responsive/FilterPicker.jsx'
 import StackedBarChart from '../responsive/StackedBarChart.jsx'
-import { Card, Chips, KV, ShowAllButton } from '../responsive/CardKit.jsx'
+import MixBar, { MixLegend } from '../responsive/MixBar.jsx'
+import { Card, Chips, KV, ShowAllButton, RowText } from '../responsive/CardKit.jsx'
 import { useRaBasis, setRaBasis, exportExchangeCsv, groupReturnTrend, immatureSince, maturityText, isRed } from './returnAnalysisData.js'
 
 // Sales → D2C → Return Analysis below 1024px (docs/responsive/RETURN_ANALYSIS_MOBILE_PROMPT_1.md,
@@ -268,6 +269,42 @@ function CancelCard({ rows = [] }) {
   )
 }
 
+// ── Last 12 months: the desktop "Last 12 Months Summary", newest first ──
+const monthLabel = key => { const [y, m] = (key || '').split('-'); return y && m ? `${MON[parseInt(m, 10) - 1]}-${y.slice(2)}` : key }
+function MonthsCard({ rows = [], basis, end }) {
+  const [all, setAll] = useState(false)
+  const [sel, setSel] = useState(null)
+  const suffix = basis === 'qty' ? 'PctQty' : 'Pct'
+  const sorted = [...rows].sort((a, b) => b.month.localeCompare(a.month))
+  const shown = all ? sorted : sorted.slice(0, 6)
+  const maxTotal = Math.max(...sorted.map(r => r[`totalReturn${suffix}`] || 0), 0) || 1
+  // The range's last month is partial unless the range ends on its last day.
+  const endD = end ? d0(end) : null
+  const partialKey = endD && new Date(endD.getFullYear(), endD.getMonth() + 1, 0).getDate() !== endD.getDate() ? end.slice(0, 7) : null
+  const label = r => (r.month === partialKey ? `${monthLabel(r.month)} (1–${endD.getDate()} ${MON[endD.getMonth()]}, partial)` : monthLabel(r.month))
+  const parts = r => [{ key: 'cancel', label: 'Cancel', value: r[`cancel${suffix}`], color: M.green }, { key: 'rto', label: 'RTO', value: r[`rto${suffix}`], color: M.g2 }, { key: 'cir', label: 'CIR', value: r[`cir${suffix}`], color: M.g3 }]
+  const amount = r => (basis === 'qty' ? `${fmtN(r.qty)} units` : `Rev ${fmt(r.revenue)}`)
+  return (
+    <Card title="Last 12 months" sub={`Total return % by month · ${basis === 'qty' ? 'by qty' : 'by revenue'}`}>
+      <MixLegend parts={parts({})} prefix="Bar:" style={{ marginBottom: 6 }} />
+      {sorted.length ? shown.map(r => (
+        <button key={r.month} type="button" onClick={() => setSel(r)}
+          style={{ display: 'block', width: '100%', padding: '8px 0', border: 'none', borderBottom: `1px solid ${M.line}`, background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer' }}>
+          <RowText name={label(r)} sub={amount(r)} value={p1(r[`totalReturn${suffix}`])} valueColor={redIf('totalReturnPct', r[`totalReturn${suffix}`])} />
+          <div style={{ width: `${Math.max(2, ((r[`totalReturn${suffix}`] || 0) / maxTotal) * 100)}%`, marginTop: 6 }}>
+            <MixBar parts={parts(r)} height={4} label={`${monthLabel(r.month)}: Cancel, RTO, CIR`} fmt={p1} />
+          </div>
+        </button>
+      )) : <div style={{ fontSize: 13, color: M.muted, padding: '8px 0' }}>No data</div>}
+      {sorted.length > 6 && <ShowAllButton onClick={() => setAll(a => !a)}>{all ? 'Show last 6' : `Show all ${sorted.length}`}</ShowAllButton>}
+      <BottomSheet open={!!sel} onClose={() => setSel(null)} title={sel ? label(sel) : ''}>
+        {sel && <KV items={[{ label: basis === 'qty' ? 'Qty' : 'Revenue', value: basis === 'qty' ? fmtN(sel.qty) : fmt(sel.revenue) },
+          ...RATE_COLS.map(([id, l]) => ({ label: l, value: p1(sel[`${id}${suffix}`]), color: redIf(`${id}Pct`, sel[`${id}${suffix}`]) }))]} />}
+      </BottomSheet>
+    </Card>
+  )
+}
+
 export default function ReturnAnalysisMobile({ data, loading, error, filters, onMenuExtra, topProductsPaymentType, setTopProductsPaymentType }) {
   const bp = useBreakpoint()
   const basis = useRaBasis()
@@ -297,6 +334,7 @@ export default function ReturnAnalysisMobile({ data, loading, error, filters, on
       {data && <CategoryCard data={data} basis={basis} period={period} />}
       {data && <ReasonsCard reasons={data.returnReasons} period={period} />}
       {data && <CancelCard rows={data.cancelByBucket} />}
+      {data && <MonthsCard rows={data.monthlyTable} basis={basis} end={filters.end} />}
       {!data && loading && <div className="skel" style={{ height: 420, borderRadius: M.radius.card, background: M.card, boxShadow: M.cardShadow }} aria-label="Loading return analysis" />}
     </div>
   )
