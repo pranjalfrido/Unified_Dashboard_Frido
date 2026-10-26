@@ -26,6 +26,28 @@ export const METRIC_TARGETS = {
   deadStockUnits: null,
 }
 
+// P&L margin watchlist bars per channel group (PNL_MASTER_PLAN.md Part B §1; D2C confirmed, the rest
+// proposals — change them here, nothing else needs to change). Percent values; null = rule off for
+// that group (EBO/Offline have no real CM2, so no "Below healthy ROAS").
+//   cm1: CM1 % below → flag · cogs: COGS % above · gm: GM % below · ret: Returns % (of gross) above
+//   cm2Target: the "healthy" CM2 % · aspDrop: ASP down more than this % vs the previous period
+//   retUp: Returns % up more than this many points vs the previous period
+export const PNL_RULE_BARS = {
+  d2c:         { label: 'D2C', cm1: 30, cogs: 50, gm: 50, ret: 20, cm2Target: 15, aspDrop: 5, retUp: 3 },
+  marketplace: { label: 'Amazon, Flipkart, Myntra', cm1: 20, cogs: 45, gm: 40, ret: 15, cm2Target: 10, aspDrop: 5, retUp: 3 },
+  quick:       { label: 'Blinkit, Instamart, Zepto', cm1: 18, cogs: 45, gm: 35, ret: 5, cm2Target: 8, aspDrop: 5, retUp: 2 },
+  smallMarket: { label: 'CRED, Firstcry', cm1: 20, cogs: 45, gm: 40, ret: 10, cm2Target: 10, aspDrop: 5, retUp: 3 },
+  store:       { label: 'EBO, Offline', cm1: 30, cogs: 45, gm: 45, ret: 10, cm2Target: null, aspDrop: 5, retUp: 3 },
+}
+export const PNL_CHANNEL_GROUP = {
+  shopify: 'd2c', amazon: 'marketplace', flipkart: 'marketplace', myntra: 'marketplace',
+  blinkit: 'quick', instamart: 'quick', zepto: 'quick', cred: 'smallMarket', firstcry: 'smallMarket',
+  ebo: 'store', offline: 'store',
+}
+// A product is only checked if it has at least this share of the tab's gross revenue OR this many
+// units in the period, so tiny products (e.g. Firstcry, 2–11 units each) don't flag every row.
+export const PNL_MATERIALITY = { minShareOfGross: 0.01, minUnits: 50 }
+
 // 'good' | 'warn' | 'bad' | null (null = no target, show neutral)
 export function metricStatus(key, value) {
   const t = METRIC_TARGETS[key]
