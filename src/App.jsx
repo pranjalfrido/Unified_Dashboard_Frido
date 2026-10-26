@@ -12010,6 +12010,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
             })()
 
+            // Late reports (A7): Flipkart / Myntra revenue arrives days late. Days after the last real
+            // report (latestRealDate, the same late-report logic P&L uses) are "pending": no revenue and
+            // no ROAS point instead of ₹0 / a crashing ROAS. Spend still shows.
+            const pendingAfter = selPlatform === 'Flipkart' ? (data.flipkart?.latestRealDate || null) : selPlatform === 'Myntra' ? (data.myntra?.latestRealDate || null) : null
             const aggTrend = (rows, gran) => {
               const map = {}
               rows.forEach(r => {
@@ -12030,12 +12034,14 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0 }
                 map[key].spend += r.spend
                 map[key].revenue += r.revenue
+                if (pendingAfter && r.date > pendingAfter) map[key].pending = true
               })
-              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
-                ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0
-              }))
+              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => (r.pending
+                ? { ...r, revenue: null, roas: null }
+                : { ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0 }))
             }
             const trendData = aggTrend(filteredDailyArr, trendGran)
+            const pendingDays = pendingAfter ? filteredDailyArr.filter(r => r.date > pendingAfter).length : 0
             const xFmt = d => {
               if (trendGran === 'monthly') return d
               if (trendGran === 'quarterly') return d
@@ -12093,6 +12099,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
                   </ComposedChart>
                 </ResponsiveContainer>
+                {pendingDays > 0 && (
+                  <div style={{ fontSize: 11, color: C.t3, textAlign: 'center', marginTop: 2 }}>◌ Revenue after {new Date(pendingAfter + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} not loaded yet (late report): {pendingDays} day{pendingDays === 1 ? '' : 's'} shown as pending, no revenue or ROAS</div>
+                )}
                 {/* Custom legend, plain HTML — Recharts' built-in <Legend> ignores explicit
                     payload ordering for mixed Area/Line series, so it's replaced entirely to
                     guarantee Spend, Revenue, ROAS always reads left to right in that order. */}
