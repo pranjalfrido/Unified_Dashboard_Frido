@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logistics Mobile Mockup</title>
+<style>
+:root{--bg:#efebe4;--ink:#1c2420;--muted:#7b847f;--line:#eeebe4;--green:#1f5a3d;--soft:#f4f2ed;--up:#1f8a4c;--dn:#c0392b;--amber:#c8860a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);display:flex;gap:40px;justify-content:center;align-items:flex-start;padding:32px 16px;flex-wrap:wrap}
+.phone{width:375px;height:760px;background:#f4f2ed;border-radius:36px;box-shadow:0 20px 50px rgba(0,0,0,.18);border:10px solid #111;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.top{background:linear-gradient(180deg,#0f2a1d,#1c4630);color:#fff}
+.tb{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px;gap:8px}
+.tb h1{font-size:17px;margin:0;font-weight:700}
+.sub1{font-size:11.5px;color:rgba(255,255,255,.7);margin-top:2px}
+.pill{font-size:12px;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:6px 9px;background:rgba(255,255,255,.08);color:#fff;white-space:nowrap}
+.fbtn{position:relative;width:34px;height:31px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#fff;font-size:15px;cursor:pointer;flex:0 0 auto}
+.fbtn b{position:absolute;top:-6px;right:-6px;background:#fff;color:#0f2a1d;border-radius:9px;padding:0 5px;font-size:10.5px;line-height:16px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:4px 14px 0;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.ch{outline:none;-webkit-tap-highlight-color:transparent;flex:0 0 auto;font-size:12.5px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);color:#e9f1ec;cursor:pointer}
+.ch.on{background:#fff;color:#0f2a1d;font-weight:700}
+.subrow{display:flex;gap:18px;padding:6px 14px 0}
+.subrow button{outline:none;-webkit-tap-highlight-color:transparent;border:none;background:none;color:rgba(255,255,255,.65);font-size:13.5px;font-weight:600;padding:2px 0 8px;cursor:pointer;border-bottom:2px solid transparent}
+.subrow button.on{color:#fff;border-bottom-color:#fff}
+.scroll{flex:1;overflow:auto;padding:12px;font-variant-numeric:tabular-nums}
+.card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px}
+.master{background:linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#fff 460px);border:1px solid #dbe8df}
+.ct{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.ct h2{font-size:15.5px;margin:0;font-weight:700;white-space:nowrap}
+.cnt{font-size:12px;color:var(--muted);white-space:nowrap}
+.lbl{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.hero{font-size:28px;font-weight:700;letter-spacing:-.02em;margin-top:2px;display:flex;align-items:baseline;gap:8px}
+.hero .d{font-size:12.5px}
+.sub{font-size:12.5px;color:var(--muted);line-height:18px;height:36px;overflow:hidden}
+.split{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:6px 0 4px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;background:var(--c)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:10px}
+.tile{background:rgba(255,255,255,.9);border:1px solid rgba(31,90,61,.08);border-radius:12px;padding:8px 10px;cursor:pointer;transition:.2s}
+.tile.on{border-color:rgba(31,90,61,.22);box-shadow:0 0 10px 1px rgba(31,90,61,.10)}
+.tile .r1{display:flex;justify-content:space-between;align-items:center;gap:4px;min-width:0}.tile .d{flex:0 0 auto}
+.tile .k{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v{font-size:15.5px;font-weight:700;margin-top:3px}
+.d{font-size:11.5px;font-weight:600;white-space:nowrap}.up{color:var(--up)}.dn{color:var(--dn)}
+svg.chart{display:block;width:calc(100% + 28px);margin:6px -14px 0;height:110px;touch-action:none}
+.seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;flex:0 0 auto;max-width:100%}.segw{display:flex;width:100%;overflow:hidden}.segw button{flex:1 1 0;min-width:0;text-align:center;padding:7px 2px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+.seg button{outline:none;-webkit-tap-highlight-color:transparent;border:none;background:none;font-size:12px;font-weight:600;color:var(--muted);padding:5px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.segw{margin-bottom:8px}
+.chipsc{display:flex;gap:6px;overflow-x:auto;margin:0 -14px 8px;padding:0 14px;scrollbar-width:none}.chipsc::-webkit-scrollbar{display:none}
+.s{flex:0 0 auto;font-size:12px;padding:5px 10px;border-radius:999px;background:var(--soft);border:1px solid transparent;cursor:pointer;color:var(--ink)}
+.s.on{background:var(--green);color:#fff}
+.more3{border:1px solid #eeebe4;background:#fff;border-radius:9px;height:28px;min-width:30px;padding:0 8px;font-size:13px;font-weight:700;color:#7b847f;cursor:pointer;white-space:nowrap}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.row:last-child{border-bottom:none}
+.row .n{font-size:13.5px;font-weight:600;line-height:17px}
+.row .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:500}
+.row .v{font-size:13.5px;font-weight:700;text-align:right;white-space:nowrap}
+.row .m{font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap}
+.row .bar{grid-column:1/-1;height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:3px}
+.row .bar i{display:block;height:100%;background:var(--green)}
+.row.tot{background:var(--soft);border-radius:10px;padding:8px 10px;margin-bottom:4px;border:none;cursor:default}
+.stack{grid-column:1/-1;display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:4px;background:var(--line)}
+.more{margin-top:10px;width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:13.5px;font-weight:600;color:var(--green);cursor:pointer}
+.sec{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:16px 4px 8px}
+.nav{display:flex;justify-content:space-around;background:#fff;border-top:1px solid var(--line);padding:6px 0 14px}
+.nav div{display:flex;flex-direction:column;align-items:center;font-size:10.5px;color:var(--muted);gap:3px;min-width:56px}.nav div.on{color:var(--green);font-weight:700}.nav span{font-size:18px}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:.2s;z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;padding:10px 18px 22px;transform:translateY(100%);transition:.25s;z-index:6;max-height:82%;overflow:auto}
+.open .shade{opacity:1;pointer-events:auto}.open .sheet{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:#ddd;margin:0 auto 12px}
+.sheet h3{font-size:16px;margin:0 0 2px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.kv div{background:var(--soft);border-radius:12px;padding:9px 11px}.kv .k{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.kv .v{font-size:15px;font-weight:700;margin-top:3px}
+.frow{display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #eeebe4;font-size:14px;font-weight:600}
+.frow small{display:block;color:#7b847f;font-weight:600;font-size:12px}
+.notes{max-width:440px;font-size:14px;line-height:1.55}.notes h2{font-size:18px;margin:4px 0 10px}.notes h3{font-size:15px;margin:14px 0 6px}.notes li{margin-bottom:6px}
+.warn{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:14px;color:#6b5414}
+.hide{display:none}
+.ctl{display:flex;align-items:stretch;background:var(--soft);border-radius:12px;padding:3px;margin:2px 0 10px;height:38px}
+.cb{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;border:none;background:transparent;border-radius:9px;padding:0 8px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink);position:relative}.cb+.cb::before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:1px;background:#dcd8cf}.cb.act+.cb::before,.cb.act::before{display:none}
+.cb svg{flex:0 0 auto;width:15px;height:15px;stroke:#5f6b65;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cb .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cb .car{color:#9aa39e;font-size:9px;flex:0 0 auto}
+#cbV{flex:1.55 1 0}#cbF{flex:1.15 1 0}#cbS{flex:1 1 0}.cb{font-size:12px!important}.cb{gap:5px!important;padding:0 6px!important}.cb.act{background:#fff;box-shadow:0 1px 3px rgba(15,42,29,.10);color:var(--green)}.cb.act svg{stroke:var(--green)}.cb .badge{background:var(--green);color:#fff;border-radius:8px;font-size:10px;font-weight:700;padding:0 5px;line-height:15px;flex:0 0 auto}
+.cnum{background:var(--green);color:#fff;border-radius:8px;font-size:10px;padding:0 5px;line-height:15px}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:12px 2px;border-top:1px solid #eeebe4;font-size:14px;font-weight:600;cursor:pointer}
+.opt .tick{width:22px;height:22px;border-radius:7px;border:1.5px solid #cfd6d2;display:grid;place-items:center;font-size:12px;color:#fff}
+.opt.on .tick{background:var(--green);border-color:var(--green)}
+.opt .ord{width:22px;height:22px;border-radius:50%;border:1.5px solid #cfd6d2;display:grid;place-items:center;font-size:11.5px;font-weight:800;color:#fff}
+.opt.on .ord{background:var(--green);border-color:var(--green)}
+.grp{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 2px}
+.sbtns2{display:flex;gap:8px;margin-top:14px}.sbtns2 button{flex:1;padding:12px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);margin:2px 0 6px}
+
+.lblr{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:6px 0 6px}.lblr small{text-transform:none;letter-spacing:0;font-weight:500;margin-left:4px}
+.gby{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px}
+.gby button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 0;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;position:relative}
+.gby button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.gby button b{position:absolute;top:-6px;right:-5px;background:#fff;color:var(--green);border:1px solid var(--green);border-radius:8px;font-size:10px;line-height:14px;padding:0 4px}
+.fc{flex:0 0 auto;font-size:12px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);cursor:pointer}
+.fc.on{background:#e7f0ea;border-color:rgba(31,90,61,.35);color:var(--green);font-weight:600}
+.fc.sep{border:none;padding:5px 2px;color:#c9cfcb;cursor:default}
+.child{background:var(--soft);border-radius:10px;padding:2px 10px;margin:4px 0 6px}
+.child .row{padding:6px 0}.child .row .n{font-size:12.5px}
+.caret{display:inline-block;width:14px;color:#9aa39e;font-size:11px}
+.tatrow{padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.tatrow .h{display:flex;justify-content:space-between;align-items:baseline}
+.tatrow .h b{font-size:14px}.tatrow .h span{font-size:12px;color:var(--muted)}
+.tatrow .h span strong{font-size:14px;color:var(--ink)}
+.tatbar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 6px;background:var(--line);gap:2px}
+.tatbar i{display:block;height:100%}
+.tatnums{display:grid;grid-template-columns:repeat(4,1fr);font-size:11.5px;color:var(--muted)}
+.tatnums span{text-align:center}.tatnums span:first-child{text-align:left}.tatnums span:last-child{text-align:right}
+.tatnums b{color:var(--ink);font-weight:600}
+.tatrow.tot{background:var(--soft);border-radius:12px;padding:12px;border:none;margin-bottom:4px}
+.ndrsum{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--soft);border-radius:12px;padding:12px;margin-bottom:6px}
+.ndrsum div{display:flex;flex-direction:column;gap:2px}.ndrsum .k{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.ndrsum .v{font-size:16px;font-weight:700}
+.ndrsum .full{grid-column:1/-1;font-size:12px;color:var(--muted);flex-direction:row;justify-content:space-between;border-top:1px solid #e3e0d8;padding-top:8px}
+
+@supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent}}*::-webkit-scrollbar{width:3px;height:3px}*::-webkit-scrollbar-track{background:transparent}*::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}*::-webkit-scrollbar-button{display:none;height:0;width:0}
+#costChips{display:flex;gap:4px;padding:4px 10px 4px;border-top:1px solid rgba(255,255,255,.08);justify-content:space-between}
+#costChips.hide{display:none}
+#costChips .ch{flex:1 1 0;text-align:center;padding:4px 0 7px;font-size:12px;font-weight:600;background:transparent;border:none;color:rgba(255,255,255,.62);border-radius:0;position:relative}
+#costChips .ch.on{color:#fff;font-weight:700;background:transparent;box-shadow:none}#costChips .ch.on::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:24px;height:2px;border-radius:2px;background:#fff}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="top">
+    <div class="tb"><div><h1>Logistics</h1><div class="sub1" id="upd">Forward · Regular shipments</div></div>
+      <div style="display:flex;gap:8px;align-items:center"><div class="pill" id="pill">📅 1 – 25 Oct</div><button class="fbtn" id="fbtn">⚲<b id="fb">1</b></button></div></div>
+    <div class="subrow"><button class="on" data-t="p">Performance</button><button data-t="c">Cost</button></div>
+    <div class="hide" id="costChips"></div>
+  </div>
+
+  <div class="scroll" id="scroll">
+  <!-- ================= PERFORMANCE ================= -->
+  <div id="tabP">
+    <div class="card master" id="pMaster"></div>
+
+    <div class="card">
+      <div class="ct"><h2>Courier scorecard</h2><button class="more3" id="csMenu">⋯</button></div>
+      <div class="ctl" id="csCtl"></div>
+      <div id="csGroup" class="hide"></div><div id="csFilt" class="hide"></div><div id="csSort" class="hide"></div>
+      <div id="csList"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct"><h2>Speed (TAT buckets)</h2></div>
+      <div class="seg segw" id="tatT"><button class="on" data-v="proc">Processing</button><button data-v="pick">Pickup</button><button data-v="tran">In-transit</button><button data-v="ful">Fulfilment</button></div>
+      <div class="sub" style="height:auto;margin-bottom:4px" id="tatHint"></div>
+      <div class="legend hide" id="tatLeg"></div>
+      <div id="tatList"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct"><h2>By weight</h2><div class="seg" id="wT"><button class="on">Qty</button><button>Value</button></div></div>
+      <div id="wList"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct"><h2>Geography</h2></div>
+      <div class="seg segw" id="geoT"><button class="on" data-v="dc">Drop city</button><button data-v="pc">Pickup city</button><button data-v="ds">Drop state</button></div>
+      <div id="geoList"></div>
+      <button class="more">Show all</button>
+    </div>
+
+    <div class="card">
+      <div class="ct"><h2>RTO shipment analysis</h2><button class="more3" id="rtoMenu">⋯</button></div>
+      <div class="seg segw" id="rtoT"><button class="on" data-v="age">RTO ageing</button><button data-v="del">Delivery ageing</button><button data-v="why">Reasons</button></div>
+      <div class="sub" id="rtoDesc" style="height:auto;margin-bottom:4px"></div><div class="legend" id="rtoLeg" style="margin-bottom:6px"></div>
+      <div id="rtoList"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct"><h2>NDR</h2><div class="seg" id="ndrT"><button class="on">All</button><button>COD</button><button>Prepaid</button></div></div>
+      <div id="ndrList"></div>
+    </div>
+  </div>
+
+  <!-- ================= COST ================= -->
+  <div id="tabC" class="hide">
+    <div class="card master" id="cMaster"></div>
+    <div id="cBody"></div>
+  </div>
+  </div>
+
+  <div class="nav"><div><span>▦</span>Overview</div><div><span>▮▮</span>Sales</div><div><span>₹</span>P&amp;L</div><div><span>▢</span>Inventory</div><div class="on"><span>⋯</span>More</div></div>
+  <div class="shade" id="shade"></div>
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<div class="notes">
+  <h2>Logistics, mobile: proposed</h2>
+  <ul>
+    <li><b>Header</b>: "Logistics" with <b>Performance / Cost</b> sub-tabs. Cost adds <b>Overview · B2C · FTL/PTL · 3PL</b> chips. Courier, direction (Forward/Reverse), shipment type, states, city, payment, category, weight slab → filter sheet. Refresh/Export → "⋯".</li>
+  </ul>
+  <h3>Performance</h3>
+  <ul>
+    <li><b>Master card</b>: Total shipments + GMV / Delivered / RTO line; chart; <b>10 tiles</b> (RTO %, Z-RTO, FASR, RASR, multi-attempt, processing, pickup, in-transit, fulfilment, RTO TAT) with desktop's ▲/▼. Tap a tile → chart.</li>
+    <li><b>Courier scorecard</b>: <b>View by</b> Courier / Zone / Facility / Month — tap a 2nd one to nest (e.g. Courier → Zone: each courier expands into zones). <b>Show</b> chips Tier I / II / III / COD / Prepaid are <b>multi-select filters</b> (e.g. Tier I + II combined). Sort chips for all columns. No duplicate total box (it's in the KPIs).</li>
+    <li><b>Speed</b>: the 4 TAT bucket tables become one card with a toggle and a <b>stacked bucket bar</b> per facility/courier.</li>
+    <li><b>Weight</b>, <b>Geography</b> (drop city / pickup city / drop state), <b>RTO</b> (ageing / delivery ageing / reasons as a ranked list, no rotated labels) and <b>NDR</b> (All / COD / Prepaid) as compact lists with detail sheets.</li>
+  </ul>
+  <h3>Cost</h3>
+  <ul>
+    <li><b>Overview</b>: total cost with a B2C / FTL / 3PL split bar, 6 tiles, monthly trend, and one partners card with a B2C / FTL / 3PL toggle.</li>
+    <li><b>B2C</b>: ₹2.43 Cr + 6 tiles, monthly trend, couriers (sort by cost, ₹/shipment, ₹/kg, over-weight), "Where the money goes" (Zone / Leg), weight slabs, rate drift, cost by product (drill-down), like-for-like compare.</li>
+    <li><b>FTL/PTL</b>: ₹60.48 L + 8 tiles, transporters, vehicle types, lanes (search), rate consistency.</li>
+    <li><b>3PL</b>: ₹57.77 L with an Operations / Rental split bar + 8 tiles (₹/parcel, ₹/kg, parcel weight, ₹/site/month, operations, rental, % of value); partners with <b>spend vs parcel share</b> double bars (replaces the Spend vs volume chart); warehouse sites (search); site trend with one site at a time (chips) against the blended rate (replaces the 6-line chart).</li>
+  </ul>
+  <div class="warn">Mockup only. Values are from your screenshots. <b>Chart shapes, the Value view of weight, the TAT/RTO bucket shares not visible in the screenshots, the 3PL chart shapes and the FTL "Rate consistency" rows beyond the visible ones are illustrative.</b></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const IN=n=>n==null?'—':Number(n).toLocaleString('en-IN');
+function sheet(h){$('sheet').innerHTML='<div class="grab"></div>'+h;$('phone').classList.add('open');}
+$('shade').onclick=()=>$('phone').classList.remove('open');
+const segBind=(id,fn)=>$(id).querySelectorAll('button').forEach(b=>b.onclick=()=>{$(id).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));fn&&fn(b.dataset.v,b.textContent)});
+const dl=(v,good)=>v==null?'':`<span class="d ${good?'up':'dn'}">${v>0?'▲':'▼'} ${Math.abs(v)}%</span>`;
+
+// ---------- MASTER CARD (generic) ----------
+function master(el,cfg){let cur=0;const W=345,H=110;
+ function path(a,mn,mx){return a.map((v,i)=>(i?'L':'M')+(i*W/(a.length-1)).toFixed(1)+','+(8+(H-16)*(1-(v-mn)/(mx-mn||1))).toFixed(1)).join(' ')}
+ function draw(){const t=cfg.tiles[cur];const s=t.s||cfg.series;const mn=Math.min(...s)*.95,mx=Math.max(...s)*1.03;
+  el.innerHTML=`${cfg.split||''}<div class="lbl">${t.name||t.k}</div><div class="hero"><span id="${el.id}H">${t.big||t.v}</span>${t.dv!=null?dl(t.dv,t.good):''}</div><div class="sub" id="${el.id}S">${t.sub||''}</div>
+  ${s?`<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="g${el.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f5a3d" stop-opacity=".18"/><stop offset="1" stop-color="#1f5a3d" stop-opacity="0"/></linearGradient></defs><path d="${path(s,mn,mx)} L${W},${H} L0,${H} Z" fill="url(#g${el.id})"/><path d="${path(s,mn,mx)}" fill="none" stroke="#1f5a3d" stroke-width="2.3" stroke-linejoin="round"/></svg><div class="legend" style="margin-top:4px"><span style="--c:#1f5a3d">${cfg.range}</span><span style="margin-left:auto">${cfg.gran}</span></div>`:''}
+  <div class="grid">${cfg.tiles.map((x,i)=>`<div class="tile ${i===cur?'on':''}" data-i="${i}"><div class="r1"><span class="k">${x.k}</span>${dl(x.dv,x.good)}</div><div class="v" ${x.red?'style="color:#c0392b"':''}>${x.v}</div></div>`).join('')}</div>`;
+  el.querySelectorAll('.tile').forEach(e=>e.onclick=()=>{cur=+e.dataset.i;draw()});}
+ draw();}
+const sTrend=[6.2,10.8,7.1,6.4,7.8,7.6,7.4,8.0,7.9,6.9,6.6,6.7,6.0,6.6,7.0,6.9,7.4,7.3,6.5,7.0,5.0,8.2,9.6,9.3,4.0].map(x=>x*1000);
+
+// ---------- PERFORMANCE ----------
+master($('pMaster'),{range:'1 – 25 Oct',gran:'Daily · auto',series:sTrend,tiles:[
+ {k:'Shipments',name:'Total shipments',big:'1,73,468',v:'1,73,468',dv:-6.8,good:false,sub:'GMV ₹32.74 Cr · 75.4% delivered · 4.6% RTO'},
+ {k:'RTO %',name:'RTO %',v:'4.6%',dv:-3.2,good:true,sub:'8,038 RTO shipments'},
+ {k:'Z-RTO',v:'943',dv:-40.1,good:false,sub:'0.5% of total'},
+ {k:'FASR',name:'FASR % (of attempted)',v:'83.7%',dv:-21.2,good:false,sub:'69.1% of total'},
+ {k:'RASR',name:'RASR % (of attempted)',v:'7.6%',dv:-33.1,good:false,sub:'6.3% of total'},
+ {k:'Multi-att',name:'Multi-attempt delivered',v:'10.9K',dv:-33.1,good:false,sub:'6.3% of total'},
+ {k:'Processing',name:'Avg processing',v:'1.1d',dv:-15.4,good:true,sub:'Order date → shipment creation'},
+ {k:'Pickup',name:'Avg pickup TAT',v:'0.7d',dv:4.5,good:false,sub:'Shipment creation → pickup'},
+ {k:'In-transit',name:'Avg in-transit',v:'2.9d',dv:-7.0,good:true,sub:'Shipment pickup → delivery'},
+ {k:'Fulfilment',name:'Avg fulfilment',v:'4.5d',dv:-8.2,good:true,sub:'Order date → delivery date'}]});
+// note: desktop has 11 KPIs incl Avg RTO TAT; mobile proposal keeps 10 (even) — see prompt
+
+const CS=[['Bluedart',63.36,109911,73.89,4.77,.08,84.34,7.05,13.13,1.10,.61,3.30,4.75,4.06],['ElasticRun',11.08,19220,87.38,3.92,.32,84.85,8.21,9.96,.95,.83,1.39,2.98,2.56],['Delhivery NDD',9.60,16645,83.88,3.47,.08,84.23,8.50,2.70,1.07,.99,1.94,3.76,5.06],['Shadowfax',5.74,9959,78.34,3.77,.24,81.81,9.90,.03,1.17,.70,2.58,4.17,5.71],['Delhivery',5.13,8900,62.66,4.93,.16,80.96,7.89,9.56,1.21,.86,4.48,6.28,5.25],['Swift',4.08,7072,56.67,8.87,.54,71.61,9.49,5.36,.83,.81,3.65,4.92,6.79],['Safexpress',.77,1339,75.35,1.27,.07,86.51,7.35,6.84,1.29,.67,4.22,5.75,5.08],['Skye Air',.24,417,96.16,2.16,.48,90.91,7.62,null,1.00,1.18,.37,2.21,2.56],['Urbane Bolt',0,5,60.00,0,40.00,100,0,33.33,1.80,1.39,1.36,5.00,null]];
+const CSC=['Vol %','Total','Del %','RTO %','Canc %','FASR %','RASR %','EDD breach %','Avg processing','Avg pickup','Avg S2D','Avg O2D','Avg RTO TAT'];
+let csS=1;
+const DIMS=['Courier','Zone','Facility','Month'];let gb=['Courier'];
+const FIL=['Tier I','Tier II','Tier III','|','COD','Prepaid'];let fsel=new Set();
+const SUBZ=['Zone A','Zone B','Zone C','Zone D','Zone E'];
+function renderCtl(){const fs=[...fsel];
+ $('csCtl').innerHTML=`<button class="cb ${gb.length>1?'act':''}" id="cbV"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="7" y="13" width="14" height="5" rx="1.5"/><path d="M3 11v4h3"/></svg><span class="v">${gb.join(' › ')}</span></button><button class="cb ${fs.length?'act':''}" id="cbF"><svg viewBox="0 0 24 24"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></svg><span class="v">Filter</span>${fs.length?`<span class="badge">${fs.length}</span>`:''}</button><button class="cb" id="cbS"><svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg><span class="v">${CSC[csS]}</span></button>`;
+ $('cbV').onclick=openView;$('cbF').onclick=openFilt;$('cbS').onclick=openSort;}
+function openView(){const t=[...gb];const draw=()=>{sheet('<h3>View by</h3><div class="hint">Pick up to 2, in order. The 2nd opens under each row.</div>'+DIMS.map(d=>{const i=t.indexOf(d);return `<div class="opt ${i>=0?'on':''}" data-d="${d}">${d}<span class="ord">${i>=0?i+1:''}</span></div>`}).join('')+'<div class="sbtns2"><button style="border:1px solid #eee;background:#fff" id="vr">Reset</button><button style="border:none;background:#1f5a3d;color:#fff" id="va">Apply</button></div>');
+ document.querySelectorAll('.opt[data-d]').forEach(o=>o.onclick=()=>{const d=o.dataset.d,i=t.indexOf(d);if(i>=0){if(t.length>1)t.splice(i,1)}else{if(t.length>=2)t.pop();t.push(d)}draw()});$('vr').onclick=()=>{t.splice(0,t.length,'Courier');draw()};$('va').onclick=()=>{gb=[...t];$('phone').classList.remove('open');renderGB();renderCS()};};draw();}
+function openFilt(){const t=new Set(fsel);const G=[['City tier',['Tier I','Tier II','Tier III']],['Payment mode',['COD','Prepaid']]];const draw=()=>{sheet('<h3>Filter scorecard</h3><div class="hint">Multi-select · combined view</div>'+G.map(g=>`<div class="grp">${g[0]}</div>`+g[1].map(f=>`<div class="opt ${t.has(f)?'on':''}" data-f="${f}">${f}<span class="tick">✓</span></div>`).join('')).join('')+`<div class="sbtns2"><button style="border:1px solid #eee;background:#fff" id="fr">Clear</button><button style="border:none;background:#1f5a3d;color:#fff" id="fa">Apply${t.size?' ('+t.size+')':''}</button></div>`);
+ document.querySelectorAll('.opt[data-f]').forEach(o=>o.onclick=()=>{const f=o.dataset.f;t.has(f)?t.delete(f):t.add(f);draw()});$('fr').onclick=()=>{t.clear();draw()};$('fa').onclick=()=>{fsel=new Set(t);$('phone').classList.remove('open');renderGB();renderCS()};};draw();}
+function openSort(){sheet('<h3>Sort by</h3>'+CSC.map((c,i)=>`<div class="opt ${i===csS?'on':''}" data-i="${i}">${c}<span class="tick">✓</span></div>`).join(''));document.querySelectorAll('.opt[data-i]').forEach(o=>o.onclick=()=>{csS=+o.dataset.i;$('phone').classList.remove('open');renderCS()});}
+function renderGB(){renderCtl();$('csGroup').innerHTML=DIMS.map(d=>{const i=gb.indexOf(d);return `<button class="${i>=0?'on':''}" data-d="${d}">${d}${i>=0&&gb.length>1?`<b>${i+1}</b>`:''}</button>`}).join('');
+ $('csGroup').querySelectorAll('button').forEach(b=>b.onclick=()=>{const d=b.dataset.d,i=gb.indexOf(d);if(i>=0){if(gb.length>1)gb.splice(i,1)}else{if(gb.length>=2)gb.pop();gb.push(d)}renderGB();renderCS()});
+ $('csFilt').innerHTML=FIL.map(f=>f==='|'?'<span class="fc sep">|</span>':`<button class="fc ${fsel.has(f)?'on':''}" data-f="${f}">${fsel.has(f)?'✓ ':''}${f}</button>`).join('');
+ $('csFilt').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{const f=b.dataset.f;fsel.has(f)?fsel.delete(f):fsel.add(f);renderGB();renderCS()});}
+let open=new Set(['Bluedart']);
+function renderCS(){renderCtl();$('csSort').innerHTML=CSC.map((c,i)=>`<button class="s ${i===csS?'on':''}" data-i="${i}">${c}</button>`).join('');
+ $('csSort').querySelectorAll('.s').forEach(b=>b.onclick=()=>{csS=+b.dataset.i;renderCS()});
+ const scale=fsel.size?0.35+0.12*fsel.size:1;
+ const l=[...CS].sort((a,b)=>(b[csS+1]??-1)-(a[csS+1]??-1));const mx=Math.max(...l.map(r=>r[csS+1]||0));
+ const f=(v,i)=>v==null?'—':i===1?IN(Math.round(v)):i>=8?v.toFixed(2)+'d':v.toFixed(2)+'%';
+ const lvl2=gb[1];
+ const note=fsel.size?`<div class="sub" style="height:auto;margin:-2px 0 4px">Showing ${[...fsel].join(' + ')} combined</div>`:'';
+ $('csList').innerHTML=note+(gb[0]!=='Courier'?`<div class="sub" style="height:auto">Rows by ${gb[0]}${lvl2?' → '+lvl2:''} (same layout)</div>`:'')+
+ l.map(r=>{const isO=lvl2&&open.has(r[0]);const v=csS===1?r[2]*scale:r[csS+1];
+  return `<div class="row" data-n="${r[0]}"><div class="n">${lvl2?`<span class="caret">${isO?'▾':'▸'}</span>`:''}${r[0]}<small style="${lvl2?'padding-left:14px':''}">${IN(Math.round(r[2]*scale))} · del ${r[3]}% · RTO <span style="${r[4]>4.5?'color:#c0392b':''}">${r[4]}%</span></small></div><div><div class="v">${f(v,csS)}</div><div class="m">${CSC[csS]}</div></div><div class="bar"><i style="width:${(r[csS+1]||0)/mx*100}%"></i></div></div>`+
+  (isO?`<div class="child">${(lvl2==='Zone'?SUBZ:lvl2==='Facility'?['Pune','Delhi','Bengaluru','Hyderabad']:['Jul','Aug','Sep','Oct']).map((z,j)=>`<div class="row" style="cursor:default"><div class="n">${z}<small>${IN(Math.round(r[2]*scale*[.3,.25,.2,.15,.1][j]))} · del ${(r[3]-2+j).toFixed(1)}%</small></div><div><div class="v">${f(r[csS+1]==null?null:(csS===1?r[2]*scale*[.3,.25,.2,.15,.1][j]:r[csS+1]*(0.9+j*0.05)),csS)}</div></div></div>`).join('')}</div>`:'')}).join('');
+ $('csList').querySelectorAll('.row[data-n]').forEach(e=>e.onclick=()=>{const n=e.dataset.n;if(lvl2){open.has(n)?open.delete(n):open.add(n);renderCS();return;}const r=CS.find(x=>x[0]===n);sheet(`<h3>${r[0]}</h3><div class="sub" style="height:auto">1 – 25 Oct · forward</div><div class="kv">${CSC.map((c,i)=>`<div><div class="k">${c}</div><div class="v">${f(r[i+1],i)}</div></div>`).join('')}</div>`)});}
+renderGB();renderCS();
+$('csMenu').onclick=()=>sheet('<h3>Scorecard</h3><div class="frow" style="color:#1f5a3d">⇩ Export CSV</div><div class="frow">Reset view</div>');
+
+// TAT buckets
+const TAT={proc:{h:'Order creation → shipment creation · by facility',b:['0–1d','2–3d','4–5d','5+d'],rows:[['Pune',[79.7,16.6,2.7,1.0]],['Delhi',[73.7,21.8,2.7,1.8]],['Bengaluru',[73.4,24.5,1.9,.3]],['Hyderabad',[73.5,23.6,2.3,.6]],['Kolkata',[75.3,20.7,3.6,.4]],['Mumbai',[68.4,30.3,.9,.4]],['Chennai',[70.0,20.6,4.5,4.8]]],t:[76.2,20.3,2.5,1.0]},
+ pick:{h:'Shipment creation → pickup · by courier',b:['0–12h','12–24h','24–48h','48h+'],rows:[['Bluedart',[65.5,14.0,18.8,1.7]],['ElasticRun',[43.2,9.4,43.7,3.8]],['Delhivery NDD',[34.0,7.6,48.7,9.6]],['Shadowfax',[55.0,14.2,29.5,1.3]],['Delhivery',[47.1,8.7,37.0,7.2]],['Swift',[45.4,18.9,30.8,4.9]],['Safexpress',[33.7,58.4,5.7,2.3]]],t:[57.4,13.2,26.4,3.1]},
+ tran:{h:'Pickup → delivery · by courier',b:['0–1d','2–3d','4–5d','5+d'],rows:[['Bluedart',[22.6,52.5,13.3,11.7]],['ElasticRun',[83.5,14.6,1.0,.9]],['Delhivery NDD',[65.1,31.1,1.7,2.1]],['Shadowfax',[40.6,43.8,9.2,6.4]],['Delhivery',[7.1,41.3,20.5,31.1]],['Swift',[24.1,37.3,12.8,25.8]],['Safexpress',[7.3,43.7,24.6,24.3]]],t:[35.5,43.6,10.6,10.3]},
+ ful:{h:'Order creation → delivery · by facility',b:['0–1d','2–3d','4–5d','5+d'],rows:[['Pune',[2.7,43.2,35.5,18.5]],['Delhi',[2.3,34.5,38.7,24.5]],['Bengaluru',[1.4,27.9,32.4,38.3]],['Hyderabad',[.7,17.5,45.4,36.4]],['Kolkata',[.5,10.7,42.9,45.9]],['Mumbai',[1.3,31.9,47.5,19.3]],['Chennai',[0,.8,12.1,87.1]]],t:[2.1,34.5,37.7,25.7]}};
+const BC=['#1f5a3d','#5f8f75','#9cc4ad','#d5dbd7'];
+function renderTAT(v){const d=TAT[v];$('tatHint').textContent=d.h;$('tatLeg').innerHTML=d.b.map((b,i)=>`<span style="--c:${BC[i]}">${b}</span>`).join('');
+ const row=(n,a,tot)=>`<div class="tatrow ${tot?'tot':''}" data-n="${n}"><div class="h"><b>${n}</b><span><strong>${a[0]}%</strong> within ${d.b[0]}</span></div><div class="tatbar">${a.map((x,i)=>x>0?`<i style="width:${x}%;background:${BC[i]}"></i>`:'').join('')}</div><div class="tatnums">${a.map((x,i)=>`<span>${d.b[i]} <b>${x}%</b></span>`).join('')}</div></div>`;
+ $('tatList').innerHTML=row('Total',d.t,1)+d.rows.map(r=>row(r[0],r[1])).join('');
+ $('tatList').querySelectorAll('.tatrow:not(.tot)').forEach(e=>e.onclick=()=>{const r=d.rows.find(x=>x[0]===e.dataset.n);sheet(`<h3>${r[0]}</h3><div class="sub" style="height:auto">${d.h}</div><div class="kv">${d.b.map((b,i)=>`<div><div class="k">${b}</div><div class="v">${r[1][i]}%</div></div>`).join('')}</div>`)});}
+segBind('tatT',renderTAT);renderTAT('proc');
+
+// Weight
+const WT=[['0–500g',69968,40.3,2.0,4.8],['500g–1kg',41997,24.2,2.0,2.4],['1–2kg',19495,11.2,2.3,2.6],['2–5kg',23178,13.4,2.5,6.0],['5–10kg',13468,7.8,2.8,4.0],['20–50kg',2380,1.4,3.0,1.6]];
+$('wList').innerHTML=WT.map(r=>`<div class="row" data-n="${r[0]}" style="grid-template-columns:1fr auto auto"><div class="n">${r[0]}</div><div class="v">${IN(r[1])}</div><div class="m" style="min-width:40px">${r[2]}%</div><div class="bar"><i style="width:${r[2]/40.3*100}%"></i></div></div>`).join('');
+$('wList').querySelectorAll('.row').forEach(e=>e.onclick=()=>{const r=WT.find(x=>x[0]===e.dataset.n);sheet(`<h3>${r[0]} slab</h3><div class="kv"><div><div class="k">Shipments</div><div class="v">${IN(r[1])}</div></div><div><div class="k">Share</div><div class="v">${r[2]}%</div></div><div><div class="k">In-transit TAT</div><div class="v">${r[3]}d</div></div><div><div class="k">RTO %</div><div class="v">${r[4]}%</div></div></div>`)});
+segBind('wT');
+
+// Geography
+const GEO={dc:[['Mumbai',11972,20.4],['Pune',10585,18.0],['Bangalore',10549,18.0],['Thane',5276,9.0],['Hyderabad',5154,8.8],['Ahmedabad',3975,6.8],['Gurgaon',3230,5.5]],pc:[['Pune',80071,46.2],['Gurugram',35152,20.3],['Bengaluru',20034,11.5],['Hyderabad',15877,9.2],['Kolkata',11432,6.6],['Bhiwandi',10260,5.9],['Chennai',641,.4]],ds:[['Maharashtra',39654,29.5],['Karnataka',17098,12.7],['Uttar Pradesh',14413,10.7],['Gujarat',14092,10.5],['Delhi',10743,8.0],['Telangana',9592,7.1],['Haryana',8099,6.0]]};
+function renderGeo(v){const l=GEO[v];$('geoList').innerHTML=l.map(r=>`<div class="row" style="grid-template-columns:1fr auto auto"><div class="n">${r[0]}</div><div class="v">${IN(r[1])}</div><div class="m" style="min-width:40px">${r[2]}%</div><div class="bar"><i style="width:${r[2]/l[0][2]*100}%"></i></div></div>`).join('');}
+segBind('geoT',renderGeo);renderGeo('dc');
+
+// RTO
+const RTO={age:{b:['0–1d','2–4d','5–7d','8–10d','10+d'],t:[8038,[11.8,31.6,28.6,15.4,12.0]],rows:[['Bluedart',5240,[8.9,27.4,32.3,16.6,14.3]],['ElasticRun',754,[40.3,50.3,5.6,1.7,.4]],['Swift',627,[6.9,27.8,37.0,18.2,10.2]],['Delhivery NDD',577,[6.9,50.3,22.9,16.6,3.1]],['Delhivery',439,[5.9,16.6,27.1,24.6,25.5]],['Shadowfax',375,[16.5,48.8,19.7,8.0,6.4]]]},
+ del:{b:['0–1d','2–4d','5–7d','8–10d','10+d'],t:[5669,[7.7,52.9,32.0,6.2,1.1]],rows:[['Bluedart',3810,[5.2,60.0,30.3,3.9,.6]],['ElasticRun',673,[33.1,55.1,8.0,3.4,.3]],['Delhivery NDD',355,[1.7,35.5,54.6,7.3,.8]],['Swift',335,[.6,15.5,49.0,27.5,7.5]],['Shadowfax',244,[.8,30.3,53.7,13.1,2.0]],['Delhivery',230,[3.5,33.9,46.1,13.5,3.0]]]}};
+const RW=[['OTP-based cancellation',50.8],['Customer unavailable',16.4],['Order already cancelled',8.2],['Address issue',7.3],['Rejected by customer',6.6],['Customer unreachable',6.0],['Payment issue',1.6],['No attempt',.8]];
+const BC5=['#1f5a3d','#5f8f75','#9cc4ad','#c9d9cf','#e3e7e4'];
+function renderRTO(v){$('rtoDesc').innerHTML=({age:'<b style="color:#1c2420">RTO ageing</b> · pickup date → RTO mark date',del:'<b style="color:#1c2420">RTO delivery ageing</b> · RTO mark date → delivered back',why:'<b style="color:#1c2420">RTO reasons</b> · shipment count & % of total RTO'})[v];if(v==='why'){$('rtoLeg').innerHTML='<span style="color:#7b847f">% of total RTO</span>';$('rtoMenu').style.visibility='hidden';
+  $('rtoList').innerHTML=RW.map(r=>`<div class="row" style="grid-template-columns:1fr auto"><div class="n">${r[0]}</div><div class="v">${r[1]}%</div><div class="bar"><i style="width:${r[1]/50.8*100}%"></i></div></div>`).join('')+'<button class="more">Show all 16 reasons</button>';return;}
+ $('rtoMenu').style.visibility=v==='age'?'visible':'hidden';const d=RTO[v];$('rtoLeg').innerHTML=d.b.map((b,i)=>`<span style="--c:${BC5[i]}">${b}</span>`).join('');
+ const row=(n,c,a,tot)=>`<div class="row ${tot?'tot':''}"><div class="n">${n}<small>${IN(c)} RTO${v==='del'?' delivered back':''}</small></div><div><div class="v">${(a[3]+a[4]).toFixed(1)}%</div><div class="m">8d+</div></div><div class="stack">${a.map((x,i)=>`<i style="width:${x}%;background:${BC5[i]}"></i>`).join('')}</div></div>`;
+ $('rtoList').innerHTML=row('Total',d.t[0],d.t[1],1)+d.rows.map(r=>row(r[0],r[1],r[2])).join('');}
+segBind('rtoT',renderRTO);renderRTO('age');
+$('rtoMenu').onclick=()=>sheet('<h3>RTO ageing measured from</h3>'+['Order creation','Shipment creation','Pickup date'].map((x,i)=>`<div class="frow">${x}${i===2?'<span style="color:#1f5a3d">✓</span>':''}</div>`).join(''));
+
+// NDR
+const NDR=[['Bluedart',109911,9705,8.8,64.5,22.8,2.79],['ElasticRun',19220,1926,10.0,76.9,18.8,2.38],['Delhivery NDD',16645,1767,10.6,72.4,16.1,2.45],['Shadowfax',9959,1122,11.3,75.0,14.5,2.58],['Swift',7072,856,12.1,54.8,32.2,2.75],['Delhivery',8900,843,9.5,58.7,26.3,2.78],['Safexpress',1339,90,6.7,87.8,3.3,2.14]];
+$('ndrList').innerHTML=`<div class="ndrsum"><div><span class="k">NDR %</span><span class="v">9.4%</span></div><div><span class="k">→ Delivered</span><span class="v up">67.0%</span></div><div><span class="k">→ RTO</span><span class="v dn">21.6%</span></div><div class="full"><span>All couriers · 16,340 NDR</span><span>avg 2.68 attempts</span></div></div>`+NDR.map(r=>`<div class="row" data-n="${r[0]}"><div class="n">${r[0]}<small>${IN(r[2])} NDR · → del ${r[4]}% · → RTO ${r[5]}%</small></div><div><div class="v">${r[3]}%</div><div class="m">NDR</div></div></div>`).join('');
+$('ndrList').querySelectorAll('[data-n]').forEach(e=>e.onclick=()=>{const r=NDR.find(x=>x[0]===e.dataset.n);sheet(`<h3>${r[0]} · NDR</h3><div class="kv"><div><div class="k">Shipments</div><div class="v">${IN(r[1])}</div></div><div><div class="k">NDR count</div><div class="v">${IN(r[2])}</div></div><div><div class="k">NDR %</div><div class="v">${r[3]}%</div></div><div><div class="k">Avg attempts</div><div class="v">${r[6]}</div></div><div><div class="k">→ Delivered</div><div class="v">${r[4]}%</div></div><div><div class="k">→ RTO</div><div class="v">${r[5]}%</div></div></div><p class="sub" style="height:auto;margin-top:10px">Also: Del 2nd / 3rd / 3+ attempt, Avg S2D, Avg O2D (all desktop columns).</p>`)});
+segBind('ndrT');
+
+// filter sheet
+$('fbtn').onclick=()=>{const p=!$('tabP').classList.contains('hide');sheet('<h3>Filters</h3>'+(p?[['Courier','All 12'],['Courier direction','Forward'],['Shipment type','Regular'],['Pickup state','All'],['Drop state','All'],['Drop city','All'],['Payment','All'],['Category','All'],['Sub-category','All'],['Weight slab','All']]:[['Period','last 1 month'],['Courier / transporter','All'],['Sub-category','All'],['Zone','All']]).map(r=>`<div class="frow"><span>${r[0]}<small>${r[1]}</small></span><span style="color:#7b847f">›</span></div>`).join(''))};
+
+// ---------- COST ----------
+const CC=['Overview','B2C','FTL/PTL','3PL'];let cc=0;
+$('costChips').innerHTML=CC.map((c,i)=>`<button class="ch ${i?'':'on'}" data-i="${i}">${c}</button>`).join('');
+$('costChips').querySelectorAll('.ch').forEach(b=>b.onclick=()=>{$('costChips').querySelectorAll('.ch').forEach(x=>x.classList.toggle('on',x===b));cc=+b.dataset.i;renderCost();$('scroll').scrollTop=0});
+const mTrend=[3.1,3.15,3.5,3.3,4.6,3.61];
+const rl=(rows,opt={})=>rows.map(r=>`<div class="row" ${opt.click?`data-n="${r[0]}"`:''}><div class="n">${r[0]}<small>${r[2]||''}</small></div><div><div class="v">${r[1]}</div><div class="m">${r[3]||''}</div></div>${r[4]!=null?`<div class="bar"><i style="width:${r[4]}%"></i></div>`:''}</div>`).join('');
+const card=(t,body,extra='')=>`<div class="card"><div class="ct"><h2>${t}</h2>${extra}</div>${body}</div>`;
+function renderCost(){const M=$('cMaster');let body='';
+ if(cc===0){master(M,{range:'Apr – Sep 2026',gran:'Monthly · 6M',series:mTrend,split:'',tiles:[
+   {k:'Total cost',big:'₹3.61 Cr',v:'₹3.61 Cr',sub:'8.76% of shipment value · 2.56L parcels · 403 trips'},
+   {k:'B2C courier',v:'₹2.43 Cr',sub:'67.3% of spend'},{k:'FTL/PTL freight',v:'₹60.48 L',sub:'16.7% of spend'},{k:'3PL warehousing',v:'₹57.77 L',sub:'16.0% of spend'},
+   {k:'Partners',v:'16',sub:'12 carriers · 4 3PL · 6 sites'},{k:'Logistics % of value',v:'5.90%',sub:'B2C basis · freight value pending'}]});
+   M.insertAdjacentHTML('afterbegin','<div class="split"><i style="width:67.3%;background:#1f5a3d"></i><i style="width:16.7%;background:#5f8f75"></i><i style="flex:1;background:#9cc4ad"></i></div><div class="legend" style="margin-bottom:8px"><span style="--c:#1f5a3d">B2C 67%</span><span style="--c:#5f8f75">FTL/PTL 17%</span><span style="--c:#9cc4ad">3PL 16%</span></div>');
+   body=card('Partners','<div class="seg segw" id="ptT"><button class="on" data-v="b">B2C couriers</button><button data-v="f">FTL/PTL</button><button data-v="w">3PL</button></div><div id="ptList"></div>');}
+ else if(cc===1){master(M,{range:'Apr – Sep 2026',gran:'Monthly · 6M',series:[2.03,2.16,2.33,2.16,3.24,2.43],tiles:[
+   {k:'B2C cost',name:'B2C logistics cost',big:'₹2.43 Cr',v:'₹2.43 Cr',dv:-24.8,good:true,sub:'5.90% of GMV · 2.56L invoices · 5.86L kg billed'},
+   {k:'Shipment value',v:'₹41.24 Cr',sub:'goods shipped'},{k:'Cost per kg',v:'₹41.49',s:[28.5,28.95,32.61,34.24,36.95,41.49],sub:'5.86L kg billed'},
+   {k:'Cost / shpmt',name:'Avg cost / shipment',v:'₹94.91',s:[121.1,126.0,125.35,110.99,102.48,94.91],sub:'freight + invoices'},{k:'Surcharge %',name:'Surcharge % of freight',v:'29.5%',sub:'₹71.71L of ₹2.43 Cr billed'},
+   {k:'Wasted freight',name:'Wasted freight (returns)',v:'₹47.12 L',red:1,sub:'44,719 legs · 19.4% of spend'}]});
+   body=card('Couriers',`<div class="chipsc"><button class="s on">Cost</button><button class="s">₹ / shipment</button><button class="s">₹ / kg</button><button class="s">Over-weight</button></div>`+rl([['Bluedart','₹1.46 Cr','1,62,018 · ₹89.85/shpmt · ₹45.45/kg','59.9% · over-wt 16.8%',100],['Delhivery','₹68.08 L','60,598 · ₹112.34/shpmt · ₹43.34/kg','28.0% · over-wt <b style="color:#c0392b">26.6%</b>',47],['ElasticRun','₹14.11 L','21,462 · ₹65.73/shpmt · ₹25.50/kg','5.8% · over-wt <b style="color:#c0392b">31.5%</b>',10],['Swift','₹13.57 L','9,341 · ₹145.28/shpmt','5.6%',9],['SkyAir','₹1.01 L','1,981 · ₹51.02/shpmt','0.4%',1]]),'<span class="cnt">8 partners</span>')
+   +card('Where the money goes','<div class="seg segw" id="wmT"><button class="on" data-v="z">By zone</button><button data-v="l">By leg</button></div><div id="wmList"></div>')
+   +card('Weight slabs',rl([['0.5 kg','₹51.19 L','1,13,187 shpmt · ₹45 avg','21.1% · ₹95.5/kg',100],['1 kg','₹41.21 L','55,646 · ₹74 avg','17.0% · ₹80/kg',80],['2 kg','₹42.25 L','39,533 · ₹107 avg','17.4% · ₹61.3/kg',82],['3 kg','₹13.77 L','10,755 · ₹128 avg','5.7%',27]])+'<button class="more">Show all slabs</button>','<button class="more3">⋯</button>')
+   +card('Rate drift (₹/kg)',rl([['Bluedart','<span class="dn">+39.1%</span>','₹32.67 → ₹45.45 · 9 months'],['Bluedart B2B','<span class="dn">+35.5%</span>','₹21.77 → ₹29.51 · 9 months'],['Safexpress','<span class="dn">+29.0%</span>','₹12.76 → ₹16.47 · 6 months'],['Swift','<span class="dn">+25.5%</span>','₹24.58 → ₹30.84 · 9 months'],['ElasticRun','<span class="dn">+11.7%</span>','₹22.84 → ₹25.50']]),'<span class="cnt">first → latest</span>')
+   +card('Cost by product',rl([['Orthotics ›','₹56.44 L','1,07,240 shpmt · ₹63/order','over-wt <b style="color:#c0392b">16.5%</b>'],['Footwear ›','₹54.52 L','60,875 · ₹109/order','over-wt <b style="color:#c0392b">20.5%</b>'],['Mixed shipments ›','₹33.39 L','22,920 · ₹159/order',''],['Pillows ›','₹32.86 L','21,482 · ₹170/order','over-wt 16.2%']])+'<button class="more">Show all categories</button>','<span class="cnt">category → sub-cat</span>')
+   +card('Like-for-like courier cost',`<div class="chipsc"><button class="s on">All zones</button><button class="s">All weights</button><button class="s">All legs</button></div>`+rl([['Urbanbolt','₹34.31','17,699 shpmt · ₹40.15/kg','<b class="up">cheapest</b>',11],['SkyAir','₹53.86','28,088 · ₹36.77/kg','<span class="dn">+₹19.55</span>',17],['ElasticRun','₹58.49','96,105 · ₹27.64/kg','<span class="dn">+₹24.18</span>',19],['Delhivery','₹86.03','2,19,284 · ₹50.90/kg','<span class="dn">+₹51.72</span>',28],['Bluedart','₹96.14','10,82,262 · ₹39.99/kg','<span class="dn">+₹61.83</span>',31]]),'<span class="cnt">avg ₹ / shipment</span>');}
+ else if(cc===2){master(M,{range:'Apr – Sep 2026',gran:'Monthly · 6M',series:[70.76,66.09,84.74,76.93,64.03,60.48],tiles:[
+   {k:'Freight cost',name:'Total freight cost',big:'₹60.48 L',v:'₹60.48 L',dv:-5.5,good:true,sub:'403 trips · 34 lanes'},
+   {k:'Avg cost / trip',v:'₹15,009',s:[15900,15662,15296,14247,13890,15009],sub:'across 34 lanes'},{k:'Rental vehicles',name:'Rental fixed vehicle',v:'₹2.35 L',sub:'4 vehicles · 1 mo carried'},
+   {k:'Dearest vehicle',v:'₹47,100',sub:'22FT per trip'},
+   {k:'Top transporter',name:'Top transporter share',v:'81.3%',red:1,sub:'Jopadevi · ₹49.18L'},{k:'Top 3 lanes',name:'Top 3 lane share',v:'41.0%',sub:'of total freight spend'},
+   {k:'Single-sourced',name:'Single-sourced spend',v:'70.3%',sub:'30 of 34 lanes, one carrier'},{k:'Transporters',v:'4',sub:'₹1.52L on the smallest'}]});
+   body=card('Transporters',rl([['Jopadevi','₹49.18 L','294 trips · ₹16,728/trip','81.3%',100],['Reliable','₹6.84 L','23 trips · ₹29,752/trip','11.3%',14],['ARB Logistic','₹2.94 L','53 trips · ₹5,540/trip','4.9%',6],['KM-Logistic','₹1.52 L','33 trips · ₹4,621/trip','2.5%',3]]))
+   +card('Vehicle types','<div class="seg segw"><button class="on">Total spend</button><button>Cost per trip</button></div>'+rl([['32FT','₹15.61 L','35 trips · ₹44,603/trip · 9 lanes','25.8%',100],['PICKUP','₹15.20 L','141 trips · ₹10,780/trip','25.1%',97],['20FT','₹14.00 L','66 trips · ₹21,211/trip','23.1%',90],['14FT','₹11.05 L','99 trips · ₹11,158/trip','18.3%',71]])+'<button class="more">Show all 9</button>')
+   +card('Lanes',rl([['Pune → Kolkata · 32FT','₹2.14 L','2 trips · ₹1,07,000/trip','min ₹1.04L · max ₹1.10L'],['Pune → Bangalore · 32FT','₹1.65 L','3 trips · ₹55,000/trip',''],['Nashik → Pune · 7.5T','₹1.59 L','25 trips · ₹6,376/trip','min ₹1.90K · max ₹9.10K'],['Pune → Delhi NCR · 32FT','₹1.56 L','2 trips · ₹78,000/trip','']])+'<button class="more">Show all 34 lanes</button>','<button class="more3">🔍</button>')
+   +card('Rate consistency',rl([['Pune → Pune · 32FT','<span class="dn">+9150%</span>','cheapest → dearest trip'],['Pune → Pune · 20FT','<span class="dn">+6289%</span>',''],['Nashik → Pune · 7.5T','<span class="dn">+5540%</span>',''],['Pune → Hyderabad · 20FT','<span class="dn">+1700%</span>','']]),'<span class="cnt">min 8 trips</span>')
+   +card('Freight type mix','<div class="split" style="height:10px"><i style="width:95.1%;background:#1f5a3d"></i><i style="flex:1;background:#9cc4ad"></i></div><div class="legend"><span style="--c:#1f5a3d">FTL 95.1%</span><span style="--c:#9cc4ad">PTL 4.9%</span></div>');}
+ else {master(M,{range:'Apr – Sep 2026',gran:'Monthly · 6M',series:[43,41,45,45,50,57.77],tiles:[
+   {k:'Warehousing',name:'Total warehousing cost',big:'₹57.77 L',v:'₹57.77 L',sub:'4 partners · 6 sites · <span class="dn">▲ 55.3% ₹/parcel vs Aug</span>'},
+   {k:'Cost / parcel',v:'₹47.6',s:[66,53,59,55,38,47.6],sub:'across 1,21,341 parcels'},{k:'Cost / kg',v:'₹28.6',sub:'2,01,903 kg handled'},
+   {k:'Avg parcel weight',v:'1.66 kg',sub:'shipped weight ÷ parcels'},{k:'Cost / site / month',v:'₹9.63 L',sub:'6 sites · 1 month'},
+   {k:'Operations',v:'₹43.52 L',s:[31,30,29,29.5,34,39],sub:'75.3% of spend'},{k:'Rental',v:'₹14.25 L',s:[12,11,15,15,12,12],sub:'24.7% · fixed, volume-blind'},
+   {k:'Warehousing % of value',v:'1.40%',sub:'₹57.77 L on ₹41.24 Cr shipped'}]});
+   M.insertAdjacentHTML('afterbegin','<div class="split"><i style="width:75.3%;background:#1f5a3d"></i><i style="flex:1;background:#9cc4ad"></i></div><div class="legend" style="margin-bottom:8px"><span style="--c:#1f5a3d">Operations 75%</span><span style="--c:#9cc4ad">Rental 25%</span></div>');
+   body=card('Partners','<div class="chipsc"><button class="s on">Spend</button><button class="s">₹ / parcel</button><button class="s">₹ / kg</button></div>'+
+    [['Hexalog','₹38.46 L','3 sites · ₹54.6/parcel · ₹29.6/kg',66.6,58],['Beyond Sqfeet','₹8.32 L','1 site · ₹32.0/parcel · ₹32.4/kg',14.4,21],['Aaj SCM','₹5.50 L','1 site · ₹65.8/parcel · ₹26.6/kg',9.5,7],['Losung','₹5.49 L','1 site · ₹33.3/parcel · ₹21.3/kg',9.5,14]].map(r=>
+    `<div class="row"><div class="n">${r[0]}<small>${r[2]}</small></div><div><div class="v">${r[1]}</div><div class="m">${r[3]}% spend · ${r[4]}% parcels</div></div><div class="bar" style="height:auto;background:none;display:grid;gap:2px"><i style="height:3px;width:${r[3]}%;border-radius:2px"></i><i style="height:3px;width:${r[4]}%;background:#9cc4ad;border-radius:2px"></i></div></div>`).join('')+
+    '<div class="legend" style="margin-top:8px"><span style="--c:#1f5a3d">% of spend</span><span style="--c:#9cc4ad">% of parcels</span><span>spend &gt; parcels = above blended rate</span></div>','<span class="cnt">spend vs volume</span>')
+   +card('Warehouses (sites)',rl([['Hexalog_GGN2','₹24.37 L','Hexalog · Haryana 122503 · 43,558 parcels','₹56.0/parcel · ₹30.6/kg'],['myfrido-BLR_Hexalog','₹13.43 L','Hexalog · Bangalore · 26,771','₹50.2 · ₹26.8/kg'],['Beyond_Mum','₹8.32 L','Beyond Sqfeet · Mumbai · 26,040','₹32.0 · ₹32.4/kg'],['Aaj_Kol_Item','₹5.50 L','Aaj SCM · Kolkata · 8,356','₹65.8 · ₹26.6/kg'],['Losung_Hyderabad','₹5.49 L','Losung · Hyderabad · 16,497','₹33.3 · ₹21.3/kg'],['Gurgaon_Hexalog','₹65.98 K','Hexalog · Haryana · 119 parcels','<b class="dn">₹554.5/parcel</b>']]),'<button class="more3">🔍</button>')
+   +card('Site trend (₹ / parcel)','<div class="chipsc"><button class="s on">Hexalog_GGN2</button><button class="s">myfrido-BLR</button><button class="s">Beyond_Mum</button><button class="s">Aaj_Kol</button><button class="s">Losung_Hyd</button><button class="s">Gurgaon</button></div><svg viewBox="0 0 320 90" style="width:100%;height:90px"><polyline fill="none" stroke="#1f5a3d" stroke-width="2.2" points="0,40 64,45 128,30 192,42 256,58 320,36"/><polyline fill="none" stroke="#c9cfcb" stroke-width="1.5" stroke-dasharray="4 4" points="0,48 320,48"/></svg><div class="legend"><span style="--c:#1f5a3d">Selected site</span><span style="--c:#c9cfcb">Blended rate</span><span style="margin-left:auto">Apr – Sep</span></div>');}
+ $('cBody').innerHTML=body;
+ if(cc===0){const P={b:[['Bluedart','₹1.46 Cr','1.62L shpmt · ₹90/shpmt · ₹45.5/kg','59.9%',100],['Delhivery','₹68.08 L','60.6K · ₹112/shpmt','28.0%',47],['ElasticRun','₹14.11 L','21.5K · ₹66/shpmt','5.8%',10],['Swift','₹13.57 L','9.3K · ₹145/shpmt','5.6%',9],['SkyAir','₹1.01 L','2.0K · ₹51/shpmt','0.4%',1]],f:[['Jopadevi','₹49.18 L','294 trips · ₹16,728/trip','81.3%',100],['Reliable','₹6.84 L','23 trips','11.3%',14],['ARB Logistic','₹2.94 L','53 trips','4.9%',6],['KM-Logistic','₹1.52 L','33 trips','2.5%',3],['Rental fixed vehicle','₹2.35 L','4 vehicles · fixed','—',5]],w:[['Hexalog','₹38.46 L','3 sites · ₹54.6/parcel','66.6%',100],['Beyond Sqfeet','₹8.32 L','1 site','14.4%',22],['Aaj SCM','₹5.50 L','1 site','9.5%',14],['Losung','₹5.49 L','1 site','9.5%',14]]};
+   const r=v=>$('ptList').innerHTML=rl(P[v])+'<button class="more">Show all</button>';segBind('ptT',r);r('b');}
+ if(cc===1){const Z={z:[['Zone D','₹1.50 Cr*','1,52,018 shpmt · ₹98.74 · ₹46.54/kg','61.7%',100],['Zone C','₹32 L*','31,910 · ₹100.82','13.2%',21],['Zone B','₹27 L*','27,732 · ₹97.42','11.1%',18],['Zone A','₹21 L*','34,529 · ₹60.15','8.5%',14],['Zone E','₹13 L*','9,977 · ₹131.03','5.4%',9]],l:[['Forward','₹1.96 Cr','2,11,447 · ₹92.70/shpmt','80.6%',100],['Reverse','₹36.04 L','38,249 · ₹94.22/shpmt','14.8%',18],['RTO','₹11.08 L','6,470 · ₹171.27/shpmt','4.6%',6]]};
+   const r=v=>$('wmList').innerHTML=rl(Z[v]);segBind('wmT',r);r('z');}
+}
+document.querySelectorAll('.subrow button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.subrow button').forEach(x=>x.classList.toggle('on',x===b));const p=b.dataset.t==='p';
+ $('tabP').classList.toggle('hide',!p);$('tabC').classList.toggle('hide',p);$('costChips').classList.toggle('hide',p);
+ $('pill').textContent=p?'📅 1 – 25 Oct':'📅 Sep 2026';$('upd').textContent=p?'Forward · Regular shipments':'Billing month · last 1 month';$('fb').textContent=p?'1':'1';
+ if(!p)renderCost();$('scroll').scrollTop=0;});
+</script>
+</body>
+</html>
