@@ -54,7 +54,7 @@ function TplMaster({ f, tplTrend, layout }) {
     { key: 'pct', label: 'Warehousing % of value', tileLabel: '% of value', value: f.tplValuePct != null ? f.tplValuePct.toFixed(2) + '%' : '—', sub: f.tplValuePct != null ? `${fmt(t.cost)} on ${fmt(f.tplShipValue)} shipped` : 'no matching months', deltasHidden: true },
   ]
   return (
-    <MasterTrendCard small metrics={metrics} rawRows={tplTrend} groupTrend={groupTrend} layout={layout} granularity="monthly"
+    <MasterTrendCard metrics={metrics} rawRows={tplTrend} groupTrend={groupTrend} layout={layout} granularity="monthly"
       note={<SplitTop parts={[
         { key: 'ops', label: 'Operations', value: t.operation_fee || 0, color: M.green },
         { key: 'rent', label: 'Rental', value: t.rental_fee || 0, color: M.g3 },

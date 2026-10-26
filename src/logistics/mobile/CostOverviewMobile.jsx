@@ -44,7 +44,7 @@ export function CostMaster({ overall, months, trendWindow, setTrendWindow, layou
     { key: 'pct', label: 'Logistics % of value', tileLabel: '% of value', value: pctValue.value, sub: pctValue.sub, deltasHidden: true, def: 'Logistics cost ÷ shipment value.' },
   ]
   return (
-    <MasterTrendCard small metrics={metrics} rawRows={months} groupTrend={groupTrend} layout={layout} granularity="monthly"
+    <MasterTrendCard metrics={metrics} rawRows={months} groupTrend={groupTrend} layout={layout} granularity="monthly"
       windowMenu={{ title: 'Show months', options: TREND_WINDOWS, value: trendWindow, onChange: setTrendWindow }}
       note={<SplitTop parts={[
         { key: 'b2c', label: 'B2C', value: o.b2cCost, color: M.green },

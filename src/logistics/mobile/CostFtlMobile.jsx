@@ -39,7 +39,7 @@ function FtlMaster({ b2b, b2bHead, b2bVariance, fixedVeh, vehicleRows, transRows
   ]
   return (
     <div>
-      <MasterTrendCard small metrics={metrics} rawRows={trendWindow} groupTrend={groupTrend} layout={layout} granularity="monthly"
+      <MasterTrendCard metrics={metrics} rawRows={trendWindow} groupTrend={groupTrend} layout={layout} granularity="monthly"
         windowMenu={{ title: 'Show months', options: FTL_WINDOWS, value: trendMonths, onChange: setTrendMonths }} />
       <ShowAllButton onClick={onShowTable}>Show monthly table →</ShowAllButton>
     </div>
