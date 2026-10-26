@@ -4,7 +4,7 @@ import { fmtNum, fmtInt, fmtDays } from '../theme.jsx'
 import SegmentToggle from '../../responsive/SegmentToggle.jsx'
 import BottomSheet from '../../responsive/BottomSheet.jsx'
 import FullScreenList from '../../responsive/FullScreenList.jsx'
-import { Card, RowText, ShowAllButton } from './ui.jsx'
+import { Card, RowText, ShowAllButton } from '../../responsive/CardKit.jsx'
 
 // Ageing stock (INVENTORY_MOBILE_REDESIGN_PROMPT.md §2d): one card with Slow moving / Dead stock
 // (the desktop's two sub-category tables, Spare Parts already removed by the page). Full names, no

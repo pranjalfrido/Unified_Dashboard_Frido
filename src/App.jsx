@@ -42,6 +42,7 @@ import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
 import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
 import { invCaption } from './inventory/mobile/invCaption.js'
 import LogPerfFilterButton from './logistics/mobile/LogPerfFilters.jsx'
+import PerfMobile from './logistics/mobile/PerfMobile.jsx'
 import { HeaderFilterIcon, HeaderMonthPill } from './logistics/mobile/LogHeaderBits.jsx'
 import { perfCaption, perfStripItems, perfRemove, perfClear } from './logistics/mobile/logPerfFilterState.js'
 import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
@@ -426,6 +427,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
   const isMobile = useIsMobile()
+  // Below 1024px (and phone landscape) the page renders the mobile layout (PerfMobile) instead.
+  const bpL = useBreakpoint()
+  const logMobile = bpL.width < 1024 || bpL.isPhoneLandscape
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
     if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
@@ -966,6 +970,25 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount, onRefresh: fetchLogistics, loading })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onFilterUI, lFilters, lActiveCount, opts, fetchLogistics, loading])
+
+  if (logMobile) {
+    // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative' }}>
+        <LoadingOverlay loading={loading} label="Loading logistics" />
+        {error && !rawData && !staleData && (
+          <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
+            Could not load logistics data. <button type="button" onClick={fetchLogistics} style={{ border: 'none', background: 'none', color: C.m.green, fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer' }}>Retry</button>
+          </div>
+        )}
+        {data && (
+          <PerfMobile data={data} prevData={prevData} breakdownSrc={breakdownSrc} filters={filters} lFilters={lFilters}
+            sc={{ cSelected, setCSelected, cPrimary, setCPrimary, cView, cDrill, cTier, setCTier, cPayment, setCPayment }}
+            rtoAgeingBase={rtoAgeingBase} setRtoAgeingBase={setRtoAgeingBase} ndrPayFilter={ndrPayFilter} setNdrPayFilter={setNdrPayFilter} />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
