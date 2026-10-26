@@ -1,0 +1,413 @@
+{
+  "sales/all": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹57.74 Cr",
+        "mobile": "gross rev",
+        "mv": "₹57.74 Cr"
+      },
+      {
+        "desktop": "net revenue",
+        "dv": "₹43.71 Cr",
+        "mobile": "net rev",
+        "mv": "₹43.71 Cr"
+      },
+      {
+        "desktop": "revenue at risk",
+        "dv": "₹6.24 Cr",
+        "mobile": "rev at risk",
+        "mv": "₹6.24 Cr"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,612",
+        "mobile": "aov",
+        "mv": "₹1,612"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹1.75 Cr",
+        "mobile": "avg net/day",
+        "mv": "₹1.75 Cr"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,309",
+        "mobile": "asp",
+        "mv": "₹1,309"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹6.60 Cr",
+        "mobile": "gst",
+        "mv": "₹6.60 Cr"
+      },
+      {
+        "desktop": "repeat customer rate",
+        "dv": "34.9%"
+      },
+      {
+        "desktop": "returns %",
+        "dv": "14.5%",
+        "mobile": "returns",
+        "mv": "14.5%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/shopify/myfrido": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹24.98 Cr",
+        "mobile": "gross rev",
+        "mv": "₹24.98 Cr"
+      },
+      {
+        "desktop": "net revenue ex gst",
+        "dv": "₹18.21 Cr",
+        "mobile": "net rev",
+        "mv": "₹18.21 Cr"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹2.55 Cr",
+        "mobile": "gst"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹72.86 L",
+        "mobile": "avg net/day",
+        "mv": "₹72.86 L"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,711",
+        "mobile": "aov",
+        "mv": "₹1,711"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,245",
+        "mobile": "asp",
+        "mv": "₹1,245"
+      },
+      {
+        "desktop": "returns %",
+        "dv": "17.5%",
+        "mobile": "returns",
+        "mv": "17.5%"
+      },
+      {
+        "desktop": "rto %",
+        "dv": "6.7%",
+        "mobile": "rto %",
+        "mv": "6.7%"
+      },
+      {
+        "desktop": "cir %",
+        "dv": "6.6%",
+        "mobile": "cir %",
+        "mv": "6.6%"
+      },
+      {
+        "desktop": "cancellation %",
+        "dv": "4.2%",
+        "mobile": "cancel %",
+        "mv": "4.2%"
+      },
+      {
+        "desktop": "exchange %",
+        "dv": "6.4%",
+        "mobile": "exchange %",
+        "mv": "6.4%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/amazon/seller_central": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹7.45 Cr",
+        "mobile": "gross rev",
+        "mv": "₹7.45 Cr"
+      },
+      {
+        "desktop": "net revenue",
+        "dv": "₹5.71 Cr",
+        "mobile": "net rev",
+        "mv": "₹5.71 Cr"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹83.94 L",
+        "mobile": "gst",
+        "mv": "₹83.94 L"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹29.82 L",
+        "mobile": "avg net/day",
+        "mv": "₹29.82 L"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,244",
+        "mobile": "asp",
+        "mv": "₹1,244"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,337",
+        "mobile": "aov",
+        "mv": "₹1,337"
+      },
+      {
+        "desktop": "cancellation rate",
+        "dv": "9.3%",
+        "mobile": "cancel rate",
+        "mv": "9.3%"
+      },
+      {
+        "desktop": "returns % (sc)",
+        "dv": "13.7%",
+        "mobile": "returns",
+        "mv": "13.7%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/flipkart": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹2.63 Cr",
+        "mobile": "gross rev",
+        "mv": "₹2.63 Cr"
+      },
+      {
+        "desktop": "net revenue ex gst",
+        "dv": "₹2.03 Cr",
+        "mobile": "net rev",
+        "mv": "₹2.03 Cr"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹8.11 L",
+        "mobile": "avg net/day",
+        "mv": "₹8.11 L"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,505",
+        "mobile": "aov",
+        "mv": "₹1,505"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,374",
+        "mobile": "asp",
+        "mv": "₹1,374"
+      },
+      {
+        "desktop": "delivered %",
+        "dv": "94.9%"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹22.24 L",
+        "mobile": "gst",
+        "mv": "₹22.24 L"
+      },
+      {
+        "desktop": "cancellation %",
+        "dv": "2.6%",
+        "mobile": "cancel %",
+        "mv": "2.6%"
+      },
+      {
+        "desktop": "returns %",
+        "dv": "15.8%",
+        "mobile": "returns",
+        "mv": "15.8%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/ebo": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹2.92 Cr",
+        "mobile": "gross rev",
+        "mv": "₹2.92 Cr"
+      },
+      {
+        "desktop": "net revenue",
+        "dv": "₹2.39 Cr",
+        "mobile": "net rev",
+        "mv": "₹2.39 Cr"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹28.48 L",
+        "mobile": "gst"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹9.56 L",
+        "mobile": "avg net/day",
+        "mv": "₹9.56 L"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹4,303",
+        "mobile": "aov",
+        "mv": "₹4,303"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹3,030",
+        "mobile": "asp",
+        "mv": "₹3,030"
+      },
+      {
+        "desktop": "returns %",
+        "dv": "8.4%",
+        "mobile": "returns",
+        "mv": "8.4%"
+      },
+      {
+        "desktop": "rto %",
+        "dv": "3.1%",
+        "mobile": "rto %",
+        "mv": "3.1%"
+      },
+      {
+        "desktop": "cir %",
+        "dv": "2.7%",
+        "mobile": "cir %",
+        "mv": "2.7%"
+      },
+      {
+        "desktop": "cancellation %",
+        "dv": "2.6%",
+        "mobile": "cancel %",
+        "mv": "2.6%"
+      },
+      {
+        "desktop": "exchange %",
+        "dv": "2.4%",
+        "mobile": "exchange %",
+        "mv": "2.4%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/offline/overall": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹4.77 Cr",
+        "mobile": "gross rev",
+        "mv": "₹4.77 Cr"
+      },
+      {
+        "desktop": "net revenue",
+        "dv": "₹3.59 Cr",
+        "mobile": "net rev",
+        "mv": "₹3.59 Cr"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹51.20 L",
+        "mobile": "gst"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹19.09 L",
+        "mobile": "avg net/day",
+        "mv": "₹19.09 L"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,06,304",
+        "mobile": "aov",
+        "mv": "₹1,06,304"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,462",
+        "mobile": "asp",
+        "mv": "₹1,462"
+      },
+      {
+        "desktop": "orders",
+        "dv": "449",
+        "mobile": "orders",
+        "mv": "449"
+      },
+      {
+        "desktop": "units / order",
+        "dv": "73",
+        "mobile": "units / order",
+        "mv": "73"
+      },
+      {
+        "desktop": "credit notes %",
+        "dv": "14.0%",
+        "mobile": "credit notes %",
+        "mv": "14.0%"
+      }
+    ],
+    "mobileOnly": []
+  },
+  "sales/zepto": {
+    "rows": [
+      {
+        "desktop": "gross revenue inc gst",
+        "dv": "₹14.90 L",
+        "mobile": "gross rev",
+        "mv": "₹14.90 L"
+      },
+      {
+        "desktop": "net revenue",
+        "dv": "₹12.89 L",
+        "mobile": "net rev",
+        "mv": "₹12.89 L"
+      },
+      {
+        "desktop": "gst",
+        "dv": "₹2.01 L",
+        "mobile": "gst"
+      },
+      {
+        "desktop": "daily avg net rev",
+        "dv": "₹51.57 K",
+        "mobile": "avg net/day",
+        "mv": "₹51.57 K"
+      },
+      {
+        "desktop": "orders",
+        "dv": "923",
+        "mobile": "orders",
+        "mv": "923"
+      },
+      {
+        "desktop": "aov",
+        "dv": "₹1,614",
+        "mobile": "aov",
+        "mv": "₹1,614"
+      },
+      {
+        "desktop": "asp",
+        "dv": "₹1,287",
+        "mobile": "asp",
+        "mv": "₹1,287"
+      }
+    ],
+    "mobileOnly": []
+  }
+}
