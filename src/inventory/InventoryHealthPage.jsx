@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
-import { useIsMobile } from '../responsive/useBreakpoint.js'
+import { useIsMobile, useBreakpoint } from '../responsive/useBreakpoint.js'
+import InventoryHealthMobile from './mobile/InventoryHealthMobile.jsx'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
@@ -1199,6 +1200,7 @@ function InvFilterPopover({ filters, setFilters, data, sidebarTop, facilityView,
 
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen, facilityViewProp, setFacilityViewProp, asOf, lastSalesDate, allowedTabs, invMobile = false, onMenu }) {
   const isMobile = useIsMobile()
+  const bp = useBreakpoint()
   const [search, setSearch] = useState('')
   const searchDebounceRef = useRef(null)
   const handleSearchChange = useCallback(e => {
@@ -1505,6 +1507,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // Users with only inventory:detail access see just the Inventory Detail table — KPIs and
   // Warehouse Health are hidden. Full inventory access (or admin) sees everything.
   const showDetailOnly = allowedTabs != null && !allowedTabs.includes('inventory') && allowedTabs.includes('inventory:detail')
+
+  // Below 1024px: the mobile view (INVENTORY_MOBILE_REDESIGN_PROMPT.md §2), Regular facilities only.
+  if (invMobile) {
+    return (
+      <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
+        layout={bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'} showDetailOnly={showDetailOnly} />
+    )
+  }
 
   // The collapse-toggle button used to sit in normal document flow right after the fixed
   // sidebar, assuming it would land flush against the sidebar's edge — but a position:fixed

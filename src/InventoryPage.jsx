@@ -8,6 +8,7 @@ import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
 import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
+import InvTabletBar from './inventory/mobile/InvTabletBar.jsx'
 
 // Inventory Health's Avg Sale/DOI always use useEndpoint's default trailing-7-day window
 // (getDefaultDates()) — no visible date picker for that tab, so those numbers always read
@@ -684,6 +685,17 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
         ))}
       </div>
 
+      {/* Tablets: the phone header's controls (sub-tabs, filters, "⋯") as a row above the content. */}
+      {invMobile && bp.width > 768 && !bp.isPhoneLandscape && (
+        <InvTabletBar tab={tab === 'sales' ? 'sales' : 'health'} setTab={setTab}
+          tabs={[(!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')) && { id: 'health', label: 'Inventory Health' }, (!allowedTabs || allowedTabs.includes('inventory:sales')) && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)}
+          ctrl={{
+            invHealthFilters: healthFilters, setInvHealthFilters: setHealthFilters, invHealthOpts: inv.data?.filterOptions || null,
+            invHealthAsOf: inv.data?.asOf || null, invHealthLastSales: inv.data?.lastSalesDateConsidered || null,
+            invSalesFilters: salesFilters, setInvSalesFilters: setSalesFilters, invSalesOpts: sales.data?.filterOptions || null,
+            invSalesLastSales: sales.data?.lastSalesDateConsidered || null, invMenu: tab === 'sales' ? salesMenu : healthMenu,
+          }} />
+      )}
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <LoadingOverlay loading={active.loading} label="Loading inventory" />
