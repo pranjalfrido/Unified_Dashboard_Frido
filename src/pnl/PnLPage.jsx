@@ -177,7 +177,7 @@ function loadPnlPrev(loadPeriod, key, start, end) {
 // The small per-view result (one channel / sub-tab's previous-period KPI totals) is also kept in
 // sessionStorage, so the ▲/▼ come back instantly for the rest of the session — after a reload too —
 // without re-running the ~16 s live load. Storage can be full or disabled: try/catch, then reload.
-const PREV_SS = 'pnl.prev.'
+const PREV_SS = 'pnl.prev2.' // v2: summaries carry per-product rows + daily series
 const readPrevSummary = sig => { try { const v = sessionStorage.getItem(PREV_SS + sig); return v ? JSON.parse(v) : null } catch { return null } }
 const writePrevSummary = (sig, v) => { try { sessionStorage.setItem(PREV_SS + sig, JSON.stringify(v)) } catch { /* quota / private mode */ } }
 function loadCogsMonthly(startDate, endDate) {
@@ -2107,9 +2107,24 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const summarySig = summaryReady ? JSON.stringify([activeData.gross, activeData.net, kpiSummary.cogs, kpiSummary.snd, kpiSummary.spend, kpiSummary.cm2]) : null
   useEffect(() => {
     if (!summaryReady || !onSummary) return
+    // Per-product rows (gross, units, returns — the same netRevenueOf() figures the previous
+    // period's own Financial View would show) for the watchlist's "Returns up" / "ASP down", and the
+    // daily series for the mobile chart's dashed previous-period line.
+    const rows = {}
+    Object.entries(activeData.subCatData || {}).forEach(([cat, scMap]) => Object.entries(scMap).forEach(([sc, d]) => {
+      const r = netRevenueOf(d, sc, activeMobilityNetBySubCat, cat, activeNetScale)
+      rows[`${cat}::${sc}`] = { gross: r.gross, units: r.units, returnRev: r.totalReturnRev }
+    }))
+    const byDate = {}
+    ;(activeData.daily || []).forEach(d => {
+      const x = byDate[d.date] || (byDate[d.date] = { date: d.date, rev: 0, excRev: 0, units: 0 })
+      x.rev += d.rev || 0; x.excRev += d.excRev || 0; x.units += d.units || 0
+    })
+    ;(activeData.dailyPnL || []).forEach(d => { if (byDate[d.date]) Object.assign(byDate[d.date], d) })
     onSummary({
-      gross: activeData.gross, net: activeData.net, returnRev: activeData.returnRev, orders: activeData.orders,
+      gross: activeData.gross, net: activeData.net, returnRev: activeData.returnRev, orders: activeData.orders, units: activeData.units,
       cogs: kpiSummary.cogs, gm: kpiSummary.gm, snd: kpiSummary.snd, cm1: kpiSummary.cm1, spend: kpiSummary.spend, roas: kpiSummary.roas, cm2: kpiSummary.cm2,
+      rows, daily: Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)),
     })
   }, [summarySig]) // eslint-disable-line react-hooks/exhaustive-deps -- summarySig captures every reported value
   if (summaryOnly) return null
