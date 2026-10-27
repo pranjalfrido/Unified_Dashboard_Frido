@@ -94,3 +94,26 @@ Sale-campaign → product mapping; "Socks" in the item master; CRED spend Sep / 
 - **D6** (Unmatched ad spend row on P&L quick commerce): PR #25 was still open, so `fix/pnl-unmatched-spend` was not created (your rule). Answer recorded in DECISIONS.
 - Nothing deferred (every item took under 20 minutes).
 - Ads D7 October tile didn't load within the check's wait; old → new uses Sep vs Aug.
+
+## Preview check
+
+**1. Direct preview URLs (latest pushes)**
+
+| Branch | Open this |
+|---|---|
+| `feature/responsive-pnl` (ef800e74) | https://frido-navigator-7gnhcxmsg-pranjal-tripathi-s-projects.vercel.app/pnl/shopify |
+| `feature/responsive-ads` (c4e7e8d1) | https://frido-navigator-ic9yzl8y9-pranjal-tripathi-s-projects.vercel.app/ads |
+| `feature/responsive-customer` (319298b5 + this report) | https://frido-navigator-mvoa4m3np-pranjal-tripathi-s-projects.vercel.app/customer and `/customer-support` |
+
+Each push gets a new address; the newest one is on the branch's latest GitHub commit ("View deployment"). Open it on the phone (or browser width < 1024px).
+
+**2. Login redirect: not the cause, no code change.**
+- The app's login is Supabase email + password (`signInWithPassword`, `src/LoginPage.jsx`); it never redirects, and stays on the address you opened. "Forgot password" posts a request to the team (Teams), it doesn't send a Supabase email. No production domain is hard-coded (`src/`, `vercel.json`, `index.html`), and there is no service worker.
+- What does happen: every preview is behind **Vercel's own sign-in** (Deployment Protection). A signed-out browser is sent to vercel.com/login and back to the preview after signing in. Production (`frido-navigator.vercel.app`) is open (HTTP 200), so it's the address you land on if you follow the domain shown on a Vercel dashboard page, which is what my earlier links were.
+- **Supabase → Auth → URL Configuration: nothing is required** for this login. Only if you later add email links (password-reset or magic-link emails), add to Redirect URLs: `https://frido-navigator-*-pranjal-tripathi-s-projects.vercel.app/**` and `http://127.0.0.1:510*/**`; Site URL stays `https://frido-navigator.vercel.app`.
+
+**3. New layout at 375px**
+- On the previews themselves an automated browser stops at Vercel's sign-in (screenshots `preview-check/preview-{pnl,ads,customer}-unauthenticated.png`), so it can't log in there without a bypass token. To allow it: Vercel → project → Settings → Deployment Protection → "Protection Bypass for Automation", then give me the secret (or turn protection off for previews).
+- The same commits run locally at 375px, logged in: P&L, Ads, Customer Intelligence and Customer Support all show the new layout (new phone header with chips / sub-tabs, no ☰ panel, master card): `preview-check/local-{pnl,ads,customer-intelligence,customer-support}-375.png` (PNGs are git-ignored, on Suraj's machine).
+
+**4. Old layout:** not a branch, build or breakpoint problem. All five previews built successfully, and the new layout renders on the same commits. Nothing to fix in the code.
