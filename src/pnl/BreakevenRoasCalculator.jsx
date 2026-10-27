@@ -1,6 +1,10 @@
 import { useState, useMemo, useEffect, Fragment } from 'react'
-import { C, fmt } from '../utils.js'
-import { perUnitWaterfall, rateForWeightGm, breakevenRoas as breakevenRoasOf, roasForTargetCm2 } from './pnlUtils.js'
+import { C } from '../utils.js'
+import { perUnitWaterfall, rateForWeightGm, breakevenRoas as breakevenRoasOf, roasForTargetCm2, fmtSigned as fmt } from './pnlUtils.js'
+import ToolIntro from './ToolIntro.jsx'
+import ToolResultBar from '../responsive/ToolResultBar.jsx'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
+import { setPnlToolReset } from './pnlToolStore.js'
 
 // Forward-looking, single-unit calculator for a NOT-YET-LAUNCHED product: given a listing price,
 // a discount (selling price defaults to 7% off listing — Frido's usual launch convention), COGS,
@@ -214,7 +218,8 @@ function ReferenceProductPicker({ productGroups, onApply }) {
   )
 }
 
-export default function BreakevenRoasCalculator({ productGroups = [] }) {
+// phone: PNL_REVIEW_FIXES.md §2/§4 phone layout (intro + ⓘ, equal-width toggles, Reset in ⋯, sticky result bar).
+export default function BreakevenRoasCalculator({ productGroups = [], phone = false }) {
   const [slabs, setSlabs] = useState(null)
   useEffect(() => { loadSndRates().then(setSlabs) }, [])
 
@@ -381,13 +386,32 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     setResetSignal(s => s + 1)
   }
 
+  // Phone: the header's ⋯ → Reset clears the form and saved rows; Undo puts them back.
+  useEffect(() => {
+    if (!phone) return
+    const snap = { savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct }
+    setPnlToolReset(() => {
+      resetAll()
+      return () => {
+        setSavedScenarios(snap.savedScenarios); setProductName(snap.productName); setListingPrice(snap.listingPrice); setDiscountPct(snap.discountPct)
+        setCogs(snap.cogs); setWeightGm(snap.weightGm); setGstPct(snap.gstPct)
+        setRtoPct(snap.rtoPct); setCancelPct(snap.cancelPct); setCirPct(snap.cirPct); setExchangePct(snap.exchangePct)
+      }
+    })
+    return () => setPnlToolReset(null)
+  }, [phone, savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct])
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1220 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 1220 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.pnl-no-spinner { -moz-appearance: textfield; }
       `}</style>
+      {phone ? (
+        <ToolIntro title="Breakeven ROAS" short="Find the ROAS a product needs to break even, and to reach 15% CM2."
+          long="Model a new product's per-unit economics before launch, or check an already-launched product's real breakeven ROAS: the ad efficiency it needs to break even, and the efficiency it needs to hit a healthy 15% CM2." />
+      ) : (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>Breakeven ROAS Calculator</div>
@@ -400,11 +424,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
           ↺ Reset Everything
         </button>
       </div>
+      )}
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
         <div style={{ flex: '1 1 420px', display: 'flex' }}>
           <Card style={{ flex: 1, gap: 10, padding: 16 }}>
+            {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
               {[{ id: 'new', label: 'New Product' }, { id: 'launched', label: 'Already Launched' }].map(opt => (
                 <button key={opt.id} onClick={() => setMode(opt.id)}
@@ -415,6 +441,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                   }}>{opt.label}</button>
               ))}
             </div>
+            )}
 
             {mode === 'launched' ? (
               <ReferenceProductPicker key={resetSignal} productGroups={productGroups} onApply={applyReferenceRates} />
@@ -446,6 +473,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
               </div>
               <div>
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>GST Rate</span>
+                {phone ? <SegmentToggle options={GST_PRESETS.map(g => ({ id: g, label: `${g}%` }))} value={gstPct} onChange={setGstPct} label="GST rate" full style={{ marginTop: 4 }} /> : (
                 <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                   {GST_PRESETS.map((g, i) => (
                     <div key={g} style={{ display: 'flex', alignItems: 'center' }}>
@@ -458,6 +486,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
 
@@ -569,6 +598,11 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
 
       {savedScenarios.length > 0 && (
         <SavedScenariosTable scenarios={savedScenarios} onRemove={removeScenario} onReset={resetAll} />
+      )}
+      {phone && waterfall && (
+        <ToolResultBar tone={breakevenRoas == null ? 'bad' : undefined}>
+          {breakevenRoas != null ? `Breakeven ${breakevenRoas.toFixed(2)}x · Healthy ${breakevenRoas15 != null ? `${breakevenRoas15.toFixed(2)}x` : '—'}` : 'Unprofitable even with zero ad spend'}
+        </ToolResultBar>
       )}
     </div>
   )

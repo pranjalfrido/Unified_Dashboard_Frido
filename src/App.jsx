@@ -24,6 +24,7 @@ import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
+import { usePnlTool, runPnlToolReset } from './pnl/pnlToolStore.js'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
 import AskFridoPage from './ask/AskFridoPage.jsx'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
@@ -4917,6 +4918,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   const bp = useBreakpoint()
+  const pnlTool = usePnlTool()
   // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
   // the other pages keep this bar until they are redesigned.
   if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'inventory') {
@@ -4976,6 +4978,22 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
           subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
           subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
           strip={cc?.strip} />
+      </div>
+    )
+  }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl' && pnlTool.tool) {
+    // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
+    // just "‹ D2C" back + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
+    const t = pnlTool.tool
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <button type="button" onClick={t.onBack} aria-label={`Back to ${t.backLabel}`}
+              style={{ minHeight: 44, padding: '0 4px 0 0', border: 'none', background: 'none', color: 'rgba(255,255,255,.8)', fontSize: 15, fontWeight: 500, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap' }}>‹ {t.backLabel}</button>
+            <span style={{ fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+          </span>}
+          right={pnlTool.reset ? <ActionMenu title={t.title} items={[{ id: 'reset', label: 'Reset', onSelect: runPnlToolReset }]} /> : null} />
       </div>
     )
   }

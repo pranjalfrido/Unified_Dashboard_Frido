@@ -1,5 +1,9 @@
 import { useState, useMemo } from 'react'
-import { C, fmt } from '../utils.js'
+import { C } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
+import ToolIntro from './ToolIntro.jsx'
+import ToolResultBar from '../responsive/ToolResultBar.jsx'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
 
 // Forward cost-plus pricing calculator for Offline (B2B/Stockist/MT GT) products — ported
 // directly from the business's own "B2B Costing Calculator" reference spreadsheet (shared
@@ -249,7 +253,8 @@ function ExtraCostRow({ row, onChange, onRemove }) {
 }
 
 // initialProductKey ('cat::sc'): opens with that product applied ("Simulate ↗" from the P&L Offline tab).
-export default function B2BCostingCalculator({ productGroups = [], initialProductKey = null }) {
+// phone: PNL_REVIEW_FIXES.md §2/§5 phone layout (intro + ⓘ, equal-width toggles, sticky quote bar).
+export default function B2BCostingCalculator({ productGroups = [], initialProductKey = null, phone = false }) {
   const initProduct = initialProductKey ? productGroups.find(p => p.sku === initialProductKey) || null : null
   const [mode, setMode] = useState('price') // 'price' | 'profit'
   const [assumptions, setAssumptions] = useState(DEFAULT_ASSUMPTIONS)
@@ -338,6 +343,13 @@ export default function B2BCostingCalculator({ productGroups = [], initialProduc
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.pnl-no-spinner { -moz-appearance: textfield; }
       `}</style>
+      {phone ? (
+        <>
+          <ToolIntro title="B2B Costing" short={mode === 'price' ? 'Set the EBITDA target and get the price to quote a B2B / Stockist buyer.' : "Enter the buyer's price and see the EBITDA it leaves you."}
+            long="Cost-plus pricing from the business's B2B costing sheet: COGS, inbound and forward logistics, then selling incentives, travel, employee, office and PG / finance costs as % of the selling price. Solve for Price: the price that meets the EBITDA target. Solve for Profit: the EBITDA a named price leaves." />
+          <SegmentToggle options={MODES} value={mode} onChange={setMode} label="Calculation" full />
+        </>
+      ) : (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>B2B Costing Calculator</div>
@@ -357,6 +369,7 @@ export default function B2BCostingCalculator({ productGroups = [], initialProduc
           ))}
         </div>
       </div>
+      )}
 
       {/* ── Shared assumptions ── */}
       <Card style={{ padding: '16px 22px', gap: 12 }}>
@@ -513,6 +526,13 @@ export default function B2BCostingCalculator({ productGroups = [], initialProduc
           )}
         </div>
       </div>
+      {phone && result && !result.invalid && !result.needsPrice && (
+        <ToolResultBar tone={mode === 'profit' && result.ebitdaAmount < 0 ? 'bad' : undefined}>
+          {mode === 'price'
+            ? `Quote ${fmt(result.spInclGst)} incl. GST (${fmt(result.roundedSp)} ex)`
+            : `Profit ${fmt(result.ebitdaAmount)} · ${result.ebitdaPct != null ? `${result.ebitdaPct.toFixed(1)}%` : '—'}`}
+        </ToolResultBar>
+      )}
     </div>
   )
 }

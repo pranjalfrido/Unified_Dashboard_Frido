@@ -10,6 +10,8 @@ import { C } from '../utils.js'
 import { prevRange } from '../overview/usePrevPeriod.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fmtDateRange } from '../responsive/format.js'
+import UndoToast from '../responsive/UndoToast.jsx'
+import { setPnlTool, usePnlTool, clearPnlToast } from './pnlToolStore.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -24,6 +26,7 @@ const PNL_TOOLS = [
 // since Offline has no tracked Listing Price/Discount to flex. Kept as its own single-item list
 // (not merged into PNL_TOOLS) since it's gated on activeTab === 'offline', not 'shopify'.
 const SIM_TOOL = { shopify: 'priceSimulator', offline: 'b2bCosting' }
+const TOOL_TITLES = { priceSimulator: 'Price Simulator', breakevenRoas: 'Breakeven ROAS', b2bCosting: 'B2B Costing', poApproval: 'PO Approval' }
 const OFFLINE_TOOLS = [
   { id: 'b2bCosting', label: 'B2B Costing Calculator' },
   { id: 'poApproval', label: 'PO Approval Checker' },
@@ -241,6 +244,15 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const [lastNavSig, setLastNavSig] = useState(navSig)
   if (navSig !== lastNavSig) { setLastNavSig(navSig); if (activeTool) setActiveTool(null) }
   const setD2cSubCh = setD2cSubChProp || setD2cSubChLocal
+  // Phones: an open tool takes over the header ("‹ D2C  Price Simulator", PNL_REVIEW_FIXES.md §2).
+  // The hidden previous-period instance (summaryOnly) never touches it.
+  const toolStore = usePnlTool()
+  useEffect(() => {
+    if (summaryOnly) return
+    const backLabel = PNL_TABS.find(t => t.id === activeTab)?.label || 'P&L'
+    setPnlTool(phoneHeader && activeTool ? { id: activeTool, title: TOOL_TITLES[activeTool], backLabel, onBack: () => setActiveTool(null) } : null)
+  }, [summaryOnly, phoneHeader, activeTool, activeTab])
+  useEffect(() => () => { if (!summaryOnly) setPnlTool(null) }, [summaryOnly])
   const [sndRates, setSndRates] = useState(null)
   const [cogsMonthlyMap, setCogsMonthlyMap] = useState(null)
 
@@ -2264,19 +2276,18 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       </div>}
       <div className="page-scroll">
         {phoneHeader && activeTool && (
-          <button type="button" onClick={() => setActiveTool(null)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, marginBottom: 8, padding: '0 12px', borderRadius: 12, border: `1px solid ${C.m.line}`, background: '#fff', color: C.m.green, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-            ‹ Back to {activeTabMeta?.label || 'P&L'}
-          </button>
+          // Phone tools: inputs 16px (no iOS zoom) and in ink (not blue / amber); room for the sticky result bar
+          <style>{`.pnl-tool-phone input,.pnl-tool-phone select,.pnl-tool-phone textarea{font-size:16px!important;color:${C.m.ink}!important}.pnl-tool-phone{padding-bottom:72px}`}</style>
         )}
+        {phoneHeader && activeTool && <UndoToast toast={toolStore.toast} onDone={clearPnlToast} />}
         {activeTool === 'priceSimulator' ? (
-          <PriceSimulator key={toolProduct || 'none'} variantProducts={d2cProductList} productGroups={d2cProductGroups} initialProductKey={toolProduct} />
+          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><PriceSimulator key={toolProduct || 'none'} variantProducts={d2cProductList} productGroups={d2cProductGroups} initialProductKey={toolProduct} phone={phoneHeader} /></div>
         ) : activeTool === 'breakevenRoas' ? (
-          <BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} />
+          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} phone={phoneHeader} /></div>
         ) : activeTool === 'b2bCosting' ? (
-          <B2BCostingCalculator key={toolProduct || 'none'} productGroups={offlineProductGroups} initialProductKey={toolProduct} />
+          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><B2BCostingCalculator key={toolProduct || 'none'} productGroups={offlineProductGroups} initialProductKey={toolProduct} phone={phoneHeader} /></div>
         ) : activeTool === 'poApproval' ? (
-          <POApprovalChecker productGroups={offlineProductGroups} />
+          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><POApprovalChecker productGroups={offlineProductGroups} phone={phoneHeader} /></div>
         ) : (
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}
