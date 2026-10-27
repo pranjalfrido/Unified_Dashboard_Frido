@@ -2246,14 +2246,20 @@ export default async function handler(req, res) {
         .filter(x => !salesChannels || salesChannels.includes(x.platform))
         .map(x => ({ ...x, category: normCat(x.category) }))
       const adsCB = (r.adsCategoryBreakdown || []).filter(x => !adsPlatforms || adsPlatforms.includes(x.platform))
+      // D2 (Suraj 27 Oct): spend not linked to a product — "all products" campaigns (target_type 'all',
+      // which the query spreads over every sub-category by revenue share, plus product / category
+      // targets that match nothing in the item master) or rows with no product — stays out of the
+      // category and product spend (so their ROAS is attributed-only) and is one "Unattributed" line,
+      // the same as the cached path. P&L reads adsCategoryBreakdown on its own and still spreads it.
+      const isUnattributed = x => x.target_type === 'all' || !x.product_name
       const adCatMapAll = {}
-      adsCB.forEach(x => {
+      adsCB.filter(x => !isUnattributed(x)).forEach(x => {
         const cat = normCat(x.category)
         if (!adCatMapAll[cat]) adCatMapAll[cat] = 0
         adCatMapAll[cat] += parseFloat(x.spend) || 0
       })
       const adSubCatMapAll = {}
-      adsCB.filter(x => x.product_name).forEach(x => {
+      adsCB.filter(x => !isUnattributed(x)).forEach(x => {
         const subCat = x.product_name.trim()
         if (!adSubCatMapAll[subCat]) adSubCatMapAll[subCat] = 0
         adSubCatMapAll[subCat] += parseFloat(x.spend) || 0
@@ -2262,7 +2268,7 @@ export default async function handler(req, res) {
       // any product) — this can't be joined to a sub-category, so it's tracked separately
       // and folded into "Others" below so total spend always reconciles to adCatMapAll.
       let unmatchedProductSpend = 0
-      adsCB.filter(x => !x.product_name).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
+      adsCB.filter(isUnattributed).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
 
       // Shared measures layer — same formula as Shopify/EBO/All tab.
       const netRevOf = row => computeNetRevenueMeasures({
@@ -2300,6 +2306,8 @@ export default async function handler(req, res) {
         if (others) others.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
+      // D2: one "Unattributed" category row (spend only), so no category's ROAS carries it
+      if (unmatchedProductSpend > 0) categoryRowsAll.push({ category: 'Unattributed', spend: unmatchedProductSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       // Flipkart / Myntra late-report estimates have no category / product breakdown: they are NOT
       // put in "Others" here (D3, Suraj 27 Oct). The Ads tab shows them as one labelled row,
       // "Flipkart / Myntra estimate (no product detail)", the same on the cached path; the

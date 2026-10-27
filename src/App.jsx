@@ -20538,10 +20538,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       const salChans = platformFilter ? (SAL_CHANS[platformFilter] || [platformFilter]) : null
       // Aggregate spend by category and by subCategory (product) from ads daily
       const adCatMap = {}; const adProdMap = {}; let unmatchedProdSpend = 0
+      // D2 (Suraj 27 Oct): spend with no product ("all products" campaigns, categories not in the item
+      // master) is one "Unattributed" line, not part of any category's spend / ROAS (was in "Others").
       slicedAdsDBC.filter(x => !adPlats || adPlats.includes(x.platform)).forEach(x => {
-        const cat = (x.category || 'Others').trim()
-        adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
         if (x.subCategory) {
+          const cat = (x.category || 'Others').trim()
+          adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
           const prod = x.subCategory.trim()
           adProdMap[prod] = (adProdMap[prod] || 0) + (x.spend || 0)
         } else {
@@ -20571,6 +20573,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (oth) oth.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
+      if (unmatchedProdSpend > 0) categoryRowsAll.push({ category: 'Unattributed', spend: unmatchedProdSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       // Sub-category (product) rows — driven from ad spend
       const usedKeys = new Set()
       const spendMatchedRows = Object.keys(adProdMap).map(prod => {
