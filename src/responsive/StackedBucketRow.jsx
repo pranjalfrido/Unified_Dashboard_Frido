@@ -28,9 +28,11 @@ export default function StackedBucketRow({ name, sub, right, rightSub, pcts, lab
         {segs.map((s, i) => <i key={i} style={{ display: 'block', width: `${s.p}%`, background: s.c }} />)}
       </span>
       {labels && (
-        <span style={{ display: 'grid', gridTemplateColumns: `repeat(${labels.length}, minmax(0,1fr))`, marginTop: 5, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-          {labels.map((l, i) => (
-            <span key={l} style={{ whiteSpace: 'nowrap', textAlign: i === labels.length - 1 ? 'right' : 'left' }}>
+        // Columns at least 128px wide: on a phone four buckets go 2 × 2 (in one row of four they ran
+        // into each other at 375px, e.g. "12–24h 10.7%24–48h 25.7%"); wider screens fit them in one row.
+        <span style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(128px, 1fr))`, columnGap: 12, rowGap: 2, marginTop: 5, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          {labels.map(l => (
+            <span key={l} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <span style={{ color: M.muted }}>{l} </span><b style={{ fontWeight: 600, color: flags[i] ? M.down : M.ink }}>{pcts[i] == null ? '—' : `${pcts[i]}%`}</b>
             </span>
           ))}
