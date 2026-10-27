@@ -4954,7 +4954,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>
     const H = props => (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader collapsible notifications={notifications} {...props} />
+        <MobilePageHeader notifications={notifications} {...props} />
         <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
       </div>
     )

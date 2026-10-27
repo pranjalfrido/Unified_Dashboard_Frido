@@ -9,11 +9,11 @@ Overview shows "Filtered: Sub-channel: ShopifyIndia ✕ Clear" and a filter coun
 ## 1. Structure (same on every page; rows only when the page has them)
 | Row | Height | Content |
 |---|---|---|
-| 1 | 48px | Title 17px / 650, letter-spacing −0.015em, ink `#1c2420`, + context in 13px / 500 grey `#8a938e` (e.g. "Sales  D2C"). Right side, **always this order**: date · filter · ⋯. A control the page doesn't have is absent; the others never move. |
-| 2 | 28px chips + 10px bottom padding | Channel / platform chips (Sales, P&L, Ads). |
-| 3 | 34px | Underline sub-tabs. A second sub-tab row (Logistics Cost, Customers Intelligence) is 30px, 12px, on a slightly darker band `#f6f4ef`. |
+| 1 | 48px | Title 15px / 650, letter-spacing −0.015em, ink `#1c2420`, + context in 13px / 500 grey `#8a938e` (e.g. "Sales  D2C"). Right side, **always this order**: date · filter · ⋯. A control the page doesn't have is absent; the others never move. |
+| 2 | 36px (26px chips) | Channel / platform chips (Sales, P&L, Ads). |
+| 3 | 32px | Underline sub-tabs. A second sub-tab row (Logistics Cost, Customers Intelligence) is 30px, 12px, on a slightly darker band `#f6f4ef`. |
 | strip | 28px | "Filtered:" chips + Clear, only when a non-default filter is active (see 0). |
-Targets: 48 / 86 / 120px for 1 / 2 / 3 rows; 42px collapsed.
+Targets: 48 / 84 / 116px for 1 / 2 / 3 rows (+30 for a second sub-tab row). One fixed height per page, the same before and after scrolling. Icon tap targets ≥ 44px.
 
 ## 2. Colour and surface (Ivory)
 - Header background `#fbfaf7`, 1px bottom border `#eae7df`; sub-tab row has a 1px top divider `#f0ede6`. Page background stays `#f4f2ed`, cards white.
@@ -55,12 +55,12 @@ Change the shared `MobilePageHeader` once, then **make sure every mobile screen 
 - Back arrow (sub-screens and tools) sits left of the title, 34 × 34, same borderless style.
 - Bottom sheets keep their own sheet header (title + ✕); they don't use the page header.
 
-## 5. Collapse on scroll
-After ~80px of downward scroll, rows 2–3 (and the filter strip) fold into a single 42px bar: "Title · channel · sub-tab" (15px / 13px grey) + date pill + ⋯, background `rgba(251,250,247,.86)` with backdrop blur and a soft shadow `0 4px 14px rgba(28,36,32,.07)`. Scrolling up restores the full header. 200ms transition, none with reduced motion. Sticky at the top. Must not jump the content (use a placeholder height or transform). The bottom bar stays fixed as before.
+## 5. No collapse (updated 27 Oct)
+The header does **not** collapse on scroll. It is sticky at the top with one fixed height (section 1), the same before and after scrolling, styled like the former collapsed bar: background `rgba(251,250,247,.92)` with backdrop blur, hairline `#eae7df` and a soft shadow `0 4px 14px rgba(28,36,32,.07)`; dividers are inset shadows, so they add no height. The bottom bar is 48px + safe-area inset (same as row 1). Content padding follows these heights; nothing jumps on scroll.
 
 ## 6. Verification
-- **Every screen in the 5b list** (the one you built from the code) at 375 and 360 (Chromium + WebKit), every channel chip and every sub-tab, incl. Return Analysis, all 4 P&L tools, Profile sub-screens, Documents, Frido Pulse, internal tools and full-screen views. Screenshot each header (expanded + collapsed) into `docs/responsive/HEADER_REPORT.md`, and mark any screen that couldn't be migrated and why.
-- Heights match section 1 (±2px); add a table of measured heights per page, before vs after (expanded and collapsed), at 375px; control order identical everywhere; no wrapped titles; no focus box on tap.
+- **Every screen in the 5b list** (the one you built from the code) at 375 and 360 (Chromium + WebKit), every channel chip and every sub-tab, incl. Return Analysis, all 4 P&L tools, Profile sub-screens, Documents, Frido Pulse, internal tools and full-screen views. Screenshot each header (top + scrolled) into `docs/responsive/HEADER_REPORT.md`, and mark any screen that couldn't be migrated and why.
+- Heights match section 1 (±2px); add a table of measured heights per page, before vs after (top and scrolled) plus the bottom bar, at 375px; control order identical everywhere; no wrapped titles; no focus box on tap.
 - Overview with no filter applied: no strip, no count. Apply a filter: strip + count appear; Clear removes them.
 - Notifications reachable from ⋯ with the same count as before.
 - No horizontal page overflow; text ≥ 12px.

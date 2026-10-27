@@ -32,7 +32,7 @@ function DockSlot({ on, onClick, Icon, label }) {
       onPointerDown={press} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onContextMenu={e => e.preventDefault()}
       style={{ position: 'relative', flex: '1 1 0', minWidth: 44, height: '100%', padding: 2, border: 'none', background: 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer', color: on ? M.green : M.hdr.context }}>
       <span aria-hidden="true" className={`mnav-glow${on ? ' on' : ''}`} />
-      <span aria-hidden="true" style={{ position: 'relative', display: 'grid', placeItems: 'center' }}><Icon size={22} weight={on ? 'bold' : 'regular'} /></span>
+      <span aria-hidden="true" style={{ position: 'relative', display: 'grid', placeItems: 'center' }}><Icon size={20} weight={on ? 'bold' : 'regular'} /></span>
       {tip && <span role="tooltip" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, padding: '4px 8px', borderRadius: 8, background: M.ink, color: '#fff', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none' }}>{label}</span>}
     </button>
   )

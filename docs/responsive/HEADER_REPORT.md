@@ -206,3 +206,9 @@ before: `docs/responsive/before/header/` (local files: `docs/responsive/**/*.png
 | Full-screen heatmap | ![](before/header/chromium-iphoneSE-375x667__full-table.png) | ![](after/header/chromium-iphoneSE-375x667__full-table.png) | — |
 | Overview, filtered | — | ![](after/header/chromium-iphoneSE-375x667__overview-filtered.png) | — |
 | ⋯ menu / notifications | — | ![](after/header/chromium-iphoneSE-375x667__menu-notifications.png) | ![](after/header/chromium-iphoneSE-375x667__notifications.png) |
+
+## Update 27 Oct: one fixed height, no collapse
+
+Collapse on scroll removed. The header is sticky with one fixed height (former collapsed look, 15px title, translucent Ivory with blur + shadow, inset-shadow dividers): row 1 48px, chips row 36px (26px chips), sub-tabs 32px, second sub-tab row 30px. Icon tap targets 44×44. Bottom bar 48px + safe-area inset; selected tile 34×30, icons 20px.
+
+Measured (header top / after scrolling · bottom bar), identical in Chromium + WebKit at 375 and 360: Overview 48/48 · 48, Sales Overall 84/84 · 48, Sales D2C 116/116 · 48, Logistics Cost 110/110 · 48, Customers 110/110 · 48 (check-header.mjs, 49/49 per run).

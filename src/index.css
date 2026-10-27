@@ -1596,26 +1596,31 @@ svg text, svg tspan{
 .filtered-strip::-webkit-scrollbar{ display:none }
 
 /* Phone page header, Ivory (HEADER_MOBILE_PROMPT.md, mockups/header_mockup.html; src/responsive/
-   MobilePageHeader.jsx). Row 1 48px (title · context · date · filter · ⋯), chips 28px + 10px, sub-tabs
-   34px, second sub-tab row 30px on a darker band, "Filtered:" strip 28px; 42px collapsed. One accent:
+   MobilePageHeader.jsx). One fixed height per page (no collapse): row 1 48px (title · context · date ·
+   filter · ⋯), chips row 36px (26px chips), sub-tabs 32px, second sub-tab row 30px on a darker band,
+   "Filtered:" strip 28px; totals 48 / 84 / 116px. Dividers are inset shadows (no extra px). One accent:
    Frido green for the selected chip, the active underline and the date pill text. */
-.mph{ background:#fbfaf7; border-bottom:1px solid #eae7df; font-family:var(--font); -webkit-tap-highlight-color:transparent }
+.mph{ background:rgba(251,250,247,.92); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); box-shadow:inset 0 -1px 0 #eae7df, 0 4px 14px rgba(28,36,32,.07);
+  font-family:var(--font); -webkit-tap-highlight-color:transparent; position:relative; z-index:1 }
 .mph button{ -webkit-tap-highlight-color:transparent }
 .mph button:focus{ outline:none }
 .mph button:focus-visible{ outline:2px solid #9cc4ad; outline-offset:2px }
-.mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(8px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
-.mph-r1.mph-has-back{ padding-left:max(6px, var(--safe-left)) }
+.mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(4px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
+.mph-r1.mph-has-back{ padding-left:max(2px, var(--safe-left)) }
 .mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
-.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#1c2420; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
+.mph-title b{ font-size:15px; font-weight:650; letter-spacing:-.015em; color:#1c2420; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
 .mph-title span{ font-size:13px; font-weight:500; color:#8a938e; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto } /* the context gives way first; the title keeps its width */
-.mph-ctl{ display:flex; align-items:center; gap:4px; flex:0 0 auto }
+.mph-ctl{ display:flex; align-items:center; gap:0; flex:0 0 auto }
 .mph-filter, .mph-date{ display:contents }
-.mph-ib{ position:relative; width:34px; height:34px; border-radius:10px; border:none; background:none; padding:0; color:#4e5a54; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
-.mph-ib:active{ background:#f1efe9 }
+/* 44 × 44 tap target; the pressed tile is the 34 × 34 visual */
+.mph-ib{ position:relative; width:44px; height:44px; border-radius:10px; border:none; background:none; padding:0; color:#4e5a54; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
+.mph-ib::before{ content:''; position:absolute; inset:5px; border-radius:10px }
+.mph-ib:active::before{ background:#f1efe9 }
+.mph-ib > svg{ position:relative }
 .mph-ib:disabled{ opacity:.45; cursor:default }
 .mph-back{ color:#1c2420 }
-.mph-count{ position:absolute; top:2px; right:1px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:#1f5a3d; color:#fff; font-size:12px; font-weight:800; line-height:14px; letter-spacing:-.02em; text-align:center; box-shadow:0 0 0 2px #fbfaf7 }
-.mph-dot{ position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%; background:#d9534f; box-shadow:0 0 0 2px #fbfaf7 }
+.mph-count{ position:absolute; top:7px; right:6px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:#1f5a3d; color:#fff; font-size:12px; font-weight:800; line-height:14px; letter-spacing:-.02em; text-align:center; box-shadow:0 0 0 2px #fbfaf7 }
+.mph-dot{ position:absolute; top:9px; right:9px; width:7px; height:7px; border-radius:50%; background:#d9534f; box-shadow:0 0 0 2px #fbfaf7 }
 /* date pill (DateRangePicker trigger) and the Logistics Cost month pill */
 .mph .drp-trigger, .mph .mph-pill{ display:inline-flex !important; align-items:center; gap:4px !important; height:32px; min-height:32px; padding:0 8px !important; border-radius:10px !important; border:none !important;
   background:#eef5f0 !important; color:#1f5a3d !important; font-size:12.5px !important; font-weight:600; font-family:var(--font); white-space:nowrap; cursor:pointer; flex:0 0 auto }
@@ -1626,34 +1631,29 @@ svg text, svg tspan{
 .mph .drp-chev{ display:block; opacity:.6; flex:0 0 auto }
 .mph .tnav-right{ margin-left:0 }
 /* row 2: channel chips */
-.mph-r2{ display:flex; gap:4px; overflow-x:auto; padding:0 max(12px, var(--safe-right)) 10px max(12px, var(--safe-left)); scrollbar-width:none;
+.mph-r2{ display:flex; align-items:center; gap:4px; height:36px; overflow-x:auto; padding:0 max(12px, var(--safe-right)) 4px max(12px, var(--safe-left)); scrollbar-width:none;
   -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent); mask-image:linear-gradient(90deg,#000 86%,transparent) }
 .mph-r2::-webkit-scrollbar, .mph-r3::-webkit-scrollbar{ display:none }
-.mph-chip{ flex:0 0 auto; height:28px; padding:0 11px; border-radius:999px; border:none; background:none; color:#5c6761; font-size:12.5px; font-weight:600; font-family:var(--font);
+.mph-chip{ flex:0 0 auto; height:26px; padding:0 11px; border-radius:999px; border:none; background:none; color:#5c6761; font-size:12.5px; font-weight:600; font-family:var(--font);
   display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap }
 .mph-chip[aria-pressed="true"]{ background:#1f5a3d; color:#fff }
 .mph-chip:disabled{ opacity:.4; cursor:not-allowed }
 .mph-chip [role=img]{ width:5px !important; height:5px !important; background:#c8860a !important }
 /* row 3: underline sub-tabs; 3b: the slimmer second level on a darker band */
-.mph-r3{ display:flex; gap:20px; padding:0 max(16px, var(--safe-right)) 0 max(16px, var(--safe-left)); overflow-x:auto; scrollbar-width:none; border-top:1px solid #f0ede6 }
+.mph-r3{ display:flex; gap:20px; padding:0 max(16px, var(--safe-right)) 0 max(16px, var(--safe-left)); overflow-x:auto; scrollbar-width:none; box-shadow:inset 0 1px 0 #f0ede6 }
 .mph-r3.mph-even{ justify-content:space-around }
-.mph-tab{ flex:0 0 auto; position:relative; height:34px; border:none; background:none; padding:0; color:#8a938e; font-size:12.5px; font-weight:600; font-family:var(--font); cursor:pointer; white-space:nowrap }
+.mph-tab{ flex:0 0 auto; position:relative; height:32px; border:none; background:none; padding:0; color:#8a938e; font-size:12.5px; font-weight:600; font-family:var(--font); cursor:pointer; white-space:nowrap }
 .mph-tab[aria-selected="true"]{ color:#1c2420 }
 .mph-tab[aria-selected="true"]::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px; background:#1f5a3d }
 .mph-r3b{ background:#f6f4ef }
 .mph-r3b .mph-tab{ height:30px; font-size:12px }
-.mph .filtered-strip{ min-height:28px; padding-top:0 !important; padding-bottom:0 !important; padding-left:max(16px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important; border-top:1px solid #f0ede6; border-bottom:none !important; background:#fbfaf7 !important }
+.mph .filtered-strip{ height:28px; min-height:28px; padding-top:0 !important; padding-bottom:0 !important; padding-left:max(16px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important; border-bottom:none !important; background:transparent !important; box-shadow:inset 0 1px 0 #f0ede6 }
 .mph .filtered-strip button{ min-height:22px !important; height:22px }
-/* collapsed (after ~80px of downward scroll): one 42px translucent bar */
-.mph-collapsed{ background:rgba(251,250,247,.86); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); box-shadow:0 4px 14px rgba(28,36,32,.07); animation:mph-in .2s ease }
-.mph-collapsed .mph-r1{ height:42px }
-.mph-collapsed .mph-title b{ font-size:15px }
-.mph-collapsed .drp-trigger{ height:30px; min-height:30px }
-@keyframes mph-in{ from{ opacity:.6 } to{ opacity:1 } }
-@media (prefers-reduced-motion: reduce){ .mph-collapsed{ animation:none } }
 
-/* The top bar holds the header on phones: it gives up its own bar look and grows with the rows. */
+/* The top bar holds the header on phones: it gives up its own bar look and grows with the rows. The
+   bottom bar is 48px + the safe-area inset, the same as header row 1 (content padding follows --bot). */
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  :root{ --bot:48px }
   .topnav.m-header{ height:auto; min-height:0; flex-direction:column; align-items:stretch; padding:0; gap:0; background:none; border-bottom:none; box-shadow:none; position:relative; z-index:100 }
   .topnav.m-header .ov-filter-slot{ display:contents }
   /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
@@ -1675,7 +1675,7 @@ svg text, svg tspan{
 .mnav-slot,.mnav-sheet button{ -webkit-tap-highlight-color:transparent }
 .mnav-slot:focus,.mnav-sheet button:focus{ outline:none }
 .mnav-slot:focus-visible,.mnav-sheet button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:-2px; border-radius:12px }
-.mnav-glow{ position:absolute; left:50%; top:50%; width:38px; height:34px; margin:-17px 0 0 -19px; border-radius:12px; background:#edf6f0;
+.mnav-glow{ position:absolute; left:50%; top:50%; width:34px; height:30px; margin:-15px 0 0 -17px; border-radius:11px; background:#edf6f0;
   box-shadow:0 0 8px 1px rgba(120,190,150,.22); opacity:0; transform:scale(.85); transition:opacity .25s ease, transform .25s ease; pointer-events:none }
 .mnav-glow.on{ opacity:1; transform:scale(1) }
 .mnav-link{ border:none; background:none; padding:8px 4px; min-height:40px; font-family:var(--font); font-size:13px; font-weight:600; cursor:pointer }

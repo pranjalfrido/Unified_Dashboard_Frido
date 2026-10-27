@@ -1,8 +1,8 @@
 // HEADER_MOBILE_PROMPT.md §6: every phone screen's header, logged in through the login page as a
 // temporary test user from a local state file ({ email, password }, made by an uncommitted setup step).
-// Per screen: header height (expanded and, in "after" mode, collapsed after scrolling), screenshots of
+// Per screen: header height before and after scrolling (one fixed height, no collapse), bottom bar height, screenshots of
 // both, control order date · filter · ⋯, title on one line, no tap focus box, text ≥ 12px, no sideways
-// overflow. "before" mode only measures and screenshots (the old header has no collapse).
+// overflow. "before" mode only measures and screenshots.
 // Usage: RESPONSIVE_ENGINE=webkit|chromium node scripts/responsive/check-header.mjs <stateFile> before|after [viewport] [only]
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
@@ -127,7 +127,7 @@ for (const s of S) {
       ok(`${s.id}: control order date · filter · ⋯`, !h.missing && order.join() === want.join(), (h.ctl || []).join(' '))
       ok(`${s.id}: title on one line`, h.titleH <= 26, `${h.titleH}px`)
       ok(`${s.id}: header text ≥ 12px`, !h.small?.length, (h.small || []).join(' | '))
-      // collapse: only the page header (not full-screen views)
+      // one fixed height: scrolling the page doesn't change the header (only the page header, not full-screen views)
       if (!s.hdr) {
         await page.evaluate(() => {
           const sc = [...document.querySelectorAll('.app-main *')].find(e => { const cs = getComputedStyle(e); return /(auto|scroll)/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 200 && e.getBoundingClientRect().height > 200 })
@@ -135,13 +135,15 @@ for (const s of S) {
         })
         await pause(900)
         const c = await headerBox(sel)
-        row.collapsed = c?.h
-        await page.screenshot({ path: resolve(shotDir, `${ENGINE}-${vp.name}__${s.id}--collapsed.png`), clip: { x: 0, y: 0, width: vp.width, height: Math.min(vp.height, (c?.y || 0) + (c?.h || 42) + 60) } })
+        row.scrolled = c?.h
+        row.bar = await page.evaluate(() => Math.round(document.querySelector('nav.mnav')?.getBoundingClientRect().height || 0))
+        ok(`${s.id}: same height after scrolling`, Math.abs((c?.h || 0) - box.h) <= 0.5, `${box.h} → ${c?.h}`)
+        await page.screenshot({ path: resolve(shotDir, `${ENGINE}-${vp.name}__${s.id}--scrolled.png`), clip: { x: 0, y: 0, width: vp.width, height: Math.min(vp.height, (c?.y || 0) + (c?.h || 42) + 60) } })
         await page.evaluate(() => { const sc = [...document.querySelectorAll('.app-main *')].find(e => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollTop > 0); if (sc) { sc.scrollBy(0, -30); setTimeout(() => sc.scrollTo(0, 0), 120) } })
         await pause(700)
         const back = await headerBox(sel)
         row.restored = back?.h
-        ok(`${s.id}: scrolling up restores the header`, Math.abs((back?.h || 0) - box.h) <= 2, `${box.h} → ${c?.h} → ${back?.h}`)
+        ok(`${s.id}: same height after scrolling back`, Math.abs((back?.h || 0) - box.h) <= 0.5, `${box.h} → ${c?.h} → ${back?.h}`)
       }
       // no focus box after tapping a header button
       const btn = page.locator(`${sel.replace(' >> nth=-1', '')} .mph-r1 [data-ctl=more]`).last()
@@ -154,7 +156,7 @@ for (const s of S) {
     }
     ok(`${s.id}: no sideways overflow`, !(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)))
     rows.push(row)
-    console.log(`${s.id}: ${row.expanded}${row.collapsed != null ? ` / ${row.collapsed}` : ''}`)
+    console.log(`${s.id}: header ${row.expanded}${row.scrolled != null ? ` (scrolled ${row.scrolled})` : ''}${row.bar ? ` · bar ${row.bar}` : ''}`)
     // close full-screen views / sub-screens before the next screen
     for (let i = 0; i < 3 && await page.locator('[role=dialog][aria-modal=true]').count(); i++) { await page.goBack().catch(() => {}); await pause(700) }
   } catch (e) { ok(`${s.id}: opened`, false, e.message.split('\n')[0]); for (let i = 0; i < 3 && await page.locator('[role=dialog][aria-modal=true]').count(); i++) { await page.keyboard.press('Escape'); await pause(300); await page.goBack().catch(() => {}); await pause(500) } }
