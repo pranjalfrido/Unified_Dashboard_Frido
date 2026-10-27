@@ -275,7 +275,7 @@ function Segments({ cd, layout, end }) {
   const [cell, setCell] = useState(null)
   const metrics = [
     { key: 'cust', label: 'Customers analysed', value: fmtN(s.totalCust), sub: 'D2C customers with an order in the last 12 months', deltasHidden: true },
-    { key: 'risk', label: 'Revenue at risk', value: fmt(s.atRiskRev), def: `${s.atRiskSegs.length} win-back segments` },
+    { key: 'risk', label: 'Revenue at risk', value: fmt(s.atRiskRev), def: `Every win-back segment: ${Object.keys(SEG_META).filter(n => ['WIN-BACK', 'URGENT SAVE'].includes(SEG_META[n].action)).join(', ')} (${s.atRiskSegs.length} with customers now)` },
     { key: 'healthy', label: 'Healthy base revenue', tileLabel: 'Healthy base rev', value: fmt(s.healthyRev), def: 'Champions + Loyal Customers' },
     { key: 'life', label: 'Lifetime revenue', value: fmt(s.totalRev), def: 'All segments combined' },
     { key: 'wbc', label: 'Win-back customers', value: fmtN(s.atRiskCust), def: 'Customers in WIN-BACK / URGENT SAVE segments' },

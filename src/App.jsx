@@ -19099,7 +19099,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
                   { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'D2C customers with an order in the last 12 months', tooltip: 'Unique D2C customers with at least one order in the 12 months up to the end date (one-time buyers included). All RFM segments add up to this.' },
-                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
+                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: `Revenue from every win-back segment: ${Object.keys(SEG_META).filter(n => atRiskActions.has(SEG_META[n].action)).join(', ')}. These customers used to buy but haven't returned — if not re-engaged, this revenue is lost.` },
                   { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
                   { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },
                 ].map((kpi, i) => (
