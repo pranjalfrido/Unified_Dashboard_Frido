@@ -16847,13 +16847,12 @@ function HeroSparkCard({ c }) {
   )
 }
 
-// cm1Margin: P&L D2C CM1 % (as a fraction) for the same dates, when the caller has it (payback, C2)
-function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, cm1Margin = null }) {
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp }) {
   // C2 (Suraj 27 Oct): one payback, in months, on margin, shown the same on Acquisition and Spend &
-  // Discounts: CAC ÷ (12-month revenue per customer ÷ 12 × margin). Margin = P&L D2C CM1 % for the
-  // same dates when known, else 35% (labelled).
-  const payMargin = cm1Margin != null && cm1Margin > 0 ? cm1Margin : 0.35
-  const payMarginLabel = cm1Margin != null && cm1Margin > 0 ? `${(payMargin * 100).toFixed(1)}% CM1 (P&L D2C)` : '35% margin (P&L CM1 not available)'
+  // Discounts: CAC ÷ (12-month revenue per customer ÷ 12 × 35%). Fixed 35% for now; using the P&L
+  // D2C CM1 % is in docs/BACKLOG.md.
+  const payMargin = 0.35
+  const payMarginLabel = '35% margin, P&L CM1 link later'
   const paybackMonthsOf = k => (k?.cac > 0 && k?.ltv12 > 0 ? k.cac / (k.ltv12 / 12 * payMargin) : null)
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
