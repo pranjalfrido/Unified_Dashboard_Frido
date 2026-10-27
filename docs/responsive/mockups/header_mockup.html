@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Header Styles</title>
+<style>
+:root{--g:#1f5a3d;--g2:#2f6b4b;--ink:#1c2420;--mut:#7b847f;--line:#eae7df;--bg:#f4f2ed}
+*{box-sizing:border-box}
+body{margin:0;background:#ece9e2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);padding:24px 16px 40px;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none;padding:0;-webkit-tap-highlight-color:transparent}
+button:focus{outline:none}button:focus-visible{outline:2px solid #9cc4ad;outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto}
+h1.t{font-size:19px;margin:0 0 4px}.cap{font-size:13px;color:var(--mut);margin:0 0 14px}
+.sw{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.sw button{border:1px solid #ddd9cf;background:#fff;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600}
+.sw button.on{border-color:var(--g);color:var(--g);box-shadow:0 0 0 3px rgba(31,90,61,.08)}
+.sw button small{font-weight:500;color:var(--mut);margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,375px);gap:22px 26px}
+.lab{font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px}
+.frame{width:375px;background:var(--bg);border-radius:18px;overflow:hidden;box-shadow:0 10px 28px rgba(28,36,32,.10)}
+.body{padding:12px}
+.card{background:#fff;border-radius:16px;border:1px solid var(--line);padding:12px 14px}
+.card .k{font-size:11px;font-weight:700;color:#5f6b65;letter-spacing:.06em;text-transform:uppercase}
+.card .v{font-size:26px;font-weight:700;margin-top:2px}
+.card .s{font-size:12px;color:var(--mut)}
+svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== common structure ===== */
+.r1{display:flex;align-items:center;gap:4px;height:48px;padding:0 8px 0 16px}
+.ti{margin-right:auto;min-width:0;display:flex;align-items:baseline;gap:7px;white-space:nowrap;overflow:hidden}
+.ti b{font-size:17px;font-weight:650;letter-spacing:-.015em}
+.ti span{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.dt{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 8px;border-radius:10px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.dt .cv{width:10px;height:10px;opacity:.6}
+.ib{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;position:relative;flex:0 0 auto}
+.ib .d{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%}
+.ib .n{position:absolute;top:2px;right:1px;min-width:14px;height:14px;border-radius:999px;font-size:9px;font-weight:800;display:grid;place-items:center;padding:0 3px}
+.r2{display:flex;gap:4px;overflow-x:auto;padding:0 12px 10px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent)}
+.r2::-webkit-scrollbar{display:none}
+.ch{flex:0 0 auto;height:28px;padding:0 11px;border-radius:999px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px}
+.ch i{width:5px;height:5px;border-radius:50%;background:#d9a441}
+.r3{display:flex;gap:20px;padding:0 16px;overflow-x:auto;scrollbar-width:none}
+.r3::-webkit-scrollbar{display:none}
+.r3.even{justify-content:space-between}
+.st{flex:0 0 auto;font-size:12.5px;font-weight:600;height:34px;position:relative}
+.st.on::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px}
+
+/* ===== A. IVORY (recommended) ===== */
+.A .hd{background:#fbfaf7;border-bottom:1px solid var(--line)}
+.A .ti b{color:var(--ink)}.A .ti span{color:#8a938e}
+.A .dt{color:var(--g);background:#eef5f0}
+.A .ib{color:#4e5a54}.A .ib:active{background:#f1efe9}
+.A .ib .d{background:#d9534f;box-shadow:0 0 0 2px #fbfaf7}
+.A .ib .n{background:var(--g);color:#fff;box-shadow:0 0 0 2px #fbfaf7}
+.A .ch{color:#5c6761}
+.A .ch.on{background:var(--g);color:#fff}
+.A .r3{border-top:1px solid #f0ede6}
+.A .st{color:#8a938e}.A .st.on{color:var(--ink)}.A .st.on::after{background:var(--g)}
+.A .r3.sub .st{font-size:12px;height:30px}.A .r3.sub{background:#f6f4ef}
+
+/* ===== B. GREEN TITLE + LIGHT SUB-BAR ===== */
+.B .hd .top{background:linear-gradient(180deg,#143a2c,#18432f);color:#fff}
+.B .ti span{color:rgba(255,255,255,.62)}
+.B .dt{color:#fff;background:rgba(255,255,255,.10)}
+.B .ib{color:#fff}
+.B .ib .d{background:#ff7a6e;box-shadow:0 0 0 2px #163d2d}
+.B .ib .n{background:#fff;color:var(--g);box-shadow:0 0 0 2px #163d2d}
+.B .lo{background:#eef4f0;border-bottom:1px solid #dbe8df}
+.B .r2{padding:8px 12px}
+.B .ch{color:#4f6158}.B .ch.on{background:#fff;color:var(--g);box-shadow:0 1px 3px rgba(31,90,61,.18)}
+.B .st{color:#6f7d76}.B .st.on{color:var(--g)}.B .st.on::after{background:var(--g)}
+.B .r3+.r3{border-top:1px solid #dbe8df}
+.B .r2+.r3{border-top:1px solid #dbe8df}
+
+/* ===== C. DEEP GREEN COMPACT ===== */
+.C .hd{background:linear-gradient(180deg,#123528,#17402f);color:#fff}
+.C .ti span{color:rgba(255,255,255,.62)}
+.C .dt{color:#fff;border:1px solid rgba(255,255,255,.14)}
+.C .ib{color:#fff;border:1px solid rgba(255,255,255,.14);width:32px;height:32px;margin-left:2px}
+.C .ib .d{background:#ff7a6e;box-shadow:0 0 0 2px #143a2c}
+.C .ib .n{background:#fff;color:var(--g);box-shadow:0 0 0 2px #143a2c}
+.C .ch{color:rgba(255,255,255,.8);background:rgba(255,255,255,.07)}
+.C .ch.on{background:#fff;color:var(--g)}
+.C .r3{border-top:1px solid rgba(255,255,255,.07)}
+.C .st{color:rgba(255,255,255,.6)}.C .st.on{color:#fff}.C .st.on::after{background:#fff;left:30%;right:30%}
+
+/* collapsed */
+.cb .r1{height:42px}.cb .ti b{font-size:15px}
+.A .cbw{background:rgba(251,250,247,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 4px 14px rgba(28,36,32,.07)}
+.notes{background:#fff;border-radius:14px;border:1px solid var(--line);padding:16px 20px;font-size:14px;line-height:1.55;max-width:375px}
+.notes h2{font-size:16px;margin:0 0 8px}.notes li{margin-bottom:6px}.notes ul{padding-left:18px;margin:6px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 class="t">Mobile header: final (Ivory)</h1>
+<p class="cap">Light ivory header on every page. Fixed control order: date · filter · ⋯ (notifications inside ⋯). Last frame shows the collapsed state after scrolling.</p>
+
+<div class="grid A" id="g"></div>
+</div>
+<script>
+const I={cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+ cv:'<svg class="cv" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+ fil:'<svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg>',
+ more:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>'};
+const r1=(t,s,o={})=>`<div class="r1"><div class="ti"><b>${t}</b>${s?`<span>${s}</span>`:''}</div>
+ ${o.noDate?'':`<button class="dt">${o.date||'1–30 Sep'}${I.cv}</button>`}
+ ${o.noFil?'':`<button class="ib" aria-label="Filters">${I.fil}${o.f?`<span class="n">${o.f}</span>`:''}</button>`}
+ <button class="ib" aria-label="More, 4 notifications">${I.more}<span class="d"></span></button></div>`;
+const r2=(a,on,dots=[])=>`<div class="r2">${a.map(x=>`<button class="ch ${x===on?'on':''}">${x}${dots.includes(x)?'<i></i>':''}</button>`).join('')}</div>`;
+const r3=(a,on,cls='')=>`<div class="r3 ${cls}">${a.map(x=>`<button class="st ${x===on?'on':''}">${x}</button>`).join('')}</div>`;
+const CH=['Overall','D2C','EBO','Amazon','Flipkart','Blinkit','CRED','Myntra'];
+// B needs top / lower split
+const H=[
+ ['Overview',[r1('Overview','')],[] ,'Gross revenue','₹58.01 Cr'],
+ ['Sales · Overall',[r1('Sales','Overall')],[r2(CH,'Overall')],'Gross revenue','₹44.16 Cr'],
+ ['Sales · D2C',[r1('Sales','D2C')],[r2(CH,'D2C'),r3(['Overall','MyFrido','Mobility'],'Overall')],'Gross revenue','₹26.99 Cr'],
+ ['P&L · D2C',[r1('P&L','D2C',{noFil:1})],[r2(['Overall','D2C','EBO','Amazon','Flipkart','Blinkit','CRED'],'D2C',['Overall','EBO']),r3(['Overall','MyFrido','Mobility'],'Overall')],'Gross revenue','₹26.85 Cr'],
+ ['Inventory',[r1('Inventory','',{noDate:1})],[r3(['Inventory Health','Sales & Allocation'],'Inventory Health')],'Stock value','₹18.42 Cr'],
+ ['Logistics · Cost',[r1('Logistics','',{date:'Sep 2026'})],[r3(['Performance','Cost'],'Cost'),r3(['Overview','B2C','FTL/PTL','3PL'],'Overview','even sub')],'Total logistics cost','₹1.12 Cr'],
+ ['Customers · Intelligence',[r1('Customers','',{noFil:1})],[r3(['Intelligence','Support'],'Intelligence'),r3(['Overview','Acquisition','Retention','Behaviour','Segments'],'Overview','sub')],'Gross sales','₹26.99 Cr'],
+ ['Scrolled (collapsed, any page)',[`<div class="cb cbw">${r1('Sales','D2C · Overall',{noFil:1})}</div>`],[],'Gross revenue','₹26.99 Cr']];
+function render(){document.getElementById('g').innerHTML=H.map(([l,top,low,k,v])=>`<div><div class="lab">${l}</div><div class="frame"><div class="hd"><div class="top">${top.join('')}</div>${low.length?`<div class="lo">${low.join('')}</div>`:''}</div>
+ <div class="body"><div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="s">▲ vs prev · illustrative</div></div></div></div></div>`).join('')+
+ `<div class="notes"><h2>What makes it elegant</h2><ul>
+ <li><b>Less chrome:</b> no boxed buttons; icons sit on their own with a soft press state. The date is a quiet tinted pill with a chevron, not an outlined box.</li>
+ <li><b>One accent colour:</b> Frido green only for the active chip, the active underline and the date. Everything else is ink and grey.</li>
+ <li><b>Notifications</b> become a small red dot on ⋯ (count inside the menu).</li>
+ <li><b>Ivory header</b> (#fbfaf7) with a hairline bottom edge, blending into the page so the data cards become the hero. When scrolled it turns slightly translucent with a soft shadow.</li>
+ <li>Heights: 48 / 86 / 120px, 42px when scrolled. Titles 17px, never wrap.</li></ul></div>`;}
+
+render();
+</script>
+</body>
+</html>

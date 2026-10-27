@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { C } from '../utils.js'
 import RankedRow from './RankedRow.jsx'
+import MobilePageHeader from './MobilePageHeader.jsx'
 import { rankItems, barMax, barPctOf } from './rankSort.js'
 
 // "Show all" for record lists (mockups/sales_mobile_mockup.html #full): a full-screen page that
@@ -69,15 +70,10 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={title} className="fullscreen-list"
       style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: M.bg, display: 'flex', flexDirection: 'column', paddingTop: 'var(--safe-top)' }}>
-      <div style={{ background: '#fff', padding: '12px 14px 10px', borderBottom: `1px solid ${M.line}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={onClose} aria-label="Back"
-            style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: M.soft, color: M.ink, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>‹</button>
-          <span style={{ fontSize: 16, fontWeight: 700, color: M.ink }}>{title}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: M.muted }}>{list.length} {noun}</span>
-        </div>
+      <MobilePageHeader onBack={onClose} title={title} sub={`${list.length} ${noun}`} />
+      <div style={{ background: '#fff', padding: '10px 14px 10px', borderBottom: `1px solid ${M.line}` }}>
         <input type="search" value={q} onChange={e => reset(setQ)(e.target.value)} placeholder={`Search ${noun}…`} aria-label={`Search ${noun}`}
-          style={{ width: '100%', marginTop: 10, fontSize: 16, padding: '10px 12px', borderRadius: 12, border: `1px solid ${M.line}`, background: M.soft, color: M.ink, outline: 'none', fontFamily: 'var(--font)' }} />
+          style={{ width: '100%', marginTop: 0, fontSize: 16, padding: '10px 12px', borderRadius: 12, border: `1px solid ${M.line}`, background: M.soft, color: M.ink, outline: 'none', fontFamily: 'var(--font)' }} />
         <div role="group" aria-label="Sort by" style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 8, scrollbarWidth: 'none' }}>
           {sorts.map(s => chip(s.key === sortKey, s.label, reset(() => pickSort(s.key))))}
         </div>

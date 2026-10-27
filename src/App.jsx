@@ -40,6 +40,7 @@ import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonLis
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
 import ActionMenu from './responsive/ActionMenu.jsx'
+import BottomSheet from './responsive/BottomSheet.jsx'
 import MixBar from './responsive/MixBar.jsx'
 import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeCustomerRules } from './customer/customerRules.js'
@@ -3781,6 +3782,19 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
   const displayLabel = filters.start && filters.end
     ? (isMobile ? `${fmtShort(filters.start)} – ${fmtShort(filters.end)}` : `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}`)
     : 'Date range'
+  // Phone page header (HEADER_MOBILE_PROMPT.md §3): short form in the mint pill: "Sep 2026" (a whole
+  // month), "1–26 Oct" (one month), "28 Sep – 26 Oct", "Dec 25 – Jan 26". index.css shows it only there.
+  const shortLabel = (() => {
+    const s = parseD(filters?.start), e = parseD(filters?.end)
+    if (!s || !e) return 'Date range'
+    const M = MONTH_NAMES
+    if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) {
+      if (s.getDate() === 1 && e.getDate() === new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate()) return `${M[s.getMonth()]} ${s.getFullYear()}`
+      return s.getDate() === e.getDate() ? `${s.getDate()} ${M[s.getMonth()]}` : `${s.getDate()}–${e.getDate()} ${M[s.getMonth()]}`
+    }
+    if (s.getFullYear() === e.getFullYear()) return `${s.getDate()} ${M[s.getMonth()]} – ${e.getDate()} ${M[e.getMonth()]}`
+    return `${M[s.getMonth()]} ${String(s.getFullYear()).slice(2)} – ${M[e.getMonth()]} ${String(e.getFullYear()).slice(2)}`
+  })()
 
   const calIcon = (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -3885,8 +3899,10 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
       {/* Trigger button */}
       <button ref={btnRef} onClick={openPicker} className="drp-trigger"
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
-        {calIcon}
-        {displayLabel}
+        <span className="drp-cal">{calIcon}</span>
+        <span className="drp-long">{displayLabel}</span>
+        <span className="drp-short">{shortLabel}</span>
+        <svg className="drp-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
       {onRefresh && !isMobile && (
@@ -4917,6 +4933,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
 
 function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
@@ -4926,208 +4943,167 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   const dateBlurred = false
   const bp = useBreakpoint()
   const pnlTool = usePnlTool()
-  // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
-  // the other pages keep this bar until they are redesigned.
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'inventory') {
-    // INVENTORY_MOBILE_REDESIGN_PROMPT.md §1: sub-tabs in the header, no date picker on Health (a
-    // snapshot), the Sales & Allocation range as a pill, filters in a sheet, exports in "⋯".
-    const ctrl = inventoryDateControl
-    const tab = invTab === 'sales' ? 'sales' : 'health'
-    const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
-    const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
-    const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
-    // Data source / last update live in the "⋯" sheet (note), not under the title: the header stays two rows.
-    const menu = <ActionMenu items={ctrl?.invMenu || []} title={`Inventory · ${invTitles[tab]}`} note={invCaption(tab, ctrl)} />
-    return (
+  // Phones (≤768px and phone landscape): every page uses the shared Ivory MobilePageHeader
+  // (HEADER_MOBILE_PROMPT.md): title · context, then always date · filter · ⋯ (notifications are the
+  // first ⋯ item, a red dot on ⋯ while there are any), optional chips / sub-tabs / "Filtered:" strip,
+  // and it folds to one 42px bar while scrolling down. Laptop and tablet keep the bar further below.
+  const phone = bp.width <= 768 || bp.isPhoneLandscape
+  if (page === 'ask' && !phone) return null
+  if (phone) {
+    const notifications = { count: combinedAlerts.length, onOpen: () => setTimeout(() => setAlertsOpen(true), 350) }
+    const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>
+    const H = props => (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Inventory" compact
-          right={<>
-            {tab === 'sales' && ctrl?.filters && <div className="tnav-right"><DateRangePicker filters={ctrl.filters} setFilters={ctrl.setFilters} onRefresh={ctrl.onRefresh} /></div>}
-            <InvFilterButton tab={tab} ctrl={ctrl} />
-            {menu}
-          </>}
-          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={tab} onSub={setInvTab}
-          strip={{ items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) }} />
+        <MobilePageHeader collapsible notifications={notifications} {...props} />
+        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
       </div>
     )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'logistics' || page === 'logistics-cost')) {
-    // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §1: "Logistics" with Performance / Cost underline tabs; Cost
-    // adds the slim Overview · B2C · FTL/PTL · 3PL row and the billing-month pill (its sheet and the
-    // filter sheet live in LogisticsCostPage, reached through logCostCtrl). Refresh / Export / info → "⋯".
-    const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
-    const hasCost = hasCostAccess(allowedTabs)
-    const subTabs = [hasPerf && { id: 'logistics', label: 'Performance' }, hasCost && { id: 'logistics-cost', label: 'Cost' }].filter(Boolean)
-    if (page === 'logistics') {
-      const menu = <ActionMenu items={logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : []} title="Logistics · Performance" />
-      return (
-        <div className="topnav m-header" data-page={page}>
-          <MobilePageHeader title="Logistics" compact
-            right={<>
-              <div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={logisticsFilterUI?.onRefresh || onRefresh} loading={logisticsFilterUI ? logisticsFilterUI.loading : loading} /></div>
-              <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />
-              {menu}
-            </>}
-            subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
-            strip={{ items: perfStripItems(lFilters), onRemove: key => perfRemove(setLFilters, key), onClear: () => perfClear(setLFilters) }} />
-        </div>
-      )
+    if (page === 'inventory') {
+      // INVENTORY_MOBILE_REDESIGN_PROMPT.md §1: sub-tabs in the header, no date picker on Health (a
+      // snapshot), the Sales & Allocation range as a pill, filters in a sheet, exports in "⋯".
+      const ctrl = inventoryDateControl
+      const tab = invTab === 'sales' ? 'sales' : 'health'
+      const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
+      const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+      const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
+      // Data source / last update live in the "⋯" sheet (note), not under the title.
+      return H({ title: 'Inventory',
+        date: tab === 'sales' && ctrl?.filters && datePill(ctrl.filters, ctrl.setFilters, ctrl.onRefresh),
+        filter: <InvFilterButton tab={tab} ctrl={ctrl} />,
+        menu: { items: ctrl?.invMenu || [], title: `Inventory · ${invTitles[tab]}`, note: invCaption(tab, ctrl) },
+        subTabs: subTabs.length > 1 ? subTabs : null, activeSub: tab, onSub: setInvTab,
+        strip: { items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) } })
     }
-    const cc = logCostCtrl
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Logistics" compact
-          right={<>
-            {cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />}
-            {cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />}
-            <ActionMenu items={cc?.menu || []} title="Logistics · Cost" />
-          </>}
-          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
-          subTabs2={cc?.scopes?.length > 1 ? cc.scopes : null} activeSub2={cc?.scope} onSub2={id => cc?.setScope(id)}
-          strip={cc?.strip} />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'customer' || page === 'customer-support')) {
-    // CUSTOMER_MASTER_PLAN.md Part B §B3: "Customers" with Intelligence | Support underline tabs (as
-    // Inventory) and, on Intelligence, the slim second row of sub-tabs (as Logistics Cost). Date range
-    // as a pill (as Inventory Sales & Allocation); Refresh / Export in "⋯".
-    const hasIntel = !allowedTabs || allowedTabs.includes('customer')
-    const hasSupport = !allowedTabs || allowedTabs.includes('customer:support')
-    const subTabs = [hasIntel && { id: 'customer', label: 'Intelligence' }, hasSupport && { id: 'customer-support', label: 'Support' }].filter(Boolean)
-    const intel = page === 'customer'
-    const sub2 = [{ id: 'overview', label: 'Overview' }, { id: 'trends', label: 'Acquisition' }, { id: 'cohort', label: 'Retention' }, { id: 'purchase', label: 'Behaviour' }, { id: 'rfm', label: 'Segments' }, { id: 'spend', label: 'Discounts' }]
-    const items = intel ? [{ id: 'refresh', label: 'Refresh data', onSelect: onCustRefresh }]
-      : [{ id: 'refresh', label: 'Refresh data', onSelect: onCsRefresh },
-        ...(csExport && !csExport.busy && csExport.items?.length ? [{ id: 'exp-all', label: 'Export all detailed KPIs (CSV)', onSelect: () => csExport.run('all') }] : [])]
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Customers" compact
-          right={<>
-            <div className="tnav-right">{intel
-              ? <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onCustRefresh} loading={loading} />
-              : csRange && <DateRangePicker filters={csRange} setFilters={setCsRange} onRefresh={onCsRefresh} />}</div>
-            <ActionMenu items={items} title={intel ? 'Customers · Intelligence' : 'Customers · Support'} />
-          </>}
-          subTabs={subTabs.length > 1 ? subTabs : null} activeSub={page} onSub={setPage}
-          subTabs2={intel ? sub2 : null} activeSub2={customerTab} onSub2={setCustomerTab} subTabs2Scroll />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'ads') {
-    // ADS_MASTER_PLAN.md Part B §3: "Ads" + date + "⋯" (Refresh) and the channels as chips. Replaces the
-    // ☰ platform panel (MobileAdsPanel) on phones.
-    const order = ['All', 'D2C', 'Amazon', 'Flipkart', 'Myntra', 'Blinkit', 'Zepto', 'Instamart', 'CRED']
-    const chips = order.map(id => ADS_PLATFORMS.find(p => p.id === id)).filter(Boolean)
-      .map(p => ({ id: p.id, label: p.label, disabled: !!allowedTabs && !allowedTabs.includes(ADS_KEY_MAP[p.id]) }))
-    const active = adsSelPlatform || 'All'
-    const menu = <ActionMenu title={`Ads · ${ADS_PLATFORMS.find(p => p.id === active)?.label || 'Overall'}`} items={[{ id: 'refresh', label: 'Refresh data', onSelect: onRefresh }]} />
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Ads"
-          right={<><div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} /></div>{menu}</>}
-          chips={chips} activeChip={active} onChip={id => { if (id !== active) setAdsSelPlatform(id === 'All' ? null : id) }} />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'profile') {
-    // PROFILE_MOBILE_PROMPT.md: "Profile" + ⋯ (Theme, Sign out) like every other page; ProfilePage handles them.
-    const send = detail => () => window.dispatchEvent(new CustomEvent('profile:menu', { detail }))
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Profile" right={<ActionMenu title="Profile" items={[{ id: 'theme', label: 'Theme', onSelect: send('theme') }, { id: 'signout', label: 'Sign out', onSelect: send('signout') }]} />} />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl' && pnlTool.tool) {
-    // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
-    // just "‹ D2C" back + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
-    const t = pnlTool.tool
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader
-          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <button type="button" onClick={t.onBack} aria-label={`Back to ${t.backLabel}`}
-              style={{ minHeight: 44, padding: '0 4px 0 0', border: 'none', background: 'none', color: 'rgba(255,255,255,.8)', fontSize: 15, fontWeight: 500, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap' }}>‹ {t.backLabel}</button>
-            <span style={{ fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
-          </span>}
-          right={pnlTool.reset ? <ActionMenu title={t.title} items={[{ id: 'reset', label: 'Reset', onSelect: runPnlToolReset }]} /> : null} />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl') {
-    // PNL_MASTER_PLAN.md Part B §4: "P&L" + date + "⋯" (Refresh, Export), the 13 channels as chips
-    // (amber dot = In progress: Overall, EBO, International, Myntra) and underline sub-tabs for D2C /
-    // Amazon / Offline. Replaces the ☰ channel panel (MobilePnLPanel) on phones.
-    const inProgress = new Set(['all', 'ebo', 'international', 'myntra'])
-    const chips = PNL_TABS_NAV.map(t => ({
-      id: t.id, disabled: !!allowedTabs && !allowedTabs.includes(`pnl:${t.id}`),
-      label: <>{t.id === 'offline' ? 'Offline' : t.label}{inProgress.has(t.id) && <span role="img" aria-label="in progress" title="In progress" style={{ width: 6, height: 6, borderRadius: '50%', background: C.m.amber, display: 'inline-block' }} />}</>,
-    }))
-    const subTabs = pnlActiveTab === 'shopify' ? [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }]
-      : pnlActiveTab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
-      : pnlActiveTab === 'offline' ? [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Misc' }]
-      : null
-    const activeSub = pnlActiveTab === 'shopify' ? pnlD2cSubCh : pnlActiveTab === 'amazon' ? pnlAmzView : pnlActiveTab === 'offline' ? pnlOfflineSub : null
-    const onSub = id => { if (pnlActiveTab === 'shopify') setPnlD2cSubCh(id); else if (pnlActiveTab === 'amazon') setPnlAmzView(id); else if (pnlActiveTab === 'offline') setPnlOfflineSub(id) }
-    const chLabel = PNL_TABS_NAV.find(t => t.id === pnlActiveTab)?.label || 'P&L'
-    const menu = <ActionMenu title={`P&L · ${chLabel}`} items={[
-      { id: 'refresh', label: 'Refresh data', onSelect: onRefresh },
-      { id: 'export', label: 'Export Financial view (CSV)', onSelect: () => window.dispatchEvent(new Event('pnl:export')) },
-    ]} />
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="P&L"
-          right={<><div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} /></div>{!subTabs && menu}</>}
-          chips={chips} activeChip={pnlActiveTab} onChip={id => { if (id !== pnlActiveTab) setPnlActiveTab(id) }}
-          subTabs={subTabs} activeSub={activeSub} onSub={onSub} subRight={subTabs ? menu : null} />
-      </div>
-    )
-  }
-  if ((bp.width <= 768 || bp.isPhoneLandscape) && (page === 'overview' || page === 'sales')) {
-    const dateNode = (
-      <div className="tnav-right">
-        <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
-          <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
-        </div>
-      </div>
-    )
+    if (page === 'logistics' || page === 'logistics-cost') {
+      // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §1: Performance / Cost underline tabs; Cost adds the slim
+      // Overview · B2C · FTL/PTL · 3PL row and the billing-month pill (its sheet and the filter sheet live
+      // in LogisticsCostPage, reached through logCostCtrl). Refresh / Export / info → "⋯".
+      const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
+      const hasCost = hasCostAccess(allowedTabs)
+      const subTabs = [hasPerf && { id: 'logistics', label: 'Performance' }, hasCost && { id: 'logistics-cost', label: 'Cost' }].filter(Boolean)
+      const tabs = { subTabs: subTabs.length > 1 ? subTabs : null, activeSub: page, onSub: setPage }
+      if (page === 'logistics') {
+        return H({ title: 'Logistics', ...tabs,
+          date: datePill(filters, setFilters, logisticsFilterUI?.onRefresh || onRefresh, logisticsFilterUI ? logisticsFilterUI.loading : loading),
+          filter: <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />,
+          menu: { title: 'Logistics · Performance', items: logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : [] },
+          strip: { items: perfStripItems(lFilters), onRemove: key => perfRemove(setLFilters, key), onClear: () => perfClear(setLFilters) } })
+      }
+      const cc = logCostCtrl
+      return H({ title: 'Logistics', ...tabs,
+        date: cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />,
+        filter: cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />,
+        menu: { title: 'Logistics · Cost', items: cc?.menu || [] },
+        subTabs2: cc?.scopes?.length > 1 ? cc.scopes : null, activeSub2: cc?.scope, onSub2: id => cc?.setScope(id),
+        strip: cc?.strip })
+    }
+    if (page === 'customer' || page === 'customer-support') {
+      // CUSTOMER_MASTER_PLAN.md Part B §B3: Intelligence | Support underline tabs and, on Intelligence,
+      // the slim second row of sub-tabs. Date range as a pill; Refresh / Export in "⋯".
+      const hasIntel = !allowedTabs || allowedTabs.includes('customer')
+      const hasSupport = !allowedTabs || allowedTabs.includes('customer:support')
+      const subTabs = [hasIntel && { id: 'customer', label: 'Intelligence' }, hasSupport && { id: 'customer-support', label: 'Support' }].filter(Boolean)
+      const intel = page === 'customer'
+      const sub2 = [{ id: 'overview', label: 'Overview' }, { id: 'trends', label: 'Acquisition' }, { id: 'cohort', label: 'Retention' }, { id: 'purchase', label: 'Behaviour' }, { id: 'rfm', label: 'Segments' }, { id: 'spend', label: 'Discounts' }]
+      const items = intel ? [{ id: 'refresh', label: 'Refresh data', onSelect: onCustRefresh }]
+        : [{ id: 'refresh', label: 'Refresh data', onSelect: onCsRefresh },
+          ...(csExport && !csExport.busy && csExport.items?.length ? [{ id: 'exp-all', label: 'Export all detailed KPIs (CSV)', onSelect: () => csExport.run('all') }] : [])]
+      return H({ title: 'Customers',
+        date: intel ? datePill(filters, setFilters, onCustRefresh, loading) : csRange && datePill(csRange, setCsRange, onCsRefresh),
+        menu: { items, title: intel ? 'Customers · Intelligence' : 'Customers · Support' },
+        subTabs: subTabs.length > 1 ? subTabs : null, activeSub: page, onSub: setPage,
+        subTabs2: intel ? sub2 : null, activeSub2: customerTab, onSub2: setCustomerTab, subTabs2Scroll: true })
+    }
+    if (page === 'ads') {
+      // ADS_MASTER_PLAN.md Part B §3: the channels as chips (replaces the ☰ platform panel on phones).
+      const order = ['All', 'D2C', 'Amazon', 'Flipkart', 'Myntra', 'Blinkit', 'Zepto', 'Instamart', 'CRED']
+      const chips = order.map(id => ADS_PLATFORMS.find(p => p.id === id)).filter(Boolean)
+        .map(p => ({ id: p.id, label: p.label, disabled: !!allowedTabs && !allowedTabs.includes(ADS_KEY_MAP[p.id]) }))
+      const active = adsSelPlatform || 'All'
+      const chLabel = ADS_PLATFORMS.find(p => p.id === active)?.label || 'Overall'
+      return H({ title: 'Ads', sub: chLabel,
+        date: datePill(filters, setFilters, onRefresh, loading),
+        menu: { title: `Ads · ${chLabel}`, items: [{ id: 'refresh', label: 'Refresh data', onSelect: onRefresh }] },
+        chips, activeChip: active, onChip: id => { if (id !== active) setAdsSelPlatform(id === 'All' ? null : id) } })
+    }
+    if (page === 'profile') {
+      // PROFILE_MOBILE_PROMPT.md: ⋯ holds Theme and Sign out; ProfilePage handles them.
+      const send = detail => () => window.dispatchEvent(new CustomEvent('profile:menu', { detail }))
+      return H({ title: 'Profile', menu: { title: 'Profile', items: [{ id: 'theme', label: 'Theme', onSelect: send('theme') }, { id: 'signout', label: 'Sign out', onSelect: send('signout') }] } })
+    }
+    if (page === 'pnl' && pnlTool.tool) {
+      // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
+      // ‹ back to the channel + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
+      const t = pnlTool.tool
+      return H({ onBack: t.onBack, backLabel: t.backLabel, title: t.title, sub: t.backLabel,
+        menu: { title: t.title, items: pnlTool.reset ? [{ id: 'reset', label: 'Reset', onSelect: runPnlToolReset }] : [] } })
+    }
+    if (page === 'pnl') {
+      // PNL_MASTER_PLAN.md Part B §4: the 13 channels as chips (amber dot = In progress: Overall, EBO,
+      // International, Myntra) and underline sub-tabs for D2C / Amazon / Offline.
+      const inProgress = new Set(['all', 'ebo', 'international', 'myntra'])
+      const chips = PNL_TABS_NAV.map(t => ({
+        id: t.id, disabled: !!allowedTabs && !allowedTabs.includes(`pnl:${t.id}`),
+        label: <>{t.id === 'offline' ? 'Offline' : t.label}{inProgress.has(t.id) && <span role="img" aria-label="in progress" title="In progress" style={{ width: 5, height: 5, borderRadius: '50%', background: C.m.amber, display: 'inline-block' }} />}</>,
+      }))
+      const subTabs = pnlActiveTab === 'shopify' ? [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }]
+        : pnlActiveTab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+        : pnlActiveTab === 'offline' ? [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Misc' }]
+        : null
+      const activeSub = pnlActiveTab === 'shopify' ? pnlD2cSubCh : pnlActiveTab === 'amazon' ? pnlAmzView : pnlActiveTab === 'offline' ? pnlOfflineSub : null
+      const onSub = id => { if (pnlActiveTab === 'shopify') setPnlD2cSubCh(id); else if (pnlActiveTab === 'amazon') setPnlAmzView(id); else if (pnlActiveTab === 'offline') setPnlOfflineSub(id) }
+      const chLabel = PNL_TABS_NAV.find(t => t.id === pnlActiveTab)?.label || 'P&L'
+      return H({ title: 'P&L', sub: chLabel === 'Offline Sales' ? 'Offline' : chLabel,
+        date: datePill(filters, setFilters, onRefresh, loading),
+        menu: { title: `P&L · ${chLabel}`, items: [
+          { id: 'refresh', label: 'Refresh data', onSelect: onRefresh },
+          { id: 'export', label: 'Export Financial view (CSV)', onSelect: () => window.dispatchEvent(new Event('pnl:export')) },
+        ] },
+        chips, activeChip: pnlActiveTab, onChip: id => { if (id !== pnlActiveTab) setPnlActiveTab(id) },
+        subTabs, activeSub, onSub })
+    }
     if (page === 'overview') {
-      return (
-        <div className="topnav m-header" data-page={page}>
-          <MobilePageHeader title={pageTitle} right={<>
-            {/* Shown while a Sales-tab filter is shaping the Overview numbers. */}
-            <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>
-            <AlertsBell alerts={combinedAlerts} />
-            {dateNode}
-          </>} />
-        </div>
-      )
+      // Filter icon + "Filtered:" strip only while a Sales-tab filter (other than the page default) shapes the numbers.
+      return H({ title: 'Overview',
+        date: datePill(filters, setFilters, onRefresh, loading),
+        filter: <OverviewFilterButton filters={filters} setFilters={setFilters} />,
+        strip: { items: activeSalesFilters(filters), onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) } })
     }
-    const tab = salesActiveTab
-    const chips = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id])).map(t => ({ id: t.id, label: t.label }))
-    const d2cSubs = (salesData?.allSubChannels?.length ? salesData.allSubChannels : Object.keys(salesData?.subChannelMap || {}).filter(k => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
-    const d2cActive = (filters.subChannel || '').split(',').map(x => x.trim()).find(v => v && v !== 'ShopifyIndia' && v !== 'International') || null
-    const subTabs = tab === 'shopify' && shopifyView !== 'returns' && d2cSubs.length ? [{ id: 'overall', label: 'Overall' }, ...d2cSubs.map(k => ({ id: k.toLowerCase(), label: k }))]
-      : tab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
-      : tab === 'offline' ? OFFLINE_SUB_OPTIONS
-      : null
-    const activeSub = tab === 'shopify' ? (d2cActive ? d2cActive.toLowerCase() : 'overall') : tab === 'amazon' ? salesChannelView : tab === 'offline' ? salesOfflineSub : null
-    const onSub = id => { if (tab === 'shopify') goToSalesSub?.(id); else if (tab === 'amazon') setSalesChannelView(id); else if (tab === 'offline') setSalesOfflineSub(id) }
-    // The sub-channel is the D2C sub-tab, not a filter, so it stays out of the "Filtered:" strip.
-    const stripItems = activeSalesFilters(filters).filter(i => i.key !== 'subChannel')
-    const menu = <ActionMenu items={salesMenu || []} title={`Sales · ${salesChannelLabel}`} />
-    return (
-      <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader title="Sales" sub={salesChannelLabel}
-          right={<>{!subTabs && menu}<AlertsBell alerts={combinedAlerts} />{dateNode}</>}
-          chips={chips} activeChip={tab}
-          onChip={id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
-          chipsRight={<SalesFilterButton data={salesData} filters={filters} setFilters={setFilters} activeTab={tab} subCatFirstOrderMap={subCatFirstOrderMap} />}
-          subTabs={subTabs} activeSub={activeSub} onSub={onSub} subRight={subTabs ? menu : null}
-          strip={{ items: stripItems, onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) }} />
-      </div>
-    )
+    if (page === 'sales') {
+      const tab = salesActiveTab
+      const chips = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id])).map(t => ({ id: t.id, label: t.label }))
+      const d2cSubs = (salesData?.allSubChannels?.length ? salesData.allSubChannels : Object.keys(salesData?.subChannelMap || {}).filter(k => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
+      const d2cActive = (filters.subChannel || '').split(',').map(x => x.trim()).find(v => v && v !== 'ShopifyIndia' && v !== 'International') || null
+      const subTabs = tab === 'shopify' && shopifyView !== 'returns' && d2cSubs.length ? [{ id: 'overall', label: 'Overall' }, ...d2cSubs.map(k => ({ id: k.toLowerCase(), label: k }))]
+        : tab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+        : tab === 'offline' ? OFFLINE_SUB_OPTIONS
+        : null
+      const activeSub = tab === 'shopify' ? (d2cActive ? d2cActive.toLowerCase() : 'overall') : tab === 'amazon' ? salesChannelView : tab === 'offline' ? salesOfflineSub : null
+      const onSub = id => { if (tab === 'shopify') goToSalesSub?.(id); else if (tab === 'amazon') setSalesChannelView(id); else if (tab === 'offline') setSalesOfflineSub(id) }
+      // The sub-channel is the D2C sub-tab, not a filter, so it stays out of the "Filtered:" strip.
+      const strip = { items: activeSalesFilters(filters).filter(i => i.key !== 'subChannel'), onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) }
+      const date = datePill(filters, setFilters, onRefresh, loading)
+      const filter = <SalesFilterButton data={salesData} filters={filters} setFilters={setFilters} activeTab={tab} subCatFirstOrderMap={subCatFirstOrderMap} />
+      if (tab === 'shopify' && shopifyView === 'returns') {
+        // Sales → D2C → Return Analysis: ‹ back to D2C, no channel chips or sub-tabs (D2C only).
+        return H({ onBack: () => goToSalesSub?.('overall'), backLabel: 'D2C', title: 'Return analysis', sub: 'D2C', date, filter, strip,
+          menu: { items: salesMenu || [], title: 'Return analysis' } })
+      }
+      return H({ title: 'Sales', sub: salesChannelLabel, date, filter, strip,
+        menu: { items: salesMenu || [], title: `Sales · ${salesChannelLabel}` },
+        chips, activeChip: tab,
+        onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
+        subTabs, activeSub, onSub })
+    }
+    // Every other screen (Documents, Frido Pulse, the internal tools, Financial MIS …): the same header,
+    // ‹ back for the tools opened from another page, a date pill where the page has a date range.
+    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost', 'financial-mis': 'sales' }[page]
+    const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
+    const phoneTitles = { ...titles, ask: 'Frido Pulse', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
+    const hasDate = ['financial-mis', 'intelligence'].includes(page)
+    return H({ title: phoneTitles[page] || page,
+      onBack: back ? () => { if (back === 'sales') setSalesActiveTab('all'); setPage(back) } : undefined, backLabel: back ? backLabels[back] : undefined,
+      date: hasDate && datePill(filters, setFilters, onRefresh, loading) })
   }
   return (
     <div className="topnav" data-page={page}>
@@ -5197,6 +5173,22 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         </div>
       )}
     </div>
+  )
+}
+
+// Phones: the same alerts list as the bell's panel, in a bottom sheet. Opened from "Notifications (n)",
+// the first item of the header's ⋯ menu (HEADER_MOBILE_PROMPT.md §3).
+function AlertsSheet({ open, onClose, alerts }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px', color: C.m.up, fontSize: 13, fontWeight: 600 }}>
+            <span>★</span> All systems normal: no alerts for the current period.
+          </div>
+        )}
+      </div>
+    </BottomSheet>
   )
 }
 
@@ -21124,7 +21116,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {page !== 'ask' && <Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
+        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
         {error && (

@@ -5,6 +5,7 @@ import { C } from '../utils.js'
 import { THEMES, ENABLED_THEMES } from '../theme.js'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import UndoToast from '../responsive/UndoToast.jsx'
+import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import { paletteMapCss } from '../responsive/paletteMapCss.js'
 import Avatar from './Avatar.jsx'
 import { CreateUserForm } from './CreateUser.jsx'
@@ -77,12 +78,7 @@ function FullScreen({ title, onBack, right, depth = 1, children }) {
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={title} className="profile-screen ov-mobile"
       style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: M.bg, display: 'flex', flexDirection: 'column', paddingTop: 'var(--safe-top)', color: M.ink }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '6px 12px', background: M.header, color: '#fff' }}>
-        <button type="button" onClick={onBack} aria-label="Back"
-          style={{ width: 40, height: 40, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,.10)', color: '#fff', fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>‹</button>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
-        {right}
-      </div>
+      <MobilePageHeader onBack={onBack} backLabel={depth > 1 ? 'Team members' : 'Profile'} title={title} right={right} />
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: `12px 12px calc(24px + var(--safe-bottom))`, display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
     </div>,
     document.body,
@@ -281,7 +277,7 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
   )
   return (
     <FullScreen title="Team members" onBack={onClose} depth={1}
-      right={<button type="button" onClick={() => setAddOpen(true)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.10)', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>+ Add</button>}>
+      right={<button type="button" onClick={() => setAddOpen(true)} style={{ minHeight: 34, padding: '0 10px', borderRadius: 10, border: 'none', background: M.hdr.pill, color: M.green, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>+ Add</button>}>
       <input type="search" value={q} onChange={e => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search name or email…" aria-label="Search team members" style={inputStyle} />
       <div role="group" aria-label="Filter" style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
         {chip('all', 'All')}{chip('active', 'Active')}{chip('revoked', 'Revoked')}{chip('none', 'No access')}

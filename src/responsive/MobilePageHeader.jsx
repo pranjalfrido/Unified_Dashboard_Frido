@@ -1,95 +1,122 @@
-import { useEffect, useRef } from 'react'
-import { C } from '../utils.js'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import FilteredStrip from './FilteredStrip.jsx'
+import ActionMenu from './ActionMenu.jsx'
 
-// Phone page header (docs/responsive/MOBILE_DESIGN_SYSTEM.md §2, mockups/sales_mobile_mockup.html
-// .top). Rendered inside the app's top bar (Topnav adds class `m-header`; index.css draws the dark
-// green gradient and restyles the date pill / bell for it). Every row below the first is optional:
-//   row 1  title (+ " · sub" in soft white) and `right` (bell, filter icon, date pill, "⋯");
-//          `caption`: optional small line under the title inside the same row ("Updated … · sales till …")
-//   row 2  chips: horizontally scrolling choices (channels, platforms…), active = white chip;
-//          `chipsRight` sits at the row's end (the filter icon with its count)
-//   row 3  subTabs: underline tabs, only when the current choice has them; `subRight` at the end ("⋯")
-//   row 3b subTabs2: a slim second level under row 3 (Logistics → Cost: Overview · B2C · FTL/PTL · 3PL),
-//          evenly spaced 12px text tabs, active = white bold with a short centred underline;
-//          subTabs2Scroll: natural widths that scroll sideways (Customers: six sub-tabs)
-//   row 4  strip: the "Filtered:" strip (FilteredStrip props), only when filters are active
-// The first row keeps the plain top bar's height and spacing, so a page that only uses row 1 looks
-// exactly like it did before this component.
-// compact: slimmer tab rows for pages whose actions all sit in row 1 (Inventory, Logistics).
-export default function MobilePageHeader({ title, sub, caption, right, chips, activeChip, onChip, chipsRight, subTabs, activeSub, onSub, subRight, subTabs2, activeSub2, onSub2, subTabs2Scroll = false, strip, compact = false }) {
+// Phone page header, Ivory (docs/responsive/HEADER_MOBILE_PROMPT.md, mockups/header_mockup.html;
+// MOBILE_DESIGN_SYSTEM.md §2). One header for every phone screen: the top bar (Topnav) and full-screen
+// views (‹ back + title). Styles live in index.css (.mph*). Every row below the first is optional:
+//   row 1  48px: [‹ back] title 17px + context 13px grey (`sub`), then always date · filter · ⋯.
+//          date / filter: nodes (the page's date pill, its filter icon); a control the page doesn't
+//          have is absent, the others never move. ⋯ = ActionMenu(menu) with "Notifications (n)" first
+//          when `notifications` = { count, onOpen } is given; a red dot on ⋯ while count > 0.
+//          onBack: ‹ before the title (backLabel names where it goes, for screen readers).
+//          right: anything else a full-screen view needs at the end (e.g. a row count).
+//   row 2  chips: 28px channel chips, selected = Frido green fill; the selected one scrolls into view.
+//   row 3  subTabs: 34px underline tabs (spread when ≤ 4, scroll when more).
+//   row 3b subTabs2: 30px second level on a darker band (Logistics Cost, Customers Intelligence).
+//   strip  the "Filtered:" strip (FilteredStrip props), only when a non-default filter is active.
+// collapsible (the top bar only): after ~80px of downward scroll rows 2–3 and the strip fold into one
+// 42px bar ("Title · context · sub-tab" + date + ⋯); scrolling up restores it. The scroll position is
+// shifted by the height change in the same frame, so the content never jumps.
+const BackIcon = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+
+export default function MobilePageHeader({ onBack, backLabel, title, sub, caption, date, filter, menu, notifications, right, chips, activeChip, onChip, subTabs, activeSub, onSub, subTabs2, activeSub2, onSub2, subTabs2Scroll = false, strip, collapsible = false }) {
+  const rootRef = useRef(null)
   const chipRow = useRef(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const collapsedRef = useRef(false)
+  const pending = useRef(null)
+  const lastTop = useRef(new WeakMap())
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
     const el = chipRow.current?.querySelector('[aria-pressed="true"]')
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-  }, [activeChip])
+  }, [activeChip, collapsed])
+  // A new page / channel / tab starts expanded.
+  const viewKey = [typeof title === 'string' ? title : '', typeof sub === 'string' ? sub : '', activeChip, activeSub, activeSub2].join('|')
+  const [seenKey, setSeenKey] = useState(viewKey)
+  if (seenKey !== viewKey) { setSeenKey(viewKey); if (collapsed) setCollapsed(false) }
+  useEffect(() => { collapsedRef.current = collapsed }, [collapsed])
+  useEffect(() => {
+    if (!collapsible) return
+    const onScroll = e => {
+      const el = e.target
+      if (!(el instanceof Element) || !el.closest('.app-main') || el.closest('[role=dialog], .mph')) return
+      const st = el.scrollTop, map = lastTop.current
+      const prev = map.has(el) ? map.get(el) : st
+      map.set(el, st)
+      if (st === prev || pending.current) return // sideways scroll, or our own correction
+      const head = rootRef.current
+      if (!head) return
+      if (!collapsedRef.current) {
+        const delta = head.offsetHeight - 42
+        if (delta > 0 && st > prev && st > Math.max(80, delta + 40) && el.scrollHeight - el.clientHeight > delta + 120) {
+          pending.current = { el, before: head.offsetHeight }; collapsedRef.current = true; setCollapsed(true)
+        }
+      } else if (st < prev - 4 || st <= 0) {
+        pending.current = { el, before: head.offsetHeight }; collapsedRef.current = false; setCollapsed(false)
+      }
+    }
+    document.addEventListener('scroll', onScroll, true)
+    return () => document.removeEventListener('scroll', onScroll, true)
+  }, [collapsible])
+  useLayoutEffect(() => {
+    const p = pending.current
+    if (!p) return
+    const diff = (rootRef.current?.offsetHeight || p.before) - p.before
+    p.el.scrollTop += diff
+    lastTop.current.set(p.el, p.el.scrollTop)
+    requestAnimationFrame(() => { pending.current = null })
+  }, [collapsed])
+
   const hasStrip = !!strip?.items?.length
+  const n = notifications?.count || 0
+  const items = [
+    ...(notifications ? [{ id: 'notifications', label: `Notifications (${n})`, onSelect: notifications.onOpen }] : []),
+    ...(menu?.items || []),
+  ]
+  const more = (items.length || menu?.note)
+    ? <ActionMenu items={items} title={menu?.title || 'More'} note={menu?.note} dot={n > 0} label={n > 0 ? `More, ${n} notifications` : 'More actions'} />
+    : null
+  const subLabel = subTabs?.find(t => t.id === activeSub)?.label
+  const sub2Label = subTabs2?.find(t => t.id === activeSub2)?.label
+  const context = collapsed
+    ? [sub || caption, typeof subLabel === 'string' ? subLabel : null, typeof sub2Label === 'string' ? sub2Label : null].filter(Boolean).join(' · ')
+    : (sub || caption)
   return (
-    <>
-      {/* Side padding and gap come from index.css (.mph-row1 / .mph-pad): the same values as the plain bar. */}
-      <div className="mph-row1 mph-pad" style={{ display: 'flex', alignItems: 'center', height: 'var(--nav)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
-          {caption
-            ? <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>
-                <span className="mph-caption" style={{ fontSize: 12, lineHeight: '15px', color: 'rgba(255,255,255,.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{caption}</span>
-              </span>
-            : <span className="tnav-title">{title}{sub && <span style={{ color: 'rgba(255,255,255,.75)', fontWeight: 500 }}> · {sub}</span>}</span>}
+    <div ref={rootRef} className={`mph${collapsed ? ' mph-collapsed' : ''}`}>
+      <div className={`mph-r1${onBack ? ' mph-has-back' : ''}`}>
+        {onBack && <button type="button" className="mph-ib mph-back" onClick={onBack} aria-label={backLabel ? `Back to ${backLabel}` : 'Back'}>{BackIcon}</button>}
+        <div className="mph-title"><b>{title}</b>{context && <span>{context}</span>}</div>
+        <div className="mph-ctl">
+          {date && <span className="mph-date">{date}</span>}
+          {filter && !collapsed && <span className="mph-filter" data-ctl="filter">{filter}</span>}
+          {right}
+          {more}
         </div>
-        {right}
       </div>
-      {chips?.length > 0 && (
-        <div className="mph-pad" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -2 }}>
-          <div ref={chipRow} role="group" aria-label="Choose" className="mph-chips"
-            style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', flex: 1, minWidth: 0, padding: '2px 0',
-              WebkitMaskImage: 'linear-gradient(90deg,#000 85%,transparent)', maskImage: 'linear-gradient(90deg,#000 85%,transparent)' }}>
-            {chips.map(c => {
-              const on = c.id === activeChip
-              return (
-                <button key={c.id} type="button" aria-pressed={on} disabled={c.disabled} onClick={() => onChip(c.id)}
-                  style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 11px', borderRadius: 999, fontSize: 13, fontFamily: 'var(--font)', cursor: c.disabled ? 'not-allowed' : 'pointer', opacity: c.disabled ? 0.4 : 1,
-                    background: on ? '#fff' : 'rgba(255,255,255,.10)', color: on ? C.m.greenDark : '#e9f1ec', fontWeight: on ? 700 : 500, border: `1px solid ${on ? '#fff' : 'rgba(255,255,255,.14)'}` }}>
-                  {c.label}
-                </button>
-              )
-            })}
-          </div>
-          {chipsRight}
+      {!collapsed && chips?.length > 0 && (
+        <div ref={chipRow} role="group" aria-label="Choose" className="mph-r2">
+          {chips.map(c => (
+            <button key={c.id} type="button" className="mph-chip" aria-pressed={c.id === activeChip} disabled={c.disabled} onClick={() => onChip(c.id)}>{c.label}</button>
+          ))}
         </div>
       )}
-      {subTabs?.length > 0 && (
-        <div className="mph-pad" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, paddingTop: compact ? 0 : 6, marginTop: compact ? -4 : 0 }}>
-          <div role="tablist" aria-label="View" className="mph-chips" style={{ display: 'flex', gap: 16, overflowX: 'auto', scrollbarWidth: 'none', flex: 1, minWidth: 0 }}>
-            {subTabs.map(t => {
-              const on = t.id === activeSub
-              return (
-                <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => onSub(t.id)}
-                  style={{ flex: '0 0 auto', minHeight: compact ? 30 : 32, border: 'none', background: 'none', padding: compact ? '0 0 5px' : '2px 0 6px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
-                    color: on ? '#fff' : 'rgba(255,255,255,.65)', borderBottom: `2px solid ${on ? '#fff' : 'transparent'}` }}>{t.label}</button>
-              )
-            })}
-          </div>
-          {subRight && <div style={{ paddingBottom: 4 }}>{subRight}</div>}
+      {!collapsed && subTabs?.length > 0 && (
+        <div role="tablist" aria-label="View" className={`mph-r3${subTabs.length <= 4 ? ' mph-even' : ''}`}>
+          {subTabs.map(t => (
+            <button key={t.id} type="button" role="tab" className="mph-tab" aria-selected={t.id === activeSub} onClick={() => onSub(t.id)}>{t.label}</button>
+          ))}
         </div>
       )}
-      {subTabs2?.length > 0 && (
-        <div role="tablist" aria-label="Section" className="mph-tabs2 mph-chips" style={{ display: 'flex', height: 26, borderTop: '1px solid rgba(255,255,255,.12)', ...(subTabs2Scroll ? { overflowX: 'auto', scrollbarWidth: 'none', gap: 18, padding: '0 14px' } : null) }}>
-          {subTabs2.map(t => {
-            const on = t.id === activeSub2
-            return (
-              <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => onSub2(t.id)}
-                style={{ position: 'relative', flex: subTabs2Scroll ? '0 0 auto' : '1 1 0', minWidth: 0, border: 'none', background: 'none', padding: 0, fontSize: 12, fontWeight: on ? 700 : 600, fontFamily: 'var(--font)', cursor: 'pointer',
-                  color: on ? '#fff' : 'rgba(255,255,255,.62)', whiteSpace: 'nowrap' }}>
-                {t.label}
-                {on && <span aria-hidden="true" style={{ position: 'absolute', left: '50%', bottom: 2, width: 24, height: 2, marginLeft: -12, borderRadius: 2, background: '#fff' }} />}
-              </button>
-            )
-          })}
+      {!collapsed && subTabs2?.length > 0 && (
+        <div role="tablist" aria-label="Section" className={`mph-r3 mph-r3b${subTabs2Scroll ? '' : ' mph-even'}`}>
+          {subTabs2.map(t => (
+            <button key={t.id} type="button" role="tab" className="mph-tab" aria-selected={t.id === activeSub2} onClick={() => onSub2(t.id)}>{t.label}</button>
+          ))}
         </div>
       )}
-      {hasStrip && <FilteredStrip {...strip} tone="dark" />}
-      {(chips?.length > 0 || subTabs?.length > 0) && !subTabs2?.length && !hasStrip && <div aria-hidden="true" style={{ height: compact ? 2 : 8 }} />}
-    </>
+      {!collapsed && hasStrip && <FilteredStrip {...strip} tone="light" />}
+    </div>
   )
 }

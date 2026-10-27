@@ -11,7 +11,9 @@
 **Colours — calm, one palette**
 | Token | Use |
 |---|---|
-| Frido green `#1f5a3d` (+ dark `#0f2a1d`, header gradient `#0f2a1d → #1c4630`) | brand, header, bars, selected states, primary buttons |
+| Frido green `#1f5a3d` (+ dark `#0f2a1d`) | brand, bars, selected states, primary buttons; in the page header only the selected chip, the active underline and the date pill text |
+| Header Ivory `#fbfaf7`, hairline `#eae7df`, divider `#f0ede6`, band `#f6f4ef`, context grey `#8a938e`, chip text `#5c6761`, icons `#4e5a54`, pressed `#f1efe9`, date pill `#eef5f0`, notification dot `#d9534f` (`C.m.hdr`) | the phone page header (see `MobilePageHeader`) |
+| Login band gradient `#0f2a1d → #1c4630` | the login page only (a brand moment) |
 | Green shades `#5f8f75`, `#9cc4ad`, `#d5dbd7` | secondary series, stacked parts |
 | Ink `#1c2420` | all values and titles |
 | Muted `#7b847f` | labels, captions |
@@ -23,7 +25,7 @@
 - Direction-aware good/bad: lower is better for Returns %, RTO %, CIR %, Cancellation %, Exchange %, NDR %, SLA breach %, CAC, COGS %, ACoS.
 
 **Type** (one font + `font-variant-numeric: tabular-nums`; no monospace)
-page title 17/700 · card title 15–16/700 · hero 28/700 · tile value 15.5/700 · list value 13.5/700 · body 12.5–13 · labels 11–12 uppercase 600 muted · minimum 12px · inputs ≥16px.
+page title 17/650 (header; 15 collapsed) · card title 15–16/700 · hero 28/700 · tile value 15.5/700 · list value 13.5/700 · body 12.5–13 · labels 11–12 uppercase 600 muted · minimum 12px · inputs ≥16px.
 
 **Shape & effects**
 card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,90,61,.08)` · **selected = soft glow**: `border 1px rgba(31,90,61,.22)` + `box-shadow 0 0 10px 1px rgba(31,90,61,.10)` · master card gradient `#dcebe2 → #e9f3ed → #f4f9f6 → #fff` with border `#dbe8df` · transitions 150–250ms, respect reduced motion.
@@ -33,7 +35,7 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 ## 2. Shared components (`src/responsive/`) — every page uses these, no page-specific copies
 | Component | What it is |
 |---|---|
-| `MobilePageHeader` | dark-green header: title + date pill; optional chips row (channels/platforms/locations), filter icon with count, underline sub-tabs (only if they exist), "Filtered:" strip; "⋯" menu for page actions (Export, Return Analysis, Refresh…) |
+| `MobilePageHeader` | **Ivory header on every phone screen** (top bar and full-screen views; mockup `mockups/header_mockup.html`). Row 1 48px: [‹ back 34×34] title 17/650 ink + context 13/500 grey, then **always date · filter · ⋯** (a control the page lacks is absent; the rest never move). Row 2 (chips) 28px + 10px: text chips `#5c6761`, selected = green fill + white, right edge fades, selected scrolls into view, 5px amber "in progress" dot. Row 3 sub-tabs 34px 12.5/600 grey, active ink + 2px green underline the label's width, spread when ≤ 4, scroll when more; second sub-tab row 30px 12px on `#f6f4ef`. "Filtered:" strip 28px, only filters that differ from the page default. Heights 48 / 86 / 120px (1 / 2 / 3 rows). Collapses after ~80px of downward scroll into one 42px translucent bar ("Title · context · sub-tab" 15px + date + ⋯, blur + soft shadow), scrolling up restores it, the content never jumps. Date pill: 32px, radius 10, mint `#eef5f0`, green 12.5/600, short form ("Sep 2026", "1–26 Oct") + chevron at 60%. Filter / ⋯: 34×34 borderless icons 16px `#4e5a54`, filter count = 14px green circle; notifications = 7px red dot on ⋯ and "Notifications (n)" as the first ⋯ item (no separate bell, no second-row ⋯). No tap focus box; `:focus-visible` ring `#9cc4ad`. `theme-color` `#fbfaf7` on phones. Bottom sheets keep their own sheet header; the login page keeps its green band. |
 | `FilterSheet` + `FilterPicker` | level 1: one row per filter (current value + count), small toggles inline; level 2: search, Top by revenue / A–Z, checkboxes, pinned selections, dependent lists (Category → Sub-category → SKU), Apply (n). Scales to 1000+ items |
 | `MasterTrendCard` | gradient card: hero (fixed 2-line sub-line), full-width chart (no axes, prev dashed line, scrubber, auto granularity, override in "⋯"), even 2-col `KpiTile` grid that switches the chart |
 | `MasterTrendCard` layout (fixed, every page) | label + ⓘ left, ⋯ right (no date) · big value · one sub-line "▲x% vs prev · 2 key facts" · chart exactly as Overview (≈120px, thin green line with a gradient fill fading to transparent, previous period thin dashed grey, line kept inside the middle band, no axes) · legend row "This period / Prev period · Daily · auto" · 2-col tiles. Reference: released Overview hero. |

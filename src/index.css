@@ -1582,23 +1582,6 @@ svg text, svg tspan{
    hidden below 1024px; desktop keeps it. */
 @media (max-width:1023px){ .theme-picker-slot{ display:none !important } }
 
-/* Phone header (MobilePageHeader look, docs/responsive/MOBILE_DESIGN_SYSTEM.md §2): dark-green
-   gradient, white title, translucent date pill and bell. Phones only, Overview only for now; the
-   other pages move over as they are redesigned. !important beats the inline styles. */
-.bell-svg{ display:none }
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header{ background:linear-gradient(180deg,#0f2a1d,#1c4630); border-bottom:none; box-shadow:0 2px 8px rgba(0,0,0,.12) }
-  .topnav.m-header .tnav-title{ color:#fff }
-  .topnav.m-header .drp-trigger,
-  .topnav.m-header .drp-refresh,
-  .topnav.m-header .alerts-bell-btn{ background:rgba(255,255,255,.08) !important; border:1px solid rgba(255,255,255,.22) !important; color:#fff !important; border-radius:10px !important }
-  .topnav.m-header .drp-trigger{ font-size:12.5px !important; padding:6px 10px !important; min-height:34px }
-  .topnav.m-header .drp-trigger svg *{ stroke:rgba(255,255,255,.85) }
-  .topnav.m-header .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
-  .topnav.m-header .bell-emoji{ display:none }
-  .topnav.m-header .bell-svg{ display:block }
-}
-
 /* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
    label + ▲/▼ fits without shrinking text below 12px. */
 @media (max-width:370px){
@@ -1606,36 +1589,78 @@ svg text, svg tspan{
   .master-tiles{ gap:6px !important }
 }
 
-/* Overview filter icon (OverviewFilterButton): lives in the green phone header only. */
+/* Overview filter icon (OverviewFilterButton): only inside the phone header (MobilePageHeader). */
 .ov-filter-slot{ display:none }
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header .ov-filter-slot{ display:flex; flex-shrink:0 }
-  .filtered-strip::-webkit-scrollbar{ display:none }
-}
+/* Laptop alerts bell: the emoji; the SVG bell is unused now that phones show alerts in ⋯. */
+.bell-svg{ display:none }
+.filtered-strip::-webkit-scrollbar{ display:none }
 
-/* Alerts count on the green phone header: 12px minimum, palette red / amber (MOBILE_DESIGN_SYSTEM §1). */
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header .alerts-badge{ min-width:18px !important; height:18px !important; border-radius:9px !important; font-size:12px !important; top:-6px !important; right:-6px !important }
-  .topnav.m-header .alerts-badge[data-level="red"]{ background:#c0392b !important }
-  .topnav.m-header .alerts-badge[data-level="amber"]{ background:#c8860a !important }
-}
+/* Phone page header, Ivory (HEADER_MOBILE_PROMPT.md, mockups/header_mockup.html; src/responsive/
+   MobilePageHeader.jsx). Row 1 48px (title · context · date · filter · ⋯), chips 28px + 10px, sub-tabs
+   34px, second sub-tab row 30px on a darker band, "Filtered:" strip 28px; 42px collapsed. One accent:
+   Frido green for the selected chip, the active underline and the date pill text. */
+.mph{ background:#fbfaf7; border-bottom:1px solid #eae7df; font-family:var(--font); -webkit-tap-highlight-color:transparent }
+.mph button{ -webkit-tap-highlight-color:transparent }
+.mph button:focus{ outline:none }
+.mph button:focus-visible{ outline:2px solid #9cc4ad; outline-offset:2px }
+.mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(8px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
+.mph-r1.mph-has-back{ padding-left:max(6px, var(--safe-left)) }
+.mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
+.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#1c2420; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
+.mph-title span{ font-size:13px; font-weight:500; color:#8a938e; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto }
+.mph-ctl{ display:flex; align-items:center; gap:4px; flex:0 0 auto }
+.mph-filter, .mph-date{ display:contents }
+.mph-ib{ position:relative; width:34px; height:34px; border-radius:10px; border:none; background:none; padding:0; color:#4e5a54; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
+.mph-ib:active{ background:#f1efe9 }
+.mph-ib:disabled{ opacity:.45; cursor:default }
+.mph-back{ color:#1c2420 }
+.mph-count{ position:absolute; top:2px; right:1px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:#1f5a3d; color:#fff; font-size:12px; font-weight:800; line-height:14px; letter-spacing:-.02em; text-align:center; box-shadow:0 0 0 2px #fbfaf7 }
+.mph-dot{ position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%; background:#d9534f; box-shadow:0 0 0 2px #fbfaf7 }
+/* date pill (DateRangePicker trigger) and the Logistics Cost month pill */
+.mph .drp-trigger, .mph .mph-pill{ display:inline-flex !important; align-items:center; gap:4px !important; height:32px; min-height:32px; padding:0 8px !important; border-radius:10px !important; border:none !important;
+  background:#eef5f0 !important; color:#1f5a3d !important; font-size:12.5px !important; font-weight:600; font-family:var(--font); white-space:nowrap; cursor:pointer; flex:0 0 auto }
+.mph .drp-trigger:active, .mph .mph-pill:active{ background:#e3f1e8 !important }
+.drp-short, .drp-chev{ display:none }
+.mph .drp-cal, .mph .drp-long{ display:none }
+.mph .drp-short{ display:inline }
+.mph .drp-chev{ display:block; opacity:.6; flex:0 0 auto }
+.mph .tnav-right{ margin-left:0 }
+/* row 2: channel chips */
+.mph-r2{ display:flex; gap:4px; overflow-x:auto; padding:0 max(12px, var(--safe-right)) 10px max(12px, var(--safe-left)); scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent); mask-image:linear-gradient(90deg,#000 86%,transparent) }
+.mph-r2::-webkit-scrollbar, .mph-r3::-webkit-scrollbar{ display:none }
+.mph-chip{ flex:0 0 auto; height:28px; padding:0 11px; border-radius:999px; border:none; background:none; color:#5c6761; font-size:12.5px; font-weight:600; font-family:var(--font);
+  display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap }
+.mph-chip[aria-pressed="true"]{ background:#1f5a3d; color:#fff }
+.mph-chip:disabled{ opacity:.4; cursor:not-allowed }
+.mph-chip [role=img]{ width:5px !important; height:5px !important; background:#c8860a !important }
+/* row 3: underline sub-tabs; 3b: the slimmer second level on a darker band */
+.mph-r3{ display:flex; gap:20px; padding:0 max(16px, var(--safe-right)) 0 max(16px, var(--safe-left)); overflow-x:auto; scrollbar-width:none; border-top:1px solid #f0ede6 }
+.mph-r3.mph-even{ justify-content:space-around }
+.mph-tab{ flex:0 0 auto; position:relative; height:34px; border:none; background:none; padding:0; color:#8a938e; font-size:12.5px; font-weight:600; font-family:var(--font); cursor:pointer; white-space:nowrap }
+.mph-tab[aria-selected="true"]{ color:#1c2420 }
+.mph-tab[aria-selected="true"]::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px; background:#1f5a3d }
+.mph-r3b{ background:#f6f4ef }
+.mph-r3b .mph-tab{ height:30px; font-size:12px }
+.mph .filtered-strip{ min-height:28px; padding-top:0 !important; padding-bottom:0 !important; padding-left:max(16px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important; border-top:1px solid #f0ede6; border-bottom:none !important; background:#fbfaf7 !important }
+.mph .filtered-strip button{ min-height:22px !important; height:22px }
+/* collapsed (after ~80px of downward scroll): one 42px translucent bar */
+.mph-collapsed{ background:rgba(251,250,247,.86); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); box-shadow:0 4px 14px rgba(28,36,32,.07); animation:mph-in .2s ease }
+.mph-collapsed .mph-r1{ height:42px }
+.mph-collapsed .mph-title b{ font-size:15px }
+.mph-collapsed .drp-trigger{ height:30px; min-height:30px }
+@keyframes mph-in{ from{ opacity:.6 } to{ opacity:1 } }
+@media (prefers-reduced-motion: reduce){ .mph-collapsed{ animation:none } }
 
-/* Phone header (MobilePageHeader inside the top bar): grows with its optional rows (chips, sub-tabs,
-   "Filtered:" strip). Row 1 keeps the plain bar's height and padding, so Overview looks the same. */
+/* The top bar holds the header on phones: it gives up its own bar look and grows with the rows. */
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header{ height:auto; min-height:var(--nav); flex-direction:column; align-items:stretch; padding:0; gap:0 }
-  .topnav.m-header .mph-pad{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
-  .topnav.m-header .mph-row1{ gap:8px }
-  .topnav.m-header .filtered-strip{ padding-left:max(12px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important }
-  /* Same page-title size on every page that uses the phone header (Overview, Sales, Inventory, Logistics …). */
-  .topnav.m-header .tnav-title{ font-size:17px; font-weight:600 }
-  .mph-chips::-webkit-scrollbar{ display:none }
+  .topnav.m-header{ height:auto; min-height:0; flex-direction:column; align-items:stretch; padding:0; gap:0; background:none; border-bottom:none; box-shadow:none; position:relative; z-index:100 }
+  .topnav.m-header .ov-filter-slot{ display:contents }
   /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
   .sales-tabs, .fbar{ display:none !important }
+  /* Frido Pulse: the shared header names the page, so the history panel's own title goes. */
+  .af-history-header{ display:none }
 }
-
-/* Phone portrait: the plain bar's 6px gap (index.css ≤768 block) also between header items. */
-@media (max-width:768px){ .topnav.m-header .mph-row1{ gap:6px } }
 
 /* Logistics mobile (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §0): no outline on tap for chips and toggles;
    a focus ring only for keyboard focus. */
@@ -1643,8 +1668,6 @@ svg text, svg tspan{
 .log-mobile button:focus-visible, .mrp-month:focus-visible, .mrp-pill:focus-visible{ outline:2px solid rgba(31,90,61,.5); outline-offset:1px }
 .mph-tabs2 button:focus-visible{ outline:2px solid rgba(255,255,255,.8); outline-offset:-2px }
 
-/* Phone header: no outline left on a tab or button after a tap; the ring shows for keyboard focus only. */
-.topnav.m-header button:focus:not(:focus-visible){ outline:none }
 
 /* Phone navigation (NAV_MOBILE_PROMPT.md; src/responsive/MobileBottomNav.jsx). Selected icon: a pale
    green tile with a soft halo, faded / scaled in; no tap focus box, keyboard focus ring only. */

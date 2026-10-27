@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { C } from '../utils.js'
+import MobilePageHeader from './MobilePageHeader.jsx'
 
 // Full-screen view for a wide table or heatmap on phones (MOBILE_DESIGN_SYSTEM.md §3 "wide table →
 // sticky first column + horizontal scroll inside a dedicated full-screen view"). Slides over the page
@@ -34,15 +35,8 @@ export default function FullScreenTable({ open, onClose, title, note, head, cols
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={title} className="fullscreen-list fullscreen-table"
       style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: '#fff', display: 'flex', flexDirection: 'column', paddingTop: 'var(--safe-top)' }}>
-      <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${M.line}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={onClose} aria-label="Back"
-            style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: M.soft, color: M.ink, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>‹</button>
-          <span style={{ fontSize: 16, fontWeight: 700, color: M.ink }}>{title}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: M.muted }}>{rows.length} rows</span>
-        </div>
-        {note && <div style={{ fontSize: 12, color: M.muted, marginTop: 6 }}>{note}</div>}
-      </div>
+      <MobilePageHeader onBack={onClose} title={title} sub={`${rows.length} rows`} />
+      {note && <div style={{ fontSize: 12, color: M.muted, padding: '8px 14px', borderBottom: `1px solid ${M.line}` }}>{note}</div>}
       <div style={{ flex: 1, overflow: 'auto', overscrollBehavior: 'contain', paddingBottom: 'calc(20px + var(--safe-bottom))' }}>
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%' }}>
           <thead>

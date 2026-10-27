@@ -10,6 +10,7 @@ import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import MobileRankedList from '../responsive/MobileRankedList.jsx'
 import FullScreenList from '../responsive/FullScreenList.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
+import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import WatchlistCard from '../responsive/WatchlistCard.jsx'
 import MarginMatrix from '../responsive/MarginMatrix.jsx'
 import { QUADRANTS } from '../responsive/marginMatrixPoints.js'
@@ -138,11 +139,8 @@ function StoresCard({ rows, renderTable }) {
       ))}
       <ShowAllButton onClick={() => setFull(true)}>Full store table (all {rows.length} rows, all columns) →</ShowAllButton>
       {full && (
-        <div role="dialog" aria-label="Store P&L" style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: M.bg, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: M.header, color: '#fff', paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
-            <button type="button" onClick={() => setFull(false)} aria-label="Back" style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'none', color: '#fff', fontSize: 24, cursor: 'pointer' }}>‹</button>
-            <b style={{ fontSize: 16 }}>Store P&amp;L</b>
-          </div>
+        <div role="dialog" aria-label="Store P&L" style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: M.bg, display: 'flex', flexDirection: 'column', paddingTop: 'var(--safe-top)' }}>
+          <MobilePageHeader onBack={() => setFull(false)} title="Store P&L" sub={`${rows.length} stores`} />
           <div className="pnl-store-full" style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', padding: 8 }}>{renderTable()}</div>
         </div>
       )}
