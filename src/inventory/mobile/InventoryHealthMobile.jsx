@@ -126,7 +126,7 @@ export default function InventoryHealthMobile({ data, regular, locations, lastSa
       {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
       <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} rtdLevel={rtdLevel} setRtdLevel={setRtdLevel} rtdOptions={rtdOptions} />
       {!showDetailOnly && <AgeingCard slow={slow} dead={dead} />}
-      <OosLossMobile open={oosOpen} onClose={() => setOosOpen(false)} data={oos.data} error={oos.error} lastSalesDate={lastSalesDate} />
+      <OosLossMobile open={oosOpen} onClose={() => setOosOpen(false)} data={oos.data} error={oos.error} />
     </div>
   )
 }

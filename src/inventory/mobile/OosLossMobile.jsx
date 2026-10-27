@@ -89,7 +89,7 @@ function SkuSheet({ r, onClose }) {
   )
 }
 
-export default function OosLossMobile({ open, onClose, data, error, lastSalesDate }) {
+export default function OosLossMobile({ open, onClose, data, error }) {
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const [cats, setCats] = useState([])
@@ -150,8 +150,6 @@ export default function OosLossMobile({ open, onClose, data, error, lastSalesDat
   const s = all
   const maxCat = byCat[0]?.[1] || 1
   const maxAge = Math.max(1, ...byAge.map(b => b.loss))
-  const counted = data?.asOf ? `OOS counted to ${dt(data.asOf)}` : null
-  const sales = lastSalesDate ? `sales till ${dt(lastSalesDate)}` : null
 
   const metrics = [
     { key: 'loss', label: 'Loss of sale opportunity', value: inrShort(s.loss), valueColor: M.down, sub: `so far, this stock-out · ${fmtInt(s.skus) || 0} SKUs`,
@@ -184,10 +182,6 @@ export default function OosLossMobile({ open, onClose, data, error, lastSalesDat
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: `10px max(12px, var(--safe-right)) calc(20px + var(--safe-bottom)) max(12px, var(--safe-left))` }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontSize: 12, color: M.muted, margin: '0 2px', lineHeight: '17px' }}>
-          {[counted, sales].filter(Boolean).join(' · ') || ' '}{' · SKUs with no stock in live warehouses that sold (B2C) in the last 180 days'}
-        </div>
-
         {error && <Card><div style={{ fontSize: 13, color: M.down }}>Could not load: {error}</div></Card>}
         {!data && !error && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, pointerEvents: 'none' }} aria-busy="true" aria-label="Loading out-of-stock loss">
