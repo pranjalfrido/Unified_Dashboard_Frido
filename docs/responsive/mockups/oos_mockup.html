@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OOS Loss Mockup</title>
+<style>
+:root{--g:#1f5a3d;--ink:#1c2420;--mut:#7b847f;--line:#eae7df;--bg:#f4f2ed;--soft:#eef5f0;--dn:#c0392b;--glowb:rgba(31,90,61,.22)}
+*{box-sizing:border-box}
+body{margin:0;background:#ece9e2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);padding:24px 16px 40px;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none;padding:0;-webkit-tap-highlight-color:transparent}
+button:focus{outline:none}button:focus-visible{outline:2px solid #9cc4ad;outline-offset:2px}
+.wrap{max-width:1100px;margin:0 auto}
+h1.t{font-size:19px;margin:0 0 4px}.cap{font-size:13px;color:var(--mut);margin:0 0 16px}
+.row{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+.phone{width:375px;height:780px;background:var(--bg);border-radius:36px;border:10px solid #111;box-shadow:0 20px 50px rgba(0,0,0,.18);position:relative;overflow:hidden;display:flex;flex-direction:column;flex:0 0 auto}
+.hd{background:#fbfaf7;border-bottom:1px solid var(--line);height:48px;display:flex;align-items:center;gap:4px;padding:0 8px 0 6px;flex:0 0 auto}
+.bk{width:34px;height:34px;display:grid;place-items:center;font-size:20px;color:var(--g);font-weight:700}
+.hd b{font-size:16px;font-weight:650;margin-right:auto}
+.ib{width:34px;height:34px;display:grid;place-items:center;color:#4e5a54;position:relative}
+.ib svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.mb{flex:1;overflow-y:auto;padding:10px 12px 16px}
+.asof{font-size:11.5px;color:var(--mut);margin:0 2px 8px}
+.mc{background:#fff;border-radius:18px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+.master{background:linear-gradient(170deg,#dcebe2 0%,#e9f3ed 30%,#f4f9f6 60%,#fff 100%);border-color:#dbe8df}
+.hl{font-size:12px;font-weight:700;color:#5f6b65;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between}
+.hv{font-size:30px;font-weight:700;margin-top:4px;color:var(--dn)}
+.hs{font-size:12.5px;color:var(--mut);margin-top:2px}
+.tiles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px}
+.tile{background:#fff;border:1px solid rgba(31,90,61,.08);border-radius:12px;padding:8px 10px;text-align:left}
+.tile .l1{font-size:11px;font-weight:700;color:#5f6b65;text-transform:uppercase;letter-spacing:.05em}
+.tile .l2{font-size:16px;font-weight:700;margin-top:2px}.tile .l2 small{font-size:11.5px;color:var(--mut);font-weight:600;margin-left:3px}
+.tile .l3{font-size:11.5px;color:var(--mut);margin-top:1px}
+.ct{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.ct h4{margin:0;font-size:15px}.ct span{font-size:12px;color:var(--mut)}
+.act{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#fdf3f1;border:1px solid #f4d7d2;width:100%;text-align:left;margin-bottom:12px}
+.act .n{flex:1}.act b{display:block;font-size:13.5px;color:#7d241a}.act span{font-size:12px;color:#8f5a52}
+.act .v{font-weight:700;color:var(--dn);font-size:15px}
+.cr{display:block;width:100%;text-align:left;padding:7px 0}
+.cr .t{display:flex;justify-content:space-between;font-size:13px}.cr .t b{font-weight:700}
+.bar{height:6px;background:#eef1ee;border-radius:4px;overflow:hidden;margin-top:5px;display:flex}
+.bar i{display:block;height:100%}
+.cr.on .t span:first-child{color:var(--g);font-weight:700}
+.lg{display:flex;gap:12px;font-size:11.5px;color:var(--mut);margin-top:4px}.lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.sorts{display:flex;gap:6px;overflow-x:auto;margin:0 -14px 6px;padding:0 14px;scrollbar-width:none}.sorts::-webkit-scrollbar{display:none}
+.sc{flex:0 0 auto;font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;color:#5c6761}
+.sc.on{background:var(--g);color:#fff}
+.chipf{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:5px 10px;background:var(--soft);color:var(--g);margin:0 6px 6px 0}
+.sku{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.sku:last-child{border:none}
+.sku .n{flex:1;min-width:0}
+.sku .c{font-size:13px;font-weight:700;letter-spacing:.01em}
+.sku .nm{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sku .m{font-size:11.5px;color:var(--mut);margin-top:3px}
+.dd{font-weight:700}.dd.a{color:#b7791f}.dd.r{color:#c0392b}
+.flag{display:block;font-size:11px;color:#b7791f;margin-top:2px}
+.sku .v{text-align:right;flex:0 0 auto}.sku .v b{display:block;font-size:14px}.sku .v span{font-size:11.5px;color:var(--mut)}
+.more{width:100%;text-align:center;padding:9px;font-size:13px;font-weight:600;color:var(--g);border-top:1px solid var(--line);margin-top:4px}
+.how{font-size:12.5px;color:#4b554f;line-height:1.5}
+.how summary{font-weight:700;color:var(--ink);cursor:pointer;font-size:14px}
+.nav{display:flex;background:#fff;border-top:1px solid var(--line);height:48px;align-items:center;flex:0 0 auto}
+.nav span{flex:1;display:grid;place-items:center;color:#8a938e;font-size:17px}
+.nav span.on{color:var(--g)}.nav span.on i{background:#edf6f0;border-radius:12px;padding:5px 10px;box-shadow:0 0 8px 1px rgba(120,190,150,.22);font-style:normal}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:.2s;z-index:8}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;transform:translateY(100%);transition:.25s;z-index:9;padding:8px 16px 20px}
+.phone.sh .shade{opacity:1;pointer-events:auto}.phone.sh .sheet{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:#ddd;margin:0 auto 10px}
+.cells{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.cell{background:var(--bg);border-radius:12px;padding:8px 10px}.cell .k{font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.cell .v{font-size:14.5px;font-weight:700;margin-top:2px}.cell .s{font-size:11px;color:var(--mut)}
+.notes{background:#fff;border-radius:14px;border:1px solid var(--line);padding:16px 20px;font-size:14px;line-height:1.55;max-width:500px}
+.notes h2{font-size:16px;margin:0 0 8px}.notes li{margin-bottom:6px}.notes ul{padding-left:18px;margin:6px 0}
+.tag{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:10px;color:#6b5414}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 class="t">Inventory → Out-of-stock loss: mobile</h1>
+<p class="cap">Tap the "Out 30+ days" row, a category, an ageing bucket, sort chips and any SKU.</p>
+<div class="row">
+<div class="phone" id="ph">
+ <div class="hd"><button class="bk" aria-label="Back to Inventory">‹</button><b>Out-of-stock loss</b><button class="ib" aria-label="Filters"><svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg></button><button class="ib" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></button></div>
+ <div class="mb" id="mb"></div>
+ <div class="nav"><span>▦</span><span>▮▮</span><span>↗</span><span class="on"><i>▢</i></span><span>⛟</span><span>☺</span><span>⋮</span></div>
+ <div class="shade" id="shade"></div><div class="sheet" id="sheet"></div>
+</div>
+<div class="notes">
+ <h2>Mobile layout (updated view)</h2>
+ <ul>
+  <li><b>Entry:</b> on Inventory Health (mobile) a row "Out-of-stock loss · ₹34.55 L · 73 SKUs ›" under the master card.</li>
+  <li><b>Header:</b> Ivory, ‹ back, filter (Category, Days out), ⋯ (Export CSV, How it's calculated). "OOS counted to 26 Oct · sales till 26 Oct" under it.</li>
+  <li><b>Hero:</b> loss ₹34.55 L (red); tiles: SKUs out 73, Loss / day ₹2.27 L, Avg ASP ₹4,801, Avg days out 19 (longest 133 d).</li>
+  <li><b>Watch row:</b> "Out 30+ days · 14 SKUs · ₹8.71 L" (31–60 + 60+ buckets) → filters the list.</li>
+  <li><b>Loss by category</b> and <b>Stock-out ageing</b> as tappable bar rows. Tap = filter.</li>
+  <li><b>SKU list:</b> SKU + name; "17 d out · ₹40,558/day" (days coloured as on laptop); loss + category on the right. Sorts: Loss so far, Loss / day, Days out. Top 10 + "All 73". Tap → sheet with every laptop column.</li>
+  <li>PO status removed (no longer on the page).</li>
+ </ul>
+ <div class="tag">Numbers and the first 9 SKUs from your screenshots.</div>
+</div></div>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const CAT=[['Ergo Furniture',10.68],['Footwear',8.89],['Personal Care',7.30],['Mobility',4.94],['Cushions',1.69],['Pillows',.837],['Mattress Topper',.143],['Covers',.061]];
+const AGE=[['1–7 d',4.38,28,0],['8–15 d',5.40,17,8],['16–30 d',16.06,14,16],['31–60 d',3.29,10,31],['60+ d',5.42,4,61]];
+// code,name,cat,days,lossDay,lossL,avg,asp,since,basis,window,units,last,flag
+const SKU=[
+['FR-ERFT-B1','ErgoLift Footrest','Personal Care',17,40558,6.89494,'17','2,329','10 Oct','stock','11 Sep – 9 Oct · 29 d',505,'22 Oct',''],
+['FR-EEC-BE1','ErgoLuxe Executive Chair','Ergo Furniture',18,32913,5.92441,'1.03','31,916','9 Oct','stock','7 Sep – 8 Oct · 32 d',33,'15 Oct',''],
+['FR-3DPPC-B1','3D Posture Plus Ergonomic Chair','Ergo Furniture',6,58091,3.48547,'3.35','17,338','21 Oct','stock','30 Apr – 20 Oct · 174 d',583,'25 Oct',''],
+['FRGOAPW','Go Attendant Propelled Wheelchair','Mobility',74,4706,3.48208,'0.13','35,291','14 Aug','stock','13 Aug – 13 Aug · 1 d',null,'16 Sep','180-day avg (longest run only 1 d)'],
+['FR-USSC-G','Ultimate Socket Seat Cushion','Cushions',133,1149,1.52851,'0.74','1,543','16 Jun','stock','30 Apr – 15 Jun · 47 d',35,'21 Jul',''],
+['FR-WACS-SF-RG-6',"Women's Arch Comfort Sandal - Soft Footbed",'Footwear',20,7273,1.45452,'3.86','1,885','7 Oct','stock','23 Sep – 6 Oct · 14 d',54,'5 Oct',''],
+['FR-WACS-SF-LG-5',"Women's Arch Comfort Sandal - Soft Footbed",'Footwear',14,8684,1.21582,'4.38','1,982','13 Oct','stock','22 Sep – 12 Oct · 21 d',92,'11 Oct',''],
+['FR-IMP-EESD-N-BBL1','Ergoluxe Electric Standing Desk','Ergo Furniture',57,1988,1.13297,'0.06','32,465','31 Aug','stock','9 Jun – 27 Jul · 49 d',3,'21 Oct',''],
+['FR-AWS-M-12-O1',"Active Walking Shoes - Men's",'Footwear',55,1997,1.09860,'0.71','2,801','2 Sep','D2C sales stop','17 Jun – 9 Oct · 115 d',82,'9 Oct','']];
+let cat=null,age=null,sort='loss';
+const L=v=>v>=1?'₹'+v.toFixed(2)+' L':'₹'+(v*100).toFixed(1)+' K';
+const DC=d=>d>=30?'r':d>=14?'a':'';
+const inAge=(d,i)=>{const lo=AGE[i][3],hi=i<4?AGE[i+1][3]-1:1e9;return d>=lo&&d<=hi};
+function render(){let list=SKU.filter(s=>(!cat||s[2]===cat)&&(age===null||(age==='30'?s[3]>=31:inAge(s[3],age))));
+ list.sort((a,b)=>sort==='loss'?b[5]-a[5]:sort==='day'?b[4]-a[4]:b[3]-a[3]);
+ const ageLabel=age==='30'?'Out 30+ days':age!==null?AGE[age][0]+' out':null;
+ $('mb').innerHTML=`<div class="asof">OOS counted to 26 Oct · sales till 26 Oct · SKUs with no stock in live warehouses that sold (B2C) in the last 180 days</div>
+ <div class="mc master"><div class="hl"><span>Loss of sale opportunity</span><span>ⓘ</span></div><div class="hv">₹34.55 L</div><div class="hs">so far, this stock-out · 73 SKUs</div>
+  <div class="tiles"><div class="tile"><div class="l1">SKUs out</div><div class="l2">73</div><div class="l3">B2C sales in 180 d</div></div>
+  <div class="tile"><div class="l1">Loss / day</div><div class="l2">₹2.27 L</div><div class="l3">each further day out</div></div>
+  <div class="tile"><div class="l1">Avg ASP</div><div class="l2">₹4,801</div><div class="l3">across 73 SKUs</div></div>
+  <div class="tile"><div class="l1">Avg days out</div><div class="l2">19<small>days</small></div><div class="l3">longest 133 d</div></div></div></div>
+ <button class="act" id="act"><div class="n"><b>Out 30+ days</b><span>14 SKUs · ₹8.71 L lost so far</span></div><span class="v">›</span></button>
+ <div class="mc"><div class="ct"><h4>Loss by category</h4><span>tap to filter</span></div>${CAT.map(([n,v])=>`<button class="cr ${cat===n?'on':''}" data-c="${n}"><div class="t"><span>${n}</span><b>${L(v)}</b></div><div class="bar"><i style="width:${v/10.68*100}%;background:#1f5a3d"></i></div></button>`).join('')}</div>
+ <div class="mc"><div class="ct"><h4>Stock-out ageing</h4><span>loss so far · tap to filter</span></div>${AGE.map(([n,v,c],i)=>`<button class="cr ${age===i?'on':''}" data-a="${i}"><div class="t"><span>${n} · ${c} SKUs</span><b>${L(v)}</b></div><div class="bar"><i style="width:${v/16.06*100}%;background:#1f5a3d"></i></div></button>`).join('')}</div>
+ <div class="mc"><div class="ct"><h4>SKUs</h4><span>${cat||age!==null?list.length+' shown':'73 SKUs'}</span></div>
+  ${cat||ageLabel?`<div>${cat?`<button class="chipf" id="cc">${cat} ✕</button>`:''}${ageLabel?`<button class="chipf" id="ca">${ageLabel} ✕</button>`:''}</div>`:''}
+  <div class="sorts">${[['loss','Loss so far'],['day','Loss / day'],['days','Days out']].map(([k,l])=>`<button class="sc ${k===sort?'on':''}" data-s="${k}">${l}</button>`).join('')}</div>
+  ${list.map(s=>`<button class="sku" data-i="${SKU.indexOf(s)}"><div class="n"><div class="c">${s[0]}</div><div class="nm">${s[1]}</div><div class="m"><span class="dd ${DC(s[3])}">${s[3]} d out</span> · ₹${s[4].toLocaleString('en-IN')}/day${s[13]?`<span class="flag">${s[13]}</span>`:''}</div></div><div class="v"><b>${L(s[5])}</b><span>${s[2]}</span></div></button>`).join('')||'<div style="font-size:12.5px;color:#7b847f;padding:10px 0">No SKUs in this sample; the real list has them.</div>'}
+  <button class="more">All 73 SKUs →</button></div>
+ <div class="mc how"><details><summary>How it's calculated</summary><p><b>Avg daily sale</b>: B2C units per day over the SKU's longest unbroken in-stock run in the last 180 days (runs under 14 days use the 180-day average). <b>ASP</b>: 180-day average selling price. <b>OOS since</b>: day after the last in-stock day ("stock"), or day after the last D2C sale for steady sellers ("D2C sales stop"). <b>Loss</b> = days out × avg daily sale × ASP.</p></details></div>`;
+ $('mb').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{cat=cat===b.dataset.c?null:b.dataset.c;keep();});
+ $('mb').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{const i=+b.dataset.a;age=age===i?null:i;keep();});
+ $('mb').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{sort=b.dataset.s;keep();});
+ $('act').onclick=()=>{age='30';keep(true);};
+ if($('cc'))$('cc').onclick=()=>{cat=null;keep();};if($('ca'))$('ca').onclick=()=>{age=null;keep();};
+ $('mb').querySelectorAll('.sku').forEach(b=>b.onclick=()=>sheet(SKU[+b.dataset.i]));}
+function keep(toList){const st=$('mb').scrollTop;render();$('mb').scrollTop=toList?$('mb').scrollHeight:st;}
+function sheet(s){$('sheet').innerHTML=`<div class="grab"></div><b style="font-size:16px">${s[0]}</b><div style="font-size:12.5px;color:#7b847f">${s[1]} · ${s[2]}</div>
+ <div class="cells"><div class="cell"><div class="k">Loss so far</div><div class="v" style="color:#c0392b">₹${Math.round(s[5]*1e5).toLocaleString('en-IN')}</div></div><div class="cell"><div class="k">Loss / day</div><div class="v">₹${s[4].toLocaleString('en-IN')}</div></div>
+ <div class="cell"><div class="k">Days out</div><div class="v dd ${DC(s[3])}">${s[3]}</div><div class="s">since ${s[8]} · ${s[9]}</div></div><div class="cell"><div class="k">Avg daily sale</div><div class="v">${s[6]}</div>${s[13]?`<div class="s" style="color:#b7791f">${s[13]}</div>`:''}</div>
+ <div class="cell"><div class="k">ASP</div><div class="v">₹${s[7]}</div></div><div class="cell"><div class="k">Last sale</div><div class="v">${s[12]}</div></div>
+ <div class="cell" style="grid-column:1/-1"><div class="k">Sales window</div><div class="v">${s[10]}</div><div class="s">${s[11]!==null?s[11]+' units sold':'longest in-stock run'}</div></div></div>`;
+ $('ph').classList.add('sh');}
+$('shade').onclick=()=>$('ph').classList.remove('sh');
+render();
+</script>
+</body>
+</html>

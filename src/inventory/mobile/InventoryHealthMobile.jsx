@@ -12,6 +12,9 @@ import { warehouseRows } from './invMobileData.js'
 import { shortDay } from './invCaption.js'
 import StockExplorer from './StockExplorer.jsx'
 import AgeingCard from './AgeingCard.jsx'
+import OosLossMobile from './OosLossMobile.jsx'
+import Skeleton from '../../responsive/Skeleton.jsx'
+import { useOosData, stockedSkus, oosSummary } from '../oosData.js'
 
 // Inventory Health below 1024px (docs/responsive/INVENTORY_MOBILE_REDESIGN_PROMPT.md §2). Display
 // only: every value comes from InventoryHealthPage's own memos (Regular facilities - mobile is
@@ -36,6 +39,24 @@ function SummaryCard({ summary, regular, lastSalesDate, layout }) {
   return (
     <MasterTrendCard metrics={metrics} layout={layout}
       summary={<MixBar parts={parts} height={8} legend fmt={v => ` ${fmtNum(v)}`} label="RTD, RAW and Blocked split" style={{ margin: '2px 0 4px' }} />} />
+  )
+}
+
+// Entry to the Out-of-stock loss view (mockups/oos_mockup.html): one row under the summary card with
+// the headline loss and SKU count (the same totals as that view), › opens it full screen.
+function OosEntryRow({ data, error, onOpen }) {
+  const s = data ? oosSummary(stockedSkus(data)) : null
+  return (
+    <button type="button" onClick={onOpen} disabled={!data}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 52, padding: '10px 14px', borderRadius: 14, border: `1px solid ${M.line}`, background: M.card, boxShadow: M.cardShadow, textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: data ? 'pointer' : 'default' }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <b style={{ display: 'block', fontSize: 13.5 }}>Out-of-stock loss</b>
+        <span style={{ display: 'block', fontSize: 12, color: M.muted, marginTop: 1 }}>
+          {s ? <><b style={{ color: M.down }}>₹{fmtNum(s.loss)}</b> lost so far · {fmtInt(s.skus) || 0} SKUs out</> : error ? 'Could not load' : <Skeleton width={150} height={12} />}
+        </span>
+      </span>
+      <span aria-hidden="true" style={{ fontWeight: 700, color: M.green, fontSize: 18 }}>›</span>
+    </button>
   )
 }
 
@@ -95,12 +116,17 @@ export default function InventoryHealthMobile({ data, regular, locations, lastSa
   const [loc, setLoc] = useState('All')
   // Warehouse sheet → "See PNQ stock": the explorer switches to that location and scrolls into view.
   const seeStock = l => { setLoc(l); requestAnimationFrame(() => document.getElementById('inv-stock-explorer')?.scrollIntoView({ block: 'start', behavior: 'smooth' })) }
+  // Out-of-stock loss: loaded with the page (one shared request, see oosData.js), opened full screen.
+  const oos = useOosData(!showDetailOnly)
+  const [oosOpen, setOosOpen] = useState(false)
   return (
     <div className="inv-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, background: M.bg, padding: '12px max(12px, var(--safe-right)) 24px max(12px, var(--safe-left))' }}>
       {!showDetailOnly && <SummaryCard summary={data.summary} regular={regular} lastSalesDate={lastSalesDate} layout={layout} />}
+      {!showDetailOnly && <OosEntryRow data={oos.data} error={oos.error} onOpen={() => setOosOpen(true)} />}
       {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
       <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} rtdLevel={rtdLevel} setRtdLevel={setRtdLevel} rtdOptions={rtdOptions} />
       {!showDetailOnly && <AgeingCard slow={slow} dead={dead} />}
+      <OosLossMobile open={oosOpen} onClose={() => setOosOpen(false)} data={oos.data} error={oos.error} lastSalesDate={lastSalesDate} />
     </div>
   )
 }
