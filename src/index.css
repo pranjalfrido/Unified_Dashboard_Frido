@@ -1606,8 +1606,8 @@ svg text, svg tspan{
 .mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(8px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
 .mph-r1.mph-has-back{ padding-left:max(6px, var(--safe-left)) }
 .mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
-.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#1c2420; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
-.mph-title span{ font-size:13px; font-weight:500; color:#8a938e; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto }
+.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#1c2420; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
+.mph-title span{ font-size:13px; font-weight:500; color:#8a938e; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto } /* the context gives way first; the title keeps its width */
 .mph-ctl{ display:flex; align-items:center; gap:4px; flex:0 0 auto }
 .mph-filter, .mph-date{ display:contents }
 .mph-ib{ position:relative; width:34px; height:34px; border-radius:10px; border:none; background:none; padding:0; color:#4e5a54; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
