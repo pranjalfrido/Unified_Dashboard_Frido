@@ -71,7 +71,7 @@ Nothing failed after fixes. Fixed along the way: Customer phone view had no side
 - **Local limits:** this machine's API has no Supabase / Postgres secrets, so EBO store rows and CRED / additional spend were checked on September static data; Vercel has the keys.
 
 ## 7. PR #25 production check
-PR #25 (`fix/pnl-data`) is still **open (head 9aa75ddc)** as of 27 Oct 00:09 IST: not merged. The production check (EBO Unmapped / Ignored rows appear, Offline margins match the preview, ▲/▼ load) has **not run**, because it only runs after the merge. The watcher stays armed for the rest of its 12-hour window.
+PR #25 (`fix/pnl-data`) is still **open (head 9aa75ddc)** as of 27 Oct 05:40 IST: not merged. The production check (EBO Unmapped / Ignored rows appear, Offline margins match the preview, ▲/▼ load) has **not run**, because it only runs after the merge. The watcher stays armed for the rest of its 12-hour window.
 
 ## 8. Suggested merge order
 1. PR #25 `fix/pnl-data` → `main` (after your review), then the production check.
