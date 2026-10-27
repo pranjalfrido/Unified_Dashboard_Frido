@@ -4,15 +4,17 @@ import { C } from '../utils.js'
 
 // Sticky result bar for the phone tools (PNL_MASTER_PLAN.md Part C, PNL_REVIEW_FIXES.md §2): one
 // 56px line pinned just above the bottom nav, so the answer stays visible while the inputs are
-// edited. It hides while an input has focus (the keyboard is up and the bar would cover the field);
-// the caller leaves 56px of space at the end of the page (ToolResultBar.SPACER) so it never covers
-// the last card either.
+// edited. It hides while a typed field has focus (the keyboard is up and the bar would cover it);
+// sliders keep it visible. The page leaves room at its end (.pnl-tool-phone padding) so it never
+// covers the last card either.
 //   children  the result line; tone 'bad' → red text (only for a bad result)
+const isField = el => !!el && ((el.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes(el.type)) || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
+
 export default function ToolResultBar({ children, tone }) {
   const M = C.m
-  const [typing, setTyping] = useState(false)
+  // Starts from the current focus: the bar can mount while a field is already being typed in.
+  const [typing, setTyping] = useState(() => isField(document.activeElement))
   useEffect(() => {
-    const isField = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
     const on = e => setTyping(isField(e.target))
     const off = () => setTimeout(() => setTyping(isField(document.activeElement)), 0)
     document.addEventListener('focusin', on)
@@ -30,4 +32,3 @@ export default function ToolResultBar({ children, tone }) {
     document.body,
   )
 }
-ToolResultBar.SPACER = 64

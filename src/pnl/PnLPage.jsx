@@ -249,7 +249,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const toolStore = usePnlTool()
   useEffect(() => {
     if (summaryOnly) return
-    const backLabel = PNL_TABS.find(t => t.id === activeTab)?.label || 'P&L'
+    const backLabel = activeTab === 'offline' ? 'Offline' : PNL_TABS.find(t => t.id === activeTab)?.label || 'P&L'
     setPnlTool(phoneHeader && activeTool ? { id: activeTool, title: TOOL_TITLES[activeTool], backLabel, onBack: () => setActiveTool(null) } : null)
   }, [summaryOnly, phoneHeader, activeTool, activeTab])
   useEffect(() => () => { if (!summaryOnly) setPnlTool(null) }, [summaryOnly])
