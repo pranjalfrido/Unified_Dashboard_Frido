@@ -20535,8 +20535,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   useEffect(() => {
     if (location.pathname === '/') {
-      const def = getDefaultPage()
-      setPage(def)
+      navigate('/overview', { replace: true })
       return
     }
     const isPageAllowed = page === 'profile' ? true :
