@@ -4,6 +4,7 @@ import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
 import InfoPopover from '../responsive/InfoPopover.jsx'
 import FlagChips from '../responsive/FlagChips.jsx'
+import { PNL_OTHERS_INFO, PNL_WATCHLIST_EXCLUDE } from '../config/metricTargets.js'
 import { getCogsForRange } from './pnlUtils.js'
 import { buildFinancialRows, MIN_REV_FOR_RATIOS } from './financialRows.js'
 
@@ -63,6 +64,10 @@ import { buildFinancialRows, MIN_REV_FOR_RATIOS } from './financialRows.js'
 // channel's rule; the old decorative green/red is gone). flagFilter = { id, name, keys } shows only
 // those products (chip "Flag: … ✕" → onClearFlag). onSimulate(key) adds a ↗ on row hover/focus.
 // highlightKey scrolls to and highlights a product (margin matrix click).
+// Default column order = the P&L calculation order (PNL_REVIEW_FIXES.md §1f): Units, ASP, Gross,
+// Ex GST, Net, Returns, COGS, GM, SnD, CM1, Spend, ROAS, BE ROAS, CM2, Flags (after Product / Category).
+const COL_ORDER = ['units', 'asp', 'gross', 'excRev', 'net', 'returnPct', 'cogsPct', 'gmPct', 'sndPct', 'cm1Pct', 'spendPct', 'roas', 'beRoas', 'cm2Pct', 'flags']
+
 export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, spendAllocated = false, headerInfo = null, margin = null, flagFilter = null, onClearFlag, onSimulate, simulateLabel = 'Simulate', highlightKey = null }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
@@ -219,8 +224,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       row: r => <td style={{ ...tdStyleL, overflow: 'hidden' }}><FlagChips ids={flagsOf(r)} names={margin.ruleName} max={1} /></td>,
       sku: () => <td style={{ ...tdStyle, fontSize: 11 }} />,
       total: () => <td style={{ ...totalTdStyle, textAlign: 'left', fontFamily: 'inherit' }}>{margin.flaggedProducts ? `${margin.flaggedProducts} flagged` : ''}</td> }] : []),
-  ].filter(c => !(spendAllocated && c.id === 'roas'))
-  const reorder = useReorderableColumns(`pnl-financial-table-cols:${title}`, ALL_COLUMNS)
+  ].filter(c => !(spendAllocated && c.id === 'roas')).sort((a, b) => COL_ORDER.indexOf(a.id) - COL_ORDER.indexOf(b.id))
+  // v2: the default order changed to the P&L order (PNL_REVIEW_FIXES.md §1f), so an order saved
+  // under the old key doesn't hide it.
+  const reorder = useReorderableColumns(`pnl-financial-table-cols:v2:${title}`, ALL_COLUMNS)
 
   const handleExport = () => {
     const p2 = v => v != null ? +v.toFixed(2) : ''
@@ -343,6 +350,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                         {hasSkus && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s', flexShrink: 0 }}>▶</span>}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sc}</span>
                       </span>
+                      {PNL_WATCHLIST_EXCLUDE.has(r.sc) && <InfoPopover title={r.sc} text={PNL_OTHERS_INFO} style={{ width: 20, height: 20, margin: '-4px 0', flexShrink: 0 }} />}
                       {onSimulate && <button type="button" className="fv-sim" onClick={() => onSimulate(skuKey)} title={`${simulateLabel}: ${r.sc}`}
                         style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, fontWeight: 600, color: C.t1, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 6, padding: '1px 6px', cursor: 'pointer', fontFamily: 'var(--font)' }}>↗</button>}
                     </div></td>

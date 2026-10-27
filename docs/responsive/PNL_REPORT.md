@@ -38,3 +38,17 @@ Data path: 1–26 Oct from the live API; screenshots and laptop before/after on 
 - Tools open their existing laptop layouts on phones (their mobile layout is Phase 3); a "‹ Back to …" button returns to the P&L.
 - PR #25 is still open (no new commits), so the production check hasn't run yet; the watcher is still armed.
 - Screenshots are local only (PNGs are git-ignored).
+
+## Review round (27 Oct): PNL_REVIEW_FIXES.md + P1–P4
+
+Commits on `feature/responsive-pnl` (one per item): P1–P3 `b1cf3f5a`, P4 c `ef81930e`, P4 a `93b88d41`, §1 `b249c36e`, §2 `32b5a7d3`, §3 `82dbff5f`, §4 `63243af6`, §5 `c74879dd`, bar fix `58388f08`, §6 `640c849e`, design-system fixes `740705e3`, "+₹0" `5d8ec114`. Verification: `PNL_REVIEW_VERIFICATION.md` (all pass).
+
+- **Watchlist:** P1 no GM rule on D2C; P2 ASP down > 10%, EBO / Offline GM < 40%, materiality ≥ 2% of gross or ≥ 100 units; P3 "Others" out of the watchlist and matrix (ⓘ in the table); P4 c Offline COGS > 60%, Flipkart COGS > 55%, D2C Returns > 25%, Amazon Returns > 20%; P4 a header "x products need action (2+ rules or loss) · y checked", tap → that list. Needs action / checked: D2C 68 / 124, Amazon 39 / 95, SC 24 / 73, Flipkart 22 / 34, Offline 20 / 27, EBO 7 / 33, CRED 1 / 6, Blinkit 0 / 12 (DECISIONS P4).
+- **§1 Financial view (phone):** chips in P&L order per channel (the §1a table matches the code on all 20 views), highest first with tap-to-flip and the line saying so, Units · Revenue · ASP on every row (62px rows, no gap), % sorts on products ≥ 2% of gross or ≥ 100 units with "Show all", product sheet in the same order. Laptop table default order Units, ASP, Gross, Ex GST, Net, Ret, COGS, GM, SnD, CM1, Spend, ROAS, BE ROAS, CM2, Flags.
+- **§2 Tools (phone):** header "‹ D2C  Price Simulator" (no chips / sub-tabs), one-line intro + ⓘ, sticky result bar, one-sign money, equal-width toggles, Reset in ⋯ with Undo, inputs 16px in ink, mobile palette and ≥ 12px text.
+- **§3 Price Simulator:** 3 × 3 summary grid, readable waterfall bars. Volume default checked: 0%, planned = current on first open (the review's −35% was a moved slider).
+- **§4 Breakeven ROAS:** no overflow (was 509px at 375), 2 × 2 summary and tiles, result cards side by side, "Your product".
+- **§5 B2B Costing:** quote rounds **up** to the next ₹10 (your answer; ₹504 → ₹510, laptop too), "₹x exact · ₹y quoted"; empty listing price → "Enter listing price to check" (was "✓ OK", a bug); assumptions card + sheet; GST row; pre-filled product name from ↗.
+- **§6 PO Approval:** bulk upload laptop-only, collapsible product cards, banner + left-aligned profit line, "This product's usual CM1 on Offline: x%".
+
+Before / after screenshots (SE, 14, laptop 1366): `docs/responsive/after/pnl-review/compare/index.html` on Suraj's machine (PNGs are git-ignored).

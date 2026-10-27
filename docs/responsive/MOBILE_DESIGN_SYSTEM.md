@@ -36,6 +36,7 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 | `MobilePageHeader` | dark-green header: title + date pill; optional chips row (channels/platforms/locations), filter icon with count, underline sub-tabs (only if they exist), "Filtered:" strip; "⋯" menu for page actions (Export, Return Analysis, Refresh…) |
 | `FilterSheet` + `FilterPicker` | level 1: one row per filter (current value + count), small toggles inline; level 2: search, Top by revenue / A–Z, checkboxes, pinned selections, dependent lists (Category → Sub-category → SKU), Apply (n). Scales to 1000+ items |
 | `MasterTrendCard` | gradient card: hero (fixed 2-line sub-line), full-width chart (no axes, prev dashed line, scrubber, auto granularity, override in "⋯"), even 2-col `KpiTile` grid that switches the chart |
+| `MasterTrendCard` layout (fixed, every page) | label + ⓘ left, ⋯ right (no date) · big value · one sub-line "▲x% vs prev · 2 key facts" · chart exactly as Overview (≈120px, thin green line with a gradient fill fading to transparent, previous period thin dashed grey, line kept inside the middle band, no axes) · legend row "This period / Prev period · Daily · auto" · 2-col tiles. Reference: released Overview hero. |
 | `KpiTile` | label + `DeltaBadge` on line 1, value on line 2; optional status dot; tap = select (glow) or InfoPopover |
 | `DeltaBadge` | ▲/▼ %, direction-aware colour, shimmer while loading, grey "—" if none |
 | `CompactRankRow` | name · value · % on one line + thin bar (breakdowns: channels, categories, regions, tiers) |
