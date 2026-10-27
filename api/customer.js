@@ -286,6 +286,8 @@ segmented AS (
       WHEN r_score >= 3 AND m_score >= 3 THEN 'Potential Loyalists'
       WHEN r_score <= 2 AND f_score >= 3 THEN 'Cannot Lose Them'
       WHEN r_score <= 2 AND f_score >= 2 THEN 'Hibernating'
+      -- C6 (Suraj 27 Oct): bought 61-90 days ago, low frequency, under 2,000 (fell through to the ELSE)
+      WHEN r_score = 3 THEN 'About To Sleep'
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
@@ -948,6 +950,7 @@ prev_seg AS (
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
       WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) = 3 THEN 'About To Sleep' -- C6
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
@@ -977,6 +980,7 @@ curr_seg AS (
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
       WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) = 3 THEN 'About To Sleep' -- C6
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
