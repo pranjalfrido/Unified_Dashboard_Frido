@@ -4,7 +4,7 @@ import { C } from '../utils.js'
 
 // Short confirmation with an Undo action (e.g. "Levers reset · Undo" after ⋯ → Reset in a P&L
 // tool). Disappears after 5 s or on Undo.
-//   toast { text, undo? } or null · onDone: called when it should go away
+//   toast { text, undo?, actionLabel? } or null (actionLabel defaults to "Undo", e.g. "Retry") · onDone: called when it should go away
 export default function UndoToast({ toast, onDone }) {
   const M = C.m
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function UndoToast({ toast, onDone }) {
       <span style={{ flex: 1 }}>{toast.text}</span>
       {toast.undo && (
         <button type="button" onClick={() => { toast.undo(); onDone() }}
-          style={{ minHeight: 40, padding: '0 12px', border: 'none', background: 'transparent', color: '#fff', fontWeight: 700, fontSize: 14, fontFamily: 'var(--font)', cursor: 'pointer', textDecoration: 'underline' }}>Undo</button>
+          style={{ minHeight: 40, padding: '0 12px', border: 'none', background: 'transparent', color: '#fff', fontWeight: 700, fontSize: 14, fontFamily: 'var(--font)', cursor: 'pointer', textDecoration: 'underline' }}>{toast.actionLabel || 'Undo'}</button>
       )}
     </div>,
     document.body,

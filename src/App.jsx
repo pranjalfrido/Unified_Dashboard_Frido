@@ -5034,6 +5034,15 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       </div>
     )
   }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'profile') {
+    // PROFILE_MOBILE_PROMPT.md: "Profile" + ⋯ (Theme, Sign out) like every other page; ProfilePage handles them.
+    const send = detail => () => window.dispatchEvent(new CustomEvent('profile:menu', { detail }))
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader title="Profile" right={<ActionMenu title="Profile" items={[{ id: 'theme', label: 'Theme', onSelect: send('theme') }, { id: 'signout', label: 'Sign out', onSelect: send('signout') }]} />} />
+      </div>
+    )
+  }
   if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl' && pnlTool.tool) {
     // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
     // just "‹ D2C" back + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
@@ -21217,7 +21226,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'profile' && (
             <div className="page-scroll">
-              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} />
+              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} />
             </div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
