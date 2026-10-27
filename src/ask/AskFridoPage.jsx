@@ -68,6 +68,11 @@ export default function AskFridoPage({ userProfile }) {
       setActiveId(currentId);
     }
 
+    // Capture history BEFORE updating state (setConversations is async)
+    const currentConv = conversations.find(c => c.id === currentId);
+    const history = (currentConv?.messages || []).filter(m => !m.thinking && m.text);
+    const messagesForApi = [...history, { role: 'user', text }];
+
     // Add user message + thinking bubble
     setConversations(prev => prev.map(c => {
       if (c.id !== currentId) return c;
@@ -85,10 +90,6 @@ export default function AskFridoPage({ userProfile }) {
 
     setSending(true);
     try {
-      const currentConv = conversations.find(c => c.id === currentId);
-      const history = (currentConv?.messages || []).filter(m => !m.thinking);
-      const messagesForApi = [...history, { role: 'user', text }];
-
       const response = await sendMessage(messagesForApi);
       setConversations(prev => prev.map(c => {
         if (c.id !== currentId) return c;

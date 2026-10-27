@@ -20,10 +20,12 @@ export async function sendMessage(conversationMessages) {
       'x-api-key': CONNECTOR_API_KEY,
     },
     body: JSON.stringify({
-      messages: conversationMessages.map(m => ({
-        role: m.role,
-        content: m.text || '',
-      })),
+      messages: conversationMessages
+        .filter(m => m.text && m.text.trim())
+        .map(m => ({
+          role: m.role,
+          content: m.text,
+        })),
     }),
   });
 
