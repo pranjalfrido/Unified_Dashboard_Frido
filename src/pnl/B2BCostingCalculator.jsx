@@ -417,7 +417,7 @@ export default function B2BCostingCalculator({ productGroups = [], initialProduc
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Product inputs ── */}
         <div style={{ flex: phone ? '1 1 100%' : '1 1 340px', display: 'flex', minWidth: 0 }}>
-          <Card style={{ flex: 1, gap: 14, padding: 16 }}>
+          <Card style={{ flex: 1, gap: 14, padding: 16, minWidth: 0 }}>
             <SectionLabel>Product Inputs</SectionLabel>
             <ProductPicker productGroups={productGroups} onApply={applyProduct} initialName={initProduct?.name || ''} />
             {productName && (

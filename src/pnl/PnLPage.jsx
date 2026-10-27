@@ -5,6 +5,7 @@ import PriceSimulator from './PriceSimulator.jsx'
 import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
 import B2BCostingCalculator from './B2BCostingCalculator.jsx'
 import POApprovalChecker from './POApprovalChecker.jsx'
+import { buildFinancialRows } from './financialRows.js'
 import { fmtSigned, netRevenueOf, cogsMonthlyMapOf, getCogsPerUnit, getCogsForRange } from './pnlUtils.js'
 import { C } from '../utils.js'
 import { prevRange } from '../overview/usePrevPeriod.js'
@@ -1972,6 +1973,14 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // list deliberately carries NO listingPrice/discount/returnRevRate/adSpend fields; the B2B
   // Costing Calculator asks the user for Listing Price and GST% directly per product, matching
   // the original B2B Costing Calculator spreadsheet's own manual-entry convention for those two.
+  // PO Approval (phone, PNL_REVIEW_FIXES.md §6): each Offline product's CM1 % for the current range and
+  // Offline sub-tab, from the same Financial View rows the Offline tab shows. Only built while the tool is open.
+  const offlineCm1ByProduct = useMemo(() => {
+    const d = channelData?.offline
+    if (activeTool !== 'poApproval' || !d?.subCatData) return null
+    const { allRows } = buildFinancialRows({ subCatData: d.subCatData, skuData: d.skuData, sndBySku: offSndBySku, netScale: d.netScale ?? 1, cogsMonthlyMap, startDate: filters.start, endDate: filters.end })
+    return Object.fromEntries(allRows.filter(r => r.cm1Pct != null).map(r => [`${r.cat}::${r.sc}`, r.cm1Pct]))
+  }, [activeTool, channelData, offSndBySku, cogsMonthlyMap, filters.start, filters.end])
   const offlineProductGroups = useMemo(() => {
     const rows = data?.offline?.skuRows
     if (!rows?.length) return []
@@ -2287,7 +2296,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         ) : activeTool === 'b2bCosting' ? (
           <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><B2BCostingCalculator key={toolProduct || 'none'} productGroups={offlineProductGroups} initialProductKey={toolProduct} phone={phoneHeader} /></div>
         ) : activeTool === 'poApproval' ? (
-          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><POApprovalChecker productGroups={offlineProductGroups} phone={phoneHeader} /></div>
+          <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><POApprovalChecker productGroups={offlineProductGroups} phone={phoneHeader} offlineCm1={offlineCm1ByProduct} /></div>
         ) : (
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}

@@ -532,7 +532,8 @@ function BulkResultsCard({ rows, skipped, onExport, onClear }) {
 
 // phone: PNL_REVIEW_FIXES.md §2/§6 phone layout (intro + ⓘ, equal-width freight toggle, Reset in ⋯
 // with Undo, sticky APPROVE / REVIEW bar).
-export default function POApprovalChecker({ productGroups = [], phone = false }) {
+// offlineCm1: { 'cat::sc': CM1 % } from the Offline Financial View (phone line "usual CM1 on Offline")
+export default function POApprovalChecker({ productGroups = [], phone = false, offlineCm1 = null }) {
   const [sndRateSlabs, setSndRateSlabs] = useState(null)
   useEffect(() => { loadSndRates().then(setSndRateSlabs) }, [])
 
@@ -541,13 +542,15 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
   // each line keeps its own product/qty/SP/COGS/weight; Freight/Software/Incentive/Asset/Min
   // Profit % below stay PO-level (shared across every line), matching how a real PO actually
   // works (one freight booking, one minimum-margin bar for the whole deal).
-  const emptyLine = () => ({ _key: Math.random().toString(36).slice(2), productName: '', qty: '', sellingPrice: '', cogsPerUnit: '', weightKg: '' })
+  const emptyLine = () => ({ _key: Math.random().toString(36).slice(2), productName: '', productKey: null, qty: '', sellingPrice: '', cogsPerUnit: '', weightKg: '' })
   const [lines, setLines] = useState([emptyLine()])
   const updateLine = (key, patch) => setLines(ls => ls.map(l => l._key === key ? { ...l, ...patch } : l))
-  const addLine = () => setLines(ls => [...ls, emptyLine()])
+  const addLine = () => { const l = emptyLine(); setLines(ls => [...ls, l]); setOpenLine(l._key) }
+  // Phone: one product card open at a time (the rest collapse to "Product 1 · name · 20 × ₹400")
+  const [openLine, setOpenLine] = useState(null)
   const removeLine = key => setLines(ls => ls.length > 1 ? ls.filter(l => l._key !== key) : ls)
   const applyProductToLine = (key, p) => updateLine(key, {
-    productName: p.name,
+    productName: p.name, productKey: p.sku,
     cogsPerUnit: Math.round(p.cogsPerUnit * 100) / 100,
     weightKg: p.weightKg != null ? Math.round(p.weightKg * 100) / 100 : '',
   })
@@ -671,6 +674,9 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
     XLSX.writeFile(wb, 'po_approval_bulk_results.xlsx')
   }
 
+  // "Usual CM1 on Offline" for each product picked from the list (display only; hidden for typed-in ones)
+  const usualCm1 = lines.filter(l => l.productKey && offlineCm1?.[l.productKey] != null).map(l => ({ name: l.productName, pct: offlineCm1[l.productKey] }))
+
   const result = useMemo(() => computePOResult(
     { lines, softwareCostPerUnit, sellingIncentivePct, assetCost, minProfitPct, logisticsMode, ftlPtlTotalCost },
     sndRateSlabs
@@ -708,6 +714,8 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
       </div>
       )}
 
+      {phone && <div style={{ fontSize: 12.5, color: C.m.muted }}>Bulk upload is available on laptop.</div>}
+
       {bulkError && (
         <div style={{ fontSize: 12.5, color: C.red.tx, background: C.red.bg, border: `1px solid ${C.red.bd}`, borderRadius: 10, padding: '10px 14px' }}>
           Upload failed: {bulkError}
@@ -720,8 +728,8 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch', maxWidth: 1220 }}>
         {/* ── PO inputs ── */}
-        <div style={{ flex: '1 1 340px', display: 'flex' }}>
-          <Card style={{ flex: 1, gap: 14, padding: 16 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 340px', display: 'flex', minWidth: 0 }}>
+          <Card style={{ flex: 1, gap: 14, padding: 16, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <SectionLabel>PO Details</SectionLabel>
               {isFormDirty && !phone && (
@@ -740,12 +748,22 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>Products {lines.length > 1 ? `(${lines.length} — sharing one Freight/Asset Cost below)` : ''}</span>
-                <button onClick={addLine} style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.acd, cursor: 'pointer' }}>+ Add Product</button>
+                {!phone && <button onClick={addLine} style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.acd, cursor: 'pointer' }}>+ Add Product</button>}
               </div>
-              {lines.map((line, i) => (
+              {lines.map((line, i) => {
+                const isOpen = !phone || (openLine ?? lines[lines.length - 1]._key) === line._key
+                const summary = [`Product ${i + 1}`, line.productName || null, line.qty && line.sellingPrice ? `${line.qty} × ₹${Number(line.sellingPrice).toLocaleString('en-IN')}` : null].filter(Boolean).join(' · ')
+                if (!isOpen) return (
+                  <button key={line._key} type="button" onClick={() => setOpenLine(line._key)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.m.ink, fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font)', textAlign: 'left', cursor: 'pointer' }}>
+                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+                    <span aria-hidden="true" style={{ color: C.m.muted }}>▾</span>
+                  </button>
+                )
+                return (
                 <div key={line._key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase' }}>Product {i + 1}</span>
+                    <span style={{ fontSize: phone ? 12 : 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phone ? summary : `Product ${i + 1}`}</span>
                     {lines.length > 1 && <button onClick={() => removeLine(line._key)} style={{ fontSize: 10.5, fontWeight: 700, color: C.red.tx, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}>✕ Remove</button>}
                   </div>
                   <ProductPicker productGroups={productGroups} onApply={p => applyProductToLine(line._key, p)} />
@@ -759,7 +777,12 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
                     <NumField label="Weight Slab" value={line.weightKg} onChange={v => updateLine(line._key, { weightKg: v })} suffix="kg/unit" step={0.1} />
                   </div>
                 </div>
-              ))}
+                )
+              })}
+              {phone && (
+                <button type="button" onClick={addLine}
+                  style={{ minHeight: 44, borderRadius: 10, border: `1px dashed ${C.border2}`, background: '#fff', color: C.m.green, fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>+ Add product</button>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -807,9 +830,28 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
         </div>
 
         {/* ── Result ── */}
-        <div style={{ flex: '1 1 460px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 460px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           {result ? (
             <>
+              {phone ? (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4 }}>Profit %</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: result.profitPct < 0 ? C.m.down : C.m.ink, fontVariantNumeric: 'tabular-nums' }}>{result.profitPct != null ? `${result.profitPct.toFixed(1)}%` : '—'}</div>
+                  <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, padding: '10px 12px', borderRadius: 10,
+                    background: result.approved ? 'rgba(31,90,61,.08)' : 'rgba(192,57,43,.08)', color: result.approved ? C.m.green : C.m.down, fontSize: 14, fontWeight: 700 }}>
+                    <span aria-hidden="true">{result.approved ? '✓' : '⚠'}</span>
+                    <span>{result.approved ? `APPROVE · clears ${minProfitPct}% minimum` : `REVIEW · below ${minProfitPct}% minimum`}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: C.m.muted, marginTop: 8, fontVariantNumeric: 'tabular-nums' }}>Profit {fmt(result.profit)} on {fmt(result.totalSale)} sale</div>
+                  {usualCm1.length > 0 && (
+                    <div style={{ fontSize: 12.5, color: C.m.muted, marginTop: 4 }}>
+                      {usualCm1.length === 1 && lines.length === 1
+                        ? <>This product's usual CM1 on Offline: <b style={{ color: C.m.ink }}>{usualCm1[0].pct.toFixed(1)}%</b></>
+                        : <>Usual CM1 on Offline: {usualCm1.map((u, i) => <span key={u.name}>{i ? ' · ' : ''}{u.name} <b style={{ color: C.m.ink }}>{u.pct.toFixed(1)}%</b></span>)}</>}
+                    </div>
+                  )}
+                </div>
+              ) : (
               <div style={{
                 background: result.approved ? 'linear-gradient(135deg, #fff 55%, #f0fdf4 100%)' : 'linear-gradient(135deg, #fff 55%, #fef2f2 100%)',
                 border: `1px solid ${C.border}`, borderRadius: 14, padding: '18px 22px',
@@ -828,6 +870,7 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
                   </div>
                 </div>
               </div>
+              )}
 
               <Card style={{ gap: 14, padding: 18 }}>
                 <div>
@@ -839,7 +882,7 @@ export default function POApprovalChecker({ productGroups = [], phone = false })
 
                 <CostBar label="Total Sale" sub={`${result.q} units across ${result.lines.length} product${result.lines.length === 1 ? '' : 's'}`} value={result.totalSale} scaleMax={result.totalSale} tone="sale" />
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 2, borderLeft: `2px solid ${C.border}`, marginLeft: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, ...(phone ? {} : { paddingLeft: 2, borderLeft: `2px solid ${C.border}`, marginLeft: 2 }) }}>
                   <CostBar label="COGS" sub={`Across ${result.lines.length} product${result.lines.length === 1 ? '' : 's'}`} value={-result.totalCogs} scaleMax={result.totalSale} />
                   <CostBar
                     label="Logistics & Fulfilment"
