@@ -1,0 +1,190 @@
+{
+  "laptop-1366x768": {
+    "errors": [],
+    "price": {
+      "plannedCm2": "₹22.38",
+      "currentCm2": "₹22.38",
+      "breakevenDiscount": "26.5%",
+      "bar": null
+    },
+    "breakeven": {
+      "breakeven": "1.79x",
+      "cm2at15": "2.46x",
+      "bar": null
+    },
+    "b2b": {
+      "spInclGst": "₹494",
+      "exactQuoted": "₹469 exact · ₹470 quoted",
+      "status": "Enter listing price to check",
+      "bar": null
+    },
+    "po": {
+      "profitPct": "5.8%",
+      "profitLine": "Profit: ₹468 on Total Sale ₹8.00 K",
+      "decision": "REVIEW — below 15% minimum",
+      "bar": null
+    }
+  },
+  "iphoneSE-375x667": {
+    "errors": [],
+    "price": {
+      "plannedCm2": "₹22.38",
+      "currentCm2": "₹22.38",
+      "breakevenDiscount": "26.5%",
+      "bar": null,
+      "width": {
+        "scrollWidth": 375,
+        "clientWidth": 375
+      },
+      "smallInputs": 0,
+      "barShown": false,
+      "barWhileTyping": false
+    },
+    "breakeven": {
+      "breakeven": "1.79x",
+      "cm2at15": "2.46x",
+      "bar": "Breakeven 1.79x · Healthy 2.46x",
+      "width": {
+        "scrollWidth": 375,
+        "clientWidth": 375
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "b2b": {
+      "spInclGst": "₹494",
+      "exactQuoted": "₹469 exact · ₹470 quoted",
+      "status": "Enter listing price to check",
+      "bar": "Quote ₹494 incl. GST (₹470 ex)",
+      "width": {
+        "scrollWidth": 375,
+        "clientWidth": 375
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "po": {
+      "profitPct": "5.8%",
+      "profitLine": "Profit ₹468 on ₹8.00 K sale",
+      "decision": "REVIEW · below 15% minimum",
+      "bar": "REVIEW · 5.8% (min 15%)",
+      "width": {
+        "scrollWidth": 375,
+        "clientWidth": 375
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    }
+  },
+  "iphone14-390x844": {
+    "errors": [],
+    "price": {
+      "plannedCm2": "₹22.38",
+      "currentCm2": "₹22.38",
+      "breakevenDiscount": "26.5%",
+      "bar": null,
+      "width": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "smallInputs": 0,
+      "barShown": false,
+      "barWhileTyping": false
+    },
+    "breakeven": {
+      "breakeven": "1.79x",
+      "cm2at15": "2.46x",
+      "bar": "Breakeven 1.79x · Healthy 2.46x",
+      "width": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "b2b": {
+      "spInclGst": "₹494",
+      "exactQuoted": "₹469 exact · ₹470 quoted",
+      "status": "Enter listing price to check",
+      "bar": "Quote ₹494 incl. GST (₹470 ex)",
+      "width": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "po": {
+      "profitPct": "5.8%",
+      "profitLine": "Profit ₹468 on ₹8.00 K sale",
+      "decision": "REVIEW · below 15% minimum",
+      "bar": "REVIEW · 5.8% (min 15%)",
+      "width": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    }
+  },
+  "smallAndroid-360x800": {
+    "errors": [],
+    "price": {
+      "plannedCm2": "₹22.38",
+      "currentCm2": "₹22.38",
+      "breakevenDiscount": "26.5%",
+      "bar": null,
+      "width": {
+        "scrollWidth": 360,
+        "clientWidth": 360
+      },
+      "smallInputs": 0,
+      "barShown": false,
+      "barWhileTyping": false
+    },
+    "breakeven": {
+      "breakeven": "1.79x",
+      "cm2at15": "2.46x",
+      "bar": "Breakeven 1.79x · Healthy 2.46x",
+      "width": {
+        "scrollWidth": 360,
+        "clientWidth": 360
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "b2b": {
+      "spInclGst": "₹494",
+      "exactQuoted": "₹469 exact · ₹470 quoted",
+      "status": "Enter listing price to check",
+      "bar": "Quote ₹494 incl. GST (₹470 ex)",
+      "width": {
+        "scrollWidth": 360,
+        "clientWidth": 360
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    },
+    "po": {
+      "profitPct": "5.8%",
+      "profitLine": "Profit ₹468 on ₹8.00 K sale",
+      "decision": "REVIEW · below 15% minimum",
+      "bar": "REVIEW · 5.8% (min 15%)",
+      "width": {
+        "scrollWidth": 360,
+        "clientWidth": 360
+      },
+      "smallInputs": 0,
+      "barShown": true,
+      "barWhileTyping": false
+    }
+  }
+}
