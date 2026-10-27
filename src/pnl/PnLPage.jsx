@@ -12,6 +12,7 @@ import { prevRange } from '../overview/usePrevPeriod.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fmtDateRange } from '../responsive/format.js'
 import UndoToast from '../responsive/UndoToast.jsx'
+import { toolPhoneCss } from './toolPhoneCss.js'
 import { setPnlTool, usePnlTool, clearPnlToast } from './pnlToolStore.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
@@ -2286,7 +2287,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       <div className="page-scroll">
         {phoneHeader && activeTool && (
           // Phone tools: inputs 16px (no iOS zoom) and in ink (not blue / amber); room for the sticky result bar
-          <style>{`.pnl-tool-phone input,.pnl-tool-phone select,.pnl-tool-phone textarea{font-size:16px!important;color:${C.m.ink}!important}.pnl-tool-phone{padding-bottom:72px}`}</style>
+          <style>{`${toolPhoneCss()}.pnl-tool-phone input,.pnl-tool-phone select,.pnl-tool-phone textarea{font-size:16px!important;color:${C.m.ink}!important}.pnl-tool-phone{padding-bottom:72px}`}</style>
         )}
         {phoneHeader && activeTool && <UndoToast toast={toolStore.toast} onDone={clearPnlToast} />}
         {activeTool === 'priceSimulator' ? (

@@ -345,7 +345,7 @@ export default function PnLMobileView({
   }
 
   return (
-    <div className="pnl-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
+    <div className="pnl-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24, color: M.ink }}>
       {(inProgress || PROGRESS_NOTE[tab]) && <InfoStrip icon="◔" text={`In progress. ${inProgress || PROGRESS_NOTE[tab]}`} />}
       {!inProgress && !PROGRESS_NOTE[tab] && missing.length > 0 && <InfoStrip text={notAvailableNote || `${listJoin(missing)} ${missing.length === 1 ? "isn't" : "aren't"} available for ${title} yet.`} />}
       <MasterTrendCard key={`${tab}:${amzView}:${title}`} metrics={tiles} rawRows={rawRows} groupTrend={groupSumTrend} start={start} end={end} layout={layout} />
