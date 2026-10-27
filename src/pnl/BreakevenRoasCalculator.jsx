@@ -360,7 +360,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     const netRev = waterfall.netRev
     setSavedScenarios(prev => [...prev, {
       id: `${Date.now()}-${prev.length}`,
-      productName: productName || '(unnamed product)',
+      productName: productName || 'Your product',
       listingPrice, discountPct, sellingPrice,
       cogs: waterfall.cogs, weightGm,
       logistics: waterfall.logistics, fulfilment: waterfall.fulfilment, paymentGw: waterfall.paymentGw, softwareFee: waterfall.softwareFee,
@@ -428,8 +428,8 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
-        <div style={{ flex: '1 1 420px', display: 'flex' }}>
-          <Card style={{ flex: 1, gap: 10, padding: 16 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', minWidth: 0 }}>
+          <Card style={{ flex: 1, gap: 10, padding: 16, minWidth: 0 }}>
             {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
               {[{ id: 'new', label: 'New Product' }, { id: 'launched', label: 'Already Launched' }].map(opt => (
@@ -508,12 +508,28 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: '1 1 380px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Card>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 380px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || '(unnamed product)'}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || 'Your product'}</div>
                 <div style={{ height: 3, marginBottom: 10, borderRadius: 2, background: 'linear-gradient(90deg, rgba(27,94,32,0.22) 0%, rgba(27,94,32,0.05) 60%, rgba(27,94,32,0) 100%)' }} />
+                {phone ? (
+                  // Phone (PNL_REVIEW_FIXES.md §4): the four summary values as 2 × 2 chips
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+                    {[
+                      ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—'],
+                      ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—'],
+                      ['GST', `${gstPct}%`],
+                      ['Return %', `${((rtoPct || 0) + (cancelPct || 0) + (cirPct || 0)).toFixed(1)}%`],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ background: C.m.soft, borderRadius: 10, padding: '8px 10px', minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: C.m.muted }}>{label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.m.ink, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 14, rowGap: 6, paddingTop: 8 }}>
                   {[
                     ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
@@ -534,19 +550,20 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                     </Fragment>
                   ))}
                 </div>
+                )}
               </div>
             )}
             {!waterfall ? (
               <div style={{ fontSize: 13, color: C.t3, padding: '20px 0' }}>Enter a listing price to see the breakdown.</div>
             ) : (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 28, marginTop: 4, marginBottom: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 16 : 28, marginTop: 4, marginBottom: 20 }}>
                   <WaterfallBar label="Selling Price (Inc. GST, after discount)" value={waterfall.grossIncGst} scaleMax={waterfallScaleMax} tone="total" color={C.acc} />
                   <WaterfallBar label="Net Revenue (Ex. GST, after returns)" value={waterfall.netRev} scaleMax={waterfallScaleMax} tone="total" color={C.acm} />
                   <WaterfallBar label="Gross Margin (GM)" value={waterfall.gm} scaleMax={waterfallScaleMax} tone="total" color={waterfall.gm >= 0 ? C.acd : undefined} />
                   <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? C.t1 : undefined} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, 1fr)', gap: phone ? 8 : 10, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
                   <KpiTile label="COGS %" value={waterfall.netRev > 0 ? `${(waterfall.cogs / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.cogs)} />
                   <KpiTile label="GM %" value={waterfall.netRev > 0 ? `${(waterfall.gm / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.gm)} />
                   <KpiTile label="S&D %" value={waterfall.netRev > 0 ? `${(waterfall.snd / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.snd)} />
@@ -557,13 +574,13 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
           </Card>
 
           {waterfall && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: phone ? 8 : 12, flexWrap: 'wrap' }}>
               <div style={{
-                flex: '1 1 260px', background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
               }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Breakeven ROAS</div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Breakeven ROAS</div>
+                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
                   {breakevenRoas != null ? `${breakevenRoas.toFixed(2)}x` : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
@@ -572,11 +589,11 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
               </div>
 
               <div style={{
-                flex: '1 1 260px', background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
               }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>CM2 @ 15%</div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>CM2 @ 15%</div>
+                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
                   {breakevenRoas15 != null ? `${breakevenRoas15.toFixed(2)}x` : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
