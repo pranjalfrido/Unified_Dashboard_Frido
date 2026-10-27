@@ -42,7 +42,7 @@ import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeCustomerRules } from './customer/customerRules.js'
 import { SEG_META, GRID_PLACEMENT } from './customer/customerDefs.js'
 import CustomerMobileView from './customer/CustomerMobileView.jsx'
-import { paybackMargin, paybackMonthsOf as paybackMonthsOfShared } from './customer/customerDerive.js'
+import { paybackMargin, paybackMonthsOf as paybackMonthsOfShared, ltvCacOnMargin } from './customer/customerDerive.js'
 import AdsLaptopSections from './ads/AdsSections.jsx'
 import AdsMobileView from './ads/AdsMobileView.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
@@ -17582,7 +17582,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'LTV (12-MO REVENUE)', value: fmt(kpis.ltv12 || 0), sub: 'Revenue per customer, last 12 months', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: 'Lifetime LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: ltvCacOnMargin(kpis) != null ? `On revenue · on 35% margin ${ltvCacOnMargin(kpis).toFixed(2)}x (P&L CM1 link later)` : 'On revenue (12-mo revenue ÷ CAC)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
@@ -17842,6 +17842,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const acqRate = kpis.totalCustomers > 0 ? kpis.newCustomers / kpis.totalCustomers : 0
           const pAcqRate = prevKpis.totalCustomers > 0 ? prevKpis.newCustomers / prevKpis.totalCustomers : 0
           const ltvCac = kpis.ltvCac || (kpis.ltv12 && kpis.cac ? kpis.ltv12 / kpis.cac : 0)
+          const ltvCacM = ltvCacOnMargin(kpis)
           const pLtvCac = prevKpis.ltvCac || 0
           // Payback in months on margin (C2): the same number as Spend & Discounts
           const paybackMonths = paybackMonthsOf(kpis)
@@ -17861,8 +17862,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
             {
               label: 'LTV : CAC', val: ltvCac > 0 ? `${ltvCac.toFixed(2)}×` : '—',
-              sub: ltvCac > 0 ? (ltvCac >= 3 ? '✦ Healthy (on revenue)' : '⚠ Watch (on revenue)') : 'Needs LTV data',
-              subColor: ltvCac >= 3 ? T.green : ltvCac > 0 ? T.amberDeep : T.t3,
+              // C4: the Healthy bar (3x) is read on the margin version (35% margin, P&L CM1 link later)
+              sub: ltvCacM != null ? `On margin ${ltvCacM.toFixed(2)}× · ${ltvCacM >= 3 ? '✦ Healthy' : '⚠ Watch'} (35% margin, P&L CM1 link later)` : 'Needs LTV data',
+              subColor: ltvCacM != null && ltvCacM >= 3 ? T.green : ltvCacM != null ? T.amberDeep : T.t3,
               spark: roasVals, cur: ltvCac, prev: pLtvCac,
             },
             {

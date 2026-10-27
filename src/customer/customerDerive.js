@@ -48,6 +48,11 @@ export const PAYBACK_FALLBACK_MARGIN = 0.35
 export function paybackMargin() {
   return { margin: PAYBACK_FALLBACK_MARGIN, label: '35% margin, P&L CM1 link later' }
 }
+// LTV:CAC on margin (C4, Suraj 27 Oct): 12-month revenue per customer × margin ÷ CAC, shown next to the
+// revenue one; the Healthy (3x) bar is read on this one. Same fixed 35% margin as the payback for now.
+export function ltvCacOnMargin(k, margin = PAYBACK_FALLBACK_MARGIN) {
+  return k?.ltv12 > 0 && k?.cac > 0 ? k.ltv12 * margin / k.cac : null
+}
 export function paybackMonthsOf(k, margin) {
   return k?.cac > 0 && k?.ltv12 > 0 && margin > 0 ? k.cac / (k.ltv12 / 12 * margin) : null
 }

@@ -16,7 +16,7 @@ import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import FullScreenTable from '../responsive/FullScreenTable.jsx'
 import { heatBg, heatInk } from '../responsive/heat.js'
 import { SEG_META, GRID_PLACEMENT } from './customerDefs.js'
-import { pctChg, dailyRows, ledgers, deriveAcquisition, deriveRetention, deriveBehaviour, deriveSegments, deriveDiscounts, paybackMargin } from './customerDerive.js'
+import { pctChg, dailyRows, ledgers, deriveAcquisition, deriveRetention, deriveBehaviour, deriveSegments, deriveDiscounts, paybackMargin, ltvCacOnMargin } from './customerDerive.js'
 
 // Customer Intelligence below 1024px (CUSTOMER_MASTER_PLAN.md Part B §B3, mockups/customer_mockup.html).
 // Display only: the same /api/customer response as the laptop tabs, numbers from customerDerive.js (the
@@ -106,7 +106,7 @@ function Acquisition({ cd, rows, start, end, layout, pay }) {
     { key: 'cac', label: 'CAC', value: fmt(k.cac), sub: 'Total spend (incl. offline) ÷ new customers', delta: pctChg(k.cac, p.cac), lowerIsBetter: true, point: r => (r.newC > 0 && r.spend > 0 ? r.spend / r.newC : null), fmtPoint: fmt },
     { key: 'roas', label: 'ROAS', value: `${(k.roas || 0).toFixed(2)}x`, sub: 'Gross rev (ex GST) ÷ spend', delta: pctChg(k.roas, p.roas), point: r => (r.spend > 0 ? r.gross / r.spend : null), fmtPoint: x2 },
     { key: 'acq', label: 'Acquisition rate', value: `${(a.acqRate * 100).toFixed(1)}%`, sub: 'New ÷ total customers', delta: pctChg(a.acqRate, a.pAcqRate), point: r => (r.newC + r.repC > 0 ? r.newC / (r.newC + r.repC) * 100 : null), fmtPoint: p1 },
-    { key: 'ltvcac', label: 'LTV : CAC', value: a.ltvCac > 0 ? `${a.ltvCac.toFixed(2)}x` : '—', sub: a.ltvCac > 0 ? (a.ltvCac >= 3 ? 'Healthy (on revenue)' : 'Watch (on revenue)') : 'Needs LTV data', delta: pctChg(a.ltvCac, a.pLtvCac) },
+    { key: 'ltvcac', label: 'LTV : CAC', value: a.ltvCac > 0 ? `${a.ltvCac.toFixed(2)}x` : '—', sub: ltvCacOnMargin(a.k) != null ? `On margin ${ltvCacOnMargin(a.k).toFixed(2)}x · ${ltvCacOnMargin(a.k) >= 3 ? 'Healthy' : 'Watch'} (35% margin, P&L CM1 link later)` : 'Needs LTV data', delta: pctChg(a.ltvCac, a.pLtvCac) },
     { key: 'payback', label: 'Payback', value: a.paybackMonths != null ? `${a.paybackMonths.toFixed(1)} mo` : '—', sub: `Months of customer margin to recover CAC, at ${pay.label}`, delta: null, lowerIsBetter: true },
   ]
   const days = a.enriched.filter(r => r.date)
