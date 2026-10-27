@@ -5,7 +5,7 @@ import { ADS_RULES } from '../config/metricTargets.js'
 // only sums, shares and ratios of those.
 
 // Frido green shades, darkest first (D2C darkest), one per channel / sub-type.
-export const SHADES = ['#1f5a3d', '#5f8f75', '#9cc4ad', '#c3d9cb', '#d5dbd7', '#e3e8e5', '#eef1ee', '#f4f6f4']
+export const SHADES = ['#1f5a3d', '#5f8f75', '#9cc4ad', 'rgba(31,90,61,.30)', '#d5dbd7', 'rgba(31,90,61,.14)', 'rgba(31,90,61,.08)', 'rgba(31,90,61,.05)']
 
 // Overall: one series per channel. D2C = Meta + Google spend, Shopify sales.
 export const OVERALL_CHANNELS = [
