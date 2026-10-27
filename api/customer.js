@@ -4,6 +4,29 @@ import { getPool } from './_db.js'
 // All queries use fact_all_platform_sales_report filtered to Shopify
 const TBL = '`frido-429506.production.fact_all_platform_sales_report`'
 
+// Cross-sell totals from EVERY first → second pair (C5, Suraj 27 Oct; the query used to stop at 500
+// rows, which left ~35% of customers out of the lift maths). Category grain in full (small); sub-
+// category grain with the 8 biggest sub-categories by volume kept and the rest as 'Other' (the same
+// top-8 rule the heatmap uses), so the payload stays small.
+function crossSellTotals(rows) {
+  const add = (m, f, s, n) => { const k = `${f}|||${s}`; m.set(k, (m.get(k) || 0) + n) }
+  const cat = new Map()
+  rows.forEach(r => { if (r.firstCategory && r.secondCategory) add(cat, r.firstCategory, r.secondCategory, r.customers) })
+  const vol = {}
+  rows.forEach(r => {
+    if (r.firstSubCategory) vol[r.firstSubCategory] = (vol[r.firstSubCategory] || 0) + r.customers
+    if (r.secondSubCategory) vol[r.secondSubCategory] = (vol[r.secondSubCategory] || 0) + r.customers
+  })
+  const top = new Set(Object.entries(vol).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k))
+  const sub = new Map()
+  rows.forEach(r => {
+    if (!r.firstSubCategory || !r.secondSubCategory) return
+    add(sub, top.has(r.firstSubCategory) ? r.firstSubCategory : 'Other', top.has(r.secondSubCategory) ? r.secondSubCategory : 'Other', r.customers)
+  })
+  const out = (m, fk, sk) => [...m.entries()].map(([k, customers]) => { const [f, s] = k.split('|||'); return { [fk]: f, [sk]: s, customers } })
+  return { cat: out(cat, 'firstCategory', 'secondCategory'), sub: out(sub, 'firstSubCategory', 'secondSubCategory'), subTop: [...top] }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -232,8 +255,7 @@ JOIN sp USING (CustomerId)
 WHERE fp.first_category IS NOT NULL AND sp.second_category IS NOT NULL
 GROUP BY first_category, first_sub_category, second_category, second_sub_category
 HAVING COUNT(DISTINCT fp.CustomerId) > 0
-ORDER BY customers DESC
-LIMIT 500`),
+ORDER BY customers DESC`), // every pair (C5): the totals use all of them; only the display list is cut to 500 below
 
       // Q5 â€” RFM segments (trailing 12 months up to end date)
       run(`WITH customer_stats AS (
@@ -1045,13 +1067,17 @@ LIMIT 50`)
         customers: parseInt(r.customers),
         revenue: parseFloat(r.revenue) || 0,
       })),
-      crossSell: crossSell.map(r => ({
-        firstCategory: r.first_category,
-        firstSubCategory: r.first_sub_category,
-        secondCategory: r.second_category,
-        secondSubCategory: r.second_sub_category,
-        customers: parseInt(r.customers),
-      })),
+      // display rows: the 500 biggest pairs (as before); totals: every pair (crossSellTotals)
+      ...(() => {
+        const all = crossSell.map(r => ({
+          firstCategory: r.first_category,
+          firstSubCategory: r.first_sub_category,
+          secondCategory: r.second_category,
+          secondSubCategory: r.second_sub_category,
+          customers: parseInt(r.customers),
+        }))
+        return { crossSell: all.slice(0, 500), crossSellTotals: crossSellTotals(all) }
+      })(),
       rfm: rfm.map(r => ({
         segment: r.segment,
         customers: parseInt(r.customers),

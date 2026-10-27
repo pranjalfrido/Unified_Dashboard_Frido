@@ -16949,6 +16949,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     discountRepeatRateByFirst = [],
     categoryDiscountAnalysis = [],
     crossSell = [],
+    crossSellTotals = null,
     dailySpend: rawDailySpend = [],
   } = custData
 
@@ -18230,8 +18231,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
         {activeTab === 'purchase' && (() => {
           // ── compute lift heatmap from crossSell data ──
-          const crossRaw = crossSell || []
+          // C5: totals from every pair (crossSellTotals: full category grain, sub-category top 8 + Other);
+          // falls back to the 500 display rows for an older cached payload.
           const isSubCat = crossFilter === 'Sub Category'
+          const crossRaw = (isSubCat ? crossSellTotals?.sub : crossSellTotals?.cat) || crossSell || []
 
           // top-N categories by volume
           const catVolume = {}
@@ -18242,7 +18245,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             if (s) catVolume[s] = (catVolume[s] || 0) + r.customers
           })
           const TOP_N = isSubCat ? 8 : 9
-          const topCats = Object.entries(catVolume).sort((a,b) => b[1]-a[1]).slice(0, TOP_N).map(([k]) => k)
+          const topCats = Object.entries(catVolume).filter(([k]) => !(isSubCat && crossSellTotals?.sub && k === 'Other')).sort((a,b) => b[1]-a[1]).slice(0, TOP_N).map(([k]) => k)
           const getKey = (r, role) => {
             const raw = isSubCat ? (role === 'first' ? r.firstSubCategory : r.secondSubCategory) : (role === 'first' ? r.firstCategory : r.secondCategory)
             return topCats.includes(raw) ? raw : (raw ? 'Other' : null)
@@ -18258,13 +18261,16 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             if (!countMatrix[f]) countMatrix[f] = {}
             countMatrix[f][s] = (countMatrix[f][s] || 0) + r.customers
           })
-          // second-purchase totals for lift denominator
+          // second-purchase totals for lift denominator. C5 (Suraj 27 Oct): the same-category diagonal
+          // (bought the same category again) is left out of every total, so lift compares cross-category
+          // moves with cross-category moves only.
+          const offDiag = (f, c) => (f === c ? 0 : (countMatrix[f]?.[c] || 0))
           const secondTotals = {}
-          liftCols.forEach(c => { secondTotals[c] = liftRows.reduce((sum, f) => sum + (countMatrix[f]?.[c] || 0), 0) })
+          liftCols.forEach(c => { secondTotals[c] = liftRows.reduce((sum, f) => sum + offDiag(f, c), 0) })
           const grandTotal = Object.values(secondTotals).reduce((a, b) => a + b, 0)
           // row totals
           const rowTotals = {}
-          liftRows.forEach(f => { rowTotals[f] = liftCols.reduce((sum, c) => sum + (countMatrix[f]?.[c] || 0), 0) })
+          liftRows.forEach(f => { rowTotals[f] = liftCols.reduce((sum, c) => sum + offDiag(f, c), 0) })
 
           // lift = (count[f][s] / rowTotal[f]) / (secondTotals[s] / grandTotal)
           const liftVal = (f, s) => {
@@ -18663,9 +18669,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       </thead>
                       <tbody>
                         {(() => {
-                          // aggregate by category pair (crossSell has sub-category level rows)
+                          // aggregate by category pair from every pair (C5), else the display rows
                           const pairMap = new Map()
-                          crossSell.forEach(r => {
+                          ;(crossSellTotals?.cat || crossSell).forEach(r => {
                             const key = `${r.firstCategory}|||${r.secondCategory}`
                             pairMap.set(key, (pairMap.get(key) || 0) + r.customers)
                           })
