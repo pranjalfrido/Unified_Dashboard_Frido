@@ -62,6 +62,7 @@ export const C = {
     up: '#1f8a4c', down: '#c0392b', amber: '#c8860a', prev: '#a3aba6', // prev: previous-period line + its legend swatch
     downDark: '#7a1f1f', // Inventory "Out of stock" (darker than Critical red), approved 2026-10-26
     masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
+    glowTile: '#e3f1e8', // phone nav: selected icon tile and current-page row
     tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
     cardShadow: '0 1px 3px rgba(0,0,0,.06)',
     radius: { card: 18, tile: 12, chip: 999 },

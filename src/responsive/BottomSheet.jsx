@@ -3,12 +3,16 @@ import { createPortal } from 'react-dom'
 import { C } from '../utils.js'
 
 // Mobile bottom sheet: drag handle, safe-area padding, closes on backdrop tap, Esc, the close
-// button, or the Android/browser back button (opening pushes a history entry). Focus moves into
-// the sheet on open and back to the trigger on close.
+// button, the Android/browser back button (opening pushes a history entry), or a swipe down from
+// the top of the sheet. Focus moves into the sheet on open and back to the trigger on close.
 export default function BottomSheet({ open, onClose, title, subtitle, children }) {
   const sheetRef = useRef(null)
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose })
+  // Swipe down (≥ 80px) while the sheet is scrolled to its top closes it.
+  const touchY = useRef(null)
+  const onTouchStart = e => { touchY.current = sheetRef.current?.scrollTop > 0 ? null : e.touches[0].clientY }
+  const onTouchEnd = e => { if (touchY.current != null && e.changedTouches[0].clientY - touchY.current >= 80) closeRef.current(); touchY.current = null }
 
   useEffect(() => {
     if (!open) return
@@ -37,7 +41,7 @@ export default function BottomSheet({ open, onClose, title, subtitle, children }
     <div style={{ position: 'fixed', inset: 0, zIndex: C.z.modal }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)' }} />
       <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
-        className="bottom-sheet"
+        className="bottom-sheet" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
         style={{ position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '85dvh', overflowY: 'auto', overscrollBehavior: 'contain', background: C.m.card, borderRadius: '20px 20px 0 0',
           padding: `10px max(18px, var(--safe-right)) calc(20px + var(--safe-bottom)) max(18px, var(--safe-left))`, outline: 'none', boxShadow: '0 -8px 30px rgba(0,0,0,.18)' }}>
         <div aria-hidden="true" style={{ width: 40, height: 5, borderRadius: 3, background: C.m.g4, margin: '0 auto 12px' }} />

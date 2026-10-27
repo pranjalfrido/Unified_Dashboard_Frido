@@ -6,6 +6,7 @@ import {
 import MixBar from './responsive/MixBar.jsx'
 import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeSupportRules } from './customer/customerRules.js'
+import { publishNavStat } from './responsive/navStats.js'
 import CustomerSupportMobile from './customer/CustomerSupportMobile.jsx'
 import { C as BASE_C, fmtN, exportCSV } from './utils.js'
 import { yesterdayStillLoading, SUPPORT_LOAD_NOTE, orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
@@ -775,6 +776,9 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   // B2.5: Shopify D2C orders of the 7 days the drivers cover (dispo7 = last 7 days to the end date); Day view only
   const orders7 = grain === 'day' ? orders7Of(model) : 0
   const watch = useMemo(() => computeSupportRules(data, model, back, grain), [data, model, back, grain])
+  // Phone launcher's live number for Customer (navStats): the watchlist's "Pending > 8 days" count
+  const pendRule = watch?.rules?.find(r => r.id === 'pending')
+  if (pendRule) publishNavStat('customer', { value: pendRule.valueText, label: pendRule.name.replace(/^Pending/, 'pending').replace('> 8 days', '9+ days') })
   const dayLoading = yesterdayStillLoading(grain, latest?.key) // C7
   const goRule = id => {
     const target = watch?.rules.find(r => r.id === id)?.target

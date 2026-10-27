@@ -2,7 +2,9 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package, Calculator } from '@phosphor-icons/react'
+import { NAV_PAGES } from './responsive/navConfig.js'
+import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
@@ -3590,10 +3592,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 }
 
 // ── Bottom Nav (phones: ≤768px and phone landscape) ─────────────
-// Same permission rules as the Sidebar. The first four allowed of Overview / Sales / P&L / Inventory
-// sit in the bar; everything else (Ads, Logistics, Customer, Documents, Frido Pulse, Profile) is in "More".
-function BottomNav({ page, setPage, setInvTab, allowedTabs, profile }) {
-  const ic = Icon => <Icon size={22} />
+// NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
+// "All pages") and a launcher with every other page. Only pages this user may open are passed in,
+// with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: Lightning,
+  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package, 'financial-mis': Calculator }
+function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const can = id => {
     if (!allowedTabs) return true
     if (id === 'sales') return hasSalesAccess(allowedTabs)
@@ -3602,29 +3606,14 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile }) {
     if (id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
     if (id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
     if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
+    if (id === 'courier-allocation') return hasCostAccess(allowedTabs)
+    if (['cogs', 'logistics-ledger', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
+    if (id === 'financial-mis') return allowedTabs.includes('sales:financial-mis')
     return allowedTabs.includes(id)
   }
-  const all = [
-    { id: 'overview', label: 'Overview', icon: ic(SquaresFour) },
-    { id: 'sales', label: 'Sales', icon: ic(ChartBar) },
-    { id: 'pnl', label: 'P&L', icon: ic(TrendUp) },
-    { id: 'inventory', label: 'Inventory', icon: ic(Cube) },
-    { id: 'ads', label: 'Ads', icon: ic(PlayCircle) },
-    { id: 'logistics', label: 'Logistics', icon: ic(Truck) },
-    { id: 'customer', label: 'Customer', icon: ic(Users) },
-    { id: 'documents', label: 'Documents', icon: ic(FileText) },
-    { id: 'ask', label: 'Frido Pulse', icon: ic(Lightning) },
-  ].filter(i => can(i.id))
-  const primaryIds = ['overview', 'sales', 'pnl', 'inventory']
-  const primary = all.filter(i => primaryIds.includes(i.id))
-  const more = [...all.filter(i => !primaryIds.includes(i.id)), {
-    id: 'profile', label: profile?.name?.split(' ')[0] || 'Profile',
-    icon: profile?.avatar_url
-      ? <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
-      : <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  }]
+  const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
   // Sub-pages light up their parent; Logistics / Customer open the sub-page this user may see.
-  const active = page === 'logistics-cost' || page === 'courier-allocation' ? 'logistics' : page === 'customer-support' ? 'customer' : page
+  const active = page === 'logistics-cost' ? 'logistics' : page === 'customer-support' ? 'customer' : page
   const onSelect = id => {
     if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
     if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
@@ -3636,7 +3625,14 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile }) {
     }
     setPage(id)
   }
-  return <MobileBottomNav primary={primary} more={more} active={active} onSelect={onSelect} />
+  // Same calls as Profile → Sign out.
+  const signOut = async () => {
+    if (userId) await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+    await supabase.auth.signOut()
+    onSignOut?.()
+  }
+  return <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
+    onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} />
 }
 
 // ── Topnav ─────────────────────────────────────────────────────
@@ -12091,6 +12087,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
         pSpend: p ? p.spend : null, pClicks: p ? p.clicks : null, pImpr: p ? p.impressions : null }
     })
     const money = v => fmt(v)
+    // Phone launcher's live number for Ads (navStats): this tile's own value, no extra query
+    if (overallRoas > 0) publishNavStat('ads', { value: `${overallRoas.toFixed(2)}x`, label: 'ROAS' })
     const all = {
       spend: { label: 'Total spend', tileLabel: 'Spend', value: fmt(heroSpend), delta: chg(heroSpend, prevSpend), lowerIsBetter: true, def: 'Ad spend in the period.',
         sub: `Ad rev ${fmt(totalRevenue)} · ROAS ${overallRoas.toFixed(2)}x`, point: r => r.spend, prevPoint: r => r.pSpend, fmtPoint: money },
@@ -21234,7 +21232,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
         </div>
       </div>
-      <BottomNav page={page} setPage={setPage} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
+      <BottomNav page={page} setPage={setPage} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} userId={session?.user?.id} theme={theme} setTheme={setTheme} onSignOut={onSignOut} />
     </div>
   )
 }
