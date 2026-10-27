@@ -30,14 +30,13 @@ const p1 = v => (v != null && isFinite(v) ? `${v.toFixed(1)}%` : '—')
 const FMT = { money: fmt, int: fmtN, x: v => `${(v || 0).toFixed(2)}×`, pct: v => `${(v || 0).toFixed(1)}%` }
 const Muted = ({ children, style }) => <div style={{ fontSize: 12, color: M.muted, ...style }}>{children}</div>
 
-// cm1Margin: P&L D2C CM1 % (fraction) for the same dates, for the payback (C2); null → 35% (labelled)
 const asOf = end => (end ? new Date(`${end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date')
 
-export default function CustomerMobileView({ custData: cd, tab, setTab, start, end, watch, cm1Margin = null }) {
+export default function CustomerMobileView({ custData: cd, tab, setTab, start, end, watch }) {
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const rows = dailyRows(cd)
-  const pay = paybackMargin(cm1Margin)
+  const pay = paybackMargin() // C2: fixed 35% for now
   const props = { cd, rows, start, end, layout, pay }
   const openRule = id => { const t = watch?.rules.find(r => r.id === id)?.target; if (t) { setTab(t); document.querySelector('.page-scroll')?.scrollTo?.({ top: 0 }) } }
   return (

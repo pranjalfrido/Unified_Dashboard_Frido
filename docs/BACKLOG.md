@@ -42,7 +42,7 @@ queries, metric logic or numbers).
 | FIXED | Logistics → Performance: Z-RTO ▲/▼ showed green when Z-RTO rose (lower is better). (5c) | Fixed in cf916c66 on feature/responsive-logistics (2026-10-26), desktop and mobile. |
 | FIXED | Logistics → Cost 3PL: the hero badge read "₹/parcel vs 2026-08" (raw month key). (5d) | Mobile shows "vs Aug" — fixed in 3dfa23df on feature/responsive-logistics (2026-10-26); desktop label unchanged (display only, approved). |
 | LOW | Customer Retention: the "Inactive 90+" card's sparkline plots cohort sizes, not inactivity. | `sparkLost90` (App.jsx ~17977). Found in Customer C1. |
-| LOW | Customer cross-sell query is all-time and `LIMIT 500`. | api/customer.js Q4 (~175-236): totals truncated; not date-filtered. |
+| DONE (C5, 27 Oct) | Customer cross-sell query is all-time and `LIMIT 500`. | Totals now use every pair; 500 rows kept for display only (fix/customer-data). |
 
 ### P&L data fixes — branch `fix/pnl-data` (2026-10-26, docs/responsive/PNL_MASTER_PLAN.md Part A)
 
@@ -70,3 +70,4 @@ queries, metric logic or numbers).
 | MEDIUM | Customer Support backlog trend (14 days of pending parent + child) needs a daily snapshot of open tickets; `cs_dashboard_unified` is rebuilt daily with no history. | Phone and laptop show today's pending only (CUSTOMER_MASTER_PLAN B2.6). |
 | LOW | Customer Support "contacts per 100 orders" by reason shows only in the Daily view (dispo7 is always the last 7 days; Week / Month responses have no orders for exactly those 7 days). | Add 7-day orders to the API response to show it in every view. |
 | LOW | Customer phone view numbers come from src/customer/customerDerive.js, a copy of the laptop tab formulas in App.jsx (CustomerPage). Move the laptop tabs onto the same functions so there is one copy. | Verified equal value by value (CUSTOMER_VERIFICATION.md). |
+| MEDIUM | Customer: use the P&L D2C CM1 % for payback and LTV:CAC. | Payback (C2) uses a fixed 35% margin, labelled "35% margin, P&L CM1 link later"; LTV:CAC on CM1 (C4) the same. The Customer page doesn't load the sales data P&L needs (the /api/bq fetch is limited to Overview / Sales / P&L / Ads / Intelligence), so this needs either that data or a small CM1 % endpoint. Suraj 27 Oct. |

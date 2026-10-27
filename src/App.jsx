@@ -17145,12 +17145,11 @@ function HeroSparkCard({ c }) {
   )
 }
 
-// cm1Margin: P&L D2C CM1 % (as a fraction) for the same dates, when the caller has it (payback, C2)
-function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, refreshTick = 0, cm1Margin = null }) {
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, refreshTick = 0 }) {
   // C2 (Suraj 27 Oct): one payback, in months, on margin, shown the same on Acquisition and Spend &
-  // Discounts: CAC ÷ (12-month revenue per customer ÷ 12 × margin). Margin = P&L D2C CM1 % for the
-  // same dates when known, else 35% (labelled).
-  const { margin: payMargin, label: payMarginLabel } = paybackMargin(cm1Margin)
+  // Discounts (laptop and phone: customerDerive paybackMargin / paybackMonthsOf). Fixed 35% for now;
+  // using the P&L D2C CM1 % is in docs/BACKLOG.md.
+  const { margin: payMargin, label: payMarginLabel } = paybackMargin()
   const paybackMonthsOf = k => paybackMonthsOfShared(k, payMargin)
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
@@ -17263,7 +17262,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     <>
       {tabBar}
       <div style={{ padding: '12px 12px 0' }}>
-        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} cm1Margin={cm1Margin} />
+        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
       </div>
     </>
   )

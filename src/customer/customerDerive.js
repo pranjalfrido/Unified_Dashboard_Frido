@@ -43,11 +43,10 @@ export function ledgers(k, p) {
 }
 
 // Payback (C2, Suraj 27 Oct), shared by laptop and phone: CAC ÷ (12-month revenue per customer ÷ 12 ×
-// margin), in months. margin = P&L D2C CM1 % (fraction) for the same dates when known, else 35%.
+// margin), in months, at a fixed 35% margin for now (P&L D2C CM1 % link in docs/BACKLOG.md).
 export const PAYBACK_FALLBACK_MARGIN = 0.35
-export function paybackMargin(cm1Margin) {
-  const known = cm1Margin != null && cm1Margin > 0
-  return { margin: known ? cm1Margin : PAYBACK_FALLBACK_MARGIN, label: known ? `${(cm1Margin * 100).toFixed(1)}% CM1 (P&L D2C)` : '35% margin (P&L CM1 not available)' }
+export function paybackMargin() {
+  return { margin: PAYBACK_FALLBACK_MARGIN, label: '35% margin, P&L CM1 link later' }
 }
 export function paybackMonthsOf(k, margin) {
   return k?.cac > 0 && k?.ltv12 > 0 && margin > 0 ? k.cac / (k.ltv12 / 12 * margin) : null
