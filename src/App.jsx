@@ -11973,6 +11973,16 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const adsDetail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
   const adsUnattributed = (adsDetail.subCategoryRows || []).filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0)
   const adsProductRows = (adsDetail.subCategoryRows || []).filter(r => r.subCategory !== 'Unattributed')
+  // D3 (Suraj 27 Oct): revenue the tables can't break down gets its own labelled row, so the Total
+  // row equals the card: CRED on the All tab, and the Flipkart / Myntra late-report estimates (ex-GST)
+  // wherever those channels are in scope. Laptop tables and the phone lists use the same rows.
+  const adsExtraRows = (() => {
+    const out = []
+    if (!selPlatform && (chMap['CRED']?.excRev || 0) > 0) out.push({ category: 'CRED', label: 'CRED (not in categories)', spend: credAdditionalSpend, revenue: Math.round(chMap['CRED'].excRev) })
+    const estRev = (!selPlatform || selPlatform === 'Flipkart' ? data.flipkart?.estTotalExcRev || 0 : 0) + (!selPlatform || selPlatform === 'Myntra' ? data.myntra?.estTotalExcRev || 0 : 0)
+    if (estRev > 0) out.push({ category: 'Flipkart / Myntra', label: 'Flipkart / Myntra estimate (no product detail)', spend: 0, revenue: Math.round(estRev) })
+    return out.map(r => ({ ...r, netRevenue: r.revenue, orders: 0, returns: 0, cancellations: 0, roas: r.spend > 0 ? r.revenue / r.spend : 0 }))
+  })()
   const adsPrevByProd = (() => {
     // previous equal-length window's product spend / sales (cached path only; see injectAdsFromCache)
     if (!ads.prevAdsDailyByCategory) return null
@@ -12048,6 +12058,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     const catRowsM = (() => {
       const m = {}
       adsProductRows.forEach(r2 => { const o = m[r2.category] || (m[r2.category] = { isCat: true, category: r2.category, spend: 0, revenue: 0, n: 0 }); o.spend += r2.spend || 0; o.revenue += r2.revenue || 0; o.n++ })
+      // D3 labelled rows, the same as the laptop table
+      adsExtraRows.forEach(r2 => { m[r2.label] = { isCat: true, category: r2.label, spend: r2.spend, revenue: r2.revenue, n: 1 } })
       return Object.values(m)
     })()
     return (
@@ -12061,7 +12073,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           <AdsMobileView channel={chLabel} metrics={metrics} trendRows={trendRows} start={filters.start} end={filters.end} fmt={fmt}
             watch={adsWatch} dayRows={adsDayRows} series={adsSeries} monthly={adsMonthly} shareRows={adsShareRows} pacing={adsPacing}
             overview={overview} amazonSplit={amazonSplit} unattributed={adsUnattributed} totalSpend={totalSpend}
-            catRows={catRowsM} prodRows={adsProductRows} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
+            catRows={catRowsM} prodRows={[...adsProductRows, ...adsExtraRows.map(r2 => ({ ...r2, subCategory: r2.label }))]} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
         </div>
       </div>
     )
@@ -12593,16 +12605,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
         )}
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
-          // D3 (Suraj 27 Oct): revenue the tables can't break down gets its own labelled row, so the
-          // Total row equals the card: CRED on the All tab, and the Flipkart / Myntra late-report
-          // estimates (ex-GST) wherever those channels are in scope. Same on the live and cached paths.
-          const extraRows = []
-          if (!selPlatform && (chMap['CRED']?.excRev || 0) > 0) extraRows.push({ category: 'CRED', label: 'CRED (not in categories)', spend: credAdditionalSpend, revenue: Math.round(chMap['CRED'].excRev) })
-          const estRev = (!selPlatform || selPlatform === 'Flipkart' ? data.flipkart?.estTotalExcRev || 0 : 0) + (!selPlatform || selPlatform === 'Myntra' ? data.myntra?.estTotalExcRev || 0 : 0)
-          if (estRev > 0) extraRows.push({ category: 'Flipkart / Myntra', label: 'Flipkart / Myntra estimate (no product detail)', spend: 0, revenue: Math.round(estRev) })
-          const extra = r => ({ netRevenue: r.revenue, orders: 0, returns: 0, cancellations: 0, roas: r.spend > 0 ? r.revenue / r.spend : 0, spend: r.spend, revenue: r.revenue })
-          const catRowsAll = [...(detail.categoryRows || []), ...extraRows.map(r => ({ ...extra(r), category: r.label }))]
-          const subCatRowsAll = [...(detail.subCategoryRows || []), ...extraRows.map(r => ({ ...extra(r), category: r.category, subCategory: r.label }))]
+          // D3: the labelled CRED / estimate rows (adsExtraRows above)
+          const catRowsAll = [...(detail.categoryRows || []), ...adsExtraRows.map(r => ({ ...r, category: r.label }))]
+          const subCatRowsAll = [...(detail.subCategoryRows || []), ...adsExtraRows.map(r => ({ ...r, subCategory: r.label }))]
           if (!catRowsAll.length) return null
 
           // Category/sub-category slicers filter these tables down to the selection, same as
@@ -12610,9 +12615,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           // consistent: pick "Slippers" once and every section reflects it.
           // B2: spend not linked to a product is one line above the lists (not a row); the Total rows still include it
           const unattrSpend = !selCat.length && !selSubCat.length ? subCatRowsAll.filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0) : 0
+          // D2 (fix/ads-data): both paths now give that spend its own "Unattributed" category row; it is
+          // the line above, not a list row (it used to sit inside "Others" and was subtracted here)
           const slicedCatRows = (selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll)
-            .map(r => (unattrSpend > 0 && r.category === 'Others' ? { ...r, spend: Math.max(0, r.spend - unattrSpend), roas: r.spend - unattrSpend > 0 ? r.revenue / (r.spend - unattrSpend) : 0 } : r))
-            .filter(r => r.spend > 0.5 || r.revenue > 0.5)
+            .filter(r => r.category !== 'Unattributed' && (r.spend > 0.5 || r.revenue > 0.5))
           // B2: Unattributed spend is one line above the lists, not a product row; a watchlist tile filters the list
           const slicedProdRows = subCatRowsAll.filter(r =>
             r.subCategory !== 'Unattributed' && (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
