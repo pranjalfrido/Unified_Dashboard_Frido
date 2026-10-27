@@ -19946,6 +19946,26 @@ function AppInner() {
       .catch(() => setAllowedTabs([]))
   }, [session])
 
+  // An admin's change to this person's role or tabs applies when the tab is shown again (and every
+  // 5 minutes), without a reload. State only changes when something actually changed.
+  useEffect(() => {
+    if (!session || session === 'recovery') return
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
+        .then(({ data }) => { if (data) setProfile(p => (p && JSON.stringify(p) === JSON.stringify(data) ? p : data)) }, () => {})
+      supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
+        .then(({ data }) => {
+          if (!data) return
+          const next = data.map(r => r.tab)
+          setAllowedTabs(t => (t && [...t].sort().join() === [...next].sort().join() ? t : next))
+        }, () => {})
+    }
+    document.addEventListener('visibilitychange', refresh)
+    const id = setInterval(refresh, 5 * 60 * 1000)
+    return () => { document.removeEventListener('visibilitychange', refresh); clearInterval(id) }
+  }, [session])
+
   if (session === undefined) return (
     <LoadingScreen />
   )

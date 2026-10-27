@@ -266,38 +266,47 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const [showActivity, setShowActivity] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmRole, setConfirmRole] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => { setLocalTabs(permissions) }, [user.user_id])
+  useEffect(() => { setLocalTabs(permissions) }, [user.user_id, user.is_admin]) // eslint-disable-line react-hooks/exhaustive-deps -- reset only when another member (or role) is shown
 
+  // Tabs are saved by the admin API in one step. For an admin, saving makes them a member with the
+  // tabs picked here (Make member).
   async function savePermissions() {
     setSaving(true)
-    const tabsToSave = [...localTabs]
-    if (user.is_admin) {
-      await adminCall('demote_user', session, { user_id: user.user_id })
-    }
-    const { error: delErr } = await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
-    if (delErr) { console.error('delete error', delErr); showToast('Save failed'); setSaving(false); return }
-    if (tabsToSave.length > 0) {
-      const { error: insErr } = await supabase.from('user_permissions').insert(tabsToSave.map(tab => ({ user_id: user.user_id, tab })))
-      if (insErr) { console.error('insert error', insErr); showToast('Save failed'); setSaving(false); return }
-    }
-    setSaving(false); onUpdate()
-    showToast(user.is_admin ? `${user.name} demoted to Member` : 'Permissions saved')
+    const result = await adminCall(user.is_admin ? 'demote_user' : 'set_permissions', session, { user_id: user.user_id, tabs: [...localTabs] })
+    setSaving(false); setConfirmRole(false)
+    if (result.error) { showToast(`Not saved: ${result.error}`); return }
+    onUpdate()
+    showToast(user.is_admin ? `${user.name} is now a member` : 'Permissions saved')
+  }
+
+  async function promoteUser() {
+    setSaving(true)
+    const result = await adminCall('promote_user', session, { user_id: user.user_id })
+    setSaving(false); setConfirmRole(false)
+    if (result.error) { showToast(`Not changed: ${result.error}`); return }
+    onUpdate()
+    showToast(`${user.name} is now an admin`)
   }
 
   async function revokeUser() {
     setRevoking(true)
-    await adminCall('revoke_user', session, { user_id: user.user_id })
-    setRevoking(false); setConfirmRevoke(false); onUpdate()
+    const result = await adminCall(user.is_active ? 'revoke_user' : 'restore_user', session, { user_id: user.user_id })
+    setRevoking(false); setConfirmRevoke(false)
+    if (result.error) { showToast(`Not changed: ${result.error}`); return }
+    onUpdate()
     showToast(user.is_active ? `${user.name} revoked` : `${user.name} restored`)
   }
 
   async function deleteUser() {
     setDeleting(true)
-    await adminCall('delete_user', session, { user_id: user.user_id })
-    setDeleting(false); setConfirmDelete(false); onUpdate()
+    const result = await adminCall('delete_user', session, { user_id: user.user_id })
+    setDeleting(false); setConfirmDelete(false)
+    if (result.error) { showToast(`Not deleted: ${result.error}`); return }
+    onUpdate()
     showToast(`${user.name} deleted`)
   }
 
@@ -325,6 +334,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', paddingTop: 4 }}>
           <button style={S.textBtn} onClick={() => setShowActivity(true)}>Activity</button>
           <button style={S.textBtn} onClick={() => setShowReset(true)}>Reset pw</button>
+          {!user.is_admin && user.is_active && <button style={S.textBtn} onClick={() => setConfirmRole(true)}>Make admin</button>}
           {user.is_active
             ? <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
             : <button style={{ ...S.textBtn, color: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
@@ -339,12 +349,12 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
       {/* Permission panel */}
       <>
         <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
-          {user.is_admin ? 'Admin — select specific tabs to demote to Member' : 'Click chips to grant or remove access'}
+          {user.is_admin ? 'Admin — sees every tab. To make them a member, pick the tabs they keep, then Make member' : 'Click chips to grant or remove access'}
         </div>
         <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} callerEmail={session?.user?.email} />
-        {tabsChanged && (
-          <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
-            {saving ? 'Saving…' : user.is_admin ? 'Demote to Member & save' : 'Save permissions'}
+        {(user.is_admin || tabsChanged) && (
+          <button style={{ ...(user.is_admin ? S.outlineBtn : S.primaryBtn), fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={() => (user.is_admin ? setConfirmRole(true) : savePermissions())} disabled={saving}>
+            {saving ? 'Saving…' : user.is_admin ? `Make member (${localTabs.length} tab${localTabs.length === 1 ? '' : 's'})` : 'Save permissions'}
           </button>
         )}
       </>
@@ -363,6 +373,17 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
           danger={user.is_active}
           onConfirm={revokeUser}
           onCancel={() => setConfirmRevoke(false)}
+        />
+      )}
+      {confirmRole && (
+        <ConfirmDialog
+          message={user.is_admin
+            ? `Make ${user.name} a member? They lose admin and keep only the ${localTabs.length} tab${localTabs.length === 1 ? '' : 's'} selected.`
+            : `Make ${user.name} an admin? Admins see every tab and can manage the team.`}
+          confirmLabel={user.is_admin ? 'Make member' : 'Make admin'}
+          danger={false}
+          onConfirm={user.is_admin ? savePermissions : promoteUser}
+          onCancel={() => setConfirmRole(false)}
         />
       )}
       {confirmDelete && (

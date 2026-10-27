@@ -15,7 +15,14 @@ function ForgotPassword({ prefillEmail, onBack }) {
     if (!email.trim()) { setErr('Enter your email.'); return }
     setLoading(true)
     setErr('')
-    const { data } = await supabase.from('user_profiles').select('name, is_active').eq('email', email.trim().toLowerCase()).single()
+    // The API looks up this one email (the browser can no longer read user_profiles before sign-in).
+    let data = null
+    try {
+      const r = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth-admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account_lookup', email: email.trim().toLowerCase() }) })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      data = j.found ? j : null
+    } catch { setErr("Can't reach the server. Try again in a moment."); setLoading(false); return }
     if (!data) { setErr('No account found with this email.'); setLoading(false); return }
     if (!data.is_active) { setErr('Your account has been revoked. Contact your admin.'); setLoading(false); return }
 

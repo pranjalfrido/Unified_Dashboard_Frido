@@ -322,30 +322,25 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
 function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onChanged, setToast }) {
   const [tabs, setTabs] = useState(perms)
   const [openSec, setOpenSec] = useState(null)
-  const [sheet, setSheet] = useState(null) // 'activity' | 'reset' | 'revoke' | 'delete'
+  const [sheet, setSheet] = useState(null) // 'activity' | 'reset' | 'revoke' | 'delete' | 'role'
   const [busy, setBusy] = useState(false)
   const [pw, setPw] = useState({ a: '', b: '', err: '' })
   const queue = useRef(Promise.resolve())
   const sections = accessSections(callerEmail)
   const readOnly = isSelf || user.is_admin
 
-  // Save exactly as the laptop does: delete the member's rows, insert the new list. Saves run one
-  // after another; a failed save puts the chips back and offers Retry.
+  // Saved by the admin API in one step, as on the laptop. Saves run one after another; a failed save
+  // puts the chips back and offers Retry.
   const save = list => (queue.current = queue.current.then(async () => {
-    const { error: delErr } = await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
-    if (delErr) return delErr
-    if (list.length) {
-      const { error: insErr } = await supabase.from('user_permissions').insert(list.map(tab => ({ user_id: user.user_id, tab })))
-      if (insErr) return insErr
-    }
-    return null
+    const result = await adminCall('set_permissions', session, { user_id: user.user_id, tabs: list })
+    return result.error || null
   }))
   const apply = async (next, prev, label = 'Saved') => {
     setTabs(next)
     const err = await save(next)
     if (err) {
       setTabs(prev)
-      setToast({ text: "Couldn't save", actionLabel: 'Retry', undo: () => apply(next, prev, label) })
+      setToast({ text: `Couldn't save: ${err}`, actionLabel: 'Retry', undo: () => apply(next, prev, label) })
       return
     }
     onChanged()
@@ -358,14 +353,23 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
     apply(next, prev)
   }
 
+  // Revoke / restore / delete / make member / make admin. A refused or failed change keeps the sheet
+  // open with the reason (e.g. the last admin) instead of a success toast.
+  const [actErr, setActErr] = useState('')
   const act = async action => {
-    setBusy(true)
-    await adminCall(action, session, { user_id: user.user_id })
-    setBusy(false); setSheet(null)
+    setBusy(true); setActErr('')
+    const result = await adminCall(action, session, { user_id: user.user_id, ...(action === 'demote_user' ? { tabs: [] } : {}) })
+    setBusy(false)
+    if (result.error) { setActErr(result.error); return }
+    setSheet(null)
+    if (action === 'demote_user') setTabs(result.tabs || [])
     await onChanged()
-    if (action === 'delete_user') { setToast({ text: `${user.name} deleted` }); onBack() }
-    else setToast({ text: user.is_active ? `${user.name} revoked` : `${user.name} restored` })
+    const done = { delete_user: 'deleted', revoke_user: 'revoked', restore_user: 'restored', demote_user: 'is now a member · pick their tabs', promote_user: 'is now an admin' }[action]
+    setToast({ text: `${user.name} ${done}` })
+    if (action === 'delete_user') onBack()
   }
+  const openSheet = s => { setActErr(''); setSheet(s) }
+  const errLine = actErr && <div role="alert" style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: M.down }}>{actErr}</div>
   const resetPw = async e => {
     e.preventDefault()
     if (pw.a.length < 8) return setPw(p => ({ ...p, err: 'Password must be at least 8 characters.' }))
@@ -405,7 +409,8 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
         {readOnly ? (
           <div style={{ padding: '12px 0', fontSize: 13, color: M.muted }}>
             <b style={{ display: 'block', color: M.ink, fontSize: 14, marginBottom: 2 }}>Admin · all tabs</b>
-            {isSelf ? 'Your own access and admin role can’t be changed here.' : 'Admins see every tab. Change an admin’s access on a laptop.'}
+            {isSelf ? 'Your own access and admin role can’t be changed here.' : 'Admins see every tab. Make them a member to choose their tabs.'}
+            {!isSelf && <button type="button" onClick={() => openSheet('role')} style={{ ...outlineBtn(M.green), marginTop: 10 }}>Make member</button>}
           </div>
         ) : sections.map((sec, si) => {
           const keys = sectionKeys(sec)
@@ -443,12 +448,13 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
 
       <section style={{ ...cardStyle, padding: '4px 16px' }}>
         <Row title="Activity" sub="Logins and logouts" onClick={() => setSheet('activity')} last={isSelf} />
-        {!isSelf && <Row title="Reset password" sub="Set a new password for them" onClick={() => setSheet('reset')} last />}
+        {!isSelf && <Row title="Reset password" sub="Set a new password for them" onClick={() => setSheet('reset')} last={user.is_admin || !user.is_active} />}
+        {!isSelf && !user.is_admin && user.is_active && <Row title="Make admin" sub="Sees every tab and can manage the team" onClick={() => openSheet('role')} last />}
       </section>
       {!isSelf && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" onClick={() => setSheet('revoke')} style={outlineBtn(M.ink, M.g4)}>{user.is_active ? 'Revoke access' : 'Restore access'}</button>
-          <button type="button" onClick={() => setSheet('delete')} style={outlineBtn(M.down, 'rgba(192,57,43,.45)')}>Delete member</button>
+          <button type="button" onClick={() => openSheet('revoke')} style={outlineBtn(M.ink, M.g4)}>{user.is_active ? 'Revoke access' : 'Restore access'}</button>
+          <button type="button" onClick={() => openSheet('delete')} style={outlineBtn(M.down, 'rgba(192,57,43,.45)')}>Delete member</button>
         </div>
       )}
 
@@ -464,16 +470,28 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
       </BottomSheet>
       <BottomSheet open={sheet === 'revoke'} onClose={() => setSheet(null)} title={user.is_active ? 'Revoke access' : 'Restore access'}>
         <p style={{ margin: '0 0 14px', fontSize: 14, color: M.ink }}>{user.is_active ? `Revoke access for ${user.name}? They can't log in until you restore it.` : `Restore access for ${user.name}?`}</p>
+        {errLine}
         <div style={{ display: 'flex', gap: 10 }}>
           <button type="button" onClick={() => setSheet(null)} style={outlineBtn()}>Cancel</button>
-          <button type="button" onClick={() => act('revoke_user')} disabled={busy} style={user.is_active ? { ...primaryBtn, background: M.down } : primaryBtn}>{busy ? '…' : user.is_active ? 'Revoke' : 'Restore'}</button>
+          <button type="button" onClick={() => act(user.is_active ? 'revoke_user' : 'restore_user')} disabled={busy} style={user.is_active ? { ...primaryBtn, background: M.down } : primaryBtn}>{busy ? '…' : user.is_active ? 'Revoke' : 'Restore'}</button>
         </div>
       </BottomSheet>
       <BottomSheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete member">
         <p style={{ margin: '0 0 14px', fontSize: 14, color: M.ink }}>{`Delete ${user.name}? This can't be undone.`}</p>
+        {errLine}
         <div style={{ display: 'flex', gap: 10 }}>
           <button type="button" onClick={() => setSheet(null)} style={outlineBtn()}>Cancel</button>
           <button type="button" onClick={() => act('delete_user')} disabled={busy} style={{ ...primaryBtn, background: M.down }}>{busy ? '…' : 'Delete'}</button>
+        </div>
+      </BottomSheet>
+      <BottomSheet open={sheet === 'role'} onClose={() => setSheet(null)} title={user.is_admin ? 'Make member' : 'Make admin'}>
+        <p style={{ margin: '0 0 14px', fontSize: 14, color: M.ink }}>{user.is_admin
+          ? `Make ${user.name} a member? They lose admin and start with no tabs; pick their tabs on this screen right after.`
+          : `Make ${user.name} an admin? Admins see every tab and can manage the team.`}</p>
+        {errLine}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" onClick={() => setSheet(null)} style={outlineBtn()}>Cancel</button>
+          <button type="button" onClick={() => act(user.is_admin ? 'demote_user' : 'promote_user')} disabled={busy} style={primaryBtn}>{busy ? '…' : user.is_admin ? 'Make member' : 'Make admin'}</button>
         </div>
       </BottomSheet>
     </FullScreen>
