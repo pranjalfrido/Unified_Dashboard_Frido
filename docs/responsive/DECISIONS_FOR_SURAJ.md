@@ -46,3 +46,14 @@ No CRED-specific date code exists. CRED spend only exists for months with a `mar
 
 ### D6. Ads ROAS vs P&L ROAS (A10)
 Same for D2C (3.74x), Amazon (9.23x), Flipkart (7.04x); Zepto 5.86x vs 5.88x. Different: Blinkit 34.26x vs 39.34x, Instamart 13.53x vs 17.05x (P&L only counts spend on sub-categories that have sales in the tab, the same gap as P&L Overall Mktg vs Ads); Myntra 9.64x vs none (P&L has no Myntra spend source). Decide whether P&L should keep unmatched spend in an "Others" row (P&L ROAS would match Ads).
+
+### D2–D5: decided 27 Oct, applied on fix/ads-data
+- **D2 → a:** spend not linked to a product is one "Unattributed" row (category and product tables) on both the live and cached paths; category / product ROAS are on attributed spend only; Total rows include everything. 1–26 Oct: Rs 2.79 Cr (32.6% of spend) on All, Rs 2.76 Cr (43.3%) on D2C. P&L unchanged. Data task (BACKLOG, Suraj's team): map sale campaigns to products where possible; add "Socks" to the item master. Commit 28efb977.
+- **D3 → a + GST fix:** labelled rows "CRED (not in categories)" and "Flipkart / Myntra estimate (no product detail)"; Total = card on every tab. Flipkart's estimate is added ex GST: Flipkart gross ex GST 1–25 Oct Rs 241.32 L → Rs 237.75 L, net Rs 205.24 L → Rs 202.20 L, overall net Rs 4,384.18 L → Rs 4,381.14 L (Sales Overall / Flipkart and P&L Flipkart / Overall move by the same amounts). Commit b137317c.
+- **D4 → a:** Ads CAC = Customer tab definition: 1–26 Oct Rs 672 → Rs 700 (90,930 new customers, = Customer tab). Commit 788869d7.
+- **D5:** CRED tab follows the global dates (commit bbaf290c). Data task: check whether CRED spend for Sep / Oct should exist.
+
+### Decisions made without Suraj (Ads, 27 Oct)
+- **D5, narrower fix:** "the sliced cache wins" was applied only when the live CRED data is from another date range. Always preferring the cache would have changed Sep CRED from Rs 26.39 L / 2,075 orders to Rs 26.97 L / 2,357 orders (the cache adds up per-product orders), so the option that changes fewest numbers was taken.
+- **D2, Socks:** the live query name-matches the "Socks" target (Rs 6.8 L, 1–25 Oct) to a category, the cache leaves it unattributed, so Unattributed is Rs 2.79 Cr live vs Rs 2.86 Cr cached. Left as is (fixed by the data task: add "Socks" to the item master).
+- **D3, partial day:** Flipkart's partially-synced last day still sits in chMap next to its full-day estimate (noted in D3); not changed, as the answer covered only the GST fix.
