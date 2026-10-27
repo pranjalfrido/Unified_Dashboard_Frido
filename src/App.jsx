@@ -20732,6 +20732,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
+  // D5 (Suraj 27 Oct): the Ads CRED tab follows the global dates. The live data.cred is used only when
+  // its days fall inside the selected range; otherwise (a previous range's payload while a fetch is
+  // pending, or after one failed) the cache sliced to the selected dates wins.
+  const credDays = data?.cred?.daily || []
+  const credIsCurrent = credDays.length > 0 && credDays.every(d => d.date >= filters.start && d.date <= filters.end)
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
@@ -20783,7 +20788,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
-            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
+            <AdsTab data={adsCache ? { ...(data || {}), cred: (credIsCurrent ? data.cred : null) ?? (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
           {page === 'intelligence' && (
             <div className="page-scroll">
