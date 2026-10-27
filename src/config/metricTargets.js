@@ -35,15 +35,18 @@ export const METRIC_TARGETS = {
 // Suraj 27 Oct (DECISIONS P1/P2): no GM rule on D2C (GM = 100 − COGS there, so it repeated the COGS
 // rule); ASP down > 10% everywhere; EBO/Offline COGS > 50% / GM < 40%; Flipkart COGS > 50% (override).
 export const PNL_RULE_BARS = {
-  d2c:         { label: 'D2C', cm1: 30, cogs: 50, gm: null, ret: 20, cm2Target: 15, aspDrop: 10, retUp: 3 },
+  d2c:         { label: 'D2C', cm1: 30, cogs: 50, gm: null, ret: 25, cm2Target: 15, aspDrop: 10, retUp: 3 },
   marketplace: { label: 'Amazon, Flipkart, Myntra', cm1: 20, cogs: 45, gm: 40, ret: 15, cm2Target: 10, aspDrop: 10, retUp: 3 },
   quick:       { label: 'Blinkit, Instamart, Zepto', cm1: 18, cogs: 45, gm: 35, ret: 5, cm2Target: 8, aspDrop: 10, retUp: 2 },
   smallMarket: { label: 'CRED, Firstcry', cm1: 20, cogs: 45, gm: 40, ret: 10, cm2Target: 10, aspDrop: 10, retUp: 3 },
   store:       { label: 'EBO, Offline', cm1: 30, cogs: 50, gm: 40, ret: 10, cm2Target: null, aspDrop: 10, retUp: 3 },
 }
 // One tab's bars that differ from its group's (merged over them; the label then names the tab).
+// Suraj 27 Oct (P4 c): Offline COGS > 60%, Flipkart COGS > 55%, Amazon Returns > 20%, D2C Returns > 25%.
 export const PNL_RULE_BAR_OVERRIDES = {
-  flipkart: { label: 'Flipkart', cogs: 50 },
+  flipkart: { label: 'Flipkart', cogs: 55 },
+  amazon: { label: 'Amazon', ret: 20 },
+  offline: { label: 'Offline', cogs: 60 },
 }
 export const PNL_CHANNEL_GROUP = {
   shopify: 'd2c', amazon: 'marketplace', flipkart: 'marketplace', myntra: 'marketplace',
