@@ -1675,8 +1675,8 @@ svg text, svg tspan{
 .mnav-slot,.mnav-sheet button{ -webkit-tap-highlight-color:transparent }
 .mnav-slot:focus,.mnav-sheet button:focus{ outline:none }
 .mnav-slot:focus-visible,.mnav-sheet button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:-2px; border-radius:12px }
-.mnav-glow{ position:absolute; left:50%; top:50%; width:42px; height:40px; margin:-20px 0 0 -21px; border-radius:13px; background:#e3f1e8;
-  box-shadow:0 0 14px 3px rgba(120,190,150,.38); opacity:0; transform:scale(.85); transition:opacity .25s ease, transform .25s ease; pointer-events:none }
+.mnav-glow{ position:absolute; left:50%; top:50%; width:38px; height:34px; margin:-17px 0 0 -19px; border-radius:12px; background:#edf6f0;
+  box-shadow:0 0 8px 1px rgba(120,190,150,.22); opacity:0; transform:scale(.85); transition:opacity .25s ease, transform .25s ease; pointer-events:none }
 .mnav-glow.on{ opacity:1; transform:scale(1) }
 .mnav-link{ border:none; background:none; padding:8px 4px; min-height:40px; font-family:var(--font); font-size:13px; font-weight:600; cursor:pointer }
 @media (prefers-reduced-motion: reduce){ .mnav-glow{ transition:none } }

@@ -62,7 +62,8 @@ export const C = {
     up: '#1f8a4c', down: '#c0392b', amber: '#c8860a', prev: '#a3aba6', // prev: previous-period line + its legend swatch
     downDark: '#7a1f1f', // Inventory "Out of stock" (darker than Critical red), approved 2026-10-26
     masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
-    glowTile: '#e3f1e8', // phone nav: selected icon tile and current-page row
+    glowTile: '#e3f1e8', // phone nav launcher: current-page row
+    navTile: '#edf6f0', // phone bottom bar: selected icon tile (38 × 34, radius 12, tight soft halo)
     // Phone page header, Ivory (HEADER_MOBILE_PROMPT.md): surface, hairlines, context grey, chip text, icons, pressed, date pill, notification dot
     hdr: { bg: '#fbfaf7', line: '#eae7df', divider: '#f0ede6', band: '#f6f4ef', context: '#8a938e', chip: '#5c6761', icon: '#4e5a54', press: '#f1efe9', pill: '#eef5f0', dot: '#d9534f' },
     tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
