@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { PNL_RULE_BARS, PNL_CHANNEL_GROUP, PNL_MATERIALITY } from '../config/metricTargets.js'
+import { PNL_RULE_BARS, PNL_RULE_BAR_OVERRIDES, PNL_CHANNEL_GROUP, PNL_MATERIALITY, PNL_WATCHLIST_EXCLUDE } from '../config/metricTargets.js'
 import { breakevenRoas, roasForTargetCm2 } from '../pnl/pnlUtils.js'
 
 // P&L margin watchlist engine (PNL_MASTER_PLAN.md Part B §1), shared by the laptop watchlist / matrix /
@@ -21,7 +21,7 @@ export const RULES = [
   { id: 'cm1', chip: 'CM1', name: b => `CM1 < ${b.cm1}%`, needs: ['cm1'], what: b => `below ${b.cm1}%` },
   { id: 'ret', chip: 'Returns', name: b => `Returns > ${b.ret}%`, needs: ['ret'], what: () => 'returned' },
   { id: 'cogs', chip: 'COGS', name: b => `COGS > ${b.cogs}%`, needs: ['cogs'], what: b => `over ${b.cogs}%` },
-  { id: 'gm', chip: 'GM', name: b => `GM < ${b.gm}%`, needs: ['cogs'], what: b => `below ${b.gm}%` },
+  { id: 'gm', chip: 'GM', name: b => `GM < ${b.gm}%`, needs: ['gm'], what: b => `below ${b.gm}%` },
   { id: 'asp', chip: 'ASP ↓', name: b => `ASP down > ${b.aspDrop}%`, needs: ['prev'], what: () => 'price given up' },
   { id: 'retup', chip: 'Returns ↑', name: b => `Returns up > ${b.retUp} pts`, needs: ['ret', 'prev'], what: () => 'extra returns' },
 ]
@@ -30,10 +30,10 @@ export const CHIP_ORDER = ['loss', 'cm1', 'cogs', 'gm', 'ret', 'retup', 'asp', '
 
 export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null }) {
   const group = PNL_CHANNEL_GROUP[tab]
-  const bars = group ? PNL_RULE_BARS[group] : null
+  const bars = group ? { ...PNL_RULE_BARS[group], ...PNL_RULE_BAR_OVERRIDES[tab] } : null
   if (!bars) return null
   const have = {
-    cm1: !!avail.cm1 && bars.cm1 != null, cogs: !!avail.cogs && bars.cogs != null, ret: !!avail.ret && bars.ret != null,
+    cm1: !!avail.cm1 && bars.cm1 != null, cogs: !!avail.cogs && bars.cogs != null, gm: !!avail.cogs && bars.gm != null, ret: !!avail.ret && bars.ret != null,
     spend: !!avail.spend, cm2Target: bars.cm2Target != null, prev: !!prevRows,
   }
   const live = RULES.filter(r => r.needs.every(n => have[n]) && (r.id !== 'retup' || bars.retUp != null))
@@ -44,7 +44,7 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
   const byRule = Object.fromEntries(live.map(r => [r.id, []]))
   const flagsByKey = {}
   const derived = {}
-  let small = 0
+  let small = 0, excluded = 0
   rows.forEach(r => {
     const key = `${r.cat}::${r.sc}`
     const prev = prevRows?.[key]
@@ -54,8 +54,11 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
     derived[key] = {
       beRoas: breakevenRoas(r.excRev, r.cm1),
       roasNeeded: bars.cm2Target != null ? roasForTargetCm2(r.excRev, r.cm1, r.net, bars.cm2Target / 100) : null,
-      asp, prevAsp, prevRetPct, material: material(r),
+      asp, prevAsp, prevRetPct, material: false, excluded: PNL_WATCHLIST_EXCLUDE.has(r.sc),
     }
+    // "Others" keeps its table values (BE ROAS etc.) but is never checked or put in the matrix
+    if (derived[key].excluded) { excluded++; return }
+    derived[key].material = material(r)
     if (!derived[key].material) { small++; return }
     const hits = []
     const add = (id, impact) => { if (!liveIds.has(id)) return; byRule[id].push({ row: r, key, impact }); hits.push(id) }
@@ -81,7 +84,7 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
   })
   return {
     bars, group, rules, flagsByKey, derived,
-    smallCount: small, checkedCount: rows.length - small,
+    smallCount: small, excludedCount: excluded, checkedCount: rows.length - small - excluded,
     triggered: rules.filter(r => r.count > 0).length,
     flaggedProducts: Object.keys(flagsByKey).length,
     ruleName: Object.fromEntries(rules.map(r => [r.id, r.name])),

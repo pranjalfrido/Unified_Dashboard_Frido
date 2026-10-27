@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { C } from '../utils.js'
 import { fmtSigned } from '../pnl/pnlUtils.js'
+import { PNL_MATERIALITY } from '../config/metricTargets.js'
 import InfoPopover from './InfoPopover.jsx'
 
 // P&L margin watchlist (PNL_MASTER_PLAN.md Part B §3.1 laptop / §4 mobile), one card for every tab
@@ -25,7 +26,8 @@ function RulesPopover({ bars, channel }) {
     bars.cm1 != null && `CM1 below ${bars.cm1}%`, bars.cogs != null && `COGS above ${bars.cogs}%`, bars.gm != null && `GM below ${bars.gm}%`,
     bars.ret != null && `Returns above ${bars.ret}% of gross`, bars.cm2Target != null && `Healthy CM2: ${bars.cm2Target}%`,
     `ASP down more than ${bars.aspDrop}% vs previous period`, bars.retUp != null && `Returns up more than ${bars.retUp} pts vs previous period`,
-    'Products with < 1% of gross and < 50 units aren\'t checked',
+    `Products with < ${PNL_MATERIALITY.minShareOfGross * 100}% of gross and < ${PNL_MATERIALITY.minUnits} units aren't checked`,
+    '"Others" isn\'t checked (not a product)',
   ].filter(Boolean)
   return (
     <span ref={ref} style={{ position: 'relative' }}>

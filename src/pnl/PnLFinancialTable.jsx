@@ -4,6 +4,7 @@ import { fmtSigned as fmt } from './pnlUtils.js'
 import { useSortableTable, useReorderableColumns } from '../components.jsx'
 import InfoPopover from '../responsive/InfoPopover.jsx'
 import FlagChips from '../responsive/FlagChips.jsx'
+import { PNL_OTHERS_INFO, PNL_WATCHLIST_EXCLUDE } from '../config/metricTargets.js'
 import { getCogsForRange } from './pnlUtils.js'
 import { buildFinancialRows, MIN_REV_FOR_RATIOS } from './financialRows.js'
 
@@ -343,6 +344,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                         {hasSkus && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s', flexShrink: 0 }}>▶</span>}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sc}</span>
                       </span>
+                      {PNL_WATCHLIST_EXCLUDE.has(r.sc) && <InfoPopover title={r.sc} text={PNL_OTHERS_INFO} style={{ width: 20, height: 20, margin: '-4px 0', flexShrink: 0 }} />}
                       {onSimulate && <button type="button" className="fv-sim" onClick={() => onSimulate(skuKey)} title={`${simulateLabel}: ${r.sc}`}
                         style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, fontWeight: 600, color: C.t1, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 6, padding: '1px 6px', cursor: 'pointer', fontFamily: 'var(--font)' }}>↗</button>}
                     </div></td>

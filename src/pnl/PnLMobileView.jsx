@@ -15,6 +15,7 @@ import MarginMatrix from '../responsive/MarginMatrix.jsx'
 import { QUADRANTS } from '../responsive/marginMatrixPoints.js'
 import BiggestFixes from '../responsive/BiggestFixes.jsx'
 import FlagChips from '../responsive/FlagChips.jsx'
+import { PNL_OTHERS_INFO, PNL_WATCHLIST_EXCLUDE } from '../config/metricTargets.js'
 
 // P&L below 1024px (PNL_MASTER_PLAN.md Part B §4, mockups/pnl_mockup.html phone; PNL_MOBILE_PLAN.md §4).
 // Display only: every number comes from what PnLChannelTab already has (the KPI cards' values,
@@ -71,6 +72,7 @@ function ProductSheet({ row, flags, ruleName, derived, tabLabel, period, cols, o
   return (
     <div>
       <div style={{ fontSize: 12, color: M.muted, marginBottom: 8 }}>{row.cat} · {tabLabel} · {period}</div>
+      {derived?.excluded && <div style={{ marginBottom: 10 }}><InfoStrip text={PNL_OTHERS_INFO} /></div>}
       {flags.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           {flags.map(id => (
@@ -287,7 +289,7 @@ export default function PnLMobileView({
   const breaksFor = { cm2: 'loss', cm1: 'cm1', ret: 'ret', gm: 'gm', cogs: 'cogs' }
   const rowKey = r => (r.isCat ? `cat:${r.cat}` : `${r.cat}::${r.sc}`)
   const listProps = {
-    itemKey: rowKey, sorts, name: r => r.sc, sub: r => (r.isCat ? `${r.n} product${r.n === 1 ? '' : 's'}` : r.cat),
+    itemKey: rowKey, sorts, name: r => r.sc, sub: r => (r.isCat ? `${r.n} product${r.n === 1 ? '' : 's'}` : PNL_WATCHLIST_EXCLUDE.has(r.sc) ? `${r.cat} · not a product, not checked` : r.cat),
     secondary: (r, k) => (k === 'gross' ? [cols.spend ? `CM2 ${pctTxt(r.cm2Pct)}` : cols.cm1 ? `CM1 ${pctTxt(r.cm1Pct)}` : cols.cogs ? `GM ${pctTxt(r.gmPct)}` : null, cols.ret ? `Ret ${pctTxt(r.returnPct)}` : null].filter(Boolean).join(' · ') : fmt(r.gross)),
     searchText: r => `${r.sc} ${r.cat}`, groupOf: r => r.cat,
     badge: r => (r.isCat ? null : <FlagChips ids={flagsOf(rowKey(r))} names={margin?.ruleName} variant="mobile" />),
