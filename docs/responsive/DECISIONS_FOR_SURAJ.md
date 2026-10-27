@@ -118,3 +118,18 @@ The "Agent FRT above target" rule uses each channel's loosest SLA target (chat 4
 
 ### C10. "Revenue at risk" counts more segments than its tooltip says
 Segments KPI "Revenue at risk" sums every WIN-BACK / URGENT SAVE segment (About To Sleep, At Risk, Hibernating, Lost, Cannot Lose Them: ₹185.68 Cr for 1–26 Oct), but its tooltip says "Hibernating + Cannot Lose Them". The new watchlist "Win-back pool" uses exactly Hibernating + Cannot Lose Them (as the master plan says). Option a: change the tooltip to list all win-back segments. Option b: make the KPI Hibernating + Cannot Lose Them only (number changes). Recommendation: a (label only).
+
+### Customer answers (27 Oct): decided, applied on fix/customer-data
+- **C1 → a:** inactivity counted as of the end date, labelled "as of {date}" (1ba9fe46). As of 30 Sep: Active 280,913 → 154,809; 90+ days 1,981,015 → 2,006,992.
+- **C2 → a:** one payback, in months, on margin, same on Acquisition and Spend & Discounts (f05b31ab). 1–26 Oct at the 35% fallback: "1.1 orders" / 3.7 mo → 10.5 mo.
+- **C3 (= D4):** no change needed here: Customer CAC already = (Meta + Google + D2C additional spend) ÷ new customers (first Shopify order in range, `_EX` excluded). The Ads side moves to it on fix/ads-data.
+- **C4:** display, on feature/responsive-customer.
+- **C5 → a:** diagonal out of the lift totals; totals from every pair (17,030), the 500-row limit kept only for display rows (ef604f16). Top 5 changes in the commit message.
+- **C6 → a:** 61–90 day low-frequency customers → "About To Sleep" (61720c08). As of 26 Oct: Hibernating 992,658 → 860,401; About To Sleep 0 → 132,257.
+- **C7:** display, on feature/responsive-customer.
+- **C9 → a (query):** Repurchase due, one cached aggregated query (49e242e0); Pillows 68,704 and Orthotics 67,811 due, both equal to a direct BigQuery count.
+
+### Decisions made without Suraj (Customer, 27 Oct)
+- **C2 margin source:** this branch has no P&L summary to read, so the payback takes the margin as an input and falls back to 35% (labelled "35% margin (P&L CM1 not available)"). The P&L D2C CM1 % for the same dates is wired on feature/responsive-customer, where the P&L summary exists.
+- **C5 sub-category totals:** the API buckets sub-categories into the 8 biggest by volume + "Other" (the heatmap's own top-8 rule) instead of sending all 17,030 pairs; category grain is sent in full.
+- **C9 definition:** "category" = the order's category as in the repurchase-cycle chart (Q17); median = the same all-time median days to 2nd purchase; "due" = last order in that category, up to the end date, 1–2× the median (both ends included). Cached 6 h per end date in the API instance.
