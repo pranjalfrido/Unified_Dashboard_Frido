@@ -133,3 +133,16 @@ Segments KPI "Revenue at risk" sums every WIN-BACK / URGENT SAVE segment (About 
 - **C2 margin (Suraj 27 Oct, later message):** fixed 35%, labelled "35% margin, P&L CM1 link later"; no P&L data on the Customer page. Using the P&L D2C CM1 % is logged in docs/BACKLOG.md.
 - **C5 sub-category totals:** the API buckets sub-categories into the 8 biggest by volume + "Other" (the heatmap's own top-8 rule) instead of sending all 17,030 pairs; category grain is sent in full.
 - **C9 definition:** "category" = the order's category as in the repurchase-cycle chart (Q17); median = the same all-time median days to 2nd purchase; "due" = last order in that category, up to the end date, 1–2× the median (both ends included). Cached 6 h per end date in the API instance.
+
+### Customer answers (27 Oct): decided, applied on feature/responsive-customer
+- **C2 (display):** payback the same on laptop and phone (one shared helper), fixed 35% margin, "35% margin, P&L CM1 link later" (P&L CM1 link in docs/BACKLOG.md).
+- **C4 → a (label only, per your later message):** "LTV:CAC on margin" shown next to the revenue one at the same fixed 35% (1–26 Oct: 3.28x on revenue, 1.15x on margin → "Watch"); the Healthy bar reads the margin version (d27a0b9c).
+- **C7 → b:** before 11:00 IST the Day view keeps yesterday, shows "Yesterday's support data loads at 11:00 IST" and grey changes (laptop + phone) (a4c3b7e0).
+- **C8 → a:** FRT targets chat 15 min, social 30 min, email 4 h in `SUPPORT_RULES.frtTargetSec` (f23c0c34).
+- **C9 → a (display):** Repurchase due card on Purchase Behavior, laptop + phone (e3a4fdd0).
+- **C10 → a:** "Revenue at risk" tooltip lists every win-back segment; number unchanged (₹185.68 Cr) (96171e69).
+- The phone view was brought in line with the fix/customer-data numbers after the merge (310fe54f).
+
+### Decisions made without Suraj (Customer display, 27 Oct)
+- **C4 watchlist rule:** "LTV:CAC below 3x" in the Customer health watchlist still reads the revenue value (changing it would raise a new flag; you asked for a label only). Move it to the margin version together with the P&L CM1 link (BACKLOG).
+- **C9 total:** the "due now" total adds up the categories, so one customer can count in more than one; the card says so.
