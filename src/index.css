@@ -1600,7 +1600,8 @@ svg text, svg tspan{
    filter · ⋯), chips row 36px (26px chips), sub-tabs 32px, second sub-tab row 30px on a darker band,
    "Filtered:" strip 28px; totals 48 / 84 / 116px. Dividers are inset shadows (no extra px). One accent:
    Frido green for the selected chip, the active underline and the date pill text. */
-.mph{ background:rgba(251,250,247,.92); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); box-shadow:inset 0 -1px 0 #eae7df, 0 4px 14px rgba(28,36,32,.07);
+/* No backdrop-filter: it would make the header the containing block of the date picker's fixed sheet. */
+.mph{ background:#fbfaf7; box-shadow:inset 0 -1px 0 #eae7df, 0 4px 14px rgba(28,36,32,.07);
   font-family:var(--font); -webkit-tap-highlight-color:transparent; position:relative; z-index:1 }
 .mph button{ -webkit-tap-highlight-color:transparent }
 .mph button:focus{ outline:none }
