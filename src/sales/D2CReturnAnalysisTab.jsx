@@ -433,16 +433,16 @@ function ReturnReasonsTable({ returnReasons: cirReasons, exchangeReasons, reason
   const totalRevenueImpact = useMemo(() => (returnReasons || []).reduce((s, r) => s + (r.revenueImpact || 0), 0), [returnReasons])
 
   return (
-    <Card fill title="Return Reasons · Detail" action={
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <ProductSlicer products={products} value={product} onChange={v => { setProduct(v); setExpanded({}) }} />
-        {REASON_KINDS.map(k => (
-          <button key={k.id} onClick={() => { setKind(k.id); setExpanded({}) }} aria-pressed={kind === k.id}
-            style={{ fontSize: 11, fontWeight: kind === k.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: `1px solid ${kind === k.id ? C.acm : C.border2}`, background: kind === k.id ? C.acl : C.card, color: kind === k.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{k.label}</button>
-        ))}
-      </div>
-    }>
+    <Card fill title="Return Reasons · Detail">
       <div style={{ overflowY: 'auto', height: '100%' }}>
+        {/* Under the title, not in the header: at 1366px the three cards in this row must fit side by side. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginBottom: 6 }}>
+          <ProductSlicer products={products} value={product} onChange={v => { setProduct(v); setExpanded({}) }} />
+          {REASON_KINDS.map(k => (
+            <button key={k.id} onClick={() => { setKind(k.id); setExpanded({}) }} aria-pressed={kind === k.id}
+              style={{ fontSize: 11, fontWeight: kind === k.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: `1px solid ${kind === k.id ? C.acm : C.border2}`, background: kind === k.id ? C.acl : C.card, color: kind === k.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{k.label}</button>
+          ))}
+        </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
             <tr style={{ background: C.acl }}>
