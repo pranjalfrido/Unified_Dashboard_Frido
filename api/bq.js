@@ -2067,14 +2067,16 @@ export default async function handler(req, res) {
             cur.setDate(cur.getDate() + 1)
             while (cur <= end_) {
               const d = cur.toISOString().slice(0, 10)
-              estimatedDaily.push({ date: d, sub, rev: avgRev, excRev: avgExcRev, orders: avgOrders, units: avgUnits, estimated: true })
+              estimatedDaily.push({ date: d, sub, rev: avgRev, excRev: avgExcRev > 0 ? avgExcRev : avgRev, orders: avgOrders, units: avgUnits, estimated: true })
               cur.setDate(cur.getDate() + 1)
             }
           }
         }
-        const estBySub = { FBF: { rev: 0, orders: 0, units: 0 }, 'NON-FBF': { rev: 0, orders: 0, units: 0 } }
-        estimatedDaily.forEach(d => { const s = d.sub === 'FBF' ? 'FBF' : 'NON-FBF'; estBySub[s].rev += d.rev; estBySub[s].orders += d.orders; estBySub[s].units += d.units })
+        const estBySub = { FBF: { rev: 0, excRev: 0, orders: 0, units: 0 }, 'NON-FBF': { rev: 0, excRev: 0, orders: 0, units: 0 } }
+        estimatedDaily.forEach(d => { const s = d.sub === 'FBF' ? 'FBF' : 'NON-FBF'; estBySub[s].rev += d.rev; estBySub[s].excRev += d.excRev; estBySub[s].orders += d.orders; estBySub[s].units += d.units })
         const estTotalRev = estimatedDaily.reduce((s, d) => s + d.rev, 0)
+        // ex-GST estimate (D3, Suraj 27 Oct): ex-GST totals add this, never the Inc-GST estTotalRev
+        const estTotalExcRev = estimatedDaily.reduce((s, d) => s + d.excRev, 0)
         const estTotalOrders = estimatedDaily.reduce((s, d) => s + d.orders, 0)
         const estTotalUnits = estimatedDaily.reduce((s, d) => s + d.units, 0)
         // partialBySub: the tiny real revenue/orders/units sitting inside r.fkTotals' SQL-summed
@@ -2088,13 +2090,13 @@ export default async function handler(req, res) {
         })
         const realTotals = (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, cancelOrders: parseInt(x.cancel_orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, returnRev: parseFloat(x.return_rev)||0, totalReturnRev: parseFloat(x.total_return_rev)||0 }))
         const patchedTotals = realTotals.map(t => {
-          const e = estBySub[t.sub] || { rev: 0, orders: 0, units: 0 }
+          const e = estBySub[t.sub] || { rev: 0, excRev: 0, orders: 0, units: 0 }
           const p = partialBySub[t.sub] || { rev: 0, orders: 0, units: 0, excRev: 0 }
           // Only patch rev/excRev with estimated — orders/units stay as real COUNT(DISTINCT) to avoid inflation
-          return { ...t, rev: t.rev - p.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev - p.excRev + e.rev }
+          return { ...t, rev: t.rev - p.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev - p.excRev + e.excRev }
         })
-        if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'], excRev: estBySub['NON-FBF'].rev })
-        return { estTotalRev, estTotalOrders, estTotalUnits, estBySub, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
+        if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'] })
+        return { estTotalRev, estTotalExcRev, estTotalOrders, estTotalUnits, estBySub, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
     })()
 
     // Myntra — same "estimate missing recent days via 7-day trailing average" mechanism as
@@ -2158,13 +2160,13 @@ export default async function handler(req, res) {
 
     // Patch overall totals with Flipkart estimated days
     const adjTotalRev = totalRev + fkBlock.estTotalRev
-    const adjTotalExcRev = totalExcRev + fkBlock.estTotalRev
+    const adjTotalExcRev = totalExcRev + fkBlock.estTotalExcRev
     const adjNOrders = nOrders + fkBlock.estTotalOrders
     const adjTotalQty = totalQty + fkBlock.estTotalUnits
     const adjAspQty = aspQty + fkBlock.estTotalUnits
     if (chMap['Flipkart']) {
       chMap['Flipkart'].rev += fkBlock.estTotalRev
-      chMap['Flipkart'].excRev += fkBlock.estTotalRev
+      chMap['Flipkart'].excRev += fkBlock.estTotalExcRev
       chMap['Flipkart'].orders += fkBlock.estTotalOrders
       chMap['Flipkart'].qty += fkBlock.estTotalUnits
       // Override netRev using the exact same aggregate the Flipkart tab itself computes from
@@ -2298,15 +2300,10 @@ export default async function handler(req, res) {
         if (others) others.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
-      // Flipkart's feed lags real time — chMap['Flipkart'] (and so the KPI card's Net Revenue)
-      // is patched with a trailing-7-day-average estimate for the missing days, but that estimate
-      // has no category/product breakdown to attribute it to. Add it to "Others" so this table's
-      // total always reconciles to the KPI card's Net Revenue — only when Flipkart is in scope.
-      if (includesFlipkart && fkBlock.estTotalRev > 0) {
-        const others = categoryRowsAll.find(x => x.category === 'Others')
-        if (others) { others.revenue += Math.round(fkBlock.estTotalRev); others.netRevenue += Math.round(fkBlock.estTotalRev) }
-        else categoryRowsAll.push({ category: 'Others', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 })
-      }
+      // Flipkart / Myntra late-report estimates have no category / product breakdown: they are NOT
+      // put in "Others" here (D3, Suraj 27 Oct). The Ads tab shows them as one labelled row,
+      // "Flipkart / Myntra estimate (no product detail)", the same on the cached path; the
+      // reconcile target below leaves them out.
 
       // Sub-category level
       const subCatMap = {}
@@ -2381,13 +2378,7 @@ export default async function handler(req, res) {
         ? [{ category: 'Others', subCategory: 'Unattributed', spend: unmatchedProductSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }]
         : []
 
-      // Flipkart trailing-average estimate for lagging days (see categoryRowsAll above) —
-      // no product breakdown available, so it goes under Others / Flipkart Estimate.
-      const fkEstRows = includesFlipkart && fkBlock.estTotalRev > 0
-        ? [{ category: 'Others', subCategory: 'Flipkart Estimate', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 }]
-        : []
-
-      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherSpendRows, ...fkEstRows]
+      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherSpendRows]
 
       // Force exact reconciliation to the KPI card's own revenue number (same chMap source the
       // frontend's Net Revenue / Platform Overview use). The two sides are built from genuinely
@@ -2395,11 +2386,13 @@ export default async function handler(req, res) {
       // lag-shifted window, etc.) that can never be made to agree to the rupee by construction —
       // rather than let those small structural gaps grow with the date range, plug the residual
       // straight into "Others" so By Category / By Product always foot to the KPI exactly.
+      // without the Flipkart / Myntra estimates (their own labelled row in the Ads tab, D3)
+      const estOf = c => (c === 'Flipkart' ? fkBlock.estTotalExcRev || 0 : c === 'Myntra' ? mnBlock.estTotalExcRev || 0 : 0)
       const trueRevenue = platformFilter === 'D2C'
         ? (chMap['Shopify']?.excRev || 0)
         : platformFilter
-          ? (chMap[platformFilter]?.excRev || 0)
-          : ['Shopify', 'Amazon', 'Blinkit', 'Zepto', 'Instamart', 'Myntra', 'Flipkart'].reduce((s, c) => s + (chMap[c]?.excRev || 0), 0)
+          ? (chMap[platformFilter]?.excRev || 0) - estOf(platformFilter)
+          : ['Shopify', 'Amazon', 'Blinkit', 'Zepto', 'Instamart', 'Myntra', 'Flipkart'].reduce((s, c) => s + (chMap[c]?.excRev || 0) - estOf(c), 0)
       const reconcile = (rows) => {
         const currentTotal = rows.reduce((s, x) => s + x.revenue, 0)
         const residual = Math.round(trueRevenue - currentTotal)
@@ -3777,7 +3770,7 @@ export default async function handler(req, res) {
           const m = computeNetRevenueMeasures({ gross_inc_gst: all.rev, gross_exc_gst: all.excRev, cancel_rev: all.cancelRev, return_rev: all.returnRev, rto_rev: 0, cir_rev: 0 })
           return { gross: m.grossIncGst, cancelRev: m.cancelRev, returnRev: m.returnRev, netRev: m.netRevenueExcGst, gstRatio: m.grossIncGst > 0 ? (m.grossIncGst - m.grossExcGst) / m.grossIncGst : 0 }
         })(),
-        estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
+        estTotalRev: fkBlock.estTotalRev, estTotalExcRev: fkBlock.estTotalExcRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
         daily: fkBlock.daily,
         // fkBlock.latestFkDate checked FIRST (confirmed bug fix 2026-10-22, "the last sync was
         // happened [mid-day].. what it's considering is that we have the data till 18th") — it's
@@ -3881,6 +3874,7 @@ export default async function handler(req, res) {
           // per-component resolved-units pattern as revenue — shares the same `share` scaling).
           return rows.map(x => {
             const est = fkBlock.estBySub[x.sub === 'FBF' ? 'FBF' : 'NON-FBF']?.rev || 0
+            const estEx = fkBlock.estBySub[x.sub === 'FBF' ? 'FBF' : 'NON-FBF']?.excRev || 0
             const subCatKey = `${x.category}::${x.subcategory}`
             const resolved = fkResolvedByCatSubCat[subCatKey]
             const share = resolved && subCatRevTotal[subCatKey] > 0 ? x.rev / subCatRevTotal[subCatKey] : 0
@@ -3890,7 +3884,7 @@ export default async function handler(req, res) {
             const cancelUnits = resolved ? resolved.cancelUnits * share : 0
             if (est <= 0 || !subRevTotal[x.sub]) return { ...x, returnRev, cancelRev, returnUnits, cancelUnits }
             const estShare = x.rev / subRevTotal[x.sub]
-            return { ...x, rev: x.rev + est * estShare, excRev: x.excRev + est * estShare, returnRev, cancelRev, returnUnits, cancelUnits }
+            return { ...x, rev: x.rev + est * estShare, excRev: x.excRev + estEx * estShare, returnRev, cancelRev, returnUnits, cancelUnits }
           })
         })(),
         dailyCat: (r.fkDailyCat || []).map(x => ({ date: x.date, category: x.category, subcategory: x.subcategory, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
@@ -4160,6 +4154,7 @@ export default async function handler(req, res) {
         returnRateMature: buildReturnRateMature(r.mnReturnRateMature),
         daily: mnBlock.daily,
         estimatedDays: mnBlock.estimatedDays,
+        estTotalExcRev: mnBlock.estTotalExcRev,
         latestRealDate: mnBlock.latestMnDate,
         status: (r.mnStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         // cancelRev/rtoRev/cirRev/returnRev added from mnResolvedByCatSubCat (built above, keyed by
@@ -4290,7 +4285,7 @@ export default async function handler(req, res) {
         // the category/product breakdown below only sums rows actually present in the sales
         // table. Exposed here so the frontend can add the same estimate into Flipkart's
         // "Others" bucket, keeping the KPI and the breakdown tables' totals consistent.
-        flipkartEstRev: fkBlock.estTotalRev || 0,
+        flipkartEstRev: fkBlock.estTotalExcRev || 0, // ex-GST (D3)
         daily: (r.adsDaily || []).map(x => ({ date: x.date, platform: x.platform, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0 })),
         channelDailyExcRev: (() => {
           const map = {}
@@ -4430,7 +4425,7 @@ export default async function handler(req, res) {
             // above); add the same estimate here as an uncategorized row so this table's total
             // stays consistent with the KPI instead of silently running short.
             if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
-              categoryRows.push({ platform: plat, category: 'Others (est.)', subCategory: null, spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+              categoryRows.push({ platform: plat, category: 'Others (est.)', subCategory: null, spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalExcRev), orders: 0 })
             }
 
             // Product rows for this platform
@@ -4460,7 +4455,7 @@ export default async function handler(req, res) {
             }
             // Same Flipkart lag-estimate reconciliation as the category table above.
             if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
-              advertisedProducts.push({ platform: plat, category: 'Others (est.)', subCategory: 'Others (est.)', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+              advertisedProducts.push({ platform: plat, category: 'Others (est.)', subCategory: 'Others (est.)', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalExcRev), orders: 0 })
             }
           })
 

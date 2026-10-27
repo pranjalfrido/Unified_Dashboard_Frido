@@ -12351,8 +12351,16 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             sub-tab (All + each platform), reconciled to that tab's own KPI Total Spend. */}
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
-          const catRowsAll = detail.categoryRows || []
-          const subCatRowsAll = detail.subCategoryRows || []
+          // D3 (Suraj 27 Oct): revenue the tables can't break down gets its own labelled row, so the
+          // Total row equals the card: CRED on the All tab, and the Flipkart / Myntra late-report
+          // estimates (ex-GST) wherever those channels are in scope. Same on the live and cached paths.
+          const extraRows = []
+          if (!selPlatform && (chMap['CRED']?.excRev || 0) > 0) extraRows.push({ category: 'CRED', label: 'CRED (not in categories)', spend: credAdditionalSpend, revenue: Math.round(chMap['CRED'].excRev) })
+          const estRev = (!selPlatform || selPlatform === 'Flipkart' ? data.flipkart?.estTotalExcRev || 0 : 0) + (!selPlatform || selPlatform === 'Myntra' ? data.myntra?.estTotalExcRev || 0 : 0)
+          if (estRev > 0) extraRows.push({ category: 'Flipkart / Myntra', label: 'Flipkart / Myntra estimate (no product detail)', spend: 0, revenue: Math.round(estRev) })
+          const extra = r => ({ netRevenue: r.revenue, orders: 0, returns: 0, cancellations: 0, roas: r.spend > 0 ? r.revenue / r.spend : 0, spend: r.spend, revenue: r.revenue })
+          const catRowsAll = [...(detail.categoryRows || []), ...extraRows.map(r => ({ ...extra(r), category: r.label }))]
+          const subCatRowsAll = [...(detail.subCategoryRows || []), ...extraRows.map(r => ({ ...extra(r), category: r.category, subCategory: r.label }))]
           if (!catRowsAll.length) return null
 
           // Category/sub-category slicers filter these tables down to the selection, same as
