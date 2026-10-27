@@ -9,21 +9,18 @@ export const CATEGORY_COLORS = {
   Customer: { bg: '#E0F2FE', text: '#0C4A6E' },
 };
 
-const CONNECTOR_URL = 'https://frido-data-connector-1012773678578.asia-south1.run.app';
-const CONNECTOR_API_KEY = 'f5e4fd36fe9b0fa4bce39a20b18ec70d78e2e41028a5958bb27c5fdd184fc7b2';
-
-export async function sendMessage(conversationMessages) {
-  const res = await fetch(`${CONNECTOR_URL}/chat`, {
+export async function sendMessage(conversationMessages, callerToken) {
+  const res = await fetch('/api/pulse', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': CONNECTOR_API_KEY,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages: conversationMessages.map(m => ({
-        role: m.role,
-        content: m.text || '',
-      })),
+      callerToken,
+      messages: conversationMessages
+        .filter(m => m.text && m.text.trim())
+        .map(m => ({
+          role: m.role,
+          content: m.text,
+        })),
     }),
   });
 
