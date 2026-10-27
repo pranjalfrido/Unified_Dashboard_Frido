@@ -33,6 +33,8 @@ import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
+import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
+import { rememberSalesSpot, peekSalesSpot, takeSalesSpot, useRaBasis } from './sales/returnAnalysisData.js'
 import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonList, eboStoreRows } from './sales/salesMobileData.js'
 import TopStatesMobile from './overview/TopStatesMobile.jsx'
 import MobilePageHeader from './responsive/MobilePageHeader.jsx'
@@ -4917,6 +4919,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   const bp = useBreakpoint()
+  const raBasis = useRaBasis()
   // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
   // the other pages keep this bar until they are redesigned.
   if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'inventory') {
@@ -5012,6 +5015,17 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     // The sub-channel is the D2C sub-tab, not a filter, so it stays out of the "Filtered:" strip.
     const stripItems = activeSalesFilters(filters).filter(i => i.key !== 'subChannel')
     const menu = <ActionMenu items={salesMenu || []} title={`Sales · ${salesChannelLabel}`} />
+    if (tab === 'shopify' && shopifyView === 'returns') {
+      // Sales → D2C → Return Analysis: ‹ back to the D2C sub-tab it was opened from, no channel chips
+      // or sub-tabs (D2C only); "· by qty / by revenue" = the page-wide Qty / Rev setting in "⋯".
+      return (
+        <div className="topnav m-header" data-page={page} data-sub="returns">
+          <MobilePageHeader onBack={() => goToSalesSub?.(peekSalesSpot()?.sub || 'overall')} title="Return Analysis" caption={`D2C · by ${raBasis === 'qty' ? 'qty' : 'revenue'}`}
+            right={<><SalesFilterButton data={salesData} filters={filters} setFilters={setFilters} activeTab={tab} subCatFirstOrderMap={subCatFirstOrderMap} /><ActionMenu items={salesMenu || []} title="Return Analysis" />{dateNode}</>}
+            strip={{ items: stripItems, onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) }} />
+        </div>
+      )
+    }
     return (
       <div className="topnav m-header" data-page={page}>
         <MobilePageHeader title="Sales" sub={salesChannelLabel}
@@ -8985,7 +8999,7 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
   )
 }
 
-function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
+function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenReturns, subCatFirstOrderMap }) {
   // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
   const salesBp = useBreakpoint()
   const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
@@ -9431,7 +9445,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
     const rr = isD2CSubChFiltered ? { rows: [] } : reasonList(sh.returnReasons || [])
     const mData = { period: fmtDateRange(rangeStart, rangeEnd), reasons: rr.rows, reasonsSub: rr.sub, regions: regionList(sh.regionRows), tiers: tierList(sh.tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), geoNote: isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : null, categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
-    return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+    return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData}
+      footer={onOpenReturns ? <ReturnEntryCard filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} onOpen={onOpenReturns} subTab={filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility'} /> : null} />
   }
 
   return (
@@ -15110,12 +15125,12 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd }) {
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd, onOpenReturns, onRaMenu }) {
   const salesBp = useBreakpoint()
   const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   if (channel === 'Shopify') return shopifyView === 'returns'
-    ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
-    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+    ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} onMenuExtra={onRaMenu} />
+    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} onOpenReturns={onOpenReturns} subCatFirstOrderMap={subCatFirstOrderMap} />
   if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Blinkit') return <BlinkitTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
@@ -15360,6 +15375,29 @@ const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': '
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage, onMenu }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
+
+  // Return Analysis opened from Sales → D2C (the phone entry card or "⋯"): remember the D2C sub-tab
+  // and scroll position so the page's back arrow (or Back) returns to the same spot.
+  const salesScrollRef = useRef(null)
+  const [raMenu, setRaMenu] = useState(null) // the mobile Return Analysis view's "⋯" items (Qty / Rev, its CSVs)
+  const d2cSubId = filters.subChannel === 'MyFrido' ? 'myfrido' : filters.subChannel === 'Mobility' ? 'mobility' : 'overall'
+  const openReturns = () => { rememberSalesSpot({ sub: d2cSubId, scroll: salesScrollRef.current?.scrollTop || 0 }); setShopifyView('returns') }
+  useLayoutEffect(() => {
+    const el = salesScrollRef.current
+    if (!el) return
+    if (activeTab === 'shopify' && shopifyView === 'returns') { el.scrollTop = 0; return }
+    if (!peekSalesSpot()) return
+    if (activeTab !== 'shopify') { takeSalesSpot(); return }
+    const spot = takeSalesSpot()
+    let n = 0, raf
+    // The D2C cards render over a few frames; wait until the page is tall enough (max ~2 s).
+    const restore = () => {
+      if (el.scrollHeight - el.clientHeight >= spot.scroll || n++ > 120) { el.scrollTop = spot.scroll; return }
+      raf = requestAnimationFrame(restore)
+    }
+    restore()
+    return () => cancelAnimationFrame(raf)
+  }, [activeTab, shopifyView])
 
   const [allExportOpen, setAllExportOpen] = useState(false)
   const [d2cExportOpen, setD2cExportOpen] = useState(false)
@@ -16243,9 +16281,8 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 14px', borderRadius: 7, background: C.acs, color: C.acd, display: 'inline-block' }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
 
-  // Phone header "⋯" menu: the desktop Export menu's options and handlers for this tab. D2C's Return
-  // Analysis view is not offered on phones yet (its mobile layout is the next round); a phone that
-  // lands on it by link gets "Back to D2C" instead.
+  // Phone header "⋯" menu: the desktop Export menu's options and handlers for this tab, plus D2C's
+  // Return Analysis view (the desktop's "Return Analysis" button); on that view, "Back to D2C".
   useEffect(() => {
     if (!onMenu) return
     const std = [['sku', 'Category SKU'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
@@ -16256,10 +16293,11 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       : handlers[activeTab] ? std : []
     const run = activeTab === 'shopify' ? handleD2CExport : activeTab === 'all' ? handleAllExport : handlers[activeTab]
     const items = opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) }))
-    if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') })
+    if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') }, ...(raMenu || []))
+    if (activeTab === 'shopify' && shopifyView !== 'returns') items.unshift({ id: 'returns', label: 'Return analysis', group: 'View', onSelect: openReturns })
     onMenu(items)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onMenu, activeTab, channelView, shopifyView, data, filters])
+  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu])
   useEffect(() => () => onMenu?.([]), [onMenu])
 
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
@@ -16545,10 +16583,10 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         </div>
       </div>
       {/* Content */}
-      <div className="page-scroll">
+      <div className="page-scroll" ref={salesScrollRef}>
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} setPage={setPage} allowedTabs={allowedTabs}
           onOpenChannel={id => { if (allowedTabs && !allowedTabs.includes(SALES_KEY_MAP[id])) return; setActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} />}
-        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
+        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} onOpenReturns={openReturns} onRaMenu={setRaMenu} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
         {activeTab === 'flipkart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Flipkart" />}

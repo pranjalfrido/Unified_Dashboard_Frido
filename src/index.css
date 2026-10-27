@@ -1597,6 +1597,10 @@ svg text, svg tspan{
   .topnav.m-header .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
   .topnav.m-header .bell-emoji{ display:none }
   .topnav.m-header .bell-svg{ display:block }
+  /* Sales → D2C → Return Analysis: row 1 also holds ‹ back, so the date pill drops its calendar icon
+     to keep the title whole on 360–375px phones. */
+  .topnav.m-header[data-sub="returns"] .drp-trigger svg{ display:none }
+  .topnav.m-header[data-sub="returns"] .drp-trigger{ padding:6px 9px !important }
 }
 
 /* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
@@ -1645,3 +1649,5 @@ svg text, svg tspan{
 
 /* Phone header: no outline left on a tab or button after a tap; the ring shows for keyboard focus only. */
 .topnav.m-header button:focus:not(:focus-visible){ outline:none }
+/* Return Analysis mobile: no focus ring after a tap on its toggles / chips (keyboard focus still shows one). */
+.ra-mobile :focus:not(:focus-visible){ outline:none }

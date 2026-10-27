@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
+import { useBreakpoint } from '../responsive/useBreakpoint.js'
+import { useReturnAnalysis, groupReturnTrend, exportExchangeCsv, immatureSince, maturityText, sizeSwapPct, REASON_KINDS, reasonsFor, reasonProducts } from './returnAnalysisData.js'
+import ReturnAnalysisMobile from './ReturnAnalysisMobile.jsx'
 import {
   Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -29,23 +32,12 @@ function TrendStatTile({ label, value, badge, color }) {
 // Return-metrics trend chart — single ComposedChart, dual y-axis: left = Revenue (₹), right =
 // the 5 return-rate lines (%) — same pairing convention as D2C Overview's own "Revenue & Returns
 // Trend" chart (App.jsx ~line 6008-6050).
-function ReturnTrendChart({ kpis, dailyTrend }) {
+// end: the range end — a one-line maturity note under the tiles when it falls in the last 14 days
+// (RETURN_ANALYSIS_MOBILE_PROMPT §4a, the existing Provisional Return % window).
+function ReturnTrendChart({ kpis, dailyTrend, end }) {
   const [groupBy, setGroupBy] = useState('daily')
   const raw = (dailyTrend || []).map(d => ({ date: d.date, revenue: d.revenue, cancelPct: d.cancelPct, rtoPct: d.rtoPct, cirPct: d.cirPct, exchangePct: d.exchangePct, totalReturnPct: d.totalReturnPct }))
-  const grouped = useMemo(() => {
-    if (groupBy === 'daily') return raw
-    const buckets = {}
-    raw.forEach(d => {
-      const key = groupBy === 'weekly'
-        ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
-        : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, cancelPct: 0, rtoPct: 0, cirPct: 0, exchangePct: 0, totalReturnPct: 0, _n: 0 }
-      buckets[key].revenue += d.revenue
-      buckets[key].cancelPct += d.cancelPct; buckets[key].rtoPct += d.rtoPct; buckets[key].cirPct += d.cirPct
-      buckets[key].exchangePct += d.exchangePct; buckets[key].totalReturnPct += d.totalReturnPct; buckets[key]._n += 1
-    })
-    return Object.values(buckets).map(b => ({ ...b, cancelPct: b.cancelPct / b._n, rtoPct: b.rtoPct / b._n, cirPct: b.cirPct / b._n, exchangePct: b.exchangePct / b._n, totalReturnPct: b.totalReturnPct / b._n })).sort((a, b) => a.date.localeCompare(b.date))
-  }, [raw, groupBy])
+  const grouped = useMemo(() => groupReturnTrend(raw, groupBy), [raw, groupBy])
   const xFmt = d => groupBy === 'daily' ? d?.slice(5) : groupBy === 'monthly' ? d?.slice(0, 7) : d
 
   const revChg = kpis && kpis.prevTotalRevenue > 0 ? ((kpis.totalRevenue - kpis.prevTotalRevenue) / kpis.prevTotalRevenue * 100) : null
@@ -66,6 +58,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
           <TrendStatTile label="Exchange %" value={`${kpis.exchangePct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.exchangePct, kpis.prevExchangePct)} />
         </div>
       )}
+      {immatureSince(end) && <div style={{ fontSize: 11.5, color: C.t3, margin: '-6px 0 8px', flexShrink: 0 }}>ⓘ {maturityText(immatureSince(end))}</div>}
       <div style={{ flex: 1, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%" minHeight={240}>
           <ComposedChart data={grouped} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
@@ -330,7 +323,9 @@ function CancelBucketChart({ cancelByBucket }) {
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No cancellation data</div>
       ) : (
         <div>
-          <ResponsiveContainer width="100%" height={220}>
+          {/* one 14px line; the chart gives up the same 14px so the card looks as before */}
+          <div style={{ fontSize: 11, lineHeight: '14px', height: 14, color: C.t3, margin: '-4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Last 6 months · each cancelled order counted once (main product)</div>
+          <ResponsiveContainer width="100%" height={202}>
             <BarChart data={chartData} margin={{ top: 0, right: 4, bottom: 10, left: 0 }} barCategoryGap="25%">
               <XAxis dataKey="month" tick={{ fontSize: 9, fill: C.t3 }} />
               <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} />
@@ -372,8 +367,55 @@ function CancelBucketChart({ cancelByBucket }) {
 // rotating-▶-chevron interaction used elsewhere on this page (ReturnBreakdownTable's variant
 // rows, App.jsx's FlatCategoryProductMatrix) — collapses what was a flat 50+ row list down to
 // one row per Reason by default.
-function ReturnReasonsTable({ returnReasons, height = 420 }) {
+// Product slicer for the Return Reasons card: one sub-category at a time (search + list), styled like
+// CancelBucketChart's sub-category dropdown. '' = all products.
+function ProductSlicer({ products, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ('') } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const list = [{ name: '', count: null }, ...products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()))]
+  const pick = v => { onChange(v); setOpen(false); setQ('') }
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" title={value || 'All products'}
+        style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', width: 130, background: value ? C.acl : undefined, borderColor: value ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{value || 'All products'}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
+          <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search products…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            {list.map(p => (
+              <div key={p.name || '__all'} onClick={() => pick(p.name)} style={{ display: 'flex', gap: 8, padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: p.name === value ? C.acl : undefined, color: p.name === value ? C.t1 : C.t2, fontWeight: p.name === value ? 600 : 400 }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || 'All products'}</span>
+                {p.count != null && <span style={{ color: C.t3 }}>{fmtN(p.count)}</span>}
+              </div>
+            ))}
+            {list.length === 1 && q && <div style={{ padding: 10, fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// All / CIR / Exch: CIR orders (returnReasons), exchange orders (exchangeReasons), or both added up;
+// the product slicer narrows it to one sub-category (reasonsBySubCategory).
+function ReturnReasonsTable({ returnReasons: cirReasons, exchangeReasons, reasonsBySubCategory, height = 420 }) {
   const [expanded, setExpanded] = useState({})
+  const [kind, setKind] = useState('all')
+  const [product, setProduct] = useState('')
+  const products = useMemo(() => reasonProducts(reasonsBySubCategory || []), [reasonsBySubCategory])
+  const returnReasons = useMemo(() => reasonsFor(kind, cirReasons || [], exchangeReasons || [], reasonsBySubCategory || [], product), [kind, cirReasons, exchangeReasons, reasonsBySubCategory, product])
   const totalCount = useMemo(() => (returnReasons || []).reduce((s, r) => s + r.count, 0), [returnReasons])
   const grouped = useMemo(() => {
     const m = {}
@@ -391,7 +433,15 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   const totalRevenueImpact = useMemo(() => (returnReasons || []).reduce((s, r) => s + (r.revenueImpact || 0), 0), [returnReasons])
 
   return (
-    <Card fill title="Return Reasons · Detail">
+    <Card fill title="Return Reasons · Detail" action={
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <ProductSlicer products={products} value={product} onChange={v => { setProduct(v); setExpanded({}) }} />
+        {REASON_KINDS.map(k => (
+          <button key={k.id} onClick={() => { setKind(k.id); setExpanded({}) }} aria-pressed={kind === k.id}
+            style={{ fontSize: 11, fontWeight: kind === k.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: `1px solid ${kind === k.id ? C.acm : C.border2}`, background: kind === k.id ? C.acl : C.card, color: kind === k.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{k.label}</button>
+        ))}
+      </div>
+    }>
       <div style={{ overflowY: 'auto', height: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
@@ -679,25 +729,7 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
     top3Pct: r => r.top3Pct ?? -1,
   })
 
-  function doExport() {
-    if (!rows.length) return
-    const exportRows = rows.map(r => ({
-      'Category': r.category,
-      'Sub-Category': r.subCategory,
-      'SKU': r.sku,
-      'Total Qty': r.totalQty,
-      'Exchange Qty': r.exchQty,
-      'Exchange %': r.exchPct.toFixed(2),
-      'Gross Rev (Exchange, incl GST)': r.exchRev.toFixed(2),
-      'Top Exchanged Product 1': r.top1Sku || '',
-      'Top 1 Share %': r.top1Pct != null ? r.top1Pct.toFixed(2) : '',
-      'Top Exchanged Product 2': r.top2Sku || '',
-      'Top 2 Share %': r.top2Pct != null ? r.top2Pct.toFixed(2) : '',
-      'Top Exchanged Product 3': r.top3Sku || '',
-      'Top 3 Share %': r.top3Pct != null ? r.top3Pct.toFixed(2) : '',
-    }))
-    exportCSV(exportRows, `exchange_sku_detail_${dateStart || 'all'}_${dateEnd || 'all'}.csv`)
-  }
+  const doExport = () => exportExchangeCsv(rows, dateStart, dateEnd)
 
   return (
     <Card fill title="Exchange Deep Dive · SKU-wise" action={
@@ -746,7 +778,8 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
                       <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: C.t1 }}>{fmtN(r.exchQty)}</td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: exchPctColor }}>{r.exchPct.toFixed(1)}%</td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t2 }}>{fmt(r.exchRev)}</td>
-                      <td style={{ padding: '5px 8px', color: r.top1Sku ? C.t1 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top1Sku ? `${r.top1Sku}${r.top1Pct != null ? ` · ${r.top1Pct.toFixed(1)}%` : ''}` : ''}</td>
+                      <td style={{ padding: '5px 8px', color: r.top1Sku ? C.t1 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top1Sku ? `${r.top1Sku}${r.top1Pct != null ? ` · ${r.top1Pct.toFixed(1)}%` : ''}` : ''}
+                        {sizeSwapPct(r) != null && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 999, background: C.acl, color: C.acd, fontFamily: 'var(--font)', fontSize: 10.5, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>Size swap</span>}</td>
                       <td style={{ padding: '5px 8px', color: r.top2Sku ? C.t2 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top2Sku ? `${r.top2Sku}${r.top2Pct != null ? ` · ${r.top2Pct.toFixed(1)}%` : ''}` : ''}</td>
                       <td style={{ padding: '5px 8px', color: r.top3Sku ? C.t2 : C.t3, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{r.top3Sku ? `${r.top3Sku}${r.top3Pct != null ? ` · ${r.top3Pct.toFixed(1)}%` : ''}` : ''}</td>
                     </tr>
@@ -761,12 +794,7 @@ function ExchangeDeepDiveCard({ rows = [], dateStart, dateEnd }) {
   )
 }
 
-export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {} }) {
-  const API = import.meta.env.VITE_API_URL || ''
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-
+export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}, onMenuExtra }) {
   const [topProductsBasis, setTopProductsBasis] = useState('revenue')
   const [topProductsPaymentType, setTopProductsPaymentType] = useState('')
   const [catBasis, setCatBasis] = useState('revenue')
@@ -774,41 +802,17 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
   const [monthBasis, setMonthBasis] = useState('revenue')
   const [payBasis, setPayBasis] = useState('revenue')
 
-  const reqIdRef = useRef(0)
-  useEffect(() => {
-    if (!filters.start || !filters.end) return
-    const reqId = ++reqIdRef.current
-    let subCategoryList = filters.subCategory?.length ? [...filters.subCategory] : []
-    if (filters.productAge && Object.keys(subCatFirstOrderMap).length) {
-      const today = new Date()
-      const ageSubs = Object.entries(subCatFirstOrderMap)
-        .filter(([, d]) => { const days = (today - new Date(d)) / 86400000; return filters.productAge === 'new' ? days <= 90 : days > 90 })
-        .map(([sc]) => sc)
-      subCategoryList = ageSubs
-    }
-    const body = {
-      start: filters.start, end: filters.end,
-      subChannel: (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel : '',
-      category: filters.category?.length ? filters.category.join(',') : undefined,
-      subCategory: subCategoryList.length ? subCategoryList.join(',') : undefined,
-      topProductsPaymentType: topProductsPaymentType || undefined,
-    }
-    // Deferred to a microtask so the fetch kickoff (and its setLoading/setError) doesn't run
-    // synchronously inside the effect body itself — same async-boundary shape React's
-    // set-state-in-effect rule wants, without changing request/race-guard behavior.
-    Promise.resolve().then(() => {
-      if (reqId !== reqIdRef.current) return
-      setLoading(true)
-      setError(null)
-      fetch(`${API}/api/return-analysis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
-        .then(json => { if (reqId === reqIdRef.current) setData(json) })
-        .catch(e => { if (reqId === reqIdRef.current) setError(e.message) })
-        .finally(() => { if (reqId === reqIdRef.current) setLoading(false) })
-    })
-  }, [API, filters.start, filters.end, filters.subChannel, filters.category, filters.subCategory, filters.productAge, subCatFirstOrderMap, topProductsPaymentType])
+  const { data, loading, error } = useReturnAnalysis({ filters, subCatFirstOrderMap, topProductsPaymentType })
+  // Below 1024px (and phones in landscape): the mobile layout of the same data.
+  const bp = useBreakpoint()
+  const mobile = bp.width < 1024 || bp.isPhoneLandscape
 
   const paymentTypeOpts = useMemo(() => (data?.paymentTypeTable || []).map(r => r.paymentType).filter(Boolean), [data])
+
+  if (mobile) {
+    return <ReturnAnalysisMobile data={data} loading={loading} error={error} filters={filters} onMenuExtra={onMenuExtra}
+      topProductsPaymentType={topProductsPaymentType} setTopProductsPaymentType={setTopProductsPaymentType} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -822,7 +826,7 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
       {data && (
         <>
           <div className="g-2" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
-            <ReturnTrendChart kpis={data.kpis} dailyTrend={data.dailyTrend} />
+            <ReturnTrendChart kpis={data.kpis} dailyTrend={data.dailyTrend} end={filters.end} />
             <TopReturnedProductsCard
               topProducts={data.topProducts}
               paymentTypeOpts={paymentTypeOpts}
@@ -866,7 +870,7 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
 
           <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 0.8fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
-            <ReturnReasonsTable returnReasons={data.returnReasons} />
+            <ReturnReasonsTable returnReasons={data.returnReasons} exchangeReasons={data.exchangeReasons} reasonsBySubCategory={data.reasonsBySubCategory} />
             <CancelBucketChart cancelByBucket={data.cancelByBucket} />
           </div>
 

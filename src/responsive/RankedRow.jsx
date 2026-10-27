@@ -5,7 +5,9 @@ import { C } from '../utils.js'
 // "…"), sub-label (e.g. category) under the name, the sorted value + a secondary value on the
 // right, and a thin bar pinned to the bottom. compact: height follows the content (rows with no
 // sub-label, e.g. Inventory Top products) instead of the fixed 74px.
-export default function RankedRow({ rank, name, sub, value, secondary, barPct, barTone, onClick, compact = false }) {
+// valueColor: the page's existing colour rule for the value (e.g. a desktop red threshold)
+// badge: a small chip at the start of the sub-label line (e.g. Return Analysis "Size swap 91%")
+export default function RankedRow({ rank, name, sub, value, secondary, barPct, barTone, onClick, compact = false, valueColor, badge }) {
   const M = C.m
   return (
     <button type="button" onClick={onClick}
@@ -13,10 +15,10 @@ export default function RankedRow({ rank, name, sub, value, secondary, barPct, b
         borderBottom: `1px solid ${M.line}`, background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer', overflow: 'hidden' }}>
       <span style={{ minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: M.type.listValue, fontWeight: 600, lineHeight: '17px', maxHeight: 34, overflow: 'hidden', overflowWrap: 'anywhere' }}>{rank}. {name}</span>
-        {sub && <span style={{ display: 'block', fontSize: 12, lineHeight: '15px', color: M.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>}
+        {(sub || badge) && <span style={{ display: 'block', fontSize: 12, lineHeight: '15px', color: M.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{badge}{sub}</span>}
       </span>
       <span style={{ textAlign: 'right' }}>
-        <span style={{ display: 'block', fontSize: M.type.listValue, fontWeight: 700, lineHeight: '17px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        <span style={{ display: 'block', fontSize: M.type.listValue, fontWeight: 700, lineHeight: '17px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: valueColor || undefined }}>{value}</span>
         {secondary && <span style={{ display: 'block', fontSize: 12, lineHeight: '15px', color: M.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{secondary}</span>}
       </span>
       <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 5, height: 3, background: M.line, borderRadius: 2, overflow: 'hidden' }}>
