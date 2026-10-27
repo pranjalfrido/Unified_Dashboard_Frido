@@ -12,7 +12,7 @@ Run 27 Oct 2026, 05:00–06:00 IST, local build of `feature/responsive-customer`
 | No donuts, no page sideways scroll, no inner scroll in page flow, no card wider than the screen | **Pass**: all 7 views, both engines |
 | Tap-through incl. finger scroll (Chromium touch swipe; WebKit pan check) | **Pass**: 35 / 35 on Chromium, 35 / 35 on WebKit |
 | Screenshots SE / 14 / Pixel / small Android / landscape / iPad portrait | **Pass**: no overflow, nothing clipped (after the 12px gutter fix 1325fcfe); `docs/responsive/after/customer*/` (PNGs git-ignored, report.json committed) |
-| Production build | **Pass** (`vite build`); lint unchanged vs the branch start (App.jsx 354, Support 3 + 1 moved to supportModel.js) |
+| Production build | **Pass** (`vite build`); lint unchanged vs the branch start (App.jsx 353 errors; Support page + new files 4, the same 4 as before, one moved to supportModel.js) |
 
 ## Support Detailed KPIs: phone = laptop (rows matched / laptop rows)
 | Section | Rows | Day (Count / %) | Week (Count / %) | Month (Count / %) |
