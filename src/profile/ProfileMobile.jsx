@@ -277,7 +277,7 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
   )
   return (
     <FullScreen title="Team members" onBack={onClose} depth={1}
-      right={<button type="button" onClick={() => setAddOpen(true)} style={{ minHeight: 34, padding: '0 10px', borderRadius: 10, border: 'none', background: M.hdr.pill, color: M.green, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>+ Add</button>}>
+      right={<button type="button" onClick={() => setAddOpen(true)} style={{ minHeight: 34, padding: '0 10px', borderRadius: 10, border: 'none', background: M.hdr.pill, color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer' }}>+ Add</button>}>
       <input type="search" value={q} onChange={e => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search name or email…" aria-label="Search team members" style={inputStyle} />
       <div role="group" aria-label="Filter" style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
         {chip('all', 'All')}{chip('active', 'Active')}{chip('revoked', 'Revoked')}{chip('none', 'No access')}

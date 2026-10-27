@@ -30,7 +30,7 @@ function DockSlot({ on, onClick, Icon, label }) {
   return (
     <button type="button" className="mnav-slot" aria-label={label} aria-current={on ? 'page' : undefined} onClick={onClick}
       onPointerDown={press} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onContextMenu={e => e.preventDefault()}
-      style={{ position: 'relative', flex: '1 1 0', minWidth: 44, height: '100%', padding: 2, border: 'none', background: 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer', color: on ? M.green : M.hdr.context }}>
+      style={{ position: 'relative', flex: '1 1 0', minWidth: 44, height: '100%', padding: 2, border: 'none', background: 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer', color: on ? M.green : M.nav.icon }}>
       <span aria-hidden="true" className={`mnav-glow${on ? ' on' : ''}`} />
       <span aria-hidden="true" style={{ position: 'relative', display: 'grid', placeItems: 'center' }}><Icon size={20} weight={on ? 'bold' : 'regular'} /></span>
       {tip && <span role="tooltip" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, padding: '4px 8px', borderRadius: 8, background: M.ink, color: '#fff', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none' }}>{label}</span>}
@@ -100,7 +100,7 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
   const bar = (
     <nav className="mnav bottom-nav" aria-label="Main"
       style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: Z_BAR, height: 'calc(var(--bot) + var(--safe-bottom))', padding: '0 var(--safe-right) var(--safe-bottom) var(--safe-left)',
-        background: '#fff', borderTop: `1px solid ${M.line}` }}>
+        background: M.nav.bg, boxShadow: M.nav.shadow }}>
       <div style={{ display: 'flex', alignItems: 'stretch', height: 'var(--bot)' }}>
         {shownDock.map(p => <DockSlot key={p.id} label={p.label} Icon={p.Icon} on={p.id === active} onClick={() => onSelect(p.id)} />)}
         <DockSlot label={launcherPage ? `${launcherPage.label} (All pages)` : 'All pages'} Icon={launcherPage ? launcherPage.Icon : DotsNine} on={!!launcherPage} onClick={() => setOpen(true)} />
