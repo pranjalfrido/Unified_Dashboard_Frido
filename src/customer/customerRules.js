@@ -147,7 +147,7 @@ export function computeSupportRules(data, model, back = 1, grain = 'day') {
     id: 'frt', name: 'Agent FRT above target', target: 'speed', red: false, count: over.length,
     valueText: `${over.length} channel${over.length === 1 ? '' : 's'}`,
     line: over.length ? over.map(x => `${x.ch} ${dur(x.v)} vs ${dur(x.t)}`).join(' · ') : checked.length ? `${checked.join(', ')} within target` : `Not enough agent replies to check (< ${R.frtMinReplies} per channel)`,
-    info: `Agent first response time above the channel's loosest SLA target (chat ${dur(R.frtTargetSec.Chat)}, email / social ${dur(R.frtTargetSec.Email)}), channels with at least ${R.frtMinReplies} agent replies.`,
+    info: `Agent first response time above the channel's target (chat ${dur(R.frtTargetSec.Chat)}, social ${dur(R.frtTargetSec['Social media'])}, email ${dur(R.frtTargetSec.Email)}; starting targets, to confirm with the CS head), channels with at least ${R.frtMinReplies} agent replies.`,
   })
 
   const esc = p => div(p?.t('All')?.escalations, p?.t('All')?.interactions)
@@ -171,7 +171,7 @@ export function computeSupportRules(data, model, back = 1, grain = 'day') {
   })
 
   return result(rules, 'Support', [
-    `Pending more than ${R.pendingDays} days`, `Agent FRT above chat ${dur(R.frtTargetSec.Chat)} / email, social ${dur(R.frtTargetSec.Email)} (≥ ${R.frtMinReplies} replies)`,
+    `Pending more than ${R.pendingDays} days`, `Agent FRT above chat ${dur(R.frtTargetSec.Chat)} / social ${dur(R.frtTargetSec['Social media'])} / email ${dur(R.frtTargetSec.Email)} (≥ ${R.frtMinReplies} replies)`,
     `Escalation rate up ≥ ${R.escalationUpPts} pts`, `Interactions per 100 orders up ≥ ${R.per100UpPct}%`,
   ])
 }

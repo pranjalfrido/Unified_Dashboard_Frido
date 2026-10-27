@@ -73,7 +73,7 @@ export const CUSTOMER_RULES = {
 // Customer Support watchlist (CUSTOMER_MASTER_PLAN.md Part B §B2.4).
 export const SUPPORT_RULES = {
   pendingDays: 8,             // 'Pending > 8 days': tickets in the 9-10, 11-15 and 15+ day buckets
-  frtTargetSec: { Chat: 40, Email: 15 * 60, 'Social media': 15 * 60 }, // the channel's loosest SLA target
+  frtTargetSec: { Chat: 15 * 60, Email: 4 * 60 * 60, 'Social media': 30 * 60 }, // Suraj 27 Oct (C8): starting targets, to confirm with the CS head
   frtMinReplies: 20,          // a channel needs this many agent replies to be checked
   escalationUpPts: 0.3,       // 'Escalation rate up': ▲ at least this many pts
   per100UpPct: 10,            // 'Contacts per 100 orders up': ▲ at least this %
