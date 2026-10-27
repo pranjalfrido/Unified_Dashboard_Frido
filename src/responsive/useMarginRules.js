@@ -43,6 +43,8 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
 
   const byRule = Object.fromEntries(live.map(r => [r.id, []]))
   const flagsByKey = {}
+  const impactByKey = {}
+  const rowByKey = {}
   const derived = {}
   let small = 0, excluded = 0
   rows.forEach(r => {
@@ -61,7 +63,7 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
     derived[key].material = material(r)
     if (!derived[key].material) { small++; return }
     const hits = []
-    const add = (id, impact) => { if (!liveIds.has(id)) return; byRule[id].push({ row: r, key, impact }); hits.push(id) }
+    const add = (id, impact) => { if (!liveIds.has(id)) return; byRule[id].push({ row: r, key, impact }); hits.push(id); impactByKey[key] = (impactByKey[key] || 0) + impact; rowByKey[key] = r }
     if (r.cm2 != null && r.cm2 < 0) add('loss', r.cm2)
     else if (r.cm2Pct != null && bars.cm2Target != null && r.cm2Pct < bars.cm2Target) add('thin', -((bars.cm2Target - r.cm2Pct) / 100) * r.net)
     if (r.cm1Pct != null && r.cm1Pct < bars.cm1) add('cm1', -((bars.cm1 - r.cm1Pct) / 100) * r.net)
@@ -87,6 +89,10 @@ export function computeMarginRules({ rows = [], tab, avail = {}, prevRows = null
     smallCount: small, excludedCount: excluded, checkedCount: rows.length - small - excluded,
     triggered: rules.filter(r => r.count > 0).length,
     flaggedProducts: Object.keys(flagsByKey).length,
+    // "Needs action" list (DECISIONS P4 a): a product trips 2+ rules, or loses money after ads.
+    // The rule tiles keep their own full counts; this list is what the header points at.
+    needsAction: Object.entries(flagsByKey).filter(([, ids]) => ids.length >= 2 || ids.includes('loss'))
+      .map(([key]) => ({ row: rowByKey[key], key, impact: impactByKey[key] })).sort((a, b) => a.impact - b.impact),
     ruleName: Object.fromEntries(rules.map(r => [r.id, r.name])),
   }
 }

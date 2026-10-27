@@ -46,19 +46,25 @@ function RulesPopover({ bars, channel }) {
 
 export default function WatchlistCard({ result, channel, variant = 'laptop', activeRule = null, onRule, onOpenRule, pendingPrev = [] }) {
   if (!result) return null
-  const { rules, triggered, flaggedProducts, smallCount, bars } = result
+  const { rules, triggered, flaggedProducts, smallCount, bars, needsAction, checkedCount } = result
   const total = rules.length + pendingPrev.length
   const header = `${triggered} of ${total} rule${total === 1 ? '' : 's'} triggered · ${flaggedProducts} product${flaggedProducts === 1 ? '' : 's'}`
+  // P&L (DECISIONS P4 a): "x products need action (2+ rules or loss) · y checked"; tap → that list
+  // (laptop: filters the Financial View like a rule tile; mobile: onOpenRule('needs')).
+  const needs = needsAction ? `${needsAction.length} product${needsAction.length === 1 ? '' : 's'} need${needsAction.length === 1 ? 's' : ''} action (2+ rules or loss) · ${checkedCount} checked` : null
 
   if (variant === 'mobile') {
-    return <WatchlistMobile rules={rules} header={`${triggered} of ${total} rules · ${bars.label} bars`} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
+    return <WatchlistMobile rules={rules} header={needs ? null : `${triggered} of ${total} rules · ${bars.label} bars`} needs={needs} needsCount={needsAction?.length || 0} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
   }
   return (
     <div className="kpi-card" style={{ padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: C.t1 }}>Margin watchlist</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: C.t3 }}>
-          <span>{header}{smallCount ? ` · ${smallCount} small product${smallCount === 1 ? '' : 's'} not checked` : ''}</span>
+          {needs
+            ? <button type="button" aria-pressed={activeRule === 'needs'} disabled={!needsAction.length} onClick={() => onRule?.(activeRule === 'needs' ? null : 'needs')}
+                style={{ border: `1px solid ${activeRule === 'needs' ? 'rgba(31,90,61,.35)' : C.border}`, borderRadius: 999, background: activeRule === 'needs' ? C.acl : C.card, color: C.t1, fontSize: 12, fontWeight: 600, padding: '3px 10px', cursor: needsAction.length ? 'pointer' : 'default', fontFamily: 'var(--font)' }}>{needs}</button>
+            : <span>{header}{smallCount ? ` · ${smallCount} small product${smallCount === 1 ? '' : 's'} not checked` : ''}</span>}
           <RulesPopover bars={bars} channel={channel} />
         </div>
       </div>
@@ -94,13 +100,16 @@ export default function WatchlistCard({ result, channel, variant = 'laptop', act
   )
 }
 
-function WatchlistMobile({ rules, header, smallCount, onOpenRule, pendingPrev }) {
+function WatchlistMobile({ rules, header, needs, needsCount, smallCount, onOpenRule, pendingPrev }) {
   const [all, setAll] = useState(false)
   const shown = all ? rules : rules.slice(0, 5)
   return (
     <section style={{ background: M.card, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow }}>
       <h2 style={{ margin: 0, fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink }}>Margin watchlist</h2>
-      <div style={{ fontSize: 12, color: M.muted, margin: '2px 0 8px' }}>{header}{smallCount ? ` · ${smallCount} small not checked` : ''}</div>
+      {needs
+        ? <button type="button" onClick={() => needsCount && onOpenRule?.('needs')} disabled={!needsCount}
+            style={{ display: 'block', width: '100%', minHeight: 32, margin: '2px 0 6px', padding: 0, border: 'none', background: 'transparent', textAlign: 'left', fontSize: 12.5, fontWeight: 600, color: needsCount ? M.green : M.muted, fontFamily: 'var(--font)', cursor: needsCount ? 'pointer' : 'default' }}>{needs}{needsCount ? ' ›' : ''}</button>
+        : <div style={{ fontSize: 12, color: M.muted, margin: '2px 0 8px' }}>{header}{smallCount ? ` · ${smallCount} small not checked` : ''}</div>}
       {shown.map((r, i) => (
         <button key={r.id} type="button" onClick={() => r.count && onOpenRule?.(r.id)} disabled={!r.count}
           style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto 14px', alignItems: 'center', gap: 8, width: '100%', minHeight: 52, padding: '6px 0', border: 'none', borderBottom: i < shown.length - 1 ? `1px solid ${M.line}` : 'none', background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: r.count ? 'pointer' : 'default' }}>

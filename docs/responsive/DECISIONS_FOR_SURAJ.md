@@ -58,3 +58,22 @@ Options:
 - c) Raise the noisy bars per channel: Offline COGS > 60%, Flipkart COGS > 55%, D2C Returns > 25%, Amazon Returns > 20%.
 - d) Keep as is; the ₹ impact sort puts the biggest problems first.
 Recommendation: c for Offline / Flipkart COGS (the bar is below the channel's normal level), plus b if you want a steady share across tabs. Each is a one-line change in `src/config/metricTargets.js`.
+
+### P4: decided 27 Oct (c, then a), applied
+- **c:** Offline COGS > 60%, Flipkart COGS > 55%, D2C Returns > 25%, Amazon (Overall, SC, VC) Returns > 20%.
+- **a:** the watchlist header now reads "x products need action (2+ rules or loss) · y checked" and opens that list (laptop: filters the Financial View; phone: full-screen list). Rule tiles keep their full counts.
+
+Rule check re-run (1–26 Oct): all flags correct on all 8 views; the header counts equal a recount from the displayed flags.
+
+| Tab | Checked | Tiles flagged | Needs action | Top 2 rules (tabs above 40%) |
+|---|---|---|---|---|
+| D2C | 124 | 90 (73%) | 68 (55%) | Below healthy ROAS 42 · ASP down 36 |
+| Amazon Overall | 95 | 67 (71%) | 39 (41%) | ASP down 39 · COGS > 45% 28 |
+| Amazon SC | 73 | 50 (68%) | 24 (33%) | — |
+| Flipkart | 34 | 29 (85%) | 22 (65%) | CM1 < 20% 16 · Loss 13 |
+| Blinkit | 12 | 4 (33%) | 0 (0%) | — |
+| CRED | 6 | 5 (83%) | 1 (17%) | — |
+| Offline | 27 | 23 (85%) | 20 (74%) | CM1 < 30% 19 · COGS > 60% 19 (GM < 40% 19) |
+| EBO | 33 | 14 (42%) | 7 (21%) | — |
+
+Still above 40% on "needs action": D2C, Amazon Overall, Flipkart, Offline. No more bars changed (as asked).

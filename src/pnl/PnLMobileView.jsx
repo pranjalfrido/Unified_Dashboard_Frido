@@ -240,7 +240,7 @@ export default function PnLMobileView({
   const flagsOf = key => margin?.flagsByKey?.[key] || []
   const openProduct = key => { setSheetKey(key) }
   const simulate = onSimulate ? key => { setSheetKey(null); setRuleList(null); setQuad(null); setFixesOpen(false); setCatOpen(null); onSimulate(key) } : null
-  const rule = margin?.rules.find(r => r.id === ruleList) || null
+  const rule = (ruleList === 'needs' && margin?.needsAction ? { id: 'needs', name: 'Needs action', items: margin.needsAction, red: false } : margin?.rules.find(r => r.id === ruleList)) || null
   const cm1Rule = margin?.rules.find(r => r.id === 'cm1') || null
   const derivedOf = key => margin?.derived?.[key]
 
@@ -257,6 +257,7 @@ export default function PnLMobileView({
     if (id === 'ret') return { v: `${pctTxt(r.returnPct)} returns`, s: `Prev ${pctTxt(d.prevRetPct)}` }
     if (id === 'retup') return { v: `+${(r.returnPct - d.prevRetPct).toFixed(1)} pts`, s: `${pctTxt(d.prevRetPct)} → ${pctTxt(r.returnPct)}` }
     if (id === 'asp') return { v: `${((d.asp - d.prevAsp) / d.prevAsp * 100).toFixed(1)}% ASP`, s: `₹${Math.round(d.prevAsp).toLocaleString('en-IN')} → ₹${Math.round(d.asp).toLocaleString('en-IN')}` }
+    if (id === 'needs') return { v: fmt(x.impact), s: (flagsOf(x.key)).map(f => margin.ruleName[f]).join(' · ') }
     return { v: '', s: '' }
   }
 
@@ -378,7 +379,7 @@ export default function PnLMobileView({
       {/* Rule → its products */}
       <FullScreenList open={!!rule} onClose={() => setRuleList(null)} title={rule?.name || ''} noun="products" items={rule?.items || []}
         sorts={[{ key: 'impact', label: '₹ impact', value: x => -x.impact, format: x => ruleValue(rule?.id, x).v, bar: 'bad' }]}
-        sub={x => ruleValue(rule?.id, x).s} secondary={x => fmt(x.impact)} valueColor={() => (rule?.red ? M.down : undefined)} {...productListProps} />
+        sub={x => ruleValue(rule?.id, x).s} secondary={x => (rule?.id === 'needs' ? null : fmt(x.impact))} valueColor={() => (rule?.red ? M.down : undefined)} {...productListProps} />
       {/* Quadrant → its products */}
       <FullScreenList open={!!quad} onClose={() => setQuad(null)} title={QUADRANTS.find(q => q.id === quad?.id)?.label || ''} noun="products" items={quad?.pts || []}
         sorts={[{ key: 'gross', label: 'Revenue', value: p => p.x, format: p => `${pctTxt(p.y)} CM1` }]}

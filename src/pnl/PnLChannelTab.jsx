@@ -388,7 +388,9 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
   const pendingPrev = margin && prevStatusM === 'loading' ? [`ASP down > ${margin.bars.aspDrop}%`, ...(margin.bars.retUp != null && !returnsNotCaptured ? [`Returns up > ${margin.bars.retUp} pts`] : [])] : []
   const [activeRule, setActiveRule] = useState(null)
   const [highlightKey, setHighlightKey] = useState(null)
-  const activeRuleObj = margin?.rules.find(r => r.id === activeRule && r.count > 0) || null
+  // 'needs' = the watchlist header's "need action" list (2+ rules or loss), filtered like a rule tile
+  const needsRule = margin?.needsAction?.length ? { id: 'needs', name: 'Needs action (2+ rules or loss)', items: margin.needsAction, count: margin.needsAction.length } : null
+  const activeRuleObj = (activeRule === 'needs' ? needsRule : margin?.rules.find(r => r.id === activeRule && r.count > 0)) || null
   const flagFilter = activeRuleObj ? { id: activeRuleObj.id, name: activeRuleObj.name, keys: new Set(activeRuleObj.items.map(x => x.key)) } : null
   const cm1Rule = margin?.rules.find(r => r.id === 'cm1') || null
   const fvRef = useRef(null)
