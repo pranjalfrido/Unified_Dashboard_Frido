@@ -8,7 +8,8 @@ import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeSupportRules } from './customer/customerRules.js'
 import CustomerSupportMobile from './customer/CustomerSupportMobile.jsx'
 import { C as BASE_C, fmtN, exportCSV } from './utils.js'
-import { orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
+import { yesterdayStillLoading, SUPPORT_LOAD_NOTE, orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
+import InfoStrip from './responsive/InfoStrip.jsx'
 
 // Customer Support (CC dashboard): Freshdesk tickets + Ozonetel calls + Shopify D2C orders,
 // laid out as the CC spec sheet does — KPIs down the side, periods across (Day 1..7,
@@ -283,11 +284,12 @@ function SectionTitle({ children, note, right, id }) {
 
 // Change pill: coloured tint + arrow + %, green when the move is good, red when bad, grey when
 // the KPI has no good direction (volumes), too small to matter, or has no previous value.
-function DeltaPill({ cur, prev, good, title, isRate = false }) {
+// neutral: grey whatever the direction (C7: yesterday still loading before 11:00 IST)
+function DeltaPill({ cur, prev, good, title, isRate = false, neutral = false }) {
   const c = changeOf(cur, prev, isRate)
   const ch = c ? c.v : null
   const flat = !c || c.flat
-  const better = flat || !good ? null : good === 'up' ? ch > 0 : ch < 0
+  const better = flat || !good || neutral ? null : good === 'up' ? ch > 0 : ch < 0
   const tone = better == null ? { bg: C.bg, tx: C.t2 } : better ? C.green : C.red
   return (
     <span title={title} style={{ background: tone.bg, color: tone.tx, fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -299,7 +301,7 @@ function DeltaPill({ cur, prev, good, title, isRate = false }) {
 // KPI card: label, big value with the change pill beside it, one line of context, and a
 // full-width sparkline over the visible periods. Every card has the same rows so a row of
 // cards lines up. `detail` = the counts behind the value; without it the previous value shows.
-function KpiCard({ label, values, f, good, prevLabel, detail, noPrev, back = 1 }) {
+function KpiCard({ label, values, f, good, prevLabel, detail, noPrev, back = 1, neutral = false }) {
   // back = 7: Day view compares with the same weekday last week (CA10); the sparkline shows the last 7 days
   const cur = values.at(-1), prev = values.length > back ? values.at(-1 - back) : null
   const series = (back > 1 ? values.slice(-back) : values).map((v, i) => ({ i, v: v == null || !isFinite(v) ? null : v }))
@@ -312,7 +314,7 @@ function KpiCard({ label, values, f, good, prevLabel, detail, noPrev, back = 1 }
       <div title={label} style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 24, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1.15 }}>{f(cur)}</div>
-        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} isRate={f === pctF} />
+        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} isRate={f === pctF} neutral={neutral} />
       </div>
       <div title={hasCur && !hasPrev && noPrev ? `${line} · ${noPrev}` : line} style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
       <div style={{ height: 34, marginTop: 'auto', paddingTop: 4 }}>
@@ -773,6 +775,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   // B2.5: Shopify D2C orders of the 7 days the drivers cover (dispo7 = last 7 days to the end date); Day view only
   const orders7 = grain === 'day' ? orders7Of(model) : 0
   const watch = useMemo(() => computeSupportRules(data, model, back, grain), [data, model, back, grain])
+  const dayLoading = yesterdayStillLoading(grain, latest?.key) // C7
   const goRule = id => {
     const target = watch?.rules.find(r => r.id === id)?.target
     document.getElementById(`cs-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -848,8 +851,9 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
 
       {data && latest && (
         <>
+          {dayLoading && <InfoStrip icon="◔" text={SUPPORT_LOAD_NOTE} detail="The support table rebuilds at 11:00 IST; until then yesterday's numbers are partial, so their changes are shown in grey." />}
           <div id="cs-top" style={{ display: 'grid', gridTemplateColumns: `repeat(${vw < 760 ? 2 : vw < 1100 ? 3 : vw < 1500 ? 4 : 6}, minmax(0, 1fr))`, gap: 12, scrollMarginTop: 12, ...dim }}>
-            {kpis.map(k => <KpiCard key={k.label} {...k} back={back} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
+            {kpis.map(k => <KpiCard key={k.label} {...k} back={back} neutral={dayLoading} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
           </div>
 
           {watch && <div style={dim}><WatchlistCard result={watch} channel="Support" title="Support watchlist" onRule={goRule} /></div>}

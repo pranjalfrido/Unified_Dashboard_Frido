@@ -19,6 +19,16 @@ export const chLabel = ch => (ch === 'Chat' ? 'Chat (WhatsApp)' : ch === 'Inboun
 export const trimPunct = x => String(x ?? '').replace(/[.\s]+$/, '')
 
 // ── formatting ──
+// C7 (Suraj 27 Oct): cs_dashboard_unified rebuilds at 11:00 IST, so before then "yesterday" is
+// still loading. True when the Day view's latest day is yesterday (IST) and it is before 11:00 IST.
+export const SUPPORT_LOAD_NOTE = "Yesterday's support data loads at 11:00 IST"
+export function yesterdayStillLoading(grain, latestKey, now = Date.now()) {
+  if (grain !== 'day' || !latestKey) return false
+  const ist = new Date(now + 330 * 60000)
+  const yesterday = new Date(ist.getTime() - 86400000).toISOString().slice(0, 10)
+  return latestKey === yesterday && ist.getUTCHours() < 11
+}
+
 export const dur = (s) => {
   if (s == null || !isFinite(s)) return '—'
   if (s < 60) return `${Math.round(s)}s`

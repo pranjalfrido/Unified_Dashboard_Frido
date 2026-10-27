@@ -19,6 +19,7 @@ import {
   GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, avg, PCT_DEFAULT, fcr, changeOf,
   ttrColumns, AGE_BUCKETS, pendencyRows, driverRows, DOW, MAIN, per100, reasonLink,
 } from './supportModel.js'
+import { yesterdayStillLoading, SUPPORT_LOAD_NOTE } from './supportModel.js'
 
 // Customer Support below 1024px (CUSTOMER_MASTER_PLAN.md Part B §B4 / B4a / B4b, mockups/customer_mockup.html).
 // Display only. Everything is read from the laptop's own model (supportModel.js): the Detailed KPI sheets
@@ -62,12 +63,13 @@ export default function CustomerSupportMobile(p) {
     { key: 'esc', label: 'Escalation rate', get: q => div(all(q)?.escalations, all(q)?.interactions), f: pctF, good: 'down' },
   ]
   const rows = trendModel.map(q => ({ date: grain === 'month' ? `${q.key}-01` : q.key, ...Object.fromEntries(kp.map(k => [k.key, k.get(q) ?? null])) }))
+  const dayLoading = yesterdayStillLoading(grain, latest?.key) // C7: grey changes, strip on top
   const metric = (k, i) => {
     const cur = k.get(latest), pv = prev ? k.get(prev) : null
     const c = changeOf(cur, pv, k.f === pctF)
     return {
       key: k.key, label: k.label, tileLabel: k.tileLabel, value: k.f(cur),
-      delta: c ? (k.f === pctF ? c.v : c.v * 100) : null, deltaPts: k.f === pctF, deltaNeutral: !k.good, lowerIsBetter: k.good === 'down',
+      delta: c ? (k.f === pctF ? c.v : c.v * 100) : null, deltaPts: k.f === pctF, deltaNeutral: !k.good || dayLoading, lowerIsBetter: k.good === 'down',
       sub: i === 0 ? `${int(all(latest)?.unique_int)} unique customers${prevLbl ? ` · prev ${prevLbl}` : ''}` : undefined,
       point: r => r[k.key], fmtPoint: k.f,
     }
@@ -102,6 +104,7 @@ export default function CustomerSupportMobile(p) {
   return (
     <div className="cs-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24, color: M.ink }}>
       <SegmentToggle options={GRAINS.map(x => ({ id: x.id, label: x.label }))} value={grain} onChange={setGrain} label="Support view" full />
+      {dayLoading && <InfoStrip icon="◔" text={SUPPORT_LOAD_NOTE} detail="The support table rebuilds at 11:00 IST; until then yesterday's numbers are partial, so their changes are shown in grey." />}
       <div style={dim}>
         <MasterTrendCard metrics={metrics} rawRows={rows} groupTrend={r => r} start={rows[0]?.date} end={rows.at(-1)?.date} granularity={gran} layout={layout}
           note={grain === 'day' ? `Change vs the same weekday last week (${prevLbl || '—'})` : `Change vs the previous ${grain}; the latest ${grain} may be partial`} />
