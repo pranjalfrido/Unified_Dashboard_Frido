@@ -107,3 +107,14 @@ The diagonal is now greyed and out of the colour scale (display), but it is stil
 
 ### C7. Support's default day before 11:00 IST
 The default view is yesterday, but `cs_dashboard_unified` rebuilds at 11:00 IST, so before 11:00 yesterday is nearly empty (26 Oct at 02:30: 100 interactions vs ~3,500) and every card shows a ▼95%+ drop. Option a: before 11:00 IST default to the day before yesterday. Option b: keep yesterday and show "data loads at 11:00" when the day is still loading. Recommendation: b (an InfoStrip, no number change).
+
+## Customer Phase 2 (feature/responsive-customer)
+
+### C8. Agent FRT target for the Support watchlist
+The "Agent FRT above target" rule uses each channel's loosest SLA target (chat 40 s, email / social 15 min). Real chat agent FRT is ~30 min (23 Oct: 1,927 s on 713 replies), so chat and email flag every day and the rule says little. Option a: set FRT targets from the team's real goal (e.g. chat 5 min, email 2 h) in `SUPPORT_RULES.frtTargetSec`. Option b: keep the SLA-based targets. Recommendation: a; a one-line change in metricTargets.js once you give the numbers.
+
+### C9. Repurchase due (B2.3) needs one new query
+"Customers whose last order in a category is 1–2× that category's median repurchase cycle" needs each customer's last order per category, which no current query returns. Option a: add one cached query to /api/customer (all-time, grouped to category × days-since-last-order buckets, so the response stays small). Option b: skip. Not built; the Behaviour tab says so in one line.
+
+### C10. "Revenue at risk" counts more segments than its tooltip says
+Segments KPI "Revenue at risk" sums every WIN-BACK / URGENT SAVE segment (About To Sleep, At Risk, Hibernating, Lost, Cannot Lose Them: ₹185.68 Cr for 1–26 Oct), but its tooltip says "Hibernating + Cannot Lose Them". The new watchlist "Win-back pool" uses exactly Hibernating + Cannot Lose Them (as the master plan says). Option a: change the tooltip to list all win-back segments. Option b: make the KPI Hibernating + Cannot Lose Them only (number changes). Recommendation: a (label only).
