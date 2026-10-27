@@ -316,7 +316,7 @@ function Cm2HeroCard({ before, after, beforePct, afterPct }) {
         <div style={{ fontSize: 11, color: C.t3 }} title="Current is rebuilt on the product's mature (settled) return rates, so it can differ slightly from the Financial View for a recent range">Current CM2 (mature-normalised): {fmt(before)} ({beforePct != null ? `${beforePct.toFixed(1)}%` : '—'})</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: trendPalette ? trendPalette.tx : C.t2, marginTop: 2 }}>
           {/* one sign: "▼ ₹7.83 L decline", never "▼ ₹-7,83,164" (PNL_REVIEW_FIXES.md §2) */}
-          {trendPalette ? `${improved ? '▲' : '▼'} ${fmt(Math.abs(delta))}` : fmt(delta)} {trendPalette && <span style={{ fontWeight: 500 }}>{improved ? 'improvement' : 'decline'}</span>}
+          {trendPalette ? `${improved ? '▲' : '▼'} ${fmt(Math.abs(delta))}` : `${delta >= 0 ? '+' : ''}${fmt(delta)}`} {trendPalette && <span style={{ fontWeight: 500 }}>{improved ? 'improvement' : 'decline'}</span>}
         </div>
       </div>
     </div>
