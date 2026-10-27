@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { C } from '../utils.js'
 import { fmtSigned } from '../pnl/pnlUtils.js'
+import { PNL_MATERIALITY } from '../config/metricTargets.js'
 import InfoPopover from './InfoPopover.jsx'
 
 // P&L margin watchlist (PNL_MASTER_PLAN.md Part B §3.1 laptop / §4 mobile), one card for every tab
@@ -31,7 +32,8 @@ function RulesPopover({ bars, channel, lines: given }) {
     bars.cm1 != null && `CM1 below ${bars.cm1}%`, bars.cogs != null && `COGS above ${bars.cogs}%`, bars.gm != null && `GM below ${bars.gm}%`,
     bars.ret != null && `Returns above ${bars.ret}% of gross`, bars.cm2Target != null && `Healthy CM2: ${bars.cm2Target}%`,
     `ASP down more than ${bars.aspDrop}% vs previous period`, bars.retUp != null && `Returns up more than ${bars.retUp} pts vs previous period`,
-    'Products with < 1% of gross and < 50 units aren\'t checked',
+    `Products with < ${PNL_MATERIALITY.minShareOfGross * 100}% of gross and < ${PNL_MATERIALITY.minUnits} units aren't checked`,
+    '"Others" isn\'t checked (not a product)',
   ].filter(Boolean)
   return (
     <span ref={ref} style={{ position: 'relative' }}>
@@ -50,20 +52,26 @@ function RulesPopover({ bars, channel, lines: given }) {
 
 export default function WatchlistCard({ result, channel, variant = 'laptop', activeRule = null, onRule, onOpenRule, pendingPrev = [], title = 'Margin watchlist' }) {
   if (!result) return null
-  const { rules, triggered, flaggedProducts, smallCount, bars } = result
+  const { rules, triggered, flaggedProducts, smallCount, bars, needsAction, checkedCount } = result
   const total = rules.length + pendingPrev.length
   // headerText (optional): replaces the product count line (rules without products)
   const header = result.headerText ?? `${triggered} of ${total} rule${total === 1 ? '' : 's'} triggered · ${flaggedProducts} product${flaggedProducts === 1 ? '' : 's'}`
+  // P&L (DECISIONS P4 a): "x products need action (2+ rules or loss) · y checked"; tap → that list
+  // (laptop: filters the Financial View like a rule tile; mobile: onOpenRule('needs')).
+  const needs = needsAction ? `${needsAction.length} product${needsAction.length === 1 ? '' : 's'} need${needsAction.length === 1 ? 's' : ''} action (2+ rules or loss) · ${checkedCount} checked` : null
 
   if (variant === 'mobile') {
-    return <WatchlistMobile title={title} rules={rules} header={result.headerText ?? `${triggered} of ${total} rules · ${bars.label} bars`} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
+    return <WatchlistMobile title={title} rules={rules} header={needs ? null : result.headerText ?? `${triggered} of ${total} rules · ${bars.label} bars`} needs={needs} needsCount={needsAction?.length || 0} smallCount={smallCount} onOpenRule={onOpenRule} pendingPrev={pendingPrev} />
   }
   return (
     <div className="kpi-card" style={{ padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: C.t1 }}>{title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: C.t3 }}>
-          <span>{header}{smallCount ? ` · ${smallCount} small product${smallCount === 1 ? '' : 's'} not checked` : ''}</span>
+          {needs
+            ? <button type="button" aria-pressed={activeRule === 'needs'} disabled={!needsAction.length} onClick={() => onRule?.(activeRule === 'needs' ? null : 'needs')}
+                style={{ border: `1px solid ${activeRule === 'needs' ? 'rgba(31,90,61,.35)' : C.border}`, borderRadius: 999, background: activeRule === 'needs' ? C.acl : C.card, color: C.t1, fontSize: 12, fontWeight: 600, padding: '3px 10px', cursor: needsAction.length ? 'pointer' : 'default', fontFamily: 'var(--font)' }}>{needs}</button>
+            : <span>{header}{smallCount ? ` · ${smallCount} small product${smallCount === 1 ? '' : 's'} not checked` : ''}</span>}
           <RulesPopover bars={bars} channel={channel} lines={result.rulesLines} />
         </div>
       </div>
@@ -99,13 +107,16 @@ export default function WatchlistCard({ result, channel, variant = 'laptop', act
   )
 }
 
-function WatchlistMobile({ title = 'Margin watchlist', rules, header, smallCount, onOpenRule, pendingPrev }) {
+function WatchlistMobile({ title = 'Margin watchlist', rules, header, needs, needsCount, smallCount, onOpenRule, pendingPrev }) {
   const [all, setAll] = useState(false)
   const shown = all ? rules : rules.slice(0, 5)
   return (
     <section style={{ background: M.card, borderRadius: M.radius.card, padding: 16, boxShadow: M.cardShadow }}>
       <h2 style={{ margin: 0, fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink }}>{title}</h2>
-      <div style={{ fontSize: 12, color: M.muted, margin: '2px 0 8px' }}>{header}{smallCount ? ` · ${smallCount} small not checked` : ''}</div>
+      {needs
+        ? <button type="button" onClick={() => needsCount && onOpenRule?.('needs')} disabled={!needsCount}
+            style={{ display: 'block', width: '100%', minHeight: 32, margin: '2px 0 6px', padding: 0, border: 'none', background: 'transparent', textAlign: 'left', fontSize: 12.5, fontWeight: 600, color: needsCount ? M.green : M.muted, fontFamily: 'var(--font)', cursor: needsCount ? 'pointer' : 'default' }}>{needs}{needsCount ? ' ›' : ''}</button>
+        : <div style={{ fontSize: 12, color: M.muted, margin: '2px 0 8px' }}>{header}{smallCount ? ` · ${smallCount} small not checked` : ''}</div>}
       {shown.map((r, i) => (
         <button key={r.id} type="button" onClick={() => hasList(r) && onOpenRule?.(r.id)} disabled={!hasList(r)}
           style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto 14px', alignItems: 'center', gap: 8, width: '100%', minHeight: 52, padding: '6px 0', border: 'none', borderBottom: i < shown.length - 1 ? `1px solid ${M.line}` : 'none', background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: r.count ? 'pointer' : 'default' }}>

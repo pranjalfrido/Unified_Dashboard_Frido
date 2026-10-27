@@ -1,6 +1,6 @@
 # Decisions for Suraj
 
-Things found during the unattended runs that change a number, a definition or a rule. Nothing here is in the code; each one waits for your answer.
+Things found during the unattended runs that change a number, a definition or a rule. Nothing here is in the code unless marked "decided, applied"; the rest wait for your answer.
 
 ## P&L Phase 2 (feature/responsive-pnl)
 
@@ -28,6 +28,58 @@ Recommendation: B for ASP down (5% catches normal sale-to-no-sale price swings) 
 
 ### P3. "Others" is a product row with large losses
 D2C "Others" (items with no sub-category) shows CM2 −456% (ROAS 0.28x, ₹3.04 L loss) because ad spend tagged to the "Others" sub-category lands on very little revenue. It is real data, but it is a mapping problem rather than a product. Option A: leave it. Option B: exclude "Others" from the watchlist (not from the table). Recommendation: B once the Ads campaign mapping (Ads data step) is settled.
+
+### P1–P3: decided 27 Oct, applied
+- **P1 → B:** no GM rule on D2C (`gm: null`); the other channels keep their GM rules.
+- **P2 → B:** ASP down > 10% on all channels; EBO / Offline COGS > 50% and GM < 40%; Flipkart COGS > 50% (`PNL_RULE_BAR_OVERRIDES`, the rest of Amazon / Myntra stay at 45%); materiality ≥ 2% of the tab's gross or ≥ 100 units.
+- **P3 → B:** "Others" is left out of the watchlist and the margin matrix (`PNL_WATCHLIST_EXCLUDE`). It stays in the Financial View with an ⓘ: "Not a product: sales with no sub-category, plus ad spend not mapped to a product."
+
+Rule check re-run (1–26 Oct, live API, every flag re-derived from the displayed numbers): all flags correct on all 8 views. Flagged / checked per tab:
+
+| Tab | Before (checked → flagged) | After | Flagged % | Biggest rules now |
+|---|---|---|---|---|
+| D2C | 153 → 128 | 124 → 97 | 78% | Below healthy ROAS 42 · Returns > 20% 41 · ASP down > 10% 36 · Loss 35 |
+| Amazon Overall | 119 → 108 | 95 → 73 | 77% | ASP down 39 · Returns > 15% 34 · COGS > 45% 28 |
+| Amazon Seller Central | 93 → 81 | 73 → 54 | 74% | Returns 30 · ASP down 23 · COGS 20 |
+| Flipkart | 58 → 50 | 34 → 29 | 85% | COGS > 50% 23 · CM1 < 20% 16 · Loss 13 |
+| Blinkit | — | 12 → 4 | 33% | CM1 < 18% 4 |
+| CRED | — | 6 → 5 | 83% | COGS > 45% 4 |
+| Offline | 43 → 41 | 27 → 25 | 93% | COGS > 50% 24 · CM1 < 30% 19 · GM < 40% 19 |
+| EBO | 60 → 46 | 33 → 14 | 42% | COGS > 50% 10 · Returns 5 |
+
+### P4. Still far above the 10–30% aim on most tabs (new, needs your call)
+The flags are spread across rules, so dropping any one rule doesn't get there (D2C without "Below healthy ROAS" → 70%, without "Returns" → 71%, without "ASP down" → 76%). What drives each tab:
+- **Offline:** COGS > 50% flags 24 of 27 products. Offline's normal COGS sits above 50%, so the bar measures the channel, not the product.
+- **Flipkart:** COGS > 50% flags 23 of 34, and 13 are loss-making after ads (real).
+- **D2C / Amazon:** Returns (> 20% / > 15%) and ASP down each flag about a third of products, and on D2C 35 products lose money after ads (28% of products on that rule alone).
+Options:
+- a) Show a product only when it trips 2+ rules, or always when it loses money after ads: D2C 78% → 59%, Amazon 77% → 47%, SC 34%, Flipkart 74%, Offline 81%, EBO 21%, CRED 17%, Blinkit 0%.
+- b) Set bars per channel from that channel's own median (e.g. flag the worst quarter), so ~25% by design.
+- c) Raise the noisy bars per channel: Offline COGS > 60%, Flipkart COGS > 55%, D2C Returns > 25%, Amazon Returns > 20%.
+- d) Keep as is; the ₹ impact sort puts the biggest problems first.
+Recommendation: c for Offline / Flipkart COGS (the bar is below the channel's normal level), plus b if you want a steady share across tabs. Each is a one-line change in `src/config/metricTargets.js`.
+
+### P4: decided 27 Oct (c, then a), applied
+- **c:** Offline COGS > 60%, Flipkart COGS > 55%, D2C Returns > 25%, Amazon (Overall, SC, VC) Returns > 20%.
+- **a:** the watchlist header now reads "x products need action (2+ rules or loss) · y checked" and opens that list (laptop: filters the Financial View; phone: full-screen list). Rule tiles keep their full counts.
+
+Rule check re-run (1–26 Oct): all flags correct on all 8 views; the header counts equal a recount from the displayed flags.
+
+| Tab | Checked | Tiles flagged | Needs action | Top 2 rules (tabs above 40%) |
+|---|---|---|---|---|
+| D2C | 124 | 90 (73%) | 68 (55%) | Below healthy ROAS 42 · ASP down 36 |
+| Amazon Overall | 95 | 67 (71%) | 39 (41%) | ASP down 39 · COGS > 45% 28 |
+| Amazon SC | 73 | 50 (68%) | 24 (33%) | — |
+| Flipkart | 34 | 29 (85%) | 22 (65%) | CM1 < 20% 16 · Loss 13 |
+| Blinkit | 12 | 4 (33%) | 0 (0%) | — |
+| CRED | 6 | 5 (83%) | 1 (17%) | — |
+| Offline | 27 | 23 (85%) | 20 (74%) | CM1 < 30% 19 · COGS > 60% 19 (GM < 40% 19) |
+| EBO | 33 | 14 (42%) | 7 (21%) | — |
+
+Still above 40% on "needs action": D2C, Amazon Overall, Flipkart, Offline. No more bars changed (as asked).
+
+### B2B quote rounding (PNL_REVIEW_FIXES.md §5): decided 27 Oct, applied
+Round the quoted SP ex-GST up to the next ₹10 (₹504 → ₹510), shown as "₹504 exact · ₹510 quoted", laptop and phone (feature/responsive-pnl c74879dd).
 
 ## Ads data (fix/ads-data)
 
@@ -84,6 +136,23 @@ Product ROAS here is total sales ÷ spend. When spend on a product drops after a
 
 ### D8. Spending at a loss uses total-sales ROAS
 The breakeven ROAS comes from P&L (Gross ex GST ÷ CM1). The product ROAS it is compared with is total sales ÷ ad spend, the same definition P&L uses. So "at a loss" means CM2 < 0 for that product on that channel, as in P&L. No change proposed; noted because Ads' own revenue isn't ad-attributed (A6).
+
+### D2–D5: decided 27 Oct, applied on fix/ads-data
+- **D2 → a:** spend not linked to a product is one "Unattributed" row (category and product tables) on both the live and cached paths; category / product ROAS are on attributed spend only; Total rows include everything. 1–26 Oct: Rs 2.79 Cr (32.6% of spend) on All, Rs 2.76 Cr (43.3%) on D2C. P&L unchanged. Data task (BACKLOG, Suraj's team): map sale campaigns to products where possible; add "Socks" to the item master. Commit 28efb977.
+- **D3 → a + GST fix:** labelled rows "CRED (not in categories)" and "Flipkart / Myntra estimate (no product detail)"; Total = card on every tab. Flipkart's estimate is added ex GST: Flipkart gross ex GST 1–25 Oct Rs 241.32 L → Rs 237.75 L, net Rs 205.24 L → Rs 202.20 L, overall net Rs 4,384.18 L → Rs 4,381.14 L (Sales Overall / Flipkart and P&L Flipkart / Overall move by the same amounts). Commit b137317c.
+- **D4 → a:** Ads CAC = Customer tab definition: 1–26 Oct Rs 672 → Rs 700 (90,930 new customers, = Customer tab). Commit 788869d7.
+- **D5:** CRED tab follows the global dates (commit bbaf290c). Data task: check whether CRED spend for Sep / Oct should exist.
+
+### D7: decided 27 Oct (b), applied on feature/responsive-ads
+"ROAS down ≥ 20%" needs ≥ ₹50 K spend in both periods (`ADS_RULES.roasDropMinSpend`). Sep vs Aug: D2C 32 → 26 products (−₹25.61 Cr → −₹22.00 Cr at the old ROAS), All 46 → 29 (−₹20.96 Cr → −₹17.90 Cr). D2 display (the "not linked to a product" line) also on feature/responsive-ads. D8: noted, no change.
+
+### Decisions made without Suraj (Ads, 27 Oct)
+- **D5, narrower fix:** "the sliced cache wins" was applied only when the live CRED data is from another date range. Always preferring the cache would have changed Sep CRED from Rs 26.39 L / 2,075 orders to Rs 26.97 L / 2,357 orders (the cache adds up per-product orders), so the option that changes fewest numbers was taken.
+- **D2, Socks:** the live query name-matches the "Socks" target (Rs 6.8 L, 1–25 Oct) to a category, the cache leaves it unattributed, so Unattributed is Rs 2.79 Cr live vs Rs 2.86 Cr cached. Left as is (fixed by the data task: add "Socks" to the item master).
+- **D3, partial day:** Flipkart's partially-synced last day still sits in chMap next to its full-day estimate (noted in D3); not changed, as the answer covered only the GST fix.
+
+### D6: answered 27 Oct, not built yet
+Answer: keep unmatched quick-commerce spend in an "Unmatched ad spend" row on the P&L table, included in the card Mktg and CM2 (P&L ROAS = Ads ROAS), out of the watchlist; Myntra unchanged. To be built on fix/pnl-unmatched-spend from main once PR #25 is merged; PR #25 was still open on 27 Oct, so it was skipped.
 
 ## Customer data (fix/customer-data)
 

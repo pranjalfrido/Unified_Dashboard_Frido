@@ -33,8 +33,9 @@ export default function MarginMatrix({ rows, bar, variant = 'laptop', onSelect, 
           <text x={padL - 6} y={sy(t) + 4} textAnchor="end" fontSize="11" fill={C.t3}>{t}%</text></g>
       ))}
       <line x1={padL} x2={W - padR} y1={sy(bar)} y2={sy(bar)} stroke={M.ink} strokeWidth="1.2" strokeDasharray="5 4" />
-      <text x={W - padR - 4} y={sy(bar) - 4} textAnchor="end" fontSize="11" fill={M.muted}>{bar}% CM1</text>
-      <line x1={sx(median)} x2={sx(median)} y1={padT} y2={H - padB} stroke={C.border2} strokeWidth="1" strokeDasharray="2 3" />
+      {/* mobile: the 600-wide viewBox is drawn ~330px wide, so 22 units ≈ 12px on screen */}
+      <text x={W - padR - 4} y={sy(bar) - 4} textAnchor="end" fontSize={variant === 'mobile' ? 22 : 11} fill={M.muted}>{bar}% CM1</text>
+      <line x1={sx(median)} x2={sx(median)} y1={padT} y2={H - padB} stroke={variant === 'mobile' ? M.g4 : C.border2} strokeWidth="1" strokeDasharray="2 3" />
       {variant !== 'mobile' && (
         <>
           <text x={padL + 6} y={padT + 14} fontSize="11" fontWeight="700" fill={C.t3}>GROW</text>

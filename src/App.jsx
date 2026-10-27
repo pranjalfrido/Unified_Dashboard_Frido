@@ -24,6 +24,7 @@ import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
+import { usePnlTool, runPnlToolReset } from './pnl/pnlToolStore.js'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
 import AskFridoPage from './ask/AskFridoPage.jsx'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
@@ -4928,6 +4929,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // CA1: Segments & RFM use the 12 months up to the end date (not all-time): the picker stays usable.
   const dateBlurred = false
   const bp = useBreakpoint()
+  const pnlTool = usePnlTool()
   // Phones (≤768px and phone landscape): Overview, Sales and Inventory use the shared MobilePageHeader;
   // the other pages keep this bar until they are redesigned.
   if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'inventory') {
@@ -5029,6 +5031,22 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         <MobilePageHeader title="Ads"
           right={<><div className="tnav-right"><DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} /></div>{menu}</>}
           chips={chips} activeChip={active} onChip={id => { if (id !== active) setAdsSelPlatform(id === 'All' ? null : id) }} />
+      </div>
+    )
+  }
+  if ((bp.width <= 768 || bp.isPhoneLandscape) && page === 'pnl' && pnlTool.tool) {
+    // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
+    // just "‹ D2C" back + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
+    const t = pnlTool.tool
+    return (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <button type="button" onClick={t.onBack} aria-label={`Back to ${t.backLabel}`}
+              style={{ minHeight: 44, padding: '0 4px 0 0', border: 'none', background: 'none', color: 'rgba(255,255,255,.8)', fontSize: 15, fontWeight: 500, fontFamily: 'var(--font)', cursor: 'pointer', whiteSpace: 'nowrap' }}>‹ {t.backLabel}</button>
+            <span style={{ fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+          </span>}
+          right={pnlTool.reset ? <ActionMenu title={t.title} items={[{ id: 'reset', label: 'Reset', onSelect: runPnlToolReset }]} /> : null} />
       </div>
     )
   }
@@ -11864,7 +11882,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   let costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
-  const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
+  // D4 (Suraj 27 Oct): one CAC everywhere = the Customer tab's definition: new customers from the sales
+  // report (first Shopify order in range, _EX excluded; ads.nCusts / repeatCusts from api/bq.js
+  // shopifyNewCusts), spend = Meta + Google + D2C additional spend (cacSpend below).
+  const shopifyNewCustomers = ads.nCusts != null ? ads.nCusts - (ads.repeatCusts || 0) : (data.nCusts || 0) - (data.repeatCusts || 0)
   let shopifyAdSpend = _filtMetaSpend + _filtGoogleSpend
 
   // Category/Sub-category filter: when active, every KPI on this page recomputes from the
@@ -11910,7 +11931,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     // while a filter is active (same "no clean number, don't fake one" principle as the rest).
   }
   const cac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? (shopifyAdSpend + (additionalSpend || 0)) / shopifyNewCustomers : 0
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? _filtMetaSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
@@ -12002,6 +12023,16 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const adsDetail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
   const adsUnattributed = (adsDetail.subCategoryRows || []).filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0)
   const adsProductRows = (adsDetail.subCategoryRows || []).filter(r => r.subCategory !== 'Unattributed')
+  // D3 (Suraj 27 Oct): revenue the tables can't break down gets its own labelled row, so the Total
+  // row equals the card: CRED on the All tab, and the Flipkart / Myntra late-report estimates (ex-GST)
+  // wherever those channels are in scope. Laptop tables and the phone lists use the same rows.
+  const adsExtraRows = (() => {
+    const out = []
+    if (!selPlatform && (chMap['CRED']?.excRev || 0) > 0) out.push({ category: 'CRED', label: 'CRED (not in categories)', spend: credAdditionalSpend, revenue: Math.round(chMap['CRED'].excRev) })
+    const estRev = (!selPlatform || selPlatform === 'Flipkart' ? data.flipkart?.estTotalExcRev || 0 : 0) + (!selPlatform || selPlatform === 'Myntra' ? data.myntra?.estTotalExcRev || 0 : 0)
+    if (estRev > 0) out.push({ category: 'Flipkart / Myntra', label: 'Flipkart / Myntra estimate (no product detail)', spend: 0, revenue: Math.round(estRev) })
+    return out.map(r => ({ ...r, netRevenue: r.revenue, orders: 0, returns: 0, cancellations: 0, roas: r.spend > 0 ? r.revenue / r.spend : 0 }))
+  })()
   const adsPrevByProd = (() => {
     // previous equal-length window's product spend / sales (cached path only; see injectAdsFromCache)
     if (!ads.prevAdsDailyByCategory) return null
@@ -12077,6 +12108,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     const catRowsM = (() => {
       const m = {}
       adsProductRows.forEach(r2 => { const o = m[r2.category] || (m[r2.category] = { isCat: true, category: r2.category, spend: 0, revenue: 0, n: 0 }); o.spend += r2.spend || 0; o.revenue += r2.revenue || 0; o.n++ })
+      // D3 labelled rows, the same as the laptop table
+      adsExtraRows.forEach(r2 => { m[r2.label] = { isCat: true, category: r2.label, spend: r2.spend, revenue: r2.revenue, n: 1 } })
       return Object.values(m)
     })()
     return (
@@ -12090,7 +12123,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           <AdsMobileView channel={chLabel} metrics={metrics} trendRows={trendRows} start={filters.start} end={filters.end} fmt={fmt}
             watch={adsWatch} dayRows={adsDayRows} series={adsSeries} monthly={adsMonthly} shareRows={adsShareRows} pacing={adsPacing}
             overview={overview} amazonSplit={amazonSplit} unattributed={adsUnattributed} totalSpend={totalSpend}
-            catRows={catRowsM} prodRows={adsProductRows} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
+            catRows={catRowsM} prodRows={[...adsProductRows, ...adsExtraRows.map(r2 => ({ ...r2, subCategory: r2.label }))]} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
         </div>
       </div>
     )
@@ -12622,8 +12655,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
         )}
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
-          const catRowsAll = detail.categoryRows || []
-          const subCatRowsAll = detail.subCategoryRows || []
+          // D3: the labelled CRED / estimate rows (adsExtraRows above)
+          const catRowsAll = [...(detail.categoryRows || []), ...adsExtraRows.map(r => ({ ...r, category: r.label }))]
+          const subCatRowsAll = [...(detail.subCategoryRows || []), ...adsExtraRows.map(r => ({ ...r, subCategory: r.label }))]
           if (!catRowsAll.length) return null
 
           // Category/sub-category slicers filter these tables down to the selection, same as
@@ -12631,9 +12665,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           // consistent: pick "Slippers" once and every section reflects it.
           // B2: spend not linked to a product is one line above the lists (not a row); the Total rows still include it
           const unattrSpend = !selCat.length && !selSubCat.length ? subCatRowsAll.filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0) : 0
+          // D2 (fix/ads-data): both paths now give that spend its own "Unattributed" category row; it is
+          // the line above, not a list row (it used to sit inside "Others" and was subtracted here)
           const slicedCatRows = (selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll)
-            .map(r => (unattrSpend > 0 && r.category === 'Others' ? { ...r, spend: Math.max(0, r.spend - unattrSpend), roas: r.spend - unattrSpend > 0 ? r.revenue / (r.spend - unattrSpend) : 0 } : r))
-            .filter(r => r.spend > 0.5 || r.revenue > 0.5)
+            .filter(r => r.category !== 'Unattributed' && (r.spend > 0.5 || r.revenue > 0.5))
           // B2: Unattributed spend is one line above the lists, not a product row; a watchlist tile filters the list
           const slicedProdRows = subCatRowsAll.filter(r =>
             r.subCategory !== 'Unattributed' && (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
@@ -20860,10 +20895,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       const salChans = platformFilter ? (SAL_CHANS[platformFilter] || [platformFilter]) : null
       // Aggregate spend by category and by subCategory (product) from ads daily
       const adCatMap = {}; const adProdMap = {}; let unmatchedProdSpend = 0
+      // D2 (Suraj 27 Oct): spend with no product ("all products" campaigns, categories not in the item
+      // master) is one "Unattributed" line, not part of any category's spend / ROAS (was in "Others").
       slicedAdsDBC.filter(x => !adPlats || adPlats.includes(x.platform)).forEach(x => {
-        const cat = (x.category || 'Others').trim()
-        adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
         if (x.subCategory) {
+          const cat = (x.category || 'Others').trim()
+          adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
           const prod = x.subCategory.trim()
           adProdMap[prod] = (adProdMap[prod] || 0) + (x.spend || 0)
         } else {
@@ -20893,6 +20930,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (oth) oth.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
+      if (unmatchedProdSpend > 0) categoryRowsAll.push({ category: 'Unattributed', spend: unmatchedProdSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       // Sub-category (product) rows — driven from ad spend
       const usedKeys = new Set()
       const spendMatchedRows = Object.keys(adProdMap).map(prod => {
@@ -21053,6 +21091,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
+  // D5 (Suraj 27 Oct): the Ads CRED tab follows the global dates. The live data.cred is used only when
+  // its days fall inside the selected range; otherwise (a previous range's payload while a fetch is
+  // pending, or after one failed) the cache sliced to the selected dates wins.
+  const credDays = data?.cred?.daily || []
+  const credIsCurrent = credDays.length > 0 && credDays.every(d => d.date >= filters.start && d.date <= filters.end)
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
@@ -21104,7 +21147,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadSalesPeriod} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
-            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [] } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
+            <AdsTab data={adsCache ? { ...(data || {}), cred: (credIsCurrent ? data.cred : null) ?? (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
           {page === 'intelligence' && (
             <div className="page-scroll">

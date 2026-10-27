@@ -1,0 +1,434 @@
+{
+  "all": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %"
+    ],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 3,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "shopify": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 1,
+    "checked": 9,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "shopify · MyFrido": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 1,
+    "checked": 9,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "shopify · Mobility": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 1,
+    "checked": 9,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "ebo": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [],
+    "ties": 1,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "amazon": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 2,
+    "checked": 9,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "amazon · Seller Central": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [],
+    "ties": 2,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "amazon · Vendor Central": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "flipkart": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 2,
+    "checked": 9,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "blinkit": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 8,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "cred": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %"
+    ],
+    "mismatches": [
+      {
+        "chip": "Returns %",
+        "laptop": [
+          "Orthotics Knee Support Wrap 6.15%",
+          "Men's Comfort Dual Strap Sandals 4.08%",
+          "Women's Comfort Flat Sandal 2.66%",
+          "Orthotics Heel Protector 1.90%"
+        ],
+        "phone": [
+          "Orthotics Knee Support Wrap 6.2%",
+          "Men's Comfort Dual Strap Sandals 4.1%",
+          "Women's Comfort Flat Sandal 2.7%",
+          "Orthotics Heel Protector 1.9%",
+          "Men's Cloud Comfort Shoes - Lace Ups 0.0%",
+          "Ultimate Wedge Plus Cushion 0.0%"
+        ]
+      }
+    ],
+    "ties": 0,
+    "checked": 5,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "firstcry": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %"
+    ],
+    "mismatches": [
+      {
+        "chip": "Returns %",
+        "laptop": [
+          "Mattress Protector 3.27%"
+        ],
+        "phone": [
+          "Mattress Protector 3.3%",
+          "Ultimate Wedge Plus Cushion 0.0%",
+          "Ultimate Pro Seat Cushion 0.0%",
+          "Cloud Backrest Cushion 0.0%",
+          "Ultimate Pro Posture Corrector 0.0%",
+          "Ultimate Car Backrest Cushion 0.0%",
+          "Ultimate Deep Sleep Pillow 0.0%",
+          "Ultimate Neck Contour Cervical Pillow 0.0%"
+        ]
+      }
+    ],
+    "ties": 0,
+    "checked": 5,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "instamart": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [
+      {
+        "chip": "ROAS",
+        "laptop": [
+          "Ultimate Car Backrest Cushion 22.35x",
+          "Travel Neck Pillow 19.24x",
+          "Dual Gel Insoles 10.19x",
+          "Ultimate Wedge Plus Cushion 8.44x",
+          "Contour Cervical Pillow 7.78x",
+          "Ultimate Deep Sleep Pillow 6.32x"
+        ],
+        "phone": [
+          "Ultimate Car Backrest Cushion 22.35x",
+          "Travel Neck Pillow 19.24x",
+          "Dual Gel Insoles 10.19x",
+          "Ultimate Wedge Plus Cushion 8.44x",
+          "Contour Cervical Pillow 7.78x",
+          "Ultimate Deep Sleep Pillow 6.32x",
+          "Ultimate Car Neck Rest Pillow —",
+          "Ultimate Car Wedge Seat Cushion —"
+        ]
+      }
+    ],
+    "ties": 0,
+    "checked": 8,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "zepto": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %",
+      "ROAS",
+      "CM2 %"
+    ],
+    "mismatches": [],
+    "ties": 2,
+    "checked": 8,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "myntra": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %"
+    ],
+    "mismatches": [],
+    "ties": 2,
+    "checked": 5,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "international": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %"
+    ],
+    "mismatches": [
+      {
+        "chip": "Returns %",
+        "laptop": [],
+        "phone": [
+          "3D Posture Plus Ergonomic Chair 0.0%",
+          "Cervical Butterfly Pillow 0.0%",
+          "Ultimate Deep Sleep Pillow 0.0%",
+          "Barefoot Sock Shoe Pro 0.0%",
+          "Arch Sports Insole 0.0%",
+          "Arch Support Insoles 0.0%"
+        ]
+      }
+    ],
+    "ties": 0,
+    "checked": 3
+  },
+  "offline": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "offline · B2B": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [
+      {
+        "chip": "Returns %",
+        "laptop": [
+          "Others 34.80%",
+          "Prime Plus Electric Wheelchair 12.22%",
+          "Travel Neck Pillow 2.09%"
+        ],
+        "phone": [
+          "Others 34.8%",
+          "Prime Plus Electric Wheelchair 12.2%",
+          "Travel Neck Pillow 2.1%",
+          "Ultimate Lap Desk Pillow 0.0%",
+          "Ultimate Deep Sleep Pillow 0.0%",
+          "Ultimate Car Neck Rest Pillow 0.0%",
+          "3D Eye Mask 0.0%",
+          "Cold & Hot Therapy Cap 0.0%"
+        ]
+      }
+    ],
+    "ties": 1,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "offline · Stockist": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  },
+  "offline · MT GT": {
+    "chips": [],
+    "mismatches": [],
+    "ties": 0,
+    "checked": 0,
+    "note": "no Financial view card"
+  },
+  "offline · Miscellaneous": {
+    "chips": [
+      "Revenue",
+      "Net revenue",
+      "Returns %",
+      "COGS %",
+      "GM %",
+      "SnD %",
+      "CM1 %"
+    ],
+    "mismatches": [
+      {
+        "chip": "Returns %",
+        "laptop": [
+          "Active Walking Shoes - Men's 13.64%",
+          "Ultimate Car Comfort Bundle 5.18%",
+          "Orthotics Posture Corrector 2.08%"
+        ],
+        "phone": [
+          "Active Walking Shoes - Men's 13.6%",
+          "Ultimate Car Comfort Bundle 5.2%",
+          "Orthotics Posture Corrector 2.1%",
+          "Ultimate Deep Sleep Pillow 0.0%",
+          "Travel Neck Pillow 0.0%",
+          "AeroMesh Classic Ergo Chair - With Headrest 0.0%",
+          "ErgoLuxe Executive Chair 0.0%",
+          "AeroMesh Ergo Chair 0.0%"
+        ]
+      }
+    ],
+    "ties": 0,
+    "checked": 7,
+    "rowsChecked": 10,
+    "rowMismatches": []
+  }
+}
