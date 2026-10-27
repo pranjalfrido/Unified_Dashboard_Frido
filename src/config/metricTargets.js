@@ -56,6 +56,7 @@ export const ADS_RULES = {
   noSalesRoas: 0.5,           // … and ROAS below this
   unattributedShare: 0.20,    // 'Unattributed spend': share of spend not linked to a product
   roasDropPct: 20,            // 'ROAS down': ▼ at least this % vs the previous period
+  roasDropMinSpend: 50000,    // … and at least this ₹ spend in BOTH periods (D7, Suraj 27 Oct; was minSpend ₹10 K)
   cpcUpPct: 15,               // 'CPC up': ▲ at least this % vs the previous period
 }
 

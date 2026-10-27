@@ -91,6 +91,9 @@ The breakeven ROAS comes from P&L (Gross ex GST ÷ CM1). The product ROAS it is 
 - **D4 → a:** Ads CAC = Customer tab definition: 1–26 Oct Rs 672 → Rs 700 (90,930 new customers, = Customer tab). Commit 788869d7.
 - **D5:** CRED tab follows the global dates (commit bbaf290c). Data task: check whether CRED spend for Sep / Oct should exist.
 
+### D7: decided 27 Oct (b), applied on feature/responsive-ads
+"ROAS down ≥ 20%" needs ≥ ₹50 K spend in both periods (`ADS_RULES.roasDropMinSpend`). Sep vs Aug: D2C 32 → 26 products (−₹25.61 Cr → −₹22.00 Cr at the old ROAS), All 46 → 29 (−₹20.96 Cr → −₹17.90 Cr). D2 display (the "not linked to a product" line) also on feature/responsive-ads. D8: noted, no change.
+
 ### Decisions made without Suraj (Ads, 27 Oct)
 - **D5, narrower fix:** "the sliced cache wins" was applied only when the live CRED data is from another date range. Always preferring the cache would have changed Sep CRED from Rs 26.39 L / 2,075 orders to Rs 26.97 L / 2,357 orders (the cache adds up per-product orders), so the option that changes fewest numbers was taken.
 - **D2, Socks:** the live query name-matches the "Socks" target (Rs 6.8 L, 1–25 Oct) to a category, the cache leaves it unattributed, so Unattributed is Rs 2.79 Cr live vs Rs 2.86 Cr cached. Left as is (fixed by the data task: add "Socks" to the item master).

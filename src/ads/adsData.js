@@ -84,10 +84,10 @@ export function computeAdsRules({ rows = [], prevByProd = null, beRoasByProd = n
     valueText: pctFmt(share), line: share > 0 ? `${fmt(unattributed)} not linked to a product` : 'All spend linked to a product',
     info: `Spend whose campaign isn't tagged to a product (e.g. "all products" sale campaigns). Flagged above ${R.unattributedShare * 100}% of spend.` })
   if (prevByProd) {
-    const items = material.filter(r => { const p = prevByProd[r.subCategory]; if (!p || !(p.spend >= R.minSpend) || !(p.revenue > 0)) return false; const pr = p.revenue / p.spend; return r.roas < pr * (1 - R.roasDropPct / 100) })
+    const items = material.filter(r => { const p = prevByProd[r.subCategory]; if (!(r.spend >= R.roasDropMinSpend) || !p || !(p.spend >= R.roasDropMinSpend) || !(p.revenue > 0)) return false; const pr = p.revenue / p.spend; return r.roas < pr * (1 - R.roasDropPct / 100) })
       .map(r => { const p = prevByProd[r.subCategory]; return item(r, (r.roas - p.revenue / p.spend) * r.spend) })
     rules.push({ id: 'roasdown', chip: 'ROAS ↓', red: false, name: `ROAS down ≥ ${R.roasDropPct}%`, what: 'revenue at the old ROAS', revLabel: 'spend', items,
-      info: `Product ROAS ▼ ${R.roasDropPct}% or more vs the previous period of the same length. Both periods need at least ₹${(R.minSpend / 1000).toFixed(0)} K spend.` })
+      info: `Product ROAS ▼ ${R.roasDropPct}% or more vs the previous period of the same length. Both periods need at least ₹${(R.roasDropMinSpend / 1000).toFixed(0)} K spend.` })
   }
   if (cpc != null && prevCpc > 0) {
     const d = (cpc - prevCpc) / prevCpc * 100
