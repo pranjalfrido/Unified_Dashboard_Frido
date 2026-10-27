@@ -108,11 +108,17 @@ async function mob(page) {
   const speed = page.locator('section').filter({ has: page.locator('h2', { hasText: /^Speed/ }) })
   for (const [k, label] of [['processing', 'Processing'], ['pickup', 'Pickup'], ['transit', 'In-transit'], ['fulfilment', 'Fulfilment']]) {
     await speed.getByRole('tab', { name: label, exact: true }).click(); await page.waitForTimeout(250)
-    base.tat[k] = await speed.locator('.sbr-row').evaluateAll(rows => rows.map(r => {
-      const name = r.innerText.split('\n')[0].trim()
-      const vals = [...r.innerText.matchAll(/(?:\d+(?:–\d+)?[dh]|\d+\+[dh]|\d+[dh]\+)\s+([\d.]+%|—)/g)].map(m => m[1])
-      return { name, vals }
-    }))
+    // The row shows only the headline; every bucket is in the sheet a tap opens (fix/logistics-bucket-labels).
+    base.tat[k] = []
+    const rows = speed.locator('.sbr-row')
+    for (let i = 0; i < await rows.count(); i++) {
+      const name = (await rows.nth(i).innerText()).split('\n')[0].trim()
+      await rows.nth(i).click(); await page.locator('.bottom-sheet').last().waitFor(); await page.waitForTimeout(300)
+      const text = await page.locator('.bottom-sheet').last().innerText() // labels render uppercase ("0–1D")
+      const vals = [...text.matchAll(/(?:\d+(?:–\d+)?[dh]|\d+\+[dh]|\d+[dh]\+)\s+([\d.]+%|—)/gi)].map(m => m[1])
+      base.tat[k].push({ name, vals })
+      await page.keyboard.press('Escape'); await page.waitForTimeout(350)
+    }
   }
   return base
 }
