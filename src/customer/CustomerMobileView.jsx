@@ -16,7 +16,7 @@ import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import FullScreenTable from '../responsive/FullScreenTable.jsx'
 import { heatBg, heatInk } from '../responsive/heat.js'
 import { SEG_META, GRID_PLACEMENT } from './customerDefs.js'
-import { pctChg, dailyRows, ledgers, deriveAcquisition, deriveRetention, deriveBehaviour, deriveSegments, deriveDiscounts } from './customerDerive.js'
+import { pctChg, dailyRows, ledgers, deriveAcquisition, deriveRetention, deriveBehaviour, deriveSegments, deriveDiscounts, paybackMargin } from './customerDerive.js'
 
 // Customer Intelligence below 1024px (CUSTOMER_MASTER_PLAN.md Part B §B3, mockups/customer_mockup.html).
 // Display only: the same /api/customer response as the laptop tabs, numbers from customerDerive.js (the
@@ -30,11 +30,15 @@ const p1 = v => (v != null && isFinite(v) ? `${v.toFixed(1)}%` : '—')
 const FMT = { money: fmt, int: fmtN, x: v => `${(v || 0).toFixed(2)}×`, pct: v => `${(v || 0).toFixed(1)}%` }
 const Muted = ({ children, style }) => <div style={{ fontSize: 12, color: M.muted, ...style }}>{children}</div>
 
-export default function CustomerMobileView({ custData: cd, tab, setTab, start, end, watch }) {
+// cm1Margin: P&L D2C CM1 % (fraction) for the same dates, for the payback (C2); null → 35% (labelled)
+const asOf = end => (end ? new Date(`${end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date')
+
+export default function CustomerMobileView({ custData: cd, tab, setTab, start, end, watch, cm1Margin = null }) {
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const rows = dailyRows(cd)
-  const props = { cd, rows, start, end, layout }
+  const pay = paybackMargin(cm1Margin)
+  const props = { cd, rows, start, end, layout, pay }
   const openRule = id => { const t = watch?.rules.find(r => r.id === id)?.target; if (t) { setTab(t); document.querySelector('.page-scroll')?.scrollTo?.({ top: 0 }) } }
   return (
     <div className="cust-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
@@ -90,8 +94,8 @@ function Overview({ cd, rows, start, end, layout, watch, onOpenRule }) {
 }
 
 // ── Acquisition ──
-function Acquisition({ cd, rows, start, end, layout }) {
-  const a = deriveAcquisition(cd)
+function Acquisition({ cd, rows, start, end, layout, pay }) {
+  const a = deriveAcquisition(cd, pay.margin)
   const { k, p } = a
   const [acqMode, setAcqMode] = useState('cust')
   const [nrMode, setNrMode] = useState('customers')
@@ -104,7 +108,7 @@ function Acquisition({ cd, rows, start, end, layout }) {
     { key: 'roas', label: 'ROAS', value: `${(k.roas || 0).toFixed(2)}x`, sub: 'Gross rev (ex GST) ÷ spend', delta: pctChg(k.roas, p.roas), point: r => (r.spend > 0 ? r.gross / r.spend : null), fmtPoint: x2 },
     { key: 'acq', label: 'Acquisition rate', value: `${(a.acqRate * 100).toFixed(1)}%`, sub: 'New ÷ total customers', delta: pctChg(a.acqRate, a.pAcqRate), point: r => (r.newC + r.repC > 0 ? r.newC / (r.newC + r.repC) * 100 : null), fmtPoint: p1 },
     { key: 'ltvcac', label: 'LTV : CAC', value: a.ltvCac > 0 ? `${a.ltvCac.toFixed(2)}x` : '—', sub: a.ltvCac > 0 ? (a.ltvCac >= 3 ? 'Healthy (on revenue)' : 'Watch (on revenue)') : 'Needs LTV data', delta: pctChg(a.ltvCac, a.pLtvCac) },
-    { key: 'payback', label: 'Payback (orders)', tileLabel: 'Payback', value: a.paybackOrders != null ? `${a.paybackOrders.toFixed(1)} orders` : '—', sub: `Orders to recover CAC at ~${(a.MARGIN_PCT * 100).toFixed(0)}% margin`, delta: null, lowerIsBetter: true },
+    { key: 'payback', label: 'Payback', value: a.paybackMonths != null ? `${a.paybackMonths.toFixed(1)} mo` : '—', sub: `Months of customer margin to recover CAC, at ${pay.label}`, delta: null, lowerIsBetter: true },
   ]
   const days = a.enriched.filter(r => r.date)
   const G = [M.green, M.g3]
@@ -155,7 +159,7 @@ function Acquisition({ cd, rows, start, end, layout }) {
 }
 
 // ── Retention ──
-function Retention({ cd, layout }) {
+function Retention({ cd, layout, end }) {
   const r = deriveRetention(cd)
   const [allCurve, setAllCurve] = useState(false)
   const [heat, setHeat] = useState(false)
@@ -163,7 +167,7 @@ function Retention({ cd, layout }) {
     { key: 'm1', label: 'M1 retention', value: `${r.avgM1.toFixed(1)}%`, sub: 'Size-weighted, all cohorts', delta: pctChg(r.avgM1, r.prevAvgM1) },
     { key: 'm1t', label: 'M1 retention', tileLabel: 'M1', value: `${r.avgM1.toFixed(1)}%` },
     { key: 'm6', label: 'M6 retention', tileLabel: 'M6', value: `${r.avgM6.toFixed(1)}%` },
-    { key: 'lost', label: 'Inactive 90+', value: fmtN(r.lost90), def: 'All-time D2C customers, last order 90+ days ago' },
+    { key: 'lost', label: 'Inactive 90+', value: fmtN(r.lost90), def: `D2C customers with no order in the 90 days before ${asOf(end)}` },
     { key: 'opc', label: 'Orders / customer', value: r.avgOrdersPerCust > 0 ? r.avgOrdersPerCust.toFixed(2) : '—', def: 'Orders ÷ customers, selected period' },
   ]
   const curve = allCurve ? r.curve : r.curve.slice(0, 12)
@@ -267,7 +271,7 @@ function Behaviour({ cd, layout }) {
 }
 
 // ── Segments ──
-function Segments({ cd, layout }) {
+function Segments({ cd, layout, end }) {
   const s = deriveSegments(cd)
   const [cell, setCell] = useState(null)
   const metrics = [
@@ -332,14 +336,14 @@ function Segments({ cd, layout }) {
       </BottomSheet>
       {fd.length > 0 && <Card title="Purchase frequency" sub="Customers by order count">{fd.map((x, i) => <CompactRankRow key={x.label} name={x.label} value={fmtN(x.customers)} pct={`${fmtN(x.totalOrders)} ord.`} barPct={x.customers / fMax * 100} last={i === fd.length - 1} />)}</Card>}
       {md.length > 0 && <Card title="Monetary distribution" sub="Customers by lifetime spend tier">{md.map((x, i) => <CompactRankRow key={x.bucket} name={x.bucket} value={fmtN(x.customers)} pct={fmt(x.revenue)} barPct={x.customers / mMax * 100} last={i === md.length - 1} />)}</Card>}
-      {inact.length > 0 && <Card title="Inactivity" sub="Days since last purchase">{inact.map((x, i) => <CompactRankRow key={x.bucket} name={x.bucket} value={fmtN(x.customers)} pct={iTot > 0 ? `${(x.customers / iTot * 100).toFixed(1)}%` : ''} barPct={x.customers / iMax * 100} last={i === inact.length - 1} />)}</Card>}
+      {inact.length > 0 && <Card title="Inactivity" sub={`Days since last purchase, as of ${asOf(end)}`}>{inact.map((x, i) => <CompactRankRow key={x.bucket} name={x.bucket} value={fmtN(x.customers)} pct={iTot > 0 ? `${(x.customers / iTot * 100).toFixed(1)}%` : ''} barPct={x.customers / iMax * 100} last={i === inact.length - 1} />)}</Card>}
     </>
   )
 }
 
 // ── Discounts ──
-function Discounts({ cd, layout }) {
-  const d = deriveDiscounts(cd)
+function Discounts({ cd, layout, pay }) {
+  const d = deriveDiscounts(cd, pay.margin)
   const { k } = d
   const [sMode, setSMode] = useState('totalSpend')
   const [bMode, setBMode] = useState('totalOrders')
@@ -349,7 +353,7 @@ function Discounts({ cd, layout }) {
     { key: 'spend2', label: 'Total spend', value: fmt(k.totalSpend || 0) },
     { key: 'roas', label: 'Blended ROAS', value: `${(k.roas || 0).toFixed(2)}x`, def: 'Gross rev (ex GST) ÷ spend' },
     { key: 'cac', label: 'Blended CAC', value: fmt(k.cac || 0), def: 'Total spend ÷ new customers' },
-    { key: 'pb', label: 'Payback', value: d.paybackMonths != null ? `${d.paybackMonths.toFixed(1)} mo` : '—', def: 'CAC ÷ monthly revenue per customer (12-month revenue ÷ 12); no margin' },
+    { key: 'pb', label: 'Payback', value: d.paybackMonths != null ? `${d.paybackMonths.toFixed(1)} mo` : '—', def: `CAC ÷ monthly margin per customer, at ${pay.label} (same as Acquisition)` },
     { key: 'share', label: 'Discounted orders', value: d.allOrders > 0 ? `${(d.discOrders / d.allOrders * 100).toFixed(1)}%` : '—', def: d.allOrders > 0 ? `${fmtN(d.discOrders)} of ${fmtN(d.allOrders)} orders` : 'No data' },
     { key: 'dpo', label: 'Avg discount / order', value: d.discPerOrder != null ? fmt(d.discPerOrder) : '—', def: d.avgDiscPct != null ? `${d.avgDiscPct.toFixed(1)}% avg discount on discounted orders` : '' },
   ]

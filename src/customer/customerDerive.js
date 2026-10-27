@@ -42,15 +42,25 @@ export function ledgers(k, p) {
   ]
 }
 
-// Acquisition & Trends (laptop 'trends' tab).
-export function deriveAcquisition(cd) {
+// Payback (C2, Suraj 27 Oct), shared by laptop and phone: CAC ÷ (12-month revenue per customer ÷ 12 ×
+// margin), in months. margin = P&L D2C CM1 % (fraction) for the same dates when known, else 35%.
+export const PAYBACK_FALLBACK_MARGIN = 0.35
+export function paybackMargin(cm1Margin) {
+  const known = cm1Margin != null && cm1Margin > 0
+  return { margin: known ? cm1Margin : PAYBACK_FALLBACK_MARGIN, label: known ? `${(cm1Margin * 100).toFixed(1)}% CM1 (P&L D2C)` : '35% margin (P&L CM1 not available)' }
+}
+export function paybackMonthsOf(k, margin) {
+  return k?.cac > 0 && k?.ltv12 > 0 && margin > 0 ? k.cac / (k.ltv12 / 12 * margin) : null
+}
+
+// Acquisition & Trends (laptop 'trends' tab). margin: see paybackMargin.
+export function deriveAcquisition(cd, margin = PAYBACK_FALLBACK_MARGIN) {
   const k = cd.kpis || {}, p = cd.prevKpis || {}
-  const MARGIN_PCT = 0.35
   const acqRate = k.totalCustomers > 0 ? k.newCustomers / k.totalCustomers : 0
   const pAcqRate = p.totalCustomers > 0 ? p.newCustomers / p.totalCustomers : 0
   const ltvCac = k.ltvCac || (k.ltv12 && k.cac ? k.ltv12 / k.cac : 0)
   const pLtvCac = p.ltvCac || 0
-  const paybackOrders = k.aov > 0 && k.cac > 0 ? k.cac / (k.aov * MARGIN_PCT) : null
+  const paybackMonths = paybackMonthsOf(k, margin)
 
   const spendByDay = {}
   for (const r of cd.dailySpend || []) spendByDay[r.date || ''] = r.totalSpend || 0
@@ -85,7 +95,7 @@ export function deriveAcquisition(cd) {
   const costly = enriched.filter(r => r.cac > cacAvg + cacStd).length
   const efficient = enriched.filter(r => r.cac > 0 && r.cac < cacAvg - cacStd).length
 
-  return { k, p, acqRate, pAcqRate, ltvCac, pLtvCac, paybackOrders, MARGIN_PCT, enriched, dow, dowWeeks: weeks, dowInsufficient: dates.length < 7, cacAvg, cacStd, costly, efficient }
+  return { k, p, acqRate, pAcqRate, ltvCac, pLtvCac, paybackMonths, enriched, dow, dowWeeks: weeks, dowInsufficient: dates.length < 7, cacAvg, cacStd, costly, efficient }
 }
 
 // Retention (laptop 'cohort' tab, customer basis).
@@ -129,21 +139,24 @@ export function deriveRetention(cd) {
   return { avgM1, avgM6, prevAvgM1, prevAvgM6, curve, lost90, avgOrdersPerCust, prevAvgOrdersPerCust, rows, maxIdx, heatCeiling: Math.max(maxNonM0 * 1.1, 5) }
 }
 
-// Purchase Behavior (laptop 'purchase' tab, Category level).
+// Purchase Behavior (laptop 'purchase' tab, Category level). C5: totals from every pair
+// (crossSellTotals, else the 500 display rows of an older payload), same-category cells out of the totals.
 export function deriveBehaviour(cd, isSubCat = false) {
-  const raw = cd.crossSell || []
+  const totals = cd.crossSellTotals
+  const raw = (isSubCat ? totals?.sub : totals?.cat) || cd.crossSell || []
   const fk = isSubCat ? 'firstSubCategory' : 'firstCategory', sk = isSubCat ? 'secondSubCategory' : 'secondCategory'
   const vol = {}
   for (const r of raw) { if (r[fk]) vol[r[fk]] = (vol[r[fk]] || 0) + r.customers; if (r[sk]) vol[r[sk]] = (vol[r[sk]] || 0) + r.customers }
-  const top = Object.entries(vol).sort((a, b) => b[1] - a[1]).slice(0, isSubCat ? 8 : 9).map(([x]) => x)
+  const top = Object.entries(vol).filter(([x]) => !(isSubCat && totals?.sub && x === 'Other')).sort((a, b) => b[1] - a[1]).slice(0, isSubCat ? 8 : 9).map(([x]) => x)
   const key = (r, f) => { const v = r[f]; return top.includes(v) ? v : (v ? 'Other' : null) }
   const cols = [...top, ...(raw.some(r => !top.includes(r[sk])) ? ['Other'] : [])]
   const rowsK = [...top, ...(raw.some(r => !top.includes(r[fk])) ? ['Other'] : [])]
   const cm = {}
   for (const r of raw) { const a = key(r, fk), b = key(r, sk); if (!a || !b) continue; (cm[a] ||= {})[b] = (cm[a][b] || 0) + r.customers }
-  const colT = {}; for (const c of cols) colT[c] = rowsK.reduce((s, f) => s + (cm[f]?.[c] || 0), 0)
+  const off = (f, c) => (f === c ? 0 : (cm[f]?.[c] || 0))
+  const colT = {}; for (const c of cols) colT[c] = rowsK.reduce((s, f) => s + off(f, c), 0)
   const grand = Object.values(colT).reduce((a, b) => a + b, 0)
-  const rowT = {}; for (const f of rowsK) rowT[f] = cols.reduce((s, c) => s + (cm[f]?.[c] || 0), 0)
+  const rowT = {}; for (const f of rowsK) rowT[f] = cols.reduce((s, c) => s + off(f, c), 0)
   const lift = (f, s) => { const n = cm[f]?.[s] || 0, rt = rowT[f] || 0, share = grand > 0 ? (colT[s] || 0) / grand : 0; return !rt || !share ? null : parseFloat(((n / rt) / share).toFixed(2)) }
   const rate = (f, s) => { const n = cm[f]?.[s] || 0, rt = rowT[f] || 0; return rt > 0 ? parseFloat((n / rt * 100).toFixed(1)) : 0 }
   const pairs = []
@@ -157,7 +170,7 @@ export function deriveBehaviour(cd, isSubCat = false) {
   const d2 = cd.daysToSecondPurchase || []
   const d2Tot = d2.reduce((s, r) => s + r.customers, 0)
   const pairMap = new Map()
-  for (const r of raw) { const kk = `${r.firstCategory}|||${r.secondCategory}`; pairMap.set(kk, (pairMap.get(kk) || 0) + r.customers) }
+  for (const r of (totals?.cat || cd.crossSell || [])) { const kk = `${r.firstCategory}|||${r.secondCategory}`; pairMap.set(kk, (pairMap.get(kk) || 0) + r.customers) }
   const topPairs = [...pairMap.entries()].map(([kk, customers]) => { const [first, second] = kk.split('|||'); return { first, second, customers } }).sort((a, b) => b.customers - a.customers).slice(0, 7)
   return {
     pb: cd.purchaseBehaviorKpis || {}, basket: cd.basketComposition || {},
@@ -185,7 +198,7 @@ export function deriveSegments(cd) {
 }
 
 // Spend & Discounts (laptop 'spend' tab).
-export function deriveDiscounts(cd) {
+export function deriveDiscounts(cd, margin = PAYBACK_FALLBACK_MARGIN) {
   const k = cd.kpis || {}
   const dd = cd.discountDist || []
   const isNon = r => r.bucket === '0%' || r.bucket === 'No Price Data'
@@ -200,7 +213,7 @@ export function deriveDiscounts(cd) {
   }))
   const discRev = dd.filter(r => !isNon(r)).reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
   const nonRev = dd.filter(isNon).reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
-  const paybackMonths = (k.cac > 0 && k.ltv12 > 0) ? (k.cac / (k.ltv12 / 12)) : null
+  const paybackMonths = paybackMonthsOf(k, margin) // C2: same as Acquisition
   const db = dd.filter(r => !isNon(r) && (r.avgDiscPct || 0) > 0)
   const dbOrders = db.reduce((s, r) => s + (r.totalOrders || 0), 0)
   const dbValue = db.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)

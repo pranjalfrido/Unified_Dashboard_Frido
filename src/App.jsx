@@ -42,6 +42,7 @@ import WatchlistCard from './responsive/WatchlistCard.jsx'
 import { computeCustomerRules } from './customer/customerRules.js'
 import { SEG_META, GRID_PLACEMENT } from './customer/customerDefs.js'
 import CustomerMobileView from './customer/CustomerMobileView.jsx'
+import { paybackMargin, paybackMonthsOf as paybackMonthsOfShared } from './customer/customerDerive.js'
 import AdsLaptopSections from './ads/AdsSections.jsx'
 import AdsMobileView from './ads/AdsMobileView.jsx'
 import { useAdsMonthly } from './ads/useAdsMonthly.js'
@@ -17149,9 +17150,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   // C2 (Suraj 27 Oct): one payback, in months, on margin, shown the same on Acquisition and Spend &
   // Discounts: CAC ÷ (12-month revenue per customer ÷ 12 × margin). Margin = P&L D2C CM1 % for the
   // same dates when known, else 35% (labelled).
-  const payMargin = cm1Margin != null && cm1Margin > 0 ? cm1Margin : 0.35
-  const payMarginLabel = cm1Margin != null && cm1Margin > 0 ? `${(payMargin * 100).toFixed(1)}% CM1 (P&L D2C)` : '35% margin (P&L CM1 not available)'
-  const paybackMonthsOf = k => (k?.cac > 0 && k?.ltv12 > 0 ? k.cac / (k.ltv12 / 12 * payMargin) : null)
+  const { margin: payMargin, label: payMarginLabel } = paybackMargin(cm1Margin)
+  const paybackMonthsOf = k => paybackMonthsOfShared(k, payMargin)
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17263,7 +17263,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     <>
       {tabBar}
       <div style={{ padding: '12px 12px 0' }}>
-        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
+        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} cm1Margin={cm1Margin} />
       </div>
     </>
   )
