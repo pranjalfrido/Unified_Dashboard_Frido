@@ -991,9 +991,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
     return (
       // The page is mounted in a non-scrolling flex box (desktop scrolls its own inner div), so the
-      // mobile view is its own scroll container.
-      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
-        <LoadingOverlay loading={loading} label="Loading logistics" />
+      // mobile view is its own scroll container. The loading veil sits on a non-scrolling wrapper around
+      // it: inside the scroll box it only covered the first screen-height and scrolled away with the cards.
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading logistics" />
+      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {error && !rawData && !staleData && (
           <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
             Could not load logistics data. <button type="button" onClick={fetchLogistics} style={{ border: 'none', background: 'none', color: C.m.green, fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer' }}>Retry</button>
@@ -1004,6 +1006,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             sc={{ cSelected, setCSelected, cPrimary, setCPrimary, cView, cDrill, cTier, setCTier, cPayment, setCPayment }}
             rtoAgeingBase={rtoAgeingBase} setRtoAgeingBase={setRtoAgeingBase} ndrPayFilter={ndrPayFilter} setNdrPayFilter={setNdrPayFilter} />
         )}
+      </div>
       </div>
     )
   }
