@@ -16847,7 +16847,14 @@ function HeroSparkCard({ c }) {
   )
 }
 
-function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp }) {
+// cm1Margin: P&L D2C CM1 % (as a fraction) for the same dates, when the caller has it (payback, C2)
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, cm1Margin = null }) {
+  // C2 (Suraj 27 Oct): one payback, in months, on margin, shown the same on Acquisition and Spend &
+  // Discounts: CAC ÷ (12-month revenue per customer ÷ 12 × margin). Margin = P&L D2C CM1 % for the
+  // same dates when known, else 35% (labelled).
+  const payMargin = cm1Margin != null && cm1Margin > 0 ? cm1Margin : 0.35
+  const payMarginLabel = cm1Margin != null && cm1Margin > 0 ? `${(payMargin * 100).toFixed(1)}% CM1 (P&L D2C)` : '35% margin (P&L CM1 not available)'
+  const paybackMonthsOf = k => (k?.cac > 0 && k?.ltv12 > 0 ? k.cac / (k.ltv12 / 12 * payMargin) : null)
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17406,7 +17413,6 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           //   qualityByChannel   — [{channel, cac, repeatRate90d, customers}] for quality quadrant chart
 
           const MONTHLY_BUDGET = null // TODO: wire up monthlyBudget from config/API
-          const MARGIN_PCT = 0.35     // approximation pending real margin data per order
 
           // ── palette tokens ──────────────────────────────────
           const T = {
@@ -17518,10 +17524,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const pAcqRate = prevKpis.totalCustomers > 0 ? prevKpis.newCustomers / prevKpis.totalCustomers : 0
           const ltvCac = kpis.ltvCac || (kpis.ltv12 && kpis.cac ? kpis.ltv12 / kpis.cac : 0)
           const pLtvCac = prevKpis.ltvCac || 0
-          // Payback Period: cac / (aov * marginPct) in days — approximation
-          const avgOrderFreqDays = kpis.totalOrders > 0 && kpis.totalCustomers > 0 ? 30 : 30 // fallback 30d
-          // CA4: CAC ÷ (AOV × margin) counts the ORDERS needed to pay back CAC; it was shown as days ('1d')
-          const paybackOrders = kpis.aov > 0 && kpis.cac > 0 ? kpis.cac / (kpis.aov * MARGIN_PCT) : null
+          // Payback in months on margin (C2): the same number as Spend & Discounts
+          const paybackMonths = paybackMonthsOf(kpis)
 
           const newCustVals = enriched.map(r => r.newCustomers || 0)
           const cacVals = enriched.filter(r => r.cac > 0).map(r => r.cac)
@@ -17543,9 +17547,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               spark: roasVals, cur: ltvCac, prev: pLtvCac,
             },
             {
-              label: 'Payback (orders)', val: paybackOrders != null ? `${paybackOrders.toFixed(1)} orders` : '—',
-              sub: `Orders to recover CAC at ~${(MARGIN_PCT*100).toFixed(0)}% margin`, spark: null,
-              cur: paybackOrders, prev: null, lowerBetter: true,
+              label: 'Payback', val: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—',
+              sub: `Months of customer margin to recover CAC, at ${payMarginLabel}`, spark: null,
+              cur: paybackMonths, prev: null, lowerBetter: true,
             },
           ]
 
@@ -19275,7 +19279,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
                 {(() => {
-                  const paybackMonths = (kpis.cac > 0 && kpis.ltv12 > 0) ? (kpis.cac / (kpis.ltv12 / 12)) : null
+                  const paybackMonths = paybackMonthsOf(kpis) // C2: same as Acquisition
                   const discountedBuckets = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data' && (r.avgDiscPct || 0) > 0)
                   const totalDiscOrders = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0), 0)
                   const totalDiscValue = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)
@@ -19285,7 +19289,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     { label: 'Total Spend', value: fmt(kpis.totalSpend || 0), sub: `Meta ${fmt(kpis.metaSpend || 0)} · Google ${fmt(kpis.googleSpend || 0)}${kpis.additionalSpend > 0 ? ` · Add. ${fmt(kpis.additionalSpend)}` : ''}` },
                     { label: 'Blended RoAS', value: `${blendedRoAS.toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend' },
                     { label: 'Blended CAC', value: fmt(blendedCAC), sub: 'Total Spend / New Customers' },
-                    { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: 'CAC ÷ Monthly Rev per Customer' },
+                    { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: `CAC ÷ monthly margin per customer, at ${payMarginLabel}` },
                     { label: 'Discounted Order Share', value: totalAllOrders > 0 ? `${(totalFirstOrders / totalAllOrders * 100).toFixed(1)}%` : '—', sub: totalAllOrders > 0 ? `${fmtN(totalFirstOrders)} of ${fmtN(totalAllOrders)} orders` : 'No data' },
                     { label: 'Avg Discount / Order', value: discValuePerOrder != null ? fmt(discValuePerOrder) : '—', sub: avgDiscPctOverall != null ? `${avgDiscPctOverall.toFixed(1)}% avg discount on discounted orders` : 'Avg ₹ discount on discounted orders' },
                   ]
