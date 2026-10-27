@@ -3904,7 +3904,7 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
         <span className="drp-cal">{calIcon}</span>
         <span className="drp-long">{displayLabel}</span>
         <span className="drp-short">{shortLabel}</span>
-        <svg className="drp-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+        <svg className="drp-chev" width="9" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg>
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
       {onRefresh && !isMobile && (

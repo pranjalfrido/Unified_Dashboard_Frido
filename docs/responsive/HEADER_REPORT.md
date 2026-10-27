@@ -212,3 +212,45 @@ before: `docs/responsive/before/header/` (local files: `docs/responsive/**/*.png
 Collapse on scroll removed. The header is sticky with one fixed height (former collapsed look, 15px title, translucent Ivory with blur + shadow, inset-shadow dividers): row 1 48px, chips row 36px (26px chips), sub-tabs 32px, second sub-tab row 30px. Icon tap targets 44×44. Bottom bar 48px + safe-area inset; selected tile 34×30, icons 20px.
 
 Measured (header top / after scrolling · bottom bar), identical in Chromium + WebKit at 375 and 360: Overview 48/48 · 48, Sales Overall 84/84 · 48, Sales D2C 116/116 · 48, Logistics Cost 110/110 · 48, Customers 110/110 · 48 (check-header.mjs, 49/49 per run).
+
+## Update 27 Oct: deep green header (C1)
+
+Branch `feature/header-green` from `main` (PR #28 was already merged). Prompt `HEADER_GREEN_PROMPT.md`, mockup
+`mockups/header_green_mockup.html`. Display only: same data, filters and routes; structure, heights and control order unchanged.
+
+**What changed**
+- `MobilePageHeader`: rows 1–3b sit in a new `.mph-bar` with the green gradient and shadow, so the "Filtered:" strip
+  stays light under it. White 17/650 title, `#a9c9b6` context, `#d8e8de` icons, white-fill selected chip (no ring),
+  sub-tab bands `rgba(0,0,0,.08)` / `.14` with white active label + mint underline, mint filter count, red dot with a green ring.
+- Date pill: translucent white, 5px gap, a 9×6 SVG chevron (stroke 1.6, 70%) centred with the text (App.jsx date
+  trigger and the Logistics Cost month pill; the chevron is hidden on laptop as before).
+- Bottom bar: `#fbfaf7`, hairline + soft shadow on top instead of the 1px border; selected tile unchanged.
+- `theme-color` on phones `#1a4d34`. Profile "+ Add" on the green header: translucent white, white text.
+- Tokens: `C.m.hdr` (green header) and `C.m.nav` (bottom bar) in `src/utils.js`; `MOBILE_DESIGN_SYSTEM.md` updated.
+- Not changed: bottom sheets, the launcher, login, laptop, master cards (12px under the header already).
+
+**One deviation:** inactive chip text is `#c8dfd1`, not the mockup's `#b9d4c4`. On the light end of the gradient
+(`#266b49`) `#b9d4c4` measures 4.05:1, below the 4.5:1 the prompt asks for; `#c8dfd1` measures 4.55:1 there and
+looks the same at a glance.
+
+**Verification** (`check-header.mjs`, now also checking contrast, selected-chip ring and chevron centring), 19 screens:
+Sales Overall / D2C (+ MyFrido, Mobility) / Amazon (+ SC, VC), Return analysis, P&L D2C (+ MyFrido), Price Simulator,
+Inventory Health, Logistics Cost (2 sub-tab rows), Ads, Customers Intelligence, Profile, Team members, member page,
+full-screen list.
+
+| Engine · width | Checks | Lowest contrast (title, chips, active tab) |
+|---|---|---|
+| Chromium 375 | 175/175 | 4.55 (inactive chip, right edge) |
+| Chromium 360 | 175/175 | 4.55 |
+| WebKit 375 | 175/175 | 4.55 |
+| WebKit 360 | 175/175 | 4.55 |
+
+Heights unchanged (48 / 80 / 84 / 110 / 116 and bar 48, the same after scrolling); chevron centred (≤ 1px); no ring on
+the selected chip; no tap focus box; no sideways overflow. Laptop 1366: no `.mph-bar`, no visible chevron, phone
+`theme-color` not applied. Build passes; lint unchanged against `main`.
+
+**Screenshots** (local, not committed; `docs/responsive/**/*.png` is ignored):
+- Before / after header: `docs/responsive/before/header/chromium-iphoneSE-375x667__<screen>.png` and
+  `docs/responsive/after/header/<engine>-<viewport>__<screen>.png` (plus `--scrolled`).
+- Full screens (375, 2×): `docs/responsive/after/header-green/green-sales-d2c.png`, `green-sales-filtered.png`
+  (filter count + strip), `green-logistics-cost.png`, `green-pnl-tool.png`, `green-customers.png`, `green-full-list.png`.
