@@ -64,6 +64,10 @@ import { buildFinancialRows, MIN_REV_FOR_RATIOS } from './financialRows.js'
 // channel's rule; the old decorative green/red is gone). flagFilter = { id, name, keys } shows only
 // those products (chip "Flag: … ✕" → onClearFlag). onSimulate(key) adds a ↗ on row hover/focus.
 // highlightKey scrolls to and highlights a product (margin matrix click).
+// Default column order = the P&L calculation order (PNL_REVIEW_FIXES.md §1f): Units, ASP, Gross,
+// Ex GST, Net, Returns, COGS, GM, SnD, CM1, Spend, ROAS, BE ROAS, CM2, Flags (after Product / Category).
+const COL_ORDER = ['units', 'asp', 'gross', 'excRev', 'net', 'returnPct', 'cogsPct', 'gmPct', 'sndPct', 'cm1Pct', 'spendPct', 'roas', 'beRoas', 'cm2Pct', 'flags']
+
 export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, spendAllocated = false, headerInfo = null, margin = null, flagFilter = null, onClearFlag, onSimulate, simulateLabel = 'Simulate', highlightKey = null }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
@@ -220,8 +224,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       row: r => <td style={{ ...tdStyleL, overflow: 'hidden' }}><FlagChips ids={flagsOf(r)} names={margin.ruleName} max={1} /></td>,
       sku: () => <td style={{ ...tdStyle, fontSize: 11 }} />,
       total: () => <td style={{ ...totalTdStyle, textAlign: 'left', fontFamily: 'inherit' }}>{margin.flaggedProducts ? `${margin.flaggedProducts} flagged` : ''}</td> }] : []),
-  ].filter(c => !(spendAllocated && c.id === 'roas'))
-  const reorder = useReorderableColumns(`pnl-financial-table-cols:${title}`, ALL_COLUMNS)
+  ].filter(c => !(spendAllocated && c.id === 'roas')).sort((a, b) => COL_ORDER.indexOf(a.id) - COL_ORDER.indexOf(b.id))
+  // v2: the default order changed to the P&L order (PNL_REVIEW_FIXES.md §1f), so an order saved
+  // under the old key doesn't hide it.
+  const reorder = useReorderableColumns(`pnl-financial-table-cols:v2:${title}`, ALL_COLUMNS)
 
   const handleExport = () => {
     const p2 = v => v != null ? +v.toFixed(2) : ''

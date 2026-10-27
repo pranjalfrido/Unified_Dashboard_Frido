@@ -15,7 +15,7 @@ import MarginMatrix from '../responsive/MarginMatrix.jsx'
 import { QUADRANTS } from '../responsive/marginMatrixPoints.js'
 import BiggestFixes from '../responsive/BiggestFixes.jsx'
 import FlagChips from '../responsive/FlagChips.jsx'
-import { PNL_OTHERS_INFO, PNL_WATCHLIST_EXCLUDE } from '../config/metricTargets.js'
+import { PNL_OTHERS_INFO, PNL_WATCHLIST_EXCLUDE, PNL_MATERIALITY } from '../config/metricTargets.js'
 
 // P&L below 1024px (PNL_MASTER_PLAN.md Part B §4, mockups/pnl_mockup.html phone; PNL_MOBILE_PLAN.md §4).
 // Display only: every number comes from what PnLChannelTab already has (the KPI cards' values,
@@ -55,19 +55,20 @@ function tileKeys({ tab, amzView, showMarketing, spendAllocated, returnsNotCaptu
 function ProductSheet({ row, flags, ruleName, derived, tabLabel, period, cols, onSimulate, simulateLabel }) {
   const bad = id => flags.includes(id)
   const red = on => (on ? M.down : undefined)
+  // PNL_REVIEW_FIXES.md §1e: Units and ASP first, then the P&L steps in the chips' order
   const items = [
-    { label: 'Gross', value: fmt(row.gross) },
-    { label: 'Net rev', value: fmt(row.net) },
-    cols.ret && { label: 'Returns', value: pctTxt(row.returnPct), color: red(bad('ret') || bad('retup')) },
-    { label: 'ASP', value: row.asp > 0 ? `₹${Math.round(row.asp).toLocaleString('en-IN')}` : '—', color: red(bad('asp')) },
-    cols.cogs && { label: 'COGS', value: pctTxt(row.cogsPct), color: red(bad('cogs')) },
-    cols.cogs && { label: 'GM', value: pctTxt(row.gmPct), color: red(bad('gm')) },
-    cols.snd && { label: 'SnD', value: pctTxt(row.sndPct) },
-    cols.cm1 && { label: 'CM1', value: pctTxt(row.cm1Pct), color: red(bad('cm1')) },
-    cols.spend && { label: 'Spend', value: row.spend > 0 ? pctTxt(row.spendPct) : '—' },
+    { label: 'Units', value: fmtN(row.units) },
+    { label: 'ASP', value: row.units > 0 ? `₹${Math.round(row.gross / row.units).toLocaleString('en-IN')}` : '—', color: red(bad('asp')) },
+    { label: 'Revenue', value: fmt(row.gross) },
+    { label: 'Net revenue', value: fmt(row.net) },
+    cols.ret && { label: 'Returns %', value: pctTxt(row.returnPct), color: red(bad('ret') || bad('retup')) },
+    cols.cogs && { label: 'COGS %', value: pctTxt(row.cogsPct), color: red(bad('cogs')) },
+    cols.cogs && { label: 'GM %', value: pctTxt(row.gmPct), color: red(bad('gm')) },
+    cols.snd && { label: 'SnD %', value: pctTxt(row.sndPct) },
+    cols.cm1 && { label: 'CM1 %', value: pctTxt(row.cm1Pct), color: red(bad('cm1')) },
     cols.spend && { label: 'ROAS', value: row.roas != null ? `${row.roas.toFixed(2)}x` : '—', color: red(bad('loss')) },
     cols.spend && { label: 'Breakeven ROAS', value: derived?.beRoas != null ? `${derived.beRoas.toFixed(2)}x` : '—' },
-    cols.spend && { label: 'CM2', value: pctTxt(row.cm2Pct), color: red(bad('loss')) },
+    cols.spend && { label: 'CM2 %', value: pctTxt(row.cm2Pct), color: red(bad('loss')) },
   ].filter(Boolean)
   return (
     <div>
@@ -235,7 +236,9 @@ export default function PnLMobileView({
   const [sheetKey, setSheetKey] = useState(null)
   const [grp, setGrp] = useState('prod')
   const [catOpen, setCatOpen] = useState(null)
-  const cols = { ret: !returnsNotCaptured, cogs: ks.cogs != null, snd: ks.snd != null, cm1: ks.cm1 != null, spend: !!adSpendReal }
+  // Metrics this channel has (the chips, the product sheet): In-progress tabs only revenue, net and returns
+  const cols = inProgress ? { ret: !returnsNotCaptured, cogs: false, snd: false, cm1: false, spend: false }
+    : { ret: !returnsNotCaptured, cogs: ks.cogs != null, snd: ks.snd != null, cm1: ks.cm1 != null, spend: !!adSpendReal }
   const rowByKey = useMemo(() => Object.fromEntries((fvRows || []).map(r => [`${r.cat}::${r.sc}`, r])), [fvRows])
   const flagsOf = key => margin?.flagsByKey?.[key] || []
   const openProduct = key => { setSheetKey(key) }
@@ -274,24 +277,41 @@ export default function PnLMobileView({
     return Object.values(m).map(c => {
       const p = (n, d) => (d > 0 ? n / d * 100 : null)
       const cm2 = c.anyCm1 && cols.spend ? c.cm1 - c.spend : null
-      return { ...c, returnPct: p(c.totalReturnRev, c.gross), asp: c.units > 0 ? c.gross / c.units : 0, cogsPct: c.anyCosted ? p(c.cogs, c.netCovered) : null, gmPct: c.anyCosted ? p(c.netCovered - c.cogs, c.netCovered) : null,
+      return { ...c, returnPct: p(c.totalReturnRev, c.gross), asp: c.units > 0 ? c.gross / c.units : 0, roas: cols.spend && c.spend > 0 ? c.excRev / c.spend : null, cogsPct: c.anyCosted ? p(c.cogs, c.netCovered) : null, gmPct: c.anyCosted ? p(c.netCovered - c.cogs, c.netCovered) : null,
         sndPct: c.anySnd ? p(c.snd, c.sndNetCovered) : null, cm1Pct: c.anyCm1 ? p(c.cm1, c.cm1NetCovered) : null, cm2Pct: cm2 != null ? p(cm2, c.cm1NetCovered) : null }
     })
   }, [fvRows, cols.spend])
-  const neg = v => (v == null ? null : -v)
+  // PNL_REVIEW_FIXES.md §1a/b: chips in P&L order, only the metrics this channel has; every chip
+  // starts highest first (Returns / COGS / SnD: worst first), tapping it again flips the order.
   const sorts = [
     { key: 'gross', label: 'Revenue', value: r => r.gross, format: r => fmt(r.gross) },
-    cols.spend && { key: 'cm2', label: 'CM2 % ↑', value: r => neg(r.cm2Pct), format: r => pctTxt(r.cm2Pct), bar: 'bad' },
-    cols.cm1 && { key: 'cm1', label: 'CM1 % ↑', value: r => neg(r.cm1Pct), format: r => pctTxt(r.cm1Pct), bar: 'bad' },
+    { key: 'net', label: 'Net revenue', value: r => r.net, format: r => fmt(r.net) },
     cols.ret && { key: 'ret', label: 'Returns %', value: r => r.returnPct, format: r => pctTxt(r.returnPct), bar: 'bad' },
-    cols.cogs && { key: 'gm', label: 'GM % ↑', value: r => neg(r.gmPct), format: r => pctTxt(r.gmPct), bar: 'bad' },
     cols.cogs && { key: 'cogs', label: 'COGS %', value: r => r.cogsPct, format: r => pctTxt(r.cogsPct), bar: 'bad' },
+    cols.cogs && { key: 'gm', label: 'GM %', value: r => r.gmPct, format: r => pctTxt(r.gmPct) },
+    cols.snd && { key: 'snd', label: 'SnD %', value: r => r.sndPct, format: r => pctTxt(r.sndPct), bar: 'bad' },
+    cols.cm1 && { key: 'cm1', label: 'CM1 %', value: r => r.cm1Pct, format: r => pctTxt(r.cm1Pct) },
+    cols.spend && { key: 'roas', label: 'ROAS', value: r => r.roas, format: r => (r.roas != null ? `${r.roas.toFixed(2)}x` : '—') },
+    cols.spend && { key: 'cm2', label: 'CM2 %', value: r => r.cm2Pct, format: r => pctTxt(r.cm2Pct) },
   ].filter(Boolean)
-  const breaksFor = { cm2: 'loss', cm1: 'cm1', ret: 'ret', gm: 'gm', cogs: 'cogs' }
+  const breaksFor = { cm2: 'loss', roas: 'loss', cm1: 'cm1', ret: 'ret', gm: 'gm', cogs: 'cogs' }
   const rowKey = r => (r.isCat ? `cat:${r.cat}` : `${r.cat}::${r.sc}`)
+  // §1d: % / ratio sorts rank only material products (the watchlist's materiality rule); Revenue /
+  // Net revenue keep every product. Categories are never filtered.
+  const tabGross = (fvRows || []).reduce((s, r) => s + (r.gross || 0), 0)
+  const material = r => (r.gross || 0) >= tabGross * PNL_MATERIALITY.minShareOfGross || (r.units || 0) >= PNL_MATERIALITY.minUnits
+  const scopeFor = k => (grp === 'prod' && k !== 'gross' && k !== 'net'
+    ? { keep: r => r.isCat || material(r), label: `products ≥ ${PNL_MATERIALITY.minShareOfGross * 100}% of gross or ≥ ${PNL_MATERIALITY.minUnits} units` } : null)
+  // §1c: every row shows Units · Revenue · ASP; with Revenue selected, Units · ASP · the last margin
+  const lastMargin = r => (cols.spend ? `CM2 ${pctTxt(r.cm2Pct)}` : cols.cm1 ? `CM1 ${pctTxt(r.cm1Pct)}` : cols.cogs ? `GM ${pctTxt(r.gmPct)}` : null)
+  const subLine = (r, k) => {
+    const lead = r.isCat ? `${r.n} product${r.n === 1 ? '' : 's'}` : PNL_WATCHLIST_EXCLUDE.has(r.sc) ? `${r.cat} (not a product)` : r.cat
+    const units = `${fmtN(r.units)} unit${r.units === 1 ? '' : 's'}`
+    const asp = r.units > 0 ? `ASP ₹${Math.round(r.gross / r.units).toLocaleString('en-IN')}` : 'ASP —'
+    return [lead, units, ...(k === 'gross' ? [asp, lastMargin(r)] : [fmt(r.gross), asp])].filter(Boolean).join(' · ')
+  }
   const listProps = {
-    itemKey: rowKey, sorts, name: r => r.sc, sub: r => (r.isCat ? `${r.n} product${r.n === 1 ? '' : 's'}` : PNL_WATCHLIST_EXCLUDE.has(r.sc) ? `${r.cat} · not a product, not checked` : r.cat),
-    secondary: (r, k) => (k === 'gross' ? [cols.spend ? `CM2 ${pctTxt(r.cm2Pct)}` : cols.cm1 ? `CM1 ${pctTxt(r.cm1Pct)}` : cols.cogs ? `GM ${pctTxt(r.gmPct)}` : null, cols.ret ? `Ret ${pctTxt(r.returnPct)}` : null].filter(Boolean).join(' · ') : fmt(r.gross)),
+    itemKey: rowKey, sorts, name: r => r.sc, sub: subLine, flipOnRetap: true, scopeFor, rowLayout: 'line',
     searchText: r => `${r.sc} ${r.cat}`, groupOf: r => r.cat,
     badge: r => (r.isCat ? null : <FlagChips ids={flagsOf(rowKey(r))} names={margin?.ruleName} variant="mobile" />),
     valueColor: (r, k) => (!r.isCat && breaksFor[k] && flagsOf(rowKey(r)).includes(breaksFor[k]) ? M.down : undefined),
