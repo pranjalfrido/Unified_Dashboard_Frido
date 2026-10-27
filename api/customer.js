@@ -312,11 +312,13 @@ FROM customer_ltv
 GROUP BY bucket
 ORDER BY MIN(monetary)`),
 
-      // Q8 â€” inactivity buckets (all-time)
+      // Q8 — inactivity buckets as of the end date (C1, Suraj 27 Oct): only orders up to the end
+      // date count, so a past range no longer puts customers who ordered after it into "Active"
       run(`WITH last_purchase AS (
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+    AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 )
 SELECT

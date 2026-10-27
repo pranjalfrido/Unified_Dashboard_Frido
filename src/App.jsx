@@ -17961,6 +17961,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const prevAvgM6 = wTotM6p > 0 ? wSumM6p / wTotM6p * 100 : 0
           const lost90Row = inactivity.find(r => String(r.bucket || '').includes('90'))
           const lost90 = lost90Row ? (lost90Row.customers || 0) : 0
+          const asOfLabel = filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'
 
           // ── spark lines for stat cards: M1% per cohort, M6% per cohort ──
           const sparkM1 = cohortMonths.map(cm => {
@@ -18080,7 +18081,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 {[
                   { label: 'Avg M1 Retention', value: `${avgM1.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM1, cur: avgM1, prev: prevAvgM1 },
                   { label: 'Avg M6 Retention', value: `${avgM6.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM6, cur: avgM6, prev: prevAvgM6 },
-                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'All-time D2C customers, last order 90+ days ago', spark: sparkLost90, cur: lost90, prev: null },
+                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: `D2C customers with no order in the 90 days before ${asOfLabel}`, spark: sparkLost90, cur: lost90, prev: null },
                   { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Orders ÷ customers, selected period', spark: null, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
                 ].map((s, i) => (
                   <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -19136,7 +19137,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               </div>
 
               {/* 6. Inactivity Distribution */}
-              <RSCard title="Inactivity Distribution" sub="Days since last purchase">
+              <RSCard title="Inactivity Distribution" sub={`Days since last purchase, as of ${filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'}`}>
                 {inactivity.length > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height={200}>
