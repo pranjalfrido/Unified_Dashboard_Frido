@@ -17254,7 +17254,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   if (custMobile) return (
     <>
       {tabBar}
-      <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
+      <div style={{ padding: '12px 12px 0' }}>
+        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
+      </div>
     </>
   )
 
