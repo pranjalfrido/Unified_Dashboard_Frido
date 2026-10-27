@@ -1,144 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
-import { PERMISSION_TREE, getAllLeafKeys } from './permissionTree.js'
+import PermissionPanel from './profile/PermissionPanel.jsx'
+import { CreateUserModal } from './profile/CreateUser.jsx'
+import Avatar from './profile/Avatar.jsx'
+import { adminCall, fmtDate, useMyProfile } from './profile/profileShared.js'
+import { S } from './profile/profileStyles.js'
+import ProfileMobile from './profile/ProfileMobile.jsx'
+import { useBreakpoint } from './responsive/useBreakpoint.js'
 
-function PermChip({ node, tabs, setTabs }) {
-  const sel = tabs.includes(node.key)
-  return (
-    <button type="button" onClick={() => setTabs(prev => sel ? prev.filter(k => k !== node.key) : [...prev, node.key])}
-      style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 11px', borderRadius: 100, border: '1.5px solid',
-        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap',
-        borderColor: sel ? '#1E2321' : '#D5D0C4', background: sel ? '#1E2321' : 'transparent',
-        color: sel ? '#F7F5EF' : '#4B534F' }}>
-      {node.label}
-    </button>
-  )
-}
 
-function PermGroup({ node, tabs, setTabs, isNested = false }) {
-  const allLeaves = getAllLeafKeys(node)
-  const allSel = allLeaves.every(k => tabs.includes(k))
-  const someSel = !allSel && allLeaves.some(k => tabs.includes(k))
-  const toggle = () => {
-    if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
-    else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
-  }
-  return (
-    <div style={{ background: isNested ? 'transparent' : '#F7F5EF', border: isNested ? 'none' : '1px solid #E7E3D8', borderRadius: isNested ? 0 : 10, padding: isNested ? '6px 0 0 0' : '10px 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em',
-          color: someSel ? '#4B7C5E' : allSel ? '#1E2321' : '#9BA5A1' }}>
-          {node.label}
-        </span>
-        <button type="button" onClick={toggle}
-          style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
-          {allSel ? 'Remove all' : 'Select all'}
-        </button>
-      </div>
-      {(() => {
-        // Collect consecutive leaves into chip rows, preserving original child order
-        const rows = []
-        let leafBatch = []
-        const flushLeaves = () => {
-          if (leafBatch.length > 0) {
-            const batch = leafBatch.splice(0)
-            rows.push(
-              <div key={`leaves-${batch[0].key}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {batch.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
-              </div>
-            )
-          }
-        }
-        for (const child of node.children) {
-          if (child.isGroup) {
-            flushLeaves()
-            rows.push(<PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)
-          } else {
-            leafBatch.push(child)
-          }
-        }
-        flushLeaves()
-        return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{rows}</div>
-      })()}
-    </div>
-  )
-}
-
-// Renders children of a group as a horizontal row of chips (for flat groups like Inventory)
-function PermGroupFlat({ node, tabs, setTabs }) {
-  const allLeaves = getAllLeafKeys(node)
-  const allSel = allLeaves.every(k => tabs.includes(k))
-  const someSel = !allSel && allLeaves.some(k => tabs.includes(k))
-  return (
-    <div style={{ background: '#F7F5EF', border: '1px solid #E7E3D8', borderRadius: 10, padding: '10px 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em',
-          color: someSel ? '#4B7C5E' : allSel ? '#1E2321' : '#9BA5A1' }}>
-          {node.label}
-        </span>
-        <button type="button" onClick={() => {
-          if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
-          else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
-        }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
-          {allSel ? 'Remove all' : 'Select all'}
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {node.children.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
-      </div>
-    </div>
-  )
-}
-
-const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
-
-function PermissionPanel({ tabs, setTabs, callerEmail }) {
-  const canGrantPulse = PULSE_WHITELIST.includes((callerEmail || '').toLowerCase());
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {PERMISSION_TREE.map(node => {
-        // Hide Frido Pulse chip from anyone not on the whitelist
-        if (node.key === 'ask' && !canGrantPulse) return null;
-        if (!node.isGroup) {
-          // Standalone tab — wrap in a card like the groups
-          const sel = tabs.includes(node.key)
-          return (
-            <div key={node.key} style={{ background: '#F7F5EF', border: '1px solid #E7E3D8', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: sel ? '#1E2321' : '#9BA5A1' }}>{node.label}</span>
-              </div>
-              <PermChip node={node} tabs={tabs} setTabs={setTabs} />
-            </div>
-          )
-        }
-        const hasNestedGroup = node.children.some(c => c.isGroup)
-        if (hasNestedGroup) return <PermGroup key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
-        return <PermGroupFlat key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
-      })}
-    </div>
-  )
-}
-
-const API = import.meta.env.VITE_API_URL || ''
-
-async function adminCall(action, session, payload) {
-  const res = await fetch(`${API}/api/auth-admin`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, callerToken: session.access_token, ...payload }),
-  })
-  return res.json()
-}
-
-function fmtDate(ts) {
-  if (!ts) return '—'
-  return new Date(ts).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-function initials(name) {
-  if (!name) return '?'
-  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
-}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function Toast({ message, onDone }) {
@@ -165,28 +35,6 @@ function useToast() {
   const show = useCallback((m) => { setMsg(m) }, [])
   const el = msg ? <Toast message={msg} onDone={() => setMsg('')} /> : null
   return [el, show]
-}
-
-// ── Avatar ────────────────────────────────────────────────────────────────────
-function Avatar({ url, name, size = 44 }) {
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: 'radial-gradient(135deg, #F4B400 0%, #B8830A 100%)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontSize: size * 0.36, fontWeight: 700,
-      fontFamily: 'Inter, system-ui, sans-serif', letterSpacing: '-0.02em',
-      position: 'relative', overflow: 'hidden',
-    }}>
-      {initials(name)}
-      {url && (
-        <img src={url} alt={name}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-          onError={e => { e.currentTarget.style.display = 'none' }}
-        />
-      )}
-    </div>
-  )
 }
 
 // ── StatusPill ────────────────────────────────────────────────────────────────
@@ -225,68 +73,10 @@ function ConfirmDialog({ message, confirmLabel, onConfirm, onCancel, danger = tr
 
 // ── My Profile ────────────────────────────────────────────────────────────────
 function MyProfile({ session, onProfileUpdated }) {
-  const [profile, setProfile] = useState(null)
-  const [name, setName] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState('')
-  const [showChangePw, setShowChangePw] = useState(false)
-  const [curPw, setCurPw] = useState('')
-  const [newPw, setNewPw] = useState('')
-  const [confirmPw, setConfirmPw] = useState('')
-  const [showCur, setShowCur] = useState(false)
-  const [showNew, setShowNew] = useState(false)
-  const [pwErr, setPwErr] = useState('')
-  const [pwMsg, setPwMsg] = useState('')
-  const [pwLoading, setPwLoading] = useState(false)
+  const { profile, name, setName, avatarUrl, uploading, uploadAvatar, saving, saveMsg, saveProfile,
+    showChangePw, setShowChangePw, curPw, setCurPw, newPw, setNewPw, confirmPw, setConfirmPw,
+    showCur, setShowCur, showNew, setShowNew, pwErr, pwMsg, pwLoading, changePassword } = useMyProfile(session, onProfileUpdated)
   const fileRef = useRef()
-
-  useEffect(() => {
-    supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
-      .then(({ data }) => { if (data) { setProfile(data); setName(data.name || ''); setAvatarUrl(data.avatar_url || '') } })
-  }, [])
-
-  async function uploadAvatar(file) {
-    if (!file) return
-    setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `${session.user.id}/avatar.${ext}`
-    await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-    const url = data.publicUrl + '?t=' + Date.now()
-    setAvatarUrl(url)
-    await supabase.from('user_profiles').update({ avatar_url: url }).eq('user_id', session.user.id)
-    setUploading(false)
-    onProfileUpdated()
-  }
-
-  async function saveProfile() {
-    if (!name.trim()) return
-    setSaving(true)
-    await supabase.from('user_profiles').update({ name: name.trim() }).eq('user_id', session.user.id)
-    setSaveMsg('✓ Saved')
-    setTimeout(() => setSaveMsg(''), 2500)
-    setSaving(false)
-    onProfileUpdated()
-  }
-
-  async function changePassword(e) {
-    e.preventDefault()
-    setPwErr('')
-    if (newPw.length < 8) { setPwErr('New password must be at least 8 characters.'); return }
-    if (newPw !== confirmPw) { setPwErr('Passwords do not match.'); return }
-    setPwLoading(true)
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: session.user.email, password: curPw })
-    if (signInErr) { setPwErr('Current password is incorrect.'); setPwLoading(false); return }
-    const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) { setPwErr(error.message); setPwLoading(false); return }
-    setPwMsg('Password updated successfully!')
-    setCurPw(''); setNewPw(''); setConfirmPw('')
-    setShowChangePw(false)
-    setTimeout(() => setPwMsg(''), 3000)
-    setPwLoading(false)
-  }
 
   return (
     <div style={S.card}>
@@ -368,122 +158,6 @@ function MyProfile({ session, onProfileUpdated }) {
             <button type="submit" style={{ ...S.primaryBtn, width: 'fit-content' }} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button>
           </form>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ── Create User Modal ─────────────────────────────────────────────────────────
-function CreateUserModal({ session, onClose, onCreated, existingUsers = [], existingPermissions = {} }) {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState(() => Math.random().toString(36).slice(2, 10) + 'A1!')
-  const [showPw, setShowPw] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [tabs, setTabs] = useState([])
-  const [copyFrom, setCopyFrom] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState('')
-
-  function regenPassword() {
-    setPassword(Math.random().toString(36).slice(2, 10) + 'A1!')
-  }
-
-  function toggleTab(key) {
-    setTabs(prev => prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key])
-  }
-
-  async function handleCreate(e) {
-    e.preventDefault()
-    if (!name.trim()) { setErr('Name is required.'); return }
-    if (!email.trim()) { setErr('Email is required.'); return }
-    if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
-    if (!isAdmin && tabs.length === 0) { setErr('Assign at least one tab permission.'); return }
-    setErr(''); setLoading(true)
-    const result = await adminCall('create_user', session, { name: name.trim(), email: email.trim().toLowerCase(), password, is_admin: isAdmin, tabs })
-    if (result.error) { setErr(result.error); setLoading(false); return }
-    setLoading(false); onCreated(); onClose()
-  }
-
-  useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', fn)
-    return () => window.removeEventListener('keydown', fn)
-  }, [onClose])
-
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <div style={{ fontFamily: 'Georgia, serif', fontSize: 20, fontWeight: 700, color: '#1E2321' }}>Add team member</div>
-          <button style={S.iconBtn} onClick={onClose}>✕</button>
-        </div>
-        {err && <div style={{ ...S.errBox, marginBottom: 16 }}>{err}</div>}
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <label style={S.label}>Full name</label>
-            <input style={S.input} value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" autoFocus />
-          </div>
-          <div>
-            <label style={S.label}>Work email</label>
-            <input style={S.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@myfrido.com" />
-          </div>
-          <div>
-            <label style={S.label}>Temporary password</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <input style={{ ...S.input, paddingRight: 60, fontFamily: 'monospace', letterSpacing: '0.04em' }} type="text" value={password} onChange={e => setPassword(e.target.value)} />
-              </div>
-              <button type="button" style={{ ...S.smBtn, flexShrink: 0, fontSize: 16, padding: '8px 12px' }} onClick={regenPassword} title="Regenerate password">↻</button>
-            </div>
-            <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 5 }}>Share this with the person directly — it won't be shown again.</div>
-          </div>
-          <div>
-            <label style={{ ...S.label, marginBottom: 10 }}>Role</label>
-            <div style={{ display: 'flex', gap: 8, background: '#F7F5EF', borderRadius: 10, padding: 4 }}>
-              {[{ id: true, label: 'Admin' }, { id: false, label: 'Member' }].map(r => (
-                <button key={String(r.id)} type="button"
-                  style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: isAdmin === r.id ? 700 : 500, cursor: 'pointer', transition: 'all .15s',
-                    background: isAdmin === r.id ? '#fff' : 'transparent',
-                    color: isAdmin === r.id ? '#1E2321' : '#4B534F',
-                    boxShadow: isAdmin === r.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none',
-                  }}
-                  onClick={() => setIsAdmin(r.id)}>{r.label}</button>
-              ))}
-            </div>
-            {isAdmin && <p style={{ fontSize: 12, color: '#4B534F', marginTop: 6 }}>Admins can see all tabs and manage team members.</p>}
-          </div>
-          {!isAdmin && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ ...S.label, marginBottom: 0 }}>Tab permissions</label>
-                {existingUsers.length > 0 && (
-                  <select
-                    value={copyFrom}
-                    onChange={e => {
-                      const uid = e.target.value
-                      setCopyFrom(uid)
-                      if (uid) setTabs([...(existingPermissions[uid] || [])])
-                    }}
-                    style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1px solid #E7E3D8', background: '#F7F5EF', color: copyFrom ? '#1E2321' : '#9BA5A1', fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', maxWidth: 200 }}
-                  >
-                    <option value="">Copy from member…</option>
-                    {existingUsers.map(u => (
-                      <option key={u.user_id} value={u.user_id}>
-                        {u.name || u.email}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              <PermissionPanel tabs={tabs} setTabs={setTabs} callerEmail={session?.user?.email} />
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8, borderTop: `1px solid #E7E3D8`, paddingTop: 18 }}>
-            <button type="button" style={S.outlineBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Creating…' : 'Create user'}</button>
-          </div>
-        </form>
       </div>
     </div>
   )
@@ -630,7 +304,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
   const tabsChanged = JSON.stringify([...localTabs].sort()) !== JSON.stringify([...permissions].sort())
 
   return (
-    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: 'calc(var(--app-h) - 220px)', paddingLeft: 20 }}>
+    <div style={{ minWidth: 0, paddingLeft: 20 }}>
       {/* Member header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
@@ -648,7 +322,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
           </div>
         </div>
         {/* Action links */}
-        <div style={{ display: 'flex', gap: 14, flexShrink: 0, alignItems: 'center', paddingTop: 4 }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', paddingTop: 4 }}>
           <button style={S.textBtn} onClick={() => setShowActivity(true)}>Activity</button>
           <button style={S.textBtn} onClick={() => setShowReset(true)}>Reset pw</button>
           {user.is_active
@@ -683,7 +357,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
       {confirmRevoke && (
         <ConfirmDialog
           message={user.is_active
-            ? `Revoke access for ${user.name}? They won't be able to log in until restored.`
+            ? `Revoke access for ${user.name}? They can't log in until you restore it.`
             : `Restore access for ${user.name}?`}
           confirmLabel={user.is_active ? 'Revoke' : 'Restore'}
           danger={user.is_active}
@@ -693,7 +367,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
       )}
       {confirmDelete && (
         <ConfirmDialog
-          message={`Permanently delete ${user.name}'s account? This cannot be undone.`}
+          message={`Delete ${user.name}? This can't be undone.`}
           confirmLabel="Delete"
           danger
           onConfirm={deleteUser}
@@ -756,9 +430,9 @@ function TeamMembers({ session, showToast }) {
       {loading ? (
         <div style={{ color: '#4B534F', fontSize: 14, padding: '20px 0' }}>Loading…</div>
       ) : (
-        <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {/* Left pane — member list */}
-          <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #E7E3D8', paddingRight: 16, maxHeight: 'calc(var(--app-h) - 220px)', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0,1fr)', alignItems: 'start' }}>
+          {/* Left pane — member list: scrolls on its own and stays in view; the panel never sits under it */}
+          <div style={{ position: 'sticky', top: 0, borderRight: '1px solid #E7E3D8', paddingRight: 16, maxHeight: 'calc(var(--app-h) - 220px)', overflowY: 'auto', boxSizing: 'border-box' }}>
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: 12 }}>
               <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9BA5A1', pointerEvents: 'none' }}>⌕</span>
@@ -826,13 +500,30 @@ function TeamMembers({ session, showToast }) {
 }
 
 // ── Main ProfilePage ──────────────────────────────────────────────────────────
-export default function ProfilePage({ session, profile, onSignOut, onProfileUpdated }) {
+// Below 1024px the phone layout (profile/ProfileMobile.jsx); the phone header's ⋯ (App.jsx Topnav)
+// sends 'profile:menu' with 'theme' or 'signout'.
+export default function ProfilePage({ session, profile, onSignOut, onProfileUpdated, theme, setTheme }) {
   const [toastEl, showToast] = useToast()
+  const phone = useBreakpoint().width < 1024
+  const [themeOpen, setThemeOpen] = useState(false)
 
   async function handleSignOut() {
     await supabase.from('login_activity').insert({ user_id: session.user.id, action: 'logout' })
     await supabase.auth.signOut()
     onSignOut()
+  }
+  const signOutRef = useRef(handleSignOut)
+  useEffect(() => { signOutRef.current = handleSignOut })
+  useEffect(() => {
+    // The ⋯ sheet's own Back-history clean-up would close a sheet opened in the same moment, so the
+    // Theme sheet opens once the menu sheet has gone.
+    const onMenu = e => { if (e.detail === 'theme') setTimeout(() => setThemeOpen(true), 350); else if (e.detail === 'signout') signOutRef.current() }
+    window.addEventListener('profile:menu', onMenu)
+    return () => window.removeEventListener('profile:menu', onMenu)
+  }, [])
+
+  if (phone) {
+    return <ProfileMobile session={session} profile={profile} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} themeOpen={themeOpen} setThemeOpen={setThemeOpen} />
   }
 
   return (
@@ -869,114 +560,4 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
       `}</style>
     </div>
   )
-}
-
-// ── Style tokens ──────────────────────────────────────────────────────────────
-const S = {
-  page: {
-    fontFamily: 'Inter, system-ui, sans-serif',
-    padding: '28px 28px 48px',
-    maxWidth: 1100,
-    margin: '0 auto',
-    color: '#1E2321',
-    background: '#F7F5EF',
-    minHeight: '100%',
-  },
-  pageHeader: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 28, flexWrap: 'wrap', gap: 14,
-  },
-  card: {
-    background: '#FFFFFF',
-    borderRadius: 16,
-    border: '1px solid #E7E3D8',
-    padding: '24px 24px',
-    marginBottom: 20,
-    boxShadow: '0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(0,0,0,.12)',
-  },
-  cardTitle: {
-    fontSize: 15, fontWeight: 800, color: '#1E2321',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    marginBottom: 0,
-  },
-  label: {
-    fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 6,
-    color: '#4B534F', textTransform: 'uppercase', letterSpacing: '.05em',
-  },
-  input: {
-    width: '100%', padding: '10px 13px', fontSize: 14,
-    fontFamily: 'Inter, system-ui, sans-serif',
-    border: '1px solid #E7E3D8', borderRadius: 9,
-    background: '#F7F5EF', color: '#1E2321',
-    outline: 'none', boxSizing: 'border-box',
-    transition: 'border-color .15s, box-shadow .15s',
-  },
-  toggleBtn: {
-    position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', fontSize: 11, fontWeight: 800,
-    color: '#9BA5A1', cursor: 'pointer', letterSpacing: '.05em',
-  },
-  primaryBtn: {
-    padding: '9px 18px', border: 'none', borderRadius: 8,
-    background: '#3E6B4F', color: '#F7F5EF',
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13.5, fontWeight: 700,
-    cursor: 'pointer', transition: 'background .15s',
-  },
-  outlineBtn: {
-    padding: '8px 16px', border: '1.5px solid #E7E3D8', borderRadius: 8,
-    background: 'transparent', color: '#1E2321',
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600,
-    cursor: 'pointer', transition: 'background .15s',
-  },
-  destructiveBtn: {
-    padding: '9px 18px', border: '1.5px solid #B4472B', borderRadius: 8,
-    background: '#B4472B', color: '#fff',
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13.5, fontWeight: 700,
-    cursor: 'pointer',
-  },
-  smBtn: {
-    padding: '6px 12px', border: '1px solid #E7E3D8', borderRadius: 8,
-    background: '#fff', color: '#1E2321',
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600,
-    cursor: 'pointer', transition: 'background .12s',
-    whiteSpace: 'nowrap',
-  },
-  textBtn: {
-    background: 'none', border: 'none', padding: 0,
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600,
-    color: '#1E2321', cursor: 'pointer', whiteSpace: 'nowrap',
-  },
-  iconBtn: {
-    background: '#F7F5EF', border: 'none', borderRadius: 8,
-    width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 14, cursor: 'pointer', color: '#4B534F',
-  },
-  chip: {
-    padding: '5px 13px', border: '1px solid #E7E3D8', borderRadius: 100,
-    background: '#F7F5EF', color: '#4B534F',
-    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12.5, fontWeight: 600,
-    cursor: 'pointer', transition: 'all .12s',
-  },
-  chipActive: {
-    border: '1.5px solid #3E6B4F', background: '#E4EFE6', color: '#3E6B4F',
-  },
-  errBox: {
-    background: '#F6E6E1', border: '1px solid #B4472B', borderRadius: 8,
-    padding: '10px 14px', fontSize: 13, color: '#B4472B', fontWeight: 600,
-  },
-  successBox: {
-    background: '#E4EFE6', border: '1px solid #3E6B4F', borderRadius: 8,
-    padding: '12px 14px', fontSize: 13, color: '#3E6B4F', fontWeight: 600,
-  },
-  overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(30,35,33,0.45)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    zIndex: 9999, padding: 24,
-  },
-  modal: {
-    background: '#fff', borderRadius: 20, padding: '28px 32px',
-    width: '100%', maxWidth: 480,
-    boxShadow: '0 30px 80px rgba(30,35,33,0.22)',
-    maxHeight: '90vh', overflowY: 'auto',
-  },
 }

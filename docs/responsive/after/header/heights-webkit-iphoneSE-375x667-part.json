@@ -1,0 +1,126 @@
+{
+  "rows": [
+    {
+      "id": "ads-Flipkart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "profile",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "profile-team",
+      "expanded": 49
+    },
+    {
+      "id": "profile-member",
+      "expanded": 49
+    }
+  ],
+  "results": [
+    {
+      "name": "ads-Flipkart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Flipkart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Flipkart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Flipkart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "profile: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "profile: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-team: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-team: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-member: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-member: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

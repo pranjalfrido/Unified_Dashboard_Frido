@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { C, fmt } from '../utils.js'
 import { fmtCompact, fmtCountCompact } from './format.js'
 import { useBreakpoint } from './useBreakpoint.js'
+import MobilePageHeader from './MobilePageHeader.jsx'
 
 // Shared responsive wrapper for every Recharts chart (docs/responsive/RESPONSIVE_PLAN.md, prompt Phase 5).
 //
@@ -148,14 +149,12 @@ export function ChartFrame({ height = 300, series = [], loading = false, empty =
       {chips}
       {fullscreen && createPortal(
         <div ref={fsRef} role="dialog" aria-modal="true" aria-label={title ? `${title}, full screen` : 'Chart, full screen'}
-          style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: C.card, display: 'flex', flexDirection: 'column', padding: 'max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>{title || ''}</span>
-            <button type="button" onClick={() => history.back()} aria-label="Close full screen"
-              style={{ minWidth: 40, minHeight: 40, borderRadius: 10, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, fontSize: 18, cursor: 'pointer' }}>×</button>
+          style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: C.card, display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top)' }}>
+          <MobilePageHeader onBack={() => history.back()} backLabel="the chart" title={title || 'Chart'} />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '8px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))' }}>
+            <FullscreenBody render={hgt => children(ctx(hgt, true))} />
+            {chips}
           </div>
-          <FullscreenBody render={hgt => children(ctx(hgt, true))} />
-          {chips}
         </div>,
         document.body,
       )}

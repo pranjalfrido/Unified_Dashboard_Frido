@@ -74,6 +74,9 @@ function ForgotPassword({ prefillEmail, onBack }) {
 }
 
 // ── Main Login Page ───────────────────────────────────────────────────────────
+// Phones: when a field gets focus (keyboard opening), bring the Sign in button into view.
+const keepSignInVisible = () => { if (window.innerWidth < 1024) setTimeout(() => document.querySelector('.btn-signin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 350) }
+
 export default function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -98,7 +101,9 @@ export default function LoginPage({ onLogin }) {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
     if (error) {
-      setGlobalErr('Incorrect email or password.')
+      // Same call; only the message differs when the server can't be reached at all.
+      const offline = !error.status || /fetch|network|load failed/i.test(error.message || '')
+      setGlobalErr(offline ? "Can't reach the server. Check your connection and try again." : 'Incorrect email or password.')
       setLoading(false)
       return
     }
@@ -219,7 +224,7 @@ export default function LoginPage({ onLogin }) {
               <p className="sub">Enter your credentials to access the dashboard.</p>
 
               {globalErr && (
-                <div className="alert-error">
+                <div className="alert-error err-top" role="alert">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                   {globalErr}
                 </div>
@@ -228,8 +233,8 @@ export default function LoginPage({ onLogin }) {
               <form onSubmit={handleLogin} noValidate>
                 <div className="field">
                   <label htmlFor="email">Email address</label>
-                  <input type="email" id="email" placeholder="you@myfrido.com"
-                    className={emailErr ? 'has-error' : ''}
+                  <input type="email" id="email" name="email" placeholder="you@myfrido.com" inputMode="email" autoCapitalize="none" spellCheck={false}
+                    className={emailErr ? 'has-error' : ''} onFocus={keepSignInVisible}
                     value={email} onChange={e => { setEmail(e.target.value); setEmailErr('') }} autoComplete="email" />
                   {emailErr && <span style={{ fontSize: 12, color: '#C85C4A', marginTop: 4, display: 'block' }}>{emailErr}</span>}
                 </div>
@@ -237,8 +242,8 @@ export default function LoginPage({ onLogin }) {
                 <div className="field">
                   <label htmlFor="password">Password</label>
                   <div className="password-wrap">
-                    <input type={showPass ? 'text' : 'password'} id="password" placeholder="••••••••"
-                      className={passErr ? 'has-error' : ''}
+                    <input type={showPass ? 'text' : 'password'} id="password" name="password" placeholder="••••••••"
+                      className={passErr ? 'has-error' : ''} onFocus={keepSignInVisible}
                       value={password} onChange={e => { setPassword(e.target.value); setPassErr('') }}
                       autoComplete="current-password" />
                     <span className="toggle-eye" onClick={() => setShowPass(v => !v)}>
@@ -258,8 +263,10 @@ export default function LoginPage({ onLogin }) {
                 <button type="submit" className="btn-signin" style={{ opacity: loading ? 0.7 : 1 }} disabled={loading}>
                   {loading ? 'Signing in…' : 'Sign in'}
                 </button>
+                {/* Phones: the same message under the form, next to the button */}
+                {globalErr && <div className="alert-error err-bottom" role="alert">{globalErr}</div>}
               </form>
-              <p className="footer-note">Need access? <a href="mailto:data.team@myfrido.com?cc=suraj.s@myfrido.com,pranjal.t@myfrido.com,tushar.g@myfrido.com">Contact the team</a></p>
+              <p className="footer-note">Need access? <a href="mailto:suraj.s@myfrido.com?subject=Request%20access%20to%20Navigator">Contact the team</a></p>
             </>
           )}
         </div>
@@ -346,11 +353,28 @@ export default function LoginPage({ onLogin }) {
         .footer-note { margin: 20px 0 0; text-align: center; font-size: 12px; color: #948E7B; }
         .footer-note a { color: #2F6A45; font-weight: 600; text-decoration: none; }
         .mobile-logo { display: none; }
-        @media (max-width: 640px) {
-          .login-card { flex-direction: column; min-height: unset; border-radius: 16px; }
-          .panel-brand { display: none; }
-          .panel-form { padding: 40px 28px; }
-          .mobile-logo { display: block; margin-bottom: 20px; }
+        .err-bottom { display: none; }
+        /* Phones and tablets (< 1024px): full screen, no floating card. A short dark-green band (the
+           MobilePageHeader gradient) with the light logo, the form on white below. Laptop unchanged. */
+        @media (max-width: 1023px) {
+          .login-page { padding: 0; align-items: stretch; background: #fff; }
+          .login-card { flex-direction: column; max-width: none; min-height: var(--app-h); border-radius: 0; box-shadow: none; }
+          .panel-brand { flex: 0 0 auto; padding: calc(18px + env(safe-area-inset-top)) 20px 18px; background: linear-gradient(180deg,#0f2a1d,#1c4630); }
+          .chart-deco, .brand-copy, .brand-footer { display: none; }
+          .brand-hero { gap: 0; }
+          .brand-mark svg { width: 132px !important; }
+          .panel-form { flex: 1; align-items: flex-start; padding: 28px 20px calc(24px + env(safe-area-inset-bottom)); }
+          .form-card { max-width: 440px; margin: 0 auto; }
+          .mobile-logo { display: none; }
+          .eyebrow { color: #5f8f75; }
+          .form-card .sub { margin-bottom: 22px; }
+          .field input { font-size: 16px; min-height: 46px; }
+          .btn-signin { min-height: 48px; font-size: 15px; }
+          .remember input { width: 16px; height: 16px; }
+          .row-between { font-size: 13px; }
+          .footer-note { font-size: 13px; }
+          .err-top { display: none; }
+          .err-bottom { display: block; margin: 14px 0 0; }
         }
       `}</style>
     </div>

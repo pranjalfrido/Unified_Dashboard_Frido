@@ -1,3 +1,4 @@
+import { publishNavStat } from '../../responsive/navStats.js'
 import { useCallback, useMemo, useState } from 'react'
 import { C, fmtBig, COURIER_LOGOS } from '../../utils.js'
 import { useBreakpoint } from '../../responsive/useBreakpoint.js'
@@ -27,6 +28,8 @@ const fmtGMV = v => (v == null ? '—' : v >= 1e7 ? (v / 1e7).toFixed(2) + ' Cr'
 // ── 2a Master card ─────────────────────────────────────────────────────────
 function PerfMaster({ data, prevData, start, end, layout }) {
   const k = data?.kpis || {}, pk = prevData?.kpis || {}
+  // Phone launcher's live number for Logistics (navStats): the RTO % tile's own value
+  if (k.total_shipments) publishNavStat('logistics', { value: pct2(k.rto, k.total_shipments), label: 'RTO' })
   // Daily / weekly / monthly rows are the page's own byDay / byWeek / byMonth (TATs are weighted
   // averages, so they are not re-summed here); the previous period is matched by position.
   const groupTrend = useCallback((d, gran) => {

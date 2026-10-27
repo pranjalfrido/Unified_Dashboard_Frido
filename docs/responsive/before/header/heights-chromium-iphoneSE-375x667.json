@@ -1,0 +1,697 @@
+{
+  "rows": [
+    {
+      "id": "overview",
+      "expanded": 46
+    },
+    {
+      "id": "sales-Overall",
+      "expanded": 88
+    },
+    {
+      "id": "sales-D2C",
+      "expanded": 132
+    },
+    {
+      "id": "sales-EBO",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Amazon",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Flipkart",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Blinkit",
+      "expanded": 88
+    },
+    {
+      "id": "sales-CRED",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Firstcry",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Instamart",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Zepto",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Myntra",
+      "expanded": 88
+    },
+    {
+      "id": "sales-International",
+      "expanded": 88
+    },
+    {
+      "id": "sales-Offline Sales",
+      "expanded": 132
+    },
+    {
+      "id": "sales-D2C-MyFrido",
+      "expanded": 132
+    },
+    {
+      "id": "sales-D2C-Mobility",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Amazon-SC",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Amazon-VC",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Offline-B2B",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Offline-Stockist",
+      "expanded": 132
+    },
+    {
+      "id": "sales-Offline-MT GT",
+      "expanded": 132
+    },
+    {
+      "id": "sales-return-analysis",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Overall",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-D2C",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-EBO",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Amazon",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-Flipkart",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Blinkit",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-CRED",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Firstcry",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Instamart",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Zepto",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Myntra",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-International",
+      "expanded": 88
+    },
+    {
+      "id": "pnl-Offline",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-D2C-MyFrido",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-Amazon-VC",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-Offline-B2B",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-tool-price-simulator",
+      "expanded": 46
+    },
+    {
+      "id": "pnl-tool-b2b-costing",
+      "expanded": 46
+    },
+    {
+      "id": "inventory-health",
+      "expanded": 74
+    },
+    {
+      "id": "inventory-sales",
+      "expanded": 74
+    },
+    {
+      "id": "logistics-performance",
+      "expanded": 74
+    },
+    {
+      "id": "logistics-cost-Overview",
+      "expanded": 98
+    },
+    {
+      "id": "logistics-cost-B2C",
+      "expanded": 98
+    },
+    {
+      "id": "logistics-cost-FTLPTL",
+      "expanded": 98
+    },
+    {
+      "id": "logistics-cost-3PL",
+      "expanded": 98
+    },
+    {
+      "id": "ads-Overall",
+      "expanded": 88
+    },
+    {
+      "id": "ads-D2C",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Amazon",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Flipkart",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Myntra",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Blinkit",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Zepto",
+      "expanded": 88
+    },
+    {
+      "id": "ads-Instamart",
+      "expanded": 88
+    },
+    {
+      "id": "ads-CRED",
+      "expanded": 88
+    },
+    {
+      "id": "customers-Overview",
+      "expanded": 98
+    },
+    {
+      "id": "customers-Acquisition",
+      "expanded": 98
+    },
+    {
+      "id": "customers-Retention",
+      "expanded": 98
+    },
+    {
+      "id": "customers-Behaviour",
+      "expanded": 98
+    },
+    {
+      "id": "customers-Segments",
+      "expanded": 98
+    },
+    {
+      "id": "customers-Discounts",
+      "expanded": 98
+    },
+    {
+      "id": "customers-support",
+      "expanded": 74
+    },
+    {
+      "id": "profile",
+      "expanded": 46
+    },
+    {
+      "id": "profile-team",
+      "expanded": 56
+    },
+    {
+      "id": "profile-member",
+      "expanded": 56
+    },
+    {
+      "id": "documents",
+      "expanded": 46
+    },
+    {
+      "id": "cogs",
+      "expanded": 46
+    },
+    {
+      "id": "logistics-ledger",
+      "expanded": 46
+    },
+    {
+      "id": "purchase-ledger",
+      "expanded": 46
+    },
+    {
+      "id": "packaging-bom",
+      "expanded": 46
+    },
+    {
+      "id": "courier-allocation",
+      "expanded": 46
+    },
+    {
+      "id": "financial-mis",
+      "expanded": 46
+    },
+    {
+      "id": "full-table",
+      "expanded": 101
+    }
+  ],
+  "results": [
+    {
+      "name": "overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-EBO: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Firstcry: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-International: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline Sales: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-MyFrido: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-Mobility: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-SC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-VC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-B2B: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Stockist: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-MT GT: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Misc: opened",
+      "pass": false,
+      "detail": "locator.scrollIntoViewIfNeeded: Timeout 20000ms exceeded."
+    },
+    {
+      "name": "sales-return-analysis: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-EBO: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Firstcry: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-International: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C-MyFrido: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon-VC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline-B2B: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-price-simulator: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: opened",
+      "pass": false,
+      "detail": "locator.scrollIntoViewIfNeeded: Timeout 20000ms exceeded."
+    },
+    {
+      "name": "pnl-tool-b2b-costing: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-po-approval: opened",
+      "pass": false,
+      "detail": "locator.scrollIntoViewIfNeeded: Timeout 20000ms exceeded."
+    },
+    {
+      "name": "inventory-health: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-sales: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-performance: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-Overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-B2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-FTLPTL: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-3PL: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Acquisition: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Retention: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Behaviour: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Segments: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Discounts: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-support: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "documents: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "frido-pulse: opened",
+      "pass": false,
+      "detail": "page.evaluate: TypeError: Cannot read properties of null (reading 'getBoundingClientRect')"
+    },
+    {
+      "name": "cogs: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-ledger: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "purchase-ledger: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "packaging-bom: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "courier-allocation: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "financial-mis: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: header found",
+      "pass": false,
+      "detail": ""
+    },
+    {
+      "name": "full-table: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

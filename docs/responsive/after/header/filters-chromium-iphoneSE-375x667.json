@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Overview, nothing filtered: no \"Filtered:\" strip",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "Overview, nothing filtered: no filter count",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "Overview: no \"Sub-channel: ShopifyIndia\" anywhere",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "after D2C Overall: Overview still shows no strip / count",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "Sales with a Category filter: strip + count",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "Overview with a Category filter: strip + count",
+    "pass": true,
+    "detail": "count 1"
+  },
+  {
+    "name": "Clear removes strip and count",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "⋯: \"Notifications (n)\" is the first item",
+    "pass": true,
+    "detail": "Notifications (4)"
+  },
+  {
+    "name": "red dot on ⋯ only when n > 0",
+    "pass": true,
+    "detail": "n=4 dot=1"
+  },
+  {
+    "name": "no separate bell in the phone header",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "Notifications opens the alerts list",
+    "pass": true,
+    "detail": "Notifications (4) / ×"
+  },
+  {
+    "name": "same count as the laptop bell",
+    "pass": true,
+    "detail": "laptop 4 · phone 4"
+  }
+]

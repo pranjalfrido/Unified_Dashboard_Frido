@@ -31,8 +31,9 @@ export const VIEWPORTS = [
 
 // Matches both the desktop label ("1 Sept 2026 → 30 Sept 2026") and the compact mobile one
 // ("1 Sept – 30 Sept"); month names can be 3 or 4 letters ("Oct", "Sept").
-const DATE_LABEL = /\d{1,2}\s+[A-Z][a-z]{2,3}(\s+\d{4})?\s*(→|–|-)\s*\d{1,2}\s+[A-Z][a-z]{2,3}/
-const SEPT_LABEL = /1\s+Sept?(\s+2026)?\s*(→|–|-)\s*30\s+Sept?/
+// …and the phone header's short form ("Sep 2026", "1–26 Oct"; HEADER_MOBILE_PROMPT.md §3).
+const DATE_LABEL = /\d{1,2}\s+[A-Z][a-z]{2,3}(\s+\d{4})?\s*(→|–|-)\s*\d{1,2}\s+[A-Z][a-z]{2,3}|^[A-Z][a-z]{2} \d{4}$|^\d{1,2}–\d{1,2} [A-Z][a-z]{2}$/
+const SEPT_LABEL = /1\s+Sept?(\s+2026)?\s*(→|–|-)\s*30\s+Sept?|Sep 2026/
 
 // RESPONSIVE_ENGINE=webkit runs the same checks on WebKit (Safari's engine). For the iPhone viewports
 // it uses Playwright's real device profiles (Safari user agent, isMobile, hasTouch, device pixel

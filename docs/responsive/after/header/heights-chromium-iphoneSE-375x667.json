@@ -1,0 +1,2804 @@
+{
+  "rows": [
+    {
+      "id": "overview",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "sales-Overall",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-D2C",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-EBO",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Amazon",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Flipkart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Blinkit",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-CRED",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Firstcry",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Instamart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Zepto",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-Myntra",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "sales-International",
+      "expanded": 87,
+      "collapsed": 87,
+      "restored": 87
+    },
+    {
+      "id": "sales-Offline Sales",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-D2C-MyFrido",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-D2C-Mobility",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Amazon-SC",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Amazon-VC",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Offline-B2B",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Offline-Stockist",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Offline-MT GT",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-Offline-Miscellaneous",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "sales-return-analysis",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "pnl-Overall",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-D2C",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-EBO",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Amazon",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-Flipkart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Blinkit",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-CRED",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Firstcry",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Instamart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Zepto",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Myntra",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-International",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "pnl-Offline",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-D2C-MyFrido",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-Amazon-VC",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-Offline-B2B",
+      "expanded": 122,
+      "collapsed": 43,
+      "restored": 122
+    },
+    {
+      "id": "pnl-tool-price-simulator",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "pnl-tool-breakeven-roas",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "pnl-tool-b2b-costing",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "pnl-tool-po-approval",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "inventory-health",
+      "expanded": 84,
+      "collapsed": 43,
+      "restored": 84
+    },
+    {
+      "id": "inventory-sales",
+      "expanded": 84,
+      "collapsed": 43,
+      "restored": 84
+    },
+    {
+      "id": "logistics-performance",
+      "expanded": 84,
+      "collapsed": 43,
+      "restored": 84
+    },
+    {
+      "id": "logistics-cost-Overview",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "logistics-cost-B2C",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "logistics-cost-FTLPTL",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "logistics-cost-3PL",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "ads-Overall",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-D2C",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Amazon",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Flipkart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Myntra",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Blinkit",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Zepto",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-Instamart",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "ads-CRED",
+      "expanded": 87,
+      "collapsed": 43,
+      "restored": 87
+    },
+    {
+      "id": "customers-Overview",
+      "expanded": 115,
+      "collapsed": 115,
+      "restored": 115
+    },
+    {
+      "id": "customers-Acquisition",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "customers-Retention",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "customers-Behaviour",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "customers-Segments",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "customers-Discounts",
+      "expanded": 115,
+      "collapsed": 43,
+      "restored": 115
+    },
+    {
+      "id": "customers-support",
+      "expanded": 84,
+      "collapsed": 43,
+      "restored": 84
+    },
+    {
+      "id": "profile",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "profile-team",
+      "expanded": 49
+    },
+    {
+      "id": "profile-member",
+      "expanded": 49
+    },
+    {
+      "id": "documents",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "frido-pulse",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "cogs",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "logistics-ledger",
+      "expanded": 49,
+      "collapsed": 43,
+      "restored": 49
+    },
+    {
+      "id": "purchase-ledger",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "packaging-bom",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "courier-allocation",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "financial-mis",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    }
+  ],
+  "results": [
+    {
+      "name": "overview: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "overview: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "overview: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "overview: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "overview: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Overall: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Overall: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Overall: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Overall: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Overall: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-D2C: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-D2C: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-D2C: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-EBO: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-EBO: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-EBO: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-EBO: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-EBO: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-EBO: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Amazon: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Amazon: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Amazon: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Flipkart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Flipkart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Flipkart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Flipkart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Flipkart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Blinkit: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Blinkit: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Blinkit: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Blinkit: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Blinkit: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-CRED: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-CRED: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-CRED: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-CRED: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-CRED: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Firstcry: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Firstcry: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Firstcry: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Firstcry: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Firstcry: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Firstcry: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Instamart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Instamart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Instamart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Instamart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Instamart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Zepto: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Zepto: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Zepto: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Zepto: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Zepto: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Myntra: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Myntra: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Myntra: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Myntra: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "sales-Myntra: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-International: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-International: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-International: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-International: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 87 → 87"
+    },
+    {
+      "name": "sales-International: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-International: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline Sales: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Offline Sales: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Offline Sales: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline Sales: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Offline Sales: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline Sales: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-MyFrido: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-D2C-MyFrido: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-D2C-MyFrido: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-MyFrido: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-D2C-MyFrido: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-MyFrido: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-Mobility: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-D2C-Mobility: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-D2C-Mobility: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-Mobility: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-D2C-Mobility: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-D2C-Mobility: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-SC: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Amazon-SC: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Amazon-SC: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-SC: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Amazon-SC: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-SC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-VC: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Amazon-VC: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Amazon-VC: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-VC: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Amazon-VC: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Amazon-VC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-B2B: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Offline-B2B: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Offline-B2B: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-B2B: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Offline-B2B: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-B2B: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Stockist: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Offline-Stockist: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Offline-Stockist: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Stockist: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Offline-Stockist: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Stockist: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-MT GT: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Offline-MT GT: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Offline-MT GT: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-MT GT: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Offline-MT GT: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-MT GT: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-Offline-Miscellaneous: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-return-analysis: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "sales-return-analysis: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "sales-return-analysis: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-return-analysis: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "sales-return-analysis: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "sales-return-analysis: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Overall: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Overall: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Overall: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Overall: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Overall: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-D2C: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-D2C: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-D2C: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-EBO: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-EBO: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-EBO: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-EBO: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-EBO: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-EBO: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Amazon: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Amazon: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-Amazon: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Flipkart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Flipkart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Flipkart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Flipkart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Flipkart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Blinkit: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Blinkit: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Blinkit: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Blinkit: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Blinkit: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-CRED: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-CRED: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-CRED: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-CRED: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-CRED: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Firstcry: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Firstcry: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Firstcry: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Firstcry: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Firstcry: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Firstcry: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Instamart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Instamart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Instamart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Instamart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Instamart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Zepto: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Zepto: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Zepto: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Zepto: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Zepto: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Myntra: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Myntra: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Myntra: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Myntra: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-Myntra: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-International: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-International: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-International: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-International: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "pnl-International: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-International: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Offline: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Offline: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-Offline: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C-MyFrido: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-D2C-MyFrido: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-D2C-MyFrido: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C-MyFrido: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-D2C-MyFrido: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-D2C-MyFrido: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon-VC: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Amazon-VC: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Amazon-VC: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon-VC: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-Amazon-VC: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Amazon-VC: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline-B2B: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "pnl-Offline-B2B: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-Offline-B2B: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline-B2B: scrolling up restores the header",
+      "pass": true,
+      "detail": "122 → 43 → 122"
+    },
+    {
+      "name": "pnl-Offline-B2B: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-Offline-B2B: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-price-simulator: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "pnl-tool-price-simulator: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-tool-price-simulator: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-price-simulator: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "pnl-tool-price-simulator: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-price-simulator: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-b2b-costing: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "pnl-tool-b2b-costing: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-tool-b2b-costing: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-b2b-costing: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "pnl-tool-b2b-costing: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-b2b-costing: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-po-approval: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "pnl-tool-po-approval: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "pnl-tool-po-approval: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-po-approval: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "pnl-tool-po-approval: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-po-approval: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-health: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "filter more"
+    },
+    {
+      "name": "inventory-health: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "inventory-health: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-health: scrolling up restores the header",
+      "pass": true,
+      "detail": "84 → 43 → 84"
+    },
+    {
+      "name": "inventory-health: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-health: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-sales: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "inventory-sales: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "inventory-sales: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-sales: scrolling up restores the header",
+      "pass": true,
+      "detail": "84 → 43 → 84"
+    },
+    {
+      "name": "inventory-sales: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "inventory-sales: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-performance: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "logistics-performance: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-performance: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-performance: scrolling up restores the header",
+      "pass": true,
+      "detail": "84 → 43 → 84"
+    },
+    {
+      "name": "logistics-performance: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-performance: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-Overview: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "logistics-cost-Overview: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-cost-Overview: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-Overview: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "logistics-cost-Overview: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-Overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-B2C: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "logistics-cost-B2C: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-cost-B2C: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-B2C: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "logistics-cost-B2C: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-B2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-FTLPTL: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "logistics-cost-FTLPTL: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-cost-FTLPTL: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-FTLPTL: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "logistics-cost-FTLPTL: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-FTLPTL: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-3PL: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date filter more"
+    },
+    {
+      "name": "logistics-cost-3PL: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-cost-3PL: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-3PL: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "logistics-cost-3PL: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-cost-3PL: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Overall: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Overall: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Overall: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Overall: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Overall: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Overall: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-D2C: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-D2C: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-D2C: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-D2C: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-D2C: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-D2C: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Amazon: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Amazon: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Amazon: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Amazon: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Amazon: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Amazon: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Flipkart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Flipkart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Flipkart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Flipkart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Myntra: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Myntra: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Myntra: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Myntra: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Myntra: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Myntra: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Blinkit: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Blinkit: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Blinkit: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Blinkit: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Blinkit: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Blinkit: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Zepto: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Zepto: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Zepto: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Zepto: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Zepto: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Zepto: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Instamart: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-Instamart: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-Instamart: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Instamart: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-Instamart: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-Instamart: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-CRED: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "ads-CRED: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "ads-CRED: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-CRED: scrolling up restores the header",
+      "pass": true,
+      "detail": "87 → 43 → 87"
+    },
+    {
+      "name": "ads-CRED: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "ads-CRED: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Overview: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Overview: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Overview: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Overview: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 115 → 115"
+    },
+    {
+      "name": "customers-Overview: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Overview: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Acquisition: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Acquisition: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Acquisition: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Acquisition: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "customers-Acquisition: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Acquisition: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Retention: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Retention: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Retention: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Retention: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "customers-Retention: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Retention: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Behaviour: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Behaviour: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Behaviour: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Behaviour: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "customers-Behaviour: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Behaviour: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Segments: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Segments: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Segments: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Segments: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "customers-Segments: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Segments: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Discounts: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-Discounts: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-Discounts: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Discounts: scrolling up restores the header",
+      "pass": true,
+      "detail": "115 → 43 → 115"
+    },
+    {
+      "name": "customers-Discounts: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-Discounts: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-support: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "customers-support: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "customers-support: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-support: scrolling up restores the header",
+      "pass": true,
+      "detail": "84 → 43 → 84"
+    },
+    {
+      "name": "customers-support: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "customers-support: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "profile: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "profile: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-team: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-team: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-member: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-member: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "documents: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "documents: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "documents: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "documents: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "documents: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "documents: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "frido-pulse: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "frido-pulse: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "frido-pulse: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "frido-pulse: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "frido-pulse: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "frido-pulse: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "cogs: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "cogs: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "cogs: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "cogs: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "cogs: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "cogs: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-ledger: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "logistics-ledger: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "logistics-ledger: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-ledger: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 43 → 49"
+    },
+    {
+      "name": "logistics-ledger: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "logistics-ledger: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "purchase-ledger: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "purchase-ledger: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "purchase-ledger: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "purchase-ledger: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "purchase-ledger: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "purchase-ledger: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "packaging-bom: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "packaging-bom: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "packaging-bom: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "packaging-bom: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "packaging-bom: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "packaging-bom: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "courier-allocation: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "courier-allocation: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "courier-allocation: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "courier-allocation: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "courier-allocation: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "courier-allocation: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "financial-mis: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "date more"
+    },
+    {
+      "name": "financial-mis: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "financial-mis: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "financial-mis: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "financial-mis: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "financial-mis: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: control order date · filter · ⋯",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "full-list: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: opened",
+      "pass": false,
+      "detail": "locator.evaluate: Timeout 30000ms exceeded."
+    },
+    {
+      "name": "full-table: control order date · filter · ⋯",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-table: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "full-table: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-table: opened",
+      "pass": false,
+      "detail": "locator.evaluate: Timeout 30000ms exceeded."
+    }
+  ]
+}

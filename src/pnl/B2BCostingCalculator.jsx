@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react'
-import { C, fmt } from '../utils.js'
+import { C } from '../utils.js'
+import { fmtSigned as fmt } from './pnlUtils.js'
+import ToolIntro from './ToolIntro.jsx'
+import ToolResultBar from '../responsive/ToolResultBar.jsx'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
+import BottomSheet from '../responsive/BottomSheet.jsx'
 
 // Forward cost-plus pricing calculator for Offline (B2B/Stockist/MT GT) products — ported
 // directly from the business's own "B2B Costing Calculator" reference spreadsheet (shared
@@ -42,7 +47,9 @@ import { C, fmt } from '../utils.js'
 //     Step 4 — Total Cost (CM1)    = COGS + Inbound + Forward Logistics + extraFlatPerUnit
 //     Step 5 — Selling Price ExGST = Total Cost ÷ (1 − SI% − T&E% − Employee% − Office% − PG%
 //                                    − extraPctOfSp% − EBITDA%)
-//     Rounded SP                   = ROUND(Selling Price ExGST ÷ 10, 0) × 10  (nearest ₹10)
+//     Rounded SP                   = CEILING(Selling Price ExGST ÷ 10) × 10  (UP to the next ₹10,
+//                                    Suraj 27 Oct: ₹504 → ₹510, so the quote never misses the EBITDA
+//                                    target; was the nearest ₹10, ₹504 → ₹500)
 //     Step 6 — SP incl. GST        = Rounded SP × (1 + GST%)
 //     EBITDA ₹/unit                = Rounded SP × EBITDA%   (an INPUT target here, echoed back)
 //
@@ -58,7 +65,8 @@ import { C, fmt } from '../utils.js'
 //     rounding a price THEY specified would misrepresent the real deal being evaluated.
 //
 //   Both modes share: Discount on Listing% = (Listing − SP incl. GST) ÷ Listing; Gross Margin% =
-//   (SP − Total Cost CM1) ÷ SP; Status = "OK" if SP incl. GST ≤ Listing Price, else "SP > MRP".
+//   (SP − Total Cost CM1) ÷ SP; Status = "OK" if SP incl. GST ≤ Listing Price, else "SP > MRP";
+//   with no Listing Price there is nothing to check: "Enter listing price to check" (neutral).
 //
 // Qty (2026-10-10 addition): a pure multiplier on the per-unit Selling Price/EBITDA already
 // computed above — Total Order Value = SP incl. GST × Qty, Total Profit = EBITDA/unit × Qty. Qty
@@ -75,6 +83,8 @@ const DEFAULT_ASSUMPTIONS = {
   pgFinanceCostPct: 2,     // % of SP
 }
 const DEFAULT_EBITDA_TARGET_PCT = 20
+// Exact rupees for a quoted unit price ("₹504 exact · ₹510 quoted"), never K / L
+const fmtPrice = v => `₹${Math.round(v).toLocaleString('en-IN')}`
 const GST_PRESETS = [0, 5, 12, 18]
 const MODES = [
   { id: 'price', label: 'Solve for Price', sub: 'I set a profit target → calculate the price to charge' },
@@ -152,8 +162,9 @@ function CostBar({ label, value, scaleMax, tone }) {
 // Typeahead over offlineProductGroups (PnLPage.jsx) — picking one auto-fills COGS/unit and Vol.
 // Weight from the dashboard's own cogsMap/item-master data; Listing Price and GST% are left for
 // the user to type (no such tracked fields exist for Offline products — see file header comment).
-function ProductPicker({ productGroups, onApply }) {
-  const [search, setSearch] = useState('')
+// initialName: shown in the box when the calculator opens on a product (↗ from the Offline tab).
+function ProductPicker({ productGroups, onApply, initialName = '' }) {
+  const [search, setSearch] = useState(initialName)
   const [open, setOpen] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
 
@@ -248,16 +259,19 @@ function ExtraCostRow({ row, onChange, onRemove }) {
   )
 }
 
-export default function B2BCostingCalculator({ productGroups = [] }) {
+// initialProductKey ('cat::sc'): opens with that product applied ("Simulate ↗" from the P&L Offline tab).
+// phone: PNL_REVIEW_FIXES.md §2/§5 phone layout (intro + ⓘ, equal-width toggles, sticky quote bar).
+export default function B2BCostingCalculator({ productGroups = [], initialProductKey = null, phone = false }) {
+  const initProduct = initialProductKey ? productGroups.find(p => p.sku === initialProductKey) || null : null
   const [mode, setMode] = useState('price') // 'price' | 'profit'
   const [assumptions, setAssumptions] = useState(DEFAULT_ASSUMPTIONS)
   const setAssumption = (key, v) => setAssumptions(prev => ({ ...prev, [key]: v }))
 
-  const [productName, setProductName] = useState('')
-  const [cogsPerUnit, setCogsPerUnit] = useState('')
+  const [productName, setProductName] = useState(initProduct?.name || '')
+  const [cogsPerUnit, setCogsPerUnit] = useState(initProduct ? Math.round(initProduct.cogsPerUnit * 100) / 100 : '')
   const [listingPrice, setListingPrice] = useState('')
   const [gstPct, setGstPct] = useState(5)
-  const [volWeightKg, setVolWeightKg] = useState('')
+  const [volWeightKg, setVolWeightKg] = useState(initProduct?.weightKg != null ? Math.round(initProduct.weightKg * 100) / 100 : '')
   const [ebitdaTargetPct, setEbitdaTargetPct] = useState(DEFAULT_EBITDA_TARGET_PCT)
   // Only used in 'profit' mode — the price a buyer has actually named, ex-GST (not Rounded-to-₹10
   // like the solved price in 'price' mode, since this is a real number someone else specified).
@@ -272,6 +286,21 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
     // Listing Price and GST% are deliberately NOT touched — no such data exists for Offline
     // products (see file header comment), so the user's own entry (or lack of one) is preserved.
   }
+
+  // Phone: the 7 shared assumptions sit in a sheet behind one summary card (PNL_REVIEW_FIXES.md §5)
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false)
+  const assumptionSummary = `Inbound ${assumptions.inboundRatePct}% · Fwd ₹${assumptions.forwardRatePerKg}/kg · Incentive ${assumptions.sellingIncentivesPct}% · T&E ${assumptions.travelEventsPct}% · Employee ${assumptions.employeeCostPct}% · Office ${assumptions.officeOverheadsPct}% · PG ${assumptions.pgFinanceCostPct}%`
+  const assumptionFields = (
+    <>
+      <NumField label="Inbound Logistics Rate" value={assumptions.inboundRatePct} onChange={v => setAssumption('inboundRatePct', v)} suffix="% of COGS" step={0.1} />
+      <NumField label="Forward Logistics Rate" value={assumptions.forwardRatePerKg} onChange={v => setAssumption('forwardRatePerKg', v)} prefix="₹" suffix="/ kg" step={0.5} />
+      <NumField label="Selling Incentives" value={assumptions.sellingIncentivesPct} onChange={v => setAssumption('sellingIncentivesPct', v)} suffix="% of SP" step={0.1} />
+      <NumField label="Travelling & Events" value={assumptions.travelEventsPct} onChange={v => setAssumption('travelEventsPct', v)} suffix="% of SP" step={0.1} />
+      <NumField label="Employee Cost" value={assumptions.employeeCostPct} onChange={v => setAssumption('employeeCostPct', v)} suffix="% of SP" step={0.1} />
+      <NumField label="Office Overheads" value={assumptions.officeOverheadsPct} onChange={v => setAssumption('officeOverheadsPct', v)} suffix="% of SP" step={0.1} />
+      <NumField label="PG / Finance Cost" value={assumptions.pgFinanceCostPct} onChange={v => setAssumption('pgFinanceCostPct', v)} suffix="% of SP" step={0.1} />
+    </>
+  )
 
   const addExtraCost = () => setExtraCosts(prev => [...prev, newExtraCostRow()])
   const updateExtraCost = (id, next) => setExtraCosts(prev => prev.map(r => r.id === id ? next : r))
@@ -302,7 +331,7 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
       const denom = 1 - pctRatesSum - (ebitdaTarget || 0) / 100
       if (denom <= 0) return { totalCostCm1, inboundCost, forwardLogistics, extraFlatPerUnit, extraPctOfSp, activeExtraCosts, invalid: 'deducted-pct-over-100' }
       sellingPriceExGst = totalCostCm1 / denom
-      roundedSp = Math.round(sellingPriceExGst / 10) * 10
+      roundedSp = Math.ceil(sellingPriceExGst / 10) * 10
       ebitdaPct = ebitdaTarget
       ebitdaAmount = roundedSp * (ebitdaPct / 100)
     } else {
@@ -336,6 +365,13 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.pnl-no-spinner { -moz-appearance: textfield; }
       `}</style>
+      {phone ? (
+        <>
+          <ToolIntro title="B2B Costing" short={mode === 'price' ? 'Set the EBITDA target and get the price to quote a B2B / Stockist buyer.' : "Enter the buyer's price and see the EBITDA it leaves you."}
+            long="Cost-plus pricing from the business's B2B costing sheet: COGS, inbound and forward logistics, then selling incentives, travel, employee, office and PG / finance costs as % of the selling price. Solve for Price: the price that meets the EBITDA target. Solve for Profit: the EBITDA a named price leaves." />
+          <SegmentToggle options={MODES} value={mode} onChange={setMode} label="Calculation" full />
+        </>
+      ) : (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>B2B Costing Calculator</div>
@@ -355,27 +391,35 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
           ))}
         </div>
       </div>
+      )}
 
-      {/* ── Shared assumptions ── */}
-      <Card style={{ padding: '16px 22px', gap: 12 }}>
+      {/* ── Shared assumptions ── (phone: one card with a summary line → sheet with the 7 fields) */}
+      {phone && (
+        <button type="button" onClick={() => setAssumptionsOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 56, padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 14, background: C.card, textAlign: 'left', fontFamily: 'var(--font)', cursor: 'pointer' }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ display: 'block', fontSize: 13.5, color: C.m.ink }}>Assumptions · 7 set</b>
+            <span style={{ display: 'block', fontSize: 12, color: C.m.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{assumptionSummary}</span>
+          </span>
+          <span aria-hidden="true" style={{ color: C.m.muted, fontSize: 16 }}>›</span>
+        </button>
+      )}
+      <BottomSheet open={phone && assumptionsOpen} onClose={() => setAssumptionsOpen(false)} title="Assumptions">
+        <div className="pnl-tool-phone" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 12, paddingBottom: 8 }}>{assumptionFields}</div>
+      </BottomSheet>
+      {!phone && <Card style={{ padding: '16px 22px', gap: 12 }}>
         <SectionLabel>Shared Assumptions — adjust to match your business</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-          <NumField label="Inbound Logistics Rate" value={assumptions.inboundRatePct} onChange={v => setAssumption('inboundRatePct', v)} suffix="% of COGS" step={0.1} />
-          <NumField label="Forward Logistics Rate" value={assumptions.forwardRatePerKg} onChange={v => setAssumption('forwardRatePerKg', v)} prefix="₹" suffix="/ kg" step={0.5} />
-          <NumField label="Selling Incentives" value={assumptions.sellingIncentivesPct} onChange={v => setAssumption('sellingIncentivesPct', v)} suffix="% of SP" step={0.1} />
-          <NumField label="Travelling & Events" value={assumptions.travelEventsPct} onChange={v => setAssumption('travelEventsPct', v)} suffix="% of SP" step={0.1} />
-          <NumField label="Employee Cost" value={assumptions.employeeCostPct} onChange={v => setAssumption('employeeCostPct', v)} suffix="% of SP" step={0.1} />
-          <NumField label="Office Overheads" value={assumptions.officeOverheadsPct} onChange={v => setAssumption('officeOverheadsPct', v)} suffix="% of SP" step={0.1} />
-          <NumField label="PG / Finance Cost" value={assumptions.pgFinanceCostPct} onChange={v => setAssumption('pgFinanceCostPct', v)} suffix="% of SP" step={0.1} />
+          {assumptionFields}
         </div>
-      </Card>
+      </Card>}
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Product inputs ── */}
-        <div style={{ flex: '1 1 340px', display: 'flex' }}>
-          <Card style={{ flex: 1, gap: 14, padding: 16 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 340px', display: 'flex', minWidth: 0 }}>
+          <Card style={{ flex: 1, gap: 14, padding: 16, minWidth: 0 }}>
             <SectionLabel>Product Inputs</SectionLabel>
-            <ProductPicker productGroups={productGroups} onApply={applyProduct} />
+            <ProductPicker productGroups={productGroups} onApply={applyProduct} initialName={initProduct?.name || ''} />
             {productName && (
               <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1 }}>{productName}</div>
             )}
@@ -383,6 +427,16 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
               <NumField label="COGS / Unit" value={cogsPerUnit} onChange={setCogsPerUnit} prefix="₹" step={0.01} />
               <NumField label="Vol. Weight" value={volWeightKg} onChange={setVolWeightKg} suffix="kg/unit" step={0.01} />
             </div>
+            {phone ? (
+              // Phone (§5): Listing Price, then GST as its own full-width segmented row
+              <>
+                <NumField label="Listing Price (MRP)" value={listingPrice} onChange={setListingPrice} prefix="₹" step={1} />
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: C.t2, marginBottom: 4 }}>GST %</div>
+                  <SegmentToggle options={GST_PRESETS.map(g => ({ id: g, label: `${g}%` }))} value={gstPct} onChange={setGstPct} label="GST" full />
+                </div>
+              </>
+            ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <NumField label="Listing Price (MRP)" value={listingPrice} onChange={setListingPrice} prefix="₹" step={1} />
               <div>
@@ -398,6 +452,7 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
                 </div>
               </div>
             </div>
+            )}
 
             {mode === 'price' ? (
               <NumField label="EBITDA Target" value={ebitdaTargetPct} onChange={setEbitdaTargetPct} suffix="% of SP" step={0.5} />
@@ -433,7 +488,7 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
         </div>
 
         {/* ── Results ── */}
-        <div style={{ flex: '1 1 460px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 460px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           {result && !result.invalid && !result.needsPrice ? (
             <>
               <div style={{
@@ -449,14 +504,14 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
                     {mode === 'price' ? fmt(result.spInclGst) : (result.ebitdaPct != null ? `${result.ebitdaPct.toFixed(1)}%` : '—')}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: phone ? 'left' : 'right', ...(phone ? { flexBasis: '100%', marginTop: -8 } : {}) }}>
                   {mode === 'price' ? (
-                    <div style={{ fontSize: 11, color: C.t3 }}>Rounded SP (ex-GST): {fmt(result.roundedSp)}</div>
+                    <div style={{ fontSize: phone ? 12.5 : 11, color: C.t3 }}>SP ex-GST: {fmtPrice(result.sellingPriceExGst)} exact · {fmtPrice(result.roundedSp)} quoted</div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.t3 }}>SP incl. GST: {fmt(result.spInclGst)} · EBITDA/unit: {fmt(result.ebitdaAmount)}</div>
+                    <div style={{ fontSize: phone ? 12.5 : 11, color: C.t3 }}>SP incl. GST: {fmt(result.spInclGst)} · EBITDA/unit: {fmt(result.ebitdaAmount)}</div>
                   )}
-                  <div style={{ fontSize: 14, fontWeight: 700, color: result.statusOk ? C.green.tx : C.red.tx, marginTop: 2 }}>
-                    {result.statusOk ? '✓ OK — within Listing Price' : '⚠ SP exceeds Listing Price'}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: !result.hasListing ? C.t3 : result.statusOk ? C.green.tx : C.red.tx, marginTop: 2 }}>
+                    {!result.hasListing ? 'Enter listing price to check' : result.statusOk ? '✓ OK — within Listing Price' : '⚠ SP exceeds Listing Price'}
                   </div>
                 </div>
               </div>
@@ -492,7 +547,7 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
                     sub={result.hasListing ? undefined : 'Enter Listing Price above'}
                     negative={result.discountOnListingPct != null && result.discountOnListingPct < 0}
                   />
-                  <KpiTile label="Selling Price (ex-GST)" value={fmt(result.sellingPriceExGst)} sub={mode === 'price' ? 'before rounding to ₹10' : 'as given'} />
+                  <KpiTile label="Selling Price (ex-GST)" value={fmt(result.sellingPriceExGst)} sub={mode === 'price' ? 'exact, before rounding up to ₹10' : 'as given'} />
                 </div>
               </Card>
             </>
@@ -511,6 +566,13 @@ export default function B2BCostingCalculator({ productGroups = [] }) {
           )}
         </div>
       </div>
+      {phone && result && !result.invalid && !result.needsPrice && (
+        <ToolResultBar tone={mode === 'profit' && result.ebitdaAmount < 0 ? 'bad' : undefined}>
+          {mode === 'price'
+            ? `Quote ${fmt(result.spInclGst)} incl. GST (${fmt(result.roundedSp)} ex)`
+            : `Profit ${fmt(result.ebitdaAmount)} · ${result.ebitdaPct != null ? `${result.ebitdaPct.toFixed(1)}%` : '—'}`}
+        </ToolResultBar>
+      )}
     </div>
   )
 }

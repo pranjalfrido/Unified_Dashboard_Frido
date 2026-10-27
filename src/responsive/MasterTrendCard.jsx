@@ -17,7 +17,8 @@ import KpiTile from './KpiTile.jsx'
 //          tapping one switches hero + chart, the selected tile glows
 //   ⋯      granularity override; Auto picks daily ≤ 31 days, weekly ≤ ~6 months, else monthly
 //
-// metrics: [{ key, label, tileLabel, def, value, valueColor, sub, delta, deltaLoading, deltasHidden, lowerIsBetter,
+// metrics (deltaPts: change in points; deltaNeutral: grey, no good/bad):
+//          [{ key, label, tileLabel, def, value, tileValue (optional node for the tile, e.g. ₹ + %), valueColor, sub, delta, deltaLoading, deltasHidden, lowerIsBetter,
 //             status, point(row) → number|null, prevPoint(row) → number|null, fmtPoint,
 //             compare: [{ label, delta }] → labelled ▲/▼ in the hero instead of "vs prev" (e.g. MoM, YoY) }]
 // layout:  'phone' | 'tablet' | 'landscape'
@@ -107,7 +108,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
             ? <>{pointLabel(scrubRow.date, gran)}{scrubPrev != null && <> · prev {m.fmtPoint(scrubPrev)}</>}</>
             : m.compare && !m.deltasHidden
               ? <>{m.compare.map((c, i) => <span key={c.label}>{i > 0 && ' · '}<DeltaBadge delta={c.delta} lowerIsBetter={m.lowerIsBetter} size={12.5} /> {c.label}</span>)}{m.sub && <> · {m.sub}</>}</>
-              : <>{!m.deltasHidden && <><DeltaBadge delta={m.delta} loading={m.deltaLoading} lowerIsBetter={m.lowerIsBetter} size={12.5} /> vs prev</>}{m.sub ? <>{!m.deltasHidden ? ' · ' : ''}{m.sub}</> : (!m.deltasHidden ? ' period' : '')}</>}
+              : <>{!m.deltasHidden && <><DeltaBadge delta={m.delta} loading={m.deltaLoading} lowerIsBetter={m.lowerIsBetter} pts={m.deltaPts} neutral={m.deltaNeutral} size={12.5} /> vs prev</>}{m.sub ? <>{!m.deltasHidden ? ' · ' : ''}{m.sub}</> : (!m.deltasHidden ? ' period' : '')}</>}
         </div>
       </div>
     </div>
@@ -134,7 +135,7 @@ export default function MasterTrendCard({ metrics, rawRows, groupTrend, start, e
   const tiles = (
     <div role="group" aria-label={isSummary ? 'Metrics' : 'Choose metric'} className="master-tiles" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 8, marginTop: layout === 'landscape' ? 0 : 10 }}>
       {tileMetrics.map(x => (
-        <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.value} valueColor={x.valueColor} delta={x.delta} deltaLoading={x.deltaLoading} deltaHidden={isSummary || x.deltasHidden}
+        <KpiTile key={x.key} label={x.tileLabel || x.label} value={x.tileValue ?? x.value} valueColor={x.valueColor} delta={x.delta} deltaLoading={x.deltaLoading} deltaPts={x.deltaPts} deltaNeutral={x.deltaNeutral} deltaHidden={isSummary || x.deltasHidden}
           lowerIsBetter={x.lowerIsBetter} status={x.status} onGradient selected={!isSummary && x.key === m.key} def={x.def}
           onSelect={isSummary ? undefined : () => { setSelKey(x.key); setScrub(null) }} />
       ))}

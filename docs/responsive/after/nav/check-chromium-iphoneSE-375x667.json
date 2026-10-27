@@ -1,0 +1,167 @@
+[
+  {
+    "name": "dock: 7 icons in order",
+    "pass": true,
+    "detail": "Overview,Sales,P&L,Inventory,Logistics,Customer,All pages"
+  },
+  {
+    "name": "dock: every tap target ≥ 44px",
+    "pass": true,
+    "detail": "54,54,54,54,54,54,54"
+  },
+  {
+    "name": "bar: full width, flush with the bottom",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "dock → /overview",
+    "pass": true,
+    "detail": "/overview current=page glow=1"
+  },
+  {
+    "name": "dock → /sales",
+    "pass": true,
+    "detail": "/sales/all/overall current=page glow=1"
+  },
+  {
+    "name": "dock → /pnl",
+    "pass": true,
+    "detail": "/pnl/all current=page glow=1"
+  },
+  {
+    "name": "dock → /inventory",
+    "pass": true,
+    "detail": "/inventory/inventory_health current=page glow=1"
+  },
+  {
+    "name": "dock → /logistics",
+    "pass": true,
+    "detail": "/logistics/performance_analytics current=page glow=1"
+  },
+  {
+    "name": "dock → /customer",
+    "pass": true,
+    "detail": "/customer current=page glow=1"
+  },
+  {
+    "name": "no focus box after a tap",
+    "pass": true,
+    "detail": "none"
+  },
+  {
+    "name": "launcher: profile row says \"Profile\" (non-admin)",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "launcher → Ads",
+    "pass": true,
+    "detail": "/ads · last slot \"Ads (All pages)\""
+  },
+  {
+    "name": "launcher → Documents",
+    "pass": true,
+    "detail": "/documents · last slot \"Documents (All pages)\""
+  },
+  {
+    "name": "launcher → COGS Ledger",
+    "pass": true,
+    "detail": "/cogs · last slot \"COGS Ledger (All pages)\""
+  },
+  {
+    "name": "launcher → Courier Allocation",
+    "pass": true,
+    "detail": "/logistics/courier_allocation · last slot \"Courier Allocation (All pages)\""
+  },
+  {
+    "name": "launcher → Logistics Bill Ledger",
+    "pass": true,
+    "detail": "/logistics-ledger · last slot \"Logistics Bill Ledger (All pages)\""
+  },
+  {
+    "name": "launcher → Purchase Ledger",
+    "pass": true,
+    "detail": "/purchase-ledger · last slot \"Purchase Ledger (All pages)\""
+  },
+  {
+    "name": "launcher → Packaging BOM",
+    "pass": true,
+    "detail": "/packaging-bom · last slot \"Packaging BOM (All pages)\""
+  },
+  {
+    "name": "launcher → Financial MIS",
+    "pass": true,
+    "detail": "/financial-mis · last slot \"Financial MIS (All pages)\""
+  },
+  {
+    "name": "last slot shows the current launcher page (Ads)",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "search \"rto\" → Logistics",
+    "pass": true,
+    "detail": "Logistics"
+  },
+  {
+    "name": "search \"roas\" → Ads",
+    "pass": true,
+    "detail": "Ads"
+  },
+  {
+    "name": "search \"cogs\" → COGS Ledger",
+    "pass": true,
+    "detail": "COGS Ledger"
+  },
+  {
+    "name": "Recent: last 4 visited, newest first",
+    "pass": true,
+    "detail": "Ads, Financial MIS, Packaging BOM, Purchase Ledger"
+  },
+  {
+    "name": "edit: limit 6 (Documents refused when full)",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "edit: Done saves (Customer out, Ads in)",
+    "pass": true,
+    "detail": "Overview,Sales,P&L,Inventory,Logistics,Ads,All pages"
+  },
+  {
+    "name": "edit: reload keeps the bar",
+    "pass": true,
+    "detail": "Overview,Sales,P&L,Inventory,Logistics,Ads,All pages"
+  },
+  {
+    "name": "bar visible and on top while scrolling /pnl/shopify",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "bar visible and on top while scrolling /customer-support",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "no sideways overflow",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "limited: dock = their pages only",
+    "pass": true,
+    "detail": "Overview,Inventory,All pages"
+  },
+  {
+    "name": "limited: launcher lists no other page",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "limited: search \"roas\" finds nothing",
+    "pass": true,
+    "detail": ""
+  }
+]

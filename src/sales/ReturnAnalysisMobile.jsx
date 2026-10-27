@@ -338,7 +338,7 @@ function ExchangeCard({ rows = [], period }) {
       <MobileRankedList title={null} noun="SKUs" items={rows} itemKey={r => r.sku} name={r => r.sku} sub={r => r.subCategory}
         groupOf={r => r.category} searchText={r => `${r.sku} ${r.subCategory} ${r.category}`} sorts={sorts} topN={10} sheetSubtitle={period}
         valueColor={(r, k) => (k === 'exchPct' ? toneColor(r.exchPct) : undefined)}
-        badge={r => { const s = sizeSwapPct(r); return s != null ? <SizeSwapChip pct={s} /> : null }}
+        subBadge={r => { const s = sizeSwapPct(r); return s != null ? <SizeSwapChip pct={s} /> : null }}
         secondary={(r, k) => (k === 'exchQty' ? `${p1(r.exchPct)} · ${fmt(r.exchRev)}` : `${fmtN(r.exchQty)} exch · of ${fmtN(r.totalQty)}`)}
         details={[{ label: 'Exch qty', value: r => fmtN(r.exchQty) }, { label: 'Exch %', value: r => p1(r.exchPct) }, { label: 'Exch ₹', value: r => fmt(r.exchRev) }, { label: 'Units sold', value: r => fmtN(r.totalQty) }]}
         renderSheet={r => {

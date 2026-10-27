@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { fmt } from '../utils.js'
 import FilterSheet from '../responsive/FilterSheet.jsx'
+import HeaderFilterButton from '../responsive/HeaderFilterButton.jsx'
 import { setSalesFilter, clearAllSalesFilters, salesFilterCount } from '../overview/salesFilters.js'
 
 // Sales filters on phones (SALES_MOBILE_REDESIGN_PROMPT.md §C): the filter icon in the header
@@ -58,12 +59,7 @@ export function SalesFilterButton({ data, filters, setFilters, activeTab, subCat
 
   return (
     <>
-      <button type="button" className="ov-filter-btn" onClick={() => setOpen(true)} aria-label={count ? `Filters (${count} active)` : 'Filters'}
-        style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 34, flexShrink: 0, borderRadius: 10,
-          border: '1px solid rgba(255,255,255,.22)', background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer' }}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-        {count > 0 && <b style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, background: '#fff', color: '#0f2a1d', fontSize: 12, fontWeight: 800, lineHeight: '18px', textAlign: 'center' }}>{count}</b>}
-      </button>
+      <HeaderFilterButton className="ov-filter-btn" count={count} onClick={() => setOpen(true)} />
       <FilterSheet open={open} onClose={() => setOpen(false)} title="Filters" rows={rows} resetLabel="Reset all" doneLabel="Show results"
         onReset={() => { setFilters(clearAllSalesFilters); setOpen(false) }} />
     </>
