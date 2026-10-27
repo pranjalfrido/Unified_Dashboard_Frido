@@ -11698,7 +11698,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   let costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
-  const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
+  // D4 (Suraj 27 Oct): one CAC everywhere = the Customer tab's definition: new customers from the sales
+  // report (first Shopify order in range, _EX excluded; ads.nCusts / repeatCusts from api/bq.js
+  // shopifyNewCusts), spend = Meta + Google + D2C additional spend (cacSpend below).
+  const shopifyNewCustomers = ads.nCusts != null ? ads.nCusts - (ads.repeatCusts || 0) : (data.nCusts || 0) - (data.repeatCusts || 0)
   let shopifyAdSpend = _filtMetaSpend + _filtGoogleSpend
 
   // Category/Sub-category filter: when active, every KPI on this page recomputes from the
@@ -11744,7 +11747,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     // while a filter is active (same "no clean number, don't fake one" principle as the rest).
   }
   const cac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? (shopifyAdSpend + (additionalSpend || 0)) / shopifyNewCustomers : 0
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? _filtMetaSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
@@ -20780,7 +20783,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
-            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [] } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
+            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
           {page === 'intelligence' && (
             <div className="page-scroll">
