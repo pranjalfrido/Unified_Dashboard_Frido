@@ -27,7 +27,7 @@ function saveConversations(convs) {
   } catch {}
 }
 
-export default function AskFridoPage({ userProfile }) {
+export default function AskFridoPage({ userProfile, session }) {
   const [conversations, setConversations] = useState(() => loadConversations());
   const [activeId, setActiveId] = useState(null);
   const [historyVisible, setHistoryVisible] = useState(true);
@@ -90,7 +90,7 @@ export default function AskFridoPage({ userProfile }) {
 
     setSending(true);
     try {
-      const response = await sendMessage(messagesForApi);
+      const response = await sendMessage(messagesForApi, session?.access_token);
       setConversations(prev => prev.map(c => {
         if (c.id !== currentId) return c;
         const msgs = c.messages.filter(m => !m.thinking);
