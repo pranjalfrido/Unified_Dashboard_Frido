@@ -1,0 +1,54 @@
+{
+  "rows": [
+    {
+      "id": "full-list",
+      "expanded": 49
+    },
+    {
+      "id": "full-table",
+      "expanded": 49
+    }
+  ],
+  "results": [
+    {
+      "name": "full-list: control order date · filter · ⋯",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "full-list: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-table: control order date · filter · ⋯",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-table: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "full-table: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-table: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

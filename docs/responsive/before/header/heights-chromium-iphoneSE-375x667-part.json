@@ -1,0 +1,69 @@
+{
+  "rows": [
+    {
+      "id": "sales-Offline-Miscellaneous",
+      "expanded": 132
+    },
+    {
+      "id": "pnl-tool-price-simulator",
+      "expanded": 46
+    },
+    {
+      "id": "pnl-tool-breakeven-roas",
+      "expanded": 46
+    },
+    {
+      "id": "pnl-tool-b2b-costing",
+      "expanded": 46
+    },
+    {
+      "id": "pnl-tool-po-approval",
+      "expanded": 46
+    },
+    {
+      "id": "frido-pulse",
+      "expanded": 48
+    },
+    {
+      "id": "full-list",
+      "expanded": 155
+    }
+  ],
+  "results": [
+    {
+      "name": "sales-Offline-Miscellaneous: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-price-simulator: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-breakeven-roas: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-b2b-costing: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pnl-tool-po-approval: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "frido-pulse: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "full-list: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

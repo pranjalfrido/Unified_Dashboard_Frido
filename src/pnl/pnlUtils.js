@@ -38,6 +38,13 @@
 // rows/keys at the source (folding them into MyFrido). Matches src/App.jsx's
 // FlatCategoryProductMatrix.mapRow()'s equivalent guard so the two implementations can't silently
 // diverge again.
+import { fmt } from '../utils.js'
+
+// Indian ₹ formatting that keeps negatives readable (fix/pnl-data item 3): utils.fmt only formats
+// values ≥ ₹1,000 as K / L / Cr, so a negative CM2 printed as raw digits ("₹-1,60,807"). P&L only —
+// other pages keep utils.fmt unchanged. Same output as fmt for zero and positive values.
+export const fmtSigned = v => (v < 0 ? `−${fmt(-v)}` : fmt(v))
+
 const isMobilityWhitelistCategory = catName => catName === undefined || catName === 'Mobility' || /^sparepart/i.test(catName || '')
 // netScale (confirmed 2026-08-19): PnL's row-level blended-GST-ratio Net Revenue and the Sales
 // tab's whole-range real-per-line-item-GST Net Revenue (api/_bq.js's computeNetRevenueMeasures)
@@ -229,6 +236,15 @@ function monthsBetween(startDate, endDate) {
 // same flat per-kg charge Amazon VC/SC's own SnD already uses (api/bq.js's
 // STOCK_MOVEMENT_RATE_PER_KG), previously missing entirely from every D2C S&D calc that shares
 // this function (Price Simulator, Breakeven ROAS) — confirmed via this same reference sheet.
+// Breakeven ROAS and the ROAS needed for a target CM2 % — moved unchanged from
+// BreakevenRoasCalculator.jsx so the P&L margin watchlist uses the identical formulas.
+// excGst: Gross Revenue Ex GST; cm1: CM1 ₹ (before ad spend); net: Net Revenue; target: fraction (0.15).
+export const breakevenRoas = (excGst, cm1) => (cm1 > 0 ? excGst / cm1 : null)
+export const roasForTargetCm2 = (excGst, cm1, net, target) => {
+  const budget = cm1 != null ? cm1 - target * net : null
+  return budget > 0 ? excGst / budget : null
+}
+
 export const PAYMENT_GATEWAY_RATE = 0.011
 export const SOFTWARE_FEE_PER_UNIT = 15
 export const STOCK_MOVEMENT_RATE_PER_KG = 4

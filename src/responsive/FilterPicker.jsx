@@ -6,7 +6,8 @@ const SHOWN = 40
 // Level 2 of FilterSheet (docs/responsive/MOBILE_DESIGN_SYSTEM.md §2): one filter's values.
 // Search, "Top by revenue" / "A–Z", current selections pinned on top, the first 40 matches listed
 // (type to narrow down, so it stays fast with 1000+ values), Clear, and Apply (n).
-//   options: [{ value, label?, sub?, rank? }]  (rank = revenue or count; omit for A–Z only)
+//   options: [{ value, label?, sub?, rank?, icon? }]  (rank = revenue or count; omit for A–Z only;
+//            icon = small logo URL shown before the label, e.g. courier logos)
 //   selected: [value]; multi: checkboxes vs single choice; onApply(values); onBack()
 //   fmtRank:  rank → text shown at the row's right (e.g. revenue)
 //   searchAll / searchAllNote: extra values only reachable by search (e.g. the full SKU master behind
@@ -36,6 +37,7 @@ export default function FilterPicker({ title, noun = 'items', options, selected,
   const row = (o, on) => (
     <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '6px 2px', borderTop: `1px solid ${M.line}`, cursor: 'pointer' }}>
       <input type={multi ? 'checkbox' : 'radio'} checked={on} onChange={() => toggle(o.value)} style={{ width: 18, height: 18, accentColor: M.green, flexShrink: 0 }} />
+      {o.icon && <img src={o.icon} alt="" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} />}
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: 14, fontWeight: on ? 600 : 500, color: M.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(o)}</span>
         {o.sub && <span style={{ display: 'block', fontSize: 12, color: M.muted }}>{o.sub}</span>}

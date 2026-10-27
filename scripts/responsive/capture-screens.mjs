@@ -55,6 +55,8 @@ function clippedElements() {
 // Screenshots the viewport at each scroll position of .page-scroll, then composes one tall image:
 // the first screen in full (nav + rail), then each further screen's content area at its offset.
 async function stitchedScreenshot(page, outPath) {
+  // Layouts without a .page-scroll container (e.g. phone landscape) scroll the document itself.
+  if (!(await page.locator('.page-scroll').count())) return page.screenshot({ path: outPath, fullPage: true })
   const box = await page.evaluate(() => {
     const el = document.querySelector('.page-scroll')
     const r = el.getBoundingClientRect()

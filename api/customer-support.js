@@ -293,14 +293,17 @@ export default async function handler(req, res) {
     // (calls by hour, agent leaderboard) keep covering only the chosen day.
     const viewStart = start
     let hidden = 0
+    // CA10: 7 context days, so the chosen day is compared with the same weekday last week (the
+    // page's trend charts show the last 7; the contact heatmap below keeps its own 7-day window).
     if (grain === 'day' && keys.length === 1) {
       const day = keys[0]
-      start = addDays(day, -6); keys = Array.from({ length: 7 }, (_, i) => addDays(start, i)); hidden = 6
+      start = addDays(day, -7); keys = Array.from({ length: 8 }, (_, i) => addDays(start, i)); hidden = 7
     }
     const queries = buildQueries(grain, start, winEnd)
     if (hidden) {
       const view = buildQueries(grain, viewStart, winEnd)
       for (const k of ['agentBoard', 'callsHourly']) queries[k] = view[k]
+      queries.heat = buildQueries(grain, addDays(winEnd, -6), winEnd).heat
     }
     const results = await runQueriesLimited(getBQ(), queries)
     const out = Object.fromEntries(results.map(({ key: k, rows }) => [k, rows.map(r =>

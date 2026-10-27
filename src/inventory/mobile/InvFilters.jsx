@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { C } from '../../utils.js'
 import FilterSheet from '../../responsive/FilterSheet.jsx'
+import HeaderFilterButton from '../../responsive/HeaderFilterButton.jsx'
 import { STATUS_ORDER } from './invStatus.js'
 import { LABELS, invFilterCount, invClearFilters } from './invFilterState.js'
 
@@ -45,25 +46,25 @@ export function InvFilterButton({ tab, ctrl, tone = 'dark' }) {
     return [
       row('location', 'locations', (o.locations || []).map(opt)),
       row('stockStatus', 'statuses', statuses.map(opt)),
+      row('rtdLevel', 'levels', (o.rtdLevels || []).map(opt)),
       row('websiteStatus', 'statuses', ['Live', 'Stock Out'].map(opt)),
       { key: 'avgSaleWindowDays', label: 'Avg sale window', toggle: [7, 15, 30].map(d => ({ id: d, label: `${d}d` })), value: f.avgSaleWindowDays || 7, onChange: d => set(p => ({ ...p, avgSaleWindowDays: d })) },
       row('facility', 'facilities', (o.facilities || []).filter(x => x.facilityType === 'Regular').map(x => ({ value: x.facility, sub: x.location }))),
       row('category', 'categories', (o.categories || []).map(opt)),
       row('subCategory', 'sub-categories', (o.subCategories || []).map(opt)),
       row('productId', 'SKUs', (o.productIds || []).map(x => ({ value: x.sku, sub: x.category }))),
-      row('rtdLevel', 'levels', (o.rtdLevels || []).map(opt)),
     ].map(r => (r.toggle ? r : { ...r, set: r.selected.length > 0, summary: summary(r.selected) }))
   }, [tab, ctrl])
 
   const dark = tone === 'dark'
   return (
     <>
-      <button type="button" className="inv-filter-btn" onClick={() => setOpen(true)} aria-label={n ? `Filters (${n} active)` : 'Filters'} disabled={!rows.length}
+      {dark ? <HeaderFilterButton className="inv-filter-btn" count={n} onClick={() => setOpen(true)} disabled={!rows.length} /> : <button type="button" className="inv-filter-btn" onClick={() => setOpen(true)} aria-label={n ? `Filters (${n} active)` : 'Filters'} disabled={!rows.length}
         style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 34, flexShrink: 0, borderRadius: 10, cursor: rows.length ? 'pointer' : 'default', opacity: rows.length ? 1 : 0.5,
           border: `1px solid ${dark ? 'rgba(255,255,255,.22)' : M.line}`, background: dark ? 'rgba(255,255,255,.08)' : '#fff', color: dark ? '#fff' : M.ink }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
         {n > 0 && <b style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, background: dark ? '#fff' : M.green, color: dark ? '#0f2a1d' : '#fff', fontSize: 12, fontWeight: 800, lineHeight: '18px', textAlign: 'center' }}>{n}</b>}
-      </button>
+      </button>}
       <FilterSheet open={open} onClose={() => setOpen(false)} title={tab === 'sales' ? 'Sales & Allocation filters' : 'Inventory Health filters'} rows={rows} resetLabel="Reset all" doneLabel="Show results"
         onReset={() => { invClearFilters(tab, ctrl); setOpen(false) }} />
     </>
