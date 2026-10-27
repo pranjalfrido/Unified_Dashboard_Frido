@@ -18775,6 +18775,41 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 })() : <CpBackendTodo field="repurchaseCycleByCategory" />}
               </CpCard>
 
+              {/* C9: Repurchase due — customers whose last order in a category is 1–2× its median cycle */}
+              {(custData.repurchaseDue || []).length > 0 && (() => {
+                const due = custData.repurchaseDue
+                const totDue = due.reduce((s, r) => s + r.dueCustomers, 0)
+                const th = { padding: '10px 12px', fontSize: 12, color: CP.ink3, fontWeight: 600, letterSpacing: 0.2 }
+                const td = { padding: '8px 12px', fontFamily: 'JetBrains Mono, monospace', textAlign: 'right', color: CP.ink }
+                return (
+                  <CpCard title="Repurchase due" sub={`Customers whose last order in a category is 1–2× that category's median repurchase cycle, as of ${filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'}`}>
+                    <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{fmtN(totDue)} due now across categories (a customer can be due in more than one): the window to nudge them back.</div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
+                          <th style={{ ...th, textAlign: 'left' }}>Category</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Median cycle</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Due window</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Due now</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Of customers</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {due.map((r, i) => (
+                          <tr key={r.category} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
+                            <td style={{ padding: '8px 12px', color: CP.ink, fontWeight: 600 }}>{r.category}</td>
+                            <td style={td}>{r.medianDays}d</td>
+                            <td style={td}>{r.medianDays}–{r.medianDays * 2}d</td>
+                            <td style={{ ...td, fontWeight: 700 }}>{fmtN(r.dueCustomers)}</td>
+                            <td style={{ ...td, color: CP.ink3 }}>{r.customers > 0 ? `${(r.dueCustomers / r.customers * 100).toFixed(1)}% of ${fmtN(r.customers)}` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CpCard>
+                )
+              })()}
+
               {/* Bottom row: 3 charts */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 

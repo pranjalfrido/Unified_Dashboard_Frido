@@ -264,7 +264,15 @@ function Behaviour({ cd, layout }) {
           {b.topPairs.map((c, i) => <CompactRankRow key={c.first + c.second} name={`${c.first || '—'} → ${c.second || '—'}`} value={fmtN(c.customers)} barPct={c.customers / tpMax * 100} last={i === b.topPairs.length - 1} />)}
         </Card>
       )}
-      <InfoStrip text="Repurchase due: not built yet" detail="Needs each customer's last order per category, which no current query returns (logged for Suraj)." />
+      {(cd.repurchaseDue || []).length > 0 && (() => {
+        // C9: same rows as the laptop table (api/customer.js Q23)
+        const due = cd.repurchaseDue, dMax = Math.max(...due.map(r => r.dueCustomers), 1)
+        return (
+          <Card title="Repurchase due" sub={`Last order in the category 1–2× its median cycle · ${fmtN(due.reduce((s, r) => s + r.dueCustomers, 0))} due across categories`}>
+            {due.map((r, i) => <CompactRankRow key={r.category} name={r.category} value={fmtN(r.dueCustomers)} pct={`${r.medianDays}–${r.medianDays * 2}d`} barPct={r.dueCustomers / dMax * 100} last={i === due.length - 1} />)}
+          </Card>
+        )
+      })()}
     </>
   )
 }
