@@ -1,0 +1,632 @@
+# Frido Data Knowledge
+
+## How you work — MANDATORY steps, never skip
+1. Understand the question: which metric, product, channel, period.
+2. ALWAYS read `api/_bq.js` via run_command target=repo FIRST before writing any sales/revenue/returns SQL. This file has the exact filters, column names, and formulas the dashboard uses. Do not write SQL from memory.
+3. For inventory questions: use the EXACT SQL template in the "EXACT query for total inventory" section below — do NOT read `api/_inventory_shared.js` first. The formula is already locked here.
+4. For logistics questions: run SELECT * FROM Clickpost table LIMIT 1 to check schema, then SELECT DISTINCT on courier/status columns to see real values.
+5. Before filtering on any text column (status, channel, courier, SKU), always check real distinct values with SELECT DISTINCT first.
+6. Write SQL only after reading the formula file — copy the exact filters from there, do not invent your own.
+7. Sanity-check your result before answering — do the numbers look plausible? Row counts right?
+8. Never write or modify data. Never invent numbers.
+
+## Tables
+
+### BigQuery (project: frido-429506)
+| Table | Use for |
+|---|---|
+| `production.fact_all_platform_sales_report` | All sales, revenue, returns, RTO, CIR, orders, units |
+| `production.Clickpost_Shipment_Tracking_Report` | Logistics: delivery rate, RTO%, TAT, courier performance, **shipment cost, delivery cost, freight cost, cost per shipment** — this is the ONLY table for any courier cost question |
+| `production.Aggregated_uniware_sales_report` | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
+| `production.historical_inventory_till_date_UC` | Daily stock history per SKU per facility — used to find in-stock runs for OOS loss calculation |
+| `production.pincode_city_master` | State, city, region, tier mapping by pincode |
+| `sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master` | Product master: category, GST rate, weight, dimensions |
+| `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` | ProductId → MasterSKU aliases |
+
+### Supabase
+| Table | Use for |
+|---|---|
+| `inv_snapshot` | Current inventory by SKU + facility — columns: `item_sku_code`, `facility`, `updated` (timestamp), `rtd_invt`, `raw_invt`, `raw_blocked_invt`, `inventory`, `inventory_blocked`. No `snapshot_at` or `updated_at` column. |
+| `sales_window` | Recent sales for avg daily sale calculation |
+| `item_master` | Product master (synced hourly from BigQuery) |
+| `cogs_ledger` | COGS per SKU per month — columns: `itemskucode`, `month` (text, format `YYYY-MM`), `cogs` (numeric), `category`, `subcategory`, `is_explicit`. **Note: data may lag 1-2 months; check `SELECT DISTINCT month FROM cogs_ledger ORDER BY month DESC LIMIT 3` before assuming current month is available.** |
+| `facility_master` | Warehouse metadata, FC status, location |
+| `sales_90d` | 90-day aggregates for dead-stock detection |
+
+## Known metrics — reuse these, don't regenerate
+
+All percentage metrics below are **REVENUE-BASED** (÷ Gross Revenue Inc GST), never order-count-based. Locked SQL is in the sections below — use it directly, do not read `api/_bq.js` first.
+
+| Metric | Formula location | Key notes |
+|---|---|---|
+| Gross Revenue (Inc/Exc GST) | locked formula below | SUM(SellingPrice_Inc_GST) / SUM(SellingPrice_Exc_GST) — see "EXACT formula for Gross Revenue" |
+| Net Revenue | locked formula below | Gross Exc GST × Retained Share after returns/cancels — see "EXACT formula for Net Revenue" |
+| RTO % | locked formula below | **REVENUE-BASED** — RTO Revenue ÷ Gross Revenue (Inc GST) × 100. NEVER order-count-based. See "EXACT formula for RTO %" section. |
+| CIR % | locked formula below | **REVENUE-BASED** — CIR Revenue ÷ Gross Revenue (Inc GST) × 100. NEVER order-count-based. See "EXACT formula for CIR %" section. |
+| Returns % | locked formula below | Mature window (today-44d to today-14d), NOT selected date range — see "EXACT SQL for SKU return %" section |
+| Delivery Rate | locked formula below | Delivered shipments ÷ Total shipments (Clickpost) — see "EXACT formula for Delivery Rate" |
+| Stuck Shipments | locked formula below | Forward only, no RTO-% statuses, guard pre-2020 timestamps — see "EXACT formula for Stuck Shipments" |
+| DOI | locked formula below | Total inventory / Avg daily sale — use the "EXACT query for total inventory" section, do NOT read _inventory_shared.js |
+| Avg Daily Sale (OOS loss / inventory planning) | locked formula below | **DIFFERENT from Inventory Health's Avg Sale** — longest in-stock run method, not recent-days average. See "EXACT formula for Avg Daily Sale (OOS/planning)" section. |
+| Channel mapping | locked below | See channel groups section |
+
+## EXACT formula for Gross Revenue — use this, never invent
+
+```sql
+SELECT
+  SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst,
+  SUM(SellingPrice_Exc_GST) AS gross_revenue_exc_gst,
+  COUNT(DISTINCT OrderId) AS orders,
+  SUM(ItemQty) AS units
+FROM `frido-429506.production.fact_all_platform_sales_report`
+WHERE OrderDate BETWEEN '${start}' AND '${end}'
+  AND NOT (OrderId LIKE '%_EX%')
+  AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+  AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+```
+- Include ALL `Order_Status` values (Delivered, RTO, CIR, Return, Cancelled, etc.) — gross revenue is the full top line before any deductions.
+- Add `GROUP BY Channel` or `GROUP BY masterskucode` as needed.
+
+## EXACT formula for Net Revenue — use this, never invent
+
+Net Revenue = Gross Revenue Exc GST × Retained Share, where Retained Share accounts for RTO/CIR/Returns/Cancels using mature-window rates.
+
+```sql
+WITH base AS (
+  SELECT
+    SUM(SellingPrice_Exc_GST) AS gross_exc_gst,
+    SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'RTO'       THEN SellingPrice_Exc_GST ELSE 0 END),
+      SUM(SellingPrice_Exc_GST)
+    ) AS rto_pct,
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'CIR'       THEN SellingPrice_Exc_GST ELSE 0 END),
+      SUM(SellingPrice_Exc_GST)
+    ) AS cir_pct,
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'Return'    THEN SellingPrice_Exc_GST ELSE 0 END),
+      SUM(SellingPrice_Exc_GST)
+    ) AS return_pct,
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'Cancelled' AND payment_type != 'COD'
+                                               THEN SellingPrice_Exc_GST ELSE 0 END),
+      SUM(SellingPrice_Exc_GST)
+    ) AS prepaid_cancel_pct
+  FROM `frido-429506.production.fact_all_platform_sales_report`
+  -- Mature window for rates (today-44d to today-14d) — NOT the user's date range
+  WHERE OrderDate BETWEEN DATE_SUB(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY), INTERVAL 29 DAY)
+                      AND DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    AND NOT (OrderId LIKE '%_EX%')
+    AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+    AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+),
+current_gross AS (
+  SELECT SUM(SellingPrice_Exc_GST) AS gross_exc_gst
+  FROM `frido-429506.production.fact_all_platform_sales_report`
+  WHERE OrderDate BETWEEN '${start}' AND '${end}'
+    AND NOT (OrderId LIKE '%_EX%')
+    AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+    AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+)
+SELECT
+  cg.gross_exc_gst AS gross_revenue_exc_gst,
+  ROUND(cg.gross_exc_gst * (1 - b.rto_pct - b.cir_pct - b.return_pct - b.prepaid_cancel_pct), 0) AS net_revenue
+FROM current_gross cg, base b
+```
+- Return/cancel rates always come from the **mature window** (today-44d to today-14d), applied against the **current period** gross. Never use current-period rates for net revenue — recent orders haven't settled yet and will give artificially high net revenue.
+- COD cancellations are excluded from the cancel deduction (only prepaid cancels are deducted).
+
+## EXACT formula for CIR % — use this, never invent
+
+**CIR % is REVENUE-BASED, not order-count-based.**
+
+Correct formula (matches dashboard):
+```
+CIR % = SUM(SellingPrice_Inc_GST WHERE Order_Status = 'CIR') / SUM(SellingPrice_Inc_GST) × 100
+```
+
+**Wrong formula — never use this:**
+```
+❌ CIR orders / (Delivered orders + CIR orders)   ← order-count ratio, always wrong
+❌ CIR orders / Total orders                       ← order-count ratio, always wrong
+```
+
+```sql
+SELECT
+  ROUND(
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END),
+      SUM(SellingPrice_Inc_GST)
+    ) * 100, 2
+  ) AS cir_pct,
+  SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_revenue,
+  SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst
+FROM `frido-429506.production.fact_all_platform_sales_report`
+WHERE OrderDate BETWEEN '${start}' AND '${end}'
+  AND NOT (OrderId LIKE '%_EX%')
+  AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+  AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+```
+- Denominator is **all rows' revenue** in the period — not just delivered orders.
+- Add `GROUP BY Channel` for channel-level breakdown.
+
+## EXACT formula for Delivery Rate — use this, never invent
+
+Delivery Rate comes from `Clickpost_Shipment_Tracking_Report` (forward shipments only by default).
+
+```sql
+SELECT
+  ROUND(
+    SAFE_DIVIDE(
+      COUNTIF(clickpost_unified_status = 'Delivered'
+        OR (clickpost_unified_status = 'NoStatusExist' AND LOWER(latest_remark) LIKE '%delivered%')),
+      COUNT(*)
+    ) * 100, 2
+  ) AS delivery_rate_pct,
+  COUNTIF(clickpost_unified_status = 'Delivered'
+    OR (clickpost_unified_status = 'NoStatusExist' AND LOWER(latest_remark) LIKE '%delivered%')) AS delivered,
+  COUNT(*) AS total_shipments
+FROM `frido-429506.production.Clickpost_Shipment_Tracking_Report`
+WHERE DATE(created_at) BETWEEN '${start}' AND '${end}'
+  AND shipment_type = 'forward'
+```
+- Always forward shipments only unless user explicitly asks for reverse.
+- Delivered definition: `clickpost_unified_status = 'Delivered'` OR (`= 'NoStatusExist'` AND `latest_remark LIKE '%delivered%'`).
+- Add `GROUP BY courier_partner_name` for courier-level breakdown.
+
+## EXACT formula for Stuck Shipments — use this, never invent
+
+"Stuck" = forward shipment not in a terminal status, with no movement (latest_timestamp not updated) for 3+ days.
+
+**Two critical rules confirmed against live data:**
+1. Exclude ALL `RTO-%` statuses — RTO orders are actively being returned, not stuck. Only excluding `RTO-Delivered` (the common mistake) overcounts by ~182 shipments.
+2. Guard `DATE(latest_timestamp) > '2020-01-01'` — 74 rows have garbage epoch-style timestamps that falsely match any "stuck > N days" filter without this guard.
+
+```sql
+-- Stuck shipments: no movement for 3+ days, by staleness bucket
+SELECT
+  CASE
+    WHEN DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY) BETWEEN 3 AND 7  THEN '4–7 days no update'
+    WHEN DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY) BETWEEN 8 AND 14 THEN '8–14 days no update'
+    ELSE '14+ days no update'
+  END AS staleness_bucket,
+  COUNT(*) AS stuck_shipments
+FROM `frido-429506.production.Clickpost_Shipment_Tracking_Report`
+WHERE shipment_type = 'Forward'
+  AND clickpost_unified_status NOT IN ('Delivered', 'Cancelled', 'Lost', 'Damaged', 'ReShippedOnNewWaybill')
+  AND clickpost_unified_status NOT LIKE 'RTO-%'
+  AND clickpost_unified_status != 'NoStatusExist'
+  AND latest_timestamp IS NOT NULL
+  AND DATE(latest_timestamp) > '2020-01-01'
+  AND DATE(latest_timestamp) <= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+  AND DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+GROUP BY staleness_bucket
+ORDER BY MIN(DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY))
+```
+
+For courier breakdown, replace the SELECT/GROUP BY:
+```sql
+SELECT
+  courier_partner,
+  COUNT(*) AS stuck_shipments
+FROM `frido-429506.production.Clickpost_Shipment_Tracking_Report`
+WHERE shipment_type = 'Forward'
+  AND clickpost_unified_status NOT IN ('Delivered', 'Cancelled', 'Lost', 'Damaged', 'ReShippedOnNewWaybill')
+  AND clickpost_unified_status NOT LIKE 'RTO-%'
+  AND clickpost_unified_status != 'NoStatusExist'
+  AND latest_timestamp IS NOT NULL
+  AND DATE(latest_timestamp) > '2020-01-01'
+  AND DATE(latest_timestamp) <= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+  AND DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+GROUP BY courier_partner
+ORDER BY stuck_shipments DESC
+```
+
+**Wrong patterns — never use:**
+```
+❌ Only excluding 'RTO-Delivered' from NOT IN — misses RTO-InTransit, RTO-Marked etc. (+182 overcounts)
+❌ No DATE(latest_timestamp) > '2020-01-01' guard — ghost epoch rows inflate count (+74 overcounts)
+❌ shipment_type = 'forward' (lowercase) — use 'Forward' (capital F), that's the actual value in the table
+```
+
+## EXACT SQL template for SKU-level revenue — use this, never invent
+```sql
+SELECT masterskucode,
+  SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst,
+  SUM(SellingPrice_Exc_GST) AS gross_revenue_exc_gst,
+  COUNT(DISTINCT OrderId) AS orders,
+  SUM(ItemQty) AS units
+FROM `frido-429506.production.fact_all_platform_sales_report`
+WHERE OrderDate BETWEEN '${start}' AND '${end}'
+  AND NOT (OrderId LIKE '%_EX%')
+GROUP BY masterskucode
+ORDER BY gross_revenue_inc_gst DESC
+LIMIT 10
+```
+- GROUP BY `masterskucode` only — never COALESCE with ChannelSKUCode or ProductId
+- Never REGEXP_REPLACE or UPPER/TRIM the SKU column — use it as-is
+
+## EXACT SQL template for revenue by channel — use this, never invent filters
+```sql
+SELECT Channel, 
+  SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst,
+  SUM(SellingPrice_Exc_GST) AS gross_revenue_exc_gst,
+  COUNT(DISTINCT OrderId) AS orders,
+  SUM(ItemQty) AS units
+FROM `frido-429506.production.fact_all_platform_sales_report`
+WHERE OrderDate BETWEEN '${start}' AND '${end}'
+  AND NOT (OrderId LIKE '%_EX%')
+GROUP BY Channel
+ORDER BY gross_revenue_inc_gst DESC
+```
+- Only 1 filter needed: exclude `_EX` orders. Nothing else.
+- Do NOT add RTV filters, Credit Note filters, Order_Type filters, payment_type filters, or any channel-level exclusions
+- All 12 channels appear naturally: Shopify, Amazon, offline_sales, Retail, Flipkart, Blinkit, Myntra, Instamart, Zepto, CRED, Firstcry, International
+
+## EXACT query for total inventory — use this, never invent
+
+Total inventory lives in Supabase `inv_snapshot`. You MUST join against `facility_master` and filter `fcs_status_for_invt = 'Live'` — without this filter you include ~40 retired/Not-Live facilities and get a number ~7x too high.
+
+```sql
+-- Total sellable inventory across all Live facilities
+SELECT
+  SUM(
+    CASE
+      -- Vadgaon_OPS and Frido_Sudhawadi: pre-computed RTD/Raw split, use as-is (no pack-qty scaling)
+      WHEN i.facility IN ('Vadgaon_OPS', 'Frido_Sudhawadi')
+        THEN COALESCE(i.rtd_invt, 0) + COALESCE(i.raw_invt, 0) + COALESCE(i.raw_blocked_invt, 0)
+      -- All other Live facilities: scale by pack_qty only for RAW SKUs
+      -- RAW SKU = item_sku_code contains 'RAW', or matches standalone '-RW'/'-RWA' segment
+      WHEN i.item_sku_code ~* 'RAW|[_-]RWA?([_-]|$)'
+        THEN (COALESCE(i.inventory, 0) + COALESCE(i.inventory_blocked, 0))
+             * COALESCE(NULLIF(CAST(regexp_match(i.item_sku_code, 'P[O0][_\s]*(\d+)')[1] AS INT), 0), 1)
+      -- RTD SKUs: inventory (available) + inventory_blocked, no scaling
+      ELSE COALESCE(i.inventory, 0) + COALESCE(i.inventory_blocked, 0)
+    END
+  ) AS total_inventory_units
+FROM inv_snapshot i
+JOIN facility_master f ON i.facility = f.facility
+WHERE f.fcs_status_for_invt = 'Live'
+  AND i.item_sku_code NOT ILIKE '%COUP%'
+  AND i.item_sku_code NOT ILIKE '%DFA%'
+  AND EXISTS (
+    SELECT 1 FROM item_master m
+    WHERE m.product_code = REGEXP_REPLACE(i.item_sku_code, '(_RAW)?(_PO[0-9]+)?$', '')
+  )  -- exclude Uncategorized SKUs (not in item_master) — dashboard excludes these too, ~48K units / 652 SKUs
+```
+
+**Critical rules — never break these:**
+- `fcs_status_for_invt = 'Live'` is MANDATORY. Omitting it inflates total by ~7x (includes WareIQ, Zippee, old Vadgaon, FBA, factory facilities).
+- **For warehouse-wise breakdown**: also filter `facility_type = 'Regular'` — this matches the dashboard's "Regular" tab (8 main WHs). Without it, EBO stores (~3K units), Dark Stores, and Frido stores (~15K units) are included and the total will be ~9.3L instead of the correct ~8.69L.
+- Pack-qty scaling (`× PO##`) applies ONLY to RAW SKUs — SKU contains 'RAW', standalone '-RW'/'-RWA', OR facility is `myfrido-Vadgaon_ITEM` (always raw). Never apply pack-qty to RTD SKUs.
+- `Vadgaon_OPS` and `Frido_Sudhawadi` have pre-computed RTD/Raw/RawBlocked columns — use those as-is, do NOT apply pack-qty logic.
+- Exclude pseudo-SKUs: `COUP` and `DFA` in item_sku_code.
+- The 8 Live Regular WH locations are: PNQ (Vadgaon_OPS, Frido_Sudhawadi), GGN (Hexalog_GGN2), BLR (myfrido-BLR_Hexalog), MUM (Beyond_Mum), KOL (Aaj_Kol_Item), HYD (Losung_Hyderabad), CHN (Losung_Chennai).
+- "Unmapped" facility rows (facility not in facility_master) = not Live, exclude them.
+- **For warehouse-wise inventory question**, add `GROUP BY i.facility` to the locked SQL above and also join `facility_master` to get the location name.
+
+## Default behaviors (critical — wrong answers come from ignoring these)
+
+### Logistics
+- **Forward shipments only by default** — never include reverse unless user asks
+- NDD couriers: Delhivery NDD (AWB starts `5448`), Skye Air, Urbane Bolt, ElasticRun
+- **Pending shipments** — use EXACTLY this dashboard unified_status mapping (from `api/logistics.js`):
+  - Delivered: `clickpost_unified_status = 'Delivered'` OR (`= 'NoStatusExist'` AND `latest_remark LIKE '%delivered%'`)
+  - RTO: `clickpost_unified_status IN ('RTO-Marked','RTO-ShipmentDelay','RTO-InTransit','RTO-Delivered','RTO-Requested','RTO-ContactCustomerCare','RTO-OutForDelivery','RTO-Failed')`
+  - Pickup Pending: `clickpost_unified_status IN ('PickupFailed','OutForPickup','PickupPending','OrderPlaced')`
+  - Intransit: `clickpost_unified_status IN ('ShipmentHeld','ContactCustomerCare','InTransit','DestinationHubIn','FailedDelivery','ShipmentDelayed','PickedUp','OutForDelivery','OriginCityOut','OriginCityIn')`
+  - Terminal (not pending): Cancelled, Lost, Damaged, RTO-Delivered
+  - **Pending = Pickup Pending + Intransit** — count shipments whose `clickpost_unified_status` falls in either group above
+
+### Sales / Revenue
+- Credit Notes → **excluded** by default
+- Amazon RTV (Return to Vendor) → **excluded** always
+- Exchange orders with `_EX` suffix in OrderId → **excluded** (double-count prevention)
+- COD cancellations → NOT counted in Returns %, only in Net Revenue deduction
+- Spare-part categories → remapped to "Others"
+- Coupon/DFA SKUs (contain `COUP` or `DFA`) → excluded from ASP/AOV
+- Shopify International → excluded from blended metrics unless "International" channel selected
+- Quick-commerce + Offline → excluded from blended AOV
+- Exchange deduction from Net Revenue → **NOT applied** (reverted 2026-08-19)
+
+### Return rates
+- Minimum 30 units required for SKU-level rate; below this, falls back to category rate
+- Mature window: today-44d to today-14d (30 days)
+- Flipkart uses a different return rate formula — see `api/_bq.js` → `buildFkReturnRateMature()`
+- Myntra uses `FulfilmentStatus` for cancellations, not `Order_Status`
+
+### Channel groups
+- **d2c**: Channel='Shopify', SubChannels: MyFrido, Mobility, Shopify International
+- **marketplace**: Amazon, Flipkart, CRED, Myntra, Firstcry
+- **quick_commerce**: Blinkit, Zepto, Instamart
+- **ebo**: Channel='Retail', SubChannel='Retail Store'
+- **offline**: offline_sales
+- **international**: Channel='International'
+
+## When data is not available for the requested date/period
+If the user asks for a specific month, date, or range and the table has no data for that period — **stop immediately and say so**. Do not hunt for alternative tables, do not fall back to a different month, do not keep querying. One sentence: "Data for [month/date] is not available in [table] — the most recent data is [X]." Then stop.
+
+Examples:
+- User asks "COGS this month" → check `cogs_ledger`, find only July 2026 → reply "COGS data is only available through July 2026 — October data hasn't been loaded yet." Done.
+- User asks "sales on 2025-03-01" → no rows for that date → reply "No sales data found for that date." Done.
+
+Never burn multiple tool calls trying to find the data elsewhere. Data not in the expected table = data not available.
+
+## EXACT SQL for SKU return % — use this, never invent
+
+Return % for SKUs uses a **mature window anchored to today**, NOT the user's selected date range. Recent orders haven't had time to settle their RTO/CIR/Cancelled status yet, so using the current period gives artificially low return rates.
+
+**Window**: `today - 44 days` to `today - 14 days` (30-day window, always fixed to today)
+- `rollingEnd = DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)`
+- `rollingStart = DATE_SUB(rollingEnd, INTERVAL 29 DAY)` (= today - 43d, effectively today-44d to today-14d)
+
+**Formula**: `(rto_rev + cir_rev + return_rev + prepaid_cancel_rev) / gross_inc_gst`
+- Same as `computeNetRevenueMeasures().overallReturnPct` → `totalReturnPct`
+- prepaid_cancel_rev = cancel_rev - cod_cancel_rev (prepaid cancellations only, NOT COD)
+
+**Minimum volume floor**: 30 units in the mature window. If a SKU has < 30 units, fall back to category rate; if category also < 30 units, use the all-channel rate.
+
+```sql
+-- SKU return % (mature window) — top products by return rate
+WITH mature AS (
+  SELECT
+    masterskucode AS sku,
+    Category AS category,
+    SUM(ItemQty) AS units,
+    SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
+    SUM(CASE WHEN Order_Status = 'CIR'       THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+    SUM(CASE WHEN Order_Status = 'RTO'       THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+    SUM(CASE WHEN Order_Status = 'Return'    THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+    SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+    SUM(CASE WHEN Order_Status = 'Cancelled' AND payment_type != 'COD'
+                                             THEN SellingPrice_Inc_GST ELSE 0 END) AS prepaid_cancel_rev
+  FROM `frido-429506.production.fact_all_platform_sales_report`
+  WHERE OrderDate BETWEEN DATE_SUB(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY), INTERVAL 29 DAY)
+                      AND DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    AND NOT (OrderId LIKE '%_EX%')
+    AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+    AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+    AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
+  GROUP BY sku, category
+),
+cat_totals AS (
+  SELECT category,
+    SUM(units) AS units,
+    SAFE_DIVIDE(SUM(rto_rev + cir_rev + return_rev + prepaid_cancel_rev), SUM(gross_inc_gst)) AS cat_return_pct
+  FROM mature GROUP BY category
+),
+all_total AS (
+  SELECT SAFE_DIVIDE(SUM(rto_rev + cir_rev + return_rev + prepaid_cancel_rev), SUM(gross_inc_gst)) AS all_return_pct,
+         SUM(units) AS units FROM mature
+)
+SELECT
+  m.sku,
+  m.category,
+  m.units,
+  -- Fall back: SKU rate if >= 30 units, else category rate, else all-channel rate
+  CASE
+    WHEN m.units >= 30
+      THEN ROUND(SAFE_DIVIDE(m.rto_rev + m.cir_rev + m.return_rev + m.prepaid_cancel_rev, m.gross_inc_gst) * 100, 2)
+    WHEN c.units >= 30
+      THEN ROUND(c.cat_return_pct * 100, 2)
+    ELSE ROUND((SELECT all_return_pct FROM all_total) * 100, 2)
+  END AS return_pct
+FROM mature m
+JOIN cat_totals c USING (category)
+ORDER BY return_pct DESC
+LIMIT 10
+```
+
+**Critical rules:**
+- Window is ALWAYS `today - 44d to today - 14d`, regardless of what date range the user asked about. Never use the user's requested start/end for return rate.
+- Flipkart uses a different formula: `(Return + RTO revenue) / total_rev` only — NOT CIR or Cancel.
+- Myntra uses `FulfilmentStatus` for cancellations, not `Order_Status`.
+- Never use `Order_Status = 'Return'` alone — that misses RTO and CIR which are the bigger buckets.
+
+## EXACT formula for RTO % — use this, never invent
+
+**RTO % is REVENUE-BASED, not order-count-based.**
+
+Correct formula (matches dashboard):
+```
+RTO % = SUM(SellingPrice_Inc_GST WHERE Order_Status = 'RTO') / SUM(SellingPrice_Inc_GST) × 100
+```
+
+**Wrong formula — never use this:**
+```
+❌ RTO orders / (Delivered orders + RTO orders)   ← order-count ratio, always wrong
+```
+
+### EXACT SQL for RTO % over a date range
+```sql
+SELECT
+  ROUND(
+    SAFE_DIVIDE(
+      SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END),
+      SUM(SellingPrice_Inc_GST)
+    ) * 100, 2
+  ) AS rto_pct,
+  SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_revenue,
+  SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst
+FROM `frido-429506.production.fact_all_platform_sales_report`
+WHERE OrderDate BETWEEN '${start}' AND '${end}'
+  AND NOT (OrderId LIKE '%_EX%')
+  AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
+  AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
+```
+
+**Critical rules:**
+- Denominator is **gross revenue (Inc GST)** — SUM of ALL `SellingPrice_Inc_GST` rows in the period, not just delivered orders.
+- Numerator is revenue of rows where `Order_Status = 'RTO'` only.
+- Always exclude `_EX` orders, Credit Notes, and Amazon RTV (same as all revenue queries).
+- For "this week" use `DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY))` to `CURRENT_DATE()`.
+- For channel-level RTO %, add `GROUP BY Channel` and keep the same denominator logic.
+
+## EXACT formula for Avg Daily Sale (OOS loss / inventory planning) — use this, never invent
+
+**This is NOT the same as Inventory Health's "Avg Sale".** Do not collapse them into one formula.
+
+### Why they differ
+Inventory Health's Avg Sale = units ÷ days over the last 7/15/30 days. For an OOS SKU those recent days had zero sales because there was nothing to sell — so that average reads near 0, and an OOS-loss calculation using it would massively understate the real loss. The correct approach measures demand during the period when the SKU **could** sell — its longest in-stock run.
+
+### Step-by-step method
+
+**Step 1 — Find daily stock per SKU** from `production.historical_inventory_till_date_UC` (daily Unicommerce stock history). Live warehouses only (`fcs_status_for_invt = 'Live'` from `facility_master`). Stock per day = (inventory + inventory_blocked) × pack_qty. Pack qty extracted from SKU code suffix `_PO##` (e.g. `FR-ERFT-B1_RAW_PO05` → pack_qty = 5). SKU is "in stock" that day if total > 0.
+
+**Step 2 — Find the longest consecutive in-stock run in the last 180 days**, ending on or before the SKU's latest sales date. A day with no snapshot at all does NOT break a run (treat as in-stock). If two runs are equally long, use the more recent one.
+
+**Step 3 — Count B2C units sold during that run** from `production.Aggregated_uniware_sales_report`. B2C only — `uc_channel_desc = 'B2C Order'` OR not listed in the channel reference (unmapped = B2C, same rule as Inventory Health). Exclude B2B Order, Purchase Order, Stock transfer. Resolve SKU aliases via `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` (ProductId → masterskucode).
+
+**Step 4 — Divide:**
+```
+Avg daily sale = B2C units sold in longest in-stock run ÷ number of days in that run
+```
+
+**Step 5 — Fallback for thin data:** If the longest in-stock run is < 14 days OR the SKU had no in-stock run at all:
+```
+Avg daily sale = B2C units in last 180 days ÷ 180
+```
+**Always flag this fallback explicitly** — say "using 180-day fallback average (longest in-stock run < 14 days)".
+
+### OOS loss calculation
+Once avg daily sale is known:
+```
+Days OOS    = days since stock hit 0 (from inv_snapshot / historical_inventory_till_date_UC)
+OOS loss    = days_oos × avg_daily_sale × ASP (SellingPrice_Inc_GST from fact_all_platform_sales_report)
+```
+
+### Worked example — verify your calculation against this
+- **SKU:** FR-ERFT-B1 (Ergolift Footrest)
+- **Longest in-stock run:** 11 Sep 2026 – 9 Oct 2026 = **29 days**
+- **B2C units sold in that run:** 505
+- **Avg daily sale:** 505 ÷ 29 = **17.41 units/day**
+- **ASP:** ₹2,329
+- **Days OOS:** 17
+- **OOS loss:** 17 × 17.41 × ₹2,329 ≈ **₹6.89 L**
+
+If your calculation for FR-ERFT-B1 gives a materially different avg daily sale, recheck: (a) are you using the longest in-stock run not a rolling window, (b) is it B2C only, (c) is pack_qty scaling applied correctly.
+
+### EXACT SQL — Step 1+2: find longest in-stock run
+**Always filter by SKU first** — never scan all SKUs for 180 days, it will time out.
+
+Column names in `historical_inventory_till_date_UC` are CamelCase:
+- Date column: `inventory_date` (DATE)
+- SKU column: `ItemSkuCode` (STRING)
+- Facility column: `Facility` (STRING)
+- Stock columns: `Inventory` (INT64), `InventoryBlocked` (INT64)
+
+```sql
+WITH daily_stock AS (
+  -- Stock per SKU per day, summed across all Live facilities
+  -- CRITICAL: filter ItemSkuCode LIKE '${sku}%' first to avoid full table scan
+  SELECT
+    REGEXP_REPLACE(h.ItemSkuCode, r'(_RAW)?(_PO\d+)?$', '') AS master_sku,
+    h.inventory_date AS snapshot_date,
+    SUM(
+      (COALESCE(h.Inventory, 0) + COALESCE(h.InventoryBlocked, 0))
+      * COALESCE(CAST(REGEXP_EXTRACT(h.ItemSkuCode, r'_PO(\d+)') AS INT64), 1)
+    ) AS stock_units
+  FROM `frido-429506.production.historical_inventory_till_date_UC` h
+  JOIN `frido-429506.production.facility_master` f ON h.Facility = f.facility
+  WHERE h.ItemSkuCode LIKE '${sku}%'   -- ← MANDATORY: filter by SKU prefix first
+    AND h.inventory_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 180 DAY)
+    AND f.fcs_status_for_invt = 'Live'
+  GROUP BY master_sku, snapshot_date
+),
+in_stock_days AS (
+  SELECT master_sku, snapshot_date,
+    stock_units > 0 AS in_stock
+  FROM daily_stock
+),
+-- Number consecutive in-stock stretches using gaps-and-islands
+runs AS (
+  SELECT master_sku, snapshot_date, in_stock,
+    DATE_DIFF(snapshot_date,
+      DATE '2000-01-01',
+      DAY) - ROW_NUMBER() OVER (PARTITION BY master_sku, in_stock ORDER BY snapshot_date) AS grp
+  FROM in_stock_days
+  WHERE in_stock = TRUE
+),
+run_lengths AS (
+  SELECT master_sku,
+    MIN(snapshot_date) AS run_start,
+    MAX(snapshot_date) AS run_end,
+    COUNT(*) AS run_days
+  FROM runs
+  GROUP BY master_sku, grp
+)
+SELECT master_sku, run_start, run_end, run_days
+FROM run_lengths
+WHERE master_sku = '${sku}'
+ORDER BY run_days DESC, run_end DESC
+LIMIT 1
+```
+
+### EXACT SQL — Step 3: B2C units sold in a date range
+```sql
+SELECT
+  REGEXP_REPLACE(
+    COALESCE(m.masterskucode, REGEXP_REPLACE(s.item_sku_code, r'(_RAW)?(_PO\d+)?$', '')),
+    r'', ''
+  ) AS master_sku,
+  SUM(s.sale_qty) AS b2c_units
+FROM `frido-429506.production.Aggregated_uniware_sales_report` s
+LEFT JOIN `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` m
+  ON s.item_sku_code = m.productid
+WHERE s.sale_date BETWEEN '${run_start}' AND '${run_end}'
+  AND (s.uc_channel_desc = 'B2C Order' OR s.uc_channel_desc IS NULL)
+  AND REGEXP_REPLACE(
+        COALESCE(m.masterskucode, REGEXP_REPLACE(s.item_sku_code, r'(_RAW)?(_PO\d+)?$', '')),
+        r'', '') = '${sku}'
+GROUP BY master_sku
+```
+
+**Critical rules — never break these:**
+- Use longest in-stock run, NOT a fixed recent window like "last 30 days".
+- B2C only — exclude B2B Order, Purchase Order, Stock transfer from `Aggregated_uniware_sales_report`.
+- Apply the 14-day minimum run length fallback — a 1–3 day run gives a wildly misleading daily rate.
+- Always flag when 180-day fallback is used.
+- OOS loss uses ASP from `fact_all_platform_sales_report`, not a hardcoded price.
+
+**Wrong patterns — never use:**
+```
+❌ Avg daily sale = units in last 30 days ÷ 30  ← uses OOS days as zero-sale days, understates demand
+❌ Avg daily sale = sales_window total ÷ window_days  ← sales_window only has ~30 days, misses OOS period
+❌ Using total units (B2C + B2B + PO) instead of B2C only
+```
+
+## When to ask vs assume
+Ask ONLY if the ambiguity would change the number materially:
+- Product name matches multiple real SKUs with clearly different totals
+- "Amazon" could mean SC vs VC (different formulas)
+- "Top courier" — by volume or by performance?
+
+Don't ask for: missing date range (use last 30 days, say so), minor wording differences, formatting preferences.
+
+When asking, reply with ONLY this block — nothing else:
+```clarify
+{"question": "...", "options": ["option1", "option2", "option3"]}
+```
+Options must be real values found while exploring — never invented.
+
+## Answer format
+- Main number first, **bold**, with unit. Indian number format (₹12.4L, ₹1.2Cr, 1,234 units).
+- Short table if there's a useful breakdown.
+- Last line: "Assumptions: ..." — date range, filters, anything assumed.
+- All dates/times in IST.
+
+## Known gotchas
+- **CRITICAL — dates**: ALWAYS use `CURRENT_DATE()` in BigQuery for today's date. NEVER hardcode a year like 2024 or 2025 — the current year is determined by `CURRENT_DATE()`. "This month" = `DATE_TRUNC(CURRENT_DATE(), MONTH)` to `CURRENT_DATE()`. "Last 30 days" = `DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)` to `CURRENT_DATE()`.
+- Timezone: all date columns are UTC in BQ; convert to IST (+5:30) for display
+- `fact_all_platform_sales_report` is a dbt model — always the freshest source for sales
+- Inventory data is hourly-synced to Supabase; for real-time use `inv_snapshot`
+- Flipkart data may lag 1 day — most recent available date is used automatically
+- `_EX` suffix orders must always be excluded or you'll double-count exchanges
+- GST rate: use `GST_Tax_Type_Code` from item master, not other GST columns
+- BQ column is `masterskucode` (lowercase), not `MasterSKU`
+- **NEVER use COALESCE(masterskucode, ChannelSKUCode, ProductId) for SKU grouping** — this fragments revenue across multiple rows and produces wrong totals. Always GROUP BY `masterskucode` directly. If a row has NULL masterskucode, leave it as NULL — do not fall back to ChannelSKUCode or ProductId.
+- BQ payment column is `payment_type`, not `PaymentMode`
+- Supabase inventory columns: `rtd_invt`, `raw_invt`, `raw_blocked_invt` (not rtd_qty etc.)
+- **Net Revenue ALWAYS uses mature window rates, not current-period rates** — compute RTO/CIR/Cancel% from today-44d to today-14d window, then apply those rates against current-period gross exc GST. Using current-period rates will give wrong (lower) net rev because recent orders haven't had time to return yet. Confirmed matches dashboard at ₹17.71 Cr vs ₹17.81 Cr (Oct 1-23 2026 D2C).
+- D2C shNetCalc filter: `Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`
