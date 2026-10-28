@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { getUserProfile } from './users.js';
@@ -19,28 +20,32 @@ function getKey(header, callback) {
   });
 }
 
+// Constant-time compare so the API key can't be guessed from response timing.
+function keyMatches(given, expected) {
+  if (!given || !expected) return false;
+  const a = Buffer.from(String(given));
+  const b = Buffer.from(String(expected));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export async function validateRequest(req) {
-  // AUTH_ENABLED=true → enforce Azure AD token; anything else → open (testing mode)
-  if (process.env.AUTH_ENABLED !== 'true') {
-    return { ok: true, user: { email: 'dev@myfrido.com', role: 'founder', name: 'Dev Mode' } };
-  }
-
-  const authHeader = req.headers['authorization'];
-  if (!authHeader) {
-    return { ok: false, status: 401, message: 'Missing Authorization header.' };
-  }
-
-  // API key path — used by Claude.ai connector until Azure OAuth is configured
+  // Authentication is always on. There is no dev/open mode: a request without a valid API key
+  // or Azure AD token gets 401. The key is accepted as `x-api-key` (what api/pulse.js sends)
+  // or `Authorization: Bearer <key>` (Claude.ai connector). If CONNECTOR_API_KEY is unset the
+  // key path fails closed.
   const CONNECTOR_API_KEY = process.env.CONNECTOR_API_KEY;
-  if (CONNECTOR_API_KEY && authHeader === `Bearer ${CONNECTOR_API_KEY}`) {
+  const authHeader = req.headers['authorization'];
+  const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (keyMatches(req.headers['x-api-key'], CONNECTOR_API_KEY) || keyMatches(bearer, CONNECTOR_API_KEY)) {
     return { ok: true, user: { email: 'connector@myfrido.com', role: 'analyst', name: 'Connector Service' } };
   }
 
-  if (!authHeader.startsWith('Bearer ')) {
-    return { ok: false, status: 401, message: 'Missing or invalid Authorization header.' };
+  if (!bearer) {
+    return { ok: false, status: 401, message: 'Missing or invalid API key.' };
   }
 
-  const token = authHeader.slice(7);
+  const token = bearer;
 
   let decoded;
   try {
