@@ -16,7 +16,7 @@ function ForgotPassword({ prefillEmail, onBack }) {
     setLoading(true)
     setErr('')
     // The API looks up this one email (the browser can no longer read user_profiles before sign-in).
-    let data = null
+    let data
     try {
       const r = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth-admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account_lookup', email: email.trim().toLowerCase() }) })
       const j = await r.json()
