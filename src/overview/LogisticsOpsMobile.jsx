@@ -91,7 +91,7 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
 
   const flows = {
     fwd: { tab: 'Forward', e2eLabel: 'Order → delivered', e2e: m.lAvgFul,
-      stages: [['Order → pickup', m.lAvgPickup], ['Order → dispatch', m.lAvgProcessing], ['Pickup → delivered', m.lAvgIntransit]],
+      stages: [['Order → AWB', m.lAvgProcessing], ['AWB → pickup', m.lAvgPickup], ['Pickup → delivery', m.lAvgIntransit]],
       sla: [['Processed ≤ 24h', m.lProcessedWithin24hPct, m.lProcessedWithin24h, m.lOrdersWithOrderDate],
         ['Picked up ≤ 24h', m.lPickedUpWithin24hPct, m.lPickedUpWithin24h, m.lOrdersPickedUp],
         ['Delivered ≤ 3d of pickup', m.lDeliveredWithin3dPickupPct, m.lDeliveredWithin3dPickup, m.lOrdersDeliveredTotal],
