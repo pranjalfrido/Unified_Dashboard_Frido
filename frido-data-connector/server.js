@@ -106,6 +106,16 @@ function createMcpServer(user) {
 
 const PORT = process.env.PORT || 8080;
 
+// Browsers may call /chat only from the dashboard origin (CORS_ORIGIN, comma-separated). api/pulse.js
+// calls server-to-server and is not affected. Any other origin gets no CORS headers.
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'https://frido-navigator.vercel.app').split(',').map(o => o.trim()).filter(Boolean);
+function setCors(req, res) {
+  const origin = req.headers.origin;
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  if (origin && CORS_ORIGINS.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
+}
+
 const httpServer = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -136,17 +146,15 @@ const httpServer = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'OPTIONS' && req.url === '/chat') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    setCors(req, res);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
     res.writeHead(204);
     res.end();
     return;
   }
 
   if (req.method === 'POST' && req.url === '/chat') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    setCors(req, res);
 
     const authResult = await validateRequest(req).catch(() => ({
       ok: false, status: 500, message: 'Auth check failed.'
