@@ -4,6 +4,8 @@ import ChatTopBar from './ChatTopBar.jsx';
 import ChatThread from './ChatThread.jsx';
 import ChatComposer from './ChatComposer.jsx';
 import { sendMessage } from './mockData.js';
+import PulseMobile from './PulseMobile.jsx';
+import { useBreakpoint } from '../responsive/useBreakpoint.js';
 
 let nextId = 1000;
 
@@ -46,6 +48,9 @@ export default function AskFridoPage({ userProfile, session }) {
   const [sending, setSending] = useState(false);
 
   const active = conversations.find(c => c.id === activeId) || null;
+  // Phones get their own layout (same rule as the app's phone header and bottom bar).
+  const bp = useBreakpoint();
+  const phone = bp.width <= 768 || bp.isPhoneLandscape;
 
   // Persist to localStorage whenever conversations change
   useEffect(() => {
@@ -126,6 +131,13 @@ export default function AskFridoPage({ userProfile, session }) {
 
   function handleSuggestion(text) { handleSend(text); }
   function handleClarifyChoice(choice) { handleSend(choice); }
+
+  if (phone) {
+    return (
+      <PulseMobile conversations={conversations} activeId={activeId} active={active} sending={sending}
+        onSelect={handleSelect} onNew={handleNew} onDelete={handleDelete} onSend={handleSend} onClarifyChoice={handleClarifyChoice} />
+    );
+  }
 
   return (
     <div className={`af-page${historyVisible ? '' : ' af-history-hidden'}`}>
