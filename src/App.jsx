@@ -1108,10 +1108,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Shipment pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order date → delivery date" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order → AWB" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="AWB → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order → delivery" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
               <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} subLabel="RTO marked → RTO delivered" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} invertColor />
             </div>
           </div>
@@ -5673,7 +5673,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const { lTotal, lDelPct, lRtoPct, lZRtoPct, lSlaPct, lFasr, lRasr, lAvgFul, lAvgProcessing, lAvgPickup, lAvgIntransit,
     lOrdersWithOrderDate, lOrdersPickedUp, lOrdersDeliveredTotal, lProcessedWithin24h, lPickedUpWithin24h, lDeliveredWithin3dPickup, lDeliveredWithin5dOrder,
     lProcessedWithin24hPct, lPickedUpWithin24hPct, lDeliveredWithin3dPickupPct, lDeliveredWithin5dOrderPct, lNdrPct, lNdrResolvedPct,
-    lAvgRtoTat, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
+    lAvgRtoTat, lAvgAwbToRtoMark, lAvgAwbToRtoDelivered, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
     lRvpCreated, lRvpDone, lRvpDoneWithin2d, lRvpDeliveredWithin5d, lRvpDoneWithin2dPct, lRvpDeliveredWithin5dPct,
     lAvgRvpCreatedToPickup, lAvgRvpPickupToDelivery, lAvgRvpTat } = logisticsMetrics(logisticsData)
   // (formulas and their reasoning: overview/overviewMetrics.js, unchanged from the inline versions)
@@ -6240,13 +6240,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   the UI before now — no new backend work needed. RTO Mark → RTO Delivered sits in
                   this same forward-labeled strip since it's read together with the other TAT legs. */}
               <Section>
-                <SecHdr info="Avg days per shipment stage, order to delivery. RTO Mark → RTO Delivered only counts RTOs that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
+                <SecHdr info="Avg days per shipment stage. Forward stages (Order → AWB → Pickup → Delivery) count forward shipments only. RTO stages count RTO-marked forward shipments only; RTO Mark → RTO Del and AWB → RTO Del. only those that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
                 <StatStrip items={[
-                  { label: 'Order → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
-                  { label: 'Order → Dispatch', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
-                  { label: 'Pickup → Del.', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
+                  { label: 'Order → AWB', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
+                  { label: 'AWB → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
+                  { label: 'Pickup → Delivery', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
                   { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : C.t1 },
-                  { label: 'RTO Mark → Del.', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Mark', val: lAvgAwbToRtoMark !== null ? `${lAvgAwbToRtoMark.toFixed(1)}d` : '—', color: lAvgAwbToRtoMark === null ? C.t3 : C.t1 },
+                  { label: 'RTO Mark → RTO Del', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Del.', val: lAvgAwbToRtoDelivered !== null ? `${lAvgAwbToRtoDelivered.toFixed(1)}d` : '—', color: lAvgAwbToRtoDelivered === null ? C.t3 : C.t1 },
                   { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : C.t1 },
                   { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : C.t1 },
                   { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : C.t1 },
