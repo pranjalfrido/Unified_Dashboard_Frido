@@ -154,7 +154,29 @@ kpis AS (
     COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 5) AS rvp_delivered_within_5d_of_done,
     ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 15, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 1) AS avg_rvp_created_to_pickup,
     ROUND(AVG(IF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 1) AS avg_rvp_pickup_to_delivery,
-    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat,
+    -- Forward-only copies for Overview's Speed & SLA Forward / RTO tabs: Overview queries every
+    -- direction (the RVP fields above need the Reverse rows), so these can't rely on the WHERE
+    -- filter the Logistics tab's Shipment Direction slicer adds. RTO is a forward-shipment leg.
+    ROUND(AVG(IF(shipment_type = 'Forward' AND created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS fwd_avg_processing,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS fwd_avg_pickup,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS fwd_avg_intransit,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS fwd_avg_fulfilment,
+    COUNTIF(shipment_type = 'Forward' AND order_date IS NOT NULL) AS fwd_orders_with_order_date,
+    COUNTIF(shipment_type = 'Forward' AND pickup_date IS NOT NULL) AS fwd_orders_picked_up,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL) AS fwd_orders_delivered_total,
+    COUNTIF(shipment_type = 'Forward' AND created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) <= 1) AS fwd_processed_within_24h,
+    COUNTIF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, HOUR) <= 24) AS fwd_picked_up_within_24h,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 3) AS fwd_delivered_within_3d_of_pickup,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) <= 5) AS fwd_delivered_within_5d_of_order,
+    COUNTIF(shipment_type = 'Forward' AND unified_status = 'RTO' AND clickpost_unified_status = 'RTO-Delivered') AS fwd_rto_completed,
+    COUNTIF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 5) AS fwd_rto_delivered_within_5d_of_mark,
+    COUNTIF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 10) AS fwd_rto_delivered_within_10d_of_mark,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS fwd_avg_rto_tat,
+    -- RTO tab stage averages, RTO-marked forward shipments only: shipment (AWB) created → RTO mark, and
+    -- AWB created → RTO delivered back (RTO-Delivered only; latest_ts_date is the RTO delivery, as above).
+    ROUND(AVG(IF(shipment_type = 'Forward' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(rto_mark_date, created_date, DAY), NULL)), 1) AS fwd_avg_awb_to_rto_mark,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, created_date, DAY) BETWEEN 0 AND 50, DATE_DIFF(latest_ts_date, created_date, DAY), NULL)), 1) AS fwd_avg_awb_to_rto_delivered
   FROM base
 ),
 by_courier AS (
