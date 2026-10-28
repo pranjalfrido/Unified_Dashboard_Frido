@@ -1726,10 +1726,12 @@ svg text, svg tspan{
 .pm-answer .af-table-wrap.pm-more{ -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)); mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)) }
 .pm-answer .af-table{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; margin:0; border:none }
 .pm-answer .af-table th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; text-align:left; padding:7px 8px; vertical-align:bottom; border:none; min-width:64px }
-.pm-answer .af-table td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; min-width:64px; max-width:170px; overflow-wrap:anywhere }
+.pm-answer .af-table td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; min-width:64px; max-width:170px; overflow-wrap:break-word; word-break:normal; hyphens:none }
 .pm-answer .af-table .pm-n{ text-align:right; white-space:nowrap }
 .pm-answer .af-table th:first-child, .pm-answer .af-table td:first-child{ position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #eeebe4 }
 .pm-answer .af-table th:first-child{ background:#f6f4ef }
+/* whole words stay together; the first column gets room for a name like "Instamart" or "Delhivery NDD" */
+.pm-answer .af-table td:first-child{ min-width:96px }
 /* no hover tint on touch (the laptop rule highlights the row under the pointer) */
 .pm-answer .af-table tbody tr:hover{ background:transparent }
 .pm-acts{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
