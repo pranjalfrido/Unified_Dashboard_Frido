@@ -78,7 +78,12 @@ export const PERMISSION_TREE = [
       { key: 'inventory:sales', label: 'Sales & Allocation' },
     ],
   },
-  { key: 'customer',  label: 'Customer',  children: [] },
+  {
+    key: 'customer', label: 'Customer', isGroup: true, children: [
+      { key: 'customer',         label: 'Customer Intelligence' },
+      { key: 'customer:support', label: 'Customer Support' },
+    ],
+  },
   // 'financial-mis' (Financial MIS) hidden for now (2026-10-20) — page/route/sidebar entry all
   // still exist in src/App.jsx, just not surfaced; re-add this line to make it grantable again.
   // { key: 'financial-mis', label: 'Financial MIS', children: [] },

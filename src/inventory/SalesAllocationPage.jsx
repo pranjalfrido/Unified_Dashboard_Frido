@@ -1004,32 +1004,40 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
               <button
                 onClick={() => {
-                  const raw = filteredData?.rawRows || data?.rawRows || []
-                  const ds = dateFilters?.start, de = dateFilters?.end
-                  const mch = filters.matrixChannel || []
-                  const subset = raw.filter(r => {
-                    if (ds && r.date < ds) return false
-                    if (de && r.date > de) return false
-                    if (mch.length && !mch.includes(r.channel) && !mch.includes(r.channel2)) return false
-                    return true
-                  })
-                  const map = new Map()
-                  for (const r of subset) {
-                    const k = `${r.date}||${r.category}||${r.subCategory}||${r.sku}||${r.channel2 || r.channel || ''}`
-                    if (!map.has(k)) map.set(k, { date: r.date, category: r.category, subCategory: r.subCategory, sku: r.sku, channel: r.channel2 || r.channel || '', qty: 0, rev: 0 })
-                    const e = map.get(k); e.qty += r.qty; e.rev += r.rev
+                  // Export the matrix exactly as shown: category, sub-category and SKU rows (current
+                  // search + channel filter), one column per visible date/week/month bucket for the
+                  // active metric, then Total and a Grand Total row. Built from the same cells as the
+                  // table (matrixCellsByPath) - the old export read rawRows, which only the pre-built
+                  // file carries, so it came out empty whenever the page was on the live API.
+                  const metricLabel = matrixMetric === 'rev' ? 'Revenue' : 'Units'
+                  const line = (level, category, subCategory, sku, path) => {
+                    const o = { level, category, subCategory, sku }
+                    for (const col of matrixColumns) o[col] = matrixValueFor(path, col)
+                    o.total = matrixValueFor(path, 'total')
+                    return o
                   }
-                  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.subCategory.localeCompare(b.subCategory) || a.sku.localeCompare(b.sku))
+                  const rows = []
+                  for (const { category, subs } of matrixCategoryTree) {
+                    rows.push(line('Category', category, '', '', `${category}${MSEP}${MSEP}`))
+                    for (const { subCategory, skus } of subs) {
+                      rows.push(line('Sub-category', category, subCategory, '', `${category}${MSEP}${subCategory}${MSEP}`))
+                      for (const sk of skus) rows.push(line('SKU', category, subCategory, sk.sku, `${category}${MSEP}${subCategory}${MSEP}${sk.skuKey}`))
+                    }
+                  }
+                  const gt = { level: 'Grand Total', category: '', subCategory: '', sku: '' }
+                  for (const col of matrixColumns) gt[col] = (matrixGrandTotal.perBucket.get(col) || { qty: 0, rev: 0 })[matrixMetric]
+                  gt.total = matrixGrandTotal.total[matrixMetric]
+                  rows.push(gt)
+                  const round = v => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
                   exportCsv(
-                    `sales_matrix_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
+                    `sales_matrix_${metricLabel.toLowerCase()}_${matrixGranularity}_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
                     [
-                      { label: 'Date', key: 'date' },
+                      { label: 'Level', key: 'level' },
                       { label: 'Category', key: 'category' },
                       { label: 'Sub-Category', key: 'subCategory' },
                       { label: 'SKU', key: 'sku' },
-                      { label: 'Channel', key: 'channel' },
-                      { label: 'Units', key: 'qty' },
-                      { label: 'Revenue', key: 'rev' },
+                      ...matrixColumns.map(col => ({ label: col, get: r => round(r[col]) })),
+                      { label: `Total ${metricLabel}`, get: r => round(r.total) },
                     ],
                     rows
                   )

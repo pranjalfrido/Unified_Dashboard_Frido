@@ -553,7 +553,16 @@ export default async function inventoryHandler(req, res) {
     const pivotRows = pivotSkus.map(s => ({
       sku: s.sku, category: s.category, subCategory: s.subCategory,
       totalInvt: Math.round(s.totalInvt), avgSale: s.avgSale,
-      byLocation: Object.fromEntries(s.locations.map(l => [l.location, { totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale }])),
+      // byFacilityType: the pivot's Regular / Other Facilities views show only those facility
+      // types' stock (InventoryHealthPage PivotTable), so it must be here - same shape as
+      // scripts/generate-inv-cache.mjs. Without it, this live fallback showed every Inventory cell as 0.
+      byLocation: Object.fromEntries(s.locations.map(l => [l.location, {
+        totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale,
+        byFacilityType: (l.facilities || []).reduce((acc, f) => {
+          acc[f.facilityType] = (acc[f.facilityType] || 0) + (f.totalInvt || 0)
+          return acc
+        }, {}),
+      }])),
     }))
 
     const payload = {
