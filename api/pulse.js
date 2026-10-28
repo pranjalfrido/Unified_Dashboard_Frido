@@ -36,6 +36,20 @@ export default async function handler(req, res) {
 
   if (profileErr || !profile?.is_active) return res.status(403).json({ error: 'Your account has been deactivated. Contact your admin.' })
 
+  // Pulse access, the same rule as App.jsx, read from the database (never from the request): the two
+  // owners, or anyone granted the 'ask' tab. Being an admin alone doesn't grant it.
+  const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com']
+  if (!PULSE_WHITELIST.includes((userData.user.email || '').toLowerCase())) {
+    const { data: grant, error: grantErr } = await admin
+      .from('user_permissions')
+      .select('tab')
+      .eq('user_id', userData.user.id)
+      .eq('tab', 'ask')
+      .limit(1)
+    if (grantErr) return res.status(503).json({ error: 'Auth service unavailable.' })
+    if (!grant?.length) return res.status(403).json({ error: "You don't have access to Frido Pulse" })
+  }
+
   // Forward to connector — credentials stay server-side
   const connectorUrl = process.env.CONNECTOR_URL
   const connectorKey = process.env.CONNECTOR_API_KEY
