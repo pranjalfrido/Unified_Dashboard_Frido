@@ -78,3 +78,15 @@ Not numbers (ignore for Pulse): `admin.js`, `auth-admin.js`, `packaging-products
 | Ads spend / ROAS | Ads | `api/bq.js` (`adsMonthly`) |
 | CM1, COGS | P&L | `api/cogs-monthly.js` + sales |
 | CAC, new vs repeat | Customers | `api/customer.js` |
+
+## Added requirements for Step 3 (CLAUDE.md rules) — from Suraj, 2026-10-29
+
+These go into the connector's `knowledge/CLAUDE.md` in Step 3 (diff shown before saving). Not applied yet; Step 3 starts on Suraj's "go".
+
+1. **Denials:** if a tool or file read is denied, never retry the same thing. After 1 denial, switch route: use the locked templates or other allowed tables, and if needed build the answer with own logic.
+2. **Custom calculations:** any answer built with own logic says so on the first line: `Custom calculation, not from the dashboard:` plus the definition used in one line (e.g. "critical = lowest days of inventory, Regular warehouses, avg sale over the last 30 days").
+3. **No bare failures:** never end with only "the data query failed". If it truly can't answer, say in one line what was tried and what is missing.
+4. **Denial cap:** max 2 denials per question, then answer with what it has.
+5. **Acceptance test:** "Top 10 products which are critical based on inventory" must return a labelled top-10 table now (custom-calculation label), and the dashboard-matching version once the `inventory` tool exists (Step 4). Add it to the Step 6 scoring set.
+
+Note: the connector already caps tool turns at 12 and forces the first turn to call a tool (`server.js`), and its final fallback returns "No answer could be generated — the data query failed". Item 3 means that fallback text in `server.js` must change too, not only CLAUDE.md.
