@@ -24,6 +24,7 @@ import cogsMonthlyHandler from './api/cogs-monthly.js'
 import financialMisHandler from './api/financial-mis.js'
 import packagingProductsHandler from './api/packaging-products.js'
 import authAdminHandler from './api/auth-admin.js'
+import pulseHandler from './api/pulse.js'
 
 config()
 
@@ -320,6 +321,7 @@ app.post('/api/cogs-monthly', (req, res) => cogsMonthlyHandler(req, res))
 app.post('/api/financial-mis', (req, res) => financialMisHandler(req, res))
 // Profile → Team members (create / roles / tabs / revoke / restore / delete) and the login page's account lookup
 app.post('/api/auth-admin', (req, res) => authAdminHandler(req, res))
+app.post('/api/pulse', (req, res) => pulseHandler(req, res))
 app.get('/api/packaging-products', (req, res) => packagingProductsHandler(req, res))
 
 // ── API: Meta UTM analytics ───────────────────────────────────
