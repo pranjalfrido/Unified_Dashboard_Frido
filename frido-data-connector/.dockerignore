@@ -1,8 +1,13 @@
 node_modules
 .env
+.env.*
 logs
 *.test.js
 test*.js
 debug_*.js
 query_*.js
 cloudrun-env.yaml
+sa_key.json
+*key*.json
+*.pem
+.git

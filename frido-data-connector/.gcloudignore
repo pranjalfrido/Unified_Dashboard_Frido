@@ -8,4 +8,8 @@ logs/
 test*.js
 debug_*.js
 query_*.js
-# cloudrun-env.yaml and sa_key.json ARE needed in the build context for Docker
+# Credentials must never be in the build context: they come from Secret Manager at runtime.
+cloudrun-env.yaml
+sa_key.json
+*key*.json
+*.pem
