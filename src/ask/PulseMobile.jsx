@@ -54,18 +54,19 @@ function answerHtml(text) {
   })
   return tpl.innerHTML
 }
+// The fade is re-applied whenever the answer's tables scroll, resize or are re-inserted (a re-render
+// that resets the answer would otherwise drop it).
 function fitTables(root) {
-  const offs = []
-  root?.querySelectorAll('.af-table').forEach(table => {
-    const wrap = table.parentElement
-    const upd = () => wrap.classList.toggle('pm-more', wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 2)
-    upd()
-    wrap.addEventListener('scroll', upd, { passive: true })
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(upd) : null
-    ro?.observe(wrap)
-    offs.push(() => { wrap.removeEventListener('scroll', upd); ro?.disconnect() })
-  })
-  return () => offs.forEach(f => f())
+  if (!root) return undefined
+  const upd = () => root.querySelectorAll('.af-table-wrap').forEach(w => w.classList.toggle('pm-more', w.scrollWidth - w.clientWidth - w.scrollLeft > 2))
+  upd()
+  const onScroll = e => { if (e.target.classList?.contains('af-table-wrap')) upd() }
+  root.addEventListener('scroll', onScroll, { capture: true, passive: true })
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(upd) : null
+  ro?.observe(root)
+  const mo = new MutationObserver(ms => { if (ms.some(m => m.type === 'childList')) upd() })
+  mo.observe(root, { childList: true, subtree: true })
+  return () => { root.removeEventListener('scroll', onScroll, { capture: true }); ro?.disconnect(); mo.disconnect() }
 }
 
 function Who({ model }) {

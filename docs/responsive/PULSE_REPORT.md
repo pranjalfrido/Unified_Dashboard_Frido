@@ -67,9 +67,9 @@ After screenshots (local, not committed): `docs/responsive/after/pulse/<engine>-
 - **⋯ menu:** the Pulse header has no notifications item (your spec lists only "Delete this chat"); notifications stay on every other page.
 - **Clarify:** clarify messages never come from the current API (it returns text/sql/model only). The phone view renders them like the laptop; they were tested from saved data.
 
-## Security fixes (separate branch fix/pulse-access, PR #34, not merged)
+## Security fixes (fix/pulse-access, PR #34, merged to main 895aa463)
 - **API:** `api/pulse.js` checks Pulse access server-side (owners' whitelist or the 'ask' tab, read from the database). Anyone else gets 403 "You don't have access to Frido Pulse".
 - **History:** saved per user (`frido_pulse_conversations_<userId>`). The old shared key moves once to the first user who opens Pulse, and history is dropped from memory on sign-out.
 - **Tests:** 10/10 with temporary users (direct API calls; two users in one browser).
 - **Connector (report only):** `api/pulse.js` sends the connector only the messages, with no user or tabs, so the connector can't limit answers by a user's page access. A Pulse user without Sales access can still get sales numbers.
-- **Merge note:** both branches change `AskFridoPage.jsx`. Whichever merges second will need a small conflict fix (storage key vs phone switch).
+- **Merged with main after #34:** no conflicts. The phone tests (4 × 46/46) and the laptop comparison were rerun on the merged code; saved chats now use the per-user key.
