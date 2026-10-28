@@ -1,5 +1,6 @@
 import { useState, useRef, Fragment, useEffect } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
+import { useIsMobile } from './responsive/useBreakpoint.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
 export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
@@ -518,8 +519,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
-  const [isMob, setIsMob] = useState(window.innerWidth <= 768)
-  useEffect(() => { const h = () => setIsMob(window.innerWidth <= 768); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h) }, [])
+  const isMob = useIsMobile()
   const selStyle = { fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
   const showCogs = cogsPct != null

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Green Header Final</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#ece9e2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:#1c2420;padding:24px 16px 40px;font-variant-numeric:tabular-nums}
+h1{font-size:19px;margin:0 0 4px}.cap{font-size:13px;color:#7b847f;margin:0 0 18px}
+.row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.lab{font-size:14px;font-weight:700}.lab small{display:block;font-weight:500;color:#7b847f;font-size:12px;text-align:center;max-width:330px;margin-top:2px}
+.phone{width:340px;height:640px;border-radius:34px;border:9px solid #111;overflow:hidden;position:relative;display:flex;flex-direction:column;background:#f4f2ed;box-shadow:0 18px 44px rgba(0,0,0,.16)}
+.hd{position:relative;z-index:3;flex:0 0 auto}
+.r1{height:48px;display:flex;align-items:center;padding:0 8px 0 14px;gap:4px}
+.r1 b{font-size:17px;font-weight:650;letter-spacing:-.015em}.r1 .cx{font-size:13px;color:#8a938e;font-weight:500;margin-left:6px;margin-right:auto}
+.dp{gap:5px;height:32px;padding:0 10px;border-radius:10px;background:#eef5f0;color:#1f5a3d;font-size:12.5px;font-weight:600;display:flex;align-items:center}
+.dp .cv{width:9px;height:6px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.7;flex:0 0 auto}
+.ib{width:34px;height:34px;display:grid;place-items:center;color:#4e5a54;font-size:15px;position:relative}
+.ib .dot{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;background:#d0443a}
+.r2{height:36px;display:flex;align-items:center;gap:4px;padding:0 10px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.ch{flex:0 0 auto;height:26px;padding:0 11px;border-radius:999px;font-size:12.5px;font-weight:600;color:#5c6761;display:flex;align-items:center}
+.ch.on{background:#1f5a3d;color:#fff}
+.r3{height:32px;display:flex;border-top:1px solid #f0ede6}
+.r3 span{flex:1;display:grid;place-items:center;font-size:12.5px;font-weight:600;color:#8a938e;position:relative}
+.r3 span.on{color:#1c2420}.r3 span.on:after{content:"";position:absolute;bottom:0;width:58px;height:2px;border-radius:2px;background:#1f5a3d}
+.mb{flex:1;overflow:hidden;padding:0 12px;margin-top:-6px}
+.card{background:#fff;border:1px solid #eae7df;border-radius:18px;padding:12px 14px;margin-bottom:10px}
+.cat{display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;padding-top:9px}.cat span{font-weight:500;color:#7b847f;font-size:12px}
+.sub{display:flex;justify-content:space-between;font-size:11.5px;color:#7b847f}
+.bar{height:4px;border-radius:3px;background:#eeece6;margin:6px 0 2px}.bar i{display:block;height:100%;border-radius:3px;background:#1f5a3d}
+.nav{position:relative;z-index:3;flex:0 0 auto;height:48px;display:flex;align-items:center}
+.nav span{flex:1;display:grid;place-items:center;color:#8a938e;font-size:16px}
+.nav span.on i{font-style:normal;color:#1f5a3d;background:#edf6f0;border-radius:12px;width:38px;height:34px;display:grid;place-items:center;box-shadow:0 0 8px 1px rgba(120,190,150,.22)}
+
+/* shared deep-green base */
+.g .hd{background:linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%);box-shadow:0 8px 18px -8px rgba(20,50,35,.45)}
+.g .r1 b{color:#fff}.g .r1 .cx{color:#a9c9b6}.g .ib{color:#d8e8de}
+.g .dp{background:rgba(255,255,255,.14);color:#fff}
+.g .ch{color:#b9d4c4}.g .ch.on{background:#fff;color:#1f5a3d}
+.g .r3{border-top-color:rgba(255,255,255,.12);background:rgba(0,0,0,.08)}
+.g .r3 span{color:#a9c9b6}.g .r3 span.on{color:#fff}.g .r3 span.on:after{background:#9fe0b9}
+.g .nav{background:#fbfaf7;box-shadow:0 -1px 0 #e6e2d8,0 -6px 16px -6px rgba(28,52,40,.14)}
+/* C1 original */
+/* C2 matching green bar */
+.C2 .nav{background:linear-gradient(0deg,#1a4d34,#1f5a3d);box-shadow:0 -8px 18px -8px rgba(20,50,35,.45)}
+.C2 .nav span{color:#8fb7a0}.C2 .nav span.on i{background:rgba(255,255,255,.16);color:#fff;box-shadow:0 0 10px 1px rgba(159,224,185,.25)}
+/* C3 glow: soft light in the corner */
+.C3 .hd{background:radial-gradient(120% 140% at 90% -20%,#3f8a63 0%,rgba(63,138,99,0) 55%),linear-gradient(160deg,#173f2c 0%,#1d5539 60%,#21603f 100%)}
+.C3 .nav{background:#f7faf8;box-shadow:0 -1px 0 #d9e7de,0 -8px 18px -8px rgba(31,90,61,.2)}
+.C3 .nav span.on i{background:#1f5a3d;color:#fff;box-shadow:0 0 10px 1px rgba(31,90,61,.25)}
+/* C4 two-tone: green rows 1-2, mint sub-tabs */
+.C4 .r3{background:#eef5f0;border-top:none}
+.C4 .r3 span{color:#6f8a7b}.C4 .r3 span.on{color:#1f5a3d}.C4 .r3 span.on:after{background:#1f5a3d}
+.C4 .hd{box-shadow:0 1px 0 #d9e7de,0 8px 16px -8px rgba(31,90,61,.25)}
+/* C5 rounded bottom edge over content */
+.C5 .hd{border-radius:0 0 22px 22px;box-shadow:0 10px 22px -10px rgba(20,50,35,.5)}
+.C5 .r3{background:transparent;border-top-color:rgba(255,255,255,.1)}
+.C5 .mb{margin-top:-4px}
+.C5 .nav{border-radius:22px 22px 0 0;background:#fff;box-shadow:0 -8px 22px -10px rgba(20,50,35,.28)}
+/* C6 pine (darker) + mint accents */
+.C6 .hd{background:linear-gradient(170deg,#0f3322 0%,#143d2a 60%,#18472f 100%)}
+.C6 .ch.on{background:#9fe0b9;color:#0f3322}.C6 .dp{background:rgba(159,224,185,.16);color:#c9f0d8}
+.C6 .r3 span.on:after{background:#9fe0b9;height:3px}
+.C6 .nav{background:#fbfaf7;box-shadow:0 -1px 0 #e6e2d8,0 -6px 16px -6px rgba(15,51,34,.18)}
+.C6 .nav span.on i{color:#143d2a}
+.g .r4{height:30px;display:flex;background:rgba(0,0,0,.14)}
+.g .r4 span{flex:1;display:grid;place-items:center;font-size:12px;font-weight:600;color:#a9c9b6;position:relative}
+.g .r4 span.on{color:#fff}.g .r4 span.on:after{content:"";position:absolute;bottom:0;width:40px;height:2px;border-radius:2px;background:#9fe0b9}
+.g .ib .dot{box-shadow:0 0 0 1.5px #1f5a3d;background:#e5534b}
+.g .fc{position:absolute;top:4px;right:3px;min-width:14px;height:14px;border-radius:7px;background:#9fe0b9;color:#143d2a;font-size:9.5px;font-weight:800;display:grid;place-items:center}
+.g .bk{color:#fff;font-size:22px;width:28px}
+.strip{display:flex;align-items:center;gap:6px;font-size:12px;color:#5c6761;padding:8px 2px 0}.strip i{font-style:normal;background:#eef5f0;color:#1f5a3d;font-weight:600;border-radius:999px;padding:3px 9px}.strip b{margin-left:auto;color:#1f5a3d;font-weight:600}
+.hero{background:linear-gradient(170deg,#dcebe2 0%,#e9f3ed 30%,#f4f9f6 60%,#fff 100%);border:1px solid #dbe8df;border-radius:18px;padding:14px;margin:14px 0 10px}
+.hero .k{font-size:12px;font-weight:700;color:#5f6b65;letter-spacing:.06em}.hero .v{font-size:27px;font-weight:700;margin-top:4px}.hero .s{font-size:12px;color:#7b847f}
+.notes{max-width:1080px;margin:22px auto 0;background:#fff;border-radius:14px;border:1px solid #eae7df;padding:14px 20px;font-size:13.5px;line-height:1.55}
+.notes b{color:#1f5a3d}
+</style></head><body>
+<h1>Mobile header: deep green (final, C1)</h1>
+<p class="cap">Same heights as before (48 / 36 / 32 / 30 px header, 48 px bar). Chips, sub-tabs, filter count, notifications dot and a sub-screen shown.</p>
+<div class="row" id="row"></div>
+<div class="notes"><b>Header</b>: green gradient #1a4d34 → #266b49, soft shadow, white title, mint-grey context. Date pill translucent white, chevron centred. <b>Chips</b>: selected white with green text, no ring. <b>Sub-tabs</b>: darker band, active white with mint underline; 2nd row darker still. <b>Filter count</b>: mint badge; <b>notifications</b>: red dot with green ring. <b>Filtered strip</b> stays light under the header. <b>Bottom bar</b>: light with hairline + soft shadow. Bottom sheets, launcher and login unchanged.</div>
+<script>
+const content=`<div class="card" style="margin-top:14px"><div style="font-size:12px;color:#7b847f">Top 8 of 12 categories · by Gross rev</div>
+${[['1. Footwear','₹7.48 Cr','60 products','26.6%',100],['2. Orthotics','₹6.24 Cr','28 products','22.2%',83],['3. Pillows','₹3.76 Cr','30 products','13.4%',50],['4. Cushions','₹3.05 Cr','22 products','10.9%',41],['5. Ergo Furniture','₹2.22 Cr','15 products','7.9%',30],['6. Mobility','₹2.12 Cr','37 products','7.5%',28],['7. Mattress Topper','₹1.26 Cr','3 products','4.5%',17],['8. Personal Care','₹1.20 Cr','13 products','4.2%',16]].map(c=>`<div class="cat">${c[0]}<b>${c[1]}</b></div><div class="sub"><span>${c[2]}</span><span>${c[3]}</span></div><div class="bar"><i style="width:${c[4]}%"></i></div>`).join('')}</div>`;
+const ph=(k,t,s)=>`<div class="col"><div class="phone ${k}"><div class="hd"><div class="r1"><b>Sales</b><span class="cx">D2C</span><span class="dp">1–26 Oct<svg class="cv" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4"/></svg></span><span class="ib">☰</span><span class="ib">⋯<i class="dot"></i></span></div>
+<div class="r2">${['Overall','D2C','EBO','Amazon','Flipkart','Blinkit'].map(x=>`<span class="ch ${x==='D2C'?'on':''}">${x}</span>`).join('')}</div>
+<div class="r3"><span class="on">Overall</span><span>MyFrido</span><span>Mobility</span></div></div>
+<div class="mb">${content}</div>
+<div class="nav"><span>▦</span><span class="on"><i>▮▮</i></span><span>↗</span><span>◇</span><span>⛟</span><span>☺</span><span>⋮</span></div></div>
+<div class="lab">${t}<small>${s}</small></div></div>`;
+
+const chev='<svg class="cv" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4"/></svg>';
+const nav=on=>`<div class="nav">${['▦','▮▮','↗','◇','⛟','☺','⋮'].map((x,i)=>i===on?`<span class="on"><i>${x}</i></span>`:`<span>${x}</span>`).join('')}</div>`;
+function screens(){
+ const s1=`<div class="col"><div class="phone g"><div class="hd"><div class="r1"><b>Sales</b><span class="cx">D2C</span><span class="dp">1–26 Oct${chev}</span><span class="ib">☰</span><span class="ib">⋯<i class="dot"></i></span></div>
+<div class="r2">${['Overall','D2C','EBO','Amazon','Flipkart','Blinkit'].map(x=>`<span class="ch ${x==='D2C'?'on':''}">${x}</span>`).join('')}</div>
+<div class="r3"><span class="on">Overall</span><span>MyFrido</span><span>Mobility</span></div></div><div class="mb">${content}</div>${nav(1)}</div><div class="lab">Sales · D2C<small>chips + sub-tabs, scrolled</small></div></div>`;
+ const s2=`<div class="col"><div class="phone g"><div class="hd"><div class="r1"><b>Logistics</b><span class="cx">Cost</span><span class="dp">Sep 2026${chev}</span><span class="ib">☰<i class="fc">1</i></span><span class="ib">⋯<i class="dot"></i></span></div>
+<div class="r3"><span>Performance</span><span class="on">Cost</span></div><div class="r4"><span class="on">Overview</span><span>B2C</span><span>FTL/PTL</span><span>3PL</span></div></div>
+<div class="mb" style="margin-top:0"><div class="strip">Filtered: <i>Courier: Delhivery ✕</i><b>Clear</b></div><div class="hero"><div class="k">LOGISTICS COST</div><div class="v">₹1.42 Cr</div><div class="s">8.6% of net revenue · ▼0.4 pts vs prev</div></div>${content.replace('margin-top:14px','margin-top:0')}</div>${nav(4)}</div><div class="lab">Logistics · Cost<small>2 sub-tab rows, filter count + strip</small></div></div>`;
+ const s3=`<div class="col"><div class="phone g"><div class="hd"><div class="r1" style="padding-left:6px"><span class="bk">‹</span><b>Out-of-stock loss</b><span class="cx"></span><span class="ib">☰</span><span class="ib">⋯</span></div></div>
+<div class="mb"><div class="hero" style="margin-top:16px"><div class="k">LOSS OF SALE OPPORTUNITY</div><div class="v" style="color:#c0392b">₹34.55 L</div><div class="s">so far, this stock-out · 73 SKUs</div></div>${content.replace('margin-top:14px','margin-top:0')}</div>${nav(3)}</div><div class="lab">Sub-screen<small>‹ back + title, no chips</small></div></div>`;
+ return s1+s2+s3;}
+document.getElementById('row').innerHTML=screens();
+</script></body></html>

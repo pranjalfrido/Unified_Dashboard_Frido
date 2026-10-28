@@ -48,6 +48,7 @@ WITH base AS (
     TIMESTAMP_MILLIS(CAST(_daton_batch_runtime AS INT64)) AS batch_ts
   FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Shelfwise_Inventory\`
   WHERE Facility IS NOT NULL AND ItemTypeSKUCode IS NOT NULL
+    AND NOT REGEXP_CONTAINS(IFNULL(Shelf, ''), r'(?i)(QC|Reject|Return|rtn|bad)')
 ),
 latest_ts_per_key AS (
   SELECT Facility, ItemTypeSKUCode, Shelf, InventoryType, MAX(batch_ts) AS max_ts

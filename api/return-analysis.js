@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 6
+const CACHE_VERSION = 9 // 7: cancelByBucket counts each cancelled order once; 8: exchangeReasons counts orders; 9: reasonsBySubCategory (2026-10-26)
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -201,16 +201,26 @@ export default async function handler(req, res) {
         const sixMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5, 1))
         const sixStart = sixMonthsAgo.toISOString().slice(0, 10)
         const sixEnd = today.toISOString().slice(0, 10)
-        return `SELECT
+        // Each cancelled order is counted once, under its main product (its highest-value line),
+        // so the per-category / per-sub-category counts add up to the month's real number of
+        // cancelled orders. Before 2026-10-26 an order with products from 2+ sub-categories was
+        // counted once per sub-category and the chart's totals ran 14–20% high.
+        return `WITH o AS (
+          SELECT OrderId, OrderDate,
+            COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
+            COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+            ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY SellingPrice_Inc_GST DESC, SubCategory, Category) AS rn
+          FROM \`frido-429506.production.fact_all_platform_sales_report\`
+          WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
+            AND Order_Status = 'Cancelled')
+        SELECT
           FORMAT_DATE('%b %Y', OrderDate) AS month,
           DATE_TRUNC(OrderDate, MONTH) AS month_dt,
-          COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
-          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          category,
+          sub_category,
           '0-1' AS bucket,
           COUNT(DISTINCT OrderId) AS cancel_count
-        FROM \`frido-429506.production.fact_all_platform_sales_report\`
-        WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
-          AND Order_Status = 'Cancelled'
+        FROM o WHERE rn = 1
         GROUP BY month, month_dt, category, sub_category, bucket
         ORDER BY month_dt, category, sub_category, bucket`
       })(),
@@ -230,17 +240,36 @@ export default async function handler(req, res) {
         LIMIT 15`,
 
       // Exchange reasons — same direct-table pattern as returnReasons above (Customer_Return_Reason
-      // is not projected through `q`), but scoped to Order_Status = 'Exchange' only.
+      // is not projected through `q`), but scoped to Order_Status = 'Exchange' only. Counts distinct
+      // orders like returnReasons (was COUNT(*) of lines until 2026-10-26, when the Return Reasons card
+      // got its All / CIR / Exch toggle and the two had to add up in one unit).
       exchangeReasons: `SELECT
           COALESCE(NULLIF(TRIM(Customer_Return_Reason), ''), 'Unknown') AS reason,
           COALESCE(NULLIF(TRIM(Customer_Sub_Reason), ''), 'Unknown') AS sub_reason,
-          COUNT(*) AS cnt,
+          COUNT(DISTINCT OrderId) AS cnt,
           SUM(SellingPrice_Inc_GST) AS revenue_impact
         FROM \`frido-429506.production.fact_all_platform_sales_report\`
         WHERE OrderDate BETWEEN '${start}' AND '${end}' AND ${shWhere}
           AND Order_Status = 'Exchange'
           AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
         GROUP BY reason, sub_reason ORDER BY cnt DESC`,
+
+      // Return Reasons card's product slicer (one sub-category at a time): the same reason rows as
+      // returnReasons (kind 'cir') and exchangeReasons (kind 'exchange'), split by sub-category.
+      // Distinct orders per sub-category, so one product's numbers are exact; the card's
+      // "All products" view keeps using the two queries above.
+      reasonsBySubCategory: `SELECT
+          IF(Order_Status = 'Exchange', 'exchange', 'cir') AS kind,
+          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          COALESCE(NULLIF(TRIM(Customer_Return_Reason), ''), 'Unknown') AS reason,
+          COALESCE(NULLIF(TRIM(Customer_Sub_Reason), ''), 'Unknown') AS sub_reason,
+          COUNT(DISTINCT OrderId) AS cnt,
+          SUM(SellingPrice_Inc_GST) AS revenue_impact
+        FROM \`frido-429506.production.fact_all_platform_sales_report\`
+        WHERE OrderDate BETWEEN '${start}' AND '${end}' AND ${shWhere}
+          AND Order_Status IN ('RTO', 'Return', 'CIR', 'Exchange')
+          AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
+        GROUP BY kind, sub_category, reason, sub_reason`,
 
       // Exchange flow — from ReturnPrime historical data (2023–2025). Joins back to
       // fact_all_platform_sales_report to resolve sku → Category/SubCategory labels.
@@ -424,6 +453,14 @@ export default async function handler(req, res) {
         exchPct: parseInt(r.total_qty) > 0 ? (parseInt(r.exch_qty) / parseInt(r.total_qty) * 100) : 0,
       })),
       exchangeReasons: (results.exchangeReasons || []).map(r => ({
+        reason: r.reason,
+        subReason: r.sub_reason,
+        count: parseInt(r.cnt) || 0,
+        revenueImpact: parseFloat(r.revenue_impact) || 0,
+      })),
+      reasonsBySubCategory: (results.reasonsBySubCategory || []).map(r => ({
+        kind: r.kind,
+        subCategory: r.sub_category,
         reason: r.reason,
         subReason: r.sub_reason,
         count: parseInt(r.cnt) || 0,

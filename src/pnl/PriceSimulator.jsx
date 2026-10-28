@@ -1,6 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { C, fmt, fmtN, pct } from '../utils.js'
-import { blendedLogisticsPerUnit, rateForWeightGm } from './pnlUtils.js'
+import { C, fmtN, pct } from '../utils.js'
+import { blendedLogisticsPerUnit, blendedLogisticsForBuckets, rateForWeightGm, fmtSigned as fmt } from './pnlUtils.js'
+import ToolIntro from './ToolIntro.jsx'
+import ToolResultBar from '../responsive/ToolResultBar.jsx'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
+import { setPnlToolReset } from './pnlToolStore.js'
 
 // Per-unit price values (Listing Price, ASP, Selling Price) are always shown in plain rupees —
 // never abbreviated to K/L like the aggregate totals (Gross/Net/CM) do via the shared fmt() —
@@ -38,7 +42,8 @@ function loadSndRates() {
 //                       thing a naive "just multiply revenue down" simulation would hide.
 //   SnD               — logistics/fulfilment/software-fee are fixed ₹/unit, scaled only by New
 //                       Units. Payment gateway (1.1% of gross) scales with price automatically.
-//   Marketing Spend   = New Net Revenue ÷ Target ROAS.
+//   Marketing Spend   = New Gross Revenue (Ex GST) ÷ Target ROAS — the same ROAS base as the rest
+//                       of the dashboard (Financial View, Breakeven ROAS, Ads tab; fix/pnl-data).
 //   Return Rate Δ     — a discount often shifts return behavior (heavier discounting → higher
 //                       returns is a common real pattern), so this is modeled explicitly rather
 //                       than silently held fixed at the mature baseline rate. Expressed as a delta
@@ -120,13 +125,13 @@ function NumberInputField({ label, value, onChange, min, max, step, prefix, suff
   )
 }
 
-function SliderField({ label, value, onChange, min, max, step, formatValue, accent }) {
+function SliderField({ label, value, onChange, min, max, step, formatValue, accent, valueColor }) {
   const pctOfTrack = ((value - min) / (max - min)) * 100
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: C.t2 }}>{label}</span>
-        <span style={{ fontSize: 16, fontWeight: 800, color: accent || C.acd, fontVariantNumeric: 'tabular-nums' }}>{formatValue(value)}</span>
+        <span style={{ fontSize: 16, fontWeight: 800, color: valueColor || accent || C.acd, fontVariantNumeric: 'tabular-nums' }}>{formatValue(value)}</span>
       </div>
       <div style={{ position: 'relative', height: 6, borderRadius: 4, background: C.border2 }}>
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pctOfTrack}%`, borderRadius: 4, background: accent || C.acc, transition: 'width 60ms linear' }} />
@@ -156,7 +161,9 @@ const BAR_H = 9
 const BAR_GAP = 2
 const ROW_GAP = 6
 
-function WaterfallChart({ before, after, hideGross }) {
+// phone (PNL_REVIEW_FIXES.md §3): label + values on one line, then Current and Planned as two
+// full-width bars on the same scale (aligned, min 2% wide so a small stage still shows).
+function WaterfallChart({ before, after, hideGross, phone = false }) {
   const stages = hideGross ? WATERFALL_STAGES.filter(s => s.key !== 'gross') : WATERFALL_STAGES
   const allValues = stages.flatMap(s => [before[s.key], after[s.key]])
   const maxVal = Math.max(...allValues, 1)
@@ -167,6 +174,39 @@ function WaterfallChart({ before, after, hideGross }) {
   const barLen = v => Math.abs(v) / range * 100
   const barLeft = v => v >= 0 ? zeroPct : zeroPct - barLen(v)
 
+  if (phone) {
+    const M = C.m
+    const w = v => `${v !== 0 ? Math.max(2, barLen(v)) : 0}%`
+    return (
+      <div>
+        {minVal < 0 && <div style={{ fontSize: 12, fontWeight: 600, color: M.down, marginBottom: 6 }}>Bars left of the line are a loss</div>}
+        {stages.map(stage => {
+          const b = before[stage.key], a = after[stage.key]
+          return (
+            <div key={stage.key} style={{ padding: '6px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontSize: 13 }}>
+                <b style={{ color: M.ink }}>{stage.label}</b>
+                <span style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  <b style={{ color: a < 0 ? M.down : M.ink }}>{fmt(a)}</b>
+                  <span style={{ fontSize: 12, color: M.muted }}> from {fmt(b)}</span>
+                </span>
+              </div>
+              {[[b, M.g4 || C.border2], [a, a < 0 ? M.down : M.green]].map(([v, color], i) => (
+                <div key={i} style={{ position: 'relative', height: 8, marginTop: i ? 3 : 5 }}>
+                  <div style={{ position: 'absolute', left: `${zeroPct}%`, top: -2, bottom: -2, width: 1, background: C.border2 }} />
+                  <div style={{ position: 'absolute', left: `${barLeft(v)}%`, width: w(v), top: 0, bottom: 0, background: color, borderRadius: 4 }} />
+                </div>
+              ))}
+            </div>
+          )
+        })}
+        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 10, fontSize: 12, color: M.muted }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 10, height: 10, borderRadius: 3, background: M.g4 || C.border2, display: 'inline-block' }} />Current (mature-normalised)</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 10, height: 10, borderRadius: 3, background: M.green, display: 'inline-block' }} />Planned</span>
+        </div>
+      </div>
+    )
+  }
   return (
     <div>
       {minVal < 0 && (
@@ -208,7 +248,7 @@ function WaterfallChart({ before, after, hideGross }) {
         })}
       </div>
       <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16, fontSize: 11, color: C.t3 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.border2, display: 'inline-block' }} />Current</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.border2, display: 'inline-block' }} />Current (mature-normalised)</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.acc, display: 'inline-block' }} />Planned</span>
       </div>
     </div>
@@ -273,9 +313,10 @@ function Cm2HeroCard({ before, after, beforePct, afterPct }) {
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 11, color: C.t3 }}>Current CM2: {fmt(before)} ({beforePct != null ? `${beforePct.toFixed(1)}%` : '—'})</div>
+        <div style={{ fontSize: 11, color: C.t3 }} title="Current is rebuilt on the product's mature (settled) return rates, so it can differ slightly from the Financial View for a recent range">Current CM2 (mature-normalised): {fmt(before)} ({beforePct != null ? `${beforePct.toFixed(1)}%` : '—'})</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: trendPalette ? trendPalette.tx : C.t2, marginTop: 2 }}>
-          {trendPalette && (improved ? '▲ ' : '▼ ')}{delta >= 0 ? '+' : ''}{fmt(delta)} {trendPalette && <span style={{ fontWeight: 500 }}>{improved ? 'improvement' : 'decline'}</span>}
+          {/* one sign: "▼ ₹7.83 L decline", never "▼ ₹-7,83,164" (PNL_REVIEW_FIXES.md §2) */}
+          {trendPalette ? `${improved ? '▲' : '▼'} ${fmt(Math.abs(delta))}` : `${delta >= 0 ? '+' : ''}${fmt(delta)}`} {trendPalette && <span style={{ fontWeight: 500 }}>{improved ? 'improvement' : 'decline'}</span>}
         </div>
       </div>
     </div>
@@ -297,10 +338,13 @@ function BaselineStat({ label, value, sub, accent, divider = true }) {
   )
 }
 
-export default function PriceSimulator({ variantProducts = [], productGroups = [] }) {
+// initialProductKey ('cat::sc'): opens on that product ("Simulate ↗" from the P&L watchlist / Financial View).
+// phone: the phone layout (PNL_REVIEW_FIXES.md §2–3): short intro + ⓘ, equal-width toggle, Reset in
+// the header's ⋯ (with Undo), levers in ink, a sticky "Planned CM2" bar.
+export default function PriceSimulator({ variantProducts = [], productGroups = [], initialProductKey = null, phone = false }) {
   const [pickMode, setPickMode] = useState('product')
-  const [selectedSku, setSelectedSku] = useState(null)
-  const [search, setSearch] = useState('')
+  const [selectedSku, setSelectedSku] = useState(() => (initialProductKey && productGroups.some(p => p.sku === initialProductKey) ? initialProductKey : null))
+  const [search, setSearch] = useState(() => productGroups.find(p => p.sku === initialProductKey)?.name || '')
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
   // Listing Price is user-editable (to simulate a hypothetical listing price change), but ALWAYS re-seeds
@@ -389,7 +433,8 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     // vs. Current CM2 ₹7.39L at 0% discount/volume change purely because Target ROAS defaulted to
     // 4x against its real ~43x. Falls back to 4.0x only when this product has no real spend on
     // record (adSpend null/0) or no net revenue to divide by.
-    const realRoas = product.adSpend > 0 && product.net > 0 ? product.net / product.adSpend : null
+    // Gross Revenue (Ex GST) ÷ spend — the dashboard's ROAS everywhere else (was Net ÷ spend here).
+    const realRoas = product.adSpend > 0 && product.excRev > 0 ? product.excRev / product.adSpend : null
     setTargetRoas(realRoas != null ? Math.max(0.5, Math.round(realRoas * 10) / 10) : 4)
     setTargetRoasIsDefault(true)
     setReturnRatePct(Math.round((product.returnRevRate || 0) * 1000) / 10)
@@ -398,6 +443,21 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
 
   // Re-seed every lever the moment a product is selected (or changed) — see resetLevers above.
   useEffect(() => { resetLevers(selectedProduct) }, [selectedProduct?.sku])
+
+  // Phone: the header's ⋯ → Reset; it returns an undo that puts every lever back as it was.
+  useEffect(() => {
+    if (!phone) return
+    const snap = { listingPriceOverride, discountPct, discountPctIsDefault, volumeDeltaPct, targetRoas, targetRoasIsDefault, returnRatePct, returnRatePctIsDefault }
+    setPnlToolReset(selectedProduct ? () => {
+      resetLevers(selectedProduct)
+      return () => {
+        setListingPriceOverride(snap.listingPriceOverride); setDiscountPct(snap.discountPct); setDiscountPctIsDefault(snap.discountPctIsDefault)
+        setVolumeDeltaPct(snap.volumeDeltaPct); setTargetRoas(snap.targetRoas); setTargetRoasIsDefault(snap.targetRoasIsDefault)
+        setReturnRatePct(snap.returnRatePct); setReturnRatePctIsDefault(snap.returnRatePctIsDefault)
+      }
+    } : null)
+    return () => setPnlToolReset(null)
+  }, [phone, selectedProduct, listingPriceOverride, discountPct, discountPctIsDefault, volumeDeltaPct, targetRoas, targetRoasIsDefault, returnRatePct, returnRatePctIsDefault])
 
   // Typeahead — matches SKU, name, subcategory, OR an abbreviation of the name (each word's first
   // letter, e.g. "XL Coccyx Seat Cushion" → "xlcsc") so a short acronym works as well as the full name.
@@ -468,10 +528,17 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const cogs = grossCogs * (1 - matureReturnRevRate)
     const gm = net - cogs
 
-    const rate = sndRateSlabs ? rateForWeightGm(sndRateSlabs, selectedProduct.weightGm ?? null) : null
+    // Priced against this product's REAL weight-bucket order-size mix (confirmed bug fix
+    // 2026-10-23), not a single-unit-shipment assumption — see blendedLogisticsForBuckets' own
+    // comment. Falls back to the single-unit rate (old behavior) when no real bucket distribution
+    // exists yet, so a brand-new/low-volume product still gets a reasonable estimate.
+    const hasRate = sndRateSlabs?.length && (selectedProduct.weightGm != null || selectedProduct.weightBuckets?.length)
     let snd
-    if (rate) {
-      const { logistics, fulfilment } = blendedLogisticsPerUnit(rate, { rtoPct, returnPct: nonRtoReturnPct, exchangePct: exchPct, cancelPct })
+    if (hasRate) {
+      const { logistics, fulfilment } = blendedLogisticsForBuckets(
+        sndRateSlabs, selectedProduct.weightBuckets, selectedProduct.weightGm ?? null,
+        { rtoPct, returnPct: nonRtoReturnPct, exchangePct: exchPct, cancelPct }
+      )
       const paymentGw = (gross / units) * PAYMENT_GW_RATE // per-unit gross Inc GST × PG rate
       const softwareFee = 15
       snd = (logistics + fulfilment + paymentGw + softwareFee) * units
@@ -490,6 +557,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const cm2 = cm1 - spend
     return {
       net, gross, units, cogs, gm, snd, cm1, spend, cm2, asp: selectedProduct.asp,
+      excRev: selectedProduct.excRev || 0, // Gross Ex GST, the Target ROAS base
       // Prepaid-only ASP — used ONLY for the Current Discount comparison against Listing Price
       // (see resetLevers' seedDiscount and currentDiscountPct below), never for CM1/CM2/waterfall,
       // which all correctly keep using the blended `asp` across both payment types.
@@ -512,7 +580,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
   // (Listing Price − Prepaid ASP) ÷ Listing Price — same real-effective-discount formula
   // resetLevers' seedDiscount uses (see that comment for why Prepaid-only, not blended asp).
   const currentDiscountPct = selectedProduct && baseline?.listingPrice
-    ? ((baseline.listingPrice - (baseline.prepaidAsp ?? baseline.asp)) / baseline.listingPrice * 100)
+    ? Math.max(0, (baseline.listingPrice - (baseline.prepaidAsp ?? baseline.asp)) / baseline.listingPrice * 100)
     : null
   const plannedSellingPrice = referencePrice != null ? referencePrice * (1 - discountPct / 100) : null
   // The REAL price multiplier applied to baseline.net: ratio of the planned price to the
@@ -612,10 +680,11 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     // (targetRoas is rounded to 1 decimal for display — recomputing spend from it can never
     // exactly reproduce baseline.spend even when nothing else changed, leaving a small but real
     // Current-vs-Planned CM2 gap at "default" levers). Once the user actually drags the slider,
-    // switch to the standard Net÷TargetROAS formula as normal.
+    // switch to Gross (Ex GST) ÷ Target ROAS — the same ROAS base as the rest of the dashboard.
+    const newExcRev = (baseline.excRev || 0) * effectivePriceMultiplier * volumeMultiplier
     const newSpend = targetRoasIsDefault
       ? (baseline.spend || 0) * effectivePriceMultiplier * volumeMultiplier
-      : (targetRoas > 0 ? newNet / targetRoas : 0)
+      : (targetRoas > 0 ? newExcRev / targetRoas : 0)
     const newCm2 = newCm1 - newSpend
 
     return { gross: newGross, net: newNet, cogs: newCogs, gm: newGm, snd: newSnd, cm1: newCm1, spend: newSpend, cm2: newCm2 }
@@ -635,7 +704,8 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     // newNet above) — held fixed at the Return Rate Δ slider's current value, same as
     // volumeDeltaPct/targetRoas, so this still answers "at TODAY's other lever settings, what's
     // the max discount before CM2 turns negative."
-    const coeff = volumeMultiplier * baseline.net * retainedFraction * (1 - PAYMENT_GW_RATE - spendFactor)
+    // Spend = Gross Ex GST × price × volume ÷ Target ROAS (not reduced by extra returns).
+    const coeff = volumeMultiplier * (baseline.net * retainedFraction * (1 - PAYMENT_GW_RATE) - (baseline.excRev || 0) * spendFactor)
     if (Math.abs(coeff) < 1e-9) return null
     // pStar solves for the ratio applied to baseline.net (i.e. priceMultiplier = newPrice ÷
     // baseline.asp) at which CM2 = 0 — convert it back to a discount off referencePrice (Listing
@@ -663,16 +733,22 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.pnl-no-spinner { -moz-appearance: textfield; }
       `}</style>
+      {phone ? (
+        <ToolIntro title="Price Simulator" short="Change price, discount, volume or ROAS and see CM1 / CM2 update."
+          long="Pick a product and adjust its price, discount, volume, and ROAS to see CM1 and CM2 update instantly, all against its real listing price and cost data. Current is rebuilt on the product's mature (settled) return rates." />
+      ) : (
       <div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>Price Simulator</div>
         <div style={{ fontSize: 12.5, color: C.t3, marginTop: 2 }}>
           Pick a product and adjust its price, discount, volume, and ROAS to see CM1 and CM2 update instantly — all against its real listing price and cost data.
         </div>
       </div>
+      )}
 
       {/* ── Product picker + current scenario snapshot ── */}
       <Card style={{ padding: '16px 22px', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          {phone ? <SegmentToggle options={PICK_MODES} value={pickMode} onChange={handlePickModeChange} label="Pick by" full style={{ width: '100%' }} /> : (
           <div style={{ display: 'flex', gap: 4 }}>
             {PICK_MODES.map((m, i) => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -686,6 +762,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
               </div>
             ))}
           </div>
+          )}
           <div style={{ fontSize: 11.5, color: C.t3 }}>
             {pickMode === 'product'
               ? 'A Product blends all its color/size variants, weighted by units sold.'
@@ -743,7 +820,22 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
           </div>
         </div>
 
-        {hasBaseline && (
+        {hasBaseline && phone && (
+          // Phone (PNL_REVIEW_FIXES.md §3): 3 × 3 in P&L order, full values, nothing cut
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: '10px 8px', paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+            {[
+              ['Gross', fmt(baseline.gross)], ['Units', fmtN(baseline.units)], ['ASP', fmtPrice(baseline.prepaidAsp ?? baseline.asp)],
+              ['Net rev', fmt(baseline.net)], ['COGS %', pct(baseline.cogs, baseline.net)], ['GM %', pct(baseline.gm, baseline.net)],
+              ['CM1 %', pct(baseline.cm1, baseline.net)], ['CM2 %', pct(baseline.cm2, baseline.net)], ['DRR', `${fmtN(Math.round(baseline.drr))}/day`],
+            ].map(([label, value]) => (
+              <div key={label} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.m.muted }}>{label}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.m.ink, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {hasBaseline && !phone && (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${baseline.gross != null ? 9 : 8}, 1fr)`, gap: 10, overflowX: 'auto', paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
             {baseline.gross != null && <BaselineStat label="Gross Revenue" value={fmt(baseline.gross)} />}
             <BaselineStat label="Units Sold" value={fmtN(baseline.units)} />
@@ -781,7 +873,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
             <Card style={{ flex: 1, gap: 12, padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <SectionLabel>Promo Levers</SectionLabel>
-                <button
+                {!phone && <button
                   onClick={() => resetLevers(selectedProduct)}
                   title="Reset all levers to this product's real current values"
                   style={{
@@ -799,7 +891,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
                     <path d="M3 12a9 9 0 1 1 2.64 6.36" />
                     <path d="M3 21v-6h6" />
                   </svg>
-                </button>
+                </button>}
               </div>
 
               {/* Listing Price — a slider like every other lever here, seeded to the product's own
@@ -840,19 +932,20 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase' }}>Current Selling Price</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.t3 }}>{fmtPrice(baseline?.asp || 0)}</div>
+                  {/* Prepaid ASP (the discount's own base; blended ASP includes the COD fee), never above listing — fix/pnl-data item 5 */}
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.t3 }}>{fmtPrice(Math.min(baseline?.prepaidAsp ?? baseline?.asp ?? 0, referencePrice ?? Infinity))}</div>
                 </div>
                 <div style={{ fontSize: 16, color: C.t3 }}>→</div>
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.acd, textTransform: 'uppercase' }}>New Selling Price</div>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: C.acd }}>{fmtPrice(plannedSellingPrice ?? baseline?.asp ?? 0)}</div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: C.acd }}>{fmtPrice(plannedSellingPrice ?? baseline?.prepaidAsp ?? baseline?.asp ?? 0)}</div>
                 </div>
               </div>
 
               <SliderField label="Volume Change" value={volumeDeltaPct} onChange={setVolumeDeltaPct} min={-50} max={200} step={5}
-                formatValue={v => `${v > 0 ? '+' : ''}${v}%`} accent={C.blue.tx} />
-              <SliderField label="Target ROAS" value={targetRoas} onChange={v => { setTargetRoas(v); setTargetRoasIsDefault(false) }} min={0.5} max={Math.max(15, Math.ceil(targetRoas))} step={0.1}
-                formatValue={v => `${v.toFixed(1)}x`} accent={C.green.tx} />
+                formatValue={v => `${v > 0 ? '+' : ''}${v}%`} accent={C.blue.tx} valueColor={phone ? C.m.ink : undefined} />
+              <SliderField label="Target ROAS (Gross ex GST ÷ spend)" value={targetRoas} onChange={v => { setTargetRoas(v); setTargetRoasIsDefault(false) }} min={0.5} max={Math.max(15, Math.ceil(targetRoas))} step={0.1}
+                formatValue={v => `${v.toFixed(1)}x`} accent={C.green.tx} valueColor={phone ? C.m.ink : undefined} />
 
               {selectedProduct && baseline?.returnRevRate != null && (
                 <div>
@@ -862,7 +955,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
                       more low-intent buyers who return more, rather than entering a separate
                       "+Xpp on top" delta. */}
                   <SliderField label="Return Rate" value={returnRatePct} onChange={v => { setReturnRatePct(v); setReturnRatePctIsDefault(false) }} min={0} max={100} step={1}
-                    formatValue={v => `${v}%`} accent={C.red.tx} />
+                    formatValue={v => `${v}%`} accent={C.red.tx} valueColor={phone ? C.m.ink : undefined} />
                   <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>
                     Current (mature) Return% <b style={{ color: C.t1 }}>{(baseline.returnRevRate * 100).toFixed(1)}%</b>
                     {baseline.returnRateSource === 'category' && ' (Category avg)'}
@@ -902,7 +995,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
               <WaterfallChart
                 before={{ gross: baseline.gross || 0, net: baseline.net, gm: baseline.gm, cm1: baseline.cm1, cm2: baseline.cm2 }}
                 after={{ gross: simulated.gross || 0, net: simulated.net, gm: simulated.gm, cm1: simulated.cm1, cm2: simulated.cm2 }}
-                hideGross={baseline.gross == null}
+                hideGross={baseline.gross == null} phone={phone}
               />
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
@@ -914,6 +1007,11 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
             </Card>
           </div>
         </div>
+      )}
+      {phone && hasBaseline && simulated && (
+        <ToolResultBar tone={simulated.cm2 < 0 ? 'bad' : undefined}>
+          Planned CM2 {fmt(simulated.cm2)} ({cm2PctAfter != null ? `${cm2PctAfter.toFixed(1)}%` : '—'}) · {Math.abs(simulated.cm2 - baseline.cm2) < 0.5 ? 'same as current' : `${simulated.cm2 > baseline.cm2 ? '▲' : '▼'} ${fmt(Math.abs(simulated.cm2 - baseline.cm2))} vs current`}
+        </ToolResultBar>
       )}
     </div>
   )

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview Mobile Mockup</title>
+<style>
+  :root{
+    --bg:#efebe4; --card:#ffffff; --ink:#1c2420; --muted:#7b847f; --line:#e9e6df;
+    --green:#1f5a3d; --green-soft:rgba(31,90,61,.10); --gold:#c8860a; --up:#1f8a4c; --down:#c0392b;
+    --chip:#f6f4ef;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);
+       display:flex;gap:40px;justify-content:center;align-items:flex-start;padding:32px 16px;flex-wrap:wrap}
+  .phone{width:375px;height:667px;background:#f4f2ed;border-radius:36px;box-shadow:0 20px 50px rgba(0,0,0,.18);
+         border:10px solid #111;position:relative;overflow:hidden;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;background:#fff;border-bottom:1px solid var(--line)}
+  .topbar h1{font-size:17px;margin:0;font-weight:600}
+  .datepill{font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff;color:var(--ink)}
+  .bell{width:32px;height:32px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;margin-right:8px;position:relative;font-size:14px}
+  .bell b{position:absolute;top:-5px;right:-5px;background:var(--down);color:#fff;font-size:10px;border-radius:9px;padding:1px 5px}
+  .scroll{flex:1;overflow:auto;padding:12px}
+  .card{background:var(--card);border-radius:18px;padding:16px 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .head{padding:0 16px;display:flex;justify-content:space-between;align-items:flex-start}
+  .label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .more{border:none;background:none;font-size:18px;color:var(--muted);line-height:1;padding:0 4px;cursor:pointer}
+  .hero{padding:4px 16px 0;font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .sub{padding:2px 16px 0;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;min-height:20px}
+  .delta{font-weight:600}
+  .up{color:var(--up)} .down{color:var(--down)}
+  svg{display:block;width:100%;height:170px;margin-top:8px;touch-action:none;cursor:crosshair}
+  .legend{display:flex;gap:14px;padding:4px 16px 0;font-size:11.5px;color:var(--muted);align-items:center}
+  .legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid var(--green);vertical-align:middle;margin-right:5px}
+  .legend i.prev{border-top:2px dashed #9aa39e}
+  .gran{margin-left:auto}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:14px 16px 4px;scroll-snap-type:x mandatory;scrollbar-width:none;
+         -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{scroll-snap-align:start;flex:0 0 auto;background:var(--chip);border:1.5px solid transparent;border-radius:14px;padding:9px 12px;min-width:118px;cursor:pointer;text-align:left}
+  .chip.active{border-color:var(--green);background:#fff;box-shadow:0 0 0 3px var(--green-soft)}
+  .chip .n{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .chip .v{font-size:16px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  .chip .d{font-size:11.5px;font-weight:600;margin-top:1px}
+  .next{margin-top:12px;background:#fff;border-radius:18px;padding:14px 16px;color:var(--muted);font-size:13px}
+  .nav{display:flex;justify-content:space-around;background:#fff;border-top:1px solid var(--line);padding:6px 0 14px}
+  .nav div{display:flex;flex-direction:column;align-items:center;font-size:10.5px;color:var(--muted);gap:3px;min-width:56px}
+  .nav div.on{color:var(--green);font-weight:700}
+  .nav span{font-size:18px}
+  .notes{max-width:380px;font-size:14px;line-height:1.55}
+  .notes h2{font-size:18px;margin:4px 0 10px}
+  .notes li{margin-bottom:8px}
+  .tag{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:14px;color:#6b5414}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="topbar">
+    <h1>Overview</h1>
+    <div style="display:flex;align-items:center">
+      <div class="bell">🔔<b>4</b></div>
+      <div class="datepill">📅 1 Oct – 24 Oct</div>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <div class="card">
+      <div class="head">
+        <div class="label" id="metricName">Gross Revenue</div>
+        <button class="more" title="Options: Daily / Weekly / Monthly">⋯</button>
+      </div>
+      <div class="hero" id="hero">₹55.72 Cr</div>
+      <div class="sub" id="sub"><span class="delta up">▲ 20.6%</span><span>vs prev period</span></div>
+
+      <svg id="chart" viewBox="0 0 355 170" preserveAspectRatio="none" aria-label="Trend chart">
+        <defs>
+          <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1f5a3d" stop-opacity=".22"/>
+            <stop offset="1" stop-color="#1f5a3d" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" x2="355" y1="85" y2="85" stroke="#eeebe4" stroke-width="1"/>
+        <path id="area" fill="url(#fill)"/>
+        <path id="prev" fill="none" stroke="#a3aba6" stroke-width="1.6" stroke-dasharray="4 4"/>
+        <path id="line" fill="none" stroke="#1f5a3d" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+        <line id="guide" y1="0" y2="170" stroke="#1c2420" stroke-width="1" opacity="0"/>
+        <circle id="dot" r="5" fill="#fff" stroke="#1f5a3d" stroke-width="2.5" opacity="0"/>
+      </svg>
+
+      <div class="legend"><span><i></i>This period</span><span><i class="prev"></i>Prev period</span><span class="gran">Daily</span></div>
+
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="next">Where revenue came from → Channel Scorecard (next section)…</div>
+  </div>
+
+  <div class="nav">
+    <div class="on"><span>▦</span>Overview</div>
+    <div><span>▮▮</span>Sales</div>
+    <div><span>₹</span>P&amp;L</div>
+    <div><span>▢</span>Inventory</div>
+    <div><span>⋯</span>More</div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>Overview, mobile: proposed</h2>
+  <ul>
+    <li><b>One hero number</b> with % change vs the previous period. "Prev Period" is no longer a separate KPI.</li>
+    <li><b>A clean chart</b>: no X/Y axis labels, full width. The dashed line is the previous period.</li>
+    <li><b>Touch and drag on the chart</b>: the big number shows that day's value and date. Let go to go back to the total.</li>
+    <li><b>Swipeable KPI chips</b>: tap one to switch the chart and the hero number to that metric.</li>
+    <li><b>No Daily/Weekly/Monthly toggle.</b> It's picked automatically from the date range; you can override it in "⋯".</li>
+    <li><b>Return %</b>: going up shows red (up is bad).</li>
+    <li>Bottom nav: 5 labelled items + "More" (planned in Phase 2).</li>
+  </ul>
+  <div class="tag">Mockup only. The chart shape and the % changes on the chips are <b>illustrative</b>. Real values come from your dashboard. The headline totals are taken from your screenshot.</div>
+</div>
+
+<script>
+// Illustrative daily series (Cr) shaped like the screenshot
+const base=[2.0,2.1,2.2,2.05,2.0,2.1,3.1,3.0,2.3,2.7,2.3,2.5,2.4,2.3,2.4,2.3,2.6,2.4,2.5,2.4,2.45,2.45,2.5,2.0];
+const prevB=[2.2,2.1,2.15,2.2,2.25,2.2,1.9,2.0,2.1,2.15,2.1,2.2,2.2,2.25,2.3,2.2,2.25,2.3,2.25,2.3,2.3,2.35,2.4,2.6];
+const metrics=[
+  {k:'Gross Revenue', v:'₹55.72 Cr', d:20.6, good:'up', scale:1,     fmt:x=>'₹'+x.toFixed(2)+' Cr'},
+  {k:'Net Revenue',   v:'₹42.10 Cr', d:18.2, good:'up', scale:.755,  fmt:x=>'₹'+x.toFixed(2)+' Cr'},
+  {k:'Orders',        v:'2,60,205',  d:15.4, good:'up', scale:4670,  fmt:x=>Math.round(x).toLocaleString('en-IN')},
+  {k:'Units',         v:'4,16,450',  d:14.1, good:'up', scale:7480,  fmt:x=>Math.round(x).toLocaleString('en-IN')},
+  {k:'AOV',           v:'₹2,141',    d:-2.3, good:'up', scale:null,  fmt:x=>'₹'+Math.round(x).toLocaleString('en-IN'), flat:2141},
+  {k:'ASP',           v:'₹1,338',    d:1.1,  good:'up', scale:null,  fmt:x=>'₹'+Math.round(x).toLocaleString('en-IN'), flat:1338},
+  {k:'Return %',      v:'14.7%',     d:0.8,  good:'down',scale:null, fmt:x=>x.toFixed(1)+'%', flat:14.7},
+];
+const W=355,H=170,pad=12;
+let cur=0;
+const el=id=>document.getElementById(id);
+function series(m,arr){ if(m.scale) return arr.map(x=>x*m.scale);
+  return arr.map((x,i)=>m.flat*(1+((x-2.3)/2.3)*0.25*(i%2?1:-0.6))); }
+function path(vals,min,max){
+  return vals.map((v,i)=>{const x=i*(W/(vals.length-1));const y=pad+(H-2*pad)*(1-(v-min)/(max-min||1));
+    return (i?'L':'M')+x.toFixed(1)+','+y.toFixed(1)}).join(' ');
+}
+let S=[],P=[],mn=0,mx=1;
+function draw(){
+  const m=metrics[cur]; S=series(m,base); P=series(m,prevB);
+  const all=S.concat(P); mn=Math.min(...all)*0.9; mx=Math.max(...all)*1.05;
+  const d=path(S,mn,mx); el('line').setAttribute('d',d); el('prev').setAttribute('d',path(P,mn,mx));
+  el('area').setAttribute('d',d+` L${W},${H} L0,${H} Z`);
+  resetHero();
+}
+function deltaHTML(m){const up=m.d>=0;const good=(m.good==='up')?up:!up;
+  return `<span class="delta ${good?'up':'down'}">${up?'▲':'▼'} ${Math.abs(m.d)}%</span>`;}
+function resetHero(){const m=metrics[cur];el('metricName').textContent=m.k;el('hero').textContent=m.v;
+  el('sub').innerHTML=deltaHTML(m)+'<span>vs prev period</span>';el('guide').setAttribute('opacity',0);el('dot').setAttribute('opacity',0);}
+function chips(){el('chips').innerHTML=metrics.map((m,i)=>`<button class="chip ${i===cur?'active':''}" data-i="${i}">
+  <div class="n">${m.k}</div><div class="v">${m.v}</div><div class="d">${deltaHTML(m)}</div></button>`).join('');
+  el('chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{cur=+b.dataset.i;chips();draw();});}
+function scrub(e){const r=el('chart').getBoundingClientRect();const cx=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width*W;
+  const i=Math.max(0,Math.min(S.length-1,Math.round(cx/(W/(S.length-1)))));const x=i*(W/(S.length-1));
+  const y=pad+(H-2*pad)*(1-(S[i]-mn)/(mx-mn));
+  el('guide').setAttribute('x1',x);el('guide').setAttribute('x2',x);el('guide').setAttribute('opacity',.35);
+  el('dot').setAttribute('cx',x);el('dot').setAttribute('cy',y);el('dot').setAttribute('opacity',1);
+  el('hero').textContent=metrics[cur].fmt(S[i]);el('sub').innerHTML=`<span>${i+1} Oct 2026</span><span>· prev ${metrics[cur].fmt(P[i])}</span>`;}
+const c=el('chart');
+['mousemove','touchstart','touchmove'].forEach(ev=>c.addEventListener(ev,e=>{e.preventDefault&&ev!=='mousemove'&&e.preventDefault();scrub(e)},{passive:false}));
+['mouseleave','touchend'].forEach(ev=>c.addEventListener(ev,resetHero));
+chips();draw();
+</script>
+</body>
+</html>

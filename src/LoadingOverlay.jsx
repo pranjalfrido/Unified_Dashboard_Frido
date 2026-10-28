@@ -104,7 +104,7 @@ export function LoadingScreen() {
       aria-live="polite"
       aria-label="Loading"
       style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 'var(--app-h)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--bg)',
       }}
     >

@@ -1,0 +1,90 @@
+{
+  "rows": [
+    {
+      "id": "profile",
+      "expanded": 49,
+      "collapsed": 49,
+      "restored": 49
+    },
+    {
+      "id": "profile-team",
+      "expanded": 49
+    },
+    {
+      "id": "profile-member",
+      "expanded": 49
+    }
+  ],
+  "results": [
+    {
+      "name": "profile: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "more"
+    },
+    {
+      "name": "profile: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: scrolling up restores the header",
+      "pass": true,
+      "detail": "49 → 49 → 49"
+    },
+    {
+      "name": "profile: no focus box after a tap",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-team: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-team: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-team: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: control order date · filter · ⋯",
+      "pass": true,
+      "detail": "other"
+    },
+    {
+      "name": "profile-member: title on one line",
+      "pass": true,
+      "detail": "25.5px"
+    },
+    {
+      "name": "profile-member: header text ≥ 12px",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "profile-member: no sideways overflow",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

@@ -41,6 +41,51 @@ export const C = {
   get sh2(){ return tok("--sh2","0 2px 4px rgba(40,38,30,.04),0 4px 12px rgba(40,38,30,.06)") },
   get sh3(){ return tok("--sh3","0 4px 8px rgba(40,38,30,.05),0 12px 28px rgba(40,38,30,.08)") },
   r: { sm: 8, md: 12, lg: 16, xl: 20 },
+  // Layout tokens (responsive overhaul). Theme-independent, so plain values rather than getters.
+  // Spacing is a 4/8 scale: C.space[4] === 16 (px).
+  space: { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48 },
+  // Page gutters per breakpoint (mobile / tablet / desktop).
+  gutter: { mobile: 16, tablet: 24, desktop: 32 },
+  // Stacking order, low to high. Matches what the shell already uses: topnav 100, sidebar 400,
+  // the mobile filter overlay 499/500.
+  z: { base: 0, raised: 10, dropdown: 60, sticky: 80, nav: 100, drawer: 200, sidebar: 400, overlay: 499, modal: 500, toast: 600 },
+  // Breakpoint minimum widths - same scale as src/responsive/useBreakpoint.js.
+  bp: { xs: 0, sm: 480, md: 768, lg: 1024, xl: 1280, '2xl': 1536 },
+  motion: { fast: '150ms', base: '200ms', slow: '250ms' },
+  // Mobile palette + scale (docs/responsive/MOBILE_DESIGN_SYSTEM.md §1) for everything below
+  // 1024px. One fixed palette - it does not follow the desktop theme picker (forest/gold/indigo),
+  // so desktop keeps its theme and look exactly as before.
+  m: {
+    green: '#1f5a3d', greenDark: '#0f2a1d', header: 'linear-gradient(180deg,#0f2a1d,#1c4630)',
+    g2: '#5f8f75', g3: '#9cc4ad', g4: '#d5dbd7',
+    ink: '#1c2420', muted: '#7b847f', line: '#eeebe4', bg: '#f4f2ed', soft: '#f4f2ed', card: '#fff',
+    up: '#1f8a4c', down: '#c0392b', amber: '#c8860a', prev: '#a3aba6', // prev: previous-period line + its legend swatch
+    downDark: '#7a1f1f', // Inventory "Out of stock" (darker than Critical red), approved 2026-10-26
+    masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
+    glowTile: '#e3f1e8', // phone nav launcher: current-page row
+    navTile: '#edf6f0', // phone bottom bar: selected icon tile (34 × 30, radius 11, tight soft halo)
+    // Phone page header, deep green (HEADER_GREEN_PROMPT.md): surface, context, chip text, icons, pressed, date pill, accent (count, underline), notification dot
+    hdr: { bg: 'linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%)', context: '#a9c9b6', chip: '#c8dfd1', icon: '#d8e8de', press: 'rgba(255,255,255,.10)', pill: 'rgba(255,255,255,.14)', accent: '#9fe0b9', dot: '#e5534b' },
+    // Phone bottom bar (light): surface, inactive icon, hairline + soft shadow
+    nav: { bg: '#fbfaf7', icon: '#8a938e', shadow: '0 -1px 0 #e6e2d8, 0 -6px 16px -6px rgba(28,52,40,.14)' },
+    tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
+    cardShadow: '0 1px 3px rgba(0,0,0,.06)',
+    radius: { card: 18, tile: 12, chip: 999 },
+    // px; nothing below 12
+    type: { pageTitle: 17, cardTitle: 15.5, hero: 24, tileValue: 14, listValue: 13.5, body: 13, label: 12 }, // hero 24 / tile 14 on every page (2026-10-26)
+  },
+  // Mobile type scale (Overview mobile redesign): { size (px), weight }. Nothing on mobile goes
+  // below 12px; labels are uppercase + muted (C.t3) at the `label` size.
+  type: {
+    pageTitle: { size: 17, weight: 600 },
+    cardTitle: { size: 16, weight: 700 },
+    hero: { size: 31, weight: 700 },
+    value: { size: 19, weight: 700 },
+    secondary: { size: 14.5, weight: 600 },
+    label: { size: 12, weight: 600 },
+    body: { size: 13, weight: 400 },
+    min: 12,
+  },
   get display(){ return tok("--display","Arial,Helvetica,sans-serif") },
   // Chart series palette as a SET. The accent leads, so it tracks the theme; the
   // rest are fixed hues chosen to stay distinguishable beside either accent.

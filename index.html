@@ -3,8 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- Pinch/double-tap zoom stays enabled (accessibility, reading dense tables on a phone).
+         viewport-fit=cover lets env(safe-area-inset-*) work on notched phones. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+    <!-- Internal dashboard: keep it out of search engines (see also public/robots.txt). -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Phones: the status bar matches the Ivory page header (HEADER_MOBILE_PROMPT.md §2). -->
+    <meta name="theme-color" content="#1a4d34" media="(max-width: 768px)" />
     <title>Frido Navigator</title>
     <script>
       // Applied before first paint so the saved theme is already on <html> when the
@@ -23,13 +29,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      document.addEventListener('touchmove', function(e) {
-        if (e.touches.length > 1) e.preventDefault();
-      }, { passive: false });
-      document.addEventListener('gesturestart', function(e) {
-        e.preventDefault();
-      }, { passive: false });
-    </script>
   </body>
 </html>

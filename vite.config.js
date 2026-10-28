@@ -23,7 +23,15 @@ export default defineConfig({
     // Node/OS DNS setups still resolve to ::1 only) guarantees the IPv4 side is up.
     host: '127.0.0.1',
     proxy: {
-      '/api': 'http://34.14.135.133'
+      // Points at the local Express/Vercel-dev server (npm run server), not the remote deployment
+      // — confirmed 2026-10-23: the remote IP was timing out from this environment entirely
+      // (/api/bq and /api/cogs-monthly both hung), which silently blanked COGS%/GM%/CM1%/CM2% in
+      // the new D2C drift table (its own error path degrades to {} on a failed fetch — see
+      // loadCogsMonthly's .catch() in PnLPage.jsx) while other numbers kept showing a stale/cached
+      // browser response from before the remote became unreachable. Matches CLAUDE.md's documented
+      // local-dev setup (`vercel dev` on port 3000) — adjust back if your local API server runs on
+      // a different port.
+      '/api': 'http://localhost:3001'
     },
     watch: {
       ignored: ['**/*.pbix', '**/*.docx', '**/*.xlsx', '**/*.doc', '**/*.pdf']

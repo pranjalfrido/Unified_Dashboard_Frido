@@ -45,7 +45,7 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop, popover}) 
         ...(popover ? { maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 } : { background: IC.surface }),
         ...(!popover && open ? {
           position: 'fixed', top: 'calc(var(--nav) + 18px)', left: 'calc(var(--sb) + 18px)', zIndex: 50,
-          height: 'calc(100vh - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
+          height: 'calc(var(--app-h) - var(--nav) - 30px)', overflowY: 'auto', paddingRight: 10,
           borderRadius: 16, boxShadow: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
         } : {}),
       }}>

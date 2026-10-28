@@ -5,7 +5,15 @@
 @tailwind utilities;
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-button,select,input{touch-action:manipulation}
+/* touch-action:manipulation removes the old 300ms tap delay WITHOUT disabling pinch-zoom (the
+   viewport meta no longer sets user-scalable=no). Covers the app's clickable divs too. */
+a,button,select,input,textarea,label,summary,[role=button],[role=tab],[role=menuitem],.sb-item,.bn-item,.card-hoverable,.tnav-btn{touch-action:manipulation}
+
+/* Full-height shell. 100vh on iOS/Android includes the area under the collapsing address bar,
+   so content (the bottom nav, the last table row) hid behind it; dvh tracks the visible height.
+   Use var(--app-h) wherever 100vh was used. */
+:root{--app-h:100vh;--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}
+@supports (height:100dvh){:root{--app-h:100dvh}}
 
 /* ── Theme tokens ───────────────────────────────────────────────
    Colour lives per-theme; everything structural (elevation, radii, type,
@@ -86,12 +94,17 @@ button,select,input{touch-action:manipulation}
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 
-::-webkit-scrollbar{width:4px;height:4px}
+/* Scrollbars: 3px light Frido green on every page (MOBILE_DESIGN_SYSTEM.md §4). Firefox via scrollbar-width /
+   scrollbar-color, only where ::-webkit-scrollbar is unsupported: in Chrome 121+ they would override the 3px bar. */
+@supports not selector(::-webkit-scrollbar){ *{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent} }
+::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
+::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(31,90,61,.45)}
+::-webkit-scrollbar-button{display:none}
 
 /* ── App shell ─────────────────────────────── */
-.app-shell{display:flex;height:100vh;overflow:hidden;background:var(--bg)}
+.app-shell{display:flex;height:var(--app-h);overflow:hidden;background:var(--bg)}
 .app-main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
 
 /* ── Sidebar (desktop) ─────────────────────── */
@@ -113,7 +126,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .sb-item .sb-icon{font-size:18px;line-height:1}
 .sb-item .sb-icon svg{color:currentColor}
 .sb-item.active .sb-icon svg{color:var(--t1)}
-.sb-item .sb-label{font-size:9.5px;font-weight:500;line-height:1;letter-spacing:.02em}
+.sb-item .sb-label{font-size:9.5px;font-weight:500;line-height:1;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;text-align:center}
 .sb-item.active .sb-label{font-weight:700;color:var(--t1)}
 .sb-item.dim{opacity:.3;cursor:default;pointer-events:none}
 .sb-div{width:36px;height:1px;background:var(--b1);margin:5px 0}
@@ -122,7 +135,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* ── Bottom nav (mobile) ───────────────────── */
 .bottom-nav{
   display:none;position:fixed;bottom:0;left:0;right:0;
-  height:var(--bot);background:var(--card);border-top:1px solid var(--b1);
+  /* Grows by the home-indicator inset so its icons sit above it, not under it. */
+  height:calc(var(--bot) + var(--safe-bottom));padding-bottom:var(--safe-bottom);
+  padding-left:var(--safe-left);padding-right:var(--safe-right);
+  background:var(--card);border-top:1px solid var(--b1);
   z-index:50;
 }
 .bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 2px;overflow:hidden}
@@ -169,8 +185,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .page-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px}
 /* clip-path:none is not enough - the scroll container clips regardless. The side and
    bottom padding above is what actually gives the card hover glow room to render. */
-.page-scroll::-webkit-scrollbar{width:4px}
-.page-scroll::-webkit-scrollbar-thumb{background:#C2C6D2;border-radius:2px}
+.page-scroll::-webkit-scrollbar{width:3px}
+.page-scroll::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
@@ -313,7 +329,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .profile-fields-row{ flex-direction:column !important; align-items:flex-start !important; gap:12px !important }
   .profile-fields-row > div:last-child{ min-width:0 !important; width:100% !important }
   .profile-avatar-col{ flex-direction:row !important; align-items:center !important; gap:14px !important; width:100% !important }
-  .profile-section input{ padding:8px 11px !important; font-size:13px !important }
+  .profile-section input{ padding:8px 11px !important; font-size:16px !important }
   .profile-section label{ font-size:11.5px !important; margin-bottom:4px !important }
   .profile-section > div > div{ gap:10px !important }
   .tnav-mob-only{ display:flex !important }
@@ -337,9 +353,9 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .ads-cat-prod-section > .kpi-card:last-child{ height:auto !important; max-height:600px !important }
   .ads-by-product-card{ height:auto !important; max-height:600px !important; flex:none !important; overflow:visible !important }
 
-  .app-main{ padding-bottom:var(--bot) }
+  .app-main{ padding-bottom:calc(var(--bot) + var(--safe-bottom)) }
 
-  .topnav{ padding:0 12px; gap:6px }
+  .topnav{ padding:0 max(12px, var(--safe-right)) 0 max(12px, var(--safe-left)); gap:6px }
   .tnav-sub{ display:none }
   .tnav-sep{ display:none }
   .tnav-preset{ display:none }
@@ -451,7 +467,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .inv-filter-drawer{
     position:fixed !important; top:var(--nav) !important; left:0 !important;
     width:85vw !important; min-width:85vw !important; max-width:320px !important;
-    height:calc(100vh - var(--nav) - var(--bot)) !important;
+    height:calc(var(--app-h) - var(--nav) - var(--bot) - var(--safe-bottom)) !important;
     z-index:200 !important; box-shadow:4px 0 24px rgba(0,0,0,0.18) !important;
     overflow-y:auto !important; overflow-x:hidden !important;
   }
@@ -859,104 +875,811 @@ svg text, svg tspan{
 .drift-legend .recharts-legend-item-text{ font-size:9.5px !important }
 .drift-legend .recharts-legend-item svg{ margin-right:3px !important }
 
-/* ═══════════════════════════════════════
-   FLASH — Frido Live Analytics & Smart Hub
-   ═══════════════════════════════════════ */
-.flash-container{
-  display:flex; flex-direction:column; height:100%; background:var(--bg);
-  font-family:var(--font-sans, 'Inter', sans-serif);
+/* ══════════════════════════════════════════════
+   Frido Pulse — Chat UI
+   ══════════════════════════════════════════════ */
+
+/* Page shell: history panel + main column */
+.af-page {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
 }
-.flash-header{
-  display:flex; align-items:center; gap:12px; padding:16px 20px;
-  border-bottom:1px solid var(--bdr, #2a2a3a); flex-shrink:0;
+
+/* ── History panel ───────────────────────────── */
+.af-history {
+  width: 240px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  border-right: none;
+  background: var(--bg);
+  overflow: hidden;
+  transition: width 0.2s ease, min-width 0.2s ease;
 }
-.flash-logo{ font-size:28px; }
-.flash-title{ margin:0; font-size:18px; font-weight:700; color:var(--t1); }
-.flash-subtitle{ margin:0; font-size:11px; color:var(--t3); margin-top:2px; }
-.flash-messages{
-  flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:12px;
+.af-page.af-history-hidden .af-history {
+  width: 0;
+  min-width: 0;
 }
-.flash-welcome{ display:flex; flex-direction:column; align-items:center; gap:16px; padding:40px 20px; }
-.flash-welcome-text{ color:var(--t2); font-size:15px; }
-.flash-suggestions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:600px; }
-.flash-suggestion{
-  background:var(--card); border:1px solid var(--bdr); border-radius:20px;
-  padding:6px 14px; font-size:12px; color:var(--t2); cursor:pointer;
-  transition:all .15s;
+
+.af-history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid var(--b1);
+  flex-shrink: 0;
 }
-.flash-suggestion:hover{ background:var(--acl); color:var(--t1); border-color:var(--acc); }
-.flash-msg{ max-width:85%; padding:10px 14px; border-radius:12px; word-break:break-word; }
-.flash-msg-user{
-  align-self:flex-end; background:var(--acc); color:#fff; border-radius:12px 12px 2px 12px;
+.af-history-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t2);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
-.flash-msg-assistant{
-  align-self:flex-start; background:var(--card); border:1px solid var(--bdr);
-  border-radius:12px 12px 12px 2px;
+.af-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--acc);
+  color: var(--on-acc);
+  border: none;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: opacity 0.15s;
 }
-.flash-headline{ font-weight:700; font-size:13px; color:var(--t1); margin:0 0 4px; }
-.flash-answer{ font-size:13px; color:var(--t2); margin:0; line-height:1.5; }
-.flash-low-confidence{ font-size:11px; color:#f59e0b; margin:6px 0 0; }
-.flash-feedback{ display:flex; gap:6px; margin-top:8px; }
-.flash-fb-btn{
-  background:transparent; border:1px solid var(--bdr); border-radius:6px;
-  padding:2px 8px; font-size:13px; cursor:pointer; color:var(--t3);
-  transition:all .15s;
+.af-new-btn:hover { opacity: 0.85; }
+
+.af-search-wrap {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--b1);
+  flex-shrink: 0;
 }
-.flash-fb-btn:hover, .flash-fb-btn.active{ background:var(--acl); border-color:var(--acc); }
-.flash-clarification-intro{ font-size:13px; color:var(--t2); margin:0 0 10px; }
-.flash-clarification{ margin-bottom:10px; }
-.flash-clarification-q{ font-size:13px; color:var(--t1); font-weight:600; margin:0 0 8px; }
-.flash-clarification-opts{ display:flex; flex-wrap:wrap; gap:6px; }
-.flash-clarification-btn{
-  background:var(--bg); border:1.5px solid var(--acc); border-radius:20px;
-  padding:6px 14px; font-size:12px; color:var(--acc); cursor:pointer;
-  transition:all .15s; font-weight:500;
+.af-search {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--b1);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--t1);
+  font-family: var(--font);
+  box-sizing: border-box;
+  outline: none;
 }
-.flash-clarification-btn:hover{ background:var(--acc); color:#fff; }
-.flash-clarification-skip{ font-size:11px; color:var(--t3); margin:8px 0 0; }
-.flash-clarification-skip-btn{
-  background:none; border:none; color:var(--t2); cursor:pointer;
-  font-size:11px; text-decoration:underline; padding:0;
+.af-search:focus { border-color: var(--acc); }
+
+.af-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 8px;
 }
-.flash-clarification-skip-btn:hover{ color:var(--t1); }
-.flash-loading{ display:flex; gap:5px; align-items:center; padding:4px 0; }
-.flash-loading span{
-  width:7px; height:7px; border-radius:50%; background:var(--acc); animation:flash-bounce .9s infinite;
+.af-history-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 12px 4px;
 }
-.flash-loading span:nth-child(2){ animation-delay:.15s; }
-.flash-loading span:nth-child(3){ animation-delay:.3s; }
-@keyframes flash-bounce{ 0%,80%,100%{ opacity:.3 } 40%{ opacity:1 } }
-.flash-input-area{
-  display:flex; gap:8px; padding:12px 16px;
-  border-top:1px solid var(--bdr); flex-shrink:0;
+.af-history-item {
+  padding: 7px 12px;
+  cursor: pointer;
+  border-radius: 7px;
+  margin: 1px 6px;
+  transition: background 0.1s;
 }
-.flash-input{
-  flex:1; background:var(--card); border:1px solid var(--bdr); border-radius:8px;
-  padding:10px 14px; font-size:13px; color:var(--t1); outline:none;
-  transition:border-color .15s;
+.af-history-item:hover { background: var(--acl); }
+.af-history-item.active { background: var(--acl); }
+.af-history-item-title {
+  font-size: 12px;
+  color: var(--t1);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.flash-input:focus{ border-color:var(--acc); }
-.flash-input::placeholder{ color:var(--t3); }
-.flash-send{
-  background:var(--acc); border:none; border-radius:8px;
-  width:40px; height:40px; font-size:18px; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  transition:opacity .15s;
+.af-history-item-meta {
+  font-size: 10px;
+  color: var(--t3);
+  margin-top: 2px;
 }
-.flash-send:hover:not(:disabled){ opacity:.85; }
-.flash-send:disabled{ opacity:.4; cursor:not-allowed; }
-.flash-table-wrap{ margin-top:8px; overflow-x:auto; max-height:300px; overflow-y:auto; border-radius:6px; }
-.flash-table{ width:100%; border-collapse:collapse; font-size:12px; }
-.flash-table th{
-  background:var(--bg); color:var(--t2); font-weight:600;
-  padding:6px 10px; text-align:left; border-bottom:1px solid var(--bdr);
-  position:sticky; top:0;
+
+.af-history-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--b1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
-.flash-table td{ padding:5px 10px; color:var(--t1); border-bottom:1px solid var(--bdr,#2a2a3a22); }
-.flash-table tr:last-child td{ border-bottom:none; }
-.flash-table-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:8px; flex-wrap:wrap; }
-.flash-table-more{ font-size:11px; color:var(--t3); }
-.flash-table-link{ background:none; border:none; color:var(--accent,#7c6fff); font-size:11px; cursor:pointer; padding:0; text-decoration:underline; }
-.flash-table-download{ background:none; border:1px solid var(--accent,#7c6fff); color:var(--accent,#7c6fff); font-size:11px; border-radius:6px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
-.flash-table-download:hover{ background:var(--accent,#7c6fff); color:#fff; }
-.flash-timing{ font-size:10px; color:var(--t3); margin:4px 0 0; }
+.af-history-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.af-history-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.af-history-user-role {
+  font-size: 10px;
+  color: var(--t3);
+}
+
+/* ── Main chat column ────────────────────────── */
+.af-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  background: var(--card);
+}
+
+/* ── Top bar ─────────────────────────────────── */
+.af-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 48px;
+  border-bottom: 1px solid var(--b1);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.af-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.af-topbar-toggle {
+  background: none;
+  border: none;
+  color: var(--t2);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.af-topbar-toggle:hover { background: var(--acl); color: var(--acc); }
+.af-topbar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.af-category-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.af-topbar-right { display: flex; gap: 6px; }
+.af-topbar-btn {
+  background: none;
+  border: 1px solid var(--b1);
+  color: var(--t2);
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.af-topbar-btn:hover { background: var(--acl); }
+
+/* ── Thread ──────────────────────────────────── */
+.af-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+.af-thread-inner {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Messages ────────────────────────────────── */
+.af-msg { display: flex; gap: 10px; }
+
+.af-msg-user {
+  justify-content: flex-end;
+}
+.af-user-bubble {
+  background: var(--acc);
+  color: var(--on-acc);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 75%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.af-msg-assistant { align-items: flex-start; }
+.af-assistant-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--acc);
+  color: var(--on-acc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.af-assistant-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.af-answer {
+  font-size: 13px;
+  color: var(--t1);
+  line-height: 1.65;
+}
+
+/* ── Thinking dots ───────────────────────────── */
+.af-thinking {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 4px 0;
+}
+.af-thinking span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--acc);
+  opacity: 0.4;
+  animation: af-bounce 1.2s infinite ease-in-out;
+}
+.af-thinking span:nth-child(2) { animation-delay: 0.2s; }
+.af-thinking span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes af-bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Markdown rendering ──────────────────────── */
+.af-md-h2 { font-size: 14px; font-weight: 700; color: var(--t1); margin: 10px 0 4px; }
+.af-md-h3 { font-size: 13px; font-weight: 700; color: var(--t1); margin: 8px 0 4px; }
+.af-md-li { padding-left: 14px; position: relative; font-size: 13px; color: var(--t1); line-height: 1.6; }
+.af-md-li::before { content: '•'; position: absolute; left: 2px; color: var(--acc); }
+.af-md-hr { border: none; border-top: 1px solid var(--b1); margin: 8px 0; }
+.af-md-gap { height: 6px; }
+.af-inline-code { background: var(--bg2); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; color: var(--acc); }
+
+/* ── Assumptions ─────────────────────────────── */
+.af-assumptions {
+  font-size: 11px;
+  color: var(--t3);
+  font-style: italic;
+}
+
+/* ── Action buttons ──────────────────────────── */
+.af-msg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.af-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--b1);
+  background: var(--bg2);
+  color: var(--t2);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s;
+}
+.af-action-btn:hover { background: var(--acl); }
+.af-action-verified {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+.af-action-sql { }
+.af-model-badge { cursor: default; pointer-events: none; }
+.af-model-sonnet { border-color: #e0e7ff; background: #eef2ff; color: #4338ca; }
+.af-model-opus   { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+
+/* ── SQL block ───────────────────────────────── */
+.af-sql-block {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 11.5px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ── Table ───────────────────────────────────── */
+.af-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--b1);
+}
+.af-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.af-table th {
+  background: var(--bg2);
+  color: var(--t2);
+  font-weight: 600;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--b1);
+  white-space: nowrap;
+}
+.af-table td {
+  padding: 7px 12px;
+  color: var(--t1);
+  border-bottom: 1px solid var(--b1);
+}
+.af-table tr:last-child td { border-bottom: none; }
+.af-table tbody tr:hover { background: var(--acl); }
+
+/* ── Clarify options ─────────────────────────── */
+.af-clarify-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.af-clarify-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--acc);
+  background: transparent;
+  color: var(--acc);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s, color 0.15s;
+}
+.af-clarify-btn:hover {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+/* ── Empty state ─────────────────────────────── */
+.af-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.af-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--acl);
+  color: var(--acc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.af-empty-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.af-empty-sub {
+  font-size: 13px;
+  color: var(--t3);
+  margin-bottom: 12px;
+}
+.af-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 520px;
+}
+.af-suggestion {
+  padding: 8px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--b1);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--t2);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.af-suggestion:hover {
+  background: var(--acl);
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+/* ── Composer ────────────────────────────────── */
+.af-composer-wrap {
+  padding: 12px 20px 10px;
+  border-top: 1px solid var(--b1);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.af-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--b1);
+  border-radius: 12px;
+  padding: 8px 8px 8px 14px;
+  transition: border-color 0.15s;
+}
+.af-composer:focus-within { border-color: var(--acc); }
+.af-composer-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--t1);
+  line-height: 1.5;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.af-composer-input::placeholder { color: var(--t3); }
+.af-composer-send {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--acc);
+  color: var(--on-acc);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.af-composer-send:hover:not(:disabled) { opacity: 0.85; }
+.af-composer-send:disabled { opacity: 0.4; cursor: default; }
+.af-disclaimer {
+  font-size: 10.5px;
+  color: var(--t3);
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* ── HistoryPanel variants ───────────────────── */
+.af-history-header {
+  padding: 14px 12px 6px;
+  border-bottom: 1px solid var(--b1);
+  flex-shrink: 0;
+}
+.af-history-sub {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 1px;
+}
+.af-history .af-new-btn {
+  margin: 10px 10px 0;
+  width: calc(100% - 20px);
+  justify-content: center;
+}
+.af-search-wrap {
+  position: relative;
+}
+.af-search-icon {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--t3);
+  pointer-events: none;
+}
+.af-search { padding-left: 28px; }
+.af-date-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 12px 4px;
+}
+.af-history-item {
+  display: flex;
+  align-items: center;
+  width: calc(100% - 12px);
+  margin: 1px 6px;
+  padding: 7px 8px 7px 12px;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: background 0.1s;
+  gap: 4px;
+}
+.af-history-item:hover { background: var(--acl); }
+.af-history-item.active { background: var(--acl); }
+.af-history-item-text {
+  flex: 1;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.af-history-item.active .af-history-item-text { font-weight: 600; }
+.af-delete-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 3px 4px;
+  border-radius: 5px;
+  color: var(--t3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.12s, color 0.12s;
+}
+.af-delete-btn:hover { background: #fee2e2; color: #dc2626; }
+.af-empty-search {
+  font-size: 12px;
+  color: var(--t3);
+  padding: 20px 12px;
+  text-align: center;
+}
+.af-user-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--b1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.af-user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.af-user-info { min-width: 0; }
+.af-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.af-user-role {
+  font-size: 10px;
+  color: var(--t3);
+}
+
+/* ── Mobile adjustments ──────────────────────── */
+@media (max-width: 768px) {
+  .af-history { width: 100%; min-width: 100%; position: absolute; z-index: 10; height: 100%; }
+  .af-page.af-history-hidden .af-history { display: none; }
+  .af-thread-inner { padding: 0 12px; }
+  .af-composer-wrap { padding: 10px 12px 8px; }
+}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE FOUNDATION (Phase 1)
+   ══════════════════════════════════════════════ */
+
+/* iOS zooms the page into any focused field under 16px. Touch screens only, so the desktop
+   look is unchanged; !important beats the inline fontSize most inputs here carry. */
+@media (hover:none) and (pointer:coarse){
+  html:root body input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  html:root body select,
+  html:root body textarea{ font-size:16px !important }
+}
+
+/* Phone in landscape (wider than 768px, so it used to get the full desktop shell with a sidebar
+   whose items ran off the bottom of a 360-390px-tall screen). Same navigation as phone portrait:
+   no sidebar, the labelled bottom nav (slimmer, height is scarce), content clear of the notch.
+   Same query as useBreakpoint().isPhoneLandscape. */
+@media (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  :root{ --sb:0px; --nav:42px; --bot:52px }
+  .sidebar{ display:none }
+  .bottom-nav{ display:block }
+  .app-main{ padding-bottom:calc(var(--bot) + var(--safe-bottom)) }
+  .topnav{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
+  .page-scroll{ padding:12px max(12px, var(--safe-right)) 12px max(12px, var(--safe-left)) }
+}
+
+/* Chart legend chips scroll sideways on phones; hide the scrollbar track. */
+.chart-legend-chips::-webkit-scrollbar{ display:none }
+
+/* ══════════════════════════════════════════════
+   OVERVIEW MOBILE (< 1024px and phone landscape)
+   ══════════════════════════════════════════════ */
+
+/* One font family: numbers use the main font with tabular figures instead of the monospace one.
+   Cards set fontFamily:'var(--mono)' inline, so redefining --mono inside the scope is enough. */
+.ov-mobile{ --mono: var(--font); font-variant-numeric: tabular-nums }
+
+/* ▲/▼ placeholder while previous-period data loads. Never intercepts taps. */
+/* Shared loading skeleton (src/responsive/Skeleton.jsx): a shade darker than the tiles (#f4f2ed) so it reads on them. */
+.m-skeleton{ pointer-events:none; background:linear-gradient(90deg, #e6e2d8 0%, #f1eee8 50%, #e6e2d8 100%); background-size:200% 100%; animation:deltaShimmer 1.2s ease-in-out infinite }
+@keyframes deltaShimmer{ 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+
+/* Collapsible sections: content slides in when opened. */
+.section-body-open{ animation:sectionOpen 200ms ease-out }
+.section-chevron{ transition:transform 200ms ease }
+@keyframes sectionOpen{ from{ opacity:0; transform:translateY(-4px) } to{ opacity:1; transform:none } }
+@media (prefers-reduced-motion:reduce){
+  .m-skeleton{ animation:none }
+  .section-body-open{ animation:none }
+  .section-chevron{ transition:none }
+}
+
+/* Page title 17/600 on the mobile Overview. */
+@media (max-width:1023px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  .topnav[data-page="overview"] .tnav-title{ font-size:17px; font-weight:600 }
+}
+
+/* Mobile has one fixed palette (docs/responsive/MOBILE_DESIGN_SYSTEM.md), so the theme picker is
+   hidden below 1024px; desktop keeps it. */
+@media (max-width:1023px){ .theme-picker-slot{ display:none !important } }
+
+/* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
+   label + ▲/▼ fits without shrinking text below 12px. */
+@media (max-width:370px){
+  .master-card{ padding:12px !important }
+  .master-tiles{ gap:6px !important }
+}
+
+/* Overview filter icon (OverviewFilterButton): only inside the phone header (MobilePageHeader). */
+.ov-filter-slot{ display:none }
+/* Laptop alerts bell: the emoji; the SVG bell is unused now that phones show alerts in ⋯. */
+.bell-svg{ display:none }
+.filtered-strip::-webkit-scrollbar{ display:none }
+
+/* Phone page header, deep green (HEADER_GREEN_PROMPT.md, mockups/header_green_mockup.html; src/responsive/
+   MobilePageHeader.jsx). One fixed height per page (no collapse): row 1 48px (title · context · date ·
+   filter · ⋯), chips row 36px (26px chips), sub-tabs 32px on a darker band, second sub-tab row 30px darker
+   still; totals 48 / 84 / 116px. Dividers are inset shadows (no extra px). The "Filtered:" strip (28px)
+   sits under the green bar on the light page background. */
+/* No backdrop-filter: it would make the header the containing block of the date picker's fixed sheet. */
+.mph{ font-family:var(--font); -webkit-tap-highlight-color:transparent; position:relative; z-index:1 }
+.mph-bar{ background:linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%); box-shadow:0 8px 18px -8px rgba(20,50,35,.45); position:relative; z-index:1 }
+.mph button{ -webkit-tap-highlight-color:transparent }
+.mph button:focus{ outline:none }
+.mph button:focus-visible{ outline:2px solid #9fe0b9; outline-offset:2px }
+.mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(4px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
+.mph-r1.mph-has-back{ padding-left:max(2px, var(--safe-left)) }
+.mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
+.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#fff; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
+.mph-title span{ font-size:13px; font-weight:500; color:#a9c9b6; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto } /* the context gives way first; the title keeps its width */
+.mph-ctl{ display:flex; align-items:center; gap:0; flex:0 0 auto }
+.mph-filter, .mph-date{ display:contents }
+/* 44 × 44 tap target; the pressed tile is the 34 × 34 visual */
+.mph-ib{ position:relative; width:44px; height:44px; border-radius:10px; border:none; background:none; padding:0; color:#d8e8de; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
+.mph-ib::before{ content:''; position:absolute; inset:5px; border-radius:10px }
+.mph-ib:active::before{ background:rgba(255,255,255,.10) }
+.mph-ib > svg{ position:relative }
+.mph-ib:disabled{ opacity:.45; cursor:default }
+.mph-back{ color:#fff }
+.mph-count{ position:absolute; top:7px; right:6px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:#9fe0b9; color:#143d2a; font-size:12px; font-weight:800; line-height:14px; letter-spacing:-.02em; text-align:center; box-shadow:0 0 0 1.5px #1f5a3d }
+.mph-dot{ position:absolute; top:9px; right:9px; width:7px; height:7px; border-radius:50%; background:#e5534b; box-shadow:0 0 0 1.5px #1f5a3d }
+/* date pill (DateRangePicker trigger) and the Logistics Cost month pill: translucent white, chevron centred */
+.mph .drp-trigger, .mph .mph-pill{ display:inline-flex !important; align-items:center; gap:5px !important; height:32px; min-height:32px; padding:0 10px !important; border-radius:10px !important; border:none !important;
+  background:rgba(255,255,255,.14) !important; color:#fff !important; font-size:12.5px !important; font-weight:600; line-height:1; font-family:var(--font); white-space:nowrap; cursor:pointer; flex:0 0 auto }
+.mph .drp-trigger:active, .mph .mph-pill:active{ background:rgba(255,255,255,.22) !important }
+.drp-short, .drp-chev{ display:none }
+.mph .drp-cal, .mph .drp-long{ display:none }
+.mph .drp-short{ display:inline }
+.mph .drp-chev{ display:block; width:9px; height:6px; opacity:.7; flex:0 0 auto }
+.mph .tnav-right{ margin-left:0 }
+/* row 2: channel chips. Inactive text #c8dfd1, a touch lighter than the mockup #b9d4c4, so it keeps 4.5:1 at the light end of the gradient. */
+.mph-r2{ display:flex; align-items:center; gap:4px; height:36px; overflow-x:auto; padding:0 max(12px, var(--safe-right)) 4px max(12px, var(--safe-left)); scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent); mask-image:linear-gradient(90deg,#000 86%,transparent) }
+.mph-r2::-webkit-scrollbar, .mph-r3::-webkit-scrollbar{ display:none }
+.mph-chip{ flex:0 0 auto; height:26px; padding:0 11px; border-radius:999px; border:none; background:none; color:#c8dfd1; font-size:12.5px; font-weight:600; font-family:var(--font);
+  display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap }
+.mph-chip[aria-pressed="true"]{ background:#fff; color:#1f5a3d }
+.mph-chip:disabled{ opacity:.4; cursor:not-allowed }
+.mph-chip [role=img]{ width:5px !important; height:5px !important; background:#c8860a !important }
+/* row 3: underline sub-tabs on a darker band; 3b: the slimmer second level, darker still */
+.mph-r3{ display:flex; gap:20px; padding:0 max(16px, var(--safe-right)) 0 max(16px, var(--safe-left)); overflow-x:auto; scrollbar-width:none; background:rgba(0,0,0,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.12) }
+.mph-r3.mph-even{ justify-content:space-around }
+.mph-tab{ flex:0 0 auto; position:relative; height:32px; border:none; background:none; padding:0; color:#a9c9b6; font-size:12.5px; font-weight:600; font-family:var(--font); cursor:pointer; white-space:nowrap }
+.mph-tab[aria-selected="true"]{ color:#fff }
+.mph-tab[aria-selected="true"]::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px; background:#9fe0b9 }
+.mph-r3b{ background:rgba(0,0,0,.14); box-shadow:none }
+.mph-r3b .mph-tab{ height:30px; font-size:12px }
+.mph .filtered-strip{ height:28px; min-height:28px; padding-top:0 !important; padding-bottom:0 !important; padding-left:max(16px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important; border-bottom:none !important; background:#f4f2ed !important; box-shadow:none }
+.mph .filtered-strip button{ min-height:22px !important; height:22px }
+
+/* The top bar holds the header on phones: it gives up its own bar look and grows with the rows. The
+   bottom bar is 48px + the safe-area inset, the same as header row 1 (content padding follows --bot). */
+@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
+  :root{ --bot:48px }
+  .topnav.m-header{ height:auto; min-height:0; flex-direction:column; align-items:stretch; padding:0; gap:0; background:none; border-bottom:none; box-shadow:none; position:relative; z-index:100 }
+  .topnav.m-header .ov-filter-slot{ display:contents }
+  /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
+  .sales-tabs, .fbar{ display:none !important }
+  /* Frido Pulse: the shared header names the page, so the history panel's own title goes. */
+  .af-history-header{ display:none }
+}
+
+/* Logistics mobile (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §0): no outline on tap for chips and toggles;
+   a focus ring only for keyboard focus. */
+.log-mobile button:focus, .mph-tabs2 button:focus, .mrp-month:focus, .mrp-pill:focus{ outline:none }
+.log-mobile button:focus-visible, .mrp-month:focus-visible, .mrp-pill:focus-visible{ outline:2px solid rgba(31,90,61,.5); outline-offset:1px }
+.mph-tabs2 button:focus-visible{ outline:2px solid rgba(255,255,255,.8); outline-offset:-2px }
+
+
+/* Phone navigation (NAV_MOBILE_PROMPT.md; src/responsive/MobileBottomNav.jsx). Selected icon: a pale
+   green tile with a soft halo, faded / scaled in; no tap focus box, keyboard focus ring only. */
+.mnav{ -webkit-tap-highlight-color:transparent }
+.mnav-slot,.mnav-sheet button{ -webkit-tap-highlight-color:transparent }
+.mnav-slot:focus,.mnav-sheet button:focus{ outline:none }
+.mnav-slot:focus-visible,.mnav-sheet button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:-2px; border-radius:12px }
+.mnav-glow{ position:absolute; left:50%; top:50%; width:34px; height:30px; margin:-15px 0 0 -17px; border-radius:11px; background:#edf6f0;
+  box-shadow:0 0 8px 1px rgba(120,190,150,.22); opacity:0; transform:scale(.85); transition:opacity .25s ease, transform .25s ease; pointer-events:none }
+.mnav-glow.on{ opacity:1; transform:scale(1) }
+.mnav-link{ border:none; background:none; padding:8px 4px; min-height:40px; font-family:var(--font); font-size:13px; font-weight:600; cursor:pointer }
+@media (prefers-reduced-motion: reduce){ .mnav-glow{ transition:none } }
+/* Return Analysis mobile: no focus ring after a tap on its toggles / chips (keyboard focus still shows one). */
+.ra-mobile :focus:not(:focus-visible){ outline:none }

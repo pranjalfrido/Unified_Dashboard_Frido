@@ -38,6 +38,13 @@
 // rows/keys at the source (folding them into MyFrido). Matches src/App.jsx's
 // FlatCategoryProductMatrix.mapRow()'s equivalent guard so the two implementations can't silently
 // diverge again.
+import { fmt } from '../utils.js'
+
+// Indian ₹ formatting that keeps negatives readable (fix/pnl-data item 3): utils.fmt only formats
+// values ≥ ₹1,000 as K / L / Cr, so a negative CM2 printed as raw digits ("₹-1,60,807"). P&L only —
+// other pages keep utils.fmt unchanged. Same output as fmt for zero and positive values.
+export const fmtSigned = v => (v < 0 ? `−${fmt(-v)}` : fmt(v))
+
 const isMobilityWhitelistCategory = catName => catName === undefined || catName === 'Mobility' || /^sparepart/i.test(catName || '')
 // netScale (confirmed 2026-08-19): PnL's row-level blended-GST-ratio Net Revenue and the Sales
 // tab's whole-range real-per-line-item-GST Net Revenue (api/_bq.js's computeNetRevenueMeasures)
@@ -229,6 +236,15 @@ function monthsBetween(startDate, endDate) {
 // same flat per-kg charge Amazon VC/SC's own SnD already uses (api/bq.js's
 // STOCK_MOVEMENT_RATE_PER_KG), previously missing entirely from every D2C S&D calc that shares
 // this function (Price Simulator, Breakeven ROAS) — confirmed via this same reference sheet.
+// Breakeven ROAS and the ROAS needed for a target CM2 % — moved unchanged from
+// BreakevenRoasCalculator.jsx so the P&L margin watchlist uses the identical formulas.
+// excGst: Gross Revenue Ex GST; cm1: CM1 ₹ (before ad spend); net: Net Revenue; target: fraction (0.15).
+export const breakevenRoas = (excGst, cm1) => (cm1 > 0 ? excGst / cm1 : null)
+export const roasForTargetCm2 = (excGst, cm1, net, target) => {
+  const budget = cm1 != null ? cm1 - target * net : null
+  return budget > 0 ? excGst / budget : null
+}
+
 export const PAYMENT_GATEWAY_RATE = 0.011
 export const SOFTWARE_FEE_PER_UNIT = 15
 export const STOCK_MOVEMENT_RATE_PER_KG = 4
@@ -260,6 +276,49 @@ export function rateForWeightGm(slabs, weightGm) {
   if (!slabs || !slabs.length || weightGm == null) return null
   const slab = slabs.find(s => s.weightGm >= weightGm) || slabs[slabs.length - 1]
   return slab
+}
+
+// Exact-match slab lookup for a real, already-bucketed weight_slab value (e.g. from
+// shSkuWeightBuckets/weightBuckets — these are already rounded to a real courier slab, unlike
+// rateForWeightGm's input which rounds UP from a raw/hypothetical gram value) — brackets to the
+// nearest slab <= the value as a defensive fallback, same convention as PnLPage.jsx's rateForSlab.
+function rateForBucketSlab(slabs, weightSlab) {
+  if (!slabs?.length || weightSlab == null) return null
+  const exact = slabs.find(s => s.weightGm === weightSlab)
+  if (exact) return exact
+  let match = null
+  for (const s of slabs) { if (s.weightGm <= weightSlab) match = s; else break }
+  return match || slabs[0]
+}
+
+// Per-weight-BUCKET logistics/fulfilment, averaged across a product's REAL order-size mix
+// (confirmed bug fix 2026-10-23) — e.g. [{slab: 7000, share: 0.52, unitsPerOrder: 2}, {slab:
+// 14000, share: 0.22, unitsPerOrder: 4}] for a product mostly sold in 2-4 unit orders. A courier
+// bills per SHIPMENT, not per unit — a 7kg box holding 2 units costs roughly double a single
+// unit's shipment, but that cost must then be DIVIDED by the 2 units inside it to get a per-unit
+// figure, not charged in full to each of the 2 (confirmed business fact: "the shipment will be
+// one only.. pack of two will be dispatched.. but in our calculation we are going component level
+// qty wise.. so we need to get the logistics based on a unit" — this was a second, compounding bug
+// found AFTER the initial per-bucket-weight fix: pricing the right bucket weight is necessary but
+// not sufficient; the per-shipment cost also has to be divided by that shipment's real unit count).
+// Falls back to blendedLogisticsPerUnit at weightGm's own single-unit rate (unitsPerOrder=1, no
+// division) when no real bucket distribution exists yet (e.g. a brand-new product with no order
+// history), so callers never silently get zero/wrong cost while data is still loading.
+export function blendedLogisticsForBuckets(slabs, weightBuckets, weightGm, outcomePcts) {
+  if (!weightBuckets?.length) {
+    const rate = rateForWeightGm(slabs, weightGm)
+    return blendedLogisticsPerUnit(rate, outcomePcts)
+  }
+  let logistics = 0, fulfilment = 0
+  weightBuckets.forEach(({ slab, share, unitsPerOrder }) => {
+    const rate = rateForBucketSlab(slabs, slab)
+    if (!rate) return
+    const perUnitDivisor = unitsPerOrder > 0 ? unitsPerOrder : 1
+    const { logistics: l, fulfilment: f } = blendedLogisticsPerUnit(rate, outcomePcts)
+    logistics += (l / perUnitDivisor) * share
+    fulfilment += (f / perUnitDivisor) * share
+  })
+  return { logistics, fulfilment }
 }
 
 // Full per-unit waterfall for a hypothetical/simulated unit at a given selling price (Inc GST).

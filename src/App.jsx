@@ -2,7 +2,9 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package, Calculator } from '@phosphor-icons/react'
+import { NAV_PAGES } from './responsive/navConfig.js'
+import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
@@ -24,18 +26,51 @@ import CourierAllocationPage from './CourierAllocationPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
+import { usePnlTool, runPnlToolReset } from './pnl/pnlToolStore.js'
 import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
-import FlashPage from './FlashPage.jsx'
-
-function useIsMobile() {
-  const [mob, setMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const h = () => setMob(window.innerWidth <= 768)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-  return mob
-}
+import AskFridoPage from './ask/AskFridoPage.jsx'
+import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
+import { ChartFrame } from './responsive/ChartFrame.jsx'
+import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
+import MasterTrendCard from './responsive/MasterTrendCard.jsx'
+import MobileBottomNav from './responsive/MobileBottomNav.jsx'
+import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
+import SalesMobileView from './sales/SalesMobileView.jsx'
+import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
+import { rememberSalesSpot, peekSalesSpot, takeSalesSpot, useRaBasis } from './sales/returnAnalysisData.js'
+import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonList, eboStoreRows } from './sales/salesMobileData.js'
+import TopStatesMobile from './overview/TopStatesMobile.jsx'
+import MobilePageHeader from './responsive/MobilePageHeader.jsx'
+import ActionMenu from './responsive/ActionMenu.jsx'
+import BottomSheet from './responsive/BottomSheet.jsx'
+import MixBar from './responsive/MixBar.jsx'
+import WatchlistCard from './responsive/WatchlistCard.jsx'
+import { computeCustomerRules } from './customer/customerRules.js'
+import { SEG_META, GRID_PLACEMENT } from './customer/customerDefs.js'
+import CustomerMobileView from './customer/CustomerMobileView.jsx'
+import { paybackMargin, paybackMonthsOf as paybackMonthsOfShared, ltvCacOnMargin } from './customer/customerDerive.js'
+import AdsLaptopSections from './ads/AdsSections.jsx'
+import AdsMobileView from './ads/AdsMobileView.jsx'
+import { useAdsMonthly } from './ads/useAdsMonthly.js'
+import { seriesFor, buildDailyByChannel, computeAdsRules, OVERALL_CHANNELS, TOTAL_SALES_ROAS_INFO } from './ads/adsData.js'
+import { SalesFilterButton } from './sales/SalesFilters.jsx'
+import { InvFilterButton } from './inventory/mobile/InvFilters.jsx'
+import { invStripItems, invRemoveFilter, invClearFilters } from './inventory/mobile/invFilterState.js'
+import { invCaption } from './inventory/mobile/invCaption.js'
+import LogPerfFilterButton from './logistics/mobile/LogPerfFilters.jsx'
+import PerfMobile from './logistics/mobile/PerfMobile.jsx'
+import { HeaderFilterIcon, HeaderMonthPill } from './logistics/mobile/LogHeaderBits.jsx'
+import { perfStripItems, perfRemove, perfClear } from './logistics/mobile/logPerfFilterState.js'
+import { activeSalesFilters, setSalesFilter, clearAllSalesFilters } from './overview/salesFilters.js'
+import ChannelScorecardMobile from './overview/ChannelScorecardMobile.jsx'
+import LogisticsOpsMobile from './overview/LogisticsOpsMobile.jsx'
+import BusinessStateMobile from './overview/BusinessStateMobile.jsx'
+import { salesMetrics, trendRows, groupHeroTrend, logisticsMetrics, customerMetrics } from './overview/overviewMetrics.js'
+import { usePrevPeriod, prevRange } from './overview/usePrevPeriod.js'
+import { METRICS } from './overview/metricLabels.js'
+import { pctChange, fmtDateRange, fmtUpdated } from './responsive/format.js'
+import MobileRankedList from './responsive/MobileRankedList.jsx'
+import { metricStatus } from './config/metricTargets.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -407,12 +442,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMobile = useIsMobile()
+  // Below 1024px (and phone landscape) the page renders the mobile layout (PerfMobile) instead.
+  const bpL = useBreakpoint()
+  const logMobile = bpL.width < 1024 || bpL.isPhoneLandscape
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
     if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
@@ -949,9 +982,34 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
   useEffect(() => {
     if (!onFilterUI) return
-    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount })
+    // onRefresh / loading: the top bar's Refresh reloads Logistics data (it used to call the Sales fetch).
+    onFilterUI({ content: filterSidebarContent, activeCount: lActiveCount, onRefresh: fetchLogistics, loading })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFilterUI, lFilters, lActiveCount, opts])
+  }, [onFilterUI, lFilters, lActiveCount, opts, fetchLogistics, loading])
+
+  if (logMobile) {
+    // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
+    return (
+      // The page is mounted in a non-scrolling flex box (desktop scrolls its own inner div), so the
+      // mobile view is its own scroll container. The loading veil sits on a non-scrolling wrapper around
+      // it: inside the scroll box it only covered the first screen-height and scrolled away with the cards.
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading logistics" />
+      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {error && !rawData && !staleData && (
+          <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
+            Could not load logistics data. <button type="button" onClick={fetchLogistics} style={{ border: 'none', background: 'none', color: C.m.green, fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer' }}>Retry</button>
+          </div>
+        )}
+        {data && (
+          <PerfMobile data={data} prevData={prevData} breakdownSrc={breakdownSrc} filters={filters} lFilters={lFilters}
+            sc={{ cSelected, setCSelected, cPrimary, setCPrimary, cView, cDrill, cTier, setCTier, cPayment, setCPayment }}
+            rtoAgeingBase={rtoAgeingBase} setRtoAgeingBase={setRtoAgeingBase} ndrPayFilter={ndrPayFilter} setNdrPayFilter={setNdrPayFilter} />
+        )}
+      </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -962,7 +1020,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         {isMobile ? (
           filterSidebarOpen && <>
             <div onClick={() => setFilterSidebarOpen(false)} style={{ position: 'fixed', inset: 0, top: 'var(--nav)', background: 'rgba(0,0,0,0.35)', zIndex: 199 }} />
-            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(100vh - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: 10 }}>
+            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(var(--app-h) - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px', borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Menu & Filters</span>
                 <button onClick={() => setFilterSidebarOpen(false)} style={{ background: 'none', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
@@ -1046,14 +1104,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
               <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} invertColor compact tight={filterSidebarOpen} />
               <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Shipment pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order date → delivery date" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order → AWB" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="AWB → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order → delivery" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
               <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} subLabel="RTO marked → RTO delivered" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} invertColor />
             </div>
           </div>
@@ -3328,10 +3386,11 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'inventory', label: 'Inventory', Icon: Cube },
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
-    // 'financial-mis' (Financial MIS) hidden from nav for now (2026-10-20) — FinancialMISPage,
-    // its route (search page === 'financial-mis'), and its permission key are all still in place,
-    // just not surfaced, so re-enabling later is a one-line add back to this array.
+    // 'financial-mis' (Financial MIS) deliberately has no sidebar entry (2026-10-20) — reached
+    // only via a link in Sales → Overall (AllTab), not a nav item. Its route and permission key
+    // are both still real/grantable; re-adding a row here would just give it a second entry point.
     { id: 'documents', label: 'Documents', Icon: FileText },
+    { id: 'ask', label: 'Frido Pulse', Icon: Lightning },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -3518,19 +3577,13 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
             </div>
-            {item.id !== 'documents' && <hr className="sb-sep" />}
+            {item.id !== 'ask' && <hr className="sb-sep" />}
           </Fragment>
         )
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
-        <div className={`sb-item${page === 'flash' ? ' active' : ''}`} title="FLASH — Frido Live Analytics & Smart Hub"
-          onClick={() => setPage('flash')}
-          style={{ cursor: 'pointer' }}>
-          <span className="sb-icon" style={{ fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚡</span>
-          <span className="sb-label">FLASH</span>
-        </div>
-        <ThemePicker theme={theme} setTheme={setTheme} />
+        <div className="theme-picker-slot" style={{ display: 'contents' }}><ThemePicker theme={theme} setTheme={setTheme} /></div>
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
           {profile?.avatar_url
@@ -3544,51 +3597,48 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
   )
 }
 
-// ── Bottom Nav (mobile) ───────────────────────────────────────
-function BottomNav({ page, setPage, allowedTabs, profile }) {
-  const allItems = [
-    { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
-    { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
-    { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
-    { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
-    { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
-  ]
-  return (
-    <nav className="bottom-nav">
-      <div className="bottom-nav-inner">
-        {allItems.map(item => {
-          const allowed = item.id === 'sales' ? hasSalesAccess(allowedTabs) :
-            item.id === 'ads' ? hasAdsAccess(allowedTabs) :
-            item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
-            item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
-            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
-            item.id === 'customer' ? (!allowedTabs || allowedTabs.includes('customer') || allowedTabs.includes('customer:support')) :
-            !allowedTabs || allowedTabs.includes(item.id)
-          const isActive = page === item.id
-          return (
-            <div key={item.id}
-              onClick={() => allowed && setPage(item.id)}
-              className={`bn-item${isActive ? ' active' : ''}`}
-              style={{ opacity: allowed ? 1 : 0.3, cursor: allowed ? 'pointer' : 'default' }}>
-              <span className="bn-icon">{item.icon}</span>
-              <span className="bn-label">{item.label}</span>
-            </div>
-          )
-        })}
-        <div onClick={() => setPage('profile')} className={`bn-item${page === 'profile' ? ' active' : ''}`}>
-          <span className="bn-icon">
-            {profile?.avatar_url
-              ? <img src={profile.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
-              : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            }
-          </span>
-          <span className="bn-label">Profile</span>
-        </div>
-      </div>
-    </nav>
-  )
+// ── Bottom Nav (phones: ≤768px and phone landscape) ─────────────
+// NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
+// "All pages") and a launcher with every other page. Only pages this user may open are passed in,
+// with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: Lightning,
+  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package, 'financial-mis': Calculator }
+function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
+  const can = id => {
+    if (!allowedTabs) return true
+    if (id === 'sales') return hasSalesAccess(allowedTabs)
+    if (id === 'ads') return hasAdsAccess(allowedTabs)
+    if (id === 'pnl') return hasPnlAccess(allowedTabs)
+    if (id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
+    if (id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
+    if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
+    if (id === 'courier-allocation') return hasCostAccess(allowedTabs)
+    if (['cogs', 'logistics-ledger', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
+    if (id === 'financial-mis') return allowedTabs.includes('sales:financial-mis')
+    return allowedTabs.includes(id)
+  }
+  const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
+  // Sub-pages light up their parent; Logistics / Customer open the sub-page this user may see.
+  const active = page === 'logistics-cost' ? 'logistics' : page === 'customer-support' ? 'customer' : page
+  const onSelect = id => {
+    if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
+    if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
+    // Inventory always opens on Inventory Health (Sales & Allocation if that is all the user may see),
+    // the same as the desktop sidebar; it used to reopen whichever sub-tab was last used.
+    if (id === 'inventory') {
+      const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
+      if (setInvTab) return setInvTab(hasHealth ? 'health' : 'sales') // navigates to inventory + that sub-tab
+    }
+    setPage(id)
+  }
+  // Same calls as Profile → Sign out.
+  const signOut = async () => {
+    if (userId) await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+    await supabase.auth.signOut()
+    onSignOut?.()
+  }
+  return <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
+    onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} />
 }
 
 // ── Topnav ─────────────────────────────────────────────────────
@@ -3596,13 +3646,12 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
 // dashboard) reuse this same calendar UI with their own palette instead of forking it —
 // only colors are parameterized, all layout/behavior stays identical. Defaults to the
 // app shell's own light theme so every existing call site is unaffected.
-function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+// Phone sheet colours (docs/responsive/MOBILE_DESIGN_SYSTEM.md §1): one mobile palette whatever
+// desktop theme is stored. Keys are the subset of C that this picker reads.
+const DRP_MOBILE_THEME = { acc: C.m.green, acl: '#e9f3ed', bg: C.m.soft, border: C.m.line, border2: C.m.g4, card: '#fff', onAcc: '#fff', t1: C.m.ink, t2: C.m.ink, t3: C.m.muted }
+function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh, loading }) {
+  const isMobile = useIsMobile()
+  const T = isMobile && themeProp === C ? DRP_MOBILE_THEME : themeProp
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters?.start ?? '', end: filters?.end ?? '' })
   const [selecting, setSelecting] = useState('start')
@@ -3738,6 +3787,19 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   const displayLabel = filters.start && filters.end
     ? (isMobile ? `${fmtShort(filters.start)} – ${fmtShort(filters.end)}` : `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}`)
     : 'Date range'
+  // Phone page header (HEADER_MOBILE_PROMPT.md §3): short form in the mint pill: "Sep 2026" (a whole
+  // month), "1–26 Oct" (one month), "28 Sep – 26 Oct", "Dec 25 – Jan 26". index.css shows it only there.
+  const shortLabel = (() => {
+    const s = parseD(filters?.start), e = parseD(filters?.end)
+    if (!s || !e) return 'Date range'
+    const M = MONTH_NAMES
+    if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) {
+      if (s.getDate() === 1 && e.getDate() === new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate()) return `${M[s.getMonth()]} ${s.getFullYear()}`
+      return s.getDate() === e.getDate() ? `${s.getDate()} ${M[s.getMonth()]}` : `${s.getDate()}–${e.getDate()} ${M[s.getMonth()]}`
+    }
+    if (s.getFullYear() === e.getFullYear()) return `${s.getDate()} ${M[s.getMonth()]} – ${e.getDate()} ${M[e.getMonth()]}`
+    return `${M[s.getMonth()]} ${String(s.getFullYear()).slice(2)} – ${M[e.getMonth()]} ${String(e.getFullYear()).slice(2)}`
+  })()
 
   const calIcon = (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -3840,14 +3902,16 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   return (
     <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
       {/* Trigger button */}
-      <button ref={btnRef} onClick={openPicker}
+      <button ref={btnRef} onClick={openPicker} className="drp-trigger"
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
-        {calIcon}
-        {displayLabel}
+        <span className="drp-cal">{calIcon}</span>
+        <span className="drp-long">{displayLabel}</span>
+        <span className="drp-short">{shortLabel}</span>
+        <svg className="drp-chev" width="9" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg>
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
       {onRefresh && !isMobile && (
-        <button onClick={onRefresh} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
+        <button onClick={onRefresh} className="drp-refresh" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span>
           Refresh
         </button>
@@ -3859,7 +3923,8 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
           {/* Backdrop */}
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9998 }} />
           <div style={{
-            position: 'fixed', bottom: 'var(--bot)', left: 0, right: 0, zIndex: 9999,
+            // Above the bottom nav, which grows by the iPhone home-indicator inset.
+            position: 'fixed', bottom: 'calc(var(--bot) + var(--safe-bottom))', left: 0, right: 0, zIndex: 9999,
             background: T.card, borderRadius: '16px 16px 0 0',
             boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
             maxHeight: '90vh', overflowY: 'auto', paddingRight: 10,
@@ -4871,16 +4936,183 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
-  const dateBlurred = page === 'customer' && customerTab === 'rfm'
+  // CA1: Segments & RFM use the 12 months up to the end date (not all-time): the picker stays usable.
+  const dateBlurred = false
+  const bp = useBreakpoint()
+  const pnlTool = usePnlTool()
+  const raBasis = useRaBasis()
+  // Phones (≤768px and phone landscape): every page uses the shared Ivory MobilePageHeader
+  // (HEADER_MOBILE_PROMPT.md): title · context, then always date · filter · ⋯ (notifications are the
+  // first ⋯ item, a red dot on ⋯ while there are any), optional chips / sub-tabs / "Filtered:" strip,
+  // and it folds to one 42px bar while scrolling down. Laptop and tablet keep the bar further below.
+  const phone = bp.width <= 768 || bp.isPhoneLandscape
+  if (page === 'ask' && !phone) return null
+  if (phone) {
+    const notifications = { count: combinedAlerts.length, onOpen: () => setTimeout(() => setAlertsOpen(true), 350) }
+    const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>
+    const H = props => (
+      <div className="topnav m-header" data-page={page}>
+        <MobilePageHeader notifications={notifications} {...props} />
+        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
+      </div>
+    )
+    if (page === 'inventory') {
+      // INVENTORY_MOBILE_REDESIGN_PROMPT.md §1: sub-tabs in the header, no date picker on Health (a
+      // snapshot), the Sales & Allocation range as a pill, filters in a sheet, exports in "⋯".
+      const ctrl = inventoryDateControl
+      const tab = invTab === 'sales' ? 'sales' : 'health'
+      const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
+      const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+      const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
+      // Data source / last update live in the "⋯" sheet (note), not under the title.
+      return H({ title: 'Inventory',
+        date: tab === 'sales' && ctrl?.filters && datePill(ctrl.filters, ctrl.setFilters, ctrl.onRefresh),
+        filter: <InvFilterButton tab={tab} ctrl={ctrl} />,
+        menu: { items: ctrl?.invMenu || [], title: `Inventory · ${invTitles[tab]}`, note: invCaption(tab, ctrl) },
+        subTabs: subTabs.length > 1 ? subTabs : null, activeSub: tab, onSub: setInvTab,
+        strip: { items: invStripItems(tab, ctrl), onRemove: key => invRemoveFilter(tab, ctrl, key), onClear: () => invClearFilters(tab, ctrl) } })
+    }
+    if (page === 'logistics' || page === 'logistics-cost') {
+      // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §1: Performance / Cost underline tabs; Cost adds the slim
+      // Overview · B2C · FTL/PTL · 3PL row and the billing-month pill (its sheet and the filter sheet live
+      // in LogisticsCostPage, reached through logCostCtrl). Refresh / Export / info → "⋯".
+      const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
+      const hasCost = hasCostAccess(allowedTabs)
+      const subTabs = [hasPerf && { id: 'logistics', label: 'Performance' }, hasCost && { id: 'logistics-cost', label: 'Cost' }].filter(Boolean)
+      const tabs = { subTabs: subTabs.length > 1 ? subTabs : null, activeSub: page, onSub: setPage }
+      if (page === 'logistics') {
+        return H({ title: 'Logistics', ...tabs,
+          date: datePill(filters, setFilters, logisticsFilterUI?.onRefresh || onRefresh, logisticsFilterUI ? logisticsFilterUI.loading : loading),
+          filter: <LogPerfFilterButton lFilters={lFilters} setLFilters={setLFilters} opts={logisticsFilterOpts} couriers={COURIERS} logos={COURIER_LOGOS} />,
+          menu: { title: 'Logistics · Performance', items: logisticsFilterUI?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: logisticsFilterUI.onRefresh }] : [] },
+          strip: { items: perfStripItems(lFilters), onRemove: key => perfRemove(setLFilters, key), onClear: () => perfClear(setLFilters) } })
+      }
+      const cc = logCostCtrl
+      return H({ title: 'Logistics', ...tabs,
+        date: cc && <HeaderMonthPill label={cc.pill} onClick={cc.openMonths} />,
+        filter: cc?.openFilters && <HeaderFilterIcon count={cc.filterCount} onClick={cc.openFilters} label="Cost filters" />,
+        menu: { title: 'Logistics · Cost', items: cc?.menu || [] },
+        subTabs2: cc?.scopes?.length > 1 ? cc.scopes : null, activeSub2: cc?.scope, onSub2: id => cc?.setScope(id),
+        strip: cc?.strip })
+    }
+    if (page === 'customer' || page === 'customer-support') {
+      // CUSTOMER_MASTER_PLAN.md Part B §B3: Intelligence | Support underline tabs and, on Intelligence,
+      // the slim second row of sub-tabs. Date range as a pill; Refresh / Export in "⋯".
+      const hasIntel = !allowedTabs || allowedTabs.includes('customer')
+      const hasSupport = !allowedTabs || allowedTabs.includes('customer:support')
+      const subTabs = [hasIntel && { id: 'customer', label: 'Intelligence' }, hasSupport && { id: 'customer-support', label: 'Support' }].filter(Boolean)
+      const intel = page === 'customer'
+      const sub2 = [{ id: 'overview', label: 'Overview' }, { id: 'trends', label: 'Acquisition' }, { id: 'cohort', label: 'Retention' }, { id: 'purchase', label: 'Behaviour' }, { id: 'rfm', label: 'Segments' }, { id: 'spend', label: 'Discounts' }]
+      const items = intel ? [{ id: 'refresh', label: 'Refresh data', onSelect: onCustRefresh }]
+        : [{ id: 'refresh', label: 'Refresh data', onSelect: onCsRefresh },
+          ...(csExport && !csExport.busy && csExport.items?.length ? [{ id: 'exp-all', label: 'Export all detailed KPIs (CSV)', onSelect: () => csExport.run('all') }] : [])]
+      return H({ title: 'Customers',
+        date: intel ? datePill(filters, setFilters, onCustRefresh, loading) : csRange && datePill(csRange, setCsRange, onCsRefresh),
+        menu: { items, title: intel ? 'Customers · Intelligence' : 'Customers · Support' },
+        subTabs: subTabs.length > 1 ? subTabs : null, activeSub: page, onSub: setPage,
+        subTabs2: intel ? sub2 : null, activeSub2: customerTab, onSub2: setCustomerTab, subTabs2Scroll: true })
+    }
+    if (page === 'ads') {
+      // ADS_MASTER_PLAN.md Part B §3: the channels as chips (replaces the ☰ platform panel on phones).
+      const order = ['All', 'D2C', 'Amazon', 'Flipkart', 'Myntra', 'Blinkit', 'Zepto', 'Instamart', 'CRED']
+      const chips = order.map(id => ADS_PLATFORMS.find(p => p.id === id)).filter(Boolean)
+        .map(p => ({ id: p.id, label: p.label, disabled: !!allowedTabs && !allowedTabs.includes(ADS_KEY_MAP[p.id]) }))
+      const active = adsSelPlatform || 'All'
+      const chLabel = ADS_PLATFORMS.find(p => p.id === active)?.label || 'Overall'
+      return H({ title: 'Ads', sub: chLabel,
+        date: datePill(filters, setFilters, onRefresh, loading),
+        menu: { title: `Ads · ${chLabel}`, items: [{ id: 'refresh', label: 'Refresh data', onSelect: onRefresh }] },
+        chips, activeChip: active, onChip: id => { if (id !== active) setAdsSelPlatform(id === 'All' ? null : id) } })
+    }
+    if (page === 'profile') {
+      // PROFILE_MOBILE_PROMPT.md: ⋯ holds Theme and Sign out; ProfilePage handles them.
+      const send = detail => () => window.dispatchEvent(new CustomEvent('profile:menu', { detail }))
+      return H({ title: 'Profile', menu: { title: 'Profile', items: [{ id: 'theme', label: 'Theme', onSelect: send('theme') }, { id: 'signout', label: 'Sign out', onSelect: send('signout') }] } })
+    }
+    if (page === 'pnl' && pnlTool.tool) {
+      // Inside a P&L tool (PNL_REVIEW_FIXES.md §2): no channel chips / sub-tabs (they do nothing there),
+      // ‹ back to the channel + the tool's title; ⋯ holds the tool's Reset (with an Undo toast).
+      const t = pnlTool.tool
+      return H({ onBack: t.onBack, backLabel: t.backLabel, title: t.title, sub: t.backLabel,
+        menu: { title: t.title, items: pnlTool.reset ? [{ id: 'reset', label: 'Reset', onSelect: runPnlToolReset }] : [] } })
+    }
+    if (page === 'pnl') {
+      // PNL_MASTER_PLAN.md Part B §4: the 13 channels as chips (amber dot = In progress: Overall, EBO,
+      // International, Myntra) and underline sub-tabs for D2C / Amazon / Offline.
+      const inProgress = new Set(['all', 'ebo', 'international', 'myntra'])
+      const chips = PNL_TABS_NAV.map(t => ({
+        id: t.id, disabled: !!allowedTabs && !allowedTabs.includes(`pnl:${t.id}`),
+        label: <>{t.id === 'offline' ? 'Offline' : t.label}{inProgress.has(t.id) && <span role="img" aria-label="in progress" title="In progress" style={{ width: 5, height: 5, borderRadius: '50%', background: C.m.amber, display: 'inline-block' }} />}</>,
+      }))
+      const subTabs = pnlActiveTab === 'shopify' ? [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }]
+        : pnlActiveTab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+        : pnlActiveTab === 'offline' ? [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Misc' }]
+        : null
+      const activeSub = pnlActiveTab === 'shopify' ? pnlD2cSubCh : pnlActiveTab === 'amazon' ? pnlAmzView : pnlActiveTab === 'offline' ? pnlOfflineSub : null
+      const onSub = id => { if (pnlActiveTab === 'shopify') setPnlD2cSubCh(id); else if (pnlActiveTab === 'amazon') setPnlAmzView(id); else if (pnlActiveTab === 'offline') setPnlOfflineSub(id) }
+      const chLabel = PNL_TABS_NAV.find(t => t.id === pnlActiveTab)?.label || 'P&L'
+      return H({ title: 'P&L', sub: chLabel === 'Offline Sales' ? 'Offline' : chLabel,
+        date: datePill(filters, setFilters, onRefresh, loading),
+        menu: { title: `P&L · ${chLabel}`, items: [
+          { id: 'refresh', label: 'Refresh data', onSelect: onRefresh },
+          { id: 'export', label: 'Export Financial view (CSV)', onSelect: () => window.dispatchEvent(new Event('pnl:export')) },
+        ] },
+        chips, activeChip: pnlActiveTab, onChip: id => { if (id !== pnlActiveTab) setPnlActiveTab(id) },
+        subTabs, activeSub, onSub })
+    }
+    if (page === 'overview') {
+      // Filter icon + "Filtered:" strip only while a Sales-tab filter (other than the page default) shapes the numbers.
+      return H({ title: 'Overview',
+        date: datePill(filters, setFilters, onRefresh, loading),
+        filter: <OverviewFilterButton filters={filters} setFilters={setFilters} />,
+        strip: { items: activeSalesFilters(filters), onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) } })
+    }
+    if (page === 'sales') {
+      const tab = salesActiveTab
+      const chips = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id])).map(t => ({ id: t.id, label: t.label }))
+      const d2cSubs = (salesData?.allSubChannels?.length ? salesData.allSubChannels : Object.keys(salesData?.subChannelMap || {}).filter(k => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
+      const d2cActive = (filters.subChannel || '').split(',').map(x => x.trim()).find(v => v && v !== 'ShopifyIndia' && v !== 'International') || null
+      const subTabs = tab === 'shopify' && shopifyView !== 'returns' && d2cSubs.length ? [{ id: 'overall', label: 'Overall' }, ...d2cSubs.map(k => ({ id: k.toLowerCase(), label: k }))]
+        : tab === 'amazon' ? [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+        : tab === 'offline' ? OFFLINE_SUB_OPTIONS
+        : null
+      const activeSub = tab === 'shopify' ? (d2cActive ? d2cActive.toLowerCase() : 'overall') : tab === 'amazon' ? salesChannelView : tab === 'offline' ? salesOfflineSub : null
+      const onSub = id => { if (tab === 'shopify') goToSalesSub?.(id); else if (tab === 'amazon') setSalesChannelView(id); else if (tab === 'offline') setSalesOfflineSub(id) }
+      // The sub-channel is the D2C sub-tab, not a filter, so it stays out of the "Filtered:" strip.
+      const strip = { items: activeSalesFilters(filters).filter(i => i.key !== 'subChannel'), onRemove: key => setFilters(setSalesFilter(key, [])), onClear: () => setFilters(clearAllSalesFilters) }
+      const date = datePill(filters, setFilters, onRefresh, loading)
+      const filter = <SalesFilterButton data={salesData} filters={filters} setFilters={setFilters} activeTab={tab} subCatFirstOrderMap={subCatFirstOrderMap} />
+      if (tab === 'shopify' && shopifyView === 'returns') {
+        // Sales → D2C → Return Analysis: ‹ back to D2C, no channel chips or sub-tabs (D2C only).
+        return H({ onBack: () => goToSalesSub?.(peekSalesSpot()?.sub || 'overall'), backLabel: 'D2C', title: 'Return analysis', sub: `D2C · by ${raBasis === 'qty' ? 'qty' : 'revenue'}`, date, filter, strip,
+          menu: { items: salesMenu || [], title: 'Return analysis' } })
+      }
+      return H({ title: 'Sales', sub: salesChannelLabel, date, filter, strip,
+        menu: { items: salesMenu || [], title: `Sales · ${salesChannelLabel}` },
+        chips, activeChip: tab,
+        onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
+        subTabs, activeSub, onSub })
+    }
+    // Every other screen (Documents, Frido Pulse, the internal tools, Financial MIS …): the same header,
+    // ‹ back for the tools opened from another page, a date pill where the page has a date range.
+    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost', 'financial-mis': 'sales' }[page]
+    const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
+    const phoneTitles = { ...titles, ask: 'Frido Pulse', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
+    const hasDate = ['financial-mis', 'intelligence'].includes(page)
+    return H({ title: phoneTitles[page] || page,
+      onBack: back ? () => { if (back === 'sales') setSalesActiveTab('all'); setPage(back) } : undefined, backLabel: back ? backLabels[back] : undefined,
+      date: hasDate && datePill(filters, setFilters, onRefresh, loading) })
+  }
   return (
-    <div className="topnav">
+    <div className="topnav" data-page={page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
         {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads' || page === 'pnl') && (
           <>
@@ -4916,11 +5148,15 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsR
           the top nav (visible on every page, like a notification icon in any standard product
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
+      {/* Phones only (index.css): shown while a Sales-tab filter is shaping the Overview numbers. */}
+      {page === 'overview' && <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>}
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
-          <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
-            <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
+          <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
+            <DateRangePicker filters={filters} setFilters={setFilters}
+              onRefresh={page === 'logistics' && logisticsFilterUI?.onRefresh ? logisticsFilterUI.onRefresh : onRefresh}
+              loading={page === 'logistics' && logisticsFilterUI ? logisticsFilterUI.loading : loading} />
           </div>
         </div>
       )}
@@ -4946,6 +5182,22 @@ function Topnav({ logisticsFilterUI, page, setPage, customerTab, csRange, setCsR
   )
 }
 
+// Phones: the same alerts list as the bell's panel, in a bottom sheet. Opened from "Notifications (n)",
+// the first item of the header's ⋯ menu (HEADER_MOBILE_PROMPT.md §3).
+function AlertsSheet({ open, onClose, alerts }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px', color: C.m.up, fontSize: 13, fontWeight: 600 }}>
+            <span>★</span> All systems normal: no alerts for the current period.
+          </div>
+        )}
+      </div>
+    </BottomSheet>
+  )
+}
+
 // Bell icon + unread-style count badge (WhatsApp/notification-icon pattern) — click opens a
 // popover listing every alert. Lives in Topnav so it's visible on every page, not just Overview.
 function AlertsBell({ alerts }) {
@@ -4968,15 +5220,17 @@ function AlertsBell({ alerts }) {
         ref={btnRef}
         onClick={() => setOpen(v => !v)}
         aria-label="Alerts"
+        className="alerts-bell-btn"
         style={{
           position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.border}`,
           background: open ? C.bg : C.card, cursor: 'pointer', fontSize: 16, color: C.t2,
         }}
       >
-        🔔
+        <span className="bell-emoji">🔔</span>
+        <svg className="bell-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         {alerts.length > 0 && (
-          <span style={{
+          <span className="alerts-badge" data-level={critical > 0 ? 'red' : 'amber'} style={{
             position: 'absolute', top: -5, right: -5, minWidth: 16, height: 16, padding: '0 3px',
             borderRadius: 8, background: critical > 0 ? '#B91C1C' : '#D97706', color: '#fff',
             fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -5039,7 +5293,10 @@ const INDIA_TOPOJSON = '/india-states.json'
 // guessing scale/center by eye and kept clipping the northeast / leaving dead whitespace.
 // fitSize computes the exact scale+translate needed to fill the given box, so this can't drift
 // out of frame regardless of container size.
-function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
+// mobile: the mobile Overview draws the map in the mobile palette (C.m) and lists the states under
+// it (TopStatesMobile), so the Top-5 overlay is dropped and the legend is 12px. Default = desktop.
+function IndiaChoropleth({ stateMap, totalRev, cityRows = [], mobile = false }) {
+  const tint = mobile ? C.m.green : C.acc
   const [hovered, setHovered] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [geoData, setGeoData] = useState(null)
@@ -5082,9 +5339,9 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
             <path
               key={i}
               d={geoData.path(f)}
-              fill={isHovered ? C.acm : rev > 0 ? C.acc : C.bg}
+              fill={isHovered ? (mobile ? tint : C.acm) : rev > 0 ? tint : mobile ? C.m.soft : C.bg}
               fillOpacity={isHovered ? 0.95 : rev > 0 ? intensity : 1}
-              stroke={C.card}
+              stroke={mobile ? '#fff' : C.card}
               strokeWidth={0.5}
               onMouseEnter={() => setHovered({ key, name, rev, cities: citiesFor(key) })}
               onMouseLeave={() => setHovered(null)}
@@ -5116,7 +5373,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
       )}
       {/* Static top-5 legend, bottom-right — fills otherwise-empty space south of the peninsula
           and stays visible without needing to hover each state one at a time. */}
-      <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
+      {!mobile && <div style={{ position: 'absolute', bottom: 26, right: 4, background: `${C.card}F2`, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 9px', fontSize: 10, pointerEvents: 'none' }}>
         <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 3 }}>Top 5 States</div>
         {top5States.map(([name, v], i) => (
           <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
@@ -5124,10 +5381,10 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
             <span style={{ fontFamily: 'var(--mono)', color: C.t1, fontWeight: 600 }}>{fmt(v.rev)}</span>
           </div>
         ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: 9.5, color: C.t3 }}>
+      </div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: mobile ? 12 : 9.5, color: mobile ? C.m.muted : C.t3 }}>
         <span>Low</span>
-        <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${C.acc}1F, ${C.acc})` }} />
+        <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${tint}1F, ${tint})` }} />
         <span>High</span>
       </div>
     </div>
@@ -5196,11 +5453,13 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
 )
 // A single stat tile: big number, label, optional delta/sub-line, optional colored accent bar +
 // tinted background (tint) for an at-a-glance good/bad read, not just a thin top stripe.
-const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3 }) => (
+// compact: two-across on a phone a tile is ~150px wide, so the 20px value ("8,81,914 units")
+// was cut off; the smaller size keeps the full value readable instead.
+const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3, compact }) => (
   <KpiCard span={span} accent={accent} tint={tint} hero={hero}>
     <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 5 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: hero ? 36 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: hero ? 36 : compact ? 17 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: compact ? 1.15 : 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       {deltaVal !== undefined && delta(deltaVal)}
     </div>
     {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>{sub}</div>}
@@ -5212,13 +5471,20 @@ const TrendStatTile = ({ label, value, badge, color, sub }) => (
   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, minWidth: 0 }}>
     <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={label}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
+        <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
         {badge}
       </div>
       {sub && <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, whiteSpace: 'nowrap' }}>{sub}</span>}
     </div>
+  </div>
+)
+// Mobile Overview: the same section label in the one mobile palette (C.m), independent of the desktop theme.
+const mobileSectionLabel = (text) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, marginBottom: -2 }}>
+    <span style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: C.m.ink }}>{text}</span>
+    <span style={{ flex: 1, height: 2, background: `linear-gradient(90deg, ${C.m.g3}, ${C.m.line} 40%)`, borderRadius: 2 }} />
   </div>
 )
 const deckSectionLabel = (text) => (
@@ -5239,15 +5505,31 @@ const WideCard = ({ span = 12, children, style }) => (
   </div>
 )
 
-function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData }) {
+function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders, onOpenInventory }) {
   const [productSearch, setProductSearch] = useState('')
-  const { totalRev, totalExcRev, nOrders, totalQty, aspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, cancellRev = 0, netRevenueCalc = 0 } = data
+  // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
+  // every value shown below is computed exactly as before.
+  //   phone (portrait)    KPIs 2-up, scorecard 2-up, everything full width
+  //   phone (landscape)   KPIs 4-up, scorecard 4-up, full width
+  //   tablet 768–1023     KPIs 4-up, scorecard 3-up, product table and map full width
+  //   laptop 1024–1279    scorecard 4-up, desktop layout otherwise
+  //   desktop ≥ 1280      unchanged
+  const bp = useBreakpoint()
+  const phone = bp.isMobile
+  const phonePortrait = phone && !bp.isPhoneLandscape
+  const wide = !phone && bp.width >= 1024
+  const scorecardCols = phonePortrait ? 2 : (phone || bp.width >= 1024) && bp.width < 1280 ? 4 : bp.isTablet ? 3 : 6
+  const kpiGrid = phonePortrait ? 2 : (phone || bp.isTablet) ? 4 : null
+  // The mobile Overview redesign (docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md): every width
+  // below 1024px, which also covers phones in landscape. 1024px and up keeps the desktop layout as is.
+  const ovMobile = bp.width < 1024 || bp.isPhoneLandscape
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevDailyArr, prevRev, prevOrders, rtoRevDirect, returnRev, cirRev, cancellRev = 0, netRevenueCalc = 0 } = data
   // ASP (revenue / units) — a different cut from AOV (revenue / orders): AOV moves with basket
   // size, ASP moves with per-item pricing/discounting. aspQty (when present) is the same
   // returns-excluded unit count ShopifyTab uses for its own ASP figure; falls back to totalQty.
   // Inc-GST (totalRev, not totalExcRev) to stay on the same basis as blendedAOV below — both
   // tiles read directly comparable this way instead of silently differing by the GST rate.
-  const blendedASP = (aspQty || totalQty) > 0 ? totalRev / (aspQty || totalQty) : 0
+  const { blendedASP, totalReturnPct } = salesMetrics(data)
   const sh = data.shopify || {}
   const [trendGroupBy, setTrendGroupBy] = useState('daily')
   const ads = data.ads || {}
@@ -5300,69 +5582,54 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // Amazon_net, ...), not flat daily totals, so gross + net are summed per day here. No per-day
   // return-rate series exists in this data source (unlike /api/return-analysis) — plotting
   // Revenue + Net Revenue honestly instead of fabricating a %-line the data doesn't have.
-  const heroTrendRaw = (dailyArr || []).map((d, i) => {
-    const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
-    const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
-    const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
-    const prevRev = prevDailyArr?.[i]?.rev ?? null
-    return { date: d.date, revenue, netRevenue, units, prevRevenue: prevRev }
-  })
-  // Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
-  // weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM.
-  const heroTrendGrouped = trendGroupBy === 'daily' ? heroTrendRaw : (() => {
-    const buckets = {}
-    heroTrendRaw.forEach(d => {
-      const key = trendGroupBy === 'weekly'
-        ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
-        : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, prevRevenue: 0 }
-      buckets[key].revenue += d.revenue
-      buckets[key].netRevenue += d.netRevenue
-      buckets[key].units += d.units
-      if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
-    })
-    return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
-  })()
+  const heroTrendRaw = trendRows(dailyArr, prevDailyArr)
+  const heroTrendGrouped = groupHeroTrend(heroTrendRaw, trendGroupBy)
   const heroTrendXFmt = d => trendGroupBy === 'daily' ? d?.slice(5) : trendGroupBy === 'monthly' ? d?.slice(0, 7) : d
 
   // ── Channel calcs ──
-  const shopifyRev = chMap['Shopify']?.rev || 0
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
-  // ── Per-channel Return% — reuses each channel tab's own existing return-rate calc/query rather
-  // than inventing a new one. D2C sums cancel+RTO+CIR from sh.catMap (same as allCats below).
-  // Amazon/Flipkart/Myntra each already carry a single combined return-rate figure from their own
-  // backend query (amzSC.returnRate, flipkart.returnRate, myntra totals.returnRev) — this is the
-  // same "simpleReturns" figure already shown on their own tabs (see FlatCategoryProductMatrix's
-  // simpleReturns prop), just surfaced here too. QC channels (Blinkit/Instamart/Zepto), CRED,
-  // Firstcry, Offline Sales, and International genuinely have no return/cancel data anywhere in
-  // their backend payload — those legitimately show "—", not a fabricated number.
-  const shopifyReturnPct = (() => {
-    const cats = Object.values(sh.catMap || {})
-    if (!cats.length || !shopifyRev) return null
-    const returnRevSum = cats.reduce((s, v) => s + (v.cancelRev || 0) + (v.rtoRev || 0) + (v.cirRev || 0), 0)
-    return returnRevSum / shopifyRev * 100
-  })()
-  const amzReturnPct = (data.amzSC?.returnRate?.rollOrders || 0) > 0 ? (data.amzSC.returnRate.pct ?? null) : null
-  const fkReturnPct = (data.flipkart?.returnRate?.all?.deliveredRev || 0) > 0 ? (data.flipkart.returnRate.all.pct ?? null) : null
-  const mnReturnRevTop = data.myntra?.totals?.returnRev || 0
-  const mnRevTop = data.myntra?.totals?.rev || 0
-  const myntraReturnPct = mnRevTop > 0 ? (mnReturnRevTop / mnRevTop * 100) : null
-  const chReturnPctMap = { Shopify: shopifyReturnPct, Amazon: amzReturnPct, Flipkart: fkReturnPct, Myntra: myntraReturnPct }
+  // ── Per-channel Return% — now reads the SAME rolling-30-day resolved engine every per-channel
+  // Sales tab (and PnL) already reads (each channel's own resolvedDailySKU, api/bq.js), not a
+  // separate raw query per channel — confirmed 2026-10-22, "should be used same query.. to have
+  // the same numbers as we have in sales". Replaces the old mix of sh.catMap (already resolved)
+  // + amzSC.returnRate/flipkart.returnRate/myntra.totals.returnRev (all raw/live, pre-dating the
+  // resolved engine, and disagreeing with each channel's own Sales tab figure). EBO/CRED/Firstcry
+  // now included too (resolvedDailySKU exists for them, previously showed "—" for lack of data).
+  // QC channels (Blinkit/Instamart/Zepto), Offline Sales, and International genuinely have no
+  // return/cancel lifecycle tracked anywhere in their backend payload — those legitimately stay
+  // "—", not a fabricated number.
+  const resolvedReturnPct = (rows, subChFilterFn) => {
+    const filtered = subChFilterFn ? (rows || []).filter(subChFilterFn) : (rows || [])
+    if (!filtered.length) return null
+    const gross = filtered.reduce((s, x) => s + (x.gross || 0), 0)
+    if (gross <= 0) return null
+    const returnRev = filtered.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
+    return returnRev / gross * 100
+  }
+  const shopifyReturnPct = resolvedReturnPct(sh.resolvedDailySKU, x => x.subChannel !== 'shopify international')
+  const amzReturnPct = resolvedReturnPct((data.amzSC?.resolvedDailySKU || []).concat(data.amzVC?.resolvedDailySKU || []))
+  const fkReturnPct = resolvedReturnPct(data.flipkart?.resolvedDailySKU)
+  const myntraReturnPct = resolvedReturnPct(data.myntra?.resolvedDailySKU)
+  const eboReturnPct = resolvedReturnPct(data.ebo?.resolvedDailySKU)
+  const credReturnPct = resolvedReturnPct(data.cred?.resolvedDailySKU)
+  const firstcryReturnPct = resolvedReturnPct(data.firstcry?.resolvedDailySKU)
+  // Offline Sales genuinely counts as a return for the company — Credit Notes against Sales
+  // (confirmed 2026-10-22: "that's actually considered return as a company"). Reads
+  // chMap.offline_sales.rev/.returnRev (NOT offline.resolvedDailySKU, which is scoped to
+  // MasterSKU-matched rows only and under-covers Offline's true gross, producing a visibly lower
+  // % here than Offline's own tab KPI/Overall tab showed) — same source the Overall tab's
+  // returnRev and Offline's own "Credit Notes %" KPI already use, confirmed 2026-10-22, "aren't
+  // we using the same query".
+  const offlineCh = chMap['offline_sales'] || {}
+  const offlineReturnPct = offlineCh.rev > 0 ? (offlineCh.returnRev || 0) / offlineCh.rev * 100 : null
+  const chReturnPctMap = { Shopify: shopifyReturnPct, Amazon: amzReturnPct, Flipkart: fkReturnPct, Myntra: myntraReturnPct, EBO: eboReturnPct, CRED: credReturnPct, Firstcry: firstcryReturnPct, offline_sales: offlineReturnPct }
 
   // ── Returns health ──
-  const cancelRev = orderStatusRevMap['Cancelled'] || 0
-  const cancelPct = totalRev > 0 ? cancelRev / totalRev * 100 : 0
-  const rtoPct = totalRev > 0 ? ((rtoRevDirect || 0) + (returnRev || 0)) / totalRev * 100 : 0
-  const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
-  const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
-  const totalReturnPct = cancelPct + rtoPct + cirPct
-  // Provisional Return % — uses the same allTabReturnRateMature query as Sales Overall tab
-  // so both tiles always show the same number. The old overallReturnRateMature used a cruder
-  // all-channel formula (netRevenueSelectFragment with no channel exclusions) that diverged
-  // from Sales Overall by ~2pp. allTabReturnRateMature is the correct scoped formula:
-  // explicit per-channel CASE WHEN rules, excludes Blinkit/Zepto/Instamart.
-  const showProvisionalReturnOverview = rangeTouchesImmatureWindow(filters?.end)
-  const provisionalReturnPctOverview = (data.allTabReturnRateMature?.allRate?.pct ?? null)
+  // cancellRev/rtoRevDirect/returnRev/cirRev are now resolved-engine-correct (api/bq.js's
+  // Overall-tab reconciliation patch, confirmed 2026-10-22) — each channel's own rolling-30-day
+  // resolved RTO/CIR/Cancelled/Return revenue. No more separate "Provisional Return%" estimate
+  // alongside a raw one — the resolved number IS the number now, same convention as every other tab.
+  // cancelPct / rtoPct / cirPct / exchPct / totalReturnPct: salesMetrics(data) above (overview/overviewMetrics.js).
 
   // ── Ads ──
   const adsTotals = ads.totals || []
@@ -5403,71 +5670,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   }).sort((a, b) => b.rev - a.rev)
 
   // ── Logistics ──
-  const lkpi = logisticsData?.kpis || {}
-  const lTotal = parseInt(lkpi.total_shipments) || 0
-  const lDelivered = parseInt(lkpi.delivered) || 0
-  const lRto = parseInt(lkpi.rto) || 0
-  const lZRto = parseInt(lkpi.z_rto) || 0
-  const lSla = parseInt(lkpi.sla_breach) || 0
-  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
-  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
-  const lZRtoPct = lTotal > 0 ? lZRto / lTotal * 100 : 0
-  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
-  const lFasr = lkpi.delivered_1attempt && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_1attempt) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
-  const lRasr = lkpi.delivered_multi && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_multi) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
-  const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
+  const { lTotal, lDelPct, lRtoPct, lZRtoPct, lSlaPct, lFasr, lRasr, lAvgFul, lAvgProcessing, lAvgPickup, lAvgIntransit,
+    lOrdersWithOrderDate, lOrdersPickedUp, lOrdersDeliveredTotal, lProcessedWithin24h, lPickedUpWithin24h, lDeliveredWithin3dPickup, lDeliveredWithin5dOrder,
+    lProcessedWithin24hPct, lPickedUpWithin24hPct, lDeliveredWithin3dPickupPct, lDeliveredWithin5dOrderPct, lNdrPct, lNdrResolvedPct,
+    lAvgRtoTat, lAvgAwbToRtoMark, lAvgAwbToRtoDelivered, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
+    lRvpCreated, lRvpDone, lRvpDoneWithin2d, lRvpDeliveredWithin5d, lRvpDoneWithin2dPct, lRvpDeliveredWithin5dPct,
+    lAvgRvpCreatedToPickup, lAvgRvpPickupToDelivery, lAvgRvpTat } = logisticsMetrics(logisticsData)
+  // (formulas and their reasoning: overview/overviewMetrics.js, unchanged from the inline versions)
   const couriers = (logisticsData?.byCourier || []).filter(c => parseInt(c.total) > 0).sort((a, b) => parseInt(b.total) - parseInt(a.total)).slice(0, 5)
-  // TAT breakdown — all already computed server-side in generate-logistics-cache.mjs's kpis CTE,
-  // just never surfaced client-side before now. Four stages of the shipment lifecycle:
-  // order→pickup (avg_pickup), pickup→delivery/transit (avg_intransit), order→delivery (avg_fulfilment,
-  // already shown elsewhere as "Avg Fulfilment"), and order→dispatch (avg_processing).
-  const lAvgProcessing = parseFloat(lkpi.avg_processing) || null
-  const lAvgPickup = parseFloat(lkpi.avg_pickup) || null
-  const lAvgIntransit = parseFloat(lkpi.avg_intransit) || null
-  // SLA-threshold counts (api/logistics.js kpis CTE) — % is against the orders that actually have
-  // both relevant dates (e.g. delivered_within_5d ÷ orders_delivered_total), not ÷ total shipments,
-  // since most shipments mid-flight haven't reached that stage yet and would silently deflate the %.
-  const lOrdersWithOrderDate = parseInt(lkpi.orders_with_order_date) || 0
-  const lOrdersPickedUp = parseInt(lkpi.orders_picked_up) || 0
-  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
-  const lProcessedWithin24h = parseInt(lkpi.processed_within_24h) || 0
-  const lPickedUpWithin24h = parseInt(lkpi.picked_up_within_24h) || 0
-  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
-  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
-  const lProcessedWithin24hPct = lOrdersWithOrderDate > 0 ? lProcessedWithin24h / lOrdersWithOrderDate * 100 : null
-  const lPickedUpWithin24hPct = lOrdersPickedUp > 0 ? lPickedUpWithin24h / lOrdersPickedUp * 100 : null
-  const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
-  const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
-  // NDR (Non-Delivery Reattempt): forward shipment with ofd_attempts >= 2 (first delivery attempt
-  // failed, courier re-attempted). Denominator is shipments with any attempt on file (ofd_attempts
-  // >= 1), not all shipments. Successfully Delivered NDR = NDR'd shipments that eventually got
-  // delivered regardless of attempt count, ÷ all NDR'd shipments.
-  const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
-  const lNdrCount = parseInt(lkpi.ndr_count) || 0
-  const lNdrResolvedDelivered = parseInt(lkpi.ndr_resolved_delivered) || 0
-  const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
-  const lNdrResolvedPct = lNdrCount > 0 ? lNdrResolvedDelivered / lNdrCount * 100 : null
-  // Reverse shipment (RTO) TAT & SLA thresholds — mirrors the forward-shipment section above but
-  // for the return leg: RTO marked -> RTO delivered back to warehouse.
-  const lAvgRtoTat = parseFloat(lkpi.avg_rto_tat) || null
-  const lRtoCompleted = parseInt(lkpi.rto_completed) || 0
-  const lRtoDeliveredWithin5dMark = parseInt(lkpi.rto_delivered_within_5d_of_mark) || 0
-  const lRtoDeliveredWithin10dMark = parseInt(lkpi.rto_delivered_within_10d_of_mark) || 0
-  const lRtoDeliveredWithin5dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin5dMark / lRtoCompleted * 100 : null
-  const lRtoDeliveredWithin10dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin10dMark / lRtoCompleted * 100 : null
-  // RVP (Reverse Pickup) — customer-return shipments (shipment_type='Reverse'). Created = order
-  // created; Done = picked up from customer; Delivered = reached warehouse. Thresholds: Done <=2d
-  // of Created, Delivered <=5d of Done.
-  const lRvpCreated = parseInt(lkpi.rvp_created) || 0
-  const lRvpDone = parseInt(lkpi.rvp_done) || 0
-  const lRvpDelivered = parseInt(lkpi.rvp_delivered) || 0
-  const lRvpDoneWithin2d = parseInt(lkpi.rvp_done_within_2d_of_created) || 0
-  const lRvpDeliveredWithin5d = parseInt(lkpi.rvp_delivered_within_5d_of_done) || 0
-  const lRvpDoneWithin2dPct = lRvpCreated > 0 ? lRvpDoneWithin2d / lRvpCreated * 100 : null
-  const lRvpDeliveredWithin5dPct = lRvpDone > 0 ? lRvpDeliveredWithin5d / lRvpDone * 100 : null
-  const lAvgRvpCreatedToPickup = parseFloat(lkpi.avg_rvp_created_to_pickup) || null
-  const lAvgRvpPickupToDelivery = parseFloat(lkpi.avg_rvp_pickup_to_delivery) || null
-  const lAvgRvpTat = parseFloat(lkpi.avg_rvp_tat) || null
   // KNOWN LIMITATION (flagged, not silently hidden): /logistics-data.json is generated as a fixed
   // "month-to-date through yesterday" snapshot server-side (scripts/generate-logistics-cache.mjs)
   // with no per-order maturity filter applied at generation time — so RTO%/SLA%/Z-RTO% here can
@@ -5508,15 +5718,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // genuine backend gap, not something derivable client-side. Showing the new-vs-repeat revenue
   // split and LTV (which DO exist), and calling out the gap explicitly rather than pretending a
   // top-customers table exists — see the header's own italic note below.
-  const custKpis = overviewCustData?.kpis || {}
-  const custRepeatRev = custKpis.repeatRevenue || 0
-  // Guarded against repeatRevenue exceeding grossSales (possible if the two are computed over
-  // slightly different windows/cohorts server-side) — clamp at 0 rather than show a nonsensical
-  // negative "New Customer Revenue" figure.
-  const custNewRev = Math.max(0, (custKpis.grossSales || 0) - custRepeatRev)
-  const custLtv = custKpis.ltv12 || 0
-  const custTotalCustomers = custKpis.totalCustomers || 0
-  const custNewCustomers = custKpis.newCustomers || 0
+  const { custKpis, custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers } = customerMetrics(overviewCustData)
 
   // ── Inventory Snapshot (from invSnapshotData / inv-data-7d.json) ──
   // Verified: no ₹ dead-stock VALUE field exists — only unit quantities (summary.deadStockUnits)
@@ -5591,9 +5793,146 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   })()
   const topSubCatMaxRev = topProductsBySubCat[0]?.rev || 1
 
+  // ── Previous period for the mobile ▲/▼ (deferred, cached; see overview/usePrevPeriod.js) ──
+  // Same request the page made for this range, for the equal-length range before it, run through
+  // the same salesMetrics()/trendRows() code. Only the small derived result is kept.
+  const prevSalesRange = prevRange(filters?.start, filters?.end)
+  const filterSig = Object.fromEntries(Object.entries(filters || {}).filter(([k]) => k !== 'start' && k !== 'end'))
+  const salesPrev = usePrevPeriod(
+    ovMobile && prevLoaders && prevSalesRange ? `sales:${prevSalesRange.start}:${prevSalesRange.end}:${JSON.stringify(filterSig)}` : null,
+    async () => {
+      const d = await prevLoaders.sales(prevSalesRange.start, prevSalesRange.end)
+      const m = salesMetrics(d)
+      return {
+        range: prevSalesRange, totalRev: m.totalRev, nOrders: m.nOrders, netRevenueCalc: m.netRevenueCalc, totalQty: m.totalQty,
+        blendedAOV: m.blendedAOV, blendedASP: m.blendedASP, totalReturnPct: m.totalReturnPct,
+        daily: trendRows(d.dailyArr).map(r => ({ netRevenue: r.netRevenue, units: r.units, orders: r.orders })),
+      }
+    },
+    { ready: !!data },
+  )
+  const sp = salesPrev.value
+  const spLoading = salesPrev.status === 'loading'
+  // All or none per card: if the previous period could not be loaded, the whole Sales Trend card
+  // drops its ▲/▼ (including Gross/Orders, which would otherwise be the only two left).
+  const spHidden = salesPrev.status === 'error'
+  const mobileTrendRows = sp?.daily
+    ? heroTrendRaw.map((r, i) => ({ ...r, prevNetRevenue: sp.daily[i]?.netRevenue ?? null, prevUnits: sp.daily[i]?.units ?? null, prevOrders: sp.daily[i]?.orders ?? null }))
+    : heroTrendRaw
+  const rupees = v => `₹${Math.round(v).toLocaleString('en-IN')}`
+  const trendMetrics = [
+    { key: 'gross', label: METRICS.gross.label, tileLabel: 'Gross rev', def: METRICS.gross.def, value: fmt(totalRev), delta: revDelta, deltasHidden: spHidden,
+      sub: `${fmtN(nOrders)} orders · ${fmtN(totalQty)} units`,
+      point: r => r.revenue, prevPoint: r => r.prevRevenue, fmtPoint: fmt },
+    { key: 'net', label: METRICS.net.label, tileLabel: 'Net rev', def: METRICS.net.def, value: fmt(netRevenueCalc), delta: pctChange(netRevenueCalc, sp?.netRevenueCalc), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => r.netRevenue, prevPoint: r => r.prevNetRevenue ?? null, fmtPoint: fmt },
+    { key: 'orders', label: METRICS.orders.label, def: METRICS.orders.def, value: fmtN(nOrders), delta: ordDelta, deltasHidden: spHidden,
+      point: r => r.orders, prevPoint: r => r.prevOrders ?? null, fmtPoint: fmtN },
+    { key: 'units', label: METRICS.units.label, def: METRICS.units.def, value: fmtN(totalQty), delta: pctChange(totalQty, sp?.totalQty), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => r.units, prevPoint: r => r.prevUnits ?? null, fmtPoint: fmtN },
+    { key: 'aov', label: METRICS.aov.label, tileLabel: 'AOV', def: METRICS.aov.def, value: rupees(blendedAOV), delta: pctChange(blendedAOV, sp?.blendedAOV), deltaLoading: spLoading, deltasHidden: spHidden,
+      point: r => (r.orders ? r.revenue / r.orders : null), prevPoint: r => (r.prevOrders && r.prevRevenue != null ? r.prevRevenue / r.prevOrders : null), fmtPoint: rupees },
+    // ASP is left out on mobile to keep the tile grid even (6); it stays on the desktop card.
+    // No daily Return % series exists in this data (heroTrendRaw's note): value + "No daily breakdown".
+    { key: 'returns', label: METRICS.returnPct.label, def: METRICS.returnPct.def, value: `${totalReturnPct.toFixed(1)}%`, delta: pctChange(totalReturnPct, sp?.totalReturnPct), deltaLoading: spLoading, deltasHidden: spHidden, lowerIsBetter: true,
+      status: metricStatus('returnPct', totalReturnPct) },
+  ]
+
+  // Channel Scorecard, mobile: the desktop cards' own per-channel figures, pre-formatted.
+  const scorecardChannels = sortedCh.map(([ch, v]) => {
+    const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
+    const prevChRev = data.prevChMap?.[ch]?.rev || 0
+    const aov = v.orders ? v.rev / v.orders : 0
+    return {
+      key: ch, name: ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch,
+      logo: CHANNEL_LOGOS[ch], color: C.ch[ch] || C.acc,
+      value: fmt(v.rev), delta: prevChRev > 0 ? (v.rev - prevChRev) / prevChRev * 100 : null,
+      sharePct, shareText: `${sharePct.toFixed(1)}% of revenue · ${fmtN(v.orders)} orders`,
+      netRev: v.netRev != null ? fmt(v.netRev) : '—', aov: v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—',
+      returnPct: chReturnPctMap[ch] ?? null,
+    }
+  })
+
+  // Logistics & Ops, mobile. Badge: same maturity logic as the logistics fetch, friendlier wording.
+  const logM = logisticsMetrics(logisticsData)
+  const logRangeM = filters?.start && filters?.end ? getMaturityAdjustedRange(filters) : null
+  const logBadge = logRangeM ? `Showing ${fmtDateRange(logRangeM.start, logRangeM.end)}${logRangeM.isFallback ? ' · latest complete data' : ''}` : ''
+
+  // ▲/▼ are limited to the master card (one previous-period request); the Logistics and Customer
+  // cards show none for now (backlog: pre-computed previous-period values).
+
   // The alerts bell (icon + count badge + popover) now lives in Topnav — visible on every page,
   // not just Overview, and computed once at the top-level App component (computeCombinedAlerts)
   // so the nav bell and this page never show two different alert lists. Nothing to render here.
+
+  // ── Mobile layout (< 1024px, and phones in landscape) ──
+  // docs/responsive/OVERVIEW_MOBILE_REDESIGN_PROMPT.md: the same values as the desktop deck below,
+  // regrouped into mobile cards, all shown (no collapsible sections - removed at the user's request).
+  // 1024px and up returns the desktop deck further down, unchanged.
+  const renderProductListMobile = () => {
+    // Mobile: ranked list instead of the table (responsive/MobileRankedList.jsx). Same rows
+    // (Others excluded, as in the table), same cell values; "Show all" opens the full-screen list
+    // with search and category chips.
+    const rows = topProductsBySubCat.filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
+    const share = g => (totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0')
+    const asp = g => (g.units > 0 ? g.rev / g.units : null)
+    const rupees = v => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
+    const pctText = g => (g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—')
+    return (
+      <div style={{ gridColumn: '1 / -1', background: C.m.card, borderRadius: C.m.radius.card, padding: 16, boxShadow: C.m.cardShadow }}>
+        <MobileRankedList title="Product Performance" noun="sub-categories" items={rows} itemKey={g => g.subCategory}
+          name={g => g.subCategory} sub={g => g.category} groupOf={g => g.category} searchText={g => `${g.subCategory} ${g.category}`}
+          sheetSubtitle={fmtDateRange(filters?.start, filters?.end)}
+          sorts={[
+            { key: 'rev', label: 'Gross rev', value: g => g.rev, format: g => fmt(g.rev) },
+            { key: 'netRev', label: 'Net rev', value: g => g.netRev, format: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+            { key: 'units', label: 'Units', value: g => g.units, format: g => fmtN(g.units) },
+            { key: 'asp', label: 'ASP', value: asp, format: g => rupees(asp(g)) },
+            { key: 'returnPct', label: 'Return %', value: g => g.returnPct, format: pctText, bar: 'bad' },
+          ]}
+          secondary={(g, k) => (k === 'rev' ? `${share(g)}% · Net ${g.netRev != null ? fmt(g.netRev) : '—'}` : `Gross ${fmt(g.rev)}`)}
+          details={[
+            { label: 'Category', value: g => g.category },
+            { label: 'Revenue (Inc. GST)', value: g => fmt(g.rev) },
+            { label: 'Share', value: g => `${share(g)}%` },
+            { label: 'Units', value: g => fmtN(g.units) },
+            { label: 'ASP', value: g => rupees(asp(g)) },
+            { label: 'Return %', value: pctText },
+            { label: 'Net Revenue', value: g => (g.netRev != null ? fmt(g.netRev) : '—') },
+          ]} />
+      </div>
+    )
+  }
+
+  if (ovMobile) {
+    const twoUp = bp.isPhoneLandscape || bp.isTablet
+    // Plain section labels (not collapsible): every section is always shown.
+    return (
+      <div className="ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
+        <MasterTrendCard rawRows={mobileTrendRows} groupTrend={groupHeroTrend} start={filters?.start} end={filters?.end}
+          layout={bp.isPhoneLandscape ? 'landscape' : bp.isTablet ? 'tablet' : 'phone'} metrics={trendMetrics} />
+
+        {mobileSectionLabel('Where Revenue Came From')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
+          <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
+          {topProductsBySubCat.length > 0 && renderProductListMobile()}
+          <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
+            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
+        </div>
+
+        {/* One title for this section: the card's own "Logistics & Ops" heading. */}
+        <LogisticsOpsMobile m={logM} prev={null} prevStatus="off" badgeText={logBadge} dataLoading={!logisticsData}
+          info="Whole-business shipment data, not D2C-only. Auto-shifts to a mature 30-day window if the range is too recent." twoCol={bp.isPhoneLandscape} />
+
+        {mobileSectionLabel('State of the Business')}
+        <BusinessStateMobile cust={{ custNewRev, custRepeatRev, custLtv, custTotalCustomers, custNewCustomers, custKpis, loaded: !!overviewCustData }}
+          custPrevKpis={null} ltvPrev={null} ltvPrevStatus="off"
+          inv={{ loaded: !!invSnapshotData, criticalLowCount: invSummary.criticalLowCount || 0, deadStockUnits: invSummary.deadStockUnits || 0, deadStockCount: invSummary.deadStockCount || 0,
+            totalInvt: invSummary.totalInvt || 0, skuCount: invSummary.skuCount || 0, doi: invSummary.doi ?? null, top20Doi: top30SkuDoi?.doi ?? null, top20Matched: top30SkuDoi?.matched ?? null }}
+          invUpdated={invSnapshotData?.asOf ? fmtUpdated(invSnapshotData.asOf) : ''} onOpenInventory={onOpenInventory} twoCol={twoUp} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
@@ -5612,13 +5951,21 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          <Card title="Sales Trend" style={{ height: 420, display: 'flex', flexDirection: 'column' }} action={
+          <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
           }>
             {/* Content-sized (not 1fr-stretched) so short values like "71,495" don't get spread
-                across the full card width with large gaps between them. */}
-            <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                across the full card width with large gaps between them. On phones/tablets the
+                eight tiles used to be forced onto one row and drew over each other (Phase 0 P0:
+                illegible on iPhone SE/14) - there they sit in a 2- or 4-column grid instead, and on
+                laptops the row wraps rather than running off the card's edge. */}
+            <div style={{
+              ...(kpiGrid
+                ? { display: 'grid', gridTemplateColumns: `repeat(${kpiGrid}, minmax(0,1fr))`, gap: '14px 16px' }
+                : { display: 'flex', flexWrap: 'wrap', gap: '14px 40px' }),
+              marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+            }}>
               <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc} />
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
@@ -5626,16 +5973,18 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
-              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} sub={(showProvisionalReturnOverview && provisionalReturnPctOverview != null) ? `Provisional: ${(provisionalReturnPctOverview * 100).toFixed(1)}%` : null} />
+              <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={heroTrendGrouped} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
+            <ChartFrame title="Sales Trend" height={{ mobile: 240, tablet: 260, desktop: 240 }} loading={!heroTrendGrouped.length}
+              series={[{ key: 'revenue', name: 'Gross Revenue', color: C.acc }, { key: 'prevRevenue', name: 'Prev Period', color: C.t3, dashed: true }]}>
+              {f => (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={heroTrendGrouped} margin={f.margin}>
                   <defs><linearGradient id="ovHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.22} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.02} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={heroTrendXFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
-                  <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                  <CartesianGrid {...f.grid} />
+                  <XAxis dataKey="date" {...f.xAxis} tickFormatter={heroTrendXFmt} />
+                  <YAxis {...f.yAxis} />
+                  <Tooltip {...f.tooltip} content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{heroTrendXFmt(label)}</div>
                       {payload.map(p => (
@@ -5646,12 +5995,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       ))}
                     </div>
                   ) : null} />
-                  <Legend {...chartLegendProps({ fontSize: 11 })} />
-                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
+                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} hide={f.hidden.has('revenue')} />
+                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} hide={f.hidden.has('prevRevenue')} />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+              )}
+            </ChartFrame>
           </Card>
         </div>
 
@@ -5662,7 +6011,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             AOV + Return% brought back into a compact footer row per "more important details". */}
         <WideCard span={12}>
           {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0,1fr))', gap: 16 }}>
+          {/* Six-across was squeezed to unreadable slivers below desktop width (Phase 0: "Channel
+              Scorecard squeezed" on tablet and phone). 2 / 3 / 4 / 6 columns by width instead. */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${scorecardCols}, minmax(0,1fr))`, gap: phonePortrait ? 10 : 16 }}>
             {sortedCh.map(([ch, v]) => {
               const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
               const prevChRev = data.prevChMap?.[ch]?.rev || 0
@@ -5672,8 +6023,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               const chReturnPct = chReturnPctMap[ch] ?? null
               return (
                 <div key={ch} className="card-hoverable channel-card-hover" style={{
-                  background: C.card, border: `1px solid ${C.acc}45`, borderRadius: 14, padding: '15px 16px',
-                  display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
+                  background: C.card, border: `1px solid ${C.acc}45`, borderRadius: 14, padding: phonePortrait ? '12px 12px' : '15px 16px',
+                  display: 'flex', flexDirection: 'column', gap: phonePortrait ? 8 : 10, minWidth: 0,
                   boxShadow: `0 0 14px 1px ${C.acc}28, 0 4px 12px -6px ${C.acc}3D`,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -5682,8 +6033,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                       : <span style={{ width: 18, height: 18, borderRadius: 5, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7.5, fontWeight: 700, color: '#fff' }}>{ch.charAt(0)}</span>}
                     <span style={{ fontSize: 12.5, fontWeight: 600, color: C.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 7 }}>
-                    <span style={{ fontSize: 18, fontWeight: 600, color: '#5A5850', fontFamily: 'var(--mono)', letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>{fmt(v.rev)}</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: phonePortrait ? '2px 7px' : 7, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
+                    <span style={{ fontSize: phonePortrait ? 16 : 18, fontWeight: 600, color: '#5A5850', fontFamily: 'var(--mono)', letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>{fmt(v.rev)}</span>
                     {chDelta !== null
                       ? <span style={{ fontSize: 10, fontWeight: 600, color: deltaColor, whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 'auto' }}>{chDelta >= 0 ? '▲' : '▼'}{Math.abs(chDelta).toFixed(1)}%</span>
                       : <span style={{ fontSize: 9.5, fontWeight: 500, color: C.t3, flexShrink: 0, marginLeft: 'auto' }}>New</span>}
@@ -5692,19 +6043,19 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                     <div style={{ height: '100%', width: `${Math.min(100, sharePct)}%`, background: `${C.acc}CC`, borderRadius: 2 }} />
                   </div>
                   <div style={{ fontSize: 9.5, color: C.t3, fontWeight: 400 }}>{sharePct.toFixed(1)}% of revenue · {fmtN(v.orders)} orders</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, paddingTop: 9, borderTop: `1px solid ${C.acc}1F` }}>
-                    <div>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>Net Rev</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.netRev != null ? fmt(v.netRev) : '—'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>AOV</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)' }}>{v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—'}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 2 }}>Return %</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: chReturnPct !== null ? (chReturnPct > 15 ? '#C97A72' : chReturnPct > 8 ? '#C99A4E' : '#4C9A6A') : C.t3 }}>{chReturnPct !== null ? `${chReturnPct.toFixed(1)}%` : '—'}</div>
-                    </div>
+                  {/* Three mini-stats side by side need ~170px; a two-across phone card is ~150px,
+                      so there they stack as label/value rows instead. Same values, same order. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: phonePortrait ? '1fr' : '1fr 1fr 1fr', gap: phonePortrait ? 4 : 8, paddingTop: 9, borderTop: `1px solid ${C.acc}1F` }}>
+                    {[
+                      { label: 'Net Rev', value: v.netRev != null ? fmt(v.netRev) : '—', style: { color: C.t2, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      { label: 'AOV', value: v.orders ? `₹${Math.round(aov).toLocaleString('en-IN')}` : '—', style: { color: C.t2, fontFamily: 'var(--mono)' } },
+                      { label: 'Return %', value: chReturnPct !== null ? `${chReturnPct.toFixed(1)}%` : '—', right: true, style: { color: chReturnPct !== null ? (chReturnPct > 15 ? '#C97A72' : chReturnPct > 8 ? '#C99A4E' : '#4C9A6A') : C.t3 } },
+                    ].map(s => (
+                      <div key={s.label} style={phonePortrait ? { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, minWidth: 0 } : { textAlign: s.right ? 'right' : undefined }}>
+                        <div style={{ fontSize: phonePortrait ? 9.5 : 8.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: phonePortrait ? 0 : 2, whiteSpace: 'nowrap' }}>{s.label}</div>
+                        <div style={{ fontSize: phonePortrait ? 11.5 : 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', ...s.style }}>{s.value}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -5714,12 +6065,12 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
         {topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
-          const filteredSubCat = q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat
+          const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
           return (
-          <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <WideCard span={wide ? 8 : 12} style={wide ? { maxHeight: 520, overflow: 'hidden' } : undefined}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
-              <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
+              <div style={{ position: 'relative', ...(phonePortrait ? { flex: '1 1 100%' } : { width: 230, flexShrink: 0 }) }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -5751,51 +6102,44 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ maxHeight: 450, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10, paddingBottom: 16 }}>
-              <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                  <tr>
-                    {['Sub-Category', 'Category', 'Revenue (Inc. GST)', 'Units', 'ASP', 'Return %', 'Net Revenue'].map((h, i) => (
-                      <th key={h} style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t3, textAlign: i <= 1 ? 'left' : 'right', padding: '10px 12px', background: C.card, borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSubCat.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: '16px 10px', textAlign: 'center', color: C.t3, fontSize: 11.5 }}>No sub-categories match "{productSearch}".</td></tr>
-                  )}
-                  {filteredSubCat.map((g, i) => {
-                    const asp = g.units > 0 ? g.rev / g.units : 0
-                    return (
-                      <tr key={g.subCategory} style={{ background: i % 2 === 1 ? C.hov : 'transparent' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }} title={g.subCategory}>{g.subCategory}</td>
-                        <td style={{ padding: '8px 12px', color: C.t3 }}>{g.category}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', width: '20%' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                            <div style={{ flex: 1, maxWidth: 60, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${(g.rev / topSubCatMaxRev) * 100}%`, background: C.acc, borderRadius: 3 }} />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 90, justifyContent: 'flex-end' }}>
-                              <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: C.t1 }}>{fmt(g.rev)}</span>
-                              <span style={{ fontSize: 9.5, color: C.t3 }}>{totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0'}%</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: C.t2 }}>{fmtN(g.units)}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.units > 0 ? `₹${Math.round(asp).toLocaleString('en-IN')}` : '—'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: g.returnPct !== null ? (g.returnPct > 15 ? C.red.tx : g.returnPct > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{g.returnPct !== null ? `${g.returnPct.toFixed(1)}%` : '—'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{g.netRev != null ? fmt(g.netRev) : '—'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* Shared table, Pattern A (priority columns): a phone shows Sub-Category, Revenue and Net
+                Revenue; a tablet adds Units and Return %; desktop shows all seven as before. The
+                "Columns" control brings hidden ones back. Cell contents are unchanged. */}
+            <ResponsiveTable pattern="priority" label="Product performance by sub-category" tableClassName="row-hoverable"
+              maxHeight={wide ? 450 : 420} rows={filteredSubCat} rowKey={g => g.subCategory}
+              cellPadding={phonePortrait ? '8px 8px' : '8px 12px'}
+              emptyText={`No sub-categories match "${productSearch}".`}
+              columns={[
+                { key: 'subCategory', label: 'Sub-Category', priority: 1, cellStyle: { fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: phonePortrait ? 120 : 200 },
+                  render: v => <span title={v}>{v}</span> },
+                { key: 'category', label: 'Category', priority: 3, cellStyle: { color: C.t3 } },
+                { key: 'rev', label: phonePortrait ? 'Revenue' : 'Revenue (Inc. GST)', align: 'right', priority: 1, cellStyle: { width: phonePortrait ? undefined : '20%' },
+                  render: (v, g) => (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                      {!phonePortrait && (
+                        <div style={{ flex: 1, maxWidth: 60, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${(g.rev / topSubCatMaxRev) * 100}%`, background: C.acc, borderRadius: 3 }} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: phonePortrait ? 0 : 90, justifyContent: 'flex-end', flexWrap: phonePortrait ? 'wrap' : 'nowrap' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: C.t1 }}>{fmt(g.rev)}</span>
+                        <span style={{ fontSize: 9.5, color: C.t3 }}>{totalRev > 0 ? (g.rev / totalRev * 100).toFixed(1) : '0.0'}%</span>
+                      </div>
+                    </div>
+                  ) },
+                { key: 'units', label: 'Units', align: 'right', priority: 2, cellStyle: { color: C.t2 }, render: v => fmtN(v) },
+                { key: 'asp', label: 'ASP', align: 'right', priority: 3, mono: true, cellStyle: { color: C.t2 },
+                  render: (_, g) => g.units > 0 ? `₹${Math.round(g.rev / g.units).toLocaleString('en-IN')}` : '—' },
+                { key: 'returnPct', label: 'Return %', align: 'right', priority: 2,
+                  render: v => <span style={{ fontWeight: 600, color: v !== null ? (v > 15 ? C.red.tx : v > 8 ? C.amber.tx : C.green.tx) : C.t3 }}>{v !== null ? `${v.toFixed(1)}%` : '—'}</span> },
+                { key: 'netRev', label: phonePortrait ? 'Net Rev' : 'Net Revenue', align: 'right', priority: 1, mono: true, cellStyle: { color: C.t2 },
+                  render: v => v != null ? fmt(v) : '—' },
+              ]} />
           </WideCard>
           )
         })()}
 
-        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
+        <WideCard span={wide ? 4 : 12} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
@@ -5813,7 +6157,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           {/* Soft gold gradient on the header only (not the dense KPI rows below) — same hero
               treatment used for other "headline number" cards (sales-kpi-hero), so this card reads
               as the section's hero summary rather than a flat white panel. */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid ${C.border}`, borderTopLeftRadius: 14, borderTopRightRadius: 14, background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: phonePortrait ? '16px 14px' : '18px 22px', borderBottom: `1px solid ${C.border}`, borderTopLeftRadius: 14, borderTopRightRadius: 14, background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, display: 'flex', alignItems: 'center' }}>
                 Logistics & Ops Performance
@@ -5846,13 +6190,18 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             // every tile across every row is the same width, whether or not that row fills all 8.
             const STAT_GRID_COLS = 8
             const STAT_COL_WIDTH = 145
+            // 8 × 145px + gaps needs ~1330px of card, which only a ≥1536px screen has: below that the
+            // last tiles were cut off at the card edge (Phase 0 audit: NDR Resolved %, RVP → Del.,
+            // RVP Del. ≤5d hidden even at 1440px). Below 2xl the strip wraps into as many equal
+            // columns as fit instead, without the one-row dividers.
+            const fixedStrip = bp.up('2xl') && !phone
             const StatStrip = ({ items }) => (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '16px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: fixedStrip ? `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)` : `repeat(auto-fill, minmax(${phonePortrait ? 130 : 140}px, 1fr))`, gap: fixedStrip ? '16px 24px' : '18px 20px' }}>
                 {items.map((t, i) => (
                   <div key={t.label} style={{
                     minWidth: 0,
-                    paddingRight: i < items.length - 1 ? 24 : 0,
-                    borderRight: i < items.length - 1 ? `1.5px solid ${C.border2}` : 'none',
+                    paddingRight: fixedStrip && i < items.length - 1 ? 24 : 0,
+                    borderRight: fixedStrip && i < items.length - 1 ? `1.5px solid ${C.border2}` : 'none',
                   }}>
                     {/* minHeight fixed regardless of whether this tile has a sub-line — some do
                         (e.g. SLA Threshold tiles' "n of d" caption) and some don't (Ops Performance
@@ -5868,21 +6217,21 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               </div>
             )
             const Section = ({ children, first }) => (
-              <div style={{ padding: '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
+              <div style={{ padding: phonePortrait ? '16px 14px' : '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
             )
             return (
             <>
               <Section first>
                 <SecHdr info="% of total shipments in range. FASR% = delivered on 1st OFD attempt.">Ops Performance</SecHdr>
                 <StatStrip items={[
-                  { label: 'Del. %', val: `${lDelPct.toFixed(1)}%`, color: lDelPct >= 80 ? C.green.tx : lDelPct >= 60 ? C.amber.tx : C.red.tx },
-                  { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: lRtoPct <= 8 ? C.green.tx : lRtoPct <= 10 ? C.amber.tx : C.red.tx },
-                  { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: lSlaPct <= 5 ? C.green.tx : lSlaPct <= 15 ? C.amber.tx : C.red.tx },
-                  { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: lZRtoPct <= 3 ? C.green.tx : lZRtoPct <= 8 ? C.amber.tx : C.red.tx },
+                  { label: 'Del. %', val: `${lDelPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: C.t1 },
+                  { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: C.t1 },
                   { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : '—', color: C.t1 },
-                  { label: 'RASR %', val: lRasr !== null ? `${lRasr.toFixed(1)}%` : '—', color: lRasr === null ? C.t3 : lRasr >= 10 ? C.green.tx : lRasr >= 5 ? C.amber.tx : C.red.tx },
-                  { label: 'NDR %', val: lNdrPct !== null ? `${lNdrPct.toFixed(1)}%` : '—', color: lNdrPct === null ? C.t3 : lNdrPct <= 10 ? C.green.tx : lNdrPct <= 20 ? C.amber.tx : C.red.tx },
-                  { label: 'NDR Resolved %', val: lNdrResolvedPct !== null ? `${lNdrResolvedPct.toFixed(1)}%` : '—', color: lNdrResolvedPct === null ? C.t3 : lNdrResolvedPct >= 70 ? C.green.tx : lNdrResolvedPct >= 50 ? C.amber.tx : C.red.tx },
+                  { label: 'RASR %', val: lRasr !== null ? `${lRasr.toFixed(1)}%` : '—', color: lRasr === null ? C.t3 : C.t1 },
+                  { label: 'NDR %', val: lNdrPct !== null ? `${lNdrPct.toFixed(1)}%` : '—', color: lNdrPct === null ? C.t3 : C.t1 },
+                  { label: 'NDR Resolved %', val: lNdrResolvedPct !== null ? `${lNdrResolvedPct.toFixed(1)}%` : '—', color: lNdrResolvedPct === null ? C.t3 : C.t1 },
                 ]} />
               </Section>
 
@@ -5891,16 +6240,18 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   the UI before now — no new backend work needed. RTO Mark → RTO Delivered sits in
                   this same forward-labeled strip since it's read together with the other TAT legs. */}
               <Section>
-                <SecHdr info="Avg days per shipment stage, order to delivery. RTO Mark → RTO Delivered only counts RTOs that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
+                <SecHdr info="Avg days per shipment stage. Forward stages (Order → AWB → Pickup → Delivery) count forward shipments only. RTO stages count RTO-marked forward shipments only; RTO Mark → RTO Del and AWB → RTO Del. only those that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
                 <StatStrip items={[
-                  { label: 'Order → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : lAvgPickup <= 1 ? C.green.tx : lAvgPickup <= 2 ? C.amber.tx : C.red.tx },
-                  { label: 'Order → Dispatch', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : lAvgProcessing <= 2 ? C.green.tx : lAvgProcessing <= 4 ? C.amber.tx : C.red.tx },
-                  { label: 'Pickup → Del.', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : lAvgIntransit <= 3 ? C.green.tx : lAvgIntransit <= 6 ? C.amber.tx : C.red.tx },
-                  { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : lAvgFul <= 3 ? C.green.tx : lAvgFul <= 5 ? C.amber.tx : C.red.tx },
-                  { label: 'RTO Mark → Del.', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : lAvgRtoTat <= 5 ? C.green.tx : lAvgRtoTat <= 10 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : lAvgRvpCreatedToPickup <= 2 ? C.green.tx : lAvgRvpCreatedToPickup <= 4 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : lAvgRvpPickupToDelivery <= 5 ? C.green.tx : lAvgRvpPickupToDelivery <= 8 ? C.amber.tx : C.red.tx },
-                  { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : lAvgRvpTat <= 7 ? C.green.tx : lAvgRvpTat <= 12 ? C.amber.tx : C.red.tx },
+                  { label: 'Order → AWB', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
+                  { label: 'AWB → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
+                  { label: 'Pickup → Delivery', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
+                  { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Mark', val: lAvgAwbToRtoMark !== null ? `${lAvgAwbToRtoMark.toFixed(1)}d` : '—', color: lAvgAwbToRtoMark === null ? C.t3 : C.t1 },
+                  { label: 'RTO Mark → RTO Del', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Del.', val: lAvgAwbToRtoDelivered !== null ? `${lAvgAwbToRtoDelivered.toFixed(1)}d` : '—', color: lAvgAwbToRtoDelivered === null ? C.t3 : C.t1 },
+                  { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : C.t1 },
+                  { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : C.t1 },
+                  { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : C.t1 },
                 ]} />
               </Section>
 
@@ -5912,14 +6263,14 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <Section>
                 <SecHdr info="% only of orders/shipments that reached that stage, not all shipments. Covers forward delivery, courier RTO, and customer-return (RVP) thresholds.">SLA Thresholds — Forward, RTO & RVP</SecHdr>
                 <StatStrip items={[
-                  { label: 'Processed ≤24h', val: lProcessedWithin24hPct !== null ? `${lProcessedWithin24hPct.toFixed(1)}%` : '—', color: lProcessedWithin24hPct === null ? C.t3 : lProcessedWithin24hPct >= 80 ? C.green.tx : lProcessedWithin24hPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersWithOrderDate > 0 ? `${fmtN(lProcessedWithin24h)} of ${fmtN(lOrdersWithOrderDate)}` : '—' },
-                  { label: 'Picked Up ≤24h', val: lPickedUpWithin24hPct !== null ? `${lPickedUpWithin24hPct.toFixed(1)}%` : '—', color: lPickedUpWithin24hPct === null ? C.t3 : lPickedUpWithin24hPct >= 80 ? C.green.tx : lPickedUpWithin24hPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersPickedUp > 0 ? `${fmtN(lPickedUpWithin24h)} of ${fmtN(lOrdersPickedUp)}` : '—' },
-                  { label: 'Del. ≤3d of Pickup', val: lDeliveredWithin3dPickupPct !== null ? `${lDeliveredWithin3dPickupPct.toFixed(1)}%` : '—', color: lDeliveredWithin3dPickupPct === null ? C.t3 : lDeliveredWithin3dPickupPct >= 80 ? C.green.tx : lDeliveredWithin3dPickupPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin3dPickup)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
-                  { label: 'Del. ≤5d of Order', val: lDeliveredWithin5dOrderPct !== null ? `${lDeliveredWithin5dOrderPct.toFixed(1)}%` : '—', color: lDeliveredWithin5dOrderPct === null ? C.t3 : lDeliveredWithin5dOrderPct >= 80 ? C.green.tx : lDeliveredWithin5dOrderPct >= 60 ? C.amber.tx : C.red.tx, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin5dOrder)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
-                  { label: 'RTO ≤5d of Mark', val: lRtoDeliveredWithin5dMarkPct !== null ? `${lRtoDeliveredWithin5dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin5dMarkPct === null ? C.t3 : lRtoDeliveredWithin5dMarkPct >= 80 ? C.green.tx : lRtoDeliveredWithin5dMarkPct >= 60 ? C.amber.tx : C.red.tx, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin5dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
-                  { label: 'RTO ≤10d of Mark', val: lRtoDeliveredWithin10dMarkPct !== null ? `${lRtoDeliveredWithin10dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin10dMarkPct === null ? C.t3 : lRtoDeliveredWithin10dMarkPct >= 80 ? C.green.tx : lRtoDeliveredWithin10dMarkPct >= 60 ? C.amber.tx : C.red.tx, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin10dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
-                  { label: 'RVP ≤2d of Created', val: lRvpDoneWithin2dPct !== null ? `${lRvpDoneWithin2dPct.toFixed(1)}%` : '—', color: lRvpDoneWithin2dPct === null ? C.t3 : lRvpDoneWithin2dPct >= 80 ? C.green.tx : lRvpDoneWithin2dPct >= 60 ? C.amber.tx : C.red.tx, sub: lRvpCreated > 0 ? `${fmtN(lRvpDoneWithin2d)} of ${fmtN(lRvpCreated)}` : '—' },
-                  { label: 'RVP Del. ≤5d of Done', val: lRvpDeliveredWithin5dPct !== null ? `${lRvpDeliveredWithin5dPct.toFixed(1)}%` : '—', color: lRvpDeliveredWithin5dPct === null ? C.t3 : lRvpDeliveredWithin5dPct >= 80 ? C.green.tx : lRvpDeliveredWithin5dPct >= 60 ? C.amber.tx : C.red.tx, sub: lRvpDone > 0 ? `${fmtN(lRvpDeliveredWithin5d)} of ${fmtN(lRvpDone)}` : '—' },
+                  { label: 'Processed ≤24h', val: lProcessedWithin24hPct !== null ? `${lProcessedWithin24hPct.toFixed(1)}%` : '—', color: lProcessedWithin24hPct === null ? C.t3 : C.t1, sub: lOrdersWithOrderDate > 0 ? `${fmtN(lProcessedWithin24h)} of ${fmtN(lOrdersWithOrderDate)}` : '—' },
+                  { label: 'Picked Up ≤24h', val: lPickedUpWithin24hPct !== null ? `${lPickedUpWithin24hPct.toFixed(1)}%` : '—', color: lPickedUpWithin24hPct === null ? C.t3 : C.t1, sub: lOrdersPickedUp > 0 ? `${fmtN(lPickedUpWithin24h)} of ${fmtN(lOrdersPickedUp)}` : '—' },
+                  { label: 'Del. ≤3d of Pickup', val: lDeliveredWithin3dPickupPct !== null ? `${lDeliveredWithin3dPickupPct.toFixed(1)}%` : '—', color: lDeliveredWithin3dPickupPct === null ? C.t3 : C.t1, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin3dPickup)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
+                  { label: 'Del. ≤5d of Order', val: lDeliveredWithin5dOrderPct !== null ? `${lDeliveredWithin5dOrderPct.toFixed(1)}%` : '—', color: lDeliveredWithin5dOrderPct === null ? C.t3 : C.t1, sub: lOrdersDeliveredTotal > 0 ? `${fmtN(lDeliveredWithin5dOrder)} of ${fmtN(lOrdersDeliveredTotal)}` : '—' },
+                  { label: 'RTO ≤5d of Mark', val: lRtoDeliveredWithin5dMarkPct !== null ? `${lRtoDeliveredWithin5dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin5dMarkPct === null ? C.t3 : C.t1, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin5dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
+                  { label: 'RTO ≤10d of Mark', val: lRtoDeliveredWithin10dMarkPct !== null ? `${lRtoDeliveredWithin10dMarkPct.toFixed(1)}%` : '—', color: lRtoDeliveredWithin10dMarkPct === null ? C.t3 : C.t1, sub: lRtoCompleted > 0 ? `${fmtN(lRtoDeliveredWithin10dMark)} of ${fmtN(lRtoCompleted)}` : '—' },
+                  { label: 'RVP ≤2d of Created', val: lRvpDoneWithin2dPct !== null ? `${lRvpDoneWithin2dPct.toFixed(1)}%` : '—', color: lRvpDoneWithin2dPct === null ? C.t3 : C.t1, sub: lRvpCreated > 0 ? `${fmtN(lRvpDoneWithin2d)} of ${fmtN(lRvpCreated)}` : '—' },
+                  { label: 'RVP Del. ≤5d of Done', val: lRvpDeliveredWithin5dPct !== null ? `${lRvpDeliveredWithin5dPct.toFixed(1)}%` : '—', color: lRvpDeliveredWithin5dPct === null ? C.t3 : C.t1, sub: lRvpDone > 0 ? `${fmtN(lRvpDeliveredWithin5d)} of ${fmtN(lRvpDone)}` : '—' },
                 ]} />
               </Section>
 
@@ -5948,41 +6299,42 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             (ads:all/d2c/amazon/etc. permission keys), which already has it in full. */}
 
         {deckSectionLabel('State of the Business')}
-        {/* Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
+        {/* 2 columns on a phone, 3 on a tablet / phone in landscape.
+            Local 5-column grid (rather than the shared 12-col deck grid used by span={n} elsewhere
             on this page) — 5 tiles per group needs its own column count to lay out evenly instead
             of wrapping a 5th tile onto its own half-empty row. */}
-        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 14 }}>
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${phonePortrait ? 2 : (phone || bp.isTablet) ? 3 : 5}, minmax(0,1fr))`, gap: phonePortrait ? 10 : 14 }}>
           <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}` }}>Customer (D2C)</div>
-          <StatTile span={1} label="New Customer Revenue" value={overviewCustData ? fmt(custNewRev) : '—'} />
-          <StatTile span={1} label="Repeat Customer Revenue" value={overviewCustData ? fmt(custRepeatRev) : '—'} />
-          <StatTile span={1} label="LTV (lifetime avg)" value={overviewCustData ? fmt(custLtv) : '—'} />
-          <StatTile span={1} label="Repeat Rate" value={overviewCustData && custKpis.repeatRate != null ? `${(custKpis.repeatRate * 100).toFixed(1)}%` : '—'} sub={!overviewCustData ? 'Loading customer data...' : 'D2C (Shopify) only'} />
-          <StatTile span={1} label="Total Customers" value={overviewCustData ? fmtN(custTotalCustomers) : '—'} sub={overviewCustData ? `${fmtN(custNewCustomers)} new this period` : ''} />
+          <StatTile span={1} compact={phonePortrait} label="New Customer Revenue" value={overviewCustData ? fmt(custNewRev) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="Repeat Customer Revenue" value={overviewCustData ? fmt(custRepeatRev) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="LTV (lifetime avg)" value={overviewCustData ? fmt(custLtv) : '—'} />
+          <StatTile span={1} compact={phonePortrait} label="Repeat Rate" value={overviewCustData && custKpis.repeatRate != null ? `${(custKpis.repeatRate * 100).toFixed(1)}%` : '—'} sub={!overviewCustData ? 'Loading customer data...' : 'D2C (Shopify) only'} />
+          <StatTile span={1} compact={phonePortrait} label="Total Customers" value={overviewCustData ? fmtN(custTotalCustomers) : '—'} sub={overviewCustData ? `${fmtN(custNewCustomers)} new this period` : ''} />
 
           {/* Stockout-Risk SKUs previously carried a lone red/green accent bar that no sibling tile
               in this grid had — it read as visually isolated rather than as one consistent deck.
               Colour now lives only in the number itself (same treatment as every other tile here),
               keeping the good/bad signal without the mismatched accent stripe. */}
           <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t2, marginTop: 6, marginBottom: -6, paddingLeft: 10, borderLeft: `2.5px solid ${C.acc}`, display: 'flex', alignItems: 'center', gap: 8 }}>Inventory{invSnapshotData?.asOf ? <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: C.t3, fontSize: 10 }}>snapshot as of {new Date(invSnapshotData.asOf).toLocaleString()}</span> : null}</div>
-          <StatTile span={1} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
+          <StatTile span={1} compact={phonePortrait} label="Stockout-Risk SKUs" value={invSnapshotData ? fmtN(invSummary.criticalLowCount || 0) : '—'}
             color={(invSummary.criticalLowCount || 0) > 0 ? C.red.tx : C.green.tx}
             sub="Critical + Low stock status" />
-          <StatTile span={1} label="Dead Stock" value={invSnapshotData ? `${fmtN(invSummary.deadStockUnits || 0)} units` : '—'} sub={invSnapshotData ? `${fmtN(invSummary.deadStockCount || 0)} SKUs, no sale in 90d` : 'Loading inventory snapshot...'} />
-          <StatTile span={1} label="Total Inventory" value={invSnapshotData ? `${fmtN(invSummary.totalInvt || 0)} units` : '—'} sub={invSnapshotData ? `Across ${fmtN(invSummary.skuCount || 0)} SKUs` : ''} />
+          <StatTile span={1} compact={phonePortrait} label="Dead Stock" value={invSnapshotData ? `${fmtN(invSummary.deadStockUnits || 0)} units` : '—'} sub={invSnapshotData ? `${fmtN(invSummary.deadStockCount || 0)} SKUs, no sale in 90d` : 'Loading inventory snapshot...'} />
+          <StatTile span={1} compact={phonePortrait} label="Total Inventory" value={invSnapshotData ? `${fmtN(invSummary.totalInvt || 0)} units` : '—'} sub={invSnapshotData ? `Across ${fmtN(invSummary.skuCount || 0)} SKUs` : ''} />
           {/* Sub-label derives a Critical/Low/Sufficient/Excess band from THIS tile's own 57d-style
               DOI figure (thresholds match api/_inventory_shared.js DOI_BANDS: <=2/<=15/<=45/>45).
               Previously showed invSummary.stockStatus, the single most-common per-SKU status across
               thousands of SKUs (a mode, not derived from the aggregate DOI at all) — e.g. it could
               read "Out of Stock" underneath a healthy 57d aggregate, which is contradictory, not
               just uninformative. */}
-          <StatTile span={1} label="Days of Inventory" value={invSnapshotData && invSummary.doi != null ? `${invSummary.doi}d` : '—'}
+          <StatTile span={1} compact={phonePortrait} label="Days of Inventory" value={invSnapshotData && invSummary.doi != null ? `${invSummary.doi}d` : '—'}
             sub={invSnapshotData && invSummary.doi != null
               ? (invSummary.doi <= 2 ? 'Critical' : invSummary.doi <= 15 ? 'Low' : invSummary.doi <= 45 ? 'Sufficient' : 'Excess')
               : '—'} />
           {/* Weighted-average DOI across the top 20 SKUs by revenue — a stockout on a best-seller
               costs far more than the same status on a long-tail SKU, so this is a sharper read on
               inventory health than the blanket all-SKU aggregate DOI tile above. */}
-          <StatTile span={1} label="DOI — Top 20 SKUs" value={top30SkuDoi ? `${top30SkuDoi.doi}d` : '—'}
+          <StatTile span={1} compact={phonePortrait} label="DOI — Top 20 SKUs" value={top30SkuDoi ? `${top30SkuDoi.doi}d` : '—'}
             color={top30SkuDoi ? (top30SkuDoi.doi <= 2 ? C.red.tx : top30SkuDoi.doi <= 15 ? C.amber.tx : C.green.tx) : C.t1}
             sub={top30SkuDoi ? `Weighted by units, ${top30SkuDoi.matched} of 20 matched` : (invSnapshotData ? 'No match' : 'Loading...')} />
         </div>
@@ -6893,7 +7245,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // background for a plain sticky-white band with lighter header-label ink, matching
 // ReturnBreakdownTable's calmer look — every other call site (EBO, Amazon, Flipkart, etc.) keeps
 // today's C.acl header unchanged since they weren't asked to match.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap: subCatDateMapProp = {}, channel = null }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {}, plainHeader = false, rangeStart, rangeEnd, subCatDateMap: subCatDateMapProp = {}, channel = null, netScale = 1 }) {
   // Daily run rate divides by every day in the selected range, so each row uses the
   // same divisor and rows stay comparable. Without a range the column is hidden
   // rather than shown with a wrong or invented divisor.
@@ -6937,56 +7289,11 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName, catName, fallbackGstRatio) => {
-    const gross = d.rev || 0
-    const excRev = d.excRev || 0
-    const cancelRev = d.cancelRev || 0  // full cancellation deducted, COD included (confirmed 2026-08-19)
-    const rtoRev = d.rtoRev || 0
-    const cirRev = d.cirRev || 0
-    const exchRev = d.exchRev || 0
-    const returnRev = d.returnRev || 0
-    // When excRev is missing (e.g. SKU-level rows that only carry gross+units), fall back to the
-    // parent product row's gstRatio so net rev isn't zeroed out by a spurious 100% GST ratio.
-    const gstRatio = excRev > 0 ? (gross > 0 ? (gross - excRev) / gross : 0) : (fallbackGstRatio ?? (gross > 0 ? (gross - excRev) / gross : 0))
-    // Exchange is NOT deducted from Net Revenue (reverted 2026-08-19) — the customer keeps a
-    // product either way, so an exchange isn't lost revenue. exchRev is still extracted above for
-    // display (exchPct) only. The recreated '_EX...' OrderId that would otherwise double-count
-    // this same sale is excluded entirely at the base BigQuery query (see api/_bq.js buildQuery).
-    const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
-    const netStandard = grossAfterReturns * (1 - gstRatio)
-    // Only use Mobility whitelist override for Mobility or Sparepart-category rows — the server
-    // (api/bq.js's mobilityNetBySubCat) already excludes any other stray category, so anything
-    // present here by the time it reaches this component legitimately belongs to one of these two.
-    // Keyed 'Category::SubCategory' (see the reconciledMobilityNetBySubCat build site above) —
-    // NOT bare SubCategory, since the same SubCategory name can exist under two Categories.
-    const whitelistKey = `${catName}::${scName}`
-    const net = ((catName === 'Mobility' || /^sparepart/i.test(catName || '')) && scName && mobilityNetBySubCat[whitelistKey] != null) ? mobilityNetBySubCat[whitelistKey] : netStandard
-    return { gross, net, units: d.units || 0, cancelRev, rtoRev, cirRev, exchRev, returnRev }
-  }
+  // Rows (and mapRow for the SKU rows / CSV) come from the shared builder in src/sales/salesMobileData.js -
+  // moved there unchanged so the mobile Sales view lists exactly the same rows and numbers.
+  const { mapRow, netShrink, allRows } = matrixRows({ subCatData, subCatPrevMap, simpleReturns, mobilityNetBySubCat, netScale })
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
 
-  // Compute overall net shrink factor to approximate prevNet from prevGross
-  const _totGross = Object.values(subCatData || {}).flatMap(m => Object.values(m)).reduce((s, d) => s + (d.rev || 0), 0)
-  const _totNet = Object.entries(subCatData || {}).flatMap(([cat, m]) => Object.entries(m).map(([sc, d]) => mapRow(d, sc, cat).net)).reduce((s, n) => s + n, 0)
-  const netShrink = _totGross > 0 ? _totNet / _totGross : 1
-
-  // Flatten to one row per Category+Product (sub-category) — every product visible immediately.
-  const allRows = []
-  Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
-    Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d, sc, cat)
-      // Marketplaces report one combined return figure (d.returnRev) with no further breakdown;
-      // D2C/EBO sum the four distinct statuses.
-      const totalReturnRev = simpleReturns ? r.returnRev : r.cancelRev + r.rtoRev + r.cirRev + r.returnRev
-      const prevGross = subCatPrevMap[`${cat}::${sc}`] || 0
-      allRows.push({
-        cat, sc, ...r, prevGross, prevNet: prevGross * netShrink,
-        asp: r.units > 0 ? r.gross / r.units : 0,
-        cancelPct: pctOf(r.cancelRev, r.gross), rtoPct: pctOf(r.rtoRev, r.gross), cirPct: pctOf(r.cirRev, r.gross), exchPct: pctOf(r.exchRev, r.gross),
-        totalReturnPct: pctOf(totalReturnRev, r.gross),
-      })
-    })
-  })
   const filteredRows = q ? allRows.filter(r => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || Object.keys(skuData?.[r.cat]?.[r.sc] || {}).some(sku => sku.toLowerCase().includes(q))) : allRows
   const getters = {
     cat: r => r.cat, sc: r => r.sc, gross: r => r.gross, units: r => r.units, asp: r => r.asp,
@@ -7084,7 +7391,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
     { id: 'prevGross', label: 'vs Prev', sortKey: 'prevGross', width: 9,
       row: r => <td style={tdStyle}>{vsPrevCell(r.net, r.prevNet)}</td>,
-      sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.prevGross > 0 ? vsPrevCell(sk.net, sk.prevGross * netShrink) : <span style={{ color: C.t3 }}>—</span>}</td>,
       total: () => <td style={totalTdStyle}>{vsPrevCell(tot.net, tot.prevGross * netShrink, plainHeader)}</td> },
     { id: 'units', label: 'Units', sortKey: 'units', width: 8,
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
@@ -7195,7 +7502,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               const isFirstOfCat = i === 0 || rows[i - 1].cat !== r.cat
               const isLastOfCat = i === rows.length - 1 || rows[i + 1].cat !== r.cat
               const isDateExpanded = expandedDateCat[r.cat]
-              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => { const prevGross = skuPrevMap?.[r.cat]?.[r.sc]?.[sku] || 0; return { sku, ...mapRow(d), prevGross } }).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
               if (isMob) {
@@ -7827,7 +8134,10 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
   )
 }
 
-function AllTab({ data, rangeStart, rangeEnd }) {
+function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChannel }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, scopedAOV = 0, scopedASP = 0, prevScopedAOV = 0, prevScopedASP = 0, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, prevNCusts = 0, prevRepeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0, netRevenueCalc = 0 } = data
   const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => {
     if (a === 'offline_sales') return 1
@@ -7918,17 +8228,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const unitsPerOrder = nOrders > 0 ? aspQtyAll / nOrders : 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
+  // cancellRev/rtoRev/cirRev/returnRevAll are now resolved-engine-correct (api/bq.js's Overall-tab
+  // reconciliation patch, confirmed 2026-10-22) — each channel's own rolling-30-day resolved
+  // RTO/CIR/Cancelled/Return revenue, summed from the SAME resolvedDailySKU every per-channel tab
+  // reads. No more separate "Provisional Return%" estimate alongside a raw one — the resolved
+  // number IS the number now, same convention as every other channel tab.
   const returnRevAll = data.returnRev || 0
   const returnNumeratorRev = cancellRev + rtoRev + returnRevAll + cirRev
   const returnPct = totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
-  // Provisional Return % — same pattern as every other tab (confirmed 2026-10-19): shown
-  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
-  // hasn't had time to mature. Sourced from data.allTabReturnRateMature.allRate.pct — the SAME
-  // scoped returnNumeratorRev formula as returnPct above (only channels with a real return
-  // lifecycle; Blinkit/Instamart/Zepto excluded), computed over the rolling mature window via its
-  // own dedicated query (allTabReturnRateMature), separate from Overview's cruder all-channel sum.
-  const showProvisionalReturnAll = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalReturnPctAll = (data.allTabReturnRateMature?.allRate?.pct ?? null)
   const aspUnits = (typeof data.aspQty === 'number' && data.aspQty > 1000) ? data.aspQty : totalQty
   const asp = aspUnits > 0 ? totalRev / aspUnits : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -7983,7 +8290,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     { label: 'Units', value: fmtNShort(aspQtyAll), spark: mobUnitsSpark },
     { label: 'AOV', value: fmtShort(scopedAOV), spark: mobAovSpark },
     { label: 'ASP', value: fmtShort(scopedASP), spark: mobAspSpark },
-    { label: 'Daily Avg Net Rev', value: fmt(totalRev / nDays), spark: mobRevSpark },
+    { label: 'Daily Avg Net Rev', value: fmt(netRevenueCalc / nDays), spark: mobRevSpark },
     { label: 'GST', value: fmt(gstCollected), spark: mobGstSpark },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: mobReturnSpark, accent: returnPct > 10 ? '#7A1A1A' : undefined },
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
@@ -8074,8 +8381,75 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     }
   }
 
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const allGeoInputs = () => {
+        const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+        let cumS = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
+          cumS += sharePct
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cumS }
+        })
+        const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
+        let cumC = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
+          cumC += sharePct
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view (src/sales/), fed with
+  // the values computed above exactly as the desktop tiles below use them.
+  if (salesMobile) {
+    const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0
+    const prevRetPct = prevRev > 0 ? ((data.prevRtoRev || 0) + (data.prevCirRev || 0)) / prevRev * 100 : 0
+    const deskChg = (cur, prev) => chg(cur, prev, { minPrev: 1, maxAbs: 999 })
+    const momChg = momRev > 0 ? (totalRev - momRev) / momRev * 100 : null
+    const yoyChg = yoyRev > 0 ? (totalRev - yoyRev) / yoyRev * 100 : null
+    const mTrend = trendRows(dailyArr, prevDailyArr).map(r => ({ date: r.date, gross: r.revenue, net: r.netRevenue, orders: r.orders, units: r.units, prevGross: r.prevRevenue }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST, all channels.', value: fmt(totalRev), sub: `${fmtN(nOrders)} orders · ${fmtN(aspQtyAll)} units`,
+        delta: momChg, compare: [momChg != null && { label: 'MoM', delta: momChg }, yoyChg != null && { label: 'YoY', delta: yoyChg }].filter(Boolean),
+        point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRevenueCalc), delta: chg(netRevenueCalc, prevExcRev), point: r => r.net, fmtPoint: fmt },
+      atRisk: { label: 'Revenue at risk', tileLabel: 'Rev at risk', def: 'RTO + return + cancelled + CIR revenue.', value: fmt(atRiskRev), delta: chg(atRiskRev, prevAtRiskEst), lowerIsBetter: true },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders (D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only).', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, delta: deskChg(scopedAOV, prevScopedAOV) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRevenueCalc / nDays), delta: deskChg(netRevenueCalc / nDays, prevDailyAvg) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units (same channels as AOV).', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, delta: deskChg(scopedASP, prevScopedASP) },
+      gst: { label: 'GST', def: 'GST collected.', value: fmt(gstCollected), delta: deskChg(gstCollected, prevGST) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: 'Cancelled + RTO + return + CIR revenue ÷ gross revenue.', value: `${returnPct.toFixed(1)}%`, delta: prevRev ? chg(returnPct, prevRetPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixDataAll, skuData: skuChannelMapBySku, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = allGeoInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), channels: sortedCh.map(([ch, v]) => ({ key: ch, id: TABS.find(t => t.ch === ch)?.id, name: ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch, gross: v.rev ?? v.netRev ?? 0, net: v.netRev ?? v.excRev ?? 0 })), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: allCatRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="all" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} onOpenChannel={onOpenChannel} />
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Entry point to the Financial MIS report — a formal, channel-by-channel P&L rollup,
+          distinct from this tab's own exploratory KPIs/tables. Placed here (Sales → Overall)
+          rather than as its own sidebar nav item (2026-10-20) since this is where someone
+          looking at overall sales performance would naturally want to jump into financials;
+          the page/route/permission itself still exists exactly as before, just reached only
+          via this link now, not a dedicated nav entry. Same tool-btn pill pattern PnLPage.jsx
+          already uses for Price Simulator/Breakeven ROAS, for visual consistency.
+          REMOVED FROM UI 2026-10-21 per explicit instruction ("not feasible for now") — the
+          `false &&` below hides the entry point only; FinancialMISPage, its route, its API
+          endpoint and its permission key are all left fully intact to re-enable later. */}
+      {false && setPage && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (
+        <div className="mob-hidden" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => setPage('financial-mis')} className="tool-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" />
+            </svg>
+            Financial MIS
+          </button>
+        </div>
+      )}
       {/* Mobile KPI list — same style as Ads tab */}
       <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
         {mobKpis.map(k => (
@@ -8106,14 +8480,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         {/* Right: 2 rows of 4 KPIs each — single grid so all 8 cards share equal height */}
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue', value: fmt(netRevenueCalc), sub: `Ex GST, after returns · ${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
+            { label: 'Net Revenue', value: fmt(netRevenueCalc), sub: `${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
             { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
             { label: 'AOV', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedAOV, prevScopedAOV) },
             { label: 'Daily Avg Net Rev', value: fmt(netRevenueCalc / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRevenueCalc / nDays, prevDailyAvg) },
             { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
             { label: 'GST', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Repeat Customer Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers`, accent: undefined, badge: (() => { const prevRate = prevNCusts > 0 ? (prevRepeatCusts / prevNCusts * 100) : null; if (prevRate === null || prevRate === 0) return null; const p = (parseFloat(repeatRate) - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
-            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: (showProvisionalReturnAll && provisionalReturnPctAll != null) ? `Provisional Return: ${(provisionalReturnPctAll * 100).toFixed(1)}%` : `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} of ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8145,22 +8519,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
       {(() => {
-        const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
-        let cumS = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
-          cumS += sharePct
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cumS }
-        })
-        const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
-        let cumC = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
-          cumC += sharePct
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-        })
+        const { enrichedStates, enrichedCities } = allGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
@@ -8731,7 +9090,10 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
   )
 }
 
-function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
+function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenReturns, subCatFirstOrderMap }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
@@ -8783,7 +9145,34 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const grossAfterReturns = netCalcSrc.netRevIncGst ?? (totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev)
   const gst = netCalcSrc.gstCompleted || 0
   const mobilityNetRevOverride = filters.subChannel === 'Mobility' ? (subChannelMap['Mobility']?.netRev ?? null) : null
-  const netRev = mobilityNetRevOverride ?? netCalcSrc.netRev ?? (grossAfterReturns - gst)
+  // Returns % / Net Revenue — resolved per-component engine (confirmed 2026-10-22): for any day
+  // older than 15 days, uses that day's own real RTO+CIR+Cancelled revenue; for any day within the
+  // last 15 days, substitutes that SKU's own rolling 30-day-window rate per component instead of
+  // the raw live rate, so the tile is never a silently-understated "immature" number needing a
+  // separate Provisional badge — this IS the number now. Exchange is tracked separately, not
+  // included (see api/_returnComponents.js). Replaces the old live-only returnRevPct formula and
+  // the "Provisional Return" sub-label entirely, per explicit instruction.
+  // Filtered to the active MyFrido/Mobility sub-channel when one is selected (confirmed
+  // 2026-10-22) — resolvedDailySKU is resolved per (sku, sub_channel) composite key server-side
+  // (see api/bq.js), so each sub-channel already carries its OWN rolling rate; this just narrows
+  // the array to the rows that belong to it, same scoping discipline as netCalcSrc/shCh above.
+  const shResolved = isD2CSubChFiltered
+    ? (sh.resolvedDailySKU || []).filter(r => r.subChannel === filters.subChannel.toLowerCase())
+    : (sh.resolvedDailySKU || [])
+  const shResolvedGross = shResolved.reduce((s, r) => s + r.gross, 0)
+  const shResolvedReturnRev = shResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const returnRevPct = shResolvedGross > 0 ? (shResolvedReturnRev / shResolvedGross * 100) : 0
+  // Net Revenue (Exc GST) — Gross-after-resolved-returns above is still Inc GST, so apply the same
+  // blended GST ratio netRevenueOf() uses elsewhere: Net Exc GST = (Gross - Returns) x
+  // (1 - GST Ratio), GST Ratio = (Gross Inc - Gross Exc) / Gross Inc. Mobility's manager-defined
+  // whitelist override still wins outright, same as before — untouched by this change.
+  // Uses shCh.excRev (already correctly scoped to the active sub-channel via isD2CSubChFiltered
+  // above, same object as netCalcSrc's source) — NOT sh.totals?.excRev, which is whole-D2C
+  // (MyFrido+Mobility combined) and was being divided against MyFrido-only shResolvedGross when
+  // filtered, overstating MyFrido's Net Revenue by ~9.5% (confirmed 2026-10-22 audit, fixed).
+  const shGstRatio = shResolvedGross > 0 ? 1 - ((shCh.excRev || 0) / shResolvedGross) : 0
+  const resolvedNetRev = (shResolvedGross - shResolvedReturnRev) * (1 - shGstRatio)
+  const netRev = mobilityNetRevOverride ?? resolvedNetRev
   const totalExcRev = netRev
 
   const prevRev = sh.prevRev || 0
@@ -8841,7 +9230,6 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
   })
   const nDays = shDailyArr.filter(d => d.rev > 0).length || sh.nDays || data.nDays || 1
-  const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = (shAspQty || totalQty) > 0 ? totalRev / (shAspQty || totalQty) : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -8853,19 +9241,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const shCancelRevRaw = netCalcSrc.cancelRev || 0
   const shCodCancelRev = netCalcSrc.codCancelRev || 0
   const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
-  const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
+  // RTO% — resolved engine (confirmed 2026-10-22), same shResolved array as Returns%/Net Revenue.
+  const shResolvedRtoRev = shResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
+  const rtoPct = shResolvedGross > 0 ? shResolvedRtoRev / shResolvedGross * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
-  const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev + shCancelRevRaw) / totalRev * 100) : 0
-  // Provisional Returns % — confirmed 2026-10-19: shown ALONGSIDE the real returnRevPct above
-  // (never replacing it), whenever the selected range's tail hasn't had time to mature (RTOs/
-  // returns/CIRs/cancellations take 1-3+ weeks to resolve, so a recent range's own returnRevPct
-  // silently reads too low). Sourced from data.shopify.returnRateMature.allRate.netRevenueReturnPct
-  // — the channel-wide rolling mature-window rate (today-44d to today-14d) — which is
-  // mathematically the SAME formula as returnRevPct above (RTO+CIR+Return+full Cancellation ÷
-  // Gross Inc GST), just computed over the trustworthy mature window instead of the live-selected
-  // one, so the two numbers are directly comparable side by side.
-  const showProvisionalReturn = rangeTouchesImmatureWindow(filters?.end)
-  const provisionalReturnPct = (sh.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — D2C is India-only, so this is just every non-International sub-channel.
@@ -8970,36 +9349,52 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
   const shFmtShort = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
   const shFmtNShort = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
   const shDailySorted = [...shDailyArr].sort((a, b) => a.date?.localeCompare(b.date))
-  const shCirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
-  const shExchRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
-  const shExchPct = totalRev > 0 ? shExchRev / totalRev * 100 : 0
+  // CIR%/Cancellation%/Exchange% — resolved engine (confirmed 2026-10-22), same shResolved
+  // array used for Returns%/Net Revenue/RTO% above, so every return-related number on this page
+  // is derived from the SAME resolved per-component data, never a mix of resolved-here/live-there.
+  const shResolvedCirRevSum = shResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
+  const shResolvedCancelRev = shResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const shResolvedExchangeRev = shResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
+  const shCirPct = shResolvedGross > 0 ? shResolvedCirRevSum / shResolvedGross * 100 : 0
+  const shResolvedCancelPct = shResolvedGross > 0 ? shResolvedCancelRev / shResolvedGross * 100 : 0
+  const shExchPct = shResolvedGross > 0 ? shResolvedExchangeRev / shResolvedGross * 100 : 0
   // When sub-channel filtered, build return trend from daily SKU data so sparklines
   // reflect MyFrido/Mobility only instead of all-D2C.
+  // Day-wise RTO%/CIR%/Cancel%/Exchange% for the trend chart/mobile sparklines — resolved engine
+  // (confirmed 2026-10-22), built from shResolved (sh.resolvedDailySKU) rather than the old
+  // data.dailyReturnTrend (whole-channel, live-only) or shDailyArr's raw per-day fields, so the
+  // trend line matches the headline KPI cards/matrix table exactly, including the rolling-30-day
+  // substitution for the last 15 days. isD2CSubChFiltered no longer branches this — shResolved
+  // already carries every D2C sub-channel (shDailySKU's own query excludes only Shopify
+  // International/Retail Store, same scope this page always showed).
   const shReturnTrendMap = useMemo(() => {
+    const byDate = {}
+    shResolved.forEach(r => {
+      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
+      d.gross += r.gross
+      d.rtoRev += r.components?.rto?.rev || 0
+      d.cirRev += r.components?.cir?.rev || 0
+      d.cancelRev += r.components?.cancel?.rev || 0
+      d.exchRev += r.components?.exchange?.rev || 0
+    })
     const m = {}
-    if (!isD2CSubChFiltered) {
-      ;(data.dailyReturnTrend || []).forEach(x => { m[x.date] = x })
-      return m
-    }
-    shDailyArr.forEach(d => {
-      const gross = d.rev || 0
-      if (!gross) return
-      m[d.date] = {
-        date: d.date,
-        rtoPct: (d.rtoRev || 0) / gross * 100,
-        cirPct: (d.cirRev || 0) / gross * 100,
-        cancelPct: (d.cancelRev || 0) / gross * 100,
-        exchPct: 0,
+    Object.entries(byDate).forEach(([date, d]) => {
+      if (!d.gross) return
+      m[date] = {
+        date,
+        rtoPct: d.rtoRev / d.gross * 100,
+        cirPct: d.cirRev / d.gross * 100,
+        cancelPct: d.cancelRev / d.gross * 100,
+        exchPct: d.exchRev / d.gross * 100,
       }
     })
     return m
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isD2CSubChFiltered, shDailyArr, data.dailyReturnTrend])
+  }, [shResolved])
   const shMobKpis = [
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: shFmtShort(gst), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gst / totalRev : 0)) },
-    { label: 'Daily Avg Net Rev', value: shFmtShort(dailyAvg), spark: shDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: shFmtShort(netRev / nDays), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: shFmtNShort(shNOrders), spark: shDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: shFmtNShort(totalQty), spark: shDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: shFmtShort(aov), spark: shDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -9008,8 +9403,142 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
     { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.rtoPct ?? null), accent: rtoPct > 10 ? '#7A1A1A' : undefined },
     { label: 'CIR %', value: `${shCirPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cirPct ?? null) },
     { label: 'Exchange %', value: `${shExchPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.exchPct ?? null) },
-    { label: 'Cancellation %', value: `${(totalRev > 0 ? cancelledRev / totalRev * 100 : 0).toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cancelPct ?? null) },
+    { label: 'Cancellation %', value: `${shResolvedCancelPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cancelPct ?? null) },
   ]
+
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const d2cMatrixInputs = () => {
+        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+        // Resolved per-SKU RTO/CIR/Cancel/Exchange revenue (confirmed 2026-10-22) — sums
+        // sh.skuMap's rtoRev/cirRev/cancelRev/exchRev are already resolved-engine-correct
+        // server-side (api/bq.js's shResolvedBySkuSubCh override, confirmed 2026-10-22) — single
+        // source of truth shared with PnL, so no separate client-side override is needed here.
+        // When MyFrido or Mobility subchannel is selected, filter matrix data to that subchannel only
+        const matrixSubCh = (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel.toLowerCase() : null
+        const catData = {}
+        const subCatData = {}
+        const skuData = {}
+        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+          skuData[cat] = {}
+          Object.entries(scMap).forEach(([sc, skuMap_]) => {
+            skuData[cat][sc] = {}
+            Object.entries(skuMap_).forEach(([sku, v]) => {
+              const rows = v.subChannelRows || {}
+              const keys = matrixSubCh ? (rows[matrixSubCh] ? [matrixSubCh] : []) : Object.keys(rows).filter(k => k !== 'shopify international')
+              if (keys.length === 0) return
+              // rtoRev/cirRev/cancelRev/exchRev here are already resolved-engine-correct, summed
+              // from sh.skuMap's subChannelRows (server-resolved, see api/bq.js comment above).
+              const agg = keys.reduce((a, k) => { const r = rows[k]; return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), codCancelRev: a.codCancelRev+(r.codCancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), exchRev: a.exchRev+(r.exchRev||0), returnUnits: a.returnUnits+(r.returnUnits||0) } }, { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
+              skuData[cat][sc][sku] = agg
+              // accumulate into subCatData and catData
+              if (!subCatData[cat]) subCatData[cat] = {}
+              if (!subCatData[cat][sc]) subCatData[cat][sc] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') subCatData[cat][sc][f] = (subCatData[cat][sc][f]||0) + agg[f] })
+              if (!catData[cat]) catData[cat] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') catData[cat][f] = (catData[cat][f]||0) + agg[f] })
+            })
+          })
+        })
+        // When no subchannel filter, use the pre-aggregated maps directly — sh.catMap/sh.subCatMap
+        // are already resolved-engine-correct server-side (api/bq.js's shResolvedByCatSubCat
+        // override, confirmed 2026-10-22), the same single source of truth PnL reads, so pick()
+        // alone is sufficient here with no further client-side re-summing needed.
+        if (!matrixSubCh) {
+          Object.keys(catData).forEach(k => delete catData[k])
+          Object.keys(subCatData).forEach(k => delete subCatData[k])
+          Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
+          Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
+            const [cat, sc] = key.split('::')
+            if (!subCatData[cat]) subCatData[cat] = {}
+            subCatData[cat][sc] = pick(v)
+          })
+        }
+        // Reconcile sh.mobilityNetBySubCat (raw, keyed by bare SubCategory — no Category
+        // dimension) into a 'Category::SubCategory' composite-keyed map before passing it down —
+        // the same SubCategory name can exist under 2 different Categories (e.g. 'Sparepart'
+        // under both 'Mobility' and 'Sparepart (Chair & Mobility)'), and FlatCategoryProductMatrix.
+        // mapRow() looks up by composite key (see its Mobility-override comment), so a bare-keyed
+        // map would apply that one whitelist value to BOTH rows independently, double-counting it
+        // in the table's Total. Mirrors PnLPage.jsx's reconciledMobilityNetBySubCat exactly.
+        let reconciledMobilityNetBySubCat = {}
+        if (filters.subChannel === 'Mobility' && sh.mobilityNetBySubCat) {
+          const scToCats = new Map()
+          Object.entries(subCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
+            if (!scToCats.has(sc)) scToCats.set(sc, [])
+            scToCats.get(sc).push(cat)
+          }))
+          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
+            const cats = scToCats.get(sc) || []
+            if (cats.length <= 1) {
+              const cat = cats[0] || 'Others'
+              reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + val
+            } else {
+              const grossByCat = cats.map(cat => subCatData[cat]?.[sc]?.rev || 0)
+              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
+              cats.forEach((cat, i) => {
+                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
+                reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + share
+              })
+            }
+          })
+        }
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as pnlUtils.js's netScale) —
+        // the table's own row-level-GST-ratio Net Revenue sum lands a hair apart from the KPI
+        // card's single whole-channel blended-GST-ratio Net Revenue (both correct, different
+        // aggregation order). Compute the table's raw total with mapRow's exact formula, then
+        // scale every row so the Total row matches the KPI card's resolved netRev exactly.
+        const d2cMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.entries(subCatData).forEach(([cat, scMap]) => {
+            Object.entries(scMap).forEach(([sc, d]) => {
+              const gross = d.rev || 0, excRev = d.excRev || 0
+              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+              const grossAfterReturns = gross - (d.cancelRev || 0) - (d.rtoRev || 0) - (d.cirRev || 0) - (d.returnRev || 0)
+              rawTotal += grossAfterReturns * (1 - gstRatio)
+            })
+          })
+          return rawTotal > 0 ? netRev / rawTotal : 1
+        })()
+    return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (sh.catPrevMap || {}), subCatPrevMap: (sh.subCatPrevMap || {}), skuPrevMap: (sh.skuPrevMap || {}), mobilityNetBySubCat: (reconciledMobilityNetBySubCat), netScale: (d2cMatrixNetScale) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const cancelledOrders = orderStatusMap['Cancelled'] || 0
+    const exchangeOrders = netCalcSrc.exchOrders ?? data.exchangeOrders ?? 0
+    const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
+    const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
+    const exchRevPerOrder = exchangeOrders > 0 ? shResolvedExchangeRev / exchangeOrders : 0
+    const prevExchangePct = prevRev > 0 ? (prevExchangeOrders * exchRevPerOrder) / prevRev * 100 : 0
+    const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
+    const netShrinkFactor = totalRev > 0 ? netRev / totalRev : 0
+    // Same daily series as the desktop "Revenue & Returns Trend" (its return line = RTO + CIR + cancelled).
+    const mTrend = shDailyArr.map((d, i) => {
+      const g = d.rev || 0, rt = shReturnTrendMap[d.date] || {}
+      return { date: d.date, gross: g, net: g * netShrinkFactor, units: d.units ?? null, prevGross: prevDailyArr[i]?.rev ?? null,
+        retNum: g * ((rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0)) / 100, rtoNum: g * (rt.rtoPct || 0) / 100, cirNum: g * (rt.cirPct || 0) / 100,
+        cancelNum: g * (rt.cancelPct || 0) / 100, exchNum: g * (rt.exchPct || 0) / 100 }
+    })
+    const pctPoint = k => r => (r.gross > 0 ? r[k] / r.gross * 100 : null)
+    const pctFmt = v => `${v.toFixed(1)}%`
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(totalRev), sub: `${fmtN(shNOrders)} orders · ${fmtN(shAspQty)} units`, delta: shRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRev), delta: chg(totalExcRev, prevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: chg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units sold.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `RTO + CIR + cancelled revenue ÷ gross revenue (${fmt(shResolvedReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: chg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      rtoPct: { label: 'RTO %', def: `RTO revenue ÷ gross revenue (${fmt(shResolvedRtoRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: chg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
+      cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(shResolvedCirRevSum)}).`, value: `${shCirPct.toFixed(1)}%`, delta: chg(shCirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(shResolvedCancelRev)}).`, value: `${shResolvedCancelPct.toFixed(1)}%`, delta: chg(shResolvedCancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
+      exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(shResolvedExchangeRev)}).`, value: `${shExchPct.toFixed(1)}%`, delta: chg(shExchPct, prevExchangePct), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
+    }
+    const mx = d2cMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const rr = isD2CSubChFiltered ? { rows: [] } : reasonList(sh.returnReasons || [])
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), reasons: rr.rows, reasonsSub: rr.sub, regions: regionList(sh.regionRows), tiers: tierList(sh.tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), geoNote: isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : null, categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="shopify" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData}
+      footer={onOpenReturns ? <ReturnEntryCard filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} onOpen={onOpenReturns} subTab={filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility'} /> : null} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -9060,11 +9589,14 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
         {(() => {
           const cirOrders = data.cirOrders || 0
           const exchangeOrders = netCalcSrc.exchOrders ?? data.exchangeOrders ?? 0
-          const exchangeRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
+          // cancelPct/cirPct/exchangePct — resolved engine (confirmed 2026-10-22), reusing the
+          // SAME shResolvedCancelRev/shResolvedCirRevSum/shResolvedExchangeRev computed above, so
+          // this tile row never drifts from the headline Returns%/RTO% tiles.
+          const exchangeRev = shResolvedExchangeRev
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
-          const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
-          const cirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
-          const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
+          const cancelPct = shResolvedCancelPct
+          const cirPct = shCirPct
+          const exchangePct = shExchPct
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
           const prevGst = prevGrossAfterReturns - prevNetRev
           const row1 = [
@@ -9086,11 +9618,11 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturn && provisionalReturnPct != null) ? `Provisional Return: ${(provisionalReturnPct * 100).toFixed(1)}%` : `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shResolvedReturnRev)} RTO+CIR+Cancelled rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shResolvedRtoRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shResolvedCirRevSum)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(shResolvedCancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(shResolvedExchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
           ]
           return (
             <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
@@ -9247,72 +9779,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd }) {
       {isIntl
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
-        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
-        // When MyFrido or Mobility subchannel is selected, filter matrix data to that subchannel only
-        const matrixSubCh = (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel.toLowerCase() : null
-        const catData = {}
-        const subCatData = {}
-        const skuData = {}
-        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
-          skuData[cat] = {}
-          Object.entries(scMap).forEach(([sc, skuMap_]) => {
-            skuData[cat][sc] = {}
-            Object.entries(skuMap_).forEach(([sku, v]) => {
-              const rows = v.subChannelRows || {}
-              const keys = matrixSubCh ? (rows[matrixSubCh] ? [matrixSubCh] : []) : Object.keys(rows).filter(k => k !== 'shopify international')
-              if (keys.length === 0) return
-              const agg = keys.reduce((a, k) => { const r = rows[k]; return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), codCancelRev: a.codCancelRev+(r.codCancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), exchRev: a.exchRev+(r.exchRev||0), returnUnits: a.returnUnits+(r.returnUnits||0) } }, { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
-              skuData[cat][sc][sku] = agg
-              // accumulate into subCatData and catData
-              if (!subCatData[cat]) subCatData[cat] = {}
-              if (!subCatData[cat][sc]) subCatData[cat][sc] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
-              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') subCatData[cat][sc][f] = (subCatData[cat][sc][f]||0) + agg[f] })
-              if (!catData[cat]) catData[cat] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
-              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') catData[cat][f] = (catData[cat][f]||0) + agg[f] })
-            })
-          })
-        })
-        // When no subchannel filter, use pre-aggregated maps (faster, already correct)
-        if (!matrixSubCh) {
-          Object.keys(catData).forEach(k => delete catData[k])
-          Object.keys(subCatData).forEach(k => delete subCatData[k])
-          Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
-          Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
-            const [cat, sc] = key.split('::')
-            if (!subCatData[cat]) subCatData[cat] = {}
-            subCatData[cat][sc] = pick(v)
-          })
-        }
-        // Reconcile sh.mobilityNetBySubCat (raw, keyed by bare SubCategory — no Category
-        // dimension) into a 'Category::SubCategory' composite-keyed map before passing it down —
-        // the same SubCategory name can exist under 2 different Categories (e.g. 'Sparepart'
-        // under both 'Mobility' and 'Sparepart (Chair & Mobility)'), and FlatCategoryProductMatrix.
-        // mapRow() looks up by composite key (see its Mobility-override comment), so a bare-keyed
-        // map would apply that one whitelist value to BOTH rows independently, double-counting it
-        // in the table's Total. Mirrors PnLPage.jsx's reconciledMobilityNetBySubCat exactly.
-        let reconciledMobilityNetBySubCat = {}
-        if (filters.subChannel === 'Mobility' && sh.mobilityNetBySubCat) {
-          const scToCats = new Map()
-          Object.entries(subCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
-            if (!scToCats.has(sc)) scToCats.set(sc, [])
-            scToCats.get(sc).push(cat)
-          }))
-          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
-            const cats = scToCats.get(sc) || []
-            if (cats.length <= 1) {
-              const cat = cats[0] || 'Others'
-              reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + val
-            } else {
-              const grossByCat = cats.map(cat => subCatData[cat]?.[sc]?.rev || 0)
-              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
-              cats.forEach((cat, i) => {
-                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
-                reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + share
-              })
-            }
-          })
-        }
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" />
+        const __mx = d2cMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9403,6 +9871,9 @@ const EBO_TREND_GROUP_OPTS = [
 ]
 
 function EBOTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   // The theme's own accent, not a literal. This was '#8B5E3C', a hardcoded brown, which
   // left the EBO sparkline and toggle reading as a different product from every other
@@ -9425,16 +9896,28 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const totalQty = totals.qty || 0
   const nOrders = totals.orders || 0
 
-  const cancelRev = ebo.netCalc?.cancelRev || 0
-  const rtoRev = ebo.netCalc?.rtoRev || 0
-  const returnRev = ebo.netCalc?.returnRev || 0
-  const cirRev = ebo.netCalc?.cirRev || 0
-  const grossAfterReturns = totalRev - cancelRev - rtoRev - returnRev - cirRev
-  const ncGross = ebo.netCalc?.gross || totalRev
+  // Returns %/Net Revenue + per-component (RTO/Return/CIR/Cancelled/Exchange) — resolved engine
+  // (confirmed 2026-10-22), same engine as D2C: mature days use real per-day component revenue,
+  // immature days (last 15) substitute this SKU's own rolling 30-day-window rate per component.
+  // Replaces the old live-only ebo.netCalc-based figures and the "Provisional Return" sub-label.
+  const eboResolved = ebo.resolvedDailySKU || []
+  const eboResolvedGross = eboResolved.reduce((s, r) => s + r.gross, 0)
+  const eboResolvedRtoRev = eboResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
+  const eboResolvedReturnRev = eboResolved.reduce((s, r) => s + (r.components?.return?.rev || 0), 0)
+  const eboResolvedCirRev = eboResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
+  const eboResolvedCancelRev = eboResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const eboResolvedExchangeRev = eboResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
+  const eboResolvedTotalReturnRev = eboResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const cancelRev = eboResolvedCancelRev
+  const rtoRev = eboResolvedRtoRev
+  const returnRev = eboResolvedReturnRev
+  const cirRev = eboResolvedCirRev
+  const grossAfterReturns = eboResolvedGross - eboResolvedTotalReturnRev
+  const ncGross = eboResolvedGross || totalRev
   const ncExcRev = ebo.netCalc?.excRev || totals.excRev || 0
   const gstRatio = ncGross > 0 ? (ncGross - ncExcRev) / ncGross : 0
-  const netRev = ebo.netCalc?.netRev ?? (grossAfterReturns * (1 - gstRatio))
-  const gstCollected = ebo.netCalc?.gstCollected ?? (grossAfterReturns - netRev)
+  const netRev = grossAfterReturns * (1 - gstRatio)
+  const gstCollected = grossAfterReturns - netRev
 
   const prevRev = ebo.prevRev || 0
   const prevExcRev = ebo.prevExcRev || 0
@@ -9452,23 +9935,18 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
 
   const shDailyArr = ebo.daily || []
   const nDays = shDailyArr.length || 1
-  const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = nOrders ? totalRev / nOrders : 0
   const asp = totalQty > 0 ? totalRev / totalQty : 0
 
   const exchangeOrders = ebo.exchange?.exchangeOrders || 0
-  const exchangeRev = ebo.exchange?.exchangeRev || 0
-  const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
-  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev + cancelRev) / totalRev * 100) : 0
-  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart/Myntra (confirmed
-  // 2026-10-19): shown ALONGSIDE the real Returns % below, never replacing it, whenever the
-  // selected range's tail hasn't had time to mature. Sourced from ebo.returnRateMature.allRate.
-  // netRevenueReturnPct — same formula as returnRevPct above, over the rolling mature window.
-  const showProvisionalReturnEbo = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalReturnPctEbo = (ebo.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
-  const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
-  const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
-  const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
+  const exchangeRev = eboResolvedExchangeRev
+  const cancelPct = eboResolvedGross > 0 ? (cancelRev / eboResolvedGross * 100) : 0
+  const returnRevPct = eboResolvedGross > 0 ? (eboResolvedTotalReturnRev / eboResolvedGross * 100) : 0
+  // RTO % card is a combined RTO+Return figure for EBO (in-store "Return" plays the RTO role for a
+  // physical store) — matches the existing sub-label's fmt(rtoRev + returnRev), kept unchanged.
+  const rtoPct = eboResolvedGross > 0 ? ((rtoRev + returnRev) / eboResolvedGross * 100) : 0
+  const cirPct = eboResolvedGross > 0 ? (cirRev / eboResolvedGross * 100) : 0
+  const exchangePct = eboResolvedGross > 0 ? (exchangeRev / eboResolvedGross * 100) : 0
 
   const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const excChg = prevNetRev > 0 ? ((netRev - prevNetRev) / prevNetRev * 100) : null
@@ -9557,7 +10035,29 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     return Object.values(buckets).map(b => ({ ...b, returnPct: b.grossRev > 0 ? b._returnRev / b.grossRev * 100 : 0, exchPct: b.grossRev > 0 ? b._exchRev / b.grossRev * 100 : 0, cancelPct: b.grossRev > 0 ? b._cancelRev / b.grossRev * 100 : 0 })).sort((a, b) => a.date.localeCompare(b.date))
   })()
 
-  const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+  // Resolved per-SKU RTO/Return/CIR/Cancelled/Exchange revenue (NEW, additive, 2026-10-22) —
+  // overrides catMap/subCatMap/skuMap's raw live-only fields, same reconciliation approach as
+  // D2C's matrix table. EBO's "returnRev" field doesn't otherwise exist on pick()'s output since
+  // the old convention folded Return into "rto" display — resolved engine tracks it separately,
+  // so it's added here and folded into rtoRev for the matrix's own RTO-combines-Return display
+  // convention (matching the KPI card's rtoPct above).
+  const eboResolvedBySku = {}
+  eboResolved.forEach(r => {
+    const s = eboResolvedBySku[r.sku] || (eboResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
+    s.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
+    s.cirRev += r.components?.cir?.rev || 0
+    s.cancelRev += r.components?.cancel?.rev || 0
+    s.exchRev += r.components?.exchange?.rev || 0
+  })
+  const pick = (v, sku) => {
+    const resolved = sku ? eboResolvedBySku[sku] : null
+    return {
+      rev: v.rev || 0, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders,
+      cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0,
+      cancelRev: resolved?.cancelRev ?? (v.cancelRev || 0), rtoRev: resolved?.rtoRev ?? (v.rtoRev || 0),
+      cirRev: resolved?.cirRev ?? (v.cirRev || 0), exchRev: resolved?.exchRev ?? (v.exchRev || 0),
+    }
+  }
   const catDataForMatrix = {}
   Object.entries(catMap).forEach(([cat, v]) => { catDataForMatrix[cat] = pick(v) })
   const subCatDataForMatrix = {}
@@ -9571,7 +10071,18 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     skuDataForMatrix[cat] = {}
     Object.entries(scMap).forEach(([sc, skuMap_]) => {
       skuDataForMatrix[cat][sc] = {}
-      Object.entries(skuMap_).forEach(([sku, v]) => { skuDataForMatrix[cat][sc][sku] = pick(v) })
+      Object.entries(skuMap_).forEach(([sku, v]) => { skuDataForMatrix[cat][sc][sku] = pick(v, sku) })
+    })
+  })
+  // Category/SubCategory grain re-summed from skuDataForMatrix (now resolved), same reconciliation
+  // discipline as D2C — overrides the raw pick(catMap/subCatMap) values above.
+  Object.keys(catDataForMatrix).forEach(cat => { catDataForMatrix[cat].rtoRev = 0; catDataForMatrix[cat].cirRev = 0; catDataForMatrix[cat].cancelRev = 0; catDataForMatrix[cat].exchRev = 0 })
+  Object.entries(skuDataForMatrix).forEach(([cat, scMap]) => {
+    Object.entries(scMap).forEach(([sc, skuMap_]) => {
+      const sums = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 }
+      Object.values(skuMap_).forEach(v => { sums.rtoRev += v.rtoRev||0; sums.cirRev += v.cirRev||0; sums.cancelRev += v.cancelRev||0; sums.exchRev += v.exchRev||0 })
+      if (subCatDataForMatrix[cat]?.[sc]) Object.assign(subCatDataForMatrix[cat][sc], sums)
+      if (catDataForMatrix[cat]) { catDataForMatrix[cat].rtoRev += sums.rtoRev; catDataForMatrix[cat].cirRev += sums.cirRev; catDataForMatrix[cat].cancelRev += sums.cancelRev; catDataForMatrix[cat].exchRev += sums.exchRev }
     })
   })
 
@@ -9583,13 +10094,31 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const eboFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
   const eboFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
   const eboDailySorted = [...shDailyArr].sort((a, b) => a.date?.localeCompare(b.date))
-  const eboReturnTrendMap = {}
-  ;(ebo.dailyReturnTrend || []).forEach(x => { eboReturnTrendMap[x.date] = x })
+  // Day-wise RTO%/Return%/CIR%/Cancel%/Exchange% for the trend chart/mobile sparklines — resolved
+  // engine (confirmed 2026-10-22), built from eboResolved (ebo.resolvedDailySKU), same approach as
+  // D2C's shReturnTrendMap, replacing the old live-only ebo.dailyReturnTrend.
+  const eboReturnTrendMap = (() => {
+    const byDate = {}
+    eboResolved.forEach(r => {
+      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
+      d.gross += r.gross
+      d.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
+      d.cirRev += r.components?.cir?.rev || 0
+      d.cancelRev += r.components?.cancel?.rev || 0
+      d.exchRev += r.components?.exchange?.rev || 0
+    })
+    const m = {}
+    Object.entries(byDate).forEach(([date, d]) => {
+      if (!d.gross) return
+      m[date] = { date, rtoPct: d.rtoRev / d.gross * 100, cirPct: d.cirRev / d.gross * 100, cancelPct: d.cancelRev / d.gross * 100, exchPct: d.exchRev / d.gross * 100 }
+    })
+    return m
+  })()
   const eboMobKpis = [
     { label: 'Gross Revenue', value: eboFmtS(totalRev), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: eboFmtS(netRev), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: eboFmtS(gstCollected), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gstCollected / totalRev : 0)) },
-    { label: 'Daily Avg Net Rev', value: eboFmtS(dailyAvg), spark: eboDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: eboFmtS(netRev / nDays), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: eboFmtN(nOrders), spark: eboDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: eboFmtN(totalQty), spark: eboDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: eboFmtS(aov), spark: eboDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -9600,6 +10129,56 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.cirPct ?? null) },
     { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.exchPct ?? null) },
   ]
+
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const eboMatrixInputs = () => {
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon/Flipkart/Myntra)
+        // so the table's Net Revenue Total matches the netRev KPI card exactly.
+        const eboMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.values(subCatDataForMatrix).forEach(scMap => {
+            Object.values(scMap).forEach(d => {
+              const gross = d.rev || 0, excR = d.excRev || 0
+              const gRatio = gross > 0 ? (gross - excR) / gross : 0
+              const afterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0)
+              rawTotal += afterReturns * (1 - gRatio)
+            })
+          })
+          return rawTotal > 0 ? netRev / rawTotal : 1
+        })()
+    return { catData: (catDataForMatrix), subCatData: (subCatDataForMatrix), skuData: (skuDataForMatrix), catPrevMap: (ebo.catPrevMap || {}), subCatPrevMap: (ebo.subCatPrevMap || {}), skuPrevMap: (ebo.skuPrevMap || {}), netScale: (eboMatrixNetScale) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const deskChg = (cur, prev) => chg(cur, prev, { maxAbs: 500 })
+    const mTrend = shDailyArr.map((d, i) => {
+      const g = d.rev || 0, rt = eboReturnTrendMap[d.date] || {}
+      return { date: d.date, gross: g, net: g * netShrinkFactor, orders: d.orders ?? null, units: d.units ?? null, prevGross: prevDailyArr[i]?.rev ?? null,
+        retNum: g * ((rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0)) / 100, rtoNum: g * (rt.rtoPct || 0) / 100, cirNum: g * (rt.cirPct || 0) / 100,
+        cancelNum: g * (rt.cancelPct || 0) / 100, exchNum: g * (rt.exchPct || 0) / 100 }
+    })
+    const pctPoint = k => r => (r.gross > 0 ? r[k] / r.gross * 100 : null)
+    const pctFmt = v => `${v.toFixed(1)}%`
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(totalRev), sub: `${fmtN(nOrders)} orders · ${fmtN(totalQty)} units`, delta: shRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after cancellations, RTO, CIR and returns.', value: fmt(netRev), delta: deskChg(netRev, prevNetRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays), delta: deskChg(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: deskChg(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: deskChg(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `RTO + return + CIR + cancelled revenue ÷ gross revenue (${fmt(eboResolvedTotalReturnRev)}).`, value: `${returnRevPct.toFixed(1)}%`, delta: deskChg(returnRevPct, prevReturnRevPct), lowerIsBetter: true, status: metricStatus('returnPct', returnRevPct), point: pctPoint('retNum'), fmtPoint: pctFmt },
+      rtoPct: { label: 'RTO %', def: `RTO + in-store return revenue ÷ gross revenue (${fmt(rtoRev + returnRev)}).`, value: `${rtoPct.toFixed(1)}%`, delta: deskChg(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('rtoNum'), fmtPoint: pctFmt },
+      cirPct: { label: 'CIR %', def: `Customer-initiated return revenue ÷ gross revenue (${fmt(cirRev)}).`, value: `${cirPct.toFixed(1)}%`, delta: deskChg(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('cirNum'), fmtPoint: pctFmt },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `Cancelled revenue ÷ gross revenue (${fmt(cancelRev)}).`, value: `${cancelPct.toFixed(1)}%`, delta: deskChg(cancelPct, prevCancelPct), lowerIsBetter: true, point: pctPoint('cancelNum'), fmtPoint: pctFmt },
+      exchangePct: { label: 'Exchange %', def: `Exchange revenue ÷ gross revenue (${fmt(exchangeRev)}).`, value: `${exchangePct.toFixed(1)}%`, delta: deskChg(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0), lowerIsBetter: true, point: pctPoint('exchNum'), fmtPoint: pctFmt },
+    }
+    const mx = eboMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const rr = reasonList(ebo.returnReasons || [])
+    const st = eboStoreRows(ebo.storeRows || [])
+    const stores = st.rows.map(r => ({ name: r.storeName, gross: r.gross, net: r.netRev, orders: r.orders, units: r.units, aov: r.orders ? r.gross / r.orders : 0, sharePct: st.tot.gross > 0 ? r.gross / st.tot.gross * 100 : 0, cancelPct: r.gross > 0 ? r.cancelRev / r.gross * 100 : null, cirPct: r.gross > 0 ? r.cirRev / r.gross * 100 : null, returnPct: r.gross > 0 ? (r.cancelRev + r.rtoRev + r.returnRev + r.cirRev) / r.gross * 100 : null }))
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), reasons: rr.rows, reasonsSub: rr.sub, stores, storeTotal: `${st.rows.length} stores · ${fmt(st.tot.gross)} gross · ${fmt(st.tot.netRev)} net`, regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(enrichedCityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="ebo" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -9636,7 +10215,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: (showProvisionalReturnEbo && provisionalReturnPctEbo != null) ? `Provisional Return: ${(provisionalReturnPctEbo * 100).toFixed(1)}%` : `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(eboResolvedTotalReturnRev)} RTO+Return+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
@@ -9715,26 +10294,16 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns channel="ebo" />
+      {(() => {
+        const __mx = eboMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} />
+      })()}
       {/* Store-wise table */}
       {(() => {
         const rawStoreRows = ebo.storeRows || []
         if (!rawStoreRows.length) return null
-        const byStore = {}
-        rawStoreRows.forEach(r => {
-          if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
-          const s = byStore[r.storeName]
-          s.gross += r.gross || 0; s.netRev += r.netRev || 0
-          s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
-          s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
-          s.orders += r.orders || 0; s.units += r.units || 0
-        })
-        const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
-        const tot = rows.reduce((s, r) => ({
-          gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
-          rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
-          orders: s.orders+r.orders, units: s.units+r.units,
-        }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+        // Aggregation shared with the mobile store list (src/sales/salesMobileData.js, moved unchanged).
+        const { rows, tot } = eboStoreRows(rawStoreRows)
         const pctOf = (n, d) => d > 0 ? n / d * 100 : 0
         const thS = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: '1.5px solid ' + C.border, background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
         const thSL = { ...thS, textAlign: 'left' }
@@ -9837,6 +10406,9 @@ function AmazonChannelViewToggle({ channelView, setChannelView }) {
 }
 
 function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
@@ -9846,20 +10418,22 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   const amzVCMatrix = data.amzVCMatrix || {}
 
   const returnRateReliable = (amzSC.returnRate?.rollOrders || 0) > 0
-  // Provisional Return % (SC) — same pattern as Shopify's D2C tab (confirmed 2026-10-19): shown
-  // ALONGSIDE the real SC Returns % above, never replacing it, whenever the selected range's tail
-  // hasn't had time to mature. Sourced from amzSC.returnRateMature.allRate.netRevenueReturnPct —
-  // the channel-wide rolling mature-window rate (today-44d to today-14d) — same formula as the
-  // live returnRate above (RTO+CIR+Return+full Cancellation ÷ Gross Inc GST), so directly comparable.
-  const showProvisionalReturnSC = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalReturnPctSC = (amzSC.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
-  // Combined SC+VC Returns % for the "All" toggle — SC's own returnRate card (rollOrders/
-  // rollReturned — despite the "rollOrders" name, both are REVENUE figures: total_rev_inc/
-  // returned_rev from amzSCReturnRate, see api/bq.js) is Seller-Central-only, so on the combined
-  // view this must also fold in VC's orderedRev/returnRev rather than silently showing SC-only
-  // figures under an "All"-scoped label.
-  const amzCombinedReturnedRev = (amzSC.returnRate?.rollReturned || 0) + (amzVC.accounts?.reduce((s, a) => s + (a.returnRev || 0), 0) || 0)
-  const amzCombinedGrossRev = (amzSC.returnRate?.rollOrders || 0) + (amzVC.accounts?.reduce((s, a) => s + (a.orderedRev || 0), 0) || 0)
+  // Returns % (SC) / Net Revenue (SC) — resolved per-component engine (confirmed 2026-10-22), same
+  // engine as D2C: mature days use real RTO+Return+CIR+Cancelled revenue, immature days (last 15)
+  // substitute this SKU's own rolling 30-day-window rate per component. Replaces the old live-only
+  // returnRate.pct and the "Provisional Return" sub-label entirely, per explicit instruction.
+  const amzSCResolved = amzSC.resolvedDailySKU || []
+  const amzSCResolvedGross = amzSCResolved.reduce((s, r) => s + r.gross, 0)
+  const amzSCResolvedReturnRev = amzSCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const amzSCResolvedReturnPct = amzSCResolvedGross > 0 ? (amzSCResolvedReturnRev / amzSCResolvedGross * 100) : 0
+  // Amazon Vendor Central's own resolved Return Revenue (single Return-status component).
+  const amzVCResolved = amzVC.resolvedDailySKU || []
+  const amzVCResolvedGross = amzVCResolved.reduce((s, r) => s + r.gross, 0)
+  const amzVCResolvedReturnRev = amzVCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Combined SC+VC Returns % for the "All" toggle — both sides now resolved-engine-derived, so
+  // the combined figure is never a mix of one resolved and one raw-live number.
+  const amzCombinedReturnedRev = amzSCResolvedReturnRev + amzVCResolvedReturnRev
+  const amzCombinedGrossRev = amzSCResolvedGross + amzVCResolvedGross
   const amzCombinedReturnPct = amzCombinedGrossRev > 0 ? (amzCombinedReturnedRev / amzCombinedGrossRev * 100) : 0
 
   // ── Seller Central calcs ──
@@ -9872,24 +10446,11 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   // formula. Confirmed with the user: the Sales tab should match PnL's number exactly here,
   // rather than each tab showing a different (if individually more/less precise) Net Revenue for
   // the same Amazon SC data — same fix direction as the D2C tab already uses.
-  const scNetRevRowLevel = (() => {
-    let net = 0
-    Object.values(amzSC.subCatChannel || {}).forEach(scMap => {
-      Object.values(scMap).forEach(d => {
-        const gross = (d.FBA?.rev || 0) + (d.MFN?.rev || 0)
-        const excRev = (d.FBA?.excRev || 0) + (d.MFN?.excRev || 0)
-        const cancelRev = (d.FBA?.cancelRev || 0) + (d.MFN?.cancelRev || 0)
-        const rtoRev = (d.FBA?.rtoRev || 0) + (d.MFN?.rtoRev || 0)
-        const cirRev = (d.FBA?.cirRev || 0) + (d.MFN?.cirRev || 0)
-        const returnRev = (d.FBA?.returnRev || 0) + (d.MFN?.returnRev || 0)
-        const totalReturnRev = cancelRev + rtoRev + cirRev + returnRev
-        const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-        net += (gross - totalReturnRev) * (1 - gstRatio)
-      })
-    })
-    return net
-  })()
-  const scNetRev = scNetRevRowLevel
+  // Net Revenue (SC) — resolved engine (confirmed 2026-10-22): resolved Gross-after-returns is
+  // still Inc GST, so apply the same blended GST ratio pattern as D2C: Net Exc GST =
+  // (Gross - Returns) x (1 - GST Ratio), GST Ratio from amzSC's own whole-channel totals.
+  const amzSCGstRatio = amzSCResolvedGross > 0 ? 1 - (((scFBA.excRev || 0) + (scMFN.excRev || 0)) / amzSCResolvedGross) : 0
+  const scNetRev = (amzSCResolvedGross - amzSCResolvedReturnRev) * (1 - amzSCGstRatio)
   const scTotalExcRev = scNetRev
   const scTotalOrders = scFBA.orders + scMFN.orders
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
@@ -9920,15 +10481,14 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   // this divided a COUNT(DISTINCT OrderId) line-item count (amzVCAccounts.returns) by an
   // unfiltered gross unit SUM (shippedUnits) — a dimensionally wrong count÷units ratio that
   // showed ~5% here vs PnL's correct ~19% for the same July VC data.
-  const vcTotalReturnRev = amzVC.accounts?.reduce((s, a) => s + (a.returnRev || 0), 0) || 0
-  const vcReturnRate = vcTotalOrdered ? (vcTotalReturnRev / vcTotalOrdered * 100) : 0
-  // Net Revenue (Ex GST, after returns) — vcTotalOrderedExcRev above is gross Ex-GST with no
-  // returns deduction (correct to keep using it for GST/ASP/other cards where "gross" is what's
-  // wanted), but a "Net Revenue" card must actually net out returns like every other channel.
-  // Same (gross − returnRev) × (1 − gstRatio) formula api/bq.js's chMap['Amazon'] override and
-  // PnL's Amazon tab already use for VC — kept in sync so this card can never drift from either.
-  const vcGstRatio = vcTotalOrdered > 0 ? Math.max(0, (vcTotalOrdered - vcTotalOrderedExcRev) / vcTotalOrdered) : 0
-  const vcNetRevenue = Math.max(vcTotalOrdered - vcTotalReturnRev, 0) * (1 - vcGstRatio)
+  // Returns %/Net Revenue (VC) — resolved per-component engine (confirmed 2026-10-22), same
+  // engine as SC/D2C: mature days use real Return-status revenue, immature days (last 15)
+  // substitute this SKU's own rolling 30-day-window Return rate. Replaces the old whole-range
+  // live-only vcTotalReturnRev/vcNetRevenue.
+  const vcTotalReturnRev = amzVCResolvedReturnRev
+  const vcReturnRate = amzVCResolvedGross ? (vcTotalReturnRev / amzVCResolvedGross * 100) : 0
+  const vcGstRatio = amzVCResolvedGross > 0 ? Math.max(0, (amzVCResolvedGross - vcTotalOrderedExcRev) / amzVCResolvedGross) : 0
+  const vcNetRevenue = Math.max(amzVCResolvedGross - vcTotalReturnRev, 0) * (1 - vcGstRatio)
   const vcMaxRev = Math.max(...(amzVC.accounts || []).map(a => a.orderedRev), 1)
 
   // ── Category filter overrides ──
@@ -10006,6 +10566,239 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
     { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzCombinedReturnPct / 100 : 0)), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
   ]
 
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const amzCategoryInputs = () => {
+                  const catRows = Array.from(new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])).map(cat => {
+                    const scD = showSC ? (amzSC.catChannel?.[cat] || {}) : {}; const vc = showVC ? (amzVCMatrix.catData?.[cat] || {}) : {}
+                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
+                    return { name: cat, rev, units, orders }
+                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
+                  const allScSub = amzSC.subCatChannel || {}; const allVcSub = amzVCMatrix.subCatData || {}
+                  const subCatSet = new Set([...Object.keys(allScSub).flatMap(cat => Object.keys(allScSub[cat]||{}).map(sc => cat+'::'+sc)), ...Object.keys(allVcSub).flatMap(cat => Object.keys(allVcSub[cat]||{}).map(sc => cat+'::'+sc))])
+                  const subCatRows = Array.from(subCatSet).map(key => {
+                    const [cat, sc] = key.split('::'); const scD = showSC ? (allScSub[cat]?.[sc] || {}) : {}; const vc = showVC ? (allVcSub[cat]?.[sc] || {}) : {}
+                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
+                    return { name: sc, category: cat, rev, units, orders }
+                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
+                  const allScSku = amzSC.skuChannel || {}; const allVcSku = amzVCMatrix.skuData || {}
+                  const skuMap = {}
+                  new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)]).forEach(cat => {
+                    skuMap[cat] = {}
+                    new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})]).forEach(sc => {
+                      skuMap[cat][sc] = {}
+                      new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})]).forEach(sku => {
+                        const scD = showSC ? (allScSku[cat]?.[sc]?.[sku] || {}) : {}; const vc = showVC ? (allVcSku[cat]?.[sc]?.[sku] || {}) : {}
+                        skuMap[cat][sc][sku] = { rev: (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0) }
+                      })
+                    })
+                  })
+    return { catRows: (catRows), subCatRows: (subCatRows), skuMap: (skuMap), totalRev: (chScCatRev + chVcCatRev) }
+  }
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const amzMatrixInputs = () => {
+            // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — SC's rtoRev/cirRev/
+            // cancelRev/returnRev and VC's returnRev were still the raw live-only figures; this
+            // sums resolveDailySkuComponents' already-resolved per-SKU totals for each side
+            // separately, so each side can still be toggled on/off (showSC/showVC) independently
+            // while using the resolved (not raw-live) numbers.
+            const scResolvedBySku = {}
+            amzSCResolved.forEach(r => {
+              const s = scResolvedBySku[r.sku] || (scResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, returnRev: 0 })
+              s.rtoRev += r.components?.rto?.rev || 0
+              s.cirRev += r.components?.cir?.rev || 0
+              s.cancelRev += r.components?.cancel?.rev || 0
+              s.returnRev += r.components?.return?.rev || 0
+            })
+            const vcResolvedBySku = {}
+            amzVCResolved.forEach(r => {
+              const s = vcResolvedBySku[r.sku] || (vcResolvedBySku[r.sku] = { returnRev: 0 })
+              s.returnRev += r.components?.return?.rev || 0
+            })
+            const pickAmz = (scChData, vc, sku) => {
+              const r = {}
+              const scResolved = sku ? scResolvedBySku[sku] : null
+              const vcResolved = sku ? vcResolvedBySku[sku] : null
+              ;['rev','excRev','units','exchRev'].forEach(k => { r[k] = (showSC ? (scChData?.FBA?.[k]||0)+(scChData?.MFN?.[k]||0) : 0)+(showVC ? (vc?.[k]||0) : 0) })
+              const scRto = showSC ? (scResolved?.rtoRev ?? ((scChData?.FBA?.rtoRev||0)+(scChData?.MFN?.rtoRev||0))) : 0
+              const scCir = showSC ? (scResolved?.cirRev ?? ((scChData?.FBA?.cirRev||0)+(scChData?.MFN?.cirRev||0))) : 0
+              const scCancel = showSC ? (scResolved?.cancelRev ?? ((scChData?.FBA?.cancelRev||0)+(scChData?.MFN?.cancelRev||0))) : 0
+              const scReturn = showSC ? (scResolved?.returnRev ?? ((scChData?.FBA?.returnRev||0)+(scChData?.MFN?.returnRev||0))) : 0
+              const vcReturn = showVC ? (vcResolved?.returnRev ?? (vc?.returnRev||0)) : 0
+              // FlatCategoryProductMatrix's simpleReturns mode (confirmed 2026-10-22) displays
+              // ONLY d.returnRev as "the" Return% for marketplaces, on the (previously true)
+              // assumption that a marketplace reports one combined return figure — SC's resolved
+              // engine now tracks RTO/CIR/Cancelled as real separate components, so those must be
+              // folded into returnRev here or they'd silently vanish from the displayed %, even
+              // though Net Revenue (which sums all 4 fields regardless of simpleReturns) stays
+              // correct either way. rtoRev/cirRev/cancelRev are still set to 0 (not double-counted
+              // into the detailedReturns sum path, which Amazon never uses — showReturnPct+
+              // simpleReturns only).
+              r.rtoRev = 0; r.cirRev = 0; r.cancelRev = 0
+              r.returnRev = scRto + scCir + scCancel + scReturn + vcReturn
+              return r
+            }
+            const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
+            const catData = {}
+            allCats.forEach(cat => {
+              catData[cat] = pickAmz(amzSC.catChannel?.[cat], amzVCMatrix.catData?.[cat])
+            })
+            const allScSub = amzSC.subCatChannel || {}
+            const allVcSub = amzVCMatrix.subCatData || {}
+            const subCatData = {}
+            const allCatsForSub = new Set([...Object.keys(allScSub), ...Object.keys(allVcSub)])
+            allCatsForSub.forEach(cat => {
+              subCatData[cat] = {}
+              const allSubs = new Set([...Object.keys(allScSub[cat]||{}), ...Object.keys(allVcSub[cat]||{})])
+              allSubs.forEach(sc => {
+                subCatData[cat][sc] = pickAmz(allScSub[cat]?.[sc], allVcSub[cat]?.[sc])
+              })
+            })
+            const allScSku = amzSC.skuChannel || {}
+            const allVcSku = amzVCMatrix.skuData || {}
+            const skuData = {}
+            const allCatsForSku = new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)])
+            allCatsForSku.forEach(cat => {
+              skuData[cat] = {}
+              const allSubs = new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})])
+              allSubs.forEach(sc => {
+                skuData[cat][sc] = {}
+                const allSkus = new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})])
+                allSkus.forEach(sku => {
+                  skuData[cat][sc][sku] = pickAmz(allScSku[cat]?.[sc]?.[sku], allVcSku[cat]?.[sc]?.[sku], sku)
+                })
+              })
+            })
+            // Category/SubCategory grain don't have a per-SKU key to look up the resolved map by —
+            // re-sum returnRev from the now-resolved skuData instead, same reconciliation approach
+            // D2C uses, so Category/SubCategory rows don't silently keep the raw live-only sum
+            // while SKU rows show the resolved one. rtoRev/cirRev/cancelRev are always 0 from
+            // pickAmz above (folded into returnRev — see its comment).
+            Object.keys(catData).forEach(cat => { catData[cat].returnRev = 0 })
+            Object.entries(skuData).forEach(([cat, scMap]) => {
+              Object.entries(scMap).forEach(([sc, skuMap_]) => {
+                const returnRevSum = Object.values(skuMap_).reduce((s, v) => s + (v.returnRev||0), 0)
+                if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev = returnRevSum
+                if (catData[cat]) catData[cat].returnRev += returnRevSum
+              })
+            })
+            // MoM prev maps: SC prev + VC prev combined (filtered by channelView)
+            const scCatPrev = showSC ? (amzSC.catPrevMap || {}) : {}; const vcCatPrev = showVC ? (amzVCMatrix.catPrevMap || {}) : {}
+            const allPrevCats = new Set([...Object.keys(scCatPrev), ...Object.keys(vcCatPrev)])
+            const catPrevMap = {}; allPrevCats.forEach(c => { catPrevMap[c] = (scCatPrev[c]||0) + (vcCatPrev[c]||0) })
+            const scSubPrev = showSC ? (amzSC.subCatPrevMap || {}) : {}; const vcSubPrev = showVC ? (amzVCMatrix.subCatPrevMap || {}) : {}
+            const subCatPrevMap = {}
+            new Set([...Object.keys(scSubPrev), ...Object.keys(vcSubPrev)]).forEach(k => { subCatPrevMap[k] = (scSubPrev[k]||0) + (vcSubPrev[k]||0) })
+            const scSkuPrev = amzSC.skuPrevMap || {}; const vcSkuPrev = amzVCMatrix.skuPrevMap || {}
+            const skuPrevMap = {}
+            const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
+            skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
+            // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C's matrix) — the
+            // table's row-level-GST-ratio Net Revenue sum vs the KPI card's whole-channel blended
+            // ratio. KPI target depends on which side(s) are toggled on.
+            const amzKpiNetTarget = channelView === 'sc' ? scNetRev : channelView === 'vc' ? vcNetRevenue : (scTotalExcRev + vcNetRevenue)
+            const amzMatrixNetScale = (() => {
+              let rawTotal = 0
+              Object.entries(subCatData).forEach(([cat, scMap]) => {
+                Object.values(scMap).forEach(d => {
+                  const gross = d.rev || 0, excRev = d.excRev || 0
+                  const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+                  const grossAfterReturns = gross - (d.cancelRev||0) - (d.rtoRev||0) - (d.cirRev||0) - (d.returnRev||0)
+                  rawTotal += grossAfterReturns * (1 - gstRatio)
+                })
+              })
+              return rawTotal > 0 ? amzKpiNetTarget / rawTotal : 1
+            })()
+    return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (skuPrevMap), netScale: (amzMatrixNetScale) }
+  }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const amzGeoInputs = () => {
+            const statePrevMap = amzSC.statePrevMap || {}
+            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            let cum = 0
+            const enrichedStates = (amzSC.states||[]).map(s => {
+              const prev = statePrevMap[s.state] || 0
+              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+              cum += sharePct
+              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.rev > 0 ? (s.returnRev||0) / s.rev * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+            })
+            const cityPrevMap = amzSC.cityPrevMap || {}
+            const totalCityRev = amzTotalRev || amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            let cumC = 0
+            const enrichedCities = (amzSC.cities||[]).map(c => {
+              const prev = cityPrevMap[c.city] || 0
+              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+              cumC += sharePct
+              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+            })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const amzAccountInputs = () => {
+                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
+                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
+                      const rows = (() => {
+                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
+                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
+                        if (channelView === 'vc') {
+                          return (amzVC.accounts || [])
+                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
+                            .sort((a, b) => b.rev - a.rev)
+                        }
+                        // 'all': SC FBA + SC MFN + each VC account
+                        const out = []
+                        if (showSC) {
+                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
+                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
+                        }
+                        if (showVC) {
+                          ;(amzVC.accounts || []).forEach((a, i) => {
+                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
+                          })
+                        }
+                        return out.sort((a, b) => b.rev - a.rev)
+                      })()
+                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
+                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+    return { rows, maxRev, chNote }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below for the active view (Overall / Seller Central / Vendor Central). Desktop shows no ▲/▼ on at
+  // least one tile in every view, so the card shows none (config: deltas false).
+  if (salesMobile) {
+    const vcDaily = {}
+    ;(amzVC.daily || []).forEach(d => { vcDaily[d.date] = d.estimated ? 0 : (d.orderedRev || 0) })
+    const scDaily = Object.fromEntries(scDailyArr.map(d => [d.date, d]))
+    const mTrend = [...new Set([...scDailyArr.map(d => d.date), ...Object.keys(vcDaily)])].sort().map((date, i) => {
+      const s = scDaily[date], sc = s ? (s.FBA || 0) + (s.MFN || 0) : 0, vc = vcDaily[date] || 0
+      return { date, sc: showSC ? sc : 0, vc: showVC ? vc : 0, gross: (showSC ? sc : 0) + (showVC ? vc : 0),
+        orders: s && showSC ? (s.FBA_orders || 0) + (s.MFN_orders || 0) : 0, prevSc: channelView === 'sc' ? (amzPrevDailyArr[i]?.rev ?? null) : null }
+    })
+    const viewName = channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'
+    const mMetrics = {
+      gross: { label: `Gross revenue · ${viewName}`, tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(chScCatRev + chVcCatRev), sub: `${fmtN(chScCatOrders + chVcCatOrders)} orders · ${fmtN(chScCatUnits + chVcCatUnits)} units`,
+        point: r => r.gross, prevPoint: channelView === 'sc' ? r => r.prevSc : undefined, fmtPoint: fmt },
+      grossSc: { label: 'Gross revenue · Seller Central', tileLabel: 'Gross SC', def: 'Seller Central gross revenue including GST.', value: fmt(chScCatRev), point: r => r.sc, fmtPoint: fmt },
+      grossVc: { label: 'Gross revenue · Vendor Central', tileLabel: 'Gross VC', def: 'Vendor Central ordered revenue including GST.', value: fmt(chVcCatRev), point: r => r.vc, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(chScCatExcRev + chVcNetRevenue) },
+      gst: { label: 'GST', def: `${channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'SC' : 'VC'} GST.`, value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: 'As desktop: gross revenue per day (see backlog).', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}` },
+      aov: { label: 'AOV', def: 'Seller Central gross revenue ÷ orders (VC has no orders).', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, point: r => (r.orders > 0 ? r.sc / r.orders : null), fmtPoint: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+      cancelPct: { label: 'Cancellation rate', tileLabel: 'Cancel rate', def: `${fmtN(scCancelOrders)} cancelled orders (SC).`, value: `${scCancelRate.toFixed(1)}%`, lowerIsBetter: true },
+      returnPct: channelView === 'vc'
+        ? { label: 'Returns % (VC)', tileLabel: 'Returns', def: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross revenue.`, value: `${vcReturnRate.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', vcReturnRate) }
+        : channelView === 'sc'
+        ? { label: 'Returns % (SC)', tileLabel: 'Returns', def: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzSCResolvedReturnPct) : null }
+        : { label: 'Returns %', tileLabel: 'Returns', def: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC + VC revenue.` : 'No reliable data.', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', lowerIsBetter: true, status: returnRateReliable ? metricStatus('returnPct', amzCombinedReturnPct) : null },
+    }
+    const cx = amzCategoryInputs(), mx = amzMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = channelView === 'vc' ? null : amzGeoInputs()
+    const ax = channelView === 'sc' ? null : amzAccountInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), accounts: ax ? ax.rows.map(r => ({ name: r.name, rev: r.rev, units: r.units })) : [], accountsNote: ax?.chNote, regions: regionList(amzSC.regionRows), tiers: tierList(amzSC.tierRows), regionNote: 'Seller Central only', ...(gx ? { states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), geoNote: 'Seller Central only' } : { geoUnavailable: 'Not available for Vendor Central: VC data has no state- or city-level granularity.' }), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel={`amazon:${channelView}`} metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list */}
@@ -10060,7 +10853,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                     ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
                     ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
-                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: (showProvisionalReturnSC && provisionalReturnPctSC != null) ? `Provisional Return: ${(provisionalReturnPctSC * 100).toFixed(1)}%` : (returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data'), accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
+                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${amzSCResolvedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSCResolvedReturnRev)} returned of ${fmt(amzSCResolvedGross)} SC rev` : 'No reliable data', accent: returnRateReliable && amzSCResolvedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'vc' ? [{ label: 'Returns % (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross rev` }] : []),
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -10221,32 +11014,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                   )}
                 </Card>
                 {(() => {
-                  const catRows = Array.from(new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])).map(cat => {
-                    const scD = showSC ? (amzSC.catChannel?.[cat] || {}) : {}; const vc = showVC ? (amzVCMatrix.catData?.[cat] || {}) : {}
-                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
-                    return { name: cat, rev, units, orders }
-                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
-                  const allScSub = amzSC.subCatChannel || {}; const allVcSub = amzVCMatrix.subCatData || {}
-                  const subCatSet = new Set([...Object.keys(allScSub).flatMap(cat => Object.keys(allScSub[cat]||{}).map(sc => cat+'::'+sc)), ...Object.keys(allVcSub).flatMap(cat => Object.keys(allVcSub[cat]||{}).map(sc => cat+'::'+sc))])
-                  const subCatRows = Array.from(subCatSet).map(key => {
-                    const [cat, sc] = key.split('::'); const scD = showSC ? (allScSub[cat]?.[sc] || {}) : {}; const vc = showVC ? (allVcSub[cat]?.[sc] || {}) : {}
-                    const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
-                    return { name: sc, category: cat, rev, units, orders }
-                  }).filter(r => r.rev > 0).sort((a,b) => b.rev - a.rev)
-                  const allScSku = amzSC.skuChannel || {}; const allVcSku = amzVCMatrix.skuData || {}
-                  const skuMap = {}
-                  new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)]).forEach(cat => {
-                    skuMap[cat] = {}
-                    new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})]).forEach(sc => {
-                      skuMap[cat][sc] = {}
-                      new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})]).forEach(sku => {
-                        const scD = showSC ? (allScSku[cat]?.[sc]?.[sku] || {}) : {}; const vc = showVC ? (allVcSku[cat]?.[sc]?.[sku] || {}) : {}
-                        skuMap[cat][sc][sku] = { rev: (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0) }
-                      })
-                    })
-                  })
+                  const __mx = amzCategoryInputs()
                   return <CategoryRevenueCard
-                    catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
+                    catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                     height={325}
@@ -10258,31 +11028,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                 {channelView === 'sc'
                   ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
                   : (() => {
-                      // Channel / Account breakdown — replaces the geography placeholder for VC and All views.
-                      // SC view: FBA vs MFN. VC view: one bar per vendor account. All: both combined.
-                      const rows = (() => {
-                        // Opacity steps for multiple VC accounts: first is full acm, rest step down.
-                        const vcColor = i => i === 0 ? C.acm : `${C.acm}${['CC','99','66','44'][Math.min(i,3)]}`
-                        if (channelView === 'vc') {
-                          return (amzVC.accounts || [])
-                            .map((a, i) => ({ name: a.account || 'Unknown', rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) }))
-                            .sort((a, b) => b.rev - a.rev)
-                        }
-                        // 'all': SC FBA + SC MFN + each VC account
-                        const out = []
-                        if (showSC) {
-                          out.push({ name: 'SC · FBA', rev: scFBA.rev || 0, units: scFBA.units || 0, color: C.acm })
-                          out.push({ name: 'SC · MFN', rev: scMFN.rev || 0, units: scMFN.units || 0, color: C.acc })
-                        }
-                        if (showVC) {
-                          ;(amzVC.accounts || []).forEach((a, i) => {
-                            out.push({ name: a.account || `VC ${i + 1}`, rev: a.orderedRev || 0, units: a.orderedUnits || 0, color: vcColor(i) })
-                          })
-                        }
-                        return out.sort((a, b) => b.rev - a.rev)
-                      })()
-                      const maxRev = Math.max(...rows.map(r => r.rev), 1)
-                      const chNote = channelView === 'vc' ? 'Vendor Central' : 'SC + VC'
+                      const { rows, maxRev, chNote } = amzAccountInputs()
                       return (
                         <Card fill title="Channel · Account Breakdown" note={chNote} style={{ height: 325 }}>
                           {rows.length === 0
@@ -10310,70 +11056,11 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             )
           })()}
           {(() => {
-            const pickAmz = (scChData, vc) => { const r = {}; ['rev','excRev','units','cancelRev','rtoRev','cirRev','exchRev','returnRev'].forEach(k => { r[k] = (showSC ? (scChData?.FBA?.[k]||0)+(scChData?.MFN?.[k]||0) : 0)+(showVC ? (vc?.[k]||0) : 0) }); return r }
-            const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
-            const catData = {}
-            allCats.forEach(cat => {
-              catData[cat] = pickAmz(amzSC.catChannel?.[cat], amzVCMatrix.catData?.[cat])
-            })
-            const allScSub = amzSC.subCatChannel || {}
-            const allVcSub = amzVCMatrix.subCatData || {}
-            const subCatData = {}
-            const allCatsForSub = new Set([...Object.keys(allScSub), ...Object.keys(allVcSub)])
-            allCatsForSub.forEach(cat => {
-              subCatData[cat] = {}
-              const allSubs = new Set([...Object.keys(allScSub[cat]||{}), ...Object.keys(allVcSub[cat]||{})])
-              allSubs.forEach(sc => {
-                subCatData[cat][sc] = pickAmz(allScSub[cat]?.[sc], allVcSub[cat]?.[sc])
-              })
-            })
-            const allScSku = amzSC.skuChannel || {}
-            const allVcSku = amzVCMatrix.skuData || {}
-            const skuData = {}
-            const allCatsForSku = new Set([...Object.keys(allScSku), ...Object.keys(allVcSku)])
-            allCatsForSku.forEach(cat => {
-              skuData[cat] = {}
-              const allSubs = new Set([...Object.keys(allScSku[cat]||{}), ...Object.keys(allVcSku[cat]||{})])
-              allSubs.forEach(sc => {
-                skuData[cat][sc] = {}
-                const allSkus = new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})])
-                allSkus.forEach(sku => {
-                  skuData[cat][sc][sku] = pickAmz(allScSku[cat]?.[sc]?.[sku], allVcSku[cat]?.[sc]?.[sku])
-                })
-              })
-            })
-            // MoM prev maps: SC prev + VC prev combined (filtered by channelView)
-            const scCatPrev = showSC ? (amzSC.catPrevMap || {}) : {}; const vcCatPrev = showVC ? (amzVCMatrix.catPrevMap || {}) : {}
-            const allPrevCats = new Set([...Object.keys(scCatPrev), ...Object.keys(vcCatPrev)])
-            const catPrevMap = {}; allPrevCats.forEach(c => { catPrevMap[c] = (scCatPrev[c]||0) + (vcCatPrev[c]||0) })
-            const scSubPrev = showSC ? (amzSC.subCatPrevMap || {}) : {}; const vcSubPrev = showVC ? (amzVCMatrix.subCatPrevMap || {}) : {}
-            const subCatPrevMap = {}
-            new Set([...Object.keys(scSubPrev), ...Object.keys(vcSubPrev)]).forEach(k => { subCatPrevMap[k] = (scSubPrev[k]||0) + (vcSubPrev[k]||0) })
-            const scSkuPrev = amzSC.skuPrevMap || {}; const vcSkuPrev = amzVCMatrix.skuPrevMap || {}
-            const skuPrevMap = {}
-            const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
-            skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="amazon" />
+            const __mx = amzMatrixInputs()
+            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} />
           })()}
           {(() => {
-            const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
-            let cum = 0
-            const enrichedStates = (amzSC.states||[]).map(s => {
-              const prev = statePrevMap[s.state] || 0
-              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-              cum += sharePct
-              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.rev > 0 ? (s.returnRev||0) / s.rev * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
-            })
-            const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = amzTotalRev || amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
-            let cumC = 0
-            const enrichedCities = (amzSC.cities||[]).map(c => {
-              const prev = cityPrevMap[c.city] || 0
-              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-              cumC += sharePct
-              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-            })
+            const { enrichedStates, enrichedCities } = amzGeoInputs()
             if (channelView === 'vc') return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
                 <Card title="Top States" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state-level granularity</div></Card>
@@ -10395,6 +11082,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
 }
 
 function FlipkartTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
   const [fkTrendGroup, setFkTrendGroup] = useState('daily')
   const [fkTrendMetric, setFkTrendMetric] = useState('rev')
@@ -10404,13 +11094,25 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
   const fk = data.flipkart || {}
   const nDays = data.nDays || 1
-  // Provisional Return % — same pattern as Shopify/Amazon SC tabs (confirmed 2026-10-19): shown
-  // ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's tail
-  // hasn't had time to mature. Sourced from fk.returnRateMature.allRate.pct — Flipkart's own
-  // return_rev/total_rev formula computed over the rolling mature window (today-44d to today-14d)
-  // instead of the live-selected one, so directly comparable to fkReturnCur.pct below.
-  const showProvisionalReturnFk = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalReturnPctFk = (fk.returnRateMature?.allRate?.pct ?? null)
+  // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22), same engine as
+  // D2C/Amazon: mature days use real RTO+Return+CIR+Cancelled revenue, immature days (last 15)
+  // substitute this SKU's own rolling 30-day-window rate per component. Replaces the old
+  // live-only fk.returnRate figures and the "Provisional Return" sub-label entirely.
+  // Filtered by selectedCat/selectedSubCat the same way filtDailyCat/totals below are (confirmed
+  // 2026-10-22 bug fix: fkResolved was previously ALWAYS whole-Flipkart regardless of the active
+  // category filter, so Net Revenue silently kept showing the whole-Flipkart total while Gross
+  // Revenue/Orders correctly narrowed to the selected category — a real scope mismatch between the
+  // numerator/denominator of the GST ratio and totalReturnRev below). fkDailySKUComponents now
+  // carries category/subcategory (api/bq.js), passed through resolveDailySkuComponents.
+  const fkResolvedAll = fk.resolvedDailySKU || []
+  const fkResolved = selectedSubCat
+    ? fkResolvedAll.filter(r => r.category === selectedCat && r.subCategory === selectedSubCat)
+    : selectedCat
+    ? fkResolvedAll.filter(r => r.category === selectedCat)
+    : fkResolvedAll
+  const fkResolvedGross = fkResolved.reduce((s, r) => s + r.gross, 0)
+  const fkResolvedReturnRev = fkResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const fkResolvedReturnPct = fkResolvedGross > 0 ? (fkResolvedReturnRev / fkResolvedGross * 100) : 0
 
   // When cat/subcat selected, derive totals+daily from dailyCat (FBF+Non-FBF combined — no split)
   const dailyCat = fk.dailyCat || []
@@ -10429,9 +11131,13 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   const excRev = totals.reduce((s, x) => s + x.excRev, 0)
   const cancelRev = totals.reduce((s, x) => s + (x.cancelRev || 0), 0)
   const cancelOrders = totals.reduce((s, x) => s + (x.cancelOrders || 0), 0)
-  const fkTotalReturnRev = totals.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
-  const gstRatioFk = rev > 0 ? (rev - excRev) / rev : 0
-  const fkNetRev = Math.max(rev - cancelRev - fkTotalReturnRev, 0) * (1 - gstRatioFk)
+  // fkTotalReturnRev/fkNetRev — resolved engine (confirmed 2026-10-22). cancelRev is already
+  // folded into fkResolvedReturnRev (Cancelled is one of Flipkart's 4 tracked components), so it's
+  // NOT subtracted a second time here (unlike the old formula, which double-subtracted cancelRev
+  // on top of a totalReturnRev that may or may not have included it depending on the source query).
+  const fkTotalReturnRev = fkResolvedReturnRev
+  const gstRatioFk = fkResolvedGross > 0 ? (fkResolvedGross - excRev) / fkResolvedGross : 0
+  const fkNetRev = Math.max(fkResolvedGross - fkTotalReturnRev, 0) * (1 - gstRatioFk)
   const aov = nOrders ? rev / nOrders : 0
   const asp = qty ? rev / qty : 0
 
@@ -10449,8 +11155,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
   const fkChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
 
-  // Return rate — combined FBF+Non-FBF
-  const fkReturnCur = fk.returnRate?.all || { pct: 0, deliveredRev: 0, returnRev: 0 }
+  // Return rate — combined FBF+Non-FBF, resolved engine (confirmed 2026-10-22).
+  const fkReturnCur = { pct: fkResolvedReturnPct, deliveredRev: fkResolvedGross, returnRev: fkResolvedReturnRev }
 
   // Delivered %
   const fkDeliveredPct = (() => {
@@ -10463,13 +11169,20 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   // Daily chart — FBF + Non-FBF combined into single daily series
   const fkEstimatedDays = fk.estimatedDays || 0
   const fkLatestReal = fk.latestRealDate || null
+  // Resolved per-day Return Revenue (NEW, additive, 2026-10-22) — overrides dailyMap's returnRev
+  // below with the resolved engine's totals, keeping rev/orders/units and Flipkart's own existing
+  // estimated-days backfill (for the 1-3 day reporting lag, a separate concern from the rolling-
+  // 30-day Return% substitution) completely untouched.
+  const fkResolvedByDate = {}
+  fkResolved.forEach(r => { fkResolvedByDate[r.date] = (fkResolvedByDate[r.date] || 0) + r.totalReturnRev })
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
     if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returns: 0, returnRev: 0, estimated: x.estimated || false }
     dailyMap[x.date].rev += x.rev; dailyMap[x.date].orders += x.orders; dailyMap[x.date].units += x.units || 0
-    dailyMap[x.date].returns += x.returns || 0; dailyMap[x.date].returnRev += x.returnRev || 0
+    dailyMap[x.date].returns += x.returns || 0
     if (x.estimated) dailyMap[x.date].estimated = true
   })
+  Object.keys(dailyMap).forEach(date => { dailyMap[date].returnRev = fkResolvedByDate[date] ?? dailyMap[date].returnRev })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
   const subDailyArr = (filtDailyCat
     ? filtDailyCat.map(x => ({ date: x.date, rev: x.rev, orders: x.orders, returns: 0, returnRev: 0 }))
@@ -10491,7 +11204,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: fkFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fkFmtS(fkNetRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkNetRev / rev : 0)) },
     { label: 'GST', value: fkFmtS(rev - excRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (rev - excRev) / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: fkFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fkFmtS(fkNetRev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: fkFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -10500,6 +11213,153 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (nOrders > 0 ? cancelOrders / nOrders : 0) : 0)) },
     { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const fkCategoryInputs = () => {
+              const catRows = Object.entries((() => { const m = {}; (fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
+              const subCatRows = (() => { const m = {}; (fk.subCategories || []).forEach(x => { const k = x.category+'::'+x.subcategory; if (!m[k]) m[k] = { name: x.subcategory, category: x.category, rev: 0, units: 0, orders: 0 }; m[k].rev += x.rev; m[k].units += x.units; m[k].orders += x.orders }); return Object.values(m).sort((a,b) => b.rev-a.rev) })()
+              const skuMap = {}
+              Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+                skuMap[cat] = {}
+                Object.entries(scMap).forEach(([sc, skMap]) => {
+                  skuMap[cat][sc] = {}
+                  Object.entries(skMap).forEach(([sku, v]) => { skuMap[cat][sc][sku] = { rev: v.rev || 0 } })
+                })
+              })
+    return { catRows: (catRows), subCatRows: (subCatRows), skuMap: (skuMap), totalRev: (rev) }
+  }
+  // Inputs of this tab's Category Revenue Matrix (moved unchanged from the render so the mobile view can reuse them).
+  const fkMatrixInputs = () => {
+        // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — fk.skuMatrix carried no
+        // returnRev at all (SKU rows always showed "—" for Return%); this adds it from the
+        // resolved engine, same as D2C/Amazon.
+        const fkResolvedBySku = {}
+        fkResolved.forEach(r => { fkResolvedBySku[r.sku] = (fkResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+        const catAggMatrix = {}
+        ;(fk.categories || []).forEach(x => {
+          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
+          catAggMatrix[x.category].rev += x.rev; catAggMatrix[x.category].excRev += x.excRev || 0; catAggMatrix[x.category].units += x.units
+          catAggMatrix[x.category].orders += x.orders || 0
+        })
+        const subCatData = {}
+        ;(fk.subCategories || []).forEach(x => {
+          if (!subCatData[x.category]) subCatData[x.category] = {}
+          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
+          subCatData[x.category][x.subcategory].rev += x.rev; subCatData[x.category][x.subcategory].excRev += x.excRev || 0; subCatData[x.category][x.subcategory].units += x.units
+          subCatData[x.category][x.subcategory].orders += x.orders || 0
+        })
+        const skuData = {}
+        Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+          skuData[cat] = {}
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            skuData[cat][sc] = {}
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              const returnRev = fkResolvedBySku[sku] || 0
+              skuData[cat][sc][sku] = { rev: v.rev, excRev: v.excRev, units: v.units, returnRev }
+              if (subCatData[cat]?.[sc]) subCatData[cat][sc].returnRev += returnRev
+              if (catAggMatrix[cat]) catAggMatrix[cat].returnRev += returnRev
+            })
+          })
+        })
+        const catPrevMap = {}
+        ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
+          const [cat] = k.split('::')
+          catPrevMap[cat] = (catPrevMap[cat] || 0) + v
+        })
+        const subCatPrevMap = {}
+        ;(fk.subCatPrevMap ? Object.entries(fk.subCatPrevMap) : []).forEach(([k, v]) => {
+          const parts = k.split('::')
+          const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
+        })
+        // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon) so the table's
+        // Net Revenue Total matches the fkNetRev KPI card exactly.
+        const fkMatrixNetScale = (() => {
+          let rawTotal = 0
+          Object.values(subCatData).forEach(scMap => {
+            Object.values(scMap).forEach(d => {
+              const gross = d.rev || 0, excRev = d.excRev || 0
+              const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+              rawTotal += (gross - (d.returnRev || 0)) * (1 - gstRatio)
+            })
+          })
+          return rawTotal > 0 ? fkNetRev / rawTotal : 1
+        })()
+    return { catData: (catAggMatrix), subCatData: (subCatData), skuData: (skuData), catPrevMap: (catPrevMap), subCatPrevMap: (subCatPrevMap), skuPrevMap: (fk.skuPrevMap || {}), netScale: (fkMatrixNetScale) }
+  }
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const fkGeoInputs = () => {
+        const statePrevMap = fk.statePrevMap || {}
+        const cityPrevMap = fk.cityPrevMap || {}
+        const stateTotalMap = fk.stateTotalMap || {}
+        const cityTotalMap = fk.cityTotalMap || {}
+        const stateMap = {}
+        ;(fk.states||[]).forEach(x => {
+          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
+          stateMap[x.state].returnRev += (x.returnRev||0); stateMap[x.state].deliveredRev += (x.deliveredRev||0)
+        })
+        const fkStateTotalBQ = (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
+        const totalStateRev = fkStateTotalBQ || Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
+        let cum = 0
+        const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
+          const prev = (statePrevMap[`${s.state}::FBF`]||0) + (statePrevMap[`${s.state}::NON-FBF`]||0)
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          cum += sharePct
+          const rtoPct = s.rev > 0 ? s.returnRev / s.rev * 100 : 0
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+        })
+        const cityMap = {}
+        ;(fk.cities||[]).forEach(x => {
+          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
+          cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
+        })
+        const fkCityTotalBQ = (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
+        const totalCityRev = rev || fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
+        let cumC = 0
+        const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
+          const prev = (cityPrevMap[`${c.city}::FBF`]||0) + (cityPrevMap[`${c.city}::NON-FBF`]||0)
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cumC += sharePct
+          const rtoPct = c.rev > 0 ? c.returnRev / c.rev * 100 : 0
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const fkRegionInputs = () => {
+              const regionAgg = {}
+              ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
+              const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
+    return { regionRows: (regionRows) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  // GST takes Delivered %'s place (no desktop ▲/▼ on Delivered %); Delivered % and the returns count go
+  // into the Returns % definition (decision 2026-10-26).
+  if (salesMobile) {
+    const gstR = rev > 0 ? (rev - excRev) / rev : 0
+    const mTrend = subDailyArr.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: Math.max((d.rev || 0) - (d.returnRev || 0), 0) * (1 - gstR), orders: d.orders || 0, units: d.units || 0,
+      retNum: d.returnRev || 0, prevGross: fkPrevDailyArr[i]?.rev ?? null }))
+    const curCancelPct = nOrders > 0 ? cancelOrders / nOrders * 100 : 0
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, delta: fkRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(fkNetRev), delta: chg(fkNetRev, fkPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(fkNetRev / nDays), delta: chg(fkNetRev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
+      gst: { label: 'GST', def: 'Inc GST − Exc GST.', value: fmt(rev - excRev), delta: chg(rev - excRev, fkPrevGST) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmtN(cancelOrders)} cancelled orders · ${fmt(cancelRev)} revenue.`, value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, delta: fkPrevCancelPct > 0 ? chg(curCancelPct, fkPrevCancelPct) : null, lowerIsBetter: true },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(fkReturnCur.returnRev)} returned of ${fmt(fkReturnCur.deliveredRev)} gross.${totalReturns > 0 ? ` Returns: ${fmtN(totalReturns)}${nOrders > 0 ? ` (${(totalReturns / nOrders * 100).toFixed(1)}% of orders)` : ''}.` : ''} Delivered: ${fkDeliveredPct.pct.toFixed(1)}% (${fmtN(fkDeliveredPct.deliveredOrders)} of ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancelled orders).`,
+        value: `${fkReturnCur.pct.toFixed(1)}%`, delta: fkPrevReturnPct > 0 ? chg(fkReturnCur.pct, fkPrevReturnPct) : null, lowerIsBetter: true, status: metricStatus('returnPct', fkReturnCur.pct),
+        point: r => (r.gross > 0 ? r.retNum / r.gross * 100 : null), fmtPoint: v => `${v.toFixed(1)}%` },
+    }
+    const cx = fkCategoryInputs(), mx = fkMatrixInputs()
+    const mCat = mobileMatrix({ ...mx, simpleReturns: true, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = fkGeoInputs(), rx = fkRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList([]), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: cx.catRows, totalRev: cx.totalRev, products: mCat.products, skus: mCat.skus,
+      note: fkEstimatedDays > 0 ? `⏳ Data available till ${fkLatestReal} · Last ${fkEstimatedDays} day${fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
+    return <SalesMobileView channel="flipkart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -10538,7 +11398,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
             { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             { label: 'GST', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: selectedCat ? null : fkChgBadge(rev - excRev, fkPrevGST) },
             { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: (showProvisionalReturnFk && provisionalReturnPctFk != null) ? `Provisional Return: ${(provisionalReturnPctFk * 100).toFixed(1)}%` : `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -10665,28 +11525,17 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
               </div>
             </Card>
             {(() => {
-              const catRows = Object.entries((() => { const m = {}; (fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
-              const subCatRows = (() => { const m = {}; (fk.subCategories || []).forEach(x => { const k = x.category+'::'+x.subcategory; if (!m[k]) m[k] = { name: x.subcategory, category: x.category, rev: 0, units: 0, orders: 0 }; m[k].rev += x.rev; m[k].units += x.units; m[k].orders += x.orders }); return Object.values(m).sort((a,b) => b.rev-a.rev) })()
-              const skuMap = {}
-              Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
-                skuMap[cat] = {}
-                Object.entries(scMap).forEach(([sc, skMap]) => {
-                  skuMap[cat][sc] = {}
-                  Object.entries(skMap).forEach(([sku, v]) => { skuMap[cat][sc][sku] = { rev: v.rev || 0 } })
-                })
-              })
+              const __mx = fkCategoryInputs()
               return <CategoryRevenueCard
-                catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={rev}
+                catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                 height={320}
               />
             })()}
             {(() => {
-              const regionAgg = {}
-              ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
-              const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={320} />
+              const __mx = fkRegionInputs()
+              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} />
             })()}
           </div>
         )
@@ -10694,80 +11543,13 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 
       {/* Category Revenue Matrix */}
       {(() => {
-        const catAggMatrix = {}
-        ;(fk.categories || []).forEach(x => {
-          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
-          catAggMatrix[x.category].rev += x.rev; catAggMatrix[x.category].excRev += x.excRev || 0; catAggMatrix[x.category].units += x.units
-          catAggMatrix[x.category].orders += x.orders || 0; catAggMatrix[x.category].returnRev += x.returnRev || 0
-        })
-        const subCatData = {}
-        ;(fk.subCategories || []).forEach(x => {
-          if (!subCatData[x.category]) subCatData[x.category] = {}
-          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
-          subCatData[x.category][x.subcategory].rev += x.rev; subCatData[x.category][x.subcategory].excRev += x.excRev || 0; subCatData[x.category][x.subcategory].units += x.units
-          subCatData[x.category][x.subcategory].orders += x.orders || 0; subCatData[x.category][x.subcategory].returnRev += x.returnRev || 0
-        })
-        const skuData = {}
-        Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
-          skuData[cat] = {}
-          Object.entries(scMap).forEach(([sc, skuMap]) => {
-            skuData[cat][sc] = {}
-            Object.entries(skuMap).forEach(([sku, v]) => {
-              skuData[cat][sc][sku] = { rev: v.rev, excRev: v.excRev, units: v.units }
-            })
-          })
-        })
-        const catPrevMap = {}
-        ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
-          const [cat] = k.split('::')
-          catPrevMap[cat] = (catPrevMap[cat] || 0) + v
-        })
-        const subCatPrevMap = {}
-        ;(fk.subCatPrevMap ? Object.entries(fk.subCatPrevMap) : []).forEach(([k, v]) => {
-          const parts = k.split('::')
-          const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
-        })
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="flipkart" />
+        const __mx = fkMatrixInputs()
+        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} />
       })()}
 
       {/* Top States + Cities rich tables */}
       {(() => {
-        const statePrevMap = fk.statePrevMap || {}
-        const cityPrevMap = fk.cityPrevMap || {}
-        const stateTotalMap = fk.stateTotalMap || {}
-        const cityTotalMap = fk.cityTotalMap || {}
-        const stateMap = {}
-        ;(fk.states||[]).forEach(x => {
-          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
-          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
-          stateMap[x.state].returnRev += (x.returnRev||0); stateMap[x.state].deliveredRev += (x.deliveredRev||0)
-        })
-        const fkStateTotalBQ = (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
-        const totalStateRev = fkStateTotalBQ || Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
-        let cum = 0
-        const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
-          const prev = (statePrevMap[`${s.state}::FBF`]||0) + (statePrevMap[`${s.state}::NON-FBF`]||0)
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          cum += sharePct
-          const rtoPct = s.rev > 0 ? s.returnRev / s.rev * 100 : 0
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
-        })
-        const cityMap = {}
-        ;(fk.cities||[]).forEach(x => {
-          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
-          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
-          cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
-        })
-        const fkCityTotalBQ = (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
-        const totalCityRev = rev || fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
-        let cumC = 0
-        const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
-          const prev = (cityPrevMap[`${c.city}::FBF`]||0) + (cityPrevMap[`${c.city}::NON-FBF`]||0)
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cumC += sharePct
-          const rtoPct = c.rev > 0 ? c.returnRev / c.rev * 100 : 0
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
-        })
+        const { enrichedStates, enrichedCities } = fkGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -10782,6 +11564,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
 const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: C.acc, Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
 const ADS_CHART_ROW_H = 330
 const ADS_SPEND_TABLE_H = 460
+// Ads tab → P&L tab whose Financial View has CM1 (for breakeven ROAS); Overall / Myntra / CRED have none.
+const ADS_PNL_TAB = { D2C: 'shopify', Amazon: 'amazon', Flipkart: 'flipkart', Blinkit: 'blinkit', Zepto: 'zepto', Instamart: 'instamart' }
 const ADS_PLATFORMS = [
   { id: 'All', label: 'Overall' },
   { id: 'D2C', label: 'D2C' },
@@ -10914,12 +11698,7 @@ function AdsMobCatDropdown({ catOptions, subCatOptions, selCat, selSubCat, setSe
 const ADS_KEY_MAP = { 'All': 'ads:all', 'D2C': 'ads:d2c', 'Amazon': 'ads:amazon', 'Blinkit': 'ads:blinkit', 'Zepto': 'ads:zepto', 'Instamart': 'ads:instamart', 'Flipkart': 'ads:flipkart', 'Myntra': 'ads:myntra', 'CRED': 'ads:cred' }
 function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }) {
   const allowedAdsPlatforms = ADS_PLATFORMS.filter(p => !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id]))
-  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMob(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMob = useIsMobile()
   const ads = data.ads || {}
   const totals = ads.totals || []
   const daily = ads.daily || []
@@ -10955,9 +11734,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const [selAdType, setSelAdType] = useState({})
   const [allCatSearch, setAllCatSearch] = useState('')
   const [allProdSearch, setAllProdSearch] = useState('')
+  // Ads Phase 2: watchlist rule filtering the By product table; the last-6-months data (session-cached)
+  const [adsFlagRule, setAdsFlagRule] = useState(null)
+  const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
+  const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
+  const adsBp = useBreakpoint()
+  const adsMobileLayout = adsBp.width < 1024 || adsBp.isPhoneLandscape
 
-  const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? C.amber.tx : r > 0 ? C.red.tx : C.t3
-  const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? C.amber.bg : r > 0 ? C.red.bg : C.bg
+  // B2: ROAS is plain text; red only where it's below 1x (the product rows use the product's
+  // breakeven ROAS where P&L has it). The old green / amber chips were decorative.
+  const roasColor = r => (r > 0 && r < 1 ? C.red.tx : r > 0 ? C.t1 : C.t3)
+  const roasBg = r => (r > 0 && r < 1 ? C.red.bg : 'transparent')
 
   const chgBadge = (cur, prev, invert = false) => {
     if (!prev || isNaN(prev) || isNaN(cur)) return null
@@ -11101,7 +11888,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   let costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
-  const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
+  // D4 (Suraj 27 Oct): one CAC everywhere = the Customer tab's definition: new customers from the sales
+  // report (first Shopify order in range, _EX excluded; ads.nCusts / repeatCusts from api/bq.js
+  // shopifyNewCusts), spend = Meta + Google + D2C additional spend (cacSpend below).
+  const shopifyNewCustomers = ads.nCusts != null ? ads.nCusts - (ads.repeatCusts || 0) : (data.nCusts || 0) - (data.repeatCusts || 0)
   let shopifyAdSpend = _filtMetaSpend + _filtGoogleSpend
 
   // Category/Sub-category filter: when active, every KPI on this page recomputes from the
@@ -11120,7 +11910,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
       const matchedScs = new Set(adsCatRows.map(r => r.subCategory).filter(Boolean))
       for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
         if (!selSubCat.length || matchedScs.has(sc)) {
-          catSpend += Object.values(dayMap).reduce((s, v) => s + (v || 0), 0)
+          // only the selected dates (the live payload's map holds whole months), as getProductAddlSpend
+          catSpend += Object.entries(dayMap).reduce((s, [date, v]) => s + (date >= _addlStart && date <= _addlEnd ? (v || 0) : 0), 0)
         }
       }
     }
@@ -11146,17 +11937,15 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     // while a filter is active (same "no clean number, don't fake one" principle as the rest).
   }
   const cac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? (shopifyAdSpend + (additionalSpend || 0)) / shopifyNewCustomers : 0
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? _filtMetaSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
   })()
-  const prevCac = (() => {
-    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
-    return 0
-  })()
+  // No previous-period new-customer count exists, so there is no real previous CAC: no badge.
+  // (It used to divide last period's spend by this period's new customers.)
+  const prevCac = null
+
 
   // Build daily spend by date, and for D2C/Meta/Google use Shopify daily excRev split by spend share
   const shopifyDailyMap = {}
@@ -11213,10 +12002,139 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     ? dailyArrRaw.map(d => ({ ...d, spend: d.spend + (addlDailySpendMap[d.date] || 0) }))
     : dailyArrRaw
 
+  // ── Ads Phase 2 sections (ADS_MASTER_PLAN.md Part B §1): inputs from data already on this page ──
+  const adsSeries = selPlatform === 'CRED' ? [] : seriesFor(selPlatform || null)
+  const adsPendingAfter = { Flipkart: data.flipkart?.latestRealDate || null, Myntra: data.myntra?.latestRealDate || null }
+  const adsDayRows = buildDailyByChannel({ daily, salesByChannel: { ...channelDailyMaps, Shopify: shopifyDailyMap }, series: adsSeries, pendingAfter: adsPendingAfter })
+  const adsPendingDays = adsDayRows.filter(d => adsSeries.some(s => d.pending[s.key])).length
+  const adsPendingNote = adsPendingDays ? `◌ ${adsPendingDays} day${adsPendingDays === 1 ? '' : 's'} with revenue not loaded yet (late Flipkart / Myntra reports): no revenue shown for them` : null
+  const adsPacing = (() => {
+    const now = new Date(); const y = new Date(now); y.setDate(y.getDate() - 1)
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const mStart = iso(new Date(y.getFullYear(), y.getMonth(), 1))
+    if (!filters.start || filters.start > mStart || filters.end < iso(y) || filters.end.slice(0, 7) !== mStart.slice(0, 7)) return null
+    const spent = adsDayRows.filter(d => d.date >= mStart).reduce((t, d) => t + adsSeries.reduce((s, x) => s + (d.spend[x.key] || 0), 0), 0)
+    const daysElapsed = Number(filters.end.slice(8)), daysInMonth = new Date(y.getFullYear(), y.getMonth() + 1, 0).getDate()
+    if (!(spent > 0)) return null
+    return { spent, projected: spent / daysElapsed * daysInMonth, daysElapsed, daysInMonth, monthLabel: y.toLocaleDateString('en-IN', { month: 'long' }) }
+  })()
+  const adsShareRows = (() => {
+    if (selPlatform) return null
+    const spendOf = c => filtTotals.filter(t => c.platforms.includes(t.platform)).reduce((s, t) => s + (t.spend || 0), 0)
+    const list = [...OVERALL_CHANNELS.map(c => ({ key: c.key, label: c.label, spend: spendOf(c), rev: platformNetRev[c.key] || 0 })), { key: 'CRED', label: 'CRED', spend: credAdditionalSpend || 0, rev: platformNetRev.CRED || 0 }]
+      .filter(r => r.spend > 0 || r.rev > 0)
+    const ts = list.reduce((s, r) => s + r.spend, 0), tr = list.reduce((s, r) => s + r.rev, 0)
+    return list.map(r => ({ key: r.key, label: r.label, a: ts > 0 ? r.spend / ts * 100 : 0, b: tr > 0 ? r.rev / tr * 100 : 0 })).sort((p, q) => q.a - p.a)
+  })()
+  const adsDetail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
+  const adsUnattributed = (adsDetail.subCategoryRows || []).filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0)
+  const adsProductRows = (adsDetail.subCategoryRows || []).filter(r => r.subCategory !== 'Unattributed')
+  // D3 (Suraj 27 Oct): revenue the tables can't break down gets its own labelled row, so the Total
+  // row equals the card: CRED on the All tab, and the Flipkart / Myntra late-report estimates (ex-GST)
+  // wherever those channels are in scope. Laptop tables and the phone lists use the same rows.
+  const adsExtraRows = (() => {
+    const out = []
+    if (!selPlatform && (chMap['CRED']?.excRev || 0) > 0) out.push({ category: 'CRED', label: 'CRED (not in categories)', spend: credAdditionalSpend, revenue: Math.round(chMap['CRED'].excRev) })
+    const estRev = (!selPlatform || selPlatform === 'Flipkart' ? data.flipkart?.estTotalExcRev || 0 : 0) + (!selPlatform || selPlatform === 'Myntra' ? data.myntra?.estTotalExcRev || 0 : 0)
+    if (estRev > 0) out.push({ category: 'Flipkart / Myntra', label: 'Flipkart / Myntra estimate (no product detail)', spend: 0, revenue: Math.round(estRev) })
+    return out.map(r => ({ ...r, netRevenue: r.revenue, orders: 0, returns: 0, cancellations: 0, roas: r.spend > 0 ? r.revenue / r.spend : 0 }))
+  })()
+  const adsPrevByProd = (() => {
+    // previous equal-length window's product spend / sales (cached path only; see injectAdsFromCache)
+    if (!ads.prevAdsDailyByCategory) return null
+    const plats = !selPlatform ? null : isD2C ? d2cPlatforms : [selPlatform]
+    const salesCh = !selPlatform ? null : isD2C ? ['Shopify'] : [selPlatform]
+    const m = {}
+    ads.prevAdsDailyByCategory.filter(x => x.subCategory && (!plats || plats.includes(x.platform))).forEach(x => { const o = m[x.subCategory] || (m[x.subCategory] = { spend: 0, revenue: 0 }); o.spend += x.spend || 0 })
+    ;(ads.prevSalesDailyByCategory || []).filter(x => x.subCategory && (!salesCh || salesCh.includes(x.platform))).forEach(x => { const o = m[x.subCategory] || (m[x.subCategory] = { spend: 0, revenue: 0 }); o.revenue += x.revenue || 0 })
+    return m
+  })()
+  // Breakeven ROAS per product from P&L (Gross ex GST ÷ CM1 ₹), channel tabs whose P&L has CM1 only.
+  // CM1 ≤ 0 means no ROAS breaks even (any spend is a loss): Infinity.
+  const adsPnlTab = ADS_PNL_TAB[selPlatform] || null
+  const adsProbeKey = adsPnlTab ? `${adsPnlTab}|${filters.start}|${filters.end}` : null
+  const adsBeRoas = adsPnlTab && adsMargins?.key === adsProbeKey && adsMargins.margins
+    ? Object.fromEntries(Object.entries(adsMargins.margins).map(([sc, m]) => [sc, m.cm1 > 0 ? m.excRev / m.cm1 : Infinity]))
+    : null
+  const adsWatch = selPlatform === 'CRED' ? null : computeAdsRules({
+    rows: adsProductRows, prevByProd: adsPrevByProd, beRoasByProd: adsBeRoas, unattributed: adsUnattributed, totalSpend,
+    cpc: totalClicks > 0 ? totalSpend / totalClicks : null, prevCpc: prevClicks > 0 ? prevSpend / prevClicks : null,
+    channel: ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall', fmt,
+  })
+  const adsFlagKeys = adsFlagRule ? new Set((adsWatch?.rules.find(r => r.id === adsFlagRule)?.items || []).map(x => x.key)) : null
+
   const maxSpend = Math.max(...totals.map(t => t.spend), 1)
   const platformLogo = p => {
     const found = ADS_PLATFORMS.find(x => x.id === p)
     return found?.logo || null
+  }
+
+  // ── Below 1024px: the mobile layout (ADS_MASTER_PLAN.md Part B §3), same values as the laptop cards ──
+  if (adsMobileLayout && selPlatform !== 'CRED') {
+    const chg = (cur, prev) => (prev > 0 && cur != null ? (cur - prev) / prev * 100 : null)
+    const metaSp = filtTotals.find(t => t.platform === 'Meta')?.spend || 0
+    const googleSp = filtTotals.find(t => t.platform === 'Google')?.spend || 0
+    const heroSpend = isD2C ? (isCatFiltered ? totalSpend : totalSpend + (additionalSpend || 0)) : totalSpend
+    // daily rows: spend / revenue (dailyArr, as the laptop trend) + clicks / impressions; previous period by day index
+    const clk = {}
+    filtDaily.forEach(d => { const o = clk[d.date] || (clk[d.date] = { clicks: 0, impressions: 0, meta: 0, google: 0 }); o.clicks += d.clicks || 0; o.impressions += d.impressions || 0; if (d.platform === 'Meta') o.meta += d.spend || 0; if (d.platform === 'Google') o.google += d.spend || 0 })
+    const plats = !selPlatform ? null : isD2C ? d2cPlatforms : [selPlatform]
+    const prevByDate = {}
+    ;(ads.prevDaily || []).filter(d => !plats || plats.includes(d.platform)).forEach(d => { const o = prevByDate[d.date] || (prevByDate[d.date] = { spend: 0, clicks: 0, impressions: 0 }); o.spend += d.spend || 0; o.clicks += d.clicks || 0; o.impressions += d.impressions || 0 })
+    const prevDays = Object.keys(prevByDate).sort()
+    const trendRows = dailyArr.map((d, i) => {
+      const p = prevByDate[prevDays[i]]
+      return { date: d.date, spend: d.spend || 0, revenue: d.revenue || 0, clicks: clk[d.date]?.clicks || 0, impressions: clk[d.date]?.impressions || 0, meta: clk[d.date]?.meta || 0, google: clk[d.date]?.google || 0,
+        pSpend: p ? p.spend : null, pClicks: p ? p.clicks : null, pImpr: p ? p.impressions : null }
+    })
+    const money = v => fmt(v)
+    // Phone launcher's live number for Ads (navStats): this tile's own value, no extra query
+    if (overallRoas > 0) publishNavStat('ads', { value: `${overallRoas.toFixed(2)}x`, label: 'ROAS' })
+    const all = {
+      spend: { label: 'Total spend', tileLabel: 'Spend', value: fmt(heroSpend), delta: chg(heroSpend, prevSpend), lowerIsBetter: true, def: 'Ad spend in the period.',
+        sub: `Ad rev ${fmt(totalRevenue)} · ROAS ${overallRoas.toFixed(2)}x`, point: r => r.spend, prevPoint: r => r.pSpend, fmtPoint: money },
+      revenue: { label: 'Ad revenue (total sales)', tileLabel: 'Ad revenue', value: fmt(totalRevenue), delta: chg(totalRevenue, prevRevenue), def: TOTAL_SALES_ROAS_INFO, point: r => r.revenue, fmtPoint: money },
+      roas: { label: 'Total-sales ROAS', tileLabel: 'ROAS', value: `${overallRoas.toFixed(2)}x`, delta: chg(overallRoas, prevRoas), def: TOTAL_SALES_ROAS_INFO, point: r => (r.spend > 0 ? r.revenue / r.spend : null), fmtPoint: v => `${v.toFixed(2)}x` },
+      orders: { label: 'Orders', value: fmtN(currentOrders), delta: chg(currentOrders, prevOrders), def: 'Distinct orders in the channel.' },
+      cpo: { label: 'Cost per order', tileLabel: 'Cost / order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', delta: chg(costPerOrder, prevCpo), lowerIsBetter: true, def: 'Spend ÷ orders.' },
+      ctr: { label: 'CTR', value: `${overallCtr.toFixed(2)}%`, delta: chg(overallCtr, prevCtr), def: 'Clicks ÷ impressions.', point: r => (r.impressions > 0 ? r.clicks / r.impressions * 100 : null), prevPoint: r => (r.pImpr > 0 ? r.pClicks / r.pImpr * 100 : null), fmtPoint: v => `${v.toFixed(2)}%` },
+      cpc: { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, delta: chg(overallCpc, prevCpc), lowerIsBetter: true, def: 'Spend ÷ clicks.', point: r => (r.clicks > 0 ? r.spend / r.clicks : null), prevPoint: r => (r.pClicks > 0 ? r.pSpend / r.pClicks : null), fmtPoint: v => `₹${v.toFixed(2)}` },
+      cpm: { label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', delta: chg(overallCpm, prevCpm), lowerIsBetter: true, def: 'Cost per 1,000 impressions.', point: r => (r.impressions > 0 ? r.spend / r.impressions * 1000 : null), prevPoint: r => (r.pImpr > 0 ? r.pSpend / r.pImpr * 1000 : null), fmtPoint: v => `₹${Math.round(v)}` },
+      meta: { label: 'Meta spend', tileLabel: 'Meta', value: fmt(metaSp), delta: chg(metaSp, prevTotals.Meta?.spend), lowerIsBetter: true, def: 'Meta ad spend.', point: r => r.meta, fmtPoint: money },
+      google: { label: 'Google spend', tileLabel: 'Google', value: fmt(googleSp), delta: chg(googleSp, prevTotals.Google?.spend), lowerIsBetter: true, def: 'Google ad spend.', point: r => r.google, fmtPoint: money },
+      cac: { label: 'CAC (D2C)', tileLabel: 'CAC', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', delta: null, deltasHidden: true, def: `Meta + Google spend ÷ ${fmtN(shopifyNewCustomers)} new customers. No previous new-customer count, so no ▲/▼.` },
+    }
+    const keys = isD2C ? ['spend', 'meta', 'google', 'revenue', 'roas', 'orders', 'cac', 'ctr'] : ['spend', 'revenue', 'roas', 'orders', 'cpo', 'ctr', 'cpc', 'cpm']
+    const metrics = keys.map(k => ({ key: k, ...all[k] }))
+    const chLabel = ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'
+    const overview = !selPlatform ? (() => {
+      const rows = OVERALL_CHANNELS.map(c => ({ key: c.key, label: c.label, spend: filtTotals.filter(t => c.platforms.includes(t.platform)).reduce((s2, t) => s2 + (t.spend || 0), 0), rev: platformNetRev[c.key] || 0 })).filter(r2 => r2.spend > 0)
+      const top = Math.max(1, ...rows.map(r2 => r2.spend))
+      return rows.sort((p, q) => q.spend - p.spend).map(r2 => ({ ...r2, roas: r2.spend > 0 ? r2.rev / r2.spend : null, share: r2.spend / top * 100 }))
+    })() : null
+    const amazonSplit = selPlatform === 'Amazon' ? ['Sponsored Products', 'Sponsored Brands', 'Sponsored Display'].map((n2, i) => ({ key: n2, label: n2.replace('Sponsored ', ''), value: (ads.byAdType || []).filter(r2 => r2.platform === 'Amazon' && r2.adType === n2).reduce((s2, r2) => s2 + (r2.spend || 0), 0), color: [C.m.green, C.m.g2, C.m.g3][i] })).filter(p => p.value > 0) : null
+    const catRowsM = (() => {
+      const m = {}
+      adsProductRows.forEach(r2 => { const o = m[r2.category] || (m[r2.category] = { isCat: true, category: r2.category, spend: 0, revenue: 0, n: 0 }); o.spend += r2.spend || 0; o.revenue += r2.revenue || 0; o.n++ })
+      // D3 labelled rows, the same as the laptop table
+      adsExtraRows.forEach(r2 => { m[r2.label] = { isCat: true, category: r2.label, spend: r2.spend, revenue: r2.revenue, n: 1 } })
+      return Object.values(m)
+    })()
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
+        {adsPnlTab && data && (
+          <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
+            offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
+            onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
+        )}
+        <div className="page-scroll" style={{ padding: '12px 12px 0' }}>
+          <AdsMobileView channel={chLabel} metrics={metrics} trendRows={trendRows} start={filters.start} end={filters.end} fmt={fmt}
+            watch={adsWatch} dayRows={adsDayRows} series={adsSeries} monthly={adsMonthly} shareRows={adsShareRows} pacing={adsPacing}
+            overview={overview} amazonSplit={amazonSplit} unattributed={adsUnattributed} totalSpend={totalSpend}
+            catRows={catRowsM} prodRows={[...adsProductRows, ...adsExtraRows.map(r2 => ({ ...r2, subCategory: r2.label }))]} beRoas={adsBeRoas} pendingNote={adsPendingNote} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -11274,6 +12192,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const clicksSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.clicks || 0)
           const impSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.impressions || 0)
           const ordersSpark = _sparkDates.map(dt => _dailyClicksMap[dt]?.orders || 0)
+          // The Orders card used the clicks line. The ads data has no daily orders on the cached path
+          // (all 0), so it shows no line there rather than another metric's.
+          const ordersSparkOrNone = ordersSpark.some(v => v > 0) ? ordersSpark : []
           const ctrSpark = _sparkDates.map(dt => { const imp = _dailyClicksMap[dt]?.impressions || 0; const cl = _dailyClicksMap[dt]?.clicks || 0; return imp > 0 ? cl / imp * 100 : 0 })
           const cpcSpark = _sparkDates.map(dt => { const cl = _dailyClicksMap[dt]?.clicks || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return cl > 0 ? sp / cl : 0 })
           const cpoPSark = _sparkDates.map(dt => { const ord = _dailyClicksMap[dt]?.orders || 0; const sp = dailyArr.find(d => d.date === dt)?.spend || 0; return ord > 0 ? sp / ord : 0 })
@@ -11292,7 +12213,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             { label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend, true), chgPct: chgPct(d2cMetaSpend, d2cPrevMetaSpend), spark: metaSpendSpark, sub: 'Meta ad spend', accentColor: '#1877F2' },
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend, true), chgPct: chgPct(d2cGoogleSpend, d2cPrevGoogleSpend), spark: googleSpendSpark, sub: 'Google ad spend', accentColor: '#34A853' },
             { label: 'Additional Spend', value: fmt(additionalSpend || 0), spark: spendSpark, sub: 'D2C additional mktg spend' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
           ] : [
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), chgPct: chgPct(totalClicks, prevClicks), spark: clicksSpark, sub: 'Across all platforms' },
@@ -11308,7 +12229,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           ] : [
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), chgPct: chgPct(overallCtr, prevCtr), spark: ctrSpark, sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc, true), chgPct: chgPct(overallCpc, prevCpc), spark: cpcSpark, sub: 'Spend / Clicks' },
-            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: clicksSpark },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders), chgPct: chgPct(currentOrders, prevOrders), spark: ordersSparkOrNone },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(costPerOrder, prevCpo, true), chgPct: chgPct(costPerOrder, prevCpo), spark: cpcSpark },
             ...(selPlatform === 'Meta' || selPlatform === 'Google'
               ? [{ label: 'CAC (D2C)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(cac, prevCac, true), chgPct: chgPct(cac, prevCac), spark: cpcSpark }]
@@ -11337,7 +12258,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     {chgBadge(d2cTotalSpend, prevSpend, true)}
                   </div>
                   <div className="kpi-sub" style={{ fontSize: 13 }}>
-                    Rev <strong>{fmt(totalRevenue)}</strong> · <span style={{ color: roasColor(overallRoas), fontWeight: 700 }}>{overallRoas.toFixed(2)}x</span> ROAS
+                    Rev <strong>{fmt(totalRevenue)}</strong> · <span style={{ color: roasColor(overallRoas), fontWeight: 700 }}>{overallRoas.toFixed(2)}x</span> <span title={TOTAL_SALES_ROAS_INFO} style={{ borderBottom: `1px dotted ${C.t3}`, cursor: 'help' }}>total-sales ROAS</span>
                   </div>
                   <div style={{ height: 30, flexShrink: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -11358,7 +12279,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
                 <SparkKpiCard label="Total Spend" value={fmt(d2cTotalSpend)} chg={chgPct(d2cTotalSpend, prevSpend)} sparkData={spendSpark} />
                 <SparkKpiCard label="Gross Revenue Ex GST" value={fmt(totalRevenue)} chg={chgPct(totalRevenue, prevRevenue)} sparkData={revSpark} />
-                <SparkKpiCard label="Overall ROAS" value={`${overallRoas.toFixed(2)}x`} chg={chgPct(overallRoas, prevRoas)} sparkData={roasSpark} accent={roasColor(overallRoas)} />
+                <SparkKpiCard label="Total-sales ROAS" value={`${overallRoas.toFixed(2)}x`} chg={chgPct(overallRoas, prevRoas)} sparkData={roasSpark} accent={roasColor(overallRoas)} />
                 {allKpis.map(k => (
                   <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={k.chgPct} sparkData={k.spark || []} accent={k.roasVal != null ? roasColor(k.roasVal) : undefined} />
                 ))}
@@ -11407,6 +12328,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
                   if (!matchedScs.size || matchedScs.has(sc)) {
                     for (const [date, spend] of Object.entries(dayMap)) {
+                      if (date < _addlStart || date > _addlEnd) continue // selected dates only
                       if (!map[date]) map[date] = { date, spend: 0, revenue: 0 }
                       map[date].spend += spend
                     }
@@ -11416,6 +12338,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
             })()
 
+            // Late reports (A7): Flipkart / Myntra revenue arrives days late. Days after the last real
+            // report (latestRealDate, the same late-report logic P&L uses) are "pending": no revenue and
+            // no ROAS point instead of ₹0 / a crashing ROAS. Spend still shows.
+            const pendingAfter = selPlatform === 'Flipkart' ? (data.flipkart?.latestRealDate || null) : selPlatform === 'Myntra' ? (data.myntra?.latestRealDate || null) : null
             const aggTrend = (rows, gran) => {
               const map = {}
               rows.forEach(r => {
@@ -11436,12 +12362,14 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                 if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0 }
                 map[key].spend += r.spend
                 map[key].revenue += r.revenue
+                if (pendingAfter && r.date > pendingAfter) map[key].pending = true
               })
-              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
-                ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0
-              }))
+              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => (r.pending
+                ? { ...r, revenue: null, roas: null }
+                : { ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0 }))
             }
             const trendData = aggTrend(filteredDailyArr, trendGran)
+            const pendingDays = pendingAfter ? filteredDailyArr.filter(r => r.date > pendingAfter).length : 0
             const xFmt = d => {
               if (trendGran === 'monthly') return d
               if (trendGran === 'quarterly') return d
@@ -11499,6 +12427,9 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                     <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
                   </ComposedChart>
                 </ResponsiveContainer>
+                {pendingDays > 0 && (
+                  <div style={{ fontSize: 11, color: C.t3, textAlign: 'center', marginTop: 2 }}>◌ Revenue after {new Date(pendingAfter + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} not loaded yet (late report): {pendingDays} day{pendingDays === 1 ? '' : 's'} shown as pending, no revenue or ROAS</div>
+                )}
                 {/* Custom legend, plain HTML — Recharts' built-in <Legend> ignores explicit
                     payload ordering for mixed Area/Line series, so it's replaced entirely to
                     guarantee Spend, Revenue, ROAS always reads left to right in that order. */}
@@ -11547,37 +12478,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12 }}>No data</div>
                 ) : (
                   <>
-                    <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="62%" outerRadius="88%" paddingAngle={3} stroke="none">
-                            {pieData.map(d => <Cell key={d.name} fill={d.color} />)}
-                          </Pie>
-                          <Tooltip
-                            formatter={(v, n, entry) => [fmt(v), `${n} (${entry.payload.code})`]}
-                            contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, fontSize: 11, padding: '7px 11px' }}
-                            itemStyle={{ color: C.t1, fontWeight: 400 }}
-                            labelStyle={{ color: C.t1, fontWeight: 600 }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                        <div style={{ fontSize: 10, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Spend</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: C.t1 }}>{fmt(totalTypeSpend)}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                      {pieData.map(d => (
-                        <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11.5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                            <span style={{ color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                            <span style={{ color: C.t3, fontSize: 10, flexShrink: 0 }}>({d.code})</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            <span style={{ color: C.t1, fontWeight: 600 }}>{fmt(d.value)}</span>
-                            <span style={{ color: C.t3, fontSize: 10 }}>{(d.value / totalTypeSpend * 100).toFixed(1)}%</span>
-                          </div>
+                    {/* B2: split bar instead of a donut (design system: no donuts); Frido green shades */}
+                    <div style={{ fontSize: 10, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Spend</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, marginBottom: 10 }}>{fmt(totalTypeSpend)}</div>
+                    <MixBar parts={pieData.map((d, i) => ({ key: d.name, label: d.code, value: d.value, color: [C.m.green, C.m.g2, C.m.g3, C.m.g4][i] || C.m.g4 }))} height={10} fmt={fmt} label="Spend type split" />
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pieData.map((d, i) => (
+                        <div key={d.name} style={{ display: 'grid', gridTemplateColumns: '10px minmax(0,1fr) auto auto', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                          <i style={{ width: 10, height: 10, borderRadius: 2, background: [C.m.green, C.m.g2, C.m.g3, C.m.g4][i] || C.m.g4, display: 'inline-block' }} />
+                          <span style={{ color: C.t1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name} <span style={{ color: C.t3 }}>({d.code})</span></span>
+                          <b style={{ color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{fmt(d.value)}</b>
+                          <span style={{ color: C.t3, fontVariantNumeric: 'tabular-nums', width: 44, textAlign: 'right' }}>{totalTypeSpend > 0 ? (d.value / totalTypeSpend * 100).toFixed(1) : '0'}%</span>
                         </div>
                       ))}
                     </div>
@@ -11649,7 +12560,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               { id: 'rev', label: isMobPlatTable ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'rev',
                 row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
-              { id: 'roas', label: 'ROAS', sortKey: 'roas',
+              { id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas',
                 row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
             ]
@@ -11741,18 +12652,35 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
         {/* Category table + Product table (with Category column) — same component for every
             sub-tab (All + each platform), reconciled to that tab's own KPI Total Spend. */}
+        {adsPnlTab && data && (
+          <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
+            offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
+            onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
+        )}
+        {!isMob && selPlatform !== 'CRED' && (
+          <AdsLaptopSections watch={adsWatch} activeRule={adsFlagRule} onRule={setAdsFlagRule} channel={ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'}
+            dayRows={adsDayRows} series={adsSeries} fmt={fmt} pendingNote={adsPendingNote} monthly={adsMonthly} pacing={adsPacing} shareRows={adsShareRows} />
+        )}
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
-          const catRowsAll = detail.categoryRows || []
-          const subCatRowsAll = detail.subCategoryRows || []
+          // D3: the labelled CRED / estimate rows (adsExtraRows above)
+          const catRowsAll = [...(detail.categoryRows || []), ...adsExtraRows.map(r => ({ ...r, category: r.label }))]
+          const subCatRowsAll = [...(detail.subCategoryRows || []), ...adsExtraRows.map(r => ({ ...r, subCategory: r.label }))]
           if (!catRowsAll.length) return null
 
           // Category/sub-category slicers filter these tables down to the selection, same as
           // the trend chart above — one shared selCat/selSubCat state keeps the whole tab
           // consistent: pick "Slippers" once and every section reflects it.
-          const slicedCatRows = selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll
+          // B2: spend not linked to a product is one line above the lists (not a row); the Total rows still include it
+          const unattrSpend = !selCat.length && !selSubCat.length ? subCatRowsAll.filter(r => r.subCategory === 'Unattributed').reduce((s, r) => s + (r.spend || 0), 0) : 0
+          // D2 (fix/ads-data): both paths now give that spend its own "Unattributed" category row; it is
+          // the line above, not a list row (it used to sit inside "Others" and was subtracted here)
+          const slicedCatRows = (selCat.length ? catRowsAll.filter(r => selCat.includes(r.category)) : catRowsAll)
+            .filter(r => r.category !== 'Unattributed' && (r.spend > 0.5 || r.revenue > 0.5))
+          // B2: Unattributed spend is one line above the lists, not a product row; a watchlist tile filters the list
           const slicedProdRows = subCatRowsAll.filter(r =>
-            (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
+            r.subCategory !== 'Unattributed' && (!selCat.length || selCat.includes(r.category)) && (!selSubCat.length || selSubCat.includes(r.subCategory))
+            && (!adsFlagKeys || adsFlagKeys.has(`${r.category}::${r.subCategory}`))
           )
 
           // Same look as the Platform Overview table above: C.bg header band with a 1.5px
@@ -11768,6 +12696,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           const catQ = allCatSearch.trim().toLowerCase()
           const prodQ = allProdSearch.trim().toLowerCase()
           const filteredCatRows = catQ ? slicedCatRows.filter(r => r.category.toLowerCase().includes(catQ)) : slicedCatRows
+          // a watchlist tile (adsFlagKeys) already narrowed slicedProdRows
           const filteredProdRows = prodQ ? slicedProdRows.filter(r => r.category.toLowerCase().includes(prodQ) || r.subCategory.toLowerCase().includes(prodQ)) : slicedProdRows
           const sortedCats = catTable.sortRows(filteredCatRows, catGetters)
           const sortedProds = prodTable.sortRows(filteredProdRows, prodGetters)
@@ -11777,16 +12706,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
           // ROAS = Revenue (Ex GST) ÷ Spend, same definition as the Platform Overview table above —
           // not the returns/cancel/CIR-adjusted netRevenue, which used to disagree with the top-level
           // ROAS figure.
-          const catTotal = filteredCatRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: 0, revenue: 0 })
+          const catTotal = filteredCatRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: catQ ? 0 : unattrSpend, revenue: 0 })
           const catRoas = catTotal.spend > 0 && catTotal.revenue > 0 ? catTotal.revenue / catTotal.spend : 0
-          const prodTotalAll = filteredProdRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: 0, revenue: 0 })
+          const prodTotalAll = filteredProdRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: prodQ || adsFlagKeys ? 0 : unattrSpend, revenue: 0 })
           const prodRoasAll = prodTotalAll.spend > 0 && prodTotalAll.revenue > 0 ? prodTotalAll.revenue / prodTotalAll.spend : 0
           // Sum addl spend from actual product rows (not KPI card) so total matches row sum
           const catAddlTotal = hasAddlSpendData ? filteredProdRows.reduce((s, r) => s + (getProductAddlSpend(r.subCategory) || 0), 0) : 0
           const prodAddlTotal = catAddlTotal
 
-          const roasCell = r => r > 0
-            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+          // red only below this product's P&L breakeven ROAS (be), else below 1x (roasColor)
+          const roasCell = (r, be) => r > 0
+            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', marginRight: -7, borderRadius: 4, background: be != null ? (r < be ? C.red.bg : 'transparent') : roasBg(r), color: be != null ? (r < be ? C.red.tx : C.t1) : roasColor(r) }}>{r.toFixed(2)}x</span>
             : '—'
 
           const catColumnDefs = [
@@ -11810,7 +12740,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
+              id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '18%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -11843,12 +12773,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: '18%', style: thStyle,
+              id: 'roas', label: <span title={TOTAL_SALES_ROAS_INFO}>ROAS (total sales)</span>, sortKey: 'roas', width: '18%', style: thStyle,
               row: r => {
                 const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
                 const totalProdSpend = r.spend + prodAddlSpend
                 const effectiveRoas = totalProdSpend > 0 && r.revenue > 0 ? r.revenue / totalProdSpend : 0
-                return <td style={tdStyle}>{roasCell(effectiveRoas)}</td>
+                return <td style={tdStyle} title={adsBeRoas?.[r.subCategory] != null && isFinite(adsBeRoas[r.subCategory]) ? `Breakeven ROAS ${adsBeRoas[r.subCategory].toFixed(2)}x (P&L)` : undefined}>{roasCell(effectiveRoas, adsBeRoas?.[r.subCategory])}</td>
               },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(prodRoasAll)}</td>,
             },
@@ -11857,6 +12787,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
           return (
             <div style={{ marginBottom: 16 }}>
+              {unattrSpend > 0 && (
+                <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', marginBottom: 10, borderRadius: 10, background: C.card, border: `1px solid ${C.border}`, fontSize: 12.5, color: C.t2 }}>
+                  <b style={{ color: C.t1 }}>{fmt(unattrSpend)} ({totalSpend > 0 ? (unattrSpend / totalSpend * 100).toFixed(1) : '0'}%) not linked to a product</b>
+                  <span>· e.g. "all products" sale campaigns. Category and product ROAS are on linked spend only; the Total rows include it.</span>
+                </div>
+              )}
               <div className="ads-cat-prod-section" style={{ display: 'flex', flexDirection: window.innerWidth <= 768 ? 'column' : 'row', gap: window.innerWidth <= 768 ? 0 : 14 }}>
               {/* Category table */}
               <div className="kpi-card" style={{ padding: '16px 18px', borderRadius: 13, borderTop: 'none', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column' }}>
@@ -11920,7 +12856,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
               {/* Product table — Category column included */}
               <div className="kpi-card ads-by-product-card" style={{ padding: isMob ? '14px 0px' : '16px 18px', borderRadius: 13, borderTop: 'none', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: isMob ? '0 14px 0 18px' : 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
+                    {adsFlagRule && <button type="button" onClick={() => setAdsFlagRule(null)} title="Show all products" style={{ fontSize: 11.5, fontWeight: 600, color: '#8a5a00', background: 'rgba(200,134,10,.12)', border: 'none', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>Flag: {adsWatch?.ruleName?.[adsFlagRule]} ✕</button>}
+                  </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input value={allProdSearch} onChange={e => setAllProdSearch(e.target.value)} placeholder="Search…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 110 : 180, outline: 'none' }} />
@@ -12031,12 +12970,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 }
 
 function AdsCredView({ data, filters = {} }) {
-  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const onResize = () => setIsMob(window.innerWidth <= 768)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const isMob = useIsMobile()
   const cred = data.cred || {}
   const totals = cred.totals || {}
   const daily = cred.daily || []
@@ -12246,21 +13180,21 @@ function AdsCredView({ data, filters = {} }) {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                 <defs>
-                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.38}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0.04}/></linearGradient>
-                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.32}/><stop offset="95%" stopColor="#10B981" stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acm} stopOpacity={0.38}/><stop offset="95%" stopColor={C.acm} stopOpacity={0.04}/></linearGradient>
+                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green.tx} stopOpacity={0.32}/><stop offset="95%" stopColor={C.green.tx} stopOpacity={0.04}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                 <YAxis yAxisId="left" tick={isMob ? false : { fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 55} />
-                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
+                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: C.amber.tx }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
                 <Tooltip content={trendTooltip} />
-                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
-                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
-                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke={C.acm} strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke={C.green.tx} strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
+                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke={C.amber.tx} strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 11 }}>
-              {[{ name: 'Spend', color: '#6366F1' }, { name: 'Revenue', color: '#10B981' }, { name: 'ROAS', color: '#F59E0B' }].map(s => (
+              {[{ name: 'Spend', color: C.acm }, { name: 'Revenue', color: C.green.tx }, { name: 'ROAS', color: C.amber.tx }].map(s => (
                 <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
                   <span style={{ color: C.t2 }}>{s.name}</span>
@@ -12275,7 +13209,7 @@ function AdsCredView({ data, filters = {} }) {
       {(byCategory.length > 0 || byProduct.length > 0) && (() => {
         const credCatColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '22%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getCatSpend(r.category))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(catTotalSpend)}</td>,
           },
@@ -12285,7 +13219,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getCatSpend(r.category); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(catTotalRoas)}</td>,
           },
@@ -12294,7 +13228,7 @@ function AdsCredView({ data, filters = {} }) {
 
         const credProdColumnDefs = [
           {
-            id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+            id: 'spend', label: <span title="CRED spend is one monthly figure, spread across categories / products by their revenue share">Spend (allocated)</span>, sortKey: 'spend', width: '20%', style: thStyle,
             row: r => <td style={tdStyle}>{fmt(getProdSpend(r.subCategory))}</td>,
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{fmt(prodTotalSpend)}</td>,
           },
@@ -12304,7 +13238,7 @@ function AdsCredView({ data, filters = {} }) {
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>,
           },
           {
-            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            id: 'roas', label: <span title="Allocated spend is proportional to revenue, so every row shows the channel ROAS: not measured per product">ROAS (allocated)</span>, sortKey: 'roas', width: '16%', style: thStyle,
             row: r => { const s = getProdSpend(r.subCategory); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
             total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.acl }}>{roasCell(prodTotalRoas)}</td>,
           },
@@ -12458,6 +13392,9 @@ function AdsCredView({ data, filters = {} }) {
 }
 
 function BlinkitTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const bl = data.blinkit || {}
   const t = bl.totals || {}
   const nDays = t.days || 1
@@ -12478,7 +13415,6 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = bl.daily || []
   const blPrevRev = bl.prevRev || 0
@@ -12514,12 +13450,57 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: blFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: blFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const blGeoInputs = () => {
+        const statePrevMap = bl.statePrevMap || {}
+        const cityPrevMap = bl.cityPrevMap || {}
+        const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const blRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: blPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST, at MRP.', value: fmt(rev), sub: `${fmtN(units)} units · ${fmtN(cities)} cities`, delta: blRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, blPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, blPrevRev > 0 ? blPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, blPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: bl.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = blGeoInputs(), rx = blRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="blinkit" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -12592,9 +13573,8 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = blRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
@@ -12603,24 +13583,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
 
       {/* Cities + States */}
       {(() => {
-        const statePrevMap = bl.statePrevMap || {}
-        const cityPrevMap = bl.cityPrevMap || {}
-        const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = blGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -12633,6 +13596,9 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
 }
 
 function InstaTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const ins = data.instamart || {}
   const t = ins.totals || {}
   const nDays = t.days || 1
@@ -12653,7 +13619,6 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = ins.daily || []
   const insPrevRev = ins.prevRev || 0
@@ -12689,12 +13654,57 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: insFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: insFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const insGeoInputs = () => {
+        const statePrevMap = ins.statePrevMap || {}
+        const cityPrevMap = ins.cityPrevMap || {}
+        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const insRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: insPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${nDays} days · ${fmtN(units)} units`, delta: insRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, insPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, insPrevRev > 0 ? insPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, insPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: ins.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = insGeoInputs(), rx = insRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="instamart" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -12765,33 +13775,15 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = insRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" />
 
       {(() => {
-        const statePrevMap = ins.statePrevMap || {}
-        const cityPrevMap = ins.cityPrevMap || {}
-        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = insGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -12804,6 +13796,9 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
 }
 
 function ZeptoTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const zp = data.zepto || {}
   const t = zp.totals || {}
   const nDays = t.days || 1
@@ -12824,7 +13819,6 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
   const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = zp.daily || []
   const zpPrevRev = zp.prevRev || 0
@@ -12860,12 +13854,57 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: zpFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: zpFmtS(excRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
+
+  // Inputs of this tab's geography tables (moved unchanged from the render so the mobile view can reuse them).
+  const zpGeoInputs = () => {
+        const statePrevMap = zp.statePrevMap || {}
+        const cityPrevMap = zp.cityPrevMap || {}
+        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+    return { enrichedStates, enrichedCities }
+  }
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const zpRegionInputs = () => {
+          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
+          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, net: d.excRev ?? null, units: d.units ?? null, prevGross: zpPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${nDays} days · ${fmtN(orders)} orders · ${fmtN(units)} units`, delta: zpRevChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST.', value: fmt(excRev), delta: chg(excRev, zpPrevExcRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(excRev / nDays), delta: chg(excRev / nDays, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
+      orders: { label: 'Orders', def: `${fmtN(cities)} cities.`, value: fmtN(orders), delta: chg(orders, zpPrevOrders) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, delta: chg(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: {}, subCatPrevMap: zp.subCatPrevMap || {}, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const gx = zpGeoInputs(), rx = zpRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(gx.enrichedStates, 'state'), cities: geoRows(gx.enrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: (t.rev || 0), products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="zepto" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -12936,33 +13975,15 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
           height={320}
         />
         {(() => {
-          const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
-          const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+          const __mx = zpRegionInputs()
+          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
         })()}
       </div>
 
       <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" />
 
       {(() => {
-        const statePrevMap = zp.statePrevMap || {}
-        const cityPrevMap = zp.cityPrevMap || {}
-        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = rev || zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
-        let sCum = 0
-        const enrichedStates = stateRows.map(s => {
-          const prev = statePrevMap[s.state] || 0
-          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
-          sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
-        })
-        let cCum = 0
-        const enrichedCities = cityRows.map(c => {
-          const prev = cityPrevMap[c.city] || 0
-          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
-          cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
-        })
+        const { enrichedStates, enrichedCities } = zpGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
@@ -12975,22 +13996,30 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
 }
 
 function CredTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const cr = data.cred || {}
   const t = cr.totals || {}
   const nDays = t.days || 1
   const rev = t.rev || 0
-  // Net Revenue (Exc GST) = shared measures layer (Gross × retained share, minus GST on that
-  // share) — not raw excRev, which has no cancel/return deduction. See computeNetRevenueMeasures.
-  const netRev = cr.netCalc?.netRev ?? (t.excRev || 0)
-  const gstCollected = cr.netCalc?.gstCollected || 0
-  const cancelRev = cr.netCalc?.cancelRev || 0
-  const totalReturnRev = (cr.netCalc?.returnRev || 0) + (cr.netCalc?.rtoRev || 0) + (cr.netCalc?.cirRev || 0) + (cr.netCalc?.cancelRev || 0)
-  const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
-  const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
+  // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22). CRED has only a
+  // Return status (confirmed live), so this is a single-component resolution: mature days use real
+  // Return revenue, immature days (last 15) substitute this SKU's own rolling 30-day-window rate.
+  const crResolved = cr.resolvedDailySKU || []
+  const crResolvedGross = crResolved.reduce((s, r) => s + r.gross, 0)
+  const totalReturnRev = crResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const returnPct = crResolvedGross > 0 ? (totalReturnRev / crResolvedGross * 100) : 0
+  const crGstRatio = crResolvedGross > 0 ? (crResolvedGross - (t.excRev || 0)) / crResolvedGross : 0
+  const netRev = Math.max(crResolvedGross - totalReturnRev, 0) * (1 - crGstRatio)
+  const gstCollected = (crResolvedGross - totalReturnRev) - netRev
+  // CRED also has a real Cancelled status (confirmed live 2026-10-22, corrected from an earlier
+  // assumption it only had Return) — tracked as its own resolved component.
+  const cancelRev = crResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelPct = crResolvedGross > 0 ? (cancelRev / crResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
   const asp = units ? rev / units : 0
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const crPrevRev = cr.prevRev || 0
   const crPrevOrders = cr.prevOrders || 0
@@ -13024,8 +14053,11 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   const catRows = allCats.map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRows = allSubCats.map(s => ({ name: s.subcategory, category: s.category, rev: s.rev, excRev: s.excRev || 0, units: s.units, orders: s.orders }))
 
-  // Category matrix data — CRED has no Cancel/RTO/CIR/Exch breakdown at category level, only
-  // combined revenue, so returnRev stays 0 here and the matrix renders with simpleReturns.
+  // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
+  // 2026-10-22), replacing the previous "CRED has no breakdown, always 0" state. simpleReturns
+  // still applies (one combined Return+Cancelled figure, no RTO/CIR for this channel).
+  const crResolvedBySku = {}
+  crResolved.forEach(r => { crResolvedBySku[r.sku] = (crResolvedBySku[r.sku] || 0) + r.totalReturnRev })
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -13033,6 +14065,32 @@ function CredTab({ data, rangeStart, rangeEnd }) {
     if (!subCatMatrixData[s.category]) subCatMatrixData[s.category] = {}
     subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units, orders: s.orders, returnRev: 0 }
   })
+  const crSkuMatrixResolved = {}
+  Object.entries(cr.skuMatrix || {}).forEach(([cat, scMap]) => {
+    crSkuMatrixResolved[cat] = {}
+    Object.entries(scMap).forEach(([sc, skuMap]) => {
+      crSkuMatrixResolved[cat][sc] = {}
+      Object.entries(skuMap).forEach(([sku, v]) => {
+        const skuReturnRev = crResolvedBySku[sku] || 0
+        crSkuMatrixResolved[cat][sc][sku] = { ...v, returnRev: skuReturnRev }
+        if (subCatMatrixData[cat]?.[sc]) subCatMatrixData[cat][sc].returnRev += skuReturnRev
+        if (catMatrixData[cat]) catMatrixData[cat].returnRev += skuReturnRev
+      })
+    })
+  })
+  // Reconciliation scale (confirmed 2026-10-22, same pattern as other channels) so the table's Net
+  // Revenue Total matches the netRev KPI card exactly.
+  const crMatrixNetScale = (() => {
+    let rawTotal = 0
+    Object.values(subCatMatrixData).forEach(scMap => {
+      Object.values(scMap).forEach(d => {
+        const gross = d.rev || 0, excR = d.excRev || 0
+        const gRatio = gross > 0 ? (gross - excR) / gross : 0
+        rawTotal += (gross - (d.returnRev || 0)) * (1 - gRatio)
+      })
+    })
+    return rawTotal > 0 ? netRev / rawTotal : 1
+  })()
 
   // Enrich states/cities for ShopifyGeoRichTable — revenue-based Return %
   let cumS = 0
@@ -13060,7 +14118,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: crFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: crFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: crFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: crFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: crFmtS(netRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: crFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -13068,6 +14126,25 @@ function CredTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Returns % and Cancellation % have no ▲/▼ on desktop, so the card shows none (all or none).
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: crPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(orders)} orders · ${fmtN(units)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: crSkuMatrixResolved, subCatPrevMap, skuPrevMap: cr.skuPrevMap || {}, simpleReturns: true, netScale: crMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(cr.regionRows), tiers: tierList(cr.tierRows), states: geoRows(enrichedStates, 'state'), cities: geoRows(enrichedCities, 'city'), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="cred" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13229,7 +14306,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="cred" />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13241,21 +14318,28 @@ function CredTab({ data, rangeStart, rangeEnd }) {
 }
 
 function FirstcryTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const fc = data.firstcry || {}
   const t = fc.totals || {}
   const nDays = t.days || 1
   const rev = t.rev || 0
-  // Net Revenue (Exc GST) = shared measures layer — see computeNetRevenueMeasures.
-  const netRev = fc.netCalc?.netRev ?? (t.excRev || 0)
-  const gstCollected = fc.netCalc?.gstCollected || 0
-  const cancelRev = fc.netCalc?.cancelRev || 0
-  const totalReturnRev = (fc.netCalc?.returnRev || 0) + (fc.netCalc?.rtoRev || 0) + (fc.netCalc?.cirRev || 0) + (fc.netCalc?.cancelRev || 0)
-  const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
-  const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
+  // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22), same engine as
+  // CRED: Return and Cancelled both tracked, mature days use real revenue, immature days (last 15)
+  // substitute this SKU's own rolling 30-day-window rate per component.
+  const fcResolved = fc.resolvedDailySKU || []
+  const fcResolvedGross = fcResolved.reduce((s, r) => s + r.gross, 0)
+  const totalReturnRev = fcResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const returnPct = fcResolvedGross > 0 ? (totalReturnRev / fcResolvedGross * 100) : 0
+  const fcGstRatio = fcResolvedGross > 0 ? (fcResolvedGross - (t.excRev || 0)) / fcResolvedGross : 0
+  const netRev = Math.max(fcResolvedGross - totalReturnRev, 0) * (1 - fcGstRatio)
+  const gstCollected = (fcResolvedGross - totalReturnRev) - netRev
+  const cancelRev = fcResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelPct = fcResolvedGross > 0 ? (cancelRev / fcResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
   const asp = units ? rev / units : 0
-  const dailyAvg = nDays ? rev / nDays : 0
 
   const fcPrevRev = fc.prevRev || 0
   const fcPrevOrders = fc.prevOrders || 0
@@ -13289,7 +14373,10 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
   const catRows = allCats.map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRows = allSubCats.map(s => ({ name: s.subcategory, category: s.category, rev: s.rev, excRev: s.excRev || 0, units: s.units, orders: s.orders }))
 
-  // Category matrix data — Firstcry has no Cancel/RTO/CIR/Exch breakdown at category level.
+  // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
+  // 2026-10-22), replacing the previous "Firstcry has no breakdown, always 0" state.
+  const fcResolvedBySku = {}
+  fcResolved.forEach(r => { fcResolvedBySku[r.sku] = (fcResolvedBySku[r.sku] || 0) + r.totalReturnRev })
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -13297,6 +14384,30 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
     if (!subCatMatrixData[s.category]) subCatMatrixData[s.category] = {}
     subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units, orders: s.orders, returnRev: 0 }
   })
+  const fcSkuMatrixResolved = {}
+  Object.entries(fc.skuMatrix || {}).forEach(([cat, scMap]) => {
+    fcSkuMatrixResolved[cat] = {}
+    Object.entries(scMap).forEach(([sc, skuMap]) => {
+      fcSkuMatrixResolved[cat][sc] = {}
+      Object.entries(skuMap).forEach(([sku, v]) => {
+        const skuReturnRev = fcResolvedBySku[sku] || 0
+        fcSkuMatrixResolved[cat][sc][sku] = { ...v, returnRev: skuReturnRev }
+        if (subCatMatrixData[cat]?.[sc]) subCatMatrixData[cat][sc].returnRev += skuReturnRev
+        if (catMatrixData[cat]) catMatrixData[cat].returnRev += skuReturnRev
+      })
+    })
+  })
+  const fcMatrixNetScale = (() => {
+    let rawTotal = 0
+    Object.values(subCatMatrixData).forEach(scMap => {
+      Object.values(scMap).forEach(d => {
+        const gross = d.rev || 0, excR = d.excRev || 0
+        const gRatio = gross > 0 ? (gross - excR) / gross : 0
+        rawTotal += (gross - (d.returnRev || 0)) * (1 - gRatio)
+      })
+    })
+    return rawTotal > 0 ? netRev / rawTotal : 1
+  })()
 
   // Enrich states/cities for ShopifyGeoRichTable — revenue-based Return %
   let cumS = 0
@@ -13324,7 +14435,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: fcFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fcFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: fcFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: fcFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fcFmtS(netRev / nDays), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: fcFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -13332,6 +14443,25 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Returns % and Cancellation % have no ▲/▼ on desktop, so the card shows none (all or none).
+  if (salesMobile) {
+    const mTrend = daily.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: fcPrevDailyArr[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(orders)} orders · ${fmtN(units)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      orders: { label: 'Orders', def: `${fmtN(units)} units.`, value: fmtN(orders), point: r => r.orders, fmtPoint: fmtN },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(totalReturnRev)} returned revenue.`, value: `${returnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', returnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: fcSkuMatrixResolved, subCatPrevMap, skuPrevMap: fc.skuPrevMap || {}, simpleReturns: true, netScale: fcMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(fc.regionRows), tiers: tierList(fc.tierRows), states: geoRows(enrichedStates, 'state'), cities: geoRows(enrichedCities, 'city'), categories: catRows, totalRev: rev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView channel="firstcry" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13486,7 +14616,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
         )
       })()}
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct channel="firstcry" />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -13497,29 +14627,30 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
 }
 
 function MyntraTab({ data, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const mn = data.myntra || {}
   const totals = mn.totals || {}
   const nDays = totals.days || data.nDays || 1
   const rev = totals.rev || 0
-  // Net Revenue (Exc GST) = shared measures layer — see computeNetRevenueMeasures.
-  const netRev = mn.netCalc?.netRev ?? (totals.excRev || 0)
   const gstCollected = mn.netCalc?.gstCollected || 0
   const cancelRev = mn.netCalc?.cancelRev || 0
   const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
   const nOrders = totals.orders || 0
   const qty = totals.units || 0
   const asp = qty ? rev / qty : 0
-  // Myntra totals carry a real returnRev/returnOrders figure directly (unlike CRED/Firstcry,
-  // which derive it from the netCalc shared-measures layer) — use it as-is.
-  const mnReturnRev = (totals.returnRev || 0) + (mn.netCalc?.rtoRev || 0) + (mn.netCalc?.cirRev || 0) + (mn.netCalc?.cancelRev || 0)
   const mnReturnOrders = totals.returnOrders || 0
-  const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
-  // Provisional Return % — same pattern as Shopify/Amazon SC/Flipkart (confirmed 2026-10-19):
-  // shown ALONGSIDE the real Returns % below, never replacing it, whenever the selected range's
-  // tail hasn't had time to mature. Sourced from mn.returnRateMature.allRate.netRevenueReturnPct —
-  // same formula as mnReturnPct above, computed over the rolling mature window instead.
-  const showProvisionalReturnMn = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalReturnPctMn = (mn.returnRateMature?.allRate?.netRevenueReturnPct ?? null)
+  // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22), same engine as
+  // D2C/Amazon/Flipkart: mature days use real RTO+Return+CIR+Cancelled revenue, immature days
+  // (last 15) substitute this SKU's own rolling 30-day-window rate per component. Replaces the
+  // old live-only totals.returnRev-based figures and the "Provisional Return" sub-label entirely.
+  const mnResolved = mn.resolvedDailySKU || []
+  const mnResolvedGross = mnResolved.reduce((s, r) => s + r.gross, 0)
+  const mnReturnRev = mnResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const mnReturnPct = mnResolvedGross > 0 ? (mnReturnRev / mnResolvedGross * 100) : 0
+  const mnGstRatio = mnResolvedGross > 0 ? (mnResolvedGross - (totals.excRev || 0)) / mnResolvedGross : 0
+  const netRev = Math.max(mnResolvedGross - mnReturnRev, 0) * (1 - mnGstRatio)
 
   const prevRev = mn.prevRev || 0
   const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
@@ -13528,6 +14659,12 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
 
   const dailyArr = mn.daily || []
   const prevDaily = mn.prevDaily || []
+  // Estimated-recent-days backfill (NEW, confirmed 2026-10-22: "go through the same what we are
+  // doing in flipkart.. implement the same in myntra") — Myntra's feed lags a few days behind
+  // BigQuery sync the same way Flipkart's does, so the trailing days of the selected range are
+  // substituted with a 7-day trailing average (mnBlock in api/bq.js) rather than showing 0/missing.
+  const mnEstimatedDays = mn.estimatedDays || 0
+  const mnLatestReal = mn.latestRealDate || null
 
   const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDaily.length) }, (_, i) => ({
     i, cur: dailyArr[i]?.rev ?? null, prev: prevDaily[i]?.rev ?? null
@@ -13545,11 +14682,40 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
   const mnStateTotal = mn.stateTotal || 0
   const mnCityTotal = mn.cityTotal || 0
 
-  // Category matrix data
+  // Category matrix data — returnRev now comes directly from mn.categories/subCategories/skuMatrix
+  // (api/bq.js's mnResolvedByCatSubCat/mnResolvedBySku override, confirmed 2026-10-22), the same
+  // resolved engine the KPI card uses — no more client-side re-derivation needed. The previous
+  // re-derivation (keying off mnSkuMatrix's SKU) silently always returned 0 for every SKU because
+  // mnSKUMatrix grouped by ChannelSKUCode while this resolved lookup used MasterSKU — two
+  // non-overlapping identities, now fixed at the source (mnSKUMatrix switched to MasterSKU).
   const catMatrixData = {}
-  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: c.returnRev || 0 } })
+  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: (c.cancelRev||0)+(c.rtoRev||0)+(c.cirRev||0)+(c.returnRev||0) } })
   const subCatMatrixData = {}
-  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: x.returnRev || 0 } })
+  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: (x.cancelRev||0)+(x.rtoRev||0)+(x.cirRev||0)+(x.returnRev||0) } })
+  const mnSkuMatrixResolved = {}
+  Object.entries(mn.skuMatrix || {}).forEach(([cat, scMap]) => {
+    mnSkuMatrixResolved[cat] = {}
+    Object.entries(scMap).forEach(([sc, skuMap]) => {
+      mnSkuMatrixResolved[cat][sc] = {}
+      Object.entries(skuMap).forEach(([sku, v]) => {
+        const returnRev = (v.cancelRev||0)+(v.rtoRev||0)+(v.cirRev||0)+(v.returnRev||0)
+        mnSkuMatrixResolved[cat][sc][sku] = { ...v, returnRev }
+      })
+    })
+  })
+  // Reconciliation scale (confirmed 2026-10-22, same pattern as D2C/Amazon/Flipkart) so the
+  // table's Net Revenue Total matches the netRev KPI card exactly.
+  const mnMatrixNetScale = (() => {
+    let rawTotal = 0
+    Object.values(subCatMatrixData).forEach(scMap => {
+      Object.values(scMap).forEach(d => {
+        const gross = d.rev || 0, excRev = d.excRev || 0
+        const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+        rawTotal += (gross - (d.returnRev || 0)) * (1 - gstRatio)
+      })
+    })
+    return rawTotal > 0 ? netRev / rawTotal : 1
+  })()
   const catRowsForCatSubCat = (mn.categories || []).map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRowsForCatSubCat = (mn.subCategories || []).map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders }))
 
@@ -13582,7 +14748,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: mnFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: mnFmtS(netRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: mnFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Net Rev', value: mnFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: mnFmtS(netRev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: mnFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -13591,6 +14757,36 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
     { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : dailyArr.map(d => d.rev || 0) },
     { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: mnReturnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
+
+  // Inputs of this tab's block (moved unchanged from the render so the mobile view can reuse them).
+  const mnRegionInputs = () => {
+              // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
+              // inline region/cityTier fields (units aggregated as orders since Myntra city rows
+              // don't carry a units field).
+              const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
+              const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
+    return { regionRows: (Object.values(regAgg)), tierRows: (Object.values(tierAgg)) }
+  }
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below. Active products / Returns % / Cancellation % have no ▲/▼ on desktop → none on the card.
+  if (salesMobile) {
+    const mTrend = dailyArr.map((d, i) => ({ date: d.date, gross: d.rev || 0, orders: d.orders ?? null, units: d.units ?? null, prevGross: (mn.prevDaily || [])[i]?.rev ?? null }))
+    const mMetrics = {
+      gross: { label: 'Gross revenue', tileLabel: 'Gross rev', def: 'Gross revenue including GST.', value: fmt(rev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after returns and cancellations.', value: fmt(netRev) },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: `Net revenue ÷ ${nDays} days.`, value: fmt(netRev / nDays) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}` },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}` },
+      activeProducts: { label: 'Active products', def: 'Product types sold.', value: fmtN(totals.skus) },
+      returnPct: { label: 'Returns %', tileLabel: 'Returns', def: `${fmt(mnReturnRev)} returned · ${fmtN(mnReturnOrders)} orders.`, value: `${mnReturnPct.toFixed(1)}%`, lowerIsBetter: true, status: metricStatus('returnPct', mnReturnPct) },
+      cancelPct: { label: 'Cancellation %', tileLabel: 'Cancel %', def: `${fmt(cancelRev)} cancelled revenue.`, value: `${cancelPct.toFixed(1)}%`, lowerIsBetter: true },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: mnSkuMatrixResolved, subCatPrevMap: mnSubCatPrevMap, skuPrevMap: mn.skuPrevMap || {}, simpleReturns: true, netScale: mnMatrixNetScale, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const rx = mnRegionInputs()
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(rx.regionRows), tiers: tierList(rx.tierRows), states: geoRows(mnEnrichedStates, 'state'), cities: geoRows(mnEnrichedCities, 'city'), categories: catRowsForCatSubCat, totalRev: rev, products: mCat.products, skus: mCat.skus,
+      note: mnEstimatedDays > 0 ? `⏳ Data available till ${mnLatestReal} · Last ${mnEstimatedDays} day${mnEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate` : null }
+    return <SalesMobileView channel="myntra" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -13629,7 +14825,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
-            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: (showProvisionalReturnMn && provisionalReturnPctMn != null) ? `Provisional Return: ${(provisionalReturnPctMn * 100).toFixed(1)}%` : `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
@@ -13678,6 +14874,11 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
                 <Dropdown value={mnTrendGroup} onChange={setMnTrendGroup} options={['daily','weekly','monthly','quarterly'].map(g => ({ id: g, label: g.charAt(0).toUpperCase() + g.slice(1) }))} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
               </div>
             }>
+              {mnEstimatedDays > 0 && mnTrendGroup === 'daily' && (
+                <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px', marginBottom: 8 }}>
+                  ⏳ Data available till {mnLatestReal} · Last {mnEstimatedDays} day{mnEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
+                </div>
+              )}
               <div style={{ height: '100%', ...(isMob ? { margin: '0 -18px' } : {}) }}>
               <ResponsiveContainer width="100%" height="100%" minHeight={240}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 32 : 20, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
@@ -13729,19 +14930,15 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
               height={320}
             />
             {(() => {
-              // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
-              // inline region/cityTier fields (units aggregated as orders since Myntra city rows
-              // don't carry a units field).
-              const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
-              const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
+              const __mx = mnRegionInputs()
+              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
             })()}
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct channel="myntra" />
+      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -13770,6 +14967,9 @@ function OfflineSubToggle({ sub, setSub }) {
 }
 
 function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
+  // Below 1024px (and phones in landscape) this tab renders the shared Sales mobile view.
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const off = data.offline || {}
   const [catRevView, setCatRevView] = useState('category')
   const [selectedCat, setSelectedCat] = useState(null)
@@ -13951,14 +15151,10 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
 
   const totalRev = rev
   const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
+  // Credit Notes count as a real return for the company (confirmed 2026-10-22: "this is actually a
+  // return for me") — cnPct is now shown as-is everywhere, no separate "Provisional" estimate
+  // alongside it, same convention as every other channel's Return% (no more provisional labeling).
   const cnPct = grossRev > 0 ? cnRevAbs / grossRev * 100 : 0
-  // Provisional Credit Note % — same pattern as other channels' Provisional Return% (confirmed
-  // 2026-10-19), adapted for Offline Sales' own Sales-vs-Credit-Note vocabulary (no RTO/CIR/
-  // Return lifecycle here). Shown ALONGSIDE the real Credit Notes % above, never replacing it,
-  // whenever the selected range's tail hasn't had time to mature — a credit note can take weeks
-  // to be issued against a recent sale, same maturity concern as an e-commerce return.
-  const showProvisionalCN = rangeTouchesImmatureWindow(rangeEnd)
-  const provisionalCnPct = (off.creditNoteRateMature?.allRate?.pct ?? null)
 
   const subLabel = sub !== 'all' ? ` · ${SUB_OPTIONS.find(o => o.id === sub)?.label || sub}` : ''
 
@@ -13980,6 +15176,25 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
     { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toString() : '0', spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.units || 0) / d.orders : null) },
     { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, spark: cnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (grossRev > 0 ? cnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: cnPct > 10 ? '#7A1A1A' : undefined },
   ]
+
+  // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles
+  // below (Daily avg follows desktop: gross per day - see backlog; Credit notes ▲/▼ as desktop).
+  if (salesMobile) {
+    const mTrend = dailyArr.map((d, i) => ({ date: d.date, gross: d.rev ?? d.revSales ?? 0, net: d.net ?? null, orders: d.orders ?? null, units: d.units ?? null, prevGross: (prevDailyArr[i]?.rev ?? prevDailyArr[i]?.revSales) ?? null }))
+    const mMetrics = {
+      gross: { label: `Gross revenue${subLabel}`, tileLabel: 'Gross rev', def: 'Gross sales including GST.', value: fmt(grossRev), sub: `${fmtN(nOrders)} orders · ${fmtN(qty)} units`, delta: revChg, point: r => r.gross, prevPoint: r => r.prevGross, fmtPoint: fmt },
+      net: { label: 'Net revenue', tileLabel: 'Net rev', def: 'Ex GST, after credit notes.', value: fmt(netRev), delta: chg(netRev, prevNetRev), point: r => r.net, fmtPoint: fmt },
+      dailyNet: { label: 'Daily avg net revenue', tileLabel: 'Avg net/day', def: 'As desktop: gross revenue per day (see backlog).', value: fmt(rev / Math.max(nDays, 1)), delta: chg(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
+      aov: { label: 'AOV', def: 'Gross revenue ÷ orders.', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, delta: chg(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
+      asp: { label: 'ASP', def: 'Gross revenue ÷ units.', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, delta: chg(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
+      orders: { label: 'Orders', def: `${fmtN(qty)} units.`, value: fmtN(nOrders), delta: chg(nOrders, prevOrders), point: r => r.orders, fmtPoint: fmtN },
+      upo: { label: 'Units per order', tileLabel: 'Units / order', def: 'Average units per order.', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', delta: chg(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
+      creditNotesPct: { label: 'Credit notes %', tileLabel: 'Credit notes %', def: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders. ▲/▼ compares the credit-note amount, as desktop.`, value: `${cnPct.toFixed(1)}%`, delta: chg(cnRevAbs, prevCnRev) },
+    }
+    const mCat = mobileMatrix({ subCatData: subCatMatrixData, skuData: skuMatrixData, subCatPrevMap, drrDays: daysInRange(rangeStart, rangeEnd) })
+    const mData = { period: fmtDateRange(rangeStart, rangeEnd), regions: regionList(regionRows), tiers: tierList(tierRows), states: geoRows(stateRows, 'state'), cities: geoRows(cityRows, 'city'), categories: catRows, totalRev: totalRev, products: mCat.products, skus: mCat.skus }
+    return <SalesMobileView key={sub} channel="offline" metrics={mMetrics} trendRows={mTrend} start={rangeStart} end={rangeEnd} data={mData} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -14018,7 +15233,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(qty)} units`, badge: chgBadge(nOrders, prevOrders) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
-            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: (showProvisionalCN && provisionalCnPct != null) ? `Provisional: ${(provisionalCnPct * 100).toFixed(1)}%` : `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
+            { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
@@ -14163,10 +15378,12 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd }) {
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap, rangeStart, rangeEnd, onOpenReturns, onRaMenu }) {
+  const salesBp = useBreakpoint()
+  const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   if (channel === 'Shopify') return shopifyView === 'returns'
-    ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
-    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+    ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} onMenuExtra={onRaMenu} />
+    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} rangeStart={rangeStart} rangeEnd={rangeEnd} onOpenReturns={onOpenReturns} subCatFirstOrderMap={subCatFirstOrderMap} />
   if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Blinkit') return <BlinkitTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
@@ -14175,7 +15392,7 @@ function ChannelTab({ data, channel, filters, setFilters, channelView, setChanne
   if (channel === 'CRED') return <CredTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Firstcry') return <FirstcryTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
   if (channel === 'Myntra') return <MyntraTab data={data} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-  if (channel === 'International') return <InternationalPlaceholderTab />
+  if (channel === 'International') return salesMobile ? <SalesMobileView channel="international" /> : <InternationalPlaceholderTab />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
@@ -14408,9 +15625,32 @@ function FilterIconPopover({ children, activeCount }) {
 }
 
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {} }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage, onMenu }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
+
+  // Return Analysis opened from Sales → D2C (the phone entry card or "⋯"): remember the D2C sub-tab
+  // and scroll position so the page's back arrow (or Back) returns to the same spot.
+  const salesScrollRef = useRef(null)
+  const [raMenu, setRaMenu] = useState(null) // the mobile Return Analysis view's "⋯" items (Qty / Rev, its CSVs)
+  const d2cSubId = filters.subChannel === 'MyFrido' ? 'myfrido' : filters.subChannel === 'Mobility' ? 'mobility' : 'overall'
+  const openReturns = () => { rememberSalesSpot({ sub: d2cSubId, scroll: salesScrollRef.current?.scrollTop || 0 }); setShopifyView('returns') }
+  useLayoutEffect(() => {
+    const el = salesScrollRef.current
+    if (!el) return
+    if (activeTab === 'shopify' && shopifyView === 'returns') { el.scrollTop = 0; return }
+    if (!peekSalesSpot()) return
+    if (activeTab !== 'shopify') { takeSalesSpot(); return }
+    const spot = takeSalesSpot()
+    let n = 0, raf
+    // The D2C cards render over a few frames; wait until the page is tall enough (max ~2 s).
+    const restore = () => {
+      if (el.scrollHeight - el.clientHeight >= spot.scroll || n++ > 120) { el.scrollTop = spot.scroll; return }
+      raf = requestAnimationFrame(restore)
+    }
+    restore()
+    return () => cancelAnimationFrame(raf)
+  }, [activeTab, shopifyView])
 
   const [allExportOpen, setAllExportOpen] = useState(false)
   const [d2cExportOpen, setD2cExportOpen] = useState(false)
@@ -15294,6 +16534,25 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 14px', borderRadius: 7, background: C.acs, color: C.acd, display: 'inline-block' }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
 
+  // Phone header "⋯" menu: the desktop Export menu's options and handlers for this tab, plus D2C's
+  // Return Analysis view (the desktop's "Return Analysis" button); on that view, "Back to D2C".
+  useEffect(() => {
+    if (!onMenu) return
+    const std = [['sku', 'Category SKU'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+    const handlers = { amazon: handleAmzExport, flipkart: handleFKExport, blinkit: handleBlExport, instamart: handleInsExport, zepto: handleZtExport, cred: handleCrExport, firstcry: handleFcExport, myntra: handleMnExport, offline: handleOffExport }
+    const opts = activeTab === 'shopify' ? [['sku', 'Day-wise & SKU'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+      : activeTab === 'all' ? [['channel', 'Revenue by Channel'], ['category', 'Category Revenue Matrix'], ['states', 'Top States & Cities'], ['all', 'Full Export']]
+      : activeTab === 'amazon' ? std.filter(([key]) => !(key === 'states' && channelView === 'vc'))
+      : handlers[activeTab] ? std : []
+    const run = activeTab === 'shopify' ? handleD2CExport : activeTab === 'all' ? handleAllExport : handlers[activeTab]
+    const items = opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) }))
+    if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') }, ...(raMenu || []))
+    if (activeTab === 'shopify' && shopifyView !== 'returns') items.unshift({ id: 'returns', label: 'Return analysis', group: 'View', onSelect: openReturns })
+    onMenu(items)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu])
+  useEffect(() => () => onMenu?.([]), [onMenu])
+
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
     + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
     + (filters.voucher ? filters.voucher.split(',').filter(Boolean).length : 0)
@@ -15577,9 +16836,10 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         </div>
       </div>
       {/* Content */}
-      <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
+      <div className="page-scroll" ref={salesScrollRef}>
+        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} setPage={setPage} allowedTabs={allowedTabs}
+          onOpenChannel={id => { if (allowedTabs && !allowedTabs.includes(SALES_KEY_MAP[id])) return; setActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} />}
+        {activeTab === 'shopify' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} onOpenReturns={openReturns} onRaMenu={setRaMenu} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
         {activeTab === 'flipkart' && <ChannelTab rangeStart={filters.start} rangeEnd={filters.end} data={filteredData} channel="Flipkart" />}
@@ -15951,7 +17211,12 @@ function HeroSparkCard({ c }) {
   )
 }
 
-function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp }) {
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, refreshTick = 0 }) {
+  // C2 (Suraj 27 Oct): one payback, in months, on margin, shown the same on Acquisition and Spend &
+  // Discounts (laptop and phone: customerDerive paybackMargin / paybackMonthsOf). Fixed 35% for now;
+  // using the P&L D2C CM1 % is in docs/BACKLOG.md.
+  const { margin: payMargin, label: payMarginLabel } = paybackMargin()
+  const paybackMonthsOf = k => paybackMonthsOfShared(k, payMargin)
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -15962,7 +17227,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const [ovChartView, setOvChartView] = useState('revenue')
-  const [ovGran, setOvGran] = useState('monthly')
+  const ovAutoGran = (st, en) => { const n = st && en ? Math.round((new Date(en) - new Date(st)) / 86400000) + 1 : 31; return n <= 31 ? 'daily' : n <= 120 ? 'weekly' : 'monthly' }
+  const [ovGran, setOvGran] = useState(() => ovAutoGran(filters?.start, filters?.end))
+  const [ovGranRange, setOvGranRange] = useState(`${filters?.start}|${filters?.end}`)
+  if (ovGranRange !== `${filters?.start}|${filters?.end}`) { setOvGranRange(`${filters?.start}|${filters?.end}`); setOvGran(ovAutoGran(filters?.start, filters?.end)) }
   const [nrMetric, setNrMetric] = useState('customers')
   const [nrGran, setNrGran] = useState('daily')
   const [spendChartGran, setSpendChartGran] = useState('daily')
@@ -15973,9 +17241,18 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   const [cohortMode, setCohortMode] = useState('customer')
   const [cohortDisplay, setCohortDisplay] = useState('pct')
   const [cohortMonthLimit, setCohortMonthLimit] = useState(14)
+  // B1: charts with 3+ series show bars + one line, the line picked with a toggle
+  const [sdLine, setSdLine] = useState('gross')
+  const [ddLine, setDdLine] = useState('aov')
+  const [cwMetric, setCwMetric] = useState('discountedOrderPct')
+  const [ssrLine, setSsrLine] = useState('grossSales')
   const API = import.meta.env.VITE_API_URL || ''
+  // Below 1024px the phone view (CUSTOMER_MASTER_PLAN.md Part B §B3); on phones the sub-tabs live in the header
+  const bpCust = useBreakpoint()
+  const custMobile = bpCust.width < 1024
+  const custPhoneHeader = bpCust.width <= 768 || bpCust.isPhoneLandscape
 
-  const custFetchKey = `${filters?.start}|${filters?.end}`
+  const custFetchKey = `${filters?.start}|${filters?.end}|${refreshTick}`
   const prevCustFetchKey = useRef(null)
   useEffect(() => {
     if (!filters?.start || !filters?.end) return
@@ -15993,7 +17270,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
       .catch(e => { setCustError(e.message); setLoading(false) })
   }, [custFetchKey])
 
-  const tabBar = (
+  const tabBar = custMobile && custPhoneHeader ? null : (
     <div className="sales-tabs">
       {[
         { id: 'overview', label: 'Overview' },
@@ -16043,8 +17320,18 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     discountRepeatRateByFirst = [],
     categoryDiscountAnalysis = [],
     crossSell = [],
+    crossSellTotals = null,
     dailySpend: rawDailySpend = [],
   } = custData
+
+  if (custMobile) return (
+    <>
+      {tabBar}
+      <div style={{ padding: '12px 12px 0' }}>
+        <CustomerMobileView custData={custData} tab={activeTab} setTab={setActiveTab} start={filters?.start} end={filters?.end} watch={computeCustomerRules(custData, filters?.end)} />
+      </div>
+    </>
+  )
 
   const bucketKey = (dateStr) => {
     if (!dateStr) return 'Unknown'
@@ -16095,6 +17382,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   })
 
   const rfmTotal = rfm.reduce((s, r) => s + (r.customers || 0), 0)
+  const custWatch = computeCustomerRules(custData, filters?.end)
 
   const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
   const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
@@ -16234,7 +17522,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Gross Rev (ex GST)',   cur: kpis.grossExcGst || 0,           prev: prevKpis.grossExcGst || 0,           f: fmt },
             { label: 'Net Rev (ex GST)',     cur: kpis.netRevenue || 0,             prev: prevKpis.netRevenue || 0,            f: fmt },
             { label: 'Repeat Rev %',         cur: (kpis.repeatRevenueRate||0)*100,  prev: (prevKpis.repeatRevenueRate||0)*100, f: v => `${v.toFixed(1)}%` },
-            { label: 'Lifetime LTV',         cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
+            { label: 'LTV (12-mo revenue)',  cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
             { label: 'LTV : CAC',            cur: kpis.ltvCac || 0,                prev: pLtvCac,                             f: v => `${v.toFixed(2)}×`, maturing: !pLtvCac, ltvCacRow: true },
           ]
 
@@ -16304,7 +17592,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       {/* prev */}
                       <div style={{ textAlign: 'right' }}>
                         {row.maturing
-                          ? <span style={{ fontSize: 10, color: CP.ink3, fontStyle: 'italic' }}>Maturing</span>
+                          ? <span title="No previous-period value is calculated for this metric" style={{ fontSize: 10, color: CP.ink3, fontStyle: 'italic' }}>n/a</span>
                           : (row.prev != null && row.prev !== 0)
                             ? <span style={{ fontSize: 11, color: CP.ink3, fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>{row.f(row.prev)}</span>
                             : null
@@ -16359,8 +17647,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: C.acc, valColor: C.t1, sparkVals: spendVals, sparkColor: C.acm, fmt: v => fmt(v) },
                   { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: C.acc, valColor: C.acm, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend (incl. offline) / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: C.acc, valColor: C.t1, sparkVals: cacVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LIFETIME VALUE', value: fmt(kpis.ltv12 || 0), sub: 'All-time avg rev / customer', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
-                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: 'Lifetime LTV / CAC', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'LTV (12-MO REVENUE)', value: fmt(kpis.ltv12 || 0), sub: 'Revenue per customer, last 12 months', badge: null, accent: C.acc, valColor: C.t1, sparkVals: dailyVals, sparkColor: C.acm, fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: ltvCacOnMargin(kpis) != null ? `On revenue · on 35% margin ${ltvCacOnMargin(kpis).toFixed(2)}x (P&L CM1 link later)` : 'On revenue (12-mo revenue ÷ CAC)', badge: null, accent: C.acc, valColor: C.t1, sparkVals: roasVals, sparkColor: C.acm, fmt: v => `${v.toFixed(2)}x` },
                   { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: C.acc, valColor: C.t1, sparkVals: repeatRevPctVals, sparkColor: C.acm, fmt: v => `${v.toFixed(1)}%` },
                 ]
                 return (
@@ -16370,6 +17658,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 )
               })()}
 
+
+              {/* B2.1 Customer health watchlist: tap a rule → the sub-tab that explains it */}
+              {custWatch && <WatchlistCard result={custWatch} channel="Customer" title="Customer health watchlist" onRule={id => { const t = custWatch.rules.find(r => r.id === id)?.target; if (t && t !== 'overview') setActiveTab(t) }} />}
 
               {/* Metric tables */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -16460,8 +17751,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <BarGradient id="gGrossRev" />
                             <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="url(#gGrossRev)" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
-                            <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
-                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke={C.t3} strokeWidth={2} dot={false} />
+                            <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill={C.m.g3} maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
+                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke={C.acd} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
@@ -16474,7 +17765,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <BarGradient id="gNewCust" />
                             <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="url(#gNewCust)" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill={C.acs} maxBarSize={32} radius={[3,3,0,0]} />
-                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} />
+                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke={C.acd} strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
@@ -16487,7 +17778,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <BarGradient id="gAov" />
                             <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="url(#gAov)" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke={C.acc} strokeWidth={2} dot={false} />
-                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke={C.t3} strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke={C.acd} strokeWidth={2} dot={false} strokeDasharray="4 3" />
                           </ComposedChart>
                         )}
                       </ResponsiveContainer>
@@ -16507,7 +17798,6 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           //   qualityByChannel   — [{channel, cac, repeatRate90d, customers}] for quality quadrant chart
 
           const MONTHLY_BUDGET = null // TODO: wire up monthlyBudget from config/API
-          const MARGIN_PCT = 0.35     // approximation pending real margin data per order
 
           // ── palette tokens ──────────────────────────────────
           const T = {
@@ -16618,10 +17908,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const acqRate = kpis.totalCustomers > 0 ? kpis.newCustomers / kpis.totalCustomers : 0
           const pAcqRate = prevKpis.totalCustomers > 0 ? prevKpis.newCustomers / prevKpis.totalCustomers : 0
           const ltvCac = kpis.ltvCac || (kpis.ltv12 && kpis.cac ? kpis.ltv12 / kpis.cac : 0)
+          const ltvCacM = ltvCacOnMargin(kpis)
           const pLtvCac = prevKpis.ltvCac || 0
-          // Payback Period: cac / (aov * marginPct) in days — approximation
-          const avgOrderFreqDays = kpis.totalOrders > 0 && kpis.totalCustomers > 0 ? 30 : 30 // fallback 30d
-          const paybackDays = kpis.aov > 0 && kpis.cac > 0 ? Math.round(kpis.cac / (kpis.aov * MARGIN_PCT)) : null
+          // Payback in months on margin (C2): the same number as Spend & Discounts
+          const paybackMonths = paybackMonthsOf(kpis)
 
           const newCustVals = enriched.map(r => r.newCustomers || 0)
           const cacVals = enriched.filter(r => r.cac > 0).map(r => r.cac)
@@ -16638,14 +17928,15 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
             {
               label: 'LTV : CAC', val: ltvCac > 0 ? `${ltvCac.toFixed(2)}×` : '—',
-              sub: ltvCac > 0 ? (ltvCac >= 3 ? '✦ Healthy' : '⚠ Watch') : 'Needs LTV data',
-              subColor: ltvCac >= 3 ? T.green : ltvCac > 0 ? T.amberDeep : T.t3,
+              // C4: the Healthy bar (3x) is read on the margin version (35% margin, P&L CM1 link later)
+              sub: ltvCacM != null ? `On margin ${ltvCacM.toFixed(2)}× · ${ltvCacM >= 3 ? '✦ Healthy' : '⚠ Watch'} (35% margin, P&L CM1 link later)` : 'Needs LTV data',
+              subColor: ltvCacM != null && ltvCacM >= 3 ? T.green : ltvCacM != null ? T.amberDeep : T.t3,
               spark: roasVals, cur: ltvCac, prev: pLtvCac,
             },
             {
-              label: 'Payback Period', val: paybackDays != null ? `${paybackDays}d` : '—',
-              sub: `Approx. at ${(MARGIN_PCT*100).toFixed(0)}% margin`, spark: null,
-              cur: paybackDays, prev: null, lowerBetter: true,
+              label: 'Payback', val: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—',
+              sub: `Months of customer margin to recover CAC, at ${payMarginLabel}`, spark: null,
+              cur: paybackMonths, prev: null, lowerBetter: true,
             },
           ]
 
@@ -16788,7 +18079,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="cust" dataKey="customersAcquired" fill={C.acc} maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
-                      <Line yAxisId="sales" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
+                      <Line yAxisId="sales" dataKey="grossSales" stroke={C.acd} strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16826,7 +18117,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="cac" dataKey="cac" fill={C.acc} maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
-                      <Line yAxisId="roas" dataKey="roas" stroke={C.t3} strokeWidth={2.5} dot={false} name="RoAS" />
+                      <Line yAxisId="roas" dataKey="roas" stroke={C.acd} strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16887,8 +18178,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   <button key={g} style={pill(spendChartGran===g)} onClick={() => setSpendChartGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>
                 ))
                 return (<>
-              <SCard title="Spend vs Sales vs RoAS" sub="Ad spend (bars) · Gross Sales (black line) · RoAS (amber line)"
-                action={granPills}>
+              <SCard title="Spend vs Sales vs RoAS" sub="Ad spend (bars) · one line: pick Gross Sales or RoAS"
+                action={<>{[['grossSales', 'Gross Sales'], ['roas', 'RoAS']].map(([v, l]) => <button key={v} style={pill(ssrLine === v)} onClick={() => setSsrLine(v)}>{l}</button>)}<span style={{ width: 8 }} />{granPills}</>}>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={sd} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
                     <CartesianGrid stroke={T.borderSoft} />
@@ -16899,8 +18190,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
                     <Legend {...chartLegendProps({ fontSize: 10 })} />
                     <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                    <Line yAxisId="spend" dataKey="grossSales" stroke={C.t3} strokeWidth={2.5} dot={false} name="Gross Sales" />
-                    <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
+                    {ssrLine === 'grossSales' && <Line yAxisId="spend" dataKey="grossSales" stroke={C.acd} strokeWidth={2.5} dot={false} name="Gross Sales" />}
+                    {ssrLine === 'roas' && <Line yAxisId="roas" dataKey="roas" stroke={C.acd} strokeWidth={2} dot={false} name="RoAS" />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </SCard>
@@ -16923,7 +18214,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                       <Legend {...chartLegendProps({ fontSize: 10 })} />
                       <Bar yAxisId="spend" dataKey="spend" fill={C.acc} maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                      <Line yAxisId="cac" dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" />
+                      <Line yAxisId="cac" dataKey="cac" stroke={C.acd} strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -16956,7 +18247,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                           <Legend {...chartLegendProps({ fontSize: 10 })} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
-                          <Line dataKey="cac" stroke={C.t3} strokeWidth={2.5} dot={false} name="CAC" connectNulls />
+                          <Line dataKey="cac" stroke={C.acd} strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </SCard>
@@ -17061,6 +18352,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const prevAvgM6 = wTotM6p > 0 ? wSumM6p / wTotM6p * 100 : 0
           const lost90Row = inactivity.find(r => String(r.bucket || '').includes('90'))
           const lost90 = lost90Row ? (lost90Row.customers || 0) : 0
+          const asOfLabel = filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'
 
           // ── spark lines for stat cards: M1% per cohort, M6% per cohort ──
           const sparkM1 = cohortMonths.map(cm => {
@@ -17180,8 +18472,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 {[
                   { label: 'Avg M1 Retention', value: `${avgM1.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM1, cur: avgM1, prev: prevAvgM1 },
                   { label: 'Avg M6 Retention', value: `${avgM6.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM6, cur: avgM6, prev: prevAvgM6 },
-                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'Customers not seen in 90d', spark: sparkLost90, cur: lost90, prev: null },
-                  { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Total orders ÷ unique customers', spark: null, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
+                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: `D2C customers with no order in the 90 days before ${asOfLabel}`, spark: sparkLost90, cur: lost90, prev: null },
+                  { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Orders ÷ customers, selected period', spark: null, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
                 ].map((s, i) => (
                   <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: CT.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{s.label}</span>
@@ -17301,8 +18593,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               const rawVal = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
                               const pctVal = base > 0 ? rawVal / base * 100 : 0
                               const intensity = idx === 0 ? 1 : Math.min(pctVal / heatCeiling, 1)
-                              const bg = idx === 0 ? CT.amberDeep : `rgba(${C.accRgb},${(intensity * 0.85 + 0.05).toFixed(2)})`
-                              const textColor = idx === 0 ? '#fff' : CT.t1
+                              // B1: M0 is always 100% → greyed, outside the colour scale (which starts at M1)
+                              const bg = idx === 0 ? C.bg : `rgba(${C.accRgb},${(intensity * 0.85 + 0.05).toFixed(2)})`
+                              const textColor = idx === 0 ? CT.t3 : CT.t1
                               return (
                                 <td key={idx} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {cohortDisplay === 'pct' ? `${pctVal.toFixed(1)}%` : cohortMode === 'customer' ? fmtN(rawVal) : fmt(rawVal)}
@@ -17325,8 +18618,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
         {activeTab === 'purchase' && (() => {
           // ── compute lift heatmap from crossSell data ──
-          const crossRaw = crossSell || []
+          // C5: totals from every pair (crossSellTotals: full category grain, sub-category top 8 + Other);
+          // falls back to the 500 display rows for an older cached payload.
           const isSubCat = crossFilter === 'Sub Category'
+          const crossRaw = (isSubCat ? crossSellTotals?.sub : crossSellTotals?.cat) || crossSell || []
 
           // top-N categories by volume
           const catVolume = {}
@@ -17337,7 +18632,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             if (s) catVolume[s] = (catVolume[s] || 0) + r.customers
           })
           const TOP_N = isSubCat ? 8 : 9
-          const topCats = Object.entries(catVolume).sort((a,b) => b[1]-a[1]).slice(0, TOP_N).map(([k]) => k)
+          const topCats = Object.entries(catVolume).filter(([k]) => !(isSubCat && crossSellTotals?.sub && k === 'Other')).sort((a,b) => b[1]-a[1]).slice(0, TOP_N).map(([k]) => k)
           const getKey = (r, role) => {
             const raw = isSubCat ? (role === 'first' ? r.firstSubCategory : r.secondSubCategory) : (role === 'first' ? r.firstCategory : r.secondCategory)
             return topCats.includes(raw) ? raw : (raw ? 'Other' : null)
@@ -17353,13 +18648,16 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
             if (!countMatrix[f]) countMatrix[f] = {}
             countMatrix[f][s] = (countMatrix[f][s] || 0) + r.customers
           })
-          // second-purchase totals for lift denominator
+          // second-purchase totals for lift denominator. C5 (Suraj 27 Oct): the same-category diagonal
+          // (bought the same category again) is left out of every total, so lift compares cross-category
+          // moves with cross-category moves only.
+          const offDiag = (f, c) => (f === c ? 0 : (countMatrix[f]?.[c] || 0))
           const secondTotals = {}
-          liftCols.forEach(c => { secondTotals[c] = liftRows.reduce((sum, f) => sum + (countMatrix[f]?.[c] || 0), 0) })
+          liftCols.forEach(c => { secondTotals[c] = liftRows.reduce((sum, f) => sum + offDiag(f, c), 0) })
           const grandTotal = Object.values(secondTotals).reduce((a, b) => a + b, 0)
           // row totals
           const rowTotals = {}
-          liftRows.forEach(f => { rowTotals[f] = liftCols.reduce((sum, c) => sum + (countMatrix[f]?.[c] || 0), 0) })
+          liftRows.forEach(f => { rowTotals[f] = liftCols.reduce((sum, c) => sum + offDiag(f, c), 0) })
 
           // lift = (count[f][s] / rowTotal[f]) / (secondTotals[s] / grandTotal)
           const liftVal = (f, s) => {
@@ -17430,9 +18728,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* KPI Strip */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
                 {[
-                  { label: 'Repeat Purchase Rate', value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', sub: `${fmtN(pbKpis.repeatCustomers || 0)} of ${fmtN(pbKpis.totalCustomers || 0)} customers` },
-                  { label: 'Avg Orders / Customer', value: pbKpis.avgOrdersPerCustomer ? pbKpis.avgOrdersPerCustomer.toFixed(2) : '—', sub: 'Lifetime order frequency' },
-                  { label: 'Avg Days Between Orders', value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', sub: 'Median repurchase gap' },
+                  { label: 'Repeat Purchase Rate', value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', sub: `${fmtN(pbKpis.repeatCustomers || 0)} of ${fmtN(pbKpis.totalCustomers || 0)} D2C customers (lifetime, to the end date)` },
+                  { label: 'Avg Orders / Customer', value: pbKpis.avgOrdersPerCustomer ? pbKpis.avgOrdersPerCustomer.toFixed(2) : '—', sub: 'Lifetime, to the end date' },
+                  { label: 'Avg Days Between Orders', value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', sub: "Average gap between a customer's orders" },
                   { label: 'Multi-Category Customers', value: pbKpis.multiCatRate != null ? `${pbKpis.multiCatRate}%` : '—', sub: 'Bought 2+ categories ever' },
                   { label: 'Avg Categories / Order', value: basket.avgCategoriesPerOrder ? basket.avgCategoriesPerOrder.toFixed(2) : '—', sub: `${basket.avgItemsPerOrder ? basket.avgItemsPerOrder.toFixed(1) : '—'} items per order` },
                 ].map(({ label, value, sub }) => (
@@ -17486,10 +18784,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               const cnt = countMatrix[f]?.[s] || 0
                               const lv = liftVal(f, s)
                               const rv = rateVal(f, s)
-                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const bgScale = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(${C.accRgb},${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(${C.accRgb},${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => (ff === ss ? 0 : countMatrix[ff]?.[ss]) || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const diag = f === s
+                              const bg = diag ? 'rgba(148,147,159,0.16)' : bgScale
                               const display = liftDisplay === 'lift' ? (lv != null && cnt >= 5 ? `${lv}×` : '') : liftDisplay === 'rate' ? (rv > 0 ? `${rv}%` : '') : (cnt > 0 ? fmtN(cnt) : '')
                               return (
-                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
+                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}${diag ? '\nSame category: greyed, not in the colour scale' : ''}`} style={{ padding: '8px 12px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
                                   {display}
                                 </td>
                               )
@@ -17523,15 +18823,16 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   return (
                     <div>
                       {insight && <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{insight}</div>}
-                      <ResponsiveContainer width="100%" height={240}>
-                        <ComposedChart data={cycleData} margin={{ top: 16, right: 16, bottom: 60, left: 8 }}>
-                          <CartesianGrid stroke={CP.lineSoft} vertical={false} />
-                          <XAxis dataKey="category" tick={{ fontSize: 10, fill: CP.ink2 }} angle={-35} textAnchor="end" interval={0} />
-                          <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}d`} />
+                      {/* B1: horizontal bars, labels on the left (no rotated axis labels) */}
+                      <ResponsiveContainer width="100%" height={Math.max(160, cycleData.length * 26 + 20)}>
+                        <ComposedChart layout="vertical" data={cycleData} margin={{ top: 4, right: 40, bottom: 4, left: 8 }}>
+                          <CartesianGrid stroke={CP.lineSoft} horizontal={false} />
+                          <YAxis type="category" dataKey="category" width={150} tick={{ fontSize: 11, fill: CP.ink2 }} interval={0} />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}d`} />
                           <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }}
                             formatter={(v, name) => [`${v} days`, name]} />
-                          <Bar dataKey="medianDays" name="Median days to repurchase" fill={CP.yellow} radius={[3,3,0,0]} maxBarSize={36}>
-                            <LabelList dataKey="medianDays" position="top" style={{ fontSize: 9, fill: CP.ink2 }} formatter={v => `${v}d`} />
+                          <Bar dataKey="medianDays" name="Median days to repurchase" fill={CP.yellow} radius={[0,3,3,0]} maxBarSize={18}>
+                            <LabelList dataKey="medianDays" position="right" style={{ fontSize: 10, fill: CP.ink2 }} formatter={v => `${v}d`} />
                           </Bar>
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -17539,6 +18840,41 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   )
                 })() : <CpBackendTodo field="repurchaseCycleByCategory" />}
               </CpCard>
+
+              {/* C9: Repurchase due — customers whose last order in a category is 1–2× its median cycle */}
+              {(custData.repurchaseDue || []).length > 0 && (() => {
+                const due = custData.repurchaseDue
+                const totDue = due.reduce((s, r) => s + r.dueCustomers, 0)
+                const th = { padding: '10px 12px', fontSize: 12, color: CP.ink3, fontWeight: 600, letterSpacing: 0.2 }
+                const td = { padding: '8px 12px', fontFamily: 'JetBrains Mono, monospace', textAlign: 'right', color: CP.ink }
+                return (
+                  <CpCard title="Repurchase due" sub={`Customers whose last order in a category is 1–2× that category's median repurchase cycle, as of ${filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'}`}>
+                    <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{fmtN(totDue)} due now across categories (a customer can be due in more than one): the window to nudge them back.</div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
+                          <th style={{ ...th, textAlign: 'left' }}>Category</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Median cycle</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Due window</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Due now</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Of customers</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {due.map((r, i) => (
+                          <tr key={r.category} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
+                            <td style={{ padding: '8px 12px', color: CP.ink, fontWeight: 600 }}>{r.category}</td>
+                            <td style={td}>{r.medianDays}d</td>
+                            <td style={td}>{r.medianDays}–{r.medianDays * 2}d</td>
+                            <td style={{ ...td, fontWeight: 700 }}>{fmtN(r.dueCustomers)}</td>
+                            <td style={{ ...td, color: CP.ink3 }}>{r.customers > 0 ? `${(r.dueCustomers / r.customers * 100).toFixed(1)}% of ${fmtN(r.customers)}` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CpCard>
+                )
+              })()}
 
               {/* Bottom row: 3 charts */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
@@ -17640,21 +18976,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                        {/* Donut */}
-                        <div style={{ position: 'relative', flexShrink: 0, width: 140, height: 140 }}>
-                          <ResponsiveContainer width={140} height={140}>
-                            <PieChart>
-                              <Pie data={basketPieData} dataKey="value" cx="50%" cy="50%" innerRadius={42} outerRadius={60} paddingAngle={2}>
-                                <Cell fill={CP.yellow} />
-                                <Cell fill={CP.yellowDeep} />
-                              </Pie>
-                              <Tooltip contentStyle={ttStyle} formatter={(v, name) => [fmtN(v), name]} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 800, color: CP.ink }}>{fmtN(basket.totalOrders)}</div>
-                            <div style={{ fontSize: 8, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em' }}>orders</div>
-                          </div>
+                        {/* Total + split bar (B1: no donuts) */}
+                        <div style={{ flexShrink: 0, width: 140 }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: CP.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtN(basket.totalOrders)}</div>
+                          <div style={{ fontSize: 10, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 8 }}>orders</div>
+                          <MixBar height={10} label="Basket split" fmt={fmtN} parts={basketPieData.map((d, i) => ({ key: d.name, label: d.name, value: d.value, color: i ? CP.yellowDeep : CP.yellow }))} />
                         </div>
                         {/* Order type breakdown */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -17756,9 +19082,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       </thead>
                       <tbody>
                         {(() => {
-                          // aggregate by category pair (crossSell has sub-category level rows)
+                          // aggregate by category pair from every pair (C5), else the display rows
                           const pairMap = new Map()
-                          crossSell.forEach(r => {
+                          ;(crossSellTotals?.cat || crossSell).forEach(r => {
                             const key = `${r.firstCategory}|||${r.secondCategory}`
                             pairMap.set(key, (pairMap.get(key) || 0) + r.customers)
                           })
@@ -17795,36 +19121,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }
 
           // ── RFM segment taxonomy ────────────────────────────────
-          const SEG_META = {
-            'Champions':           { action: 'REWARD VIP',       actionBg: '#166534', actionColor: '#fff', desc: 'Bought recently, buy often, spend the most',         tooltip: 'Bought very recently, buy most often, and spend the most. Your best customers right now. Reward with VIP perks, early access, and referral programs.',             actionTooltip: 'Bought very recently, buy most often, spend the most. Your best customers right now. → Reward VIP: loyalty perks, early access, referral programs.',           gridTooltip: 'Buy often + bought recently. These are your best customers right now.' },
-            'Loyal Customers':     { action: 'UPSELL',            actionBg: '#1e40af', actionColor: '#fff', desc: 'Regular buyers with strong lifetime value',          tooltip: 'Buy regularly with good frequency and decent lifetime value. Not top spenders but very reliable. Introduce premium products or bundles to grow their basket.',    actionTooltip: 'Buy regularly, decent frequency, good lifetime value. Not top spenders but reliable. → Upsell: introduce premium products or bundles.',                        gridTooltip: 'Frequent buyers but not as recent as Champions. Still very valuable — buy often, just need a nudge to come back sooner.' },
-            'Potential Loyalists': { action: 'NURTURE',           actionBg: '#0369a1', actionColor: '#fff', desc: 'Recent customers with repeat potential',             tooltip: 'Recent buyers who have purchased more than once and show signs of becoming loyal. Keep them engaged and build the habit before they go cold.',                  actionTooltip: 'Recent buyers with repeat potential — bought more than once, good recency. On track to become Champions. → Nurture: keep them engaged, build the habit.',      gridTooltip: 'Bought recently but not yet frequent. On track to become Champions if nurtured well. Keep them engaged.' },
-            'New Customers':       { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Bought recently for the first time',                 tooltip: 'Made their first purchase recently. Critical window — nudge them towards a second order quickly to increase retention odds.',                                    actionTooltip: 'Bought recently for the first time. Critical window. → Nudge 2nd order quickly to increase retention odds.',                                                   gridTooltip: 'First-time buyers. Critical window — push for a 2nd order before they forget about you.' },
-            'Promising':           { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Recent buyers, low frequency so far',                tooltip: 'Bought recently but only once or twice. Still forming habits. Nurture with targeted offers to convert them into regulars.',                                        actionTooltip: 'Recent buyers, low frequency so far. Still forming habits. → Nudge towards next order while purchase intent is still fresh.',                                  gridTooltip: 'Bought recently, low frequency so far. Still forming habits. Targeted offers can convert them to regulars.' },
-            'Need Attention':      { action: 'REVIEW',            actionBg: '#b45309', actionColor: '#fff', desc: 'Above average but haven\'t bought recently',         tooltip: 'Had above-average scores before but recency is dropping. At a tipping point — re-engage now before they drift into hibernation.',                                  actionTooltip: 'Customers that don\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency. → Review: analyze deeper before deciding.',                   gridTooltip: 'Mixed signals — recency is dropping. At a tipping point, re-engage now before they drift to hibernation.' },
-            'About To Sleep':      { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Below average — at risk of going dormant',           tooltip: 'Recency and frequency are both declining. On the verge of going fully dormant. A timely win-back offer could recover them.',                                     actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.',                                  gridTooltip: 'Recency and frequency both declining. On the verge of going fully dormant. A timely offer can still recover them.' },
-            'At Risk':             { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Bought often before but not recently',               tooltip: 'Used to buy frequently but have not returned in a while. High churn risk. Personalised win-back campaign recommended urgently.',                                  actionTooltip: 'Used to buy frequently but not recently. High churn risk. → Win-back: personalised campaign referencing their past purchases.',                                gridTooltip: 'Used to buy often but disappeared recently. High churn risk — personalised win-back urgently needed.' },
-            'Cannot Lose Them':    { action: 'URGENT SAVE',       actionBg: '#991b1b', actionColor: '#fff', desc: 'Used to be champions — haven\'t returned',          tooltip: 'Previously your best customers — high spend, high frequency — but they have stopped buying. Most dangerous segment. Reach out immediately with high-value offers.', actionTooltip: 'Previously your best customers — high spend, high frequency — but stopped buying. Most dangerous segment. → Urgent Save: reach out immediately, high priority.', gridTooltip: 'Rare buyers now, but used to be champions. Most dangerous segment — high value at risk. Reach out immediately.' },
-            'Hibernating':         { action: 'WIN-BACK',          actionBg: '#78350f', actionColor: '#fff', desc: 'Last purchase was long ago, low frequency',          tooltip: 'Bought a long time ago and have not come back. Not fully churned yet but going very cold. Win-back campaigns like "we miss you" discounts can reactivate them.',  actionTooltip: 'Bought a long time ago, haven\'t come back. Low frequency, long gap since last order. Not fully churned yet but going cold fast. → Win-Back: discounts, "we miss you" emails.', gridTooltip: 'Rarely bought + last purchase was long ago. Not fully churned yet — "we miss you" campaigns can reactivate them.' },
-            'Lost':                { action: 'WIN-BACK',          actionBg: '#6b7280', actionColor: '#fff', desc: 'Lowest recency, frequency and monetary scores',      tooltip: 'Lowest scores across all three RFM dimensions. Effectively churned. Low ROI to pursue, but a small reactivation campaign may recover a fraction.',               actionTooltip: 'Lowest scores across all RFM dimensions. Effectively churned. → Win-back with a single low-cost campaign; do not invest heavily.',                             gridTooltip: 'Lowest scores on all three dimensions. Effectively churned. Low ROI to pursue — one small campaign is all worth trying.' },
-            'Recent Users':        { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Bought recently but low frequency',                   tooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. Need nurturing before they go cold.',                                              actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.' },
-            'Others':              { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Mixed signals — doesn\'t fit standard RFM buckets',   tooltip: 'Customers that don\'t fit cleanly into standard RFM buckets — mixed signals on recency, frequency, and monetary. Analyze deeper before deciding on action.',    actionTooltip: 'Doesn\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency/monetary. → Review: analyze this group deeper before deciding on action.' },
-          }
 
           // ── RFM Grid placement (3×3) ────────────────────────────
-          const GRID_PLACEMENT = {
-            'Champions':           { row: 0, col: 0 },
-            'Loyal Customers':     { row: 0, col: 1 },
-            'Potential Loyalists': { row: 1, col: 0 },
-            'New Customers':       { row: 0, col: 2 },
-            'Promising':           { row: 1, col: 2 },
-            'Need Attention':      { row: 1, col: 1 },
-            'About To Sleep':      { row: 2, col: 0 },
-            'At Risk':             { row: 1, col: 0 },
-            'Cannot Lose Them':    { row: 2, col: 1 },
-            'Hibernating':         { row: 2, col: 2 },
-            'Lost':                { row: 2, col: 2 },
-          }
 
           // ── RSCard component ────────────────────────────────────
           const RSCard = ({ title, sub, action, children, infoTooltip }) => (
@@ -17901,8 +19199,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* 2. KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
-                  { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'All RFM segments combined', tooltip: 'Total unique customers across all 7 RFM segments. This is your entire analyzed customer base.' },
-                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
+                  { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'D2C customers with an order in the last 12 months', tooltip: 'Unique D2C customers with at least one order in the 12 months up to the end date (one-time buyers included). All RFM segments add up to this.' },
+                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: C.amber.bg, sub: `${atRiskSegs.length} win-back segments`, tooltip: `Revenue from every win-back segment: ${Object.keys(SEG_META).filter(n => atRiskActions.has(SEG_META[n].action)).join(', ')}. These customers used to buy but haven't returned — if not re-engaged, this revenue is lost.` },
                   { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
                   { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },
                 ].map((kpi, i) => (
@@ -18234,7 +19532,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               </div>
 
               {/* 6. Inactivity Distribution */}
-              <RSCard title="Inactivity Distribution" sub="Days since last purchase">
+              <RSCard title="Inactivity Distribution" sub={`Days since last purchase, as of ${filters?.end ? new Date(`${filters.end}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end date'}`}>
                 {inactivity.length > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height={200}>
@@ -18372,7 +19670,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
                 {(() => {
-                  const paybackMonths = (kpis.cac > 0 && kpis.ltv12 > 0) ? (kpis.cac / (kpis.ltv12 / 12)) : null
+                  const paybackMonths = paybackMonthsOf(kpis) // C2: same as Acquisition
                   const discountedBuckets = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data' && (r.avgDiscPct || 0) > 0)
                   const totalDiscOrders = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0), 0)
                   const totalDiscValue = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)
@@ -18382,7 +19680,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     { label: 'Total Spend', value: fmt(kpis.totalSpend || 0), sub: `Meta ${fmt(kpis.metaSpend || 0)} · Google ${fmt(kpis.googleSpend || 0)}${kpis.additionalSpend > 0 ? ` · Add. ${fmt(kpis.additionalSpend)}` : ''}` },
                     { label: 'Blended RoAS', value: `${blendedRoAS.toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend' },
                     { label: 'Blended CAC', value: fmt(blendedCAC), sub: 'Total Spend / New Customers' },
-                    { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: 'CAC ÷ Monthly Rev per Customer' },
+                    { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: `CAC ÷ monthly margin per customer, at ${payMarginLabel}` },
                     { label: 'Discounted Order Share', value: totalAllOrders > 0 ? `${(totalFirstOrders / totalAllOrders * 100).toFixed(1)}%` : '—', sub: totalAllOrders > 0 ? `${fmtN(totalFirstOrders)} of ${fmtN(totalAllOrders)} orders` : 'No data' },
                     { label: 'Avg Discount / Order', value: discValuePerOrder != null ? fmt(discValuePerOrder) : '—', sub: avgDiscPctOverall != null ? `${avgDiscPctOverall.toFixed(1)}% avg discount on discounted orders` : 'Avg ₹ discount on discounted orders' },
                   ]
@@ -18400,6 +19698,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 <div style={cardHead}>
                   <span style={cardTitle}>Spend vs Sales</span>
                   <div style={{ display: 'flex', gap: 4 }}>
+                    {[['gross', 'Gross sales'], ['net', 'Net revenue'], ['disc', 'Discount given']].map(([v, l]) => (
+                      <button key={v} style={pill(sdLine === v)} onClick={() => setSdLine(v)}>{l}</button>
+                    ))}
+                    <span style={{ width: 8 }} />
                     {['daily', 'weekly', 'monthly'].map(g => (
                       <button key={g} style={pill(spendGranularity === g)} onClick={() => setSpendGranularity(g)}>
                         {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -18424,16 +19726,17 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                               {payload.filter(p => p.dataKey !== 'discountGiven').map((p, i) => (
                                 <div key={i} style={{ color: SD.t1 }}>{p.name}: {fmt(p.value)}</div>
                               ))}
-                              <div style={{ color: '#E07000', marginTop: 2 }}>Discount Given: {fmt(d?.discountGiven)} <span style={{ fontWeight: 700 }}>({d?.discountPct}%)</span></div>
+                              {sdLine !== 'disc' && <div style={{ color: SD.t1, marginTop: 2 }}>Discount Given: {fmt(d?.discountGiven)} <span style={{ fontWeight: 700 }}>({d?.discountPct}%)</span></div>}
                             </div>
                           )
                         }}
                       />
                       <Legend {...chartLegendProps({ fontSize: 11 })} />
                       <Bar yAxisId="spend" dataKey="totalSpend" fill={SD.amber} name="Total Spend" maxBarSize={40} radius={[3,3,0,0]} />
-                      <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={SD.blue} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />
-                      <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
-                      <Line yAxisId="sales" dataKey="discountGiven" stroke="#E07000" strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="Discount Given" />
+                      {/* B1: one bar series + one line; the line is picked with the toggle above */}
+                      {sdLine === 'gross' && <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={C.acd} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />}
+                      {sdLine === 'net' && <Line yAxisId="sales" dataKey="netRevenue" stroke={C.acd} strokeWidth={2} dot={false} name="Net Revenue" />}
+                      {sdLine === 'disc' && <Line yAxisId="sales" dataKey="discountGiven" stroke={C.acd} strokeWidth={2} dot={false} name="Discount Given" />}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -18444,9 +19747,14 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 <div style={cardStyle}>
                   <div style={cardHead}>
                     <span style={cardTitle}>Discount Distribution</span>
-                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>Actual % off MRP (Listing Price) · New vs Repeat · AOV line</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[['aov', 'AOV'], ['disc', 'Avg disc %'], ['rev', 'Revenue %'], ['repeat', 'Repeat %']].map(([v, l]) => (
+                        <button key={v} style={pill(ddLine === v)} onClick={() => setDdLine(v)}>{l}</button>
+                      ))}
+                    </div>
                   </div>
                   <div style={cardBody}>
+                    <div style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic', marginBottom: 6 }}>Actual % off MRP (Listing Price) · bars = orders</div>
                     {discountDist.length > 0 ? (
                       <ResponsiveContainer width="100%" height={220}>
                         <ComposedChart data={discountDistWithRevPct} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
@@ -18458,10 +19766,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %' || name === 'Repeat Customer %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
                           <Legend {...chartLegendProps({ fontSize: 11 })} />
                           <Bar yAxisId="orders" dataKey="totalOrders" fill={SD.amberDeep} name="Total Orders" radius={[3,3,0,0]} />
-                          <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
-                          <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke="#E07000" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 3, fill: '#E07000' }} name="Avg Disc %" />
-                          <Line yAxisId="pct" type="monotone" dataKey="revPct" stroke="#2E74CC" strokeWidth={1.5} strokeDasharray="2 2" dot={{ r: 3, fill: '#2E74CC' }} name="Revenue %" />
-                          <Line yAxisId="pct" type="monotone" dataKey="repeatPct" stroke="#7C6F3E" strokeWidth={1.5} strokeDasharray="3 2" dot={{ r: 3, fill: C.acd }} name="Repeat Customer %" />
+                          {ddLine === 'aov' && <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={C.acd} strokeWidth={2} dot={{ r: 3, fill: C.acd }} name="AOV (ex GST)" />}
+                          {ddLine === 'disc' && <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke={C.acd} strokeWidth={2} dot={{ r: 3, fill: C.acd }} name="Avg Disc %" />}
+                          {ddLine === 'rev' && <Line yAxisId="pct" type="monotone" dataKey="revPct" stroke={C.acd} strokeWidth={2} dot={{ r: 3, fill: C.acd }} name="Revenue %" />}
+                          {ddLine === 'repeat' && <Line yAxisId="pct" type="monotone" dataKey="repeatPct" stroke={C.acd} strokeWidth={2} dot={{ r: 3, fill: C.acd }} name="Repeat Customer %" />}
                         </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
@@ -18481,21 +19789,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   <div style={{ padding: '12px 16px 0' }}>
                     {totalAllOrders > 0 ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                        {/* Donut with center label */}
-                        <div style={{ position: 'relative', flexShrink: 0, width: 160, height: 160 }}>
-                          <ResponsiveContainer width={160} height={160}>
-                            <PieChart>
-                              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={2}>
-                                <Cell fill={C.acc} />
-                                <Cell fill={C.acs} />
-                              </Pie>
-                              <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: SD.t1, lineHeight: 1.2 }}>{fmtN(totalAllOrders)}</div>
-                            <div style={{ fontSize: 8, color: SD.t3, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.05em' }}>total</div>
-                          </div>
+                        {/* Total + split bar (B1: no donuts) */}
+                        <div style={{ flexShrink: 0, width: 150 }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: SD.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtN(totalAllOrders)}</div>
+                          <div style={{ fontSize: 10, color: SD.t3, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>orders</div>
+                          <MixBar height={10} label="Discounted vs non-discounted orders" fmt={fmtN} parts={pieData.map((d, i) => ({ key: d.name, label: d.name, value: d.value, color: i ? C.acs : C.acc }))} />
                         </div>
                         {/* Stat rows */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -18552,15 +19850,19 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 <div style={cardStyle}>
                   <div style={cardHead}>
                     <span style={cardTitle}>Category-wise Discount Analysis</span>
-                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>Order volume · % orders discounted · Avg discount depth · Repeat order %</span>
+                    {/* B1: horizontal bars, one series at a time (the toggle doubles as the legend) */}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[['discountedOrderPct', '% orders discounted'], ['avgDiscPct', 'Avg disc %'], ['repeatOrderPct', 'Repeat order %'], ['totalOrders', 'Orders']].map(([v, l]) => (
+                        <button key={v} style={pill(cwMetric === v)} onClick={() => setCwMetric(v)}>{l}</button>
+                      ))}
+                    </div>
                   </div>
                   <div style={cardBody}>
-                    <ResponsiveContainer width="100%" height={370}>
-                      <ComposedChart data={categoryDiscountAnalysis} margin={{ top: 8, right: 48, bottom: 70, left: 8 }}>
-                        <CartesianGrid stroke={SD.borderSoft} vertical={false} />
-                        <XAxis dataKey="category" tick={{ fontSize: 10, fill: SD.t2 }} angle={-35} textAnchor="end" interval={0} />
-                        <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
-                        <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                    <ResponsiveContainer width="100%" height={Math.max(180, categoryDiscountAnalysis.length * 28 + 30)}>
+                      <ComposedChart layout="vertical" data={categoryDiscountAnalysis} margin={{ top: 4, right: 56, bottom: 4, left: 8 }}>
+                        <CartesianGrid stroke={SD.borderSoft} horizontal={false} />
+                        <YAxis type="category" dataKey="category" width={150} tick={{ fontSize: 11, fill: SD.t2 }} interval={0} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => (cwMetric === 'totalOrders' ? fmtBig(v) : `${v}%`)} domain={cwMetric === 'totalOrders' ? [0, 'auto'] : [0, 100]} />
                         <Tooltip
                           contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }}
                           labelStyle={{ color: SD.t1, fontWeight: 700 }}
@@ -18571,11 +19873,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             return [`${v}%`, name]
                           }}
                         />
-                        <Legend {...chartLegendProps({ fontSize: 10 })} />
-                        <Bar yAxisId="orders" dataKey="totalOrders" name="Total Orders" fill={SD.amberDeep} radius={[3,3,0,0]} maxBarSize={36} />
-                        <Line yAxisId="pct" type="monotone" dataKey="discountedOrderPct" name="% Orders Discounted" stroke="#E07000" strokeWidth={2} dot={{ r: 3, fill: '#E07000' }} />
-                        <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" name="Avg Disc %" stroke="#2E74CC" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2E74CC' }} />
-                        <Line yAxisId="pct" type="monotone" dataKey="repeatOrderPct" name="Repeat Order %" stroke="#7C6F3E" strokeWidth={2} strokeDasharray="3 2" dot={{ r: 3, fill: C.acd }} />
+                        <Bar dataKey={cwMetric} name={{ totalOrders: 'Total Orders', discountedOrderPct: '% Orders Discounted', avgDiscPct: 'Avg Disc %', repeatOrderPct: 'Repeat Order %' }[cwMetric]} fill={SD.amberDeep} radius={[0,3,3,0]} maxBarSize={18}>
+                          <LabelList dataKey={cwMetric} position="right" style={{ fontSize: 10, fill: SD.t2 }} formatter={v => (cwMetric === 'totalOrders' ? fmtN(v) : `${v}%`)} />
+                        </Bar>
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -18626,15 +19926,49 @@ function AppInner() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const [profileError, setProfileError] = useState(false)
+
   useEffect(() => {
     if (!session || session === 'recovery') return
+    setProfileError(false)
+    // Confirmed fix 2026-10-23: Supabase outages/503s on user_profiles previously left the app
+    // stuck on LoadingScreen forever (the .then() callback just never fires), with no visible
+    // error — indistinguishable from a blank/broken page. A 15s timeout now degrades to an error
+    // screen with a retry button instead of hanging silently; a slow-but-successful real response
+    // still wins the race normally (clearTimeout below) and nothing changes for the happy path.
+    let settled = false
+    const timeout = setTimeout(() => { if (!settled) setProfileError(true) }, 15000)
     supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
       .then(({ data, error }) => {
-        if (error) console.error('profile fetch error:', error)
+        settled = true
+        clearTimeout(timeout)
+        if (error) { console.error('profile fetch error:', error); setProfileError(true); return }
         setProfile(data || { is_admin: false })
       })
+      .catch(err => { settled = true; clearTimeout(timeout); console.error('profile fetch error:', err); setProfileError(true) })
     supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
       .then(({ data }) => setAllowedTabs(data ? data.map(r => r.tab) : []))
+      .catch(() => setAllowedTabs([]))
+  }, [session])
+
+  // An admin's change to this person's role or tabs applies when the tab is shown again (and every
+  // 5 minutes), without a reload. State only changes when something actually changed.
+  useEffect(() => {
+    if (!session || session === 'recovery') return
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
+        .then(({ data }) => { if (data) setProfile(p => (p && JSON.stringify(p) === JSON.stringify(data) ? p : data)) }, () => {})
+      supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
+        .then(({ data }) => {
+          if (!data) return
+          const next = data.map(r => r.tab)
+          setAllowedTabs(t => (t && [...t].sort().join() === [...next].sort().join() ? t : next))
+        }, () => {})
+    }
+    document.addEventListener('visibilitychange', refresh)
+    const id = setInterval(refresh, 5 * 60 * 1000)
+    return () => { document.removeEventListener('visibilitychange', refresh); clearInterval(id) }
   }, [session])
 
   if (session === undefined) return (
@@ -18653,33 +19987,325 @@ function AppInner() {
 
   if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
 
+  // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
+  // hanging on LoadingScreen forever with no indication anything is wrong.
+  if (profileError) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'var(--app-h)', gap: 16, fontFamily: 'inherit' }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>Couldn't load your profile</div>
+      <div style={{ fontSize: 13, color: '#777', maxWidth: 360, textAlign: 'center' }}>This usually means our data service is temporarily unavailable. Please try again in a moment.</div>
+      <button onClick={() => { setProfile(null); setProfileError(false); setSession(s => ({ ...s })) }}
+        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+        Retry
+      </button>
+    </div>
+  )
+
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (
     <LoadingScreen />
   )
 
   const isAdmin = profile.is_admin === true
-  const effectiveTabs = isAdmin ? null : allowedTabs // null means all tabs visible
+  // Frido Pulse is never auto-granted to admins — only these two emails have it by default.
+  // Anyone else (admin or member) must be explicitly granted 'ask' in their allowed_tabs.
+  const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
+  const userEmail = session?.user?.email?.toLowerCase() || '';
+  const hasPulse = PULSE_WHITELIST.includes(userEmail) || (allowedTabs || []).includes('ask');
+  // Admins get null (all tabs) but pulse is added/removed based on whitelist
+  const effectiveTabs = isAdmin
+    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','sales:financial-mis','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
+    : allowedTabs
 
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
 
-// Financial MIS — a formal, report-style rollup of the per-channel PnL figures (Gross Rev →
-// Returns → Net Rev → COGS → GM → SnD → CM1 → Marketing Spend → CM2), one row per line item,
-// one column per channel plus a Total — distinct from the existing P&L tab's per-channel,
-// interactive Financial View (Category/Product drill-down, one channel at a time). Scaffolded as
-// a placeholder (2026-10-20) — the real table is pending two open decisions: whether thin-cost-
-// data channels (Blinkit/Instamart/Zepto/CRED/Firstcry) get their own columns or roll into a
-// single "Others" column, and whether this page needs a Category/Product drill-down under each
-// channel or stays at the whole-channel summary grain. See memory for full design discussion.
-function FinancialMISPage() {
+// Financial MIS — finance-facing report at the Category_Finance/SubCategory_Finance grain and the
+// fact table's own Channel_Group (D2C/EBO/Marketplace/Non - EBO), with Return%/Net Revenue derived
+// from a rolling mature-window rate (not summed actuals) for any range touching the last 14 days —
+// see api/financial-mis.js header for the full fallback-chain rationale. Fetched ONLY on demand,
+// when this page mounts — never as part of the Sales tab's own load.
+// Matches AllTab's own palette (Sales -> Overall) rather than an ad-hoc set: C.series leads with
+// the theme accent (green), same as every other chart on that page.
+const MIS_CHGROUP_COLORS = { 'D2C': C.acc, 'Marketplace': C.series[2], 'EBO': C.series[3], 'Non - EBO': C.t3 }
+
+function FinancialMISPage({ rangeStart, rangeEnd, onBack }) {
+  const API = import.meta.env.VITE_API_URL || ''
+  // Uses the same top-bar date range as the rest of Sales — no separate date picker here.
+  const start = rangeStart, end = rangeEnd
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  // Channel-group filter pills removed for now (2026-10-21) — kept pinned to 'All' so the
+  // existing filter plumbing below stays intact for when they're reintroduced.
+  const chgroupFilter = 'All'
+  const [topProductsSort, setTopProductsSort] = useState('gross')
+
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      setLoading(true); setError(null)
+      try {
+        const r = await fetch(`${API}/api/financial-mis`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start, end }),
+        })
+        const json = await r.json()
+        if (cancelled) return
+        if (json.error) { setError(json.error); setData(null) }
+        else setData(json)
+      } catch (e) {
+        if (!cancelled) setError(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [start, end, API])
+
+  const rows = data?.rows || []
+  const filteredRows = chgroupFilter === 'All' ? rows : rows.filter(r => r.channelGroup === chgroupFilter)
+
+  // Uses the API's own totals (includes the reporting-lag top-up for Amazon Vendor
+  // Central/Flipkart/Myntra) rather than summing rows client-side, since rows deliberately
+  // excludes that estimate — see api/financial-mis.js's chgroupTopUp comment.
+  const totals = data?.totals || { grossIncGst: 0, grossExcGst: 0, netRevenueExcGst: 0, units: 0, orders: 0, returnPct: 0, hasEstimate: false }
+
+  // Sub-category (Finance) rollup, not per-SKU — per explicit instruction (2026-10-21).
+  const topProducts = useMemo(() => {
+    const all = data?.topProducts || []
+    const src = chgroupFilter === 'All' ? all : all.filter(r => r.channelGroup === chgroupFilter)
+    const sorted = [...src].sort((a, b) => {
+      if (topProductsSort === 'return') return b.returnPct - a.returnPct
+      if (topProductsSort === 'net') return b.netRevenueExcGst - a.netRevenueExcGst
+      return b.grossIncGst - a.grossIncGst
+    })
+    return sorted.slice(0, 20)
+  }, [data, chgroupFilter, topProductsSort])
+
+  const trendData = (data?.dailyTrend || []).map(d => ({ ...d, returnPctNum: d.returnPct * 100 }))
+
+  // Single CSV covering all three sections (Channel Group, Top Products, Geography), stacked
+  // with a blank row + section header between each — exportCSV() itself only handles one flat
+  // table shape at a time (it reads columns from rows[0]), so this builds the multi-section CSV
+  // text directly rather than forcing all three into one shared column set.
+  const handleExport = () => {
+    if (!data) return
+    const esc = v => JSON.stringify(v ?? '')
+    const section = (title, cols, rowsArr) => [
+      title, cols.join(','),
+      ...rowsArr.map(r => cols.map(c => esc(r[c])).join(',')),
+      '',
+    ]
+    const lines = [
+      `Financial MIS — ${start} to ${end}`,
+      '',
+      ...section('Channel Group Wise', ['Channel Group', 'Orders', 'Units', 'Gross Rev (Inc GST)', 'Gross Rev (Exc GST)', 'Net Revenue (Exc GST)', 'Return %'],
+        data.channelGroups.map(g => ({
+          'Channel Group': g.channelGroup, 'Orders': g.orders, 'Units': g.units,
+          'Gross Rev (Inc GST)': g.grossIncGst.toFixed(2), 'Gross Rev (Exc GST)': g.grossExcGst.toFixed(2),
+          'Net Revenue (Exc GST)': g.netRevenueExcGst.toFixed(2), 'Return %': (g.returnPct * 100).toFixed(1),
+        }))),
+      ...section('Top Products (Sub-category wise)', ['Category (Finance)', 'Sub-category (Finance)', 'Units', 'Gross Rev (Inc GST)', 'Net Revenue (Exc GST)', 'Return %'],
+        (data.topProducts || []).map(r => ({
+          'Category (Finance)': r.category, 'Sub-category (Finance)': r.subCategory, 'Units': r.units,
+          'Gross Rev (Inc GST)': r.grossIncGst.toFixed(2), 'Net Revenue (Exc GST)': r.netRevenueExcGst.toFixed(2),
+          'Return %': (r.returnPct * 100).toFixed(1),
+        }))),
+      ...section('Geography — State Detail', ['State', 'Orders', 'Units', 'Gross Rev (Inc GST)', 'Gross Rev (Exc GST)'],
+        (data.geo?.state || []).map(s => ({
+          'State': s.state, 'Orders': s.orders, 'Units': s.units,
+          'Gross Rev (Inc GST)': parseFloat(s.gross_inc_gst).toFixed(2), 'Gross Rev (Exc GST)': parseFloat(s.gross_exc_gst).toFixed(2),
+        }))),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `financial_mis_${start}_${end}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 10, textAlign: 'center' }}>
-      <div style={{ fontSize: 40 }}>🧾</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Financial MIS</div>
-      <div style={{ fontSize: 13, color: C.t3, maxWidth: 420 }}>
-        A formal, report-style rollup of Gross Revenue → Returns → Net Revenue → COGS → Gross Margin → SnD → CM1 → Marketing Spend → CM2, across every channel — coming soon.
+    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          {onBack && (
+            <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.card, border: `1.5px solid ${C.acc}`, color: C.acc, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginBottom: 10 }}>
+              ← Back to Sales
+            </button>
+          )}
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Financial MIS</div>
+          <div style={{ fontSize: 12, color: C.t3 }}>Finance-grain revenue &amp; return view — by channel group, product, and geography</div>
+        </div>
+        {data && (
+          <button onClick={handleExport}
+            style={{ fontSize: 11.5, fontWeight: 400, padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            Export CSV
+          </button>
+        )}
       </div>
+
+      {error && <div style={{ color: '#ef4444', fontSize: 13, padding: 12, background: 'rgba(239,68,68,0.08)', borderRadius: 8 }}>Error: {error}</div>}
+      {loading && <div style={{ color: C.t3, fontSize: 13 }}>Loading Financial MIS…</div>}
+
+      {data && !loading && (
+        <>
+          {data.meta?.needsMatureRate && (
+            <div style={{ fontSize: 11.5, color: C.t3, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
+              Selected range touches the last 14 days — Return% / Net Revenue for recent, not-yet-matured orders uses each SKU's rolling {data.meta.rollingStart} → {data.meta.rollingEnd} return rate (falling back to Sub-category → Category average when that SKU's own rate isn't reliable yet), not the raw live rate.
+            </div>
+          )}
+
+          {/* KPI cards — same sales-kpi-grid used across the rest of the dashboard */}
+          {totals.hasEstimate && (
+            <div style={{ fontSize: 11, color: C.t3 }}>
+              ⏳ Includes a 7-day rolling-average top-up for Amazon Vendor Central / Flipkart / Myntra days that haven't posted yet.
+            </div>
+          )}
+          <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+            <KPICard label="Gross Revenue (Inc GST)" value={fmt(totals.grossIncGst)} />
+            <KPICard label="Gross Revenue (Exc GST)" value={fmt(totals.grossExcGst)} />
+            <KPICard label="Net Revenue (Exc GST)" value={fmt(totals.netRevenueExcGst)} />
+            <KPICard label="Overall Return%" value={`${(totals.returnPct * 100).toFixed(1)}%`} accent={totals.returnPct > 0.2 ? '#7A1A1A' : undefined} />
+            <KPICard label="Orders" value={fmtN(totals.orders)} />
+            <KPICard label="Units" value={fmtN(totals.units)} />
+          </div>
+
+          {/* Trend chart — same visual language as AllTab's Revenue & Returns Trend / Returns & Pickup % charts */}
+          <Card title="Revenue Trend">
+            {trendData.some(d => d.hasEstimate) && (
+              <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>
+                ⏳ Some recent days include channels (Amazon Vendor Central, Flipkart, Myntra) whose latest data hasn't posted yet — those gaps are filled with that channel's own 7-day rolling average.
+              </div>
+            )}
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={trendData} margin={{ top: 10, right: 40, left: 0, bottom: 10 }}>
+                <defs>
+                  <linearGradient id="misGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.2} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} strokeOpacity={0.5} />
+                <XAxis dataKey="date" tick={{ fill: C.t3, fontSize: 10 }} tickFormatter={d => d?.slice(5)} />
+                <YAxis yAxisId="rev" tick={{ fill: C.t1, fontSize: 10 }} tickFormatter={v => fmtBig(v)} domain={[0, 'dataMax']} />
+                <YAxis yAxisId="pct" orientation="right" tick={{ fill: C.t3, fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}%`} domain={[0, dataMax => Math.ceil((dataMax + 1) / 5) * 5]} ticks={(() => { const maxPct = Math.max(5, ...trendData.map(d => d.returnPctNum || 0)); const top = Math.ceil((maxPct + 1) / 5) * 5; const out = []; for (let v = 0; v <= top; v += 5) out.push(v); return out })()} />
+                <Tooltip formatter={(v, name) => name === 'Return%' ? [`${v.toFixed(1)}%`, name] : [fmtBig(v), name]} />
+                <Legend {...chartLegendProps({ fontSize: 11 })} />
+                <Area yAxisId="rev" type="monotone" dataKey="grossIncGst" name="Gross Revenue" stroke={C.acc} fill="url(#misGrossGrad)" strokeWidth={2} dot={false} />
+                <Line yAxisId="rev" type="monotone" dataKey="netRevenueExcGst" name="Net Revenue" stroke={C.acd} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Line yAxisId="pct" type="monotone" dataKey="returnPctNum" name="Return%" stroke={C.red.tx} strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+
+
+          {/* Channel Group table */}
+          <Card title="Channel Group Wise">
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ color: C.t3, textAlign: 'right' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Channel Group</th>
+                    <th style={{ padding: '6px 10px' }}>Orders</th>
+                    <th style={{ padding: '6px 10px' }}>Units</th>
+                    <th style={{ padding: '6px 10px' }}>Gross Rev (Inc GST)</th>
+                    <th style={{ padding: '6px 10px' }}>Gross Rev (Exc GST)</th>
+                    <th style={{ padding: '6px 10px' }}>Net Revenue (Exc GST)</th>
+                    <th style={{ padding: '6px 10px' }}>Return%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.channelGroups || []).map(g => (
+                    <tr key={g.channelGroup} style={{ borderTop: `1px solid ${C.border}`, textAlign: 'right' }}>
+                      <td style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 600, color: C.t1 }}>
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: MIS_CHGROUP_COLORS[g.channelGroup] || C.acc, marginRight: 6 }} />
+                        {g.channelGroup}
+                        {g.estimatedGrossIncGst > 0 && <span title="Includes a 7-day rolling-average top-up for channels whose latest data hasn't posted yet" style={{ marginLeft: 6, color: C.t3, fontWeight: 400, fontSize: 11 }}>⏳</span>}
+                      </td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(g.orders)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(g.units)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(g.grossIncGst)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(g.grossExcGst)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{fmt(g.netRevenueExcGst)}</td>
+                      <td style={{ padding: '6px 10px', color: g.returnPct > 0.2 ? C.red.tx : C.t2 }}>{(g.returnPct * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Top Products */}
+          <Card title="Top Products" action={
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['gross', 'Gross Rev'], ['net', 'Net Rev'], ['return', 'Return%']].map(([k, label]) => (
+                <button key={k} onClick={() => setTopProductsSort(k)} className="tool-btn"
+                  style={{ fontSize: 11, padding: '4px 10px', background: topProductsSort === k ? C.acc : C.bg2, color: topProductsSort === k ? '#fff' : C.t2 }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          }>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ color: C.t3, textAlign: 'right' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Category (Finance)</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Sub-category (Finance)</th>
+                    <th style={{ padding: '6px 10px' }}>Units</th>
+                    <th style={{ padding: '6px 10px' }}>Gross Rev (Inc GST)</th>
+                    <th style={{ padding: '6px 10px' }}>Net Revenue (Exc GST)</th>
+                    <th style={{ padding: '6px 10px' }}>Return%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProducts.map((r, i) => (
+                    <tr key={r.channelGroup + r.category + r.subCategory + i} style={{ borderTop: `1px solid ${C.border}`, textAlign: 'right' }}>
+                      <td style={{ textAlign: 'left', padding: '6px 10px', color: C.t3 }}>{r.category}</td>
+                      <td style={{ textAlign: 'left', padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{r.subCategory}</td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(r.units)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(r.grossIncGst)}</td>
+                      <td style={{ padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{fmt(r.netRevenueExcGst)}</td>
+                      <td style={{ padding: '6px 10px', color: r.returnPct > 0.2 ? C.red.tx : C.t2 }}>{(r.returnPct * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  {topProducts.length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: C.t3 }}>No data for this selection.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Geography — same GeoToggleDonutCard + ShopifyGeoRichTable components AllTab uses, no custom bar chart */}
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <GeoToggleDonutCard
+              regionRows={(data.geo?.regionTier || []).reduce((acc, r) => {
+                const ex = acc.find(x => x.region === r.Region)
+                const rev = parseFloat(r.gross_inc_gst) || 0
+                if (ex) { ex.rev += rev; ex.orders += r.orders || 0 } else acc.push({ region: r.Region, rev, orders: r.orders || 0 })
+                return acc
+              }, [])}
+              tierRows={(data.geo?.regionTier || []).reduce((acc, r) => {
+                const tier = r.Tier_Label || r.City_Tier
+                const ex = acc.find(x => x.tier === tier)
+                const rev = parseFloat(r.gross_inc_gst) || 0
+                if (ex) { ex.rev += rev; ex.orders += r.orders || 0 } else acc.push({ tier, rev, orders: r.orders || 0 })
+                return acc
+              }, [])}
+            />
+            <ShopifyGeoRichTable
+              title="Top States"
+              firstKey="state" firstLabel="State"
+              formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v}
+              showAOV={false} showRTO={false} showASP={true}
+              rows={(() => {
+                const list = data.geo?.state || []
+                const total = list.reduce((s, r) => s + (parseFloat(r.gross_inc_gst) || 0), 0)
+                return list.map(r => {
+                  const rev = parseFloat(r.gross_inc_gst) || 0
+                  return { state: r.state, rev, orders: r.orders || 0, asp: r.units > 0 ? rev / r.units : 0, sharePct: total > 0 ? rev / total * 100 : 0, mom: null }
+                })
+              })()}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -18752,10 +20378,51 @@ function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => a
 function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
+// The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect
+// has always applied (productAge → subCategory, D2C sub-channels sharing the ShopifyIndia request, …).
+// Shared with the mobile Overview's previous-period loader so both send the same request shape.
+function buildBqExtra(f, subCatFirstOrderMap) {
+  const { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = f
+  const extra = {}
+  if (category?.length) extra.category = category.join(',')
+
+  // productAge filter: compute subcats from firstOrderMap and inject as subCategory filter
+  let effectiveSubCat = subCategory || []
+  if (productAge && Object.keys(subCatFirstOrderMap).length) {
+    const today = new Date()
+    const ageSubCats = Object.entries(subCatFirstOrderMap)
+      .filter(([, d]) => {
+        const days = Math.floor((today - new Date(d)) / 86400000)
+        return productAge === 'new' ? days <= 90 : days > 90
+      })
+      .map(([sc]) => sc)
+    effectiveSubCat = ageSubCats
+  }
+  if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
+
+  if (sku?.length) extra.sku = sku.join(',')
+  // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
+  // so all three hit the same server-side cache key — switching sub-tabs is instant after the
+  // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
+  const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
+  const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
+  if (bqSubChannel) extra.subChannel = bqSubChannel
+  if (voucher) extra.voucher = voucher
+  if (region?.length) extra.region = region.join(',')
+  if (tier?.length) extra.tier = tier.join(',')
+  if (state?.length) extra.state = state.join(',')
+  if (city) extra.city = city
+  if (country) extra.country = country
+  if (paymentType) extra.paymentType = paymentType
+  if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
+  return extra
+}
+
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   // Colour theme. index.html already applied the stored value to <html> before
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
+  const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -18788,6 +20455,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
+  // Opens Inventory Health with a one-shot preset (existing Status filter, or scroll to a section) -
+  // used by the mobile Overview's inventory alert rows.
+  const [invPreset, setInvPreset] = useState(null)
+  const invPresetSeq = useRef(0)
+  const openInventoryHealth = preset => { invPresetSeq.current += 1; setInvPreset({ ...preset, nonce: invPresetSeq.current }); goTo('inventory', 'health') }
   const goTo = (page, sub, sub2) => {
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
@@ -18865,6 +20537,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const [customerTab, setCustomerTab] = useState('overview')
+  const [custRefresh, setCustRefresh] = useState(0) // phone header Refresh (Customer Intelligence)
   // Customer Support date range — shared by the top-bar picker and the page. Defaults to the
   // last day (yesterday): today's tickets and calls are still arriving.
   const [csRange, setCsRange] = useState(() => {
@@ -18875,6 +20548,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [csRefresh, setCsRefresh] = useState(0)
   // Export list + download function registered by the Customer Support page for the top bar's Export menu.
   const [csExport, setCsExport] = useState(null)
+  // "⋯" actions of the Sales page (exports, …) for the phone header; set by SalesPage.
+  const [salesMenu, setSalesMenu] = useState([])
 
   // Redirect to default page if URL is '/' or unknown
   const getDefaultPage = () => {
@@ -18885,8 +20560,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   useEffect(() => {
     if (location.pathname === '/') {
-      const def = getDefaultPage()
-      setPage(def)
+      navigate('/overview', { replace: true })
       return
     }
     const isPageAllowed = page === 'profile' ? true :
@@ -18902,6 +20576,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
       (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
+      // Financial MIS has no sidebar nav entry of its own — it's reached only via the link in
+      // Sales -> Overall, and its real permission key is nested under Sales as
+      // 'sales:financial-mis' (not a bare 'financial-mis' key), so the generic
+      // allowedTabs.includes(page) check below would always fail for it.
+      page === 'financial-mis' ? (!allowedTabs || allowedTabs.includes('sales:financial-mis')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -18978,7 +20657,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
-          const r = await fetch(`${API}/pnl-data.json`)
+          // Relative path, NOT ${API}-prefixed — this is a static file in public/, served by the
+          // frontend's own origin (Vite/Vercel CDN), never by the API server. Prefixing it with
+          // API (VITE_API_URL) sent this request to the wrong host in local dev (API server runs
+          // on a different port than the static file host), 404-ing every page load — harmless in
+          // production only because Vercel happens to serve both from the same domain there.
+          const r = await fetch('/pnl-data.json')
           if (r.ok) pnlCacheRef.current = await r.json()
         }
         const c = pnlCacheRef.current
@@ -18994,7 +20678,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // Last Month static cache
       try {
         if (!pnlCacheRef.lastMonth) {
-          const r = await fetch(`${API}/pnl-data-lastmonth.json`)
+          // Same fix as pnl-data.json above — relative path, not API-prefixed.
+          const r = await fetch('/pnl-data-lastmonth.json')
           if (r.ok) pnlCacheRef.lastMonth = await r.json()
         }
         const lm = pnlCacheRef.lastMonth
@@ -19058,39 +20743,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
     const debounceMs = dateChanged ? 600 : 0
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = filtersRef.current
-      const extra = {}
-      if (category?.length) extra.category = category.join(',')
-
-      // productAge filter: compute subcats from firstOrderMap and inject as subCategory filter
-      let effectiveSubCat = subCategory || []
-      if (productAge && Object.keys(subCatFirstOrderMap).length) {
-        const today = new Date()
-        const ageSubCats = Object.entries(subCatFirstOrderMap)
-          .filter(([, d]) => {
-            const days = Math.floor((today - new Date(d)) / 86400000)
-            return productAge === 'new' ? days <= 90 : days > 90
-          })
-          .map(([sc]) => sc)
-        effectiveSubCat = ageSubCats
-      }
-      if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
-
-      if (sku?.length) extra.sku = sku.join(',')
-      // D2C India sub-tabs (MyFrido/Mobility) share the same BQ request as Overall (ShopifyIndia)
-      // so all three hit the same server-side cache key — switching sub-tabs is instant after the
-      // first load. KPIs, catMap, stateMap etc. are filtered client-side from the full D2C response.
-      const D2C_CLIENT_SIDE_SUBCHS = new Set(['MyFrido', 'Mobility'])
-      const bqSubChannel = D2C_CLIENT_SIDE_SUBCHS.has(subChannel) ? 'ShopifyIndia' : subChannel
-      if (bqSubChannel) extra.subChannel = bqSubChannel
-      if (voucher) extra.voucher = voucher
-      if (region?.length) extra.region = region.join(',')
-      if (tier?.length) extra.tier = tier.join(',')
-      if (state?.length) extra.state = state.join(',')
-      if (city) extra.city = city
-      if (country) extra.country = country
-      if (paymentType) extra.paymentType = paymentType
-      if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
+      const { start, end } = filtersRef.current
+      const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
       // Gate the ~290-query /api/bq fetch to only the tabs that actually consume its result —
       // confirmed 2026-10-19 by checking every `data={data}`/`data &&` call site in this file:
       // Overview, Sales, PnL, Ads, and Intelligence (IntelPage destructures data.orders directly)
@@ -19158,6 +20812,38 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData, page])
 
+  // ── Previous-period loaders for the mobile Overview's ▲/▼ (overview/usePrevPeriod.js) ──
+  // Each one repeats a request the page already makes, for another date range, and returns the
+  // response without touching any page state. Same endpoints, same bodies, same static-cache
+  // shortcuts, same server-side byte limits - only the dates differ.
+  const loadSalesPeriod = useCallback(async (start, end) => {
+    const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
+    // fetchData's static-cache rule: unfiltered requests whose dates match a pre-computed window
+    // are served from public/pnl-data*.json instead of BigQuery.
+    const hasFilters = Object.keys(extra).some(k => k !== 'subChannel') || (extra.subChannel && extra.subChannel !== 'ShopifyIndia')
+    if (!hasFilters) {
+      for (const c of [pnlCacheRef.current, pnlCacheRef.lastMonth]) {
+        if (c && c.mtdStart === start && c.mtdEnd === end) return c
+      }
+    }
+    const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    const json = await res.json()
+    // Same response handling as the page's own `data`.
+    return json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+  }, [API, subCatFirstOrderMap])
+  const loadLogisticsPeriod = useCallback(async (start, end) => {
+    const res = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    return res.json()
+  }, [API])
+  const loadCustomerPeriod = useCallback(async (start, end) => {
+    const res = await fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    if (!res.ok) throw new Error(`API error ${res.status}`)
+    return res.json()
+  }, [API])
+  const prevLoaders = useMemo(() => ({ sales: loadSalesPeriod, logistics: loadLogisticsPeriod, customer: loadCustomerPeriod }), [loadSalesPeriod, loadLogisticsPeriod, loadCustomerPeriod])
+
   const adsLoadGenRef = useRef(0)
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
   useEffect(() => {
@@ -19184,7 +20870,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           setAdsCachedChMap(null)
           return
         }
-        const res = await fetch(`${API}/ads-data.json`)
+        // Same fix as pnl-data.json/pnl-data-lastmonth.json — relative path, not API-prefixed.
+        // This is a static file in public/, served by the frontend's own origin, never the API
+        // server; prefixing it with API (VITE_API_URL) 404'd every page load in local dev.
+        const res = await fetch('/ads-data.json')
         if (!res.ok) return
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
@@ -19215,6 +20904,24 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
       roas: t.spend > 0 ? t.revenue / t.spend : 0,
     })).sort((a, b) => b.spend - a.spend)
+    // Previous period for the ▲/▼ badges: the same number of days immediately before the range
+    // (same rule as api/bq.js), summed from the cache's own daily rows. The generator's prevTotals
+    // is the 90 days before the whole cache window, which made spend look ▼60–80% on every tab.
+    // If that window isn't fully inside the cache, there's no real previous value: no badge.
+    const prevWindow = (() => {
+      const sD = new Date(start), eD = new Date(end)
+      const n = Math.round((eD - sD) / 86400000) + 1
+      const pE = new Date(sD); pE.setDate(pE.getDate() - 1)
+      const pS = new Date(pE); pS.setDate(pS.getDate() - n + 1)
+      return { ps: pS.toISOString().slice(0, 10), pe: pE.toISOString().slice(0, 10) }
+    })()
+    const slicedPrevTotals = {}
+    if (prevWindow.ps >= json.rollingStart) {
+      ;(ads.daily || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe).forEach(x => {
+        const t = slicedPrevTotals[x.platform] || (slicedPrevTotals[x.platform] = { spend: 0, revenue: 0, impressions: 0, clicks: 0 })
+        t.spend += x.spend || 0; t.revenue += x.revenue || 0; t.impressions += x.impressions || 0; t.clicks += x.clicks || 0
+      })
+    }
     const slicedChannelDailyExcRev = {}
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
@@ -19238,10 +20945,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       const salChans = platformFilter ? (SAL_CHANS[platformFilter] || [platformFilter]) : null
       // Aggregate spend by category and by subCategory (product) from ads daily
       const adCatMap = {}; const adProdMap = {}; let unmatchedProdSpend = 0
+      // D2 (Suraj 27 Oct): spend with no product ("all products" campaigns, categories not in the item
+      // master) is one "Unattributed" line, not part of any category's spend / ROAS (was in "Others").
       slicedAdsDBC.filter(x => !adPlats || adPlats.includes(x.platform)).forEach(x => {
-        const cat = (x.category || 'Others').trim()
-        adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
         if (x.subCategory) {
+          const cat = (x.category || 'Others').trim()
+          adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
           const prod = x.subCategory.trim()
           adProdMap[prod] = (adProdMap[prod] || 0) + (x.spend || 0)
         } else {
@@ -19271,6 +20980,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (oth) oth.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
+      if (unmatchedProdSpend > 0) categoryRowsAll.push({ category: 'Unattributed', spend: unmatchedProdSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       // Sub-category (product) rows — driven from ad spend
       const usedKeys = new Set()
       const spendMatchedRows = Object.keys(adProdMap).map(prod => {
@@ -19305,6 +21015,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (Math.abs(res) < 1) return rows
         const oth = rows.find(x => x.category === 'Others' && (isCat || x.subCategory === 'Unspecified'))
         if (oth) { oth.revenue += res; oth.netRevenue += res }
+        // A residual under ₹100 is per-row rounding (channel totals vs category rows are rounded
+        // separately): no new 'Others' row for it (A8: Zepto 'Others' ₹2, Instamart ₹4).
+        else if (Math.abs(res) < 100) return rows
         else rows.push(isCat
           ? { category: 'Others', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 }
           : { category: 'Others', subCategory: 'Unspecified', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 })
@@ -19353,8 +21066,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
+      prevTotals: slicedPrevTotals,
+      // The cache's byAdType is a 90-day total with no date split; the Amazon SP/SB/SD split comes from
+      // the selected range's own payload instead (data.ads.byAdType, merged where AdsTab is rendered).
+      byAdType: [],
       daily: slicedDaily,
       adsDailyByCategory: slicedAdsDBC,
+      // previous equal-length window's product rows (Ads watchlist 'ROAS down'); null when not in the cache
+      // previous window's platform-day rows (mobile chart's dashed previous-period line)
+      prevDaily: prevWindow.ps >= json.rollingStart ? (ads.daily || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
+      prevAdsDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.adsDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
+      prevSalesDailyByCategory: prevWindow.ps >= json.rollingStart ? (ads.salesDailyByCategory || []).filter(x => x.date >= prevWindow.ps && x.date <= prevWindow.pe) : null,
       salesDailyByCategory: slicedSalDBC,
       channelDailyExcRev: slicedChannelDailyExcRev,
       allSpendDetail,
@@ -19419,6 +21141,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
+  // D5 (Suraj 27 Oct): the Ads CRED tab follows the global dates. The live data.cred is used only when
+  // its days fall inside the selected range; otherwise (a previous range's payload while a fetch is
+  // pending, or after one failed) the cache sliced to the selected dates wins.
+  const credDays = data?.cred?.daily || []
+  const credIsCurrent = credDays.length > 0 && credDays.every(d => d.date >= filters.start && d.date <= filters.end)
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
@@ -19440,8 +21167,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        <Topnav logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'customer-support' && page !== 'flash' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom'} />
+        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
+        {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -19449,7 +21177,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -19463,13 +21191,13 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} />
+              <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} onOpenInventory={openInventoryHealth} />
             </div>
           )}
-          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
-          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
+          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadSalesPeriod} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
-            <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
+            <AdsTab data={adsCache ? { ...(data || {}), cred: (credIsCurrent ? data.cred : null) ?? (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
           {page === 'intelligence' && (
             <div className="page-scroll">
@@ -19483,7 +21211,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
+              <LogisticsCostPage onMobileCtrl={setLogCostCtrl} externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
                 onOpenAllocation={() => goTo('courier-allocation')} />
             </div>
           )}
@@ -19496,21 +21224,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} preset={invPreset} />
             </div>
           )}
           {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
+              <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} refreshTick={custRefresh} />
             </div>
           )}
           {page === 'customer-support' && (!allowedTabs || allowedTabs.includes('customer:support')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} />
+              <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} onNavigate={dest => (dest === 'returns' ? goTo('sales', 'shopify', 'return_analysis') : setPage('logistics'))} />
             </div>
           )}
-          {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('financial-mis')) && (
-            <FinancialMISPage />
+          {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (
+            <FinancialMISPage rangeStart={filters.start} rangeEnd={filters.end} onBack={() => goTo('sales', 'all')} />
           )}
           {page === 'documents' && (
             <div className="page-scroll">
@@ -19537,19 +21265,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <PackagingBomPage onBack={() => goTo('documents')} />
             </div>
           )}
-          {page === 'flash' && (
-            <div className="page-scroll" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <FlashPage userEmail={session?.user?.email || ''} />
-            </div>
-          )}
           {page === 'profile' && (
             <div className="page-scroll">
-              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} />
+              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} />
             </div>
+          )}
+          {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
+            <AskFridoPage userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} session={session} />
           )}
         </div>
       </div>
-      <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} profile={profile} />
+      <BottomNav page={page} setPage={setPage} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} userId={session?.user?.id} theme={theme} setTheme={setTheme} onSignOut={onSignOut} />
     </div>
   )
 }

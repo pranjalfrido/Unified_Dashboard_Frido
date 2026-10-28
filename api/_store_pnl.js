@@ -83,16 +83,28 @@ function toYearKey(year) {
 // selling floors (e.g. FRIDO_0004 "Exhibition", FRIDO_0007 "Retail Inside Sales" — confirmed via
 // live BQ cross-check 2026-08-20: both exist with real order volume but aren't stores to report
 // EBITDA for). Both must be filtered out here, not just a plain null check.
+// Store P&L rows for POS ids that aren't real stores are no longer dropped (fix/pnl-data item 4):
+// unmapped ids (no unifiedstorename, e.g. new stores not yet added to store_all_stores) go to one
+// "Unmapped / Other" row and "Ignore" ids to "Ignored (UTSAV)" (FRIDO_0004 Exhibition — the only
+// ignored id with sales in Sep/Oct 2026), so the store table's Total Gross equals the Financial View.
+export const UNMAPPED_STORE = 'Unmapped / Other'
+export const IGNORED_STORE = 'Ignored (UTSAV)'
 export async function getStoreIdMap() {
   const rows = await fetchTable('store_all_stores')
   const map = {}
+  const ignored = new Set()
   rows.forEach(r => {
     const unified = (r.unifiedstorename || '').trim()
-    if (!r.store_id || !unified || unified.toLowerCase() === 'ignore') return
+    if (!r.store_id) return
+    if (unified.toLowerCase() === 'ignore') { ignored.add(r.store_id); return }
+    if (!unified) return
     map[r.store_id] = unified
   })
+  Object.defineProperty(map, 'ignoredIds', { value: ignored, enumerable: false })
   return map
 }
+// Store name for a POS store_id, or the Unmapped / Ignored bucket.
+export const storeNameFor = (storeIdMap, storeId) => storeIdMap[storeId] || (storeIdMap.ignoredIds?.has(storeId) ? IGNORED_STORE : UNMAPPED_STORE)
 
 // Returns { [unifiedstorename]: { [monthKey]: { rent, employeeCost, cam, utilities, software, volumetricRent } } }
 // rent/utilities are keyed by YEAR, not month, in their source sheets — but rent_amt_rs (and the
@@ -192,12 +204,17 @@ export async function getStoreCosts() {
 //
 // netRevForMonth: this store-month's own Net Revenue (Exc GST, after returns) — required only for
 // the rent % fallback; every other line ignores it.
+// A cost line with no row in its sheet for this store/month is null ("Not available"), not 0 —
+// fix/pnl-data item 4: Employee/CAM/Software/Volumetric had no Sep/Oct 2026 rows and showed ₹0.
+// rentIsPctOfNet: rent came from the percent_of_revenue fallback (already scales with the days
+// selected, so the page must not pro-rate it again).
 export function getCostForMonth(storeCosts, unifiedStoreName, monthKey, netRevForMonth = 0) {
   const s = storeCosts[unifiedStoreName]
-  if (!s) return { rent: 0, utilities: 0, employeeCost: 0, cam: 0, software: 0, volumetricRent: 0 }
+  if (!s) return { rent: null, utilities: null, employeeCost: null, cam: null, software: null, volumetricRent: null, rentIsPctOfNet: false }
   const year = monthKey ? monthKey.slice(0, 4) : null
   const m = s.monthly?.[monthKey] || {}
 
+  let rentIsPctOfNet = false
   const rent = (() => {
     const realAmt = year ? (s.rentByYear?.[year] || 0) : 0
     if (realAmt > 0) return realAmt
@@ -207,13 +224,14 @@ export function getCostForMonth(storeCosts, unifiedStoreName, monthKey, netRevFo
     // carry percent_of_revenue=0.15 with no real rent_amt_rs). Multiplying directly by
     // netRevForMonth is correct; dividing by 100 first (as an earlier version of this did, treating
     // 0.15 as "0.15%") understated rent by 1000x for every store on this fallback.
-    return pct > 0 ? pct * netRevForMonth : 0
+    if (pct > 0) { rentIsPctOfNet = true; return pct * netRevForMonth }
+    return null
   })()
-  const utilities = year ? (s.utilitiesByYear?.[year] || 0) : 0
-  const employeeCost = m.employeeCost || 0
-  const cam = m.cam || 0
-  const software = m.software || 0
-  const volumetricRent = m.volumetricRent || 0
+  const utilities = year && s.utilitiesByYear?.[year] != null ? s.utilitiesByYear[year] : null
+  const employeeCost = m.employeeCost ?? null
+  const cam = m.cam ?? null
+  const software = m.software ?? null
+  const volumetricRent = m.volumetricRent ?? null
 
-  return { rent, utilities, employeeCost, cam, software, volumetricRent }
+  return { rent, utilities, employeeCost, cam, software, volumetricRent, rentIsPctOfNet }
 }

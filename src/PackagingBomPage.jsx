@@ -725,7 +725,7 @@ export default function PackagingBomPage({ onBack }) {
   );
 
   return (
-    <div style={{ padding: '24px 32px 48px', minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
+    <div style={{ padding: '24px 32px 48px', minHeight: 'var(--app-h)', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         {onBack && (

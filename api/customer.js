@@ -4,6 +4,41 @@ import { getPool } from './_db.js'
 // All queries use fact_all_platform_sales_report filtered to Shopify
 const TBL = '`frido-429506.production.fact_all_platform_sales_report`'
 
+// Small in-memory cache for all-time queries that only depend on the end date (Repurchase due, C9).
+// Lives as long as the server / function instance; 6 h so a new day's orders show up.
+const DUE_CACHE = new Map()
+const DUE_TTL_MS = 6 * 60 * 60 * 1000
+function cachedByKey(key, fn) {
+  const hit = DUE_CACHE.get(key)
+  if (hit && Date.now() - hit.at < DUE_TTL_MS) return hit.promise
+  const promise = fn().catch(err => { DUE_CACHE.delete(key); throw err })
+  DUE_CACHE.set(key, { at: Date.now(), promise })
+  return promise
+}
+
+// Cross-sell totals from EVERY first → second pair (C5, Suraj 27 Oct; the query used to stop at 500
+// rows, which left ~35% of customers out of the lift maths). Category grain in full (small); sub-
+// category grain with the 8 biggest sub-categories by volume kept and the rest as 'Other' (the same
+// top-8 rule the heatmap uses), so the payload stays small.
+function crossSellTotals(rows) {
+  const add = (m, f, s, n) => { const k = `${f}|||${s}`; m.set(k, (m.get(k) || 0) + n) }
+  const cat = new Map()
+  rows.forEach(r => { if (r.firstCategory && r.secondCategory) add(cat, r.firstCategory, r.secondCategory, r.customers) })
+  const vol = {}
+  rows.forEach(r => {
+    if (r.firstSubCategory) vol[r.firstSubCategory] = (vol[r.firstSubCategory] || 0) + r.customers
+    if (r.secondSubCategory) vol[r.secondSubCategory] = (vol[r.secondSubCategory] || 0) + r.customers
+  })
+  const top = new Set(Object.entries(vol).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k))
+  const sub = new Map()
+  rows.forEach(r => {
+    if (!r.firstSubCategory || !r.secondSubCategory) return
+    add(sub, top.has(r.firstSubCategory) ? r.firstSubCategory : 'Other', top.has(r.secondSubCategory) ? r.secondSubCategory : 'Other', r.customers)
+  })
+  const out = (m, fk, sk) => [...m.entries()].map(([k, customers]) => { const [f, s] = k.split('|||'); return { [fk]: f, [sk]: s, customers } })
+  return { cat: out(cat, 'firstCategory', 'secondCategory'), sub: out(sub, 'firstSubCategory', 'secondSubCategory'), subTop: [...top] }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -23,8 +58,20 @@ export default async function handler(req, res) {
     const dur = me - ms
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
+    // Mature-window return rate (same RATE_COVERAGE_FLOOR/rollingStart/rollingEnd convention as
+    // api/bq.js's shReturnRateMature etc.) — orders in the last 14 days haven't fully settled their
+    // RTO/CIR/Cancelled status yet, so net_revenue below must NOT deduct those flags directly off
+    // recent orders (confirmed bug 2026-10-22: this silently overstated net_revenue for any recent
+    // date range, since an order that will eventually turn out RTO'd/cancelled still reads as
+    // "clean" until Order_Status settles — the same bug class D2C/EBO had before the resolved-engine
+    // fix). Immature orders instead get this rolling 30-day rate applied to their revenue.
+    const todayD = new Date()
+    const matureEndD = new Date(todayD); matureEndD.setDate(matureEndD.getDate() - 14)
+    const matureEnd = matureEndD.toISOString().slice(0, 10)
+    const rollingStartD = new Date(matureEndD); rollingStartD.setDate(rollingStartD.getDate() - 29)
+    const rollingStart = rollingStartD.toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis, repurchaseDue] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -33,6 +80,15 @@ export default async function handler(req, res) {
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
+mature_rate AS (
+  SELECT SAFE_DIVIDE(
+    SUM(CASE WHEN LOWER(Order_Status) IN ('rto','rto initiated','rto delivered','cir return','cir','cancelled','cancel') THEN SellingPrice_Exc_GST ELSE 0 END),
+    SUM(SellingPrice_Exc_GST)
+  ) AS return_rate
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND DATE(OrderDate) BETWEEN '${rollingStart}' AND '${matureEnd}'
+    AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
@@ -40,13 +96,14 @@ period AS (
     CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
     CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
     CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled,
+    DATE(o.OrderDate) <= DATE('${matureEnd}') AS is_mature,
     f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
-   
+
 ),
 order_agg AS (
   SELECT OrderId, first_date,
@@ -55,6 +112,7 @@ order_agg AS (
     MAX(is_rto) AS is_rto,
     MAX(is_cir) AS is_cir,
     MAX(is_cancelled) AS is_cancelled,
+    MAX(is_mature) AS is_mature,
     ANY_VALUE(CustomerId) AS CustomerId,
     ANY_VALUE(voucher_code) AS voucher_code
   FROM period
@@ -69,10 +127,17 @@ SELECT
   ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
-  ROUND(SUM(order_rev_exc)
-    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue,
+  -- Mature orders: real RTO/CIR/Cancelled deduction (settled, trustworthy). Immature orders (last
+  -- 14 days): Order_Status hasn't settled, so apply the rolling 30-day return rate to revenue
+  -- instead of the live (incomplete) flags — same fix class as D2C/EBO's resolved-engine rollout.
+  ROUND(
+    SUM(CASE WHEN is_mature THEN
+      order_rev_exc
+      - CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END
+    ELSE order_rev_exc * (1 - COALESCE((SELECT return_rate FROM mature_rate), 0)) END)
+  , 0) AS net_revenue,
   COUNT(DISTINCT CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN OrderId END) AS discounted_orders,
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
 FROM order_agg`),
@@ -202,8 +267,7 @@ JOIN sp USING (CustomerId)
 WHERE fp.first_category IS NOT NULL AND sp.second_category IS NOT NULL
 GROUP BY first_category, first_sub_category, second_category, second_sub_category
 HAVING COUNT(DISTINCT fp.CustomerId) > 0
-ORDER BY customers DESC
-LIMIT 500`),
+ORDER BY customers DESC`), // every pair (C5): the totals use all of them; only the display list is cut to 500 below
 
       // Q5 â€” RFM segments (trailing 12 months up to end date)
       run(`WITH customer_stats AS (
@@ -234,6 +298,8 @@ segmented AS (
       WHEN r_score >= 3 AND m_score >= 3 THEN 'Potential Loyalists'
       WHEN r_score <= 2 AND f_score >= 3 THEN 'Cannot Lose Them'
       WHEN r_score <= 2 AND f_score >= 2 THEN 'Hibernating'
+      -- C6 (Suraj 27 Oct): bought 61-90 days ago, low frequency, under 2,000 (fell through to the ELSE)
+      WHEN r_score = 3 THEN 'About To Sleep'
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
@@ -282,11 +348,13 @@ FROM customer_ltv
 GROUP BY bucket
 ORDER BY MIN(monetary)`),
 
-      // Q8 â€” inactivity buckets (all-time)
+      // Q8 — inactivity buckets as of the end date (C1, Suraj 27 Oct): only orders up to the end
+      // date count, so a past range no longer puts customers who ordered after it into "Active"
       run(`WITH last_purchase AS (
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+    AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 )
 SELECT
@@ -374,13 +442,23 @@ GROUP BY day ORDER BY day`),
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') GROUP BY CustomerId
 ),
+mature_rate AS (
+  SELECT SAFE_DIVIDE(
+    SUM(CASE WHEN LOWER(Order_Status) IN ('rto','rto initiated','rto delivered','cir return','cir','cancelled','cancel') THEN SellingPrice_Exc_GST ELSE 0 END),
+    SUM(SellingPrice_Exc_GST)
+  ) AS return_rate
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND DATE(OrderDate) BETWEEN '${rollingStart}' AND '${matureEnd}'
+    AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
+),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
     f.first_date,
     CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
     CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
-    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled
+    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled,
+    DATE(o.OrderDate) <= DATE('${matureEnd}') AS is_mature
   FROM ${TBL} o JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
 ),
@@ -388,6 +466,7 @@ order_agg AS (
   SELECT OrderId, first_date,
     SUM(rev_inc) AS order_rev_inc, SUM(rev_exc) AS order_rev_exc,
     MAX(is_rto) AS is_rto, MAX(is_cir) AS is_cir, MAX(is_cancelled) AS is_cancelled,
+    MAX(is_mature) AS is_mature,
     ANY_VALUE(CustomerId) AS CustomerId
   FROM period GROUP BY OrderId, first_date
 )
@@ -400,10 +479,15 @@ SELECT
   ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
-  ROUND(SUM(order_rev_exc)
-    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
-    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue
+  -- Same mature/immature split as Q1 above — see its comment for the bug this fixes.
+  ROUND(
+    SUM(CASE WHEN is_mature THEN
+      order_rev_exc
+      - CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END
+      - CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END
+    ELSE order_rev_exc * (1 - COALESCE((SELECT return_rate FROM mature_rate), 0)) END)
+  , 0) AS net_revenue
 FROM order_agg`),
 
       // Q13 — prev period ads
@@ -784,16 +868,76 @@ GROUP BY category
 HAVING COUNT(DISTINCT OrderId) >= 50
 ORDER BY total_orders DESC
 LIMIT 20`),
+
+      // Q23 — Repurchase due (C9, Suraj 27 Oct): per category, customers whose LAST order in that
+      // category (up to the end date) is 1–2× the category's median days to 2nd purchase (the same
+      // all-time median as Q17), plus a coarse days-since-last-order distribution. One row per
+      // category, cached for 6 h per end date.
+      cachedByKey(`due:${e}`, () => run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_cat AS (
+  SELECT t.CustomerId, t.OrderId, MIN(DATE(t.OrderDate)) AS order_date,
+    ANY_VALUE(COALESCE(im.Category_Name, im2.Category_Name)) AS category
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
+  GROUP BY t.CustomerId, t.OrderId
+),
+ranked AS (
+  SELECT CustomerId, order_date, category, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM order_cat
+),
+gaps AS (
+  SELECT o1.category AS category, DATE_DIFF(o2.order_date, o1.order_date, DAY) AS days_gap
+  FROM ranked o1
+  JOIN ranked o2 ON o1.CustomerId = o2.CustomerId AND o2.rn = 2
+  WHERE o1.rn = 1 AND o1.category IS NOT NULL AND DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+),
+med AS (
+  SELECT category, APPROX_QUANTILES(days_gap, 2)[OFFSET(1)] AS median_days
+  FROM gaps GROUP BY category HAVING COUNT(*) >= 5
+),
+last_in_cat AS (
+  SELECT CustomerId, category, DATE_DIFF(DATE('${e}'), MAX(order_date), DAY) AS days_since
+  FROM order_cat
+  WHERE category IS NOT NULL AND order_date <= DATE('${e}')
+  GROUP BY CustomerId, category
+)
+SELECT l.category, m.median_days,
+  COUNTIF(m.median_days > 0 AND l.days_since BETWEEN m.median_days AND 2 * m.median_days) AS due_customers,
+  COUNT(*) AS customers,
+  COUNTIF(l.days_since <= 30) AS d0_30,
+  COUNTIF(l.days_since BETWEEN 31 AND 60) AS d31_60,
+  COUNTIF(l.days_since BETWEEN 61 AND 90) AS d61_90,
+  COUNTIF(l.days_since BETWEEN 91 AND 180) AS d91_180,
+  COUNTIF(l.days_since BETWEEN 181 AND 365) AS d181_365,
+  COUNTIF(l.days_since > 365) AS d365p
+FROM last_in_cat l
+JOIN med m USING (category)
+GROUP BY l.category, m.median_days
+ORDER BY due_customers DESC`)),
     ])
 
     // Fetch additional (offline) spend from Postgres for the selected date range.
     // Pro-rate partial months: only include the fraction of each month that falls within [s, e]
     // so a partial-month date range doesn't silently pull the full calendar month's spend.
+    const additionalSpendFor = async (rs, re) => {
     let additionalSpend = 0
     try {
       const db = getPool()
-      const startDate = new Date(s)
-      const endDate = new Date(e)
+      const startDate = new Date(rs)
+      const endDate = new Date(re)
       const months = []
       const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
       while (cur <= endDate) {
@@ -827,6 +971,10 @@ LIMIT 20`),
     } catch (_) {
       additionalSpend = 0
     }
+    return additionalSpend
+    }
+    // CA5: the previous period now includes its own additional spend, so Total Spend / CAC ▲▼ compare like with like
+    const [additionalSpend, pAdditionalSpend] = await Promise.all([additionalSpendFor(s, e), additionalSpendFor(ps, pe)])
 
     const k = kpis[0] || {}
     const metaAds = adsKpis.find(r => r.platform === 'Meta') || {}
@@ -873,6 +1021,7 @@ prev_seg AS (
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
       WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) = 3 THEN 'About To Sleep' -- C6
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
@@ -902,6 +1051,7 @@ curr_seg AS (
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
       WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
        AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) = 3 THEN 'About To Sleep' -- C6
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
     END AS segment
@@ -917,7 +1067,7 @@ LIMIT 50`)
     const pk = prevKpis[0] || {}
     const pMeta = prevAdsKpis.find(r => r.platform === 'Meta') || {}
     const pGoogle = prevAdsKpis.find(r => r.platform === 'Google') || {}
-    const pTotalSpend = (parseFloat(pMeta.spend) || 0) + (parseFloat(pGoogle.spend) || 0)
+    const pTotalSpend = (parseFloat(pMeta.spend) || 0) + (parseFloat(pGoogle.spend) || 0) + pAdditionalSpend
     const pGrossSales = parseFloat(pk.gross_sales) || 0
     const pTotalCustomers = parseInt(pk.total_customers) || 0
     const pNewCustomers = parseInt(pk.new_customers) || 0
@@ -992,13 +1142,17 @@ LIMIT 50`)
         customers: parseInt(r.customers),
         revenue: parseFloat(r.revenue) || 0,
       })),
-      crossSell: crossSell.map(r => ({
-        firstCategory: r.first_category,
-        firstSubCategory: r.first_sub_category,
-        secondCategory: r.second_category,
-        secondSubCategory: r.second_sub_category,
-        customers: parseInt(r.customers),
-      })),
+      // display rows: the 500 biggest pairs (as before); totals: every pair (crossSellTotals)
+      ...(() => {
+        const all = crossSell.map(r => ({
+          firstCategory: r.first_category,
+          firstSubCategory: r.first_sub_category,
+          secondCategory: r.second_category,
+          secondSubCategory: r.second_sub_category,
+          customers: parseInt(r.customers),
+        }))
+        return { crossSell: all.slice(0, 500), crossSellTotals: crossSellTotals(all) }
+      })(),
       rfm: rfm.map(r => ({
         segment: r.segment,
         customers: parseInt(r.customers),
@@ -1105,6 +1259,14 @@ LIMIT 50`)
         avgDiscPct: parseFloat(r.avg_disc_pct) || 0,
         aov: parseFloat(r.aov) || 0,
         repeatOrderPct: parseFloat(r.repeat_order_pct) || 0,
+      })),
+      // C9: Repurchase due per category (as of the end date)
+      repurchaseDue: repurchaseDue.map(r => ({
+        category: r.category,
+        medianDays: parseInt(r.median_days) || 0,
+        dueCustomers: parseInt(r.due_customers) || 0,
+        customers: parseInt(r.customers) || 0,
+        buckets: { '0–30': parseInt(r.d0_30) || 0, '31–60': parseInt(r.d31_60) || 0, '61–90': parseInt(r.d61_90) || 0, '91–180': parseInt(r.d91_180) || 0, '181–365': parseInt(r.d181_365) || 0, '365+': parseInt(r.d365p) || 0 },
       })),
     })
   } catch (err) {
