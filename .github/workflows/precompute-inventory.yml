@@ -78,6 +78,14 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/refresh-cost-aggregates-if-stale.mjs
 
+      # 3PL per-unit / per-kg denominators: Uniware dispatched units x SKU weight per facility.
+      # Non-fatal: if it fails, the previous volume stays in place and the cache still builds.
+      - name: Sync 3PL volume from Uniware
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/sync-3pl-shipments.mjs
+
       - name: Generate static logistics cost JSON
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

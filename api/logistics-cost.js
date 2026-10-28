@@ -2008,7 +2008,7 @@ export default async function handler(req, res) {
            ORDER BY c.cost DESC
         `).catch(() => ({ rows: [] })),
         () => query(pool, `
-          -- Volume joined from logistics_3pl_shipments (BigQuery Clickpost, synced by
+          -- Volume joined from logistics_3pl_shipments (Uniware dispatched units x SKU weight, synced by
           -- scripts/sync-3pl-shipments.mjs). Summed per month across only the warehouses
           -- that actually billed that month, so the denominator matches the numerator.
           -- Volume is summed over the DISTINCT (warehouse, month) pairs that were billed,
