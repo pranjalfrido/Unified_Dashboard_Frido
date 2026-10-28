@@ -19,7 +19,7 @@ function getBQ() {
   return _bq;
 }
 
-const MAX_BYTES_BILLED = 20 * 1024 * 1024 * 1024; // 20 GB cap per query
+const MAX_BYTES_BILLED = 5 * 1024 * 1024 * 1024; // 5 GB cap per query
 
 // Text-level guard, independent of lib/safety.js so it still holds if a caller skips that check:
 // exactly one statement, and it must be a SELECT or a WITH ... SELECT.
