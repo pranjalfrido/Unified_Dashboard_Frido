@@ -4954,7 +4954,8 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // first ⋯ item, a red dot on ⋯ while there are any), optional chips / sub-tabs / "Filtered:" strip,
   // and it folds to one 42px bar while scrolling down. Laptop and tablet keep the bar further below.
   const phone = bp.width <= 768 || bp.isPhoneLandscape
-  if (page === 'ask' && !phone) return null
+  // Pulse draws its own header on phones too (history · conversation title · new question · ⋯).
+  if (page === 'ask') return null
   if (phone) {
     const notifications = { count: combinedAlerts.length, onOpen: () => setTimeout(() => setAlertsOpen(true), 350) }
     const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>

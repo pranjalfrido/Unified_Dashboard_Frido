@@ -1683,3 +1683,85 @@ svg text, svg tspan{
 @media (prefers-reduced-motion: reduce){ .mnav-glow{ transition:none } }
 /* Return Analysis mobile: no focus ring after a tap on its toggles / chips (keyboard focus still shows one). */
 .ra-mobile :focus:not(:focus-visible){ outline:none }
+
+/* ── Frido Pulse, phones (src/ask/PulseMobile.jsx; docs/responsive/mockups/pulse_mockup.html) ──────────
+   The view is fixed to the visible area: header, thread (the only scroller), composer. Its height leaves
+   room for the bottom bar, or fills the visible area while the keyboard is open (the bar hides then). */
+.pm-root{ position:fixed; left:0; right:0; z-index:90; display:flex; flex-direction:column; background:#f4f2ed; font-family:var(--font); color:#1c2420; font-variant-numeric:tabular-nums }
+.pm-root button{ -webkit-tap-highlight-color:transparent; font-family:var(--font) }
+.pm-root button:focus, .pm-root textarea:focus, .bottom-sheet .pm-hrow button:focus, .bottom-sheet .pm-newq:focus, .bottom-sheet .pm-confirm button:focus{ outline:none }
+.pm-root button:focus-visible, .bottom-sheet .pm-hrow button:focus-visible, .bottom-sheet .pm-newq:focus-visible, .bottom-sheet .pm-confirm button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:2px }
+.pm-root .mph button:focus-visible{ outline-color:#9fe0b9 }
+.pm-kb .mnav{ display:none !important }
+.mph-tag{ font-style:normal; font-size:12px; font-weight:700; color:#cfe5d7; background:rgba(255,255,255,.12); border-radius:6px; padding:2px 6px; flex:0 0 auto; align-self:center }
+.pm-in-chat .mph-title{ align-items:center }
+.pm-in-chat .mph-title b{ font-size:15px; flex:0 1 auto; min-width:0 }
+.pm-thread{ position:relative; flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch }
+.pm-thread-inner{ padding:14px 14px 8px }
+/* empty state */
+.pm-empty{ padding:6px 14px 10px }
+.pm-hero{ text-align:center; padding:22px 6px 6px }
+.pm-bolt{ width:52px; height:52px; border-radius:16px; margin:0 auto 12px; display:grid; place-items:center; color:#1f5a3d; background:linear-gradient(160deg,#dcebe2,#f1f7f3); box-shadow:0 6px 16px -8px rgba(31,90,61,.35) }
+.pm-hero h2{ font-size:19px; font-weight:700; margin:0; letter-spacing:-.01em }
+.pm-hero p{ font-size:13px; color:#7b847f; margin:5px 0 0 }
+.pm-sh{ font-size:12px; font-weight:700; letter-spacing:.06em; color:#7b847f; margin:18px 2px 8px; text-transform:uppercase }
+.pm-sug{ display:flex; align-items:center; gap:10px; width:100%; min-height:52px; text-align:left; background:#fff; border:1px solid #eae7df; border-radius:14px; padding:10px 12px; margin-bottom:8px; font-size:13.5px; font-weight:500; color:#1c2420; cursor:pointer }
+.pm-sug i{ flex:0 0 auto; width:30px; height:30px; border-radius:9px; background:#eef5f0; display:grid; place-items:center; color:#1f5a3d }
+.pm-sug span{ flex:1; min-width:0 }
+.pm-sug .pm-chev{ color:#9aa29d; flex:0 0 auto }
+.pm-rec{ display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:8px 2px; border:none; border-bottom:1px solid #eae7df; background:none; text-align:left; font-size:13px; color:#4e5a54; cursor:pointer }
+.pm-rec span{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pm-rec svg{ color:#9aa29d; flex:0 0 auto }
+/* thread */
+.pm-me{ margin:4px 0 14px auto; width:fit-content; max-width:82%; background:#1f5a3d; color:#fff; font-size:14px; line-height:1.4; padding:9px 12px; border-radius:16px 16px 4px 16px; white-space:pre-wrap; overflow-wrap:anywhere }
+.pm-ai{ margin-bottom:14px; font-size:14px; line-height:1.5; min-width:0 }
+.pm-who{ display:flex; align-items:center; gap:6px; font-size:12px; color:#7b847f; font-weight:600; margin-bottom:6px }
+.pm-who i{ width:20px; height:20px; border-radius:6px; background:#eef5f0; display:grid; place-items:center; color:#1f5a3d; font-style:normal }
+.pm-badge{ margin-left:auto; font-size:12px; font-weight:700; color:#7b847f; background:#ebe8e1; border-radius:6px; padding:1px 6px }
+.pm-answer{ font-size:14px; line-height:1.5; color:#1c2420; overflow-wrap:anywhere; min-width:0 }
+.pm-answer .af-md-h2{ font-size:15.5px }
+.pm-answer .af-md-h3{ font-size:14.5px }
+.pm-answer .af-inline-code{ font-size:12.5px; overflow-wrap:anywhere }
+.pm-answer .af-table-wrap{ overflow-x:auto; overflow-y:hidden; margin:8px 0; border:1px solid #eae7df; border-radius:12px; background:#fff; overscroll-behavior-x:contain; max-width:100% }
+.pm-answer .af-table-wrap.pm-more{ -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)); mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)) }
+.pm-answer .af-table{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; margin:0; border:none }
+.pm-answer .af-table th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; text-align:left; padding:7px 8px; vertical-align:bottom; border:none; min-width:64px }
+.pm-answer .af-table td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; min-width:64px; max-width:170px; overflow-wrap:anywhere }
+.pm-answer .af-table .pm-n{ text-align:right; white-space:nowrap }
+.pm-answer .af-table th:first-child, .pm-answer .af-table td:first-child{ position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #eeebe4 }
+.pm-answer .af-table th:first-child{ background:#f6f4ef }
+/* no hover tint on touch (the laptop rule highlights the row under the pointer) */
+.pm-answer .af-table tbody tr:hover{ background:transparent }
+.pm-acts{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
+.pm-act{ height:30px; padding:0 10px; border-radius:9px; border:1px solid #eae7df; background:#fff; color:#1f5a3d; font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:5px; cursor:pointer }
+span.pm-act{ cursor:default; color:#1f8a4c }
+.pm-sql{ margin:6px 0 0; padding:10px 12px; background:#fbfaf7; border:1px solid #eae7df; border-radius:10px; font-size:12px; line-height:1.45; color:#3a4640; white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace }
+.pm-clar{ display:flex; flex-direction:column; gap:6px; margin:8px 0 }
+.pm-clar button{ width:100%; min-height:44px; text-align:left; font-size:13.5px; font-weight:500; padding:9px 12px; border-radius:12px; background:#fff; border:1px solid #d6e6dc; color:#1f5a3d; cursor:pointer }
+.pm-err{ background:#fbeeec; border:1px solid #f1d3ce; color:#8c2a1f; border-radius:12px; padding:10px 12px; font-size:13.5px; line-height:1.45 }
+/* composer */
+.pm-cmp{ flex:0 0 auto; padding:8px 10px 6px; background:linear-gradient(0deg,#f4f2ed 70%,rgba(244,242,237,0)) }
+.pm-box{ box-sizing:border-box; display:flex; align-items:flex-end; gap:8px; min-height:44px; background:#fff; border:1px solid #e1ded5; border-radius:14px; padding:0 4px 0 14px; box-shadow:0 4px 14px -8px rgba(28,52,40,.25) }
+.pm-box:focus-within{ border-color:#9cc4ad }
+.pm-box textarea{ flex:1; min-width:0; border:none; outline:none; resize:none; background:none; font-family:var(--font); font-size:16px; line-height:1.35; color:#1c2420; padding:10px 0; height:42px; max-height:130px; overflow-y:auto; display:block; box-sizing:border-box }
+.pm-box textarea::placeholder{ color:#9aa29d }
+.pm-send{ flex:0 0 auto; width:34px; height:34px; margin:4px 0; border-radius:10px; border:none; background:#1f5a3d; color:#fff; display:grid; place-items:center; cursor:pointer }
+.pm-send:disabled{ background:#d6e3da; cursor:default }
+.pm-disc{ font-size:12px; color:#7b847f; text-align:center; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+/* history sheet + delete confirm (inside the shared BottomSheet) */
+.pm-newq{ display:flex; align-items:center; justify-content:center; gap:6px; width:100%; height:44px; border:none; border-radius:12px; background:#1f5a3d; color:#fff; font-size:13.5px; font-weight:600; margin-bottom:10px; cursor:pointer; font-family:var(--font) }
+.pm-search{ display:flex; align-items:center; gap:8px; height:44px; border-radius:12px; background:#f4f2ed; padding:0 12px; color:#7b847f; margin-bottom:4px }
+.pm-search input{ flex:1; min-width:0; border:none; outline:none; background:none; font-size:16px; font-family:var(--font); color:#1c2420 }
+.pm-hrow{ display:flex; align-items:center; gap:6px; min-height:48px; border-bottom:1px solid #f0ede6 }
+.pm-hrow.on{ background:#f3f8f4; border-radius:10px; box-shadow:inset 3px 0 0 #1f5a3d; border-bottom-color:transparent }
+.pm-hopen{ flex:1; min-width:0; min-height:48px; padding:8px 4px 8px 10px; border:none; background:none; text-align:left; font-size:13.5px; font-weight:600; color:#1c2420; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; font-family:var(--font) }
+.pm-hdel{ flex:0 0 auto; width:44px; height:44px; border:none; background:none; color:#7b847f; display:grid; place-items:center; border-radius:10px; cursor:pointer }
+.pm-hconf{ flex:1; display:flex; align-items:center; gap:6px; padding:4px 4px 4px 10px; font-size:13px; color:#1c2420 }
+.pm-hconf span{ flex:1; font-weight:600 }
+.pm-hconf button, .pm-confirm button{ min-height:36px; padding:0 12px; border-radius:10px; border:1px solid #e1ded5; background:#fff; color:#1c2420; font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font) }
+.pm-hconf .pm-danger{ color:#c0392b; border-color:#f1d3ce }
+.pm-none{ font-size:13px; color:#7b847f; text-align:center; padding:18px 0 }
+.pm-confirm-text{ margin:0 0 14px; font-size:14px; color:#1c2420 }
+.pm-confirm{ display:flex; gap:8px }
+.pm-confirm button{ flex:1; min-height:44px }
+.pm-confirm .pm-danger-fill{ background:#c0392b; border-color:#c0392b; color:#fff }
