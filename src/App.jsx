@@ -17159,7 +17159,8 @@ function HeroSparkCard({ c }) {
   const linePts = vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' ')
   // area path: line + down to bottom-right + across to bottom-left + close
   const areaPath = `M ${vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')} L ${getX(vals.length - 1)},${H} L ${getX(0)},${H} Z`
-  const gradId = `sg-${c.label.replace(/\s/g, '')}`
+  // Only id-safe characters: "(" ")" (e.g. "LTV (12-MO REVENUE)") break url(#id) and the fill turns black.
+  const gradId = `sg-${c.label.replace(/[^A-Za-z0-9_-]/g, '')}`
   const hovIdx = hov !== null ? hov : vals.length - 1
   const hovX = getX(hovIdx), hovY = getY(vals[hovIdx])
   const handleMove = e => {

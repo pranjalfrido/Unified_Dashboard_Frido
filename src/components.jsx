@@ -80,13 +80,13 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, style,
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={spark} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <defs>
-                <linearGradient id={`kpiSpark-${sparkKey || label}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`kpiSpark-${String(sparkKey || label).replace(/[^A-Za-z0-9_-]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={sparkColor || C.acm} stopOpacity={0.34} />
                   <stop offset="100%" stopColor={sparkColor || C.acm} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <Area type="monotone" dataKey={sparkKey || 'v'} stroke={sparkColor || C.acm}
-                strokeWidth={1.75} fill={`url(#kpiSpark-${sparkKey || label})`} dot={false} />
+                strokeWidth={1.75} fill={`url(#kpiSpark-${String(sparkKey || label).replace(/[^A-Za-z0-9_-]/g, '')})`} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
