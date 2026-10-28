@@ -9,28 +9,40 @@ import { useBreakpoint } from '../responsive/useBreakpoint.js';
 
 let nextId = 1000;
 
-const STORAGE_KEY = 'frido_pulse_conversations';
+// History is saved per user (frido_pulse_conversations_<userId>), so the next person on a shared
+// laptop doesn't see it. Chats saved under the old shared key move to the first user who opens Pulse.
+const LEGACY_KEY = 'frido_pulse_conversations';
+const keyFor = userId => `${LEGACY_KEY}_${userId}`;
 
-function loadConversations() {
+function loadConversations(userId) {
+  if (!userId) return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(keyFor(userId));
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (raw == null && legacy != null) {
+      raw = legacy;
+      localStorage.setItem(keyFor(userId), legacy);
+    }
+    if (legacy != null) localStorage.removeItem(LEGACY_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
-function saveConversations(convs) {
+function saveConversations(userId, convs) {
+  if (!userId) return;
   try {
     // Keep only last 50 conversations, trim messages to last 40 per conv to avoid storage limits
     const trimmed = convs.slice(0, 50).map(c => ({
       ...c,
       messages: c.messages.filter(m => !m.thinking).slice(-40),
     }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    localStorage.setItem(keyFor(userId), JSON.stringify(trimmed));
   } catch {}
 }
 
 export default function AskFridoPage({ userProfile, session }) {
-  const [conversations, setConversations] = useState(() => loadConversations());
+  const userId = session?.user?.id;
+  const [conversations, setConversations] = useState(() => loadConversations(userId));
   const [activeId, setActiveId] = useState(null);
   const [historyVisible, setHistoryVisible] = useState(true);
   const [sending, setSending] = useState(false);
@@ -42,8 +54,8 @@ export default function AskFridoPage({ userProfile, session }) {
 
   // Persist to localStorage whenever conversations change
   useEffect(() => {
-    saveConversations(conversations);
-  }, [conversations]);
+    saveConversations(userId, conversations);
+  }, [userId, conversations]);
 
   function handleNew() {
     const id = 'new-' + (++nextId);
