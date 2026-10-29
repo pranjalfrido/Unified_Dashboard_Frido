@@ -18,6 +18,7 @@ import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTra
 import { formatTsv, unformattedNumbers } from './lib/format.js';
 import { runOosPage } from './lib/oosPage.js';
 import { runPnlTool } from './lib/pnlTool.js';
+import { isBillingError, alertBilling, UNAVAILABLE_MESSAGE } from './lib/billingAlert.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
 import { freshnessNote } from './lib/freshness.js';
@@ -484,6 +485,13 @@ const httpServer = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ text: finalText, sql: usedSql, model, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
+      if (isBillingError(err)) {
+        // Credits / billing / quota: say so plainly and alert the team (once per hour).
+        alertBilling(err, authResult.user).catch(() => {});
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: UNAVAILABLE_MESSAGE }));
+        return;
+      }
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Chat failed. Please try again.' }));
     }

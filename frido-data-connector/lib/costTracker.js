@@ -51,10 +51,10 @@ export async function trackUsage({ model, inputTokens, outputTokens, user }) {
     state.warningSent = true;
     sendAlertEmail(
       '⚠️ Frido Pulse — Cost Warning ($280 reached)',
-      `<p>Monthly AI spend has reached <strong>$${state.totalCost.toFixed(2)}</strong> (limit: $${MONTHLY_LIMIT_USD}).</p>
+      [`<p>Monthly AI spend has reached <strong>$${state.totalCost.toFixed(2)}</strong> (limit: $${MONTHLY_LIMIT_USD}).</p>
        <p>Queries this month: <strong>${state.queryCount}</strong></p>
        <p>Last user: <strong>${user?.email || 'unknown'}</strong></p>
-       <p>Frido Pulse will stop at $${MONTHLY_LIMIT_USD}. Review usage or raise the limit in <code>lib/costTracker.js</code>.</p>`
+       <p>Frido Pulse will stop at $${MONTHLY_LIMIT_USD}. Review usage or raise the limit in <code>lib/costTracker.js</code>.</p>`]
     ).catch(() => {});
   }
 }
@@ -74,10 +74,10 @@ export async function sendLimitEmail(user) {
   state.limitSent = true;
   await sendAlertEmail(
     '🚫 Frido Pulse — Monthly Limit Reached ($300)',
-    `<p>Monthly AI spend has hit the <strong>$${MONTHLY_LIMIT_USD} limit</strong>. Frido Pulse queries are now blocked for the rest of this month.</p>
+    [`<p>Monthly AI spend has hit the <strong>$${MONTHLY_LIMIT_USD} limit</strong>. Frido Pulse queries are now blocked for the rest of this month.</p>
      <p>Total spend: <strong>$${state.totalCost.toFixed(2)}</strong> across <strong>${state.queryCount} queries</strong>.</p>
      <p>Last user who triggered the limit: <strong>${user?.email || 'unknown'}</strong></p>
-     <p>To raise the limit, update <code>MONTHLY_LIMIT_USD</code> in <code>lib/costTracker.js</code> and redeploy.</p>`
+     <p>To raise the limit, update <code>MONTHLY_LIMIT_USD</code> in <code>lib/costTracker.js</code> and redeploy.</p>`]
   ).catch(() => {});
 }
 
