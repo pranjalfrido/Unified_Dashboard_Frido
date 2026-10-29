@@ -396,8 +396,12 @@ ORDER BY gross_inc_gst DESC
 - All channels: `AND f.Channel NOT IN ('Blinkit', 'Zepto', 'Instamart')` (quick commerce has no order status; take the `ALL CHANNELS` row and list each channel row)
 
 **Answer format**
-- If the period includes the latest 15 days (`includes_latest_15_days` = true): first line `**Returns (provisional, as on Sales): X%** · Actual so far (Return Analysis): Y%` (X = `provisional_total_return_pct`, Y = `actual_total_return_pct`). Then one short line: *Provisional = actual statuses for days older than 15 days plus each SKU's rolling 30-day rate for the latest 15 days (as on Sales / P&L / Overview); actual = Return Analysis, actual statuses only, prepaid cancellations only.* Then the breakdown for the provisional view: Cancellation, RTO (in returns, as on Sales), CIR, Exchange, Total — ₹ and %.
-- If the whole period is older than 15 days (`includes_latest_15_days` = false): show ONLY one number, `**Returns: X%**` (X = `provisional_total_return_pct`), and one short line "all days are older than 15 days, so provisional = actual statuses". Do NOT show the "Actual so far (Return Analysis)" figure in this case. Same breakdown.
+- **Always show both numbers, labelled by page, for any period.** X = `provisional_total_return_pct`, Y = `actual_total_return_pct`.
+  - If the period includes the latest 15 days (`includes_latest_15_days` = true): first line `**Returns (provisional, as on Sales): X%** · Return Analysis: Y%`.
+  - Otherwise: first line `**Returns (as on Sales): X%** · Return Analysis: Y%`.
+  - Then ONE short line explaining the difference: *Sales counts full cancellations (COD included) and, for the latest 15 days, an estimate from each SKU's rolling 30-day rate; Return Analysis counts actual statuses only and only prepaid cancellations.*
+  - Then the breakdown for the Sales view: Cancellation, RTO (in returns, as on Sales), CIR, Exchange, Total — ₹ and %.
+- (The old rule "show only one number when the period is older than 15 days" is replaced by the bullet above: always show both.)
 - A standalone "RTO %" question still uses Logistics → Performance, never this.
 - Net revenue: say it uses the provisional return rate for the latest 15 days.
 
@@ -664,7 +668,9 @@ GROUP BY master_sku
 
 ## Planning avg daily sale (planning questions: how much to order / transfer / plan, replenishment)
 
-**Method (PULSE_PLAYBOOK.md section 6):** B2C daily sales (Unicommerce, B2C Order or unmapped channels), last 180 days, aliases resolved to the master SKU. Spike days (a day above 3× the window's median) are removed. Every window of 7 to 30 days is considered; the highest average is the best, and **if a longer window's average is within 10% of the best, the longest such window is used** (more stable). Windows need at least 7 selling days. Run this query (it implements all of that; `${sku}` = master SKU, `${end}` = the IST yesterday from the Dates block):
+**Method (PULSE_PLAYBOOK.md section 6):** B2C daily sales (Unicommerce, B2C Order or unmapped channels), aliases resolved to the master SKU. **The best window is searched in the LAST 90 DAYS only.** Spike days (a day above 3× the window's median) are removed. Every window of 7 to 30 days is considered; the highest average is the best, and **if a longer window's average is within 10% of the best, the longest such window is used**. Windows need at least 7 selling days. The query also returns the **recent run rate** = units on the in-stock days of the last 30 days ÷ number of in-stock days (Live + Regular stock from `historical_inventory_till_date_UC`), and `show_two_quantities` (TRUE when the best-window average is MORE THAN 2× the recent run rate).
+
+Run this query (`${sku}` = master SKU, `${end}` = the IST yesterday from the Dates block). **For one warehouse** add `AND s.Facility = '<warehouse>'` in `raw_sales` and `AND h.Facility = '<warehouse>'` in `stock_days` (BLR = `myfrido-BLR_Hexalog`; look warehouse names up in `inventory_sales_allocation.facility_master`):
 ```sql
 
 WITH sku_map AS (
@@ -678,8 +684,7 @@ b2c_channel AS (
   FROM `frido-429506.inventory_sales_allocation.uc_channel_desc` GROUP BY 1
 ),
 raw_sales AS (
-  SELECT s.order_date AS d, s.total_quantity AS qty,
-    REGEXP_REPLACE(UPPER(TRIM(TRIM(REPLACE(SUBSTR(s.final_sku, 1, LEAST(
+  SELECT s.order_date AS d, s.total_quantity AS qty, REGEXP_REPLACE(UPPER(TRIM(TRIM(REPLACE(SUBSTR(s.final_sku, 1, LEAST(
       IF(STRPOS(s.final_sku, '_') > 0, STRPOS(s.final_sku, '_') - 1, LENGTH(s.final_sku)),
       IF(STRPOS(LOWER(s.final_sku), '-raw') > 0, STRPOS(LOWER(s.final_sku), '-raw') - 1, LENGTH(s.final_sku)))), '_', ' ')))), r'[\s_]+', '') AS k0
   FROM `frido-429506.production.aggregated_uniware_sales_report` s
@@ -698,12 +703,32 @@ daily AS (
   FROM UNNEST(GENERATE_DATE_ARRAY(DATE_SUB('${end}', INTERVAL 179 DAY), '${end}')) AS d
   LEFT JOIN sales_day USING (d)
 ),
+stock_days AS (   -- days in the last 30 on which the SKU had stock (Live + Regular)
+  SELECT h.inventory_date AS d
+  FROM `frido-429506.production.historical_inventory_till_date_UC` h
+  JOIN `frido-429506.inventory_sales_allocation.facility_master` f ON f.Facility = h.Facility
+  LEFT JOIN sku_map m ON m.k = REGEXP_REPLACE(UPPER(TRIM(TRIM(REPLACE(SUBSTR(h.ItemSkuCode, 1, LEAST(
+      IF(STRPOS(h.ItemSkuCode, '_') > 0, STRPOS(h.ItemSkuCode, '_') - 1, LENGTH(h.ItemSkuCode)),
+      IF(STRPOS(LOWER(h.ItemSkuCode), '-raw') > 0, STRPOS(LOWER(h.ItemSkuCode), '-raw') - 1, LENGTH(h.ItemSkuCode)))), '_', ' ')))), r'[\s_]+', '')
+  WHERE h.inventory_date BETWEEN DATE_SUB('${end}', INTERVAL 29 DAY) AND '${end}'
+    AND f.FCs_Status_for_Invt = 'Live' AND f.FacilityType = 'Regular'
+    AND COALESCE(m.master, REGEXP_REPLACE(UPPER(TRIM(TRIM(REPLACE(SUBSTR(h.ItemSkuCode, 1, LEAST(
+      IF(STRPOS(h.ItemSkuCode, '_') > 0, STRPOS(h.ItemSkuCode, '_') - 1, LENGTH(h.ItemSkuCode)),
+      IF(STRPOS(LOWER(h.ItemSkuCode), '-raw') > 0, STRPOS(LOWER(h.ItemSkuCode), '-raw') - 1, LENGTH(h.ItemSkuCode)))), '_', ' ')))), r'[\s_]+', '')) = REGEXP_REPLACE(UPPER(TRIM('${sku}')), r'[\s_]+', '')
+  GROUP BY h.inventory_date
+  HAVING SUM((COALESCE(h.Inventory, SAFE_CAST(h.Inventory_st AS INT64), 0) + COALESCE(h.InventoryBlocked, SAFE_CAST(h.InventoryBlocked_st AS INT64), 0))
+             * COALESCE(SAFE_CAST(REGEXP_EXTRACT(UPPER(h.ItemSkuCode), r'P[O0][_\s]*(\d+)') AS INT64), 1)) > 0
+),
+recent AS (   -- current run rate: units on the in-stock days of the last 30 days / number of in-stock days
+  SELECT COUNT(*) AS in_stock_days_30, SAFE_DIVIDE(SUM(dl.u), COUNT(*)) AS recent_run_rate_per_day
+  FROM stock_days sd JOIN daily dl ON dl.d = sd.d
+),
 lens AS (SELECT L FROM UNNEST(GENERATE_ARRAY(7, 30)) AS L),
-w AS (
+w AS (   -- every window of 7-30 days that starts inside the LAST 90 DAYS
   SELECT a.d AS s, l.L, b.u
   FROM daily a CROSS JOIN lens l
   JOIN daily b ON b.d BETWEEN a.d AND DATE_ADD(a.d, INTERVAL l.L - 1 DAY)
-  WHERE DATE_ADD(a.d, INTERVAL l.L - 1 DAY) <= '${end}'
+  WHERE a.d >= DATE_SUB('${end}', INTERVAL 89 DAY) AND DATE_ADD(a.d, INTERVAL l.L - 1 DAY) <= '${end}'
 ),
 med AS (SELECT s, L, APPROX_QUANTILES(u, 2)[OFFSET(1)] AS med FROM w GROUP BY s, L),
 agg AS (
@@ -714,26 +739,32 @@ agg AS (
     COUNTIF(w.u > 0) AS selling_days
   FROM w JOIN med m USING (s, L) GROUP BY w.s, w.L
 ),
-cand AS (
-  SELECT *, SAFE_DIVIDE(units_kept, days_kept) AS avg_per_day FROM agg WHERE selling_days >= 7
-),
+cand AS (SELECT *, SAFE_DIVIDE(units_kept, days_kept) AS avg_per_day FROM agg WHERE selling_days >= 7),
 best AS (SELECT MAX(avg_per_day) AS best_avg FROM cand),
-pick AS (
+pick AS (   -- longest window whose average is within 10% of the best
   SELECT c.* FROM cand c, best b WHERE c.avg_per_day >= 0.9 * b.best_avg
   ORDER BY c.L DESC, c.avg_per_day DESC, c.s DESC LIMIT 1
 ),
 tot AS (SELECT SUM(u) AS units_180d, COUNTIF(u > 0) AS selling_days_180d FROM daily),
 trend AS (
   SELECT STRING_AGG(FORMAT('%s %d', FORMAT_DATE('%b', m), u), ' · ' ORDER BY m) AS monthly_units
-  FROM (SELECT DATE_TRUNC(d, MONTH) AS m, SUM(u) AS u FROM daily WHERE d >= DATE_SUB('${end}', INTERVAL 179 DAY) GROUP BY m)
+  FROM (SELECT DATE_TRUNC(d, MONTH) AS m, SUM(u) AS u FROM daily GROUP BY m)
 )
 SELECT CAST(p.s AS STRING) AS window_start, CAST(DATE_ADD(p.s, INTERVAL p.L - 1 DAY) AS STRING) AS window_end, p.L AS window_days,
   p.units_raw AS window_units, p.spike_days AS spike_days_removed, p.units_kept AS units_used, p.days_kept AS days_used,
-  ROUND(p.avg_per_day, 2) AS planning_avg_per_day, ROUND(b.best_avg, 2) AS best_window_avg_per_day,
+  ROUND(p.avg_per_day, 2) AS planning_avg_per_day,
+  r.in_stock_days_30, ROUND(r.recent_run_rate_per_day, 2) AS recent_run_rate_per_day,
+  p.avg_per_day > 2 * r.recent_run_rate_per_day AS show_two_quantities,   -- TRUE: best window is more than 2x the current rate
   o.units_180d, o.selling_days_180d, t.monthly_units
-FROM tot o CROSS JOIN trend t LEFT JOIN pick p ON TRUE LEFT JOIN best b ON TRUE
+FROM tot o CROSS JOIN trend t CROSS JOIN recent r LEFT JOIN pick p ON TRUE
 ```
-Answer with: **window dates and length** (`window_start`–`window_end`, `window_days`), units (`window_units`, spike days removed), **planning avg per day**, and the 6-month monthly trend (`monthly_units`) in one line. Say which method was used ("planning avg"). If the query returns no window (`window_start` is NULL = fewer than 7 selling days in 180 days) use `units_180d` ÷ the number of days the SKU was in stock (from `historical_inventory_till_date_UC`, Live facilities, stock > 0; if you cannot get it, ÷ 180) and say clearly that it is a fallback. Planning questions use ONLY this avg.
+Answer with: **window dates and length** (`window_start`–`window_end`, `window_days`), units (`window_units`, spike days removed), **planning avg per day**, the **recent run rate**, and the 6-month monthly trend (`monthly_units`) in one line. Say which method was used ("planning avg").
+
+**Plan quantity:** `planning avg × (X days + lead time) − stock − on the way` (lead time 7 + 3 safety until measured; never below 0; say "stock on the way not included").
+- If `show_two_quantities` is FALSE: show one quantity.
+- If `show_two_quantities` is TRUE: show **two quantities** and a one-line warning. `Plan (best window): <qty>` (uses the planning avg) and `If current rate continues: <qty>` (uses `recent_run_rate_per_day` in the same formula). Warning line: "The best window (<dates>) sold <ratio>× the current rate; confirm which demand to plan for."
+- If the query returns no window (`window_start` is NULL = fewer than 7 selling days in 90 days) use `units_180d` ÷ the number of days the SKU was in stock (if you cannot get it, ÷ 180) and say clearly that it is a fallback.
+Planning questions use ONLY these numbers.
 
 **"avg sale / avg daily sale of <SKU>" with no context:** give both in one line — first `Planning avg: X/day (best window <dates>, N days)` from the query above, then `Inventory Health avg (last 30 days): Y/day` from this query (B2C units over the 30 days ending at the latest sales date ÷ 30; the page's own source `inventory_sales_window`):
 ```sql
