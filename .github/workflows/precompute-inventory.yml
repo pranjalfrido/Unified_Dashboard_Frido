@@ -2,6 +2,17 @@ name: Precompute Inventory Cache
 
 on:
   workflow_dispatch:        # triggered hourly by cron-job.org; manual trigger also available
+    inputs:
+      refresh_cost:
+        description: 'Also rebuild the logistics cost aggregates + JSON (heavy full-ledger queries on the live database - run outside business hours)'
+        type: boolean
+        default: false
+
+# One run at a time. cron-job.org fires hourly and a slow run used to overlap the next one,
+# doubling the load on the shared Supabase database. A new run now waits instead.
+concurrency:
+  group: precompute-inventory
+  cancel-in-progress: false
 
 jobs:
   precompute:
@@ -9,6 +20,19 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      # The logistics cost cache build runs several full scans of the 17 lakh-row B2C ledger.
+      # On the shared Supabase database that starves PostgREST for its duration ("Couldn't load
+      # your profile", 503 PGRST002 on 29 Oct). So it no longer runs every hour: only in the
+      # 21:00 UTC run (02:31 IST, off hours), or when dispatched by hand with refresh_cost.
+      # Decided first, so a run that starts late in the hour is still judged by its start time.
+      - name: Decide whether to rebuild the logistics cost cache
+        id: costgate
+        run: |
+          H=$(date -u +%H)
+          if [ "${{ inputs.refresh_cost }}" = "true" ] || [ "$H" = "21" ]; then RUN=true; else RUN=false; fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+          echo "UTC hour $H, refresh_cost=${{ inputs.refresh_cost }} -> logistics cost rebuild + cache: $RUN"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -72,7 +96,10 @@ jobs:
         run: |
           echo "::warning title=AWB dimension sync failed::awb_shipment_dims was NOT updated this run. Cost-by-product categories may be stale. The sync is incremental, so the next hourly run will catch up — but if this warning repeats, investigate."
 
+      # Also a full-ledger scan (checksum, then the lc_cube rebuild when it changed), so it is
+      # gated with the cost cache build: off hours or on demand, never during business hours.
       - name: Rebuild logistics cost aggregates if ledger changed
+        if: steps.costgate.outputs.run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -87,6 +114,7 @@ jobs:
         run: node scripts/sync-3pl-shipments.mjs
 
       - name: Generate static logistics cost JSON
+        if: steps.costgate.outputs.run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
