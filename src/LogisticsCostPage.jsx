@@ -4497,8 +4497,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             A separate section from the carriers above, because these are not carriers: they
             store and handle goods rather than move them, and are billed per site per month.
             The card therefore shows sites and a monthly charge where a carrier card shows
-            trips and a per-trip rate. Cost per parcel appears where the site's volume could
-            be matched to the Clickpost pickup data — see the 3PL tab for the full detail. */}
+            trips and a per-trip rate. Cost per unit appears where the site's volume could
+            be matched to Uniware dispatched units — see the 3PL tab for the full detail. */}
         {tpl?.partners?.length > 0 && (
           <>
             {(() => {
@@ -4528,9 +4528,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / month` : '—'}
                       </span>
                       {/* Per-unit rates, on their own row so they line up across cards. A
-                          dash where the partner's billed months have no matched parcels —
+                          dash where the partner's billed months have no matched units —
                           never a zero, which would read as "free" rather than "unknown". */}
-                      <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                      <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / unit` : '— / unit'}</span>
                       <span style={{ textAlign: 'right' }}>
                         {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
                       </span>
@@ -5119,8 +5119,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   } else if (scope === 'tpl') {
     // ── 3PL warehousing ──
     // Storage and handling billed per site per month, against the shipment volume each site
-    // actually moved. Volume comes from the Clickpost tracking report via pickup_name
-    // (scripts/sync-3pl-shipments.mjs) — the ledger itself carries no parcel count, so
+    // actually moved. Volume is Uniware dispatched units x SKU weight per facility
+    // (scripts/sync-3pl-shipments.mjs) — the ledger itself carries no unit count, so
     // without that join this tab could only report rupees.
     content = !tpl ? <Card title="Loading 3PL warehousing…" /> : !tpl.totals?.rows ? (
       <Card title="No 3PL invoices yet">
@@ -5177,9 +5177,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           <Hero
             label="Total Warehousing Cost"
             value={fmt(t.cost)}
-            // Falling cost per parcel is good news, so `good` is the inverse of `up`.
+            // Falling cost per unit is good news, so `good` is the inverse of `up`.
             deltas={rateDelta != null ? [{
-              pct: rateDelta, up: rateDelta > 0, good: rateDelta < 0, note: `₹/parcel vs ${prev.key}`,
+              pct: rateDelta, up: rateDelta > 0, good: rateDelta < 0, note: `₹/unit vs ${prev.key}`,
             }] : []}
             sub={<div>{fmt(perMonth)} per month · {fmtN(t.partners)} partners · {fmtN(t.warehouses)} sites</div>}
           >
@@ -5206,13 +5206,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
             {/* Row 1 — the unit economics. These are the figures a warehousing contract is
                 actually judged on; the composition split moved to row 2. */}
-            <Tile label="Cost / Parcel" value={perShip != null ? money1(perShip) : '—'}
+            <Tile label="Cost / Unit" value={perShip != null ? money1(perShip) : '—'}
               accent={C.acc}
-              sub={perShip != null ? `across ${fmtN(totalShip)} parcels` : 'no volume matched'} />
+              sub={perShip != null ? `across ${fmtN(totalShip)} units` : 'no volume matched'} />
             <Tile label="Cost / kg" value={perKg != null ? money1(perKg) : '—'}
               sub={perKg != null ? `${fmtN(Math.round(totalKg))} kg handled` : 'no weight matched'} />
-            <Tile label="Avg Parcel Weight" value={avgWt != null ? `${avgWt.toFixed(2)} kg` : '—'}
-              sub="shipped weight ÷ parcels" />
+            <Tile label="Avg Unit Weight" value={avgWt != null ? `${avgWt.toFixed(2)} kg` : '—'}
+              sub="dispatched weight ÷ units" />
             <Tile label="Cost / Site / Month"
               value={t.warehouses > 0 && t.months > 0 ? fmt(t.cost / t.warehouses / t.months) : '—'}
               sub={`${fmtN(t.warehouses)} sites · ${fmtN(t.months)} months`} />
@@ -5274,7 +5274,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <span style={{ textAlign: 'right' }}>
                   {pp.months > 0 ? `${fmt(pp.cost / pp.months)} / mo` : '—'}
                 </span>
-                <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / parcel` : '— / parcel'}</span>
+                <span>{pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)} / unit` : '— / unit'}</span>
                 <span style={{ textAlign: 'right' }}>
                   {pp.weight_kg > 0 ? `${money1(pp.cost / pp.weight_kg)} / kg` : '— / kg'}
                 </span>
@@ -5284,7 +5284,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         </div>
 
         <SectionHdr title="Monthly Trend"
-          note="cost per parcel against spend — the rate is what the chart is for"
+          note="cost per unit against spend — the rate is what the chart is for"
           collapsed={secHid['tpl-trend']} onToggle={() => toggleSec('tpl-trend')} />
         <div style={{ marginTop: 14, ...(secHid['tpl-trend'] ? { display: 'none' } : {}) }}><Card>
           <div style={{ height: 300 }}>
@@ -5295,8 +5295,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   total impossible to read off. A bar carries the total unambiguously and the
                   lines sit in front of it.
 
-                  Two axes on purpose — rupees and a per-parcel rate are different quantities,
-                  and a month can bill MORE in total while getting cheaper per parcel, which is
+                  Two axes on purpose — rupees and a per-unit rate are different quantities,
+                  and a month can bill MORE in total while getting cheaper per unit, which is
                   exactly what this data does and what the chart is for. */}
               <ComposedChart data={tplTrend} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
                 <BarGradient id="tplTotalBar" />
@@ -5338,7 +5338,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                         )}
                         {r.per_ship != null && (
                           <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>
-                            ₹{Math.round(r.per_ship).toLocaleString('en-IN')} / parcel
+                            ₹{Math.round(r.per_ship).toLocaleString('en-IN')} / unit
                           </div>
                         )}
                       </div>
@@ -5357,7 +5357,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <Line yAxisId="l" type="monotone" dataKey="other_fee" name="Other"
                   stroke={SER.yellow} strokeWidth={2} dot={{ r: 3, fill: SER.yellow }} />
                 {/* Drawn last so the rate — the reason this chart exists — sits on top. */}
-                <Line yAxisId="r" type="monotone" dataKey="per_ship" name="₹ / parcel"
+                <Line yAxisId="r" type="monotone" dataKey="per_ship" name="₹ / unit"
                   stroke={SER.aqua} strokeWidth={2.5} connectNulls={false}
                   dot={{ r: 3.5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }}
                   activeDot={{ r: 5, fill: SER.aqua, stroke: VIZ.surface, strokeWidth: 2 }} />
@@ -5374,7 +5374,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             rows={tpl.warehouses}
             columns={[
               { key: 'key', label: 'Facility' },
-              // The join key to shipment volume, shown so a facility with no parcels can be
+              // The join key to shipment volume, shown so a facility with no units can be
               // traced to the pincode that failed to match rather than looking unexplained.
               { key: 'pincode', label: 'Pincode', align: 'center',
                 render: (_, r) => r.pincode || '—' },
@@ -5384,14 +5384,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     ? <span title={r.partner}>{r.partner_n} contracts</span>
                     : r.partner
                 ) },
-              { key: 'shipments', label: 'Parcels', align: 'center',
+              { key: 'shipments', label: 'Units', align: 'center',
                 render: (_, r) => (r.shipments > 0 ? fmtN(r.shipments) : '—') },
               { key: 'weight_kg', label: 'Weight', align: 'center',
                 render: (_, r) => (r.weight_kg > 0 ? fmtN(Math.round(r.weight_kg)) + ' kg' : '—') },
               { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
               // The two figures this tab exists to produce. Shown as a dash, never as zero
               // or infinity, where the site billed a month that has no shipment data.
-              { key: 'per_ship', label: '₹ / Parcel', align: 'center',
+              { key: 'per_ship', label: '₹ / Unit', align: 'center',
                 render: (_, r) => (r.shipments > 0 ? money1(r.cost / r.shipments) : '—') },
               { key: 'per_kg', label: '₹ / kg', align: 'center',
                 render: (_, r) => (r.weight_kg > 0 ? money1(r.cost / r.weight_kg) : '—') },
@@ -5409,11 +5409,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           )}
         </Card></div>
 
-        <SectionHdr title="Rate by Partner" note="₹ per parcel — the ranking the contracts should be judged on"
+        <SectionHdr title="Rate by Partner" note="₹ per unit — the ranking the contracts should be judged on"
           collapsed={secHid['tpl-rate']} onToggle={() => toggleSec('tpl-rate')} />
         <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))',
           gap: 14, ...(secHid['tpl-rate'] ? { display: 'none' } : {}) }}>
-          <Card title="Cost per parcel by partner" note="partners with no matched volume are omitted">
+          <Card title="Cost per unit by partner" note="partners with no matched volume are omitted">
             <div style={{ height: 275 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {/* Horizontal bars: site names are words, not dates, and reading them along
@@ -5432,7 +5432,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     tick={{ fontSize: 11, fill: C.t2 }} axisLine={false} tickLine={false}
                     tickFormatter={v => (String(v).length > 20 ? String(v).slice(0, 19) + '…' : v)} />
                   <Tooltip content={<ChartTooltip formatter={v => money1(v)} />} />
-                  <Bar dataKey="per_ship" name="₹ / parcel" fill="url(#gTplRate)" radius={[0, 4, 4, 0]} maxBarSize={26}>
+                  <Bar dataKey="per_ship" name="₹ / unit" fill="url(#gTplRate)" radius={[0, 4, 4, 0]} maxBarSize={26}>
                     <LabelList dataKey="per_ship" position="right"
                       formatter={v => money1(v)}
                       style={{ fontSize: 10.5, fill: C.t2, fontWeight: 600 }} />
@@ -5446,7 +5446,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <ResponsiveContainer width="100%" height="100%">
                 {/* Deliberately NOT a scatter plot: with six sites a labelled bar pair reads
                     faster and needs no legend-hunting to tell which dot is which site. Share
-                    of spend against share of parcels — the gap between the two bars IS the
+                    of spend against share of units — the gap between the two bars IS the
                     story, so they sit adjacent rather than stacked. */}
                 <BarChart data={tplShareBySite} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
                   {/* Only the spend series takes the ramp. This chart is read by comparing
@@ -5467,14 +5467,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   <Tooltip content={<ChartTooltip formatter={v => Number(v).toFixed(1) + '%'} />} />
                   <Legend {...chartLegendProps({ fontSize: 10.5 })} />
                   <Bar dataKey="cost_pct" name="% of spend" fill="url(#gTplSpend)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="ship_pct" name="% of parcels" fill={SER.aqua} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="ship_pct" name="% of units" fill={SER.aqua} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </Card>
         </div>
 
-        <SectionHdr title="Warehouse Trend" note="cost per parcel by site, per billing month"
+        <SectionHdr title="Warehouse Trend" note="cost per unit by site, per billing month"
           collapsed={secHid['tpl-whtrend']} onToggle={() => toggleSec('tpl-whtrend')} />
         <div style={{ marginTop: 14, ...(secHid['tpl-whtrend'] ? { display: 'none' } : {}) }}><Card>
           <div style={{ height: 300 }}>

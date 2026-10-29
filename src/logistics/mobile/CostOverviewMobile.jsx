@@ -99,9 +99,9 @@ function Partners({ overall, b2cCards, b2bCards, fixedVeh, fixedVehMonths, tplPa
       const pct = overall.tplCost > 0 ? (pp.cost / overall.tplCost) * 100 : 0
       return {
         key: pp.key, name: pp.key, value: fmt(pp.cost), valueSub: `${pct.toFixed(1)}%`, bar: pct,
-        sub: `${fmtN(pp.warehouses)} site${pp.warehouses === 1 ? '' : 's'} · ${pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)}/parcel` : '—/parcel'}`,
+        sub: `${fmtN(pp.warehouses)} site${pp.warehouses === 1 ? '' : 's'} · ${pp.shipments > 0 ? `${money1(pp.cost / pp.shipments)}/unit` : '—/unit'}`,
         kv: [{ label: 'Cost', value: fmt(pp.cost) }, { label: 'Share', value: `${pct.toFixed(1)}%` }, { label: 'Sites', value: fmtN(pp.warehouses) }, { label: 'Per month', value: pp.months > 0 ? fmt(pp.cost / pp.months) : '—' },
-          { label: '₹ / parcel', value: pp.shipments > 0 ? money1(pp.cost / pp.shipments) : '—' }, { label: '₹ / kg', value: pp.weight_kg > 0 ? money1(pp.cost / pp.weight_kg) : '—' }],
+          { label: '₹ / unit', value: pp.shipments > 0 ? money1(pp.cost / pp.shipments) : '—' }, { label: '₹ / kg', value: pp.weight_kg > 0 ? money1(pp.cost / pp.weight_kg) : '—' }],
       }
     })
   }
