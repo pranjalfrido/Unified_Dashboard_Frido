@@ -45,7 +45,7 @@ Sales percentages (CIR, cancellation, return components) are **REVENUE-BASED** (
 | Net Revenue | locked formula below | Gross Exc GST × Retained Share after returns/cancels — see "EXACT formula for Net Revenue" |
 | RTO % | locked formula below | **Logistics → Performance only (Clickpost, shipment-based)** — RTO shipments ÷ forward shipments. Sep 2026 = 8.2%. See "EXACT SQL for Logistics Performance". Never the revenue-based version. |
 | CIR % | locked formula below | **REVENUE-BASED** — CIR Revenue ÷ Gross Revenue (Inc GST) × 100. NEVER order-count-based. See "EXACT formula for CIR %" section. |
-| Returns % | locked formula below | Mature window (today-44d to today-14d), NOT selected date range — see "EXACT SQL for SKU return %" section |
+| Returns % | locked formula below | **The answer period is the period asked** ("last month" = the previous calendar month, "this month", a date range), using the provisional/actual rules in "EXACT SQL for Returns". The mature window (today−43 to today−14) is NEVER the answer period: it only supplies each SKU's rolling rate for the latest 15 days (inside that SQL) and SKU-level return % ranking ("EXACT SQL for SKU return %"). |
 | Delivery Rate, TAT, EDD breach | locked formula below | Same Clickpost base as RTO % — see "EXACT SQL for Logistics Performance" |
 | Stuck Shipments | locked formula below | The page's "Critical Stuck" — see "EXACT SQL for Stuck Shipments" |
 | DOI | Inventory Health logic | DOI = floor(stock ÷ ceil(max(avg sale, order allocation))), avg sale per Location (7/15/30-day page toggle). Stock from the "EXACT query for total inventory" section (Regular + Live). You may read `api/_inventory_shared.js` (target=repo) to follow the page logic exactly. |
@@ -322,6 +322,8 @@ WHERE f.fcs_status_for_invt = 'Live'
 
 ## EXACT SQL for Returns — PROVISIONAL (as on Sales) and ACTUAL (Return Analysis)
 
+**The period of the answer is always the period asked** — "last month" = the previous calendar month from the Dates block (e.g. 1–30 Sep 2026), "this month" = month to date, or the date range given. Never answer a returns question with the mature window (that is only inside the SQL, for the latest 15 days). Use `${start}`/`${end}` = the asked period.
+
 Two definitions exist on the dashboard; show both when they differ.
 - **PROVISIONAL return % = what Sales, P&L, Overview and net revenue show** (`api/_returnComponents.js`, `computeNetRevenueMeasures` in `api/_bq.js`). Days older than 15 days use each SKU's REAL status revenue; the **latest 15 days** (`d >= mature_end` from the Dates block) use that SKU's rolling 30-day rate from the mature window (`mature_start`..`mature_end`) times that day's own gross (capped at the day's gross). **Total = RTO + CIR + Return-status + full Cancellations (COD included)** — the tile says "RTO+CIR+Cancelled rev"; Exchange is shown separately and is NOT in the total. SKU = the dashboard's MasterSKU (masterskucode, else ChannelSKUCode, else ProductId, cleaned).
 - **ACTUAL return % = the Return Analysis page** (`api/return-analysis.js`): actual statuses only, total = RTO + CIR + Return-status + **prepaid-only** cancellations.
@@ -429,7 +431,7 @@ ORDER BY gross_inc_gst DESC
 
 ### Return rates
 - Minimum 30 units required for SKU-level rate; below this, falls back to category rate
-- Mature window: today-44d to today-14d (30 days)
+- Mature window: today−43 to today−14 (30 days) — used only for rolling rates of the latest 15 days and SKU-level return % ranking, never as the period of an answer
 - Flipkart uses a different return rate formula — see `api/_bq.js` → `buildFkReturnRateMature()`
 - Myntra uses `FulfilmentStatus` for cancellations, not `Order_Status`
 
@@ -452,7 +454,7 @@ Never burn multiple tool calls trying to find the data elsewhere. Data not in th
 
 ## EXACT SQL for SKU return % — use this, never invent
 
-Return % for SKUs uses a **mature window anchored to today**, NOT the user's selected date range. Recent orders haven't had time to settle their RTO/CIR/Cancelled status yet, so using the current period gives artificially low return rates.
+**This section is ONLY for SKU-level return % (ranking SKUs / categories by return rate).** It does NOT answer "what is the return % for last month / this month / a date range" — for any asked period use "EXACT SQL for Returns" over exactly that period. For SKU ranking, return % uses a **mature window anchored to today** because recent orders haven't settled their RTO/CIR/Cancelled status yet, so the current period gives artificially low return rates.
 
 **Window**: the mature window from the Dates block — `'${mature_start}'` to `'${mature_end}'` (today−43 to today−14, 30 days, IST). Use those literal dates; never `CURRENT_DATE()` arithmetic.
 
