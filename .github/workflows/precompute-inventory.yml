@@ -117,6 +117,9 @@ jobs:
       # Runs every hour as a LIGHT build (transaction pooler, 120 s cap, no full-ledger detail
       # scans; those four sections are carried over). LC_FULL_BUILD=true only off hours / on demand.
       - name: Generate static logistics cost JSON
+        # Hourly light build is non-fatal: on failure the previous file stays and the ads / P&L / commit
+        # steps still run. The nightly FULL build stays fatal so a broken refresh is visible.
+        continue-on-error: ${{ steps.costgate.outputs.run != 'true' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
