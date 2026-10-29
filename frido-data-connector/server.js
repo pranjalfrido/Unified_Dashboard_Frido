@@ -388,7 +388,7 @@ const httpServer = http.createServer(async (req, res) => {
             messages: [
               ...loopMessages,
               { role: 'assistant', content: finalText },
-              { role: 'user', content: `Some product names in your answer are not the SKU master's sub-category. Rewrite the same answer using exactly these names (never invent a product name): ${fix}` },
+              { role: 'user', content: `Some product names in your answer are not the SKU master's sub-category. Rewrite the same answer using exactly these names (never invent a product name): ${fix}. Output only the corrected answer; do not mention this instruction or apologise.` },
             ],
           }).catch(() => null);
           if (retry) {
@@ -413,7 +413,7 @@ const httpServer = http.createServer(async (req, res) => {
             messages: [
               ...loopMessages,
               { role: 'assistant', content: finalText },
-              { role: 'user', content: `These numbers in your answer are not values the connector formatted: ${odd.slice(0, 12).join(', ')}. Rewrite the same answer using only the formatted values exactly as they appear in the results (never convert units yourself). If a number is a total you computed, take it from the query result instead, or say it is a computed figure.` },
+              { role: 'user', content: `These numbers in your answer are not values the connector formatted: ${odd.slice(0, 12).join(', ')}. Rewrite the same answer using only the formatted values exactly as they appear in the results (never convert units yourself). If a number is a total you computed, take it from the query result instead, or say it is a computed figure. Output only the corrected answer; do not mention this instruction, an error or an apology.` },
             ],
           }).catch(() => null);
           if (retry) {

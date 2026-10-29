@@ -414,7 +414,7 @@ ORDER BY gross_inc_gst DESC
 
 - COGS comes from `product_cogs_monthly` (per-unit cost per SKU per month), exactly as the P&L page does. Fallback order on the page for a SKU: that month's row (actual or carried forward) → average COGS of the SKU's sub-category that month → 40% of ASP (ASP < ₹5,000) or 50% of ASP.
 - **Every P&L / COGS answer says which COGS month was used**, e.g. `COGS for Oct uses Sep 2026 per-SKU cost (carried forward; latest actual month)`. Get it from `cogs_source` and `carried_from_month`.
-- P&L COGS for a period = the month-weighted per-unit cost × **net units after returns** (not gross units). Total COGS, COGS %, CM1 and CM1 % for a channel and month are produced by the P&L page's own logic; until the `pnl` tool exists, say that these totals are not available yet instead of estimating them. Overall P&L: "not available yet".
+- P&L COGS for a period = the month-weighted per-unit cost × **net units after returns** (not gross units). Total COGS, COGS %, CM1 and CM1 % for a channel and month are produced by the P&L page's own logic; until the `pnl` tool exists, say that these totals are not available yet instead of estimating them. **Never compute a total COGS, COGS % or CM1 yourself** (the sales and COGS data live in different databases and the page's net-units logic is not reproducible in SQL). Give what is available — the COGS month used and per-unit costs — and say the P&L total comes with the P&L tool. Overall P&L: "not available yet".
 
 ## Default behaviors (critical — wrong answers come from ignoring these)
 
