@@ -19,7 +19,7 @@
 |---|---|
 | `production.fact_all_platform_sales_report` | All sales, revenue, returns, RTO, CIR, orders, units |
 | `production.Clickpost_Shipment_Tracking_Report` | Logistics → Performance: RTO %, delivery rate, TAT, EDD breach, stuck, pending, NDR, courier performance. Courier **cost** is NOT answered from here — it comes from Logistics → Cost (courier invoice ledger); if you can't reach it, say so |
-| `production.Aggregated_uniware_sales_report` | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
+| `production.aggregated_uniware_sales_report` (table name is lower-case) | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
 | `production.historical_inventory_till_date_UC` | Daily stock history per SKU per facility — used to find in-stock runs for OOS loss calculation |
 | `production.pincode_city_master` | State, city, region, tier mapping by pincode |
 | `sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master` | Product master: category, GST rate, weight, dimensions |
@@ -540,7 +540,7 @@ Inventory Health's Avg Sale = units ÷ days over the last 7/15/30 days. For an O
 
 **Step 2 — Find the longest consecutive in-stock run in the last 180 days**, ending on or before the SKU's latest sales date. A day with no snapshot at all does NOT break a run (treat as in-stock). If two runs are equally long, use the more recent one.
 
-**Step 3 — Count B2C units sold during that run** from `production.Aggregated_uniware_sales_report`. B2C only — `uc_channel_desc = 'B2C Order'` OR not listed in the channel reference (unmapped = B2C, same rule as Inventory Health). Exclude B2B Order, Purchase Order, Stock transfer. Resolve SKU aliases via `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` (ProductId → masterskucode).
+**Step 3 — Count B2C units sold during that run** from `production.aggregated_uniware_sales_report`. B2C only — `uc_channel_desc = 'B2C Order'` OR not listed in the channel reference (unmapped = B2C, same rule as Inventory Health). Exclude B2B Order, Purchase Order, Stock transfer. Resolve SKU aliases via `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` (ProductId → masterskucode).
 
 **Step 4 — Divide:**
 ```
@@ -635,7 +635,7 @@ SELECT
     r'', ''
   ) AS master_sku,
   SUM(s.sale_qty) AS b2c_units
-FROM `frido-429506.production.Aggregated_uniware_sales_report` s
+FROM `frido-429506.production.aggregated_uniware_sales_report` s
 LEFT JOIN `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` m
   ON s.item_sku_code = m.productid
 WHERE s.sale_date BETWEEN '${run_start}' AND '${run_end}'
@@ -648,7 +648,7 @@ GROUP BY master_sku
 
 **Critical rules — never break these:**
 - Use longest in-stock run, NOT a fixed recent window like "last 30 days".
-- B2C only — exclude B2B Order, Purchase Order, Stock transfer from `Aggregated_uniware_sales_report`.
+- B2C only — exclude B2B Order, Purchase Order, Stock transfer from `aggregated_uniware_sales_report`.
 - Apply the 14-day minimum run length fallback — a 1–3 day run gives a wildly misleading daily rate.
 - Always flag when 180-day fallback is used.
 - OOS loss uses ASP from `fact_all_platform_sales_report`, not a hardcoded price.

@@ -32,7 +32,7 @@ function dayLabel(iso) {
 export async function freshnessNote(sql) {
   try {
     const found = [...String(sql).matchAll(/production\.([A-Za-z0-9_]+)/g)].map(x => x[1]);
-    const tables = [...new Set(found)].filter(t => /fact_all_platform_sales_report|Clickpost_Shipment_Tracking_Report|Aggregated_uniware_sales_report/.test(t));
+    const tables = [...new Set(found)].filter(t => /fact_all_platform_sales_report|Clickpost_Shipment_Tracking_Report|aggregated_uniware_sales_report/i.test(t));
     if (!tables.length) return null;
     const touched = datesTouched(sql);
     if (!touched.length) return null;

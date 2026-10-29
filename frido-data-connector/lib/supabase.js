@@ -1,4 +1,12 @@
 import pg from 'pg';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// The Supabase pooler presents a chain signed by "Supabase Root 2021 CA", which is not in Node's public CA store.
+// We keep certificate verification ON and trust exactly that CA (intermediate + root, public certificates).
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SUPABASE_CA = readFileSync(path.join(here, '..', 'knowledge', 'supabase-ca.crt'), 'utf8');
 
 let _pool;
 function getPool() {
@@ -9,7 +17,7 @@ function getPool() {
     connectionString: url,
     max: 3,
     idleTimeoutMillis: 30000,
-    ssl: { rejectUnauthorized: true },
+    ssl: { rejectUnauthorized: true, ca: SUPABASE_CA },
   });
   return _pool;
 }
