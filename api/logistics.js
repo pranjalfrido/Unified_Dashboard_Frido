@@ -1,6 +1,7 @@
-import { getBQ } from './_bq.js'
+import { getBQ, requestTimer } from './_bq.js'
 
 export default async function handler(req, res) {
+  const timer = requestTimer('logistics')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -1100,9 +1101,12 @@ SELECT
 
   try {
     const bq = getBQ()
+    const qt0 = Date.now()
     const [rows] = await bq.query({ query, maximumBytesBilled: '10000000000' })
-    if (!rows.length) return res.json({})
+    timer.queryTimings.push({ key: 'logistics_main', ms: Date.now() - qt0 })
+    if (!rows.length) { timer.finish(res); return res.json({}) }
     const r = rows[0]
+    timer.finish(res)
     res.json({
       kpis: JSON.parse(r.kpis),
       byCourier: JSON.parse(r.by_courier),
@@ -1147,6 +1151,7 @@ SELECT
     })
   } catch (e) {
     console.error('[logistics]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { getBQ } from './_bq.js'
+import { getBQ, requestTimer } from './_bq.js'
 
 // Out-of-stock loss view (Inventory Health > "OOS loss"): every SKU out of stock today that sold
 // in the last 180 days, with how long it has been out, what it sells per day while in stock, its
@@ -60,13 +60,22 @@ function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(
 function round(v, p) { const f = 10 ** p; return Math.round(v * f) / f }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('inventory-oos')
   try {
     const refresh = req.body?.refresh || req.query?.refresh
-    if (!cache || refresh || Date.now() - cache.at > TTL) cache = { at: Date.now(), payload: await buildOos() }
+    const cacheKey = 'oos'
+    if (!cache || refresh || Date.now() - cache.at > TTL) {
+      timer.markCacheMiss(cacheKey)
+      cache = { at: Date.now(), payload: await buildOos() }
+    } else {
+      timer.markCacheHit(cacheKey)
+    }
     res.setHeader('Cache-Control', 'no-store')
+    timer.finish(res)
     res.status(200).json(cache.payload)
   } catch (e) {
     console.error('[inventory-oos]', e)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

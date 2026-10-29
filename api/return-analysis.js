@@ -1,4 +1,4 @@
-import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, requestTimer } from './_bq.js'
 
 // D2C – Return Analysis. Dedicated endpoint (mirrors api/returns.js's single-purpose style)
 // rather than growing api/bq.js further. Reuses buildQuery/netRevenueSelectFragment/
@@ -40,6 +40,7 @@ function shopifyWhere(filters) {
 }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('return-analysis')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -54,7 +55,8 @@ export default async function handler(req, res) {
 
   const cacheKey = getCacheKey(req.body)
   const cached = getFromCache(cacheKey)
-  if (cached) { res.setHeader('X-Cache', 'HIT'); return res.json(cached) }
+  if (cached) { timer.markCacheHit(cacheKey); res.setHeader('X-Cache', 'HIT'); timer.finish(res); return res.json(cached) }
+  timer.markCacheMiss(cacheKey)
 
   try {
     const bq = getBQ()
@@ -495,9 +497,11 @@ export default async function handler(req, res) {
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
     res.json(payload)
   } catch (e) {
     console.error('[return-analysis]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

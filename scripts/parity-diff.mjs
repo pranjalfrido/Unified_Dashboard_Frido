@@ -40,9 +40,20 @@ function diffValues(path, a, b, diffs) {
     return
   }
   if (Array.isArray(a) && Array.isArray(b)) {
-    const len = Math.max(a.length, b.length)
+    // Several BigQuery aggregate queries in this codebase return an array with no explicit/stable
+    // ORDER BY tiebreaker (e.g. logistics.js's byWeek/byStatus/rtoReasons, customer-support.js's
+    // pendency) — confirmed by direct comparison: re-running the SAME unchanged code twice can
+    // reorder rows while every row's own field values stay byte-identical. A positional [i]
+    // comparison would then report thousands of false "diffs" that are pure row-order noise, not
+    // real numeric changes. Sort both arrays by their own JSON string representation before
+    // comparing — this is order-insensitive (catches a value actually changing) while still catching
+    // a row being added/removed/mutated (the sorted multiset differs either way).
+    const sortKey = v => JSON.stringify(v)
+    const sortedA = [...a].sort((x, y) => sortKey(x).localeCompare(sortKey(y)))
+    const sortedB = [...b].sort((x, y) => sortKey(x).localeCompare(sortKey(y)))
+    const len = Math.max(sortedA.length, sortedB.length)
     for (let i = 0; i < len; i++) {
-      diffValues(`${path}[${i}]`, a[i], b[i], diffs)
+      diffValues(`${path}[sorted:${i}]`, sortedA[i], sortedB[i], diffs)
     }
     return
   }
