@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a4d34" />
+  <title>Frido Navigator · Offline</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #EDF1EF; font-family: Inter, system-ui, -apple-system, sans-serif; color: #1c2420 }
+    .top { background: linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%); padding: calc(14px + env(safe-area-inset-top)) 20px 14px; color: #fff; font-weight: 700; font-size: 16px }
+    .box { max-width: 360px; margin: 18vh auto 0; padding: 0 24px; text-align: center }
+    img { width: 64px; height: 64px }
+    h1 { font-size: 19px; margin: 18px 0 8px }
+    p { font-size: 14px; line-height: 1.5; color: #4B534F; margin: 0 0 22px }
+    button { font: inherit; font-weight: 600; font-size: 15px; color: #fff; background: #1f5a3d; border: none; border-radius: 12px; padding: 12px 28px; min-height: 44px; cursor: pointer }
+  </style>
+</head>
+<body>
+  <div class="top">Frido Navigator</div>
+  <div class="box">
+    <img src="/icon-192.png" alt="" />
+    <h1>You're offline</h1>
+    <p>Frido Navigator needs an internet connection to load your numbers. It will open again by itself once you're back online.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </div>
+  <script>
+    // Reopen the app as soon as the connection is back (the 'online' event alone is not reliable on phones).
+    function retry() { fetch('/manifest.webmanifest', { cache: 'no-store' }).then(function (r) { if (r.ok) location.reload() }, function () {}) }
+    addEventListener('online', retry)
+    setInterval(retry, 5000)
+  </script>
+</body>
+</html>
