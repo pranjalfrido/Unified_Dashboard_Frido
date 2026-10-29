@@ -1,4 +1,4 @@
-﻿import { getBQ } from './_bq.js'
+﻿import { getBQ, requestTimer, runQueriesLimited } from './_bq.js'
 import { getPool } from './_db.js'
 
 // All queries use fact_all_platform_sales_report filtered to Shopify
@@ -40,6 +40,7 @@ function crossSellTotals(rows) {
 }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('customer')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -71,10 +72,10 @@ export default async function handler(req, res) {
     const rollingStartD = new Date(matureEndD); rollingStartD.setDate(rollingStartD.getDate() - 29)
     const rollingStart = rollingStartD.toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis, repurchaseDue] = await Promise.all([
+    const queries = {
 
       // Q1 — KPIs for the selected period (Shopify only)
-      run(`WITH first_dates AS (
+      kpis: `WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -140,10 +141,10 @@ SELECT
   , 0) AS net_revenue,
   COUNT(DISTINCT CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN OrderId END) AS discounted_orders,
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
-FROM order_agg`),
+FROM order_agg`,
 
       // Q2 — daily new vs repeat (frontend aggregates to weekly/monthly)
-      run(`WITH first_dates AS (
+      monthly: `WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -173,10 +174,10 @@ SELECT
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN OrderId END) AS repeat_orders
 FROM period
 GROUP BY day
-ORDER BY day`),
+ORDER BY day`,
 
       // Q3 — cohort retention (all-time, last 18 months of cohorts) with revenue
-      run(`WITH first_orders AS (
+      cohort: `WITH first_orders AS (
   SELECT CustomerId, DATE_TRUNC(MIN(DATE(OrderDate)), MONTH) AS cohort_month
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -204,10 +205,10 @@ cohort_data AS (
 )
 SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, customers, revenue
 FROM cohort_data
-ORDER BY cohort_month, cohort_index`),
+ORDER BY cohort_month, cohort_index`,
 
       // Q4 — first vs second purchase cross-sell (revenue-weighted category per order)
-      run(`WITH
+      crossSell: `WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name, Sub_category
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
@@ -267,10 +268,10 @@ JOIN sp USING (CustomerId)
 WHERE fp.first_category IS NOT NULL AND sp.second_category IS NOT NULL
 GROUP BY first_category, first_sub_category, second_category, second_sub_category
 HAVING COUNT(DISTINCT fp.CustomerId) > 0
-ORDER BY customers DESC`), // every pair (C5): the totals use all of them; only the display list is cut to 500 below
+ORDER BY customers DESC`, // every pair (C5): the totals use all of them; only the display list is cut to 500 below
 
       // Q5 â€” RFM segments (trailing 12 months up to end date)
-      run(`WITH customer_stats AS (
+      rfm: `WITH customer_stats AS (
   SELECT
     CustomerId,
     DATE_DIFF(DATE('${e}'), MAX(DATE(OrderDate)), DAY) AS recency_days,
@@ -313,10 +314,10 @@ SELECT segment,
   ROUND(AVG(recency_days), 0) AS avg_recency
 FROM segmented
 GROUP BY segment
-ORDER BY total_revenue DESC`),
+ORDER BY total_revenue DESC`,
 
       // Q6 â€” purchase frequency distribution (all-time)
-      run(`WITH freq AS (
+      freqDist: `WITH freq AS (
   SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -329,10 +330,10 @@ SELECT
   ROUND(SUM(orders), 0) AS total_orders
 FROM freq
 GROUP BY frequency_label
-ORDER BY MIN(orders)`),
+ORDER BY MIN(orders)`,
 
       // Q7 â€” monetary distribution (all-time)
-      run(`WITH customer_ltv AS (
+      monetaryDist: `WITH customer_ltv AS (
   SELECT CustomerId, ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -346,11 +347,11 @@ SELECT
   ROUND(AVG(monetary), 0) AS avg_revenue
 FROM customer_ltv
 GROUP BY bucket
-ORDER BY MIN(monetary)`),
+ORDER BY MIN(monetary)`,
 
       // Q8 — inactivity buckets as of the end date (C1, Suraj 27 Oct): only orders up to the end
       // date count, so a past range no longer puts customers who ordered after it into "Active"
-      run(`WITH last_purchase AS (
+      inactivity: `WITH last_purchase AS (
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -362,10 +363,10 @@ SELECT
   COUNT(*) AS customers
 FROM last_purchase
 GROUP BY bucket
-ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
+ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`,
 
       // Q9 — discount distribution using actual Listing_Price & Discount columns (Shopify only)
-      run(`WITH
+      discountDist: `WITH
 first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -423,22 +424,22 @@ SELECT
   ROUND(AVG(disc_pct), 1) AS avg_disc_pct
 FROM bucketed
 GROUP BY discount_bucket, sort_order
-ORDER BY sort_order`),
+ORDER BY sort_order`,
 
       // Q10 â€” ads KPIs
-      run(`SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
+      adsKpis: `SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
-GROUP BY platform`),
+GROUP BY platform`,
 
       // Q11 — daily ad spend (Meta + Google combined) for trend chart
-      run(`SELECT CAST(report_date AS STRING) AS day, ROUND(SUM(spend), 0) AS total_spend
+      dailySpend: `SELECT CAST(report_date AS STRING) AS day, ROUND(SUM(spend), 0) AS total_spend
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
-GROUP BY day ORDER BY day`),
+GROUP BY day ORDER BY day`,
 
       // Q12 — prev period KPIs
-      run(`WITH first_dates AS (
+      prevKpis: `WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') GROUP BY CustomerId
 ),
@@ -488,18 +489,18 @@ SELECT
       - CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END
     ELSE order_rev_exc * (1 - COALESCE((SELECT return_rate FROM mature_rate), 0)) END)
   , 0) AS net_revenue
-FROM order_agg`),
+FROM order_agg`,
 
       // Q13 — prev period ads
-      run(`SELECT platform, ROUND(SUM(spend), 0) AS spend
+      prevAdsKpis: `SELECT platform, ROUND(SUM(spend), 0) AS spend
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${ps}' AND '${pe}' AND platform IN ('Meta', 'Google')
-GROUP BY platform`),
+GROUP BY platform`,
 
       // Q14 — discount depth vs repeat rate using actual Listing_Price & Discount columns (all-time, Shopify only)
       // For each discount % bucket: of customers whose FIRST-EVER order fell in that bucket,
       // what % went on to place a second order (ever)?
-      run(`WITH
+      discountRepeatRate: `WITH
 order_agg AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
     SAFE_DIVIDE(SUM(Discount), NULLIF(SUM(Listing_Price), 0)) AS disc_ratio
@@ -545,10 +546,10 @@ SELECT
   ROUND(SAFE_DIVIDE(COUNTIF(total_orders > 1), COUNT(DISTINCT CustomerId)) * 100, 1) AS repeat_rate
 FROM bucketed
 GROUP BY discount_bucket, sort_order
-ORDER BY sort_order`),
+ORDER BY sort_order`,
 
       // Q15 — days between 1st and 2nd purchase (all-time, not date-filtered)
-      run(`WITH
+      daysToSecondPurchase: `WITH
 orders AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
   FROM ${TBL}
@@ -587,10 +588,10 @@ SELECT
   CASE bucket WHEN '0-7d' THEN 0 WHEN '8-30d' THEN 1 WHEN '31-60d' THEN 2 WHEN '61-90d' THEN 3 WHEN '91-180d' THEN 4 ELSE 5 END AS sort_order
 FROM bucketed
 GROUP BY bucket
-ORDER BY sort_order`),
+ORDER BY sort_order`,
 
       // Q16 — AOV by order number (1st through 6th+), revenue-weighted, all-time
-      run(`WITH
+      aovByOrderNumber: `WITH
 order_totals AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
     SUM(SellingPrice_Exc_GST) AS order_rev
@@ -617,10 +618,10 @@ SELECT
   COUNT(*) AS customers
 FROM capped
 GROUP BY order_label, order_sort
-ORDER BY order_sort`),
+ORDER BY order_sort`,
 
       // Q17 — median days to 2nd purchase per first-purchase category (all-time)
-      run(`WITH
+      repurchaseCycleByCategory: `WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
@@ -662,10 +663,10 @@ SELECT
 FROM gaps
 GROUP BY first_category
 HAVING COUNT(*) >= 5
-ORDER BY median_days`),
+ORDER BY median_days`,
 
       // Q18 — basket composition: single vs multi-category orders
-      run(`WITH
+      basketComposition: `WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
@@ -696,10 +697,10 @@ SELECT
   ROUND(AVG(distinct_categories), 2) AS avg_categories_per_order,
   ROUND(AVG(distinct_skus), 2) AS avg_skus_per_order,
   ROUND(AVG(total_items), 2) AS avg_items_per_order
-FROM order_cats`),
+FROM order_cats`,
 
       // Q19 — purchase behavior KPIs (repeat rate, avg orders, avg days between orders, multi-cat customers)
-      run(`WITH
+      purchaseBehaviorKpis: `WITH
 all_orders AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
   FROM ${TBL}
@@ -751,10 +752,10 @@ SELECT
   COUNTIF(cc.distinct_categories > 1) AS multi_cat_customers
 FROM customer_stats cs
 LEFT JOIN (SELECT CustomerId, AVG(gap) AS avg_gap FROM gaps GROUP BY CustomerId) g USING (CustomerId)
-LEFT JOIN customer_cats cc USING (CustomerId)`),
+LEFT JOIN customer_cats cc USING (CustomerId)`,
 
       // Q20 — order frequency histogram (1,2,3,4,5,6+) all-time
-      run(`WITH freq AS (
+      orderFreqDist: `WITH freq AS (
   SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
@@ -767,10 +768,10 @@ SELECT
   COUNT(*) AS customers
 FROM freq
 GROUP BY order_count, sort_order
-ORDER BY sort_order`),
+ORDER BY sort_order`,
 
       // Q21 — repeat rate by first-order discount status
-      run(`WITH
+      discountRepeatRateByFirst: `WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
@@ -812,10 +813,10 @@ SELECT
   ROUND(SAFE_DIVIDE(COUNT(DISTINCT so.CustomerId), COUNT(DISTINCT fo.CustomerId)) * 100, 1) AS repeat_rate
 FROM first_orders fo
 LEFT JOIN second_orders so USING (CustomerId)
-GROUP BY fo.first_order_type`),
+GROUP BY fo.first_order_type`,
 
       // Q22 — category-wise discount analysis
-      run(`WITH
+      categoryDiscountAnalysis: `WITH
 first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -867,12 +868,15 @@ FROM with_repeat
 GROUP BY category
 HAVING COUNT(DISTINCT OrderId) >= 50
 ORDER BY total_orders DESC
-LIMIT 20`),
+LIMIT 20`,
 
       // Q23 — Repurchase due (C9, Suraj 27 Oct): per category, customers whose LAST order in that
       // category (up to the end date) is 1–2× the category's median days to 2nd purchase (the same
       // all-time median as Q17), plus a coarse days-since-last-order distribution. One row per
       // category, cached for 6 h per end date.
+    }
+    const [queryResults, repurchaseDue] = await Promise.all([
+      runQueriesLimited(bq, queries, timer),
       cachedByKey(`due:${e}`, () => run(`WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
@@ -928,6 +932,8 @@ JOIN med m USING (category)
 GROUP BY l.category, m.median_days
 ORDER BY due_customers DESC`)),
     ])
+    const qr = Object.fromEntries(queryResults.map(({ key, rows }) => [key, rows]))
+    const { kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis } = qr
 
     // Fetch additional (offline) spend from Postgres for the selected date range.
     // Pro-rate partial months: only include the fraction of each month that falls within [s, e]
@@ -1075,6 +1081,7 @@ LIMIT 50`)
     const pRepeatRevenue = parseFloat(pk.repeat_revenue) || 0
     const pNetRevenue = parseFloat(pk.net_revenue) || 0
 
+    timer.finish(res)
     res.json({
       kpis: {
         grossSales,
@@ -1271,6 +1278,7 @@ LIMIT 50`)
     })
   } catch (err) {
     console.error('[customer]', err)
+    timer.finish(res)
     res.status(500).json({ error: err.message })
   }
 }
