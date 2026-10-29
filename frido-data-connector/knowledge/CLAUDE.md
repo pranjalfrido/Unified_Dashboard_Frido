@@ -31,7 +31,8 @@
 | `inv_snapshot` | Current inventory by SKU + facility — columns: `item_sku_code`, `facility`, `updated` (timestamp), `rtd_invt`, `raw_invt`, `raw_blocked_invt`, `inventory`, `inventory_blocked`. No `snapshot_at` or `updated_at` column. |
 | `sales_window` | Recent sales for avg daily sale calculation |
 | `item_master` | Product master (synced hourly from BigQuery) |
-| `cogs_ledger` | COGS per SKU per month — columns: `itemskucode`, `month` (text, format `YYYY-MM`), `cogs` (numeric), `category`, `subcategory`, `is_explicit`. **Note: data may lag 1-2 months; check `SELECT DISTINCT month FROM cogs_ledger ORDER BY month DESC LIMIT 3` before assuming current month is available.** |
+| `product_cogs_monthly` | **COGS per SKU per month — the table the P&L page uses.** Columns: `sku`, `month` (first day of the month, date), `cogs` (per unit, ₹), `category`, `sub_category`, `cogs_source` ('actual' or 'carried_forward'), `carried_from_month`. Real (uploaded) months today: Jun–Sep 2026; every other month is carried forward from the nearest real month (Oct 2026 = carried from Sep 2026; months before Jun 2026 = carried back from Jun). Check `SELECT DISTINCT month, cogs_source, carried_from_month` before answering. |
+| `cogs_ledger` | The manual COGS editor table (CogsPage) — **NOT what the P&L uses**, and it only holds Jul 2026. Do not use it to say whether COGS is "loaded". |
 | `facility_master` | Warehouse metadata, FC status, location |
 | `sales_90d` | 90-day aggregates for dead-stock detection |
 
@@ -409,6 +410,12 @@ ORDER BY gross_inc_gst DESC
 
 "Critical" on the dashboard = days of inventory ≤ 2 (bands: Critical ≤ 2, Low ≤ 15, Sufficient ≤ 45, Excess > 45), Regular + Live facilities. Until the dashboard-matching tool exists, answer "top N critical products" as a **custom calculation**: (a) stock per SKU from the locked inventory query below with `facility_type = 'Regular'` (Regular + Live only) grouped by `item_sku_code`; (b) avg daily sale = B2C units from `sales_window` over the last 30 days ÷ 30 (check the channel description for B2C in `uc_channel_desc` first); (c) days of cover = stock ÷ avg daily sale, keep SKUs with stock > 0 and avg daily sale > 0, order by days of cover ascending, LIMIT N. Select the SKU as `item_sku_code` so the connector adds Sub-category and Category. First line: `Custom calculation, not from the dashboard: critical = lowest days of inventory, Regular + Live warehouses, avg sale over the last 30 days.` Say "as of <inventory update time>".
 
+## COGS and P&L answers
+
+- COGS comes from `product_cogs_monthly` (per-unit cost per SKU per month), exactly as the P&L page does. Fallback order on the page for a SKU: that month's row (actual or carried forward) → average COGS of the SKU's sub-category that month → 40% of ASP (ASP < ₹5,000) or 50% of ASP.
+- **Every P&L / COGS answer says which COGS month was used**, e.g. `COGS for Oct uses Sep 2026 per-SKU cost (carried forward; latest actual month)`. Get it from `cogs_source` and `carried_from_month`.
+- P&L COGS for a period = the month-weighted per-unit cost × **net units after returns** (not gross units). Total COGS, COGS %, CM1 and CM1 % for a channel and month are produced by the P&L page's own logic; until the `pnl` tool exists, say that these totals are not available yet instead of estimating them. Overall P&L: "not available yet".
+
 ## Default behaviors (critical — wrong answers come from ignoring these)
 
 ### Logistics
@@ -451,7 +458,7 @@ ORDER BY gross_inc_gst DESC
 If the user asks for a specific month, date, or range and the table has no data for that period — **stop immediately and say so**. Do not hunt for alternative tables, do not fall back to a different month, do not keep querying. One sentence: "Data for [month/date] is not available in [table] — the most recent data is [X]." Then stop.
 
 Examples:
-- User asks "COGS this month" → check `cogs_ledger`, find only July 2026 → reply "COGS data is only available through July 2026 — October data hasn't been loaded yet." Done.
+- User asks "COGS this month" -> check `product_cogs_monthly` (NOT `cogs_ledger`): this month has rows with `cogs_source = 'carried_forward'` -> answer from them and say which month's cost is used, e.g. "COGS for Oct 2026 uses Sep 2026 per-SKU cost (carried forward; latest actual month)." Only say data is missing when a SKU or month has no row at all.
 - User asks "sales on 2025-03-01" → no rows for that date → reply "No sales data found for that date." Done.
 
 Never burn multiple tool calls trying to find the data elsewhere. Data not in the expected table = data not available.

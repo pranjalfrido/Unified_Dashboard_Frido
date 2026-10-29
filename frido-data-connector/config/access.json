@@ -14,6 +14,7 @@
         "sales_window",
         "item_master",
         "cogs_ledger",
+        "product_cogs_monthly",
         "facility_master",
         "sales_90d"
       ],
@@ -28,6 +29,7 @@
         "sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
         "inv_snapshot",
         "cogs_ledger",
+        "product_cogs_monthly",
         "item_master",
         "sales_90d"
       ],

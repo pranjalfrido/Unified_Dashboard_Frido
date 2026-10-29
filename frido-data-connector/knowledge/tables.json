@@ -27,6 +27,7 @@
     "state_region_nearest_wh",
     "user_profiles",
     "user_permissions",
-    "packaging_sku_master"
+    "packaging_sku_master",
+    "product_cogs_monthly"
   ]
 }
