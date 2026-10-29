@@ -1689,29 +1689,15 @@ svg text, svg tspan{
    room for the bottom bar, or fills the visible area while the keyboard is open (the bar hides then). */
 .pm-root{ position:fixed; left:0; right:0; z-index:90; display:flex; flex-direction:column; background:#f4f2ed; font-family:var(--font); color:#1c2420; font-variant-numeric:tabular-nums }
 .pm-root button{ -webkit-tap-highlight-color:transparent; font-family:var(--font) }
-.pm-root button:focus, .pm-root textarea:focus, .bottom-sheet .pm-hrow button:focus, .bottom-sheet .pm-newq:focus, .bottom-sheet .pm-confirm button:focus{ outline:none }
-.pm-root button:focus-visible, .bottom-sheet .pm-hrow button:focus-visible, .bottom-sheet .pm-newq:focus-visible, .bottom-sheet .pm-confirm button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:2px }
+.pm-root button:focus, .pm-root textarea:focus, .bottom-sheet .pm-chats button:focus, .bottom-sheet .pm-confirm button:focus, .pm-full button:focus, .pm-toast button:focus{ outline:none }
+.pm-root button:focus-visible, .bottom-sheet .pm-chats button:focus-visible, .bottom-sheet .pm-confirm button:focus-visible, .pm-full button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:2px }
 .pm-root .mph button:focus-visible{ outline-color:#9fe0b9 }
 .pm-kb .mnav{ display:none !important }
 .mph-tag{ font-style:normal; font-size:12px; font-weight:700; color:#cfe5d7; background:rgba(255,255,255,.12); border-radius:6px; padding:2px 6px; flex:0 0 auto; align-self:center }
-.pm-in-chat .mph-title{ align-items:center }
-.pm-in-chat .mph-title b{ font-size:15px; flex:0 1 auto; min-width:0 }
 .pm-thread{ position:relative; flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch }
 .pm-thread-inner{ padding:14px 14px 8px }
 /* empty state */
-.pm-empty{ padding:6px 14px 10px }
-.pm-hero{ text-align:center; padding:22px 6px 6px }
-.pm-bolt{ width:52px; height:52px; border-radius:16px; margin:0 auto 12px; display:grid; place-items:center; color:#1f5a3d; background:linear-gradient(160deg,#dcebe2,#f1f7f3); box-shadow:0 6px 16px -8px rgba(31,90,61,.35) }
-.pm-hero h2{ font-size:19px; font-weight:700; margin:0; letter-spacing:-.01em }
-.pm-hero p{ font-size:13px; color:#7b847f; margin:5px 0 0 }
 .pm-sh{ font-size:12px; font-weight:700; letter-spacing:.06em; color:#7b847f; margin:18px 2px 8px; text-transform:uppercase }
-.pm-sug{ display:flex; align-items:center; gap:10px; width:100%; min-height:52px; text-align:left; background:#fff; border:1px solid #eae7df; border-radius:14px; padding:10px 12px; margin-bottom:8px; font-size:13.5px; font-weight:500; color:#1c2420; cursor:pointer }
-.pm-sug i{ flex:0 0 auto; width:30px; height:30px; border-radius:9px; background:#eef5f0; display:grid; place-items:center; color:#1f5a3d }
-.pm-sug span{ flex:1; min-width:0 }
-.pm-sug .pm-chev{ color:#9aa29d; flex:0 0 auto }
-.pm-rec{ display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:8px 2px; border:none; border-bottom:1px solid #eae7df; background:none; text-align:left; font-size:13px; color:#4e5a54; cursor:pointer }
-.pm-rec span{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.pm-rec svg{ color:#9aa29d; flex:0 0 auto }
 /* thread */
 .pm-me{ margin:4px 0 14px auto; width:fit-content; max-width:82%; background:#1f5a3d; color:#fff; font-size:14px; line-height:1.4; padding:9px 12px; border-radius:16px 16px 4px 16px; white-space:pre-wrap; overflow-wrap:anywhere }
 .pm-ai{ margin-bottom:14px; font-size:14px; line-height:1.5; min-width:0 }
@@ -1722,18 +1708,8 @@ svg text, svg tspan{
 .pm-answer .af-md-h2{ font-size:15.5px }
 .pm-answer .af-md-h3{ font-size:14.5px }
 .pm-answer .af-inline-code{ font-size:12.5px; overflow-wrap:anywhere }
-.pm-answer .af-table-wrap{ overflow-x:auto; overflow-y:hidden; margin:8px 0; border:1px solid #eae7df; border-radius:12px; background:#fff; overscroll-behavior-x:contain; max-width:100% }
-.pm-answer .af-table-wrap.pm-more{ -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)); mask-image:linear-gradient(to right,#000 calc(100% - 28px),rgba(0,0,0,.15)) }
-.pm-answer .af-table{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; margin:0; border:none }
-.pm-answer .af-table th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; text-align:left; padding:7px 8px; vertical-align:bottom; border:none; min-width:64px }
-.pm-answer .af-table td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; min-width:64px; max-width:170px; overflow-wrap:break-word; word-break:normal; hyphens:none }
-.pm-answer .af-table .pm-n{ text-align:right; white-space:nowrap }
-.pm-answer .af-table th:first-child, .pm-answer .af-table td:first-child{ position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #eeebe4 }
-.pm-answer .af-table th:first-child{ background:#f6f4ef }
 /* whole words stay together; the first column gets room for a name like "Instamart" or "Delhivery NDD" */
-.pm-answer .af-table td:first-child{ min-width:96px }
 /* no hover tint on touch (the laptop rule highlights the row under the pointer) */
-.pm-answer .af-table tbody tr:hover{ background:transparent }
 .pm-acts{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
 .pm-act{ height:30px; padding:0 10px; border-radius:9px; border:1px solid #eae7df; background:#fff; color:#1f5a3d; font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:5px; cursor:pointer }
 span.pm-act{ cursor:default; color:#1f8a4c }
@@ -1751,19 +1727,67 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .pm-send:disabled{ background:#d6e3da; cursor:default }
 .pm-disc{ font-size:12px; color:#7b847f; text-align:center; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 /* history sheet + delete confirm (inside the shared BottomSheet) */
-.pm-newq{ display:flex; align-items:center; justify-content:center; gap:6px; width:100%; height:44px; border:none; border-radius:12px; background:#1f5a3d; color:#fff; font-size:13.5px; font-weight:600; margin-bottom:10px; cursor:pointer; font-family:var(--font) }
 .pm-search{ display:flex; align-items:center; gap:8px; height:44px; border-radius:12px; background:#f4f2ed; padding:0 12px; color:#7b847f; margin-bottom:4px }
 .pm-search input{ flex:1; min-width:0; border:none; outline:none; background:none; font-size:16px; font-family:var(--font); color:#1c2420 }
-.pm-hrow{ display:flex; align-items:center; gap:6px; min-height:48px; border-bottom:1px solid #f0ede6 }
-.pm-hrow.on{ background:#f3f8f4; border-radius:10px; box-shadow:inset 3px 0 0 #1f5a3d; border-bottom-color:transparent }
-.pm-hopen{ flex:1; min-width:0; min-height:48px; padding:8px 4px 8px 10px; border:none; background:none; text-align:left; font-size:13.5px; font-weight:600; color:#1c2420; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; font-family:var(--font) }
-.pm-hdel{ flex:0 0 auto; width:44px; height:44px; border:none; background:none; color:#7b847f; display:grid; place-items:center; border-radius:10px; cursor:pointer }
-.pm-hconf{ flex:1; display:flex; align-items:center; gap:6px; padding:4px 4px 4px 10px; font-size:13px; color:#1c2420 }
-.pm-hconf span{ flex:1; font-weight:600 }
-.pm-hconf button, .pm-confirm button{ min-height:36px; padding:0 12px; border-radius:10px; border:1px solid #e1ded5; background:#fff; color:#1c2420; font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font) }
-.pm-hconf .pm-danger{ color:#c0392b; border-color:#f1d3ce }
 .pm-none{ font-size:13px; color:#7b847f; text-align:center; padding:18px 0 }
 .pm-confirm-text{ margin:0 0 14px; font-size:14px; color:#1c2420 }
 .pm-confirm{ display:flex; gap:8px }
 .pm-confirm button{ flex:1; min-height:44px }
 .pm-confirm .pm-danger-fill{ background:#c0392b; border-color:#c0392b; color:#fff }
+
+/* Pulse phone fixes (PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html) */
+.pm-root .mph-title b{ font-size:16px }
+.pm-new{ flex:0 0 auto; height:44px; padding:0 4px; margin-left:4px; border:none; background:none; display:grid; place-items:center; cursor:pointer; -webkit-tap-highlight-color:transparent }
+.pm-new span{ display:flex; align-items:center; gap:5px; height:32px; padding:0 11px; border-radius:10px; background:rgba(255,255,255,.14); color:#fff; font-size:13px; font-weight:650 }
+.pm-new:active span{ background:rgba(255,255,255,.22) }
+.pm-first{ padding:14px 14px 10px }
+.pm-hello{ font-size:20px; font-weight:700; margin:6px 2px 2px; letter-spacing:-.01em; color:#1c2420 }
+.pm-lede{ font-size:13px; line-height:1.45; color:#7b847f; margin:0 2px 4px }
+.pm-first .pm-sh{ margin:16px 2px 8px }
+.pm-chips{ display:flex; flex-wrap:wrap; gap:6px }
+.pm-chip{ display:flex; align-items:center; gap:6px; min-height:36px; padding:7px 11px; border-radius:12px; background:#fff; border:1px solid #e6e2d8; color:#1c2420; font-size:13px; font-weight:500; text-align:left; cursor:pointer }
+.pm-chip:active{ background:#f3f8f4 }
+.pm-chip i{ font-style:normal; font-size:12px; font-weight:700; color:#1f5a3d; background:#eef5f0; border-radius:6px; padding:1px 5px; flex:0 0 auto }
+.pm-rec{ display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; min-height:44px; padding:8px 2px; border:none; border-bottom:1px solid #eae7df; background:none; text-align:left; font-size:13.5px; color:#4e5a54; cursor:pointer }
+.pm-rec span{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pm-rec small{ flex:0 0 auto; font-size:12px; color:#9aa29d }
+.pm-src{ font-size:12px; color:#7b847f; margin-top:6px }
+.pm-tbw{ margin:8px 0 6px }
+.pm-tbox{ background:#fff; border:1px solid #eae7df; border-radius:12px; overflow:hidden }
+.pm-tb{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; line-height:1.4; font-variant-numeric:tabular-nums; margin:0; border:none }
+.pm-tb th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:left; padding:7px 8px; vertical-align:bottom; border:none }
+.pm-tb td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; overflow-wrap:break-word; word-break:normal }
+.pm-tb .n{ text-align:right; white-space:nowrap }
+.pm-tb td small{ display:block; font-size:12px; color:#9aa29d; margin-top:1px }
+.pm-tb tr.tot td{ font-weight:700; background:#fbfaf7 }
+.pm-tb .up{ color:#1f8a4c } .pm-tb .dn{ color:#c0392b }
+.pm-tb tbody tr:hover{ background:transparent }
+.pm-tbar{ display:flex; align-items:center; gap:4px; margin:2px 0 0 }
+.pm-tbar button{ display:inline-flex; align-items:center; gap:5px; min-height:40px; padding:0 4px; border:none; background:none; color:#1f5a3d; font-size:12.5px; font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent }
+.pm-tbar button + button{ margin-left:8px }
+.pm-tbar .pm-copy{ margin-left:auto }
+.pm-full{ position:fixed; inset:0; z-index:500; display:flex; flex-direction:column; background:#f4f2ed; font-family:var(--font); color:#1c2420 }
+.pm-full-body{ flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px max(12px, var(--safe-right)) calc(16px + var(--safe-bottom)) max(12px, var(--safe-left)) }
+.pm-full .pm-tb{ width:auto; min-width:100%; background:#fff; border:none; box-shadow:0 0 0 1px #eae7df; border-radius:12px }
+.pm-full .pm-tb th, .pm-full .pm-tb td{ white-space:nowrap }
+.pm-full .pm-tb td:first-child{ white-space:normal; min-width:120px; max-width:180px }
+.pm-full .pm-tb th:first-child, .pm-full .pm-tb td:first-child{ position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #eeebe4 }
+.pm-full .pm-tb th:first-child{ background:#f6f4ef }
+.pm-full .pm-tb tr.tot td:first-child{ background:#fbfaf7 }
+.pm-chats{ display:flex; flex-direction:column; min-height:min(56dvh, 420px) }
+.pm-chats .pm-search{ margin-bottom:2px }
+.pm-chats .pm-sh{ margin:14px 2px 4px }
+.pm-hi{ position:relative; overflow:hidden; border-bottom:1px solid #f0ede6 }
+.pm-hi.on{ border-bottom-color:transparent }
+.pm-hdel{ position:absolute; right:0; top:0; bottom:0; width:84px; border:none; background:#c0392b; color:#fff; font-size:13px; font-weight:700; cursor:pointer; font-family:var(--font) }
+.pm-hin{ position:relative; z-index:1; display:flex; align-items:center; gap:8px; width:100%; min-height:52px; padding:9px 8px 9px 10px; border:none; background:#fff; text-align:left; color:#1c2420; cursor:pointer; font-family:var(--font); touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; transition:transform 200ms ease }
+.pm-hi.on .pm-hin{ background:#f3f8f4; box-shadow:inset 3px 0 0 #1f5a3d; border-radius:10px }
+.pm-hmain{ flex:1; min-width:0 }
+.pm-hmain b{ display:block; font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pm-hmain small{ display:block; font-size:12px; color:#9aa29d; margin-top:1px }
+.pm-hi.on .pm-hmain small{ color:#1f5a3d; font-weight:600 }
+.pm-hin > svg{ color:#b3b9b5; flex:0 0 auto }
+.pm-hint{ font-size:12px; color:#9aa29d; text-align:center; margin-top:auto; padding:14px 0 2px }
+.pm-toast{ position:fixed; left:12px; right:12px; bottom:calc(var(--bot) + var(--safe-bottom) + 70px); z-index:600; display:flex; align-items:center; justify-content:space-between; gap:12px; background:#1c2420; color:#fff; border-radius:12px; padding:4px 6px 4px 14px; min-height:44px; font-size:13.5px; font-family:var(--font); box-shadow:0 8px 20px rgba(0,0,0,.25) }
+.pm-toast button{ min-height:40px; padding:0 10px; border:none; background:none; color:#9fe0b9; font-size:13.5px; font-weight:700; cursor:pointer; font-family:var(--font); -webkit-tap-highlight-color:transparent }
+@media (prefers-reduced-motion: reduce){ .pm-hin{ transition:none } }
