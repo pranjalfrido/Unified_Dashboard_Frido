@@ -178,6 +178,10 @@ function createMcpServer(user) {
   return server;
 }
 
+// A failure in one request must never take the whole instance down.
+process.on('unhandledRejection', err => console.error('unhandledRejection', err));
+process.on('uncaughtException', err => console.error('uncaughtException', err));
+
 const PORT = process.env.PORT || 8080;
 
 // Browsers may call /chat only from the dashboard origin (CORS_ORIGIN, comma-separated). api/pulse.js
@@ -263,7 +267,8 @@ const httpServer = http.createServer(async (req, res) => {
     }
 
     const user = authResult.user;
-    const anthropic = new Anthropic({ apiKey });
+    // dangerouslyAllowBrowser: this is a server; the SDK check only trips while the P&L tool's headless DOM globals exist.
+    const anthropic = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
     const lastUserMsg = messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '';
     const isComplex = /compar|breakdown|analys|trend|p&l|profit|loss|why|explain|forecast|correlat|multi|across|vs\b|versus|deep|inventor|planning|plan|oos|out.of.stock|lead.time|reorder|avg.daily|average.daily|stuck|stock.out|stockout/i.test(lastUserMsg);

@@ -14,12 +14,14 @@ let PnLPage = null;
 let domReady = false;
 
 const realFetch = globalThis.fetch.bind(globalThis);
+const installed = [];   // DOM globals we added, removed again after every run (the Anthropic SDK refuses to start when window exists)
+let chain = Promise.resolve();   // one headless render at a time
 
 function setupDom() {
   if (domReady) return;
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: `${DASH}/`, pretendToBeVisual: true });
   const w = dom.window;
-  const def = (k, v) => { try { Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true }); } catch { /* ignore */ } };
+  const def = (k, v) => { try { Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true }); installed.push(k); } catch { /* ignore */ } };
   def('window', w); def('document', w.document); def('navigator', w.navigator);
   def('localStorage', w.localStorage); def('sessionStorage', w.sessionStorage);
   // Only what the page needs. Event / CustomEvent / Node are left alone: Node's fetch (undici) extends the global Event.
@@ -38,6 +40,13 @@ function setupDom() {
   domReady = true;
 }
 
+function teardownDom() {
+  for (const k of installed) { try { delete globalThis[k]; } catch { /* ignore */ } }
+  installed.length = 0;
+  globalThis.fetch = realFetch;
+  domReady = false;
+}
+
 async function loadPayload(start, end) {
   const key = `${start}|${end}`;
   const hit = payloadCache.get(key);
@@ -50,7 +59,7 @@ async function loadPayload(start, end) {
 }
 
 // tab: shopify (D2C) | amazon | flipkart | ebo | offline | blinkit | zepto | instamart | cred | firstcry | myntra
-export async function runPnl({ tab, start, end }) {
+async function runPnlOnce({ tab, start, end }) {
   setupDom();
   if (!PnLPage) PnLPage = (await import('../vendor/pnl/pnl-bundle.mjs')).default;
   const data = await loadPayload(start, end);
@@ -72,4 +81,12 @@ export async function runPnl({ tab, start, end }) {
     root.unmount();
     mount.remove();
   }
+}
+
+export function runPnl(args) {
+  const run = chain.then(async () => {
+    try { return await runPnlOnce(args); } finally { teardownDom(); }
+  });
+  chain = run.catch(() => {});
+  return run;
 }
