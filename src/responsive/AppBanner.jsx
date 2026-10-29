@@ -7,6 +7,9 @@ import { isStandalone, isIOS, subscribe, canPromptInstall, promptInstall, hasUpd
 // for 7 days. In the installed app: "New version available · Refresh" after a deploy.
 const KEY = 'frido.installDismissedAt'
 const WEEK = 7 * 24 * 60 * 60 * 1000
+// Same rule as the phone layout in index.css (the bottom bar is mounted on laptops too, just hidden).
+const PHONE = '(max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse)'
+const isPhone = () => window.matchMedia?.(PHONE).matches === true
 const dismissedRecently = () => { try { return Date.now() - Number(localStorage.getItem(KEY) || 0) < WEEK } catch { return false } }
 
 const ShareIcon = (
@@ -18,8 +21,17 @@ const ShareIcon = (
 export default function AppBanner() {
   const [, tick] = useState(0)
   const [hidden, setHidden] = useState(dismissedRecently)
+  const [phone, setPhone] = useState(isPhone)
   useEffect(() => subscribe(() => tick(n => n + 1)), [])
+  useEffect(() => {
+    const mq = window.matchMedia?.(PHONE)
+    if (!mq) return
+    const on = () => setPhone(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
 
+  if (!phone) return null
   const standalone = isStandalone()
   const update = standalone && hasUpdate()
   const ios = !standalone && isIOS()
