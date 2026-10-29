@@ -49,6 +49,16 @@ function getCostPool() {
     // Without this, an idle-client error from the pooler becomes an unhandled
     // rejection that takes the whole server process down.
     costPool.on('error', e => console.error('[logistics-cost pool]', e.message))
+    // Cache build only (scripts/generate-logistics-cost-cache.mjs sets the flag and connects
+    // over the SESSION port). Supavisor ignores the startup `options` above, so the role's
+    // 120 s default still applied and the full-ledger queries were cancelled. A plain SET
+    // sticks for the life of a session-mode connection. Never done on the shared transaction
+    // pooler the deployed API uses, where a session SET could leak onto other clients.
+    if (process.env.LC_SESSION_STATEMENT_TIMEOUT === '1') {
+      costPool.on('connect', client => {
+        client.query('SET statement_timeout = 600000').catch(e => console.error('[logistics-cost pool] SET statement_timeout failed:', e.message))
+      })
+    }
   }
   return costPool
 }

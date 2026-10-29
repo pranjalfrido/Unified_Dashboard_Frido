@@ -18,7 +18,12 @@ config()
 // host on 5432), where the handler's 600 s statement_timeout applies. Same rule as
 // scripts/refresh-lc-cube-only.mjs. This only affects this script; the deployed API is unchanged.
 const sessionUrl = process.env.SUPABASE_DB_URL || (process.env.SUPABASE_URL || '').replace(':6543/', ':5432/')
-if (sessionUrl) process.env.SUPABASE_URL = sessionUrl
+if (sessionUrl) {
+  process.env.SUPABASE_URL = sessionUrl
+  // The pooler drops the URL's statement_timeout option; ask the handler's pool to SET it on
+  // each session connection instead (see getCostPool in api/logistics-cost.js).
+  process.env.LC_SESSION_STATEMENT_TIMEOUT = '1'
+}
 
 // Import the handler directly to avoid needing an HTTP server
 // This runs the exact same code path as the API, using the same SUPABASE_URL env var.
