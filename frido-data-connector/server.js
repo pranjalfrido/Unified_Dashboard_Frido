@@ -15,9 +15,18 @@ import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
+import { formatTsv } from './lib/format.js';
+import { normalizeSql, datesBlock } from './lib/dates.js';
+import { enrichSkus, wrongNames } from './lib/skuMaster.js';
+import { freshnessNote } from './lib/freshness.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const KNOWLEDGE = readFileSync(path.join(__dirname, 'knowledge', 'CLAUDE.md'), 'utf8');
+const readKnowledge = name => {
+  try { return readFileSync(path.join(__dirname, 'knowledge', name), 'utf8'); } catch { return ''; }
+};
+// KNOWLEDGE_FILE (tests only) points at a candidate CLAUDE.md instead of knowledge/CLAUDE.md.
+const CORE = process.env.KNOWLEDGE_FILE ? readFileSync(process.env.KNOWLEDGE_FILE, 'utf8') : readKnowledge('CLAUDE.md');
+const KNOWLEDGE = [CORE, readKnowledge('PULSE_PLAYBOOK.md'), readKnowledge('PULSE_METRICS.md')].filter(Boolean).join('\n\n---\n\n');
 
 const TOOL_DESCRIPTION = `Run a read-only command against Frido live data. Use for ANY Frido business question — stock, revenue, returns, logistics, courier, ads, or any metric.
 - target=bigquery → SQL query against BigQuery tables
@@ -25,32 +34,33 @@ const TOOL_DESCRIPTION = `Run a read-only command against Frido live data. Use f
 - target=repo → cat/ls/head/grep to read dashboard formula code from GitHub`;
 
 function buildSystemPrompt() {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  const today = ist.toISOString().slice(0, 10);
-  return `Today's date is ${today} (IST). Use this as the reference for all date calculations — never hardcode a year or guess the date.
+  return `${datesBlock()}
 
 You have access to the run_command tool which connects to Frido's live business data. NEVER answer business questions from memory — always use run_command to query live data first.
 
 ${KNOWLEDGE}`;
 }
 
-// Single tool executor — used by both MCP and /chat
+// Single tool executor — used by both MCP and /chat.
+// Returns { ok, text, denied?, skus?, note?, sql? }. `denied` = refused by the authorization or safety
+// layer (not a query error); /chat counts these and tells the model not to retry.
 async function executeTool(user, command, target) {
   const start = Date.now();
+  // Force IST in any SQL the model wrote (CURRENT_DATE() -> CURRENT_DATE('Asia/Kolkata')).
+  if (target === 'bigquery' || target === 'supabase') command = normalizeSql(command, target);
 
   const authzResult = authorizeToolCall(user, 'run_command', target);
   if (!authzResult.ok) {
     writeAuditLog({ user, tool: 'run_command', target, command, outcome: 'denied', denialReason: authzResult.message, latencyMs: Date.now() - start });
     log({ user: user.email, role: user.role, target, command, allowed: false, reason: authzResult.message, duration: Date.now() - start });
-    return { ok: false, text: authzResult.message };
+    return { ok: false, denied: true, text: authzResult.message };
   }
 
   if (!isAllowed(command, target)) {
     const reason = blockReason(command, target);
     writeAuditLog({ user, tool: 'run_command', target, command, outcome: 'denied', denialReason: reason, latencyMs: Date.now() - start });
     log({ user: user.email, role: user.role, target, command, allowed: false, reason, duration: Date.now() - start });
-    return { ok: false, text: `Not permitted: ${reason}` };
+    return { ok: false, denied: true, text: `Not permitted: ${reason}` };
   }
 
   try {
@@ -59,20 +69,30 @@ async function executeTool(user, command, target) {
     else if (target === 'supabase') result = await runSupabase(command);
     else result = await runRepo(command);
 
-    const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    let text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    let skus = new Map();
+    let note = null;
+    if (target === 'bigquery' || target === 'supabase') {
+      // SKU rows get Sub-category + Category from the SKU master; amounts and counts are formatted
+      // in the Indian system here so the model copies them instead of converting units itself.
+      ({ text, skus } = await enrichSkus(text));
+      text = formatTsv(text);
+      if (target === 'bigquery') note = await freshnessNote(command);
+    }
     const truncated = text.length > 50000;
     const output = truncated ? text.slice(0, 50000) + '\n\n[truncated: true]' : text;
     const latencyMs = Date.now() - start;
 
     writeAuditLog({ user, tool: 'run_command', target, command, outcome: 'ok', rowsReturned: text.split('\n').length, latencyMs });
     log({ user: user.email, role: user.role, target, command, allowed: true, resultSize: text.length, truncated, duration: latencyMs });
-    return { ok: true, text: output };
+    return { ok: true, text: output, skus, note, sql: command };
   } catch (err) {
     const reqId = Math.random().toString(36).slice(2, 10);
     const latencyMs = Date.now() - start;
     writeAuditLog({ user, tool: 'run_command', target, command, outcome: 'error', denialReason: err.message, latencyMs, reqId });
     log({ user: user.email, role: user.role, target, command, allowed: true, error: err.message, reqId, duration: latencyMs });
-    return { ok: false, text: `Query failed (ref: ${reqId}). Please try rephrasing or contact accounts@myfrido.com.` };
+    // The model sees the real error so it can fix the query; users never do.
+    return { ok: false, text: `Query failed (ref: ${reqId}): ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
   }
 }
 
@@ -213,6 +233,14 @@ const httpServer = http.createServer(async (req, res) => {
       let finalText = '';
       let usedSql = null;
       let iterations = 0;
+      // Per-question state: denial cap, SKU names from the master, sync notes, what was tried.
+      let denials = 0;
+      let forceFinal = false;
+      let queriesRun = 0;
+      let queryErrors = 0;
+      let lastProblem = '';
+      const seenSkus = new Map();
+      const syncNotes = new Set();
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
 
@@ -223,7 +251,7 @@ const httpServer = http.createServer(async (req, res) => {
           max_tokens: isComplex ? 16000 : 8192,
           system: buildSystemPrompt(),
           tools,
-          tool_choice: iterations === 1 ? { type: 'any' } : { type: 'auto' },
+          tool_choice: forceFinal ? { type: 'none' } : (iterations === 1 ? { type: 'any' } : { type: 'auto' }),
           messages: loopMessages,
         };
         if (isComplex && model === 'claude-opus-4-7') reqParams.thinking = { type: 'adaptive' };
@@ -245,12 +273,29 @@ const httpServer = http.createServer(async (req, res) => {
           if (block.type !== 'tool_use') continue;
           const { command, target } = block.input;
           const result = await executeTool(user, command, target);
+          queriesRun++;
+          let content = result.text;
+          if (result.denied) {
+            denials++;
+            lastProblem = `denied: ${String(result.text).slice(0, 120)}`;
+            content = `DENIED: ${result.text}. Do not retry this; use another route (the locked templates, other allowed tables, or your own logic labelled "Custom calculation, not from the dashboard:").`;
+          } else if (!result.ok) {
+            queryErrors++;
+            lastProblem = result.error || 'query failed';
+          }
+          if (result.skus) for (const [k, v] of result.skus) seenSkus.set(k, v);
+          if (result.note) syncNotes.add(result.note);
           toolResults.push({
             type: 'tool_result',
             tool_use_id: block.id,
-            content: result.text,
+            content,
             is_error: !result.ok,
           });
+        }
+        // Max 2 denials per question, then answer with what we have.
+        if (denials >= 2 && !forceFinal) {
+          forceFinal = true;
+          toolResults.push({ type: 'text', text: 'Two requests were denied. Stop calling tools and answer now with what you already have. If you must use your own logic, start with "Custom calculation, not from the dashboard:" and the definition in one line.' });
         }
 
         loopMessages = [
@@ -279,13 +324,47 @@ const httpServer = http.createServer(async (req, res) => {
         }
       }
 
+      // Product names must be the SKU master's sub-category. If the answer shows a different name for a
+      // SKU, send it back once with the correct names.
+      if (finalText && seenSkus.size) {
+        const bad = wrongNames(finalText, seenSkus);
+        if (bad.length) {
+          const fix = [...new Map(bad.map(b => [b.sku, b.want])).entries()].map(([k, v]) => `${k} = ${v}`).join('; ');
+          const retry = await anthropic.messages.create({
+            model,
+            max_tokens: 4096,
+            system: buildSystemPrompt(),
+            tools,
+            tool_choice: { type: 'none' },
+            messages: [
+              ...loopMessages,
+              { role: 'assistant', content: finalText },
+              { role: 'user', content: `Some product names in your answer are not the SKU master's sub-category. Rewrite the same answer using exactly these names (never invent a product name): ${fix}` },
+            ],
+          }).catch(() => null);
+          if (retry) {
+            totalInputTokens += retry.usage?.input_tokens || 0;
+            totalOutputTokens += retry.usage?.output_tokens || 0;
+            for (const block of retry.content) if (block.type === 'text') finalText = block.text;
+          }
+        }
+      }
+
       await trackUsage({ model, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, user }).catch(() => {});
 
       if (!finalText) {
+        // One line: what was tried and what is missing — never a bare "query failed".
+        const tried = queriesRun
+          ? `I ran ${queriesRun} data ${queriesRun === 1 ? 'request' : 'requests'}${denials ? ` (${denials} denied)` : ''}${queryErrors ? ` (${queryErrors} failed)` : ''}`
+          : 'I could not start a data query';
+        const missing = lastProblem ? ` but ${lastProblem}, so there is no number I can stand behind yet.` : ' but got no usable result, so there is no number I can stand behind yet.';
         res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'No answer could be generated — the data query failed. Please try again or contact data.team@myfrido.com.' }));
+        res.end(JSON.stringify({ error: `${tried}${missing} Please rephrase with a date range or channel, or contact data.team@myfrido.com.` }));
         return;
       }
+
+      // Never present a partial day as final: one code-added line, whatever the model wrote.
+      if (syncNotes.size && !/still syncing/i.test(finalText)) finalText += `\n\n${[...syncNotes].join(' ')}`;
 
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 
 let _bq;
-function getBQ() {
+export function getBQ() {
   if (_bq) return _bq;
   const keyPath = process.env.GCP_SA_KEY_FILE;
   const keyJson = process.env.GCP_SA_KEY;
