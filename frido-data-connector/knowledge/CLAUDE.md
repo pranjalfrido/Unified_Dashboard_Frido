@@ -395,7 +395,7 @@ ORDER BY gross_inc_gst DESC
 
 **Answer format**
 - If the period includes the latest 15 days (`includes_latest_15_days` = true): first line `**Returns (provisional, as on Sales): X%** · Actual so far (Return Analysis): Y%` (X = `provisional_total_return_pct`, Y = `actual_total_return_pct`). Then one short line: *Provisional = actual statuses for days older than 15 days plus each SKU's rolling 30-day rate for the latest 15 days (as on Sales / P&L / Overview); actual = Return Analysis, actual statuses only, prepaid cancellations only.* Then the breakdown for the provisional view: Cancellation, RTO (in returns, as on Sales), CIR, Exchange, Total — ₹ and %.
-- If the whole period is older than 15 days: one number `**Returns: X%**` and say "all days are older than 15 days, so provisional = actual statuses". Same breakdown.
+- If the whole period is older than 15 days (`includes_latest_15_days` = false): show ONLY one number, `**Returns: X%**` (X = `provisional_total_return_pct`), and one short line "all days are older than 15 days, so provisional = actual statuses". Do NOT show the "Actual so far (Return Analysis)" figure in this case. Same breakdown.
 - A standalone "RTO %" question still uses Logistics → Performance, never this.
 - Net revenue: say it uses the provisional return rate for the latest 15 days.
 

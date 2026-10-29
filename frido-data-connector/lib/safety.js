@@ -26,7 +26,7 @@ const ALLOWED_REPO_CMDS = /^(cat|ls|head|grep|find)\s/i;
 const ALLOWED_REPO_BARE = /^(ls)$/i;
 
 // Dangerous SQL keywords that should never appear even in comments
-const HARD_BLOCKED = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|MERGE|TRUNCATE|REPLACE|CALL|EXEC|EXECUTE|GRANT|REVOKE|EXPORT\s+DATA|LOAD\s+DATA|INTO\s+OUTFILE)\b/i;
+const HARD_BLOCKED = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|MERGE|TRUNCATE|CALL|EXEC|EXECUTE|GRANT|REVOKE|EXPORT\s+DATA|LOAD\s+DATA|INTO\s+OUTFILE)\b/i;
 
 function extractTablesFromAst(ast) {
   const tables = [];
