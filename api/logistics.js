@@ -1,5 +1,39 @@
 import { getBQ, requestTimer } from './_bq.js'
 
+// Full-response cache keyed on the filter payload — modeled directly on api/logistics-cost.js's
+// respCache (read that file first; same shape: Map, FIFO eviction via RESP_CACHE_MAX, stable
+// sorted-key JSON.stringify). This endpoint has ZERO caching before this change (see PERF_AUDIT),
+// unlike logistics-cost.js's 60-min respCache or bq.js's getFromCache/setInCache — every slicer
+// change here, including the client-side-only zone/payment/state/city re-renders that don't even
+// change the filter payload, was a guaranteed ~6-20s BigQuery re-scan of
+// Clickpost_Shipment_Tracking_Report.
+//
+// TTL: 5 minutes, much shorter than logistics-cost.js's 60 min. logistics-cost.js's underlying
+// data (a hand-uploaded invoice ledger) only changes when someone uploads a new file, so a long
+// TTL costs nothing. This endpoint's source table (Clickpost_Shipment_Tracking_Report, filtered by
+// DATE(created_at)) is live operational shipment-tracking data with no documented sync cadence —
+// unlike Inventory Health's hourly cron (CLAUDE.md) there is no fixed refresh interval to key off
+// here, so 5 minutes is a conservative cap chosen to keep same-day numbers from ever reading
+// meaningfully stale during a user's session, while still absorbing the very common case of a
+// user toggling a client-only filter (zone/payment/state/city) or re-opening the tab shortly after
+// their last visit.
+const RESP_TTL_MS = 5 * 60 * 1000
+const RESP_CACHE_MAX = 24
+const respCache = new Map()
+
+// Stable key: JSON.stringify is order-sensitive, so sort the entries first (same convention as
+// logistics-cost.js's cacheKey) or the same filter set arriving in a different key order would
+// miss the cache.
+function cacheKey(f) {
+  const pick = {}
+  for (const k of Object.keys(f).sort()) {
+    const v = f[k]
+    if (v == null || (Array.isArray(v) && v.length === 0)) continue
+    pick[k] = Array.isArray(v) ? [...v].sort() : v
+  }
+  return JSON.stringify(pick)
+}
+
 export default async function handler(req, res) {
   const timer = requestTimer('logistics')
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -10,6 +44,16 @@ export default async function handler(req, res) {
 
   const { start, end, courier, shipmentType, sddNdd, paymentMode, pickupState, dropState, dropCity, category, subCategory, weightSlabs } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
+
+  const ck = cacheKey(req.body)
+  const hit = respCache.get(ck)
+  if (hit && Date.now() - hit.at < RESP_TTL_MS) {
+    timer.markCacheHit(ck)
+    res.setHeader('X-Cache', 'HIT')
+    timer.finish(res)
+    return res.json(hit.body)
+  }
+  timer.markCacheMiss(ck)
 
   // NDD split: show Delhivery NDD as separate row when Forward selected OR NDD chip selected
   const nddSelected = courier?.includes('Delhivery NDD')
@@ -1104,10 +1148,14 @@ SELECT
     const qt0 = Date.now()
     const [rows] = await bq.query({ query, maximumBytesBilled: '10000000000' })
     timer.queryTimings.push({ key: 'logistics_main', ms: Date.now() - qt0 })
-    if (!rows.length) { timer.finish(res); return res.json({}) }
+    if (!rows.length) {
+      respCache.set(ck, { at: Date.now(), body: {} })
+      while (respCache.size > RESP_CACHE_MAX) respCache.delete(respCache.keys().next().value)
+      timer.finish(res)
+      return res.json({})
+    }
     const r = rows[0]
-    timer.finish(res)
-    res.json({
+    const body = {
       kpis: JSON.parse(r.kpis),
       byCourier: JSON.parse(r.by_courier),
       byStatus: JSON.parse(r.by_status),
@@ -1148,7 +1196,14 @@ SELECT
       byWeightSlab: JSON.parse(r.by_weight_slab),
       pickupAgeing: JSON.parse(r.pickup_ageing),
       filterOpts: JSON.parse(r.filter_opts),
-    })
+    }
+    respCache.set(ck, { at: Date.now(), body })
+    // Simple FIFO eviction — insertion order is Map's iteration order (same convention as
+    // logistics-cost.js's respCache).
+    while (respCache.size > RESP_CACHE_MAX) respCache.delete(respCache.keys().next().value)
+    res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
+    res.json(body)
   } catch (e) {
     console.error('[logistics]', e.message)
     timer.finish(res)
