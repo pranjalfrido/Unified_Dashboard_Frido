@@ -81,6 +81,28 @@ let refCache = null
 // same promise instead of duplicating the work.
 let refCacheBuild = null
 
+// The five reference queries below (weight-vs-rate, rate grid, monthly trend, slab costs and the
+// zone x sub-category cube) take NO filters: they run with empty params and describe the whole
+// book. But they sit inside refCache, which is keyed on the B2B/month slicers, so changing the
+// month selection (or any B2B slicer) rebuilt ALL of them: full-ledger scans of 15-90 s each,
+// again and again, on the shared database (29 Oct outage). Memoising them separately, keyed by
+// name only, means a slicer change re-runs only the cheap, filter-dependent B2B queries.
+// One run at a time per name: concurrent callers await the same promise. A failure is not cached.
+const heavyMemo = new Map()
+export function memoHeavy(name, fn) {
+  return async () => {
+    const e = heavyMemo.get(name)
+    if (e && e.value !== undefined && Date.now() - e.at < REF_TTL_MS) return e.value
+    if (e && e.pending) return e.pending
+    const pending = Promise.resolve().then(fn).then(
+      v => { heavyMemo.set(name, { at: Date.now(), value: v }); return v },
+      err => { heavyMemo.delete(name); throw err },
+    )
+    heavyMemo.set(name, { pending })
+    return pending
+  }
+}
+
 // Full-response cache keyed on the filter payload. Bounded to RESP_CACHE_MAX entries so a
 // user cycling through slicers cannot grow it without limit; oldest key is evicted first.
 const RESP_TTL_MS = 60 * 60 * 1000
@@ -530,6 +552,7 @@ async function handlerCore(req, res) {
   if (f.action === 'invalidate') {
     respCache.clear()
     refCache = null
+    heavyMemo.clear()
     return res.status(200).json({ ok: true, invalidated: true })
   }
 
@@ -1998,10 +2021,10 @@ async function handlerCore(req, res) {
         // trend — none of which the freight tab renders, so a freight-scoped request skips
         // them. b2bFilterKey carries needsB2cDetail, so this partial build can never be
         // served to a request that does need them.
-        needsB2cDetail ? wrQ : () => EMPTY,
-        needsB2cDetail ? gridQ : () => EMPTY,
-        needsB2cDetail ? trendQ : () => EMPTY,
-        slabQ, SUBCUBE_Q,
+        needsB2cDetail ? memoHeavy('wr', wrQ) : () => EMPTY,
+        needsB2cDetail ? memoHeavy('grid', gridQ) : () => EMPTY,
+        needsB2cDetail ? memoHeavy('trend', trendQ) : () => EMPTY,
+        memoHeavy('slab', slabQ), memoHeavy('subcube', SUBCUBE_Q),
         // ── Fixed vehicle rentals ──
         // Vehicles on a standing monthly charge rather than per-trip billing. Reported
         // separately from freight: there are no trips or lanes to divide by, so folding
