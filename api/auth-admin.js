@@ -98,7 +98,9 @@ export default async function handler(req, res) {
         return fail(500, 'Could not create the profile: ' + insErr.message)
       }
 
-      const saved = !is_admin && tabs?.length > 0 ? await setTabs(userId, tabs) : []
+      // An admin sees every tab without rows; the only row an admin can need is Pulse ('ask').
+      const want = is_admin ? (Array.isArray(tabs) && tabs.includes('ask') ? ['ask'] : []) : tabs
+      const saved = want?.length > 0 ? await setTabs(userId, want) : []
       return res.status(200).json({ success: true, user_id: userId, tabs: saved })
     }
 
@@ -116,6 +118,24 @@ export default async function handler(req, res) {
       if (err) return fail(status || 400, err)
       if (t.is_admin) return fail(400, `${t.name} is an admin and sees every tab. Make them a member first.`)
       return res.status(200).json({ success: true, tabs: await setTabs(t.user_id, payload.tabs) })
+    }
+
+    // ── Give or remove Frido Pulse (members and admins: being admin doesn't include Pulse) ──
+    if (action === 'set_pulse') {
+      if (!canPulse) return fail(403, 'Only Suraj or Pranjal can give or remove Frido Pulse access.')
+      const { t, err, status } = await target(payload.user_id)
+      if (err) return fail(status || 400, err)
+      const { data: rows, error: selErr } = await admin.from('user_permissions').select('tab').eq('user_id', t.user_id).eq('tab', 'ask')
+      if (selErr) return fail(500, selErr.message)
+      if (payload.on && !rows?.length) {
+        const { error: insErr } = await admin.from('user_permissions').insert({ user_id: t.user_id, tab: 'ask' })
+        if (insErr) return fail(500, insErr.message)
+      }
+      if (!payload.on && rows?.length) {
+        const { error: delErr } = await admin.from('user_permissions').delete().eq('user_id', t.user_id).eq('tab', 'ask')
+        if (delErr) return fail(500, delErr.message)
+      }
+      return res.status(200).json({ success: true, pulse: !!payload.on })
     }
 
     // ── Admin → member, keeping the tabs given ───────────────────────────────

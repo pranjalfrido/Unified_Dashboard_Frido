@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
-import PermissionPanel from './profile/PermissionPanel.jsx'
+import PermissionPanel, { AdminPulseCard } from './profile/PermissionPanel.jsx'
 import { CreateUserModal } from './profile/CreateUser.jsx'
 import Avatar from './profile/Avatar.jsx'
-import { adminCall, fmtDate, useMyProfile } from './profile/profileShared.js'
+import { adminCall, fmtDate, useMyProfile, PULSE_WHITELIST } from './profile/profileShared.js'
 import { S } from './profile/profileStyles.js'
 import ProfileMobile from './profile/ProfileMobile.jsx'
 import { useBreakpoint } from './responsive/useBreakpoint.js'
@@ -283,6 +283,18 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
     showToast(user.is_admin ? `${user.name} is now a member` : 'Permissions saved')
   }
 
+  // Frido Pulse for an admin is saved straight away (admins have no other tab rows to save).
+  async function setAdminPulse(next) {
+    const on = next.includes('ask')
+    setSaving(true)
+    const result = await adminCall('set_pulse', session, { user_id: user.user_id, on })
+    setSaving(false)
+    if (result.error) { showToast(`Not saved: ${result.error}`); return }
+    setLocalTabs(prev => on ? [...new Set([...prev, 'ask'])] : prev.filter(k => k !== 'ask'))
+    onUpdate()
+    showToast(on ? `${user.name} can now use Frido Pulse` : `Frido Pulse removed for ${user.name}`)
+  }
+
   async function promoteUser() {
     setSaving(true)
     const result = await adminCall('promote_user', session, { user_id: user.user_id })
@@ -351,7 +363,12 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
           {user.is_admin ? 'Admin — sees every tab. To make them a member, pick the tabs they keep, then Make member' : 'Click chips to grant or remove access'}
         </div>
-        <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} callerEmail={session?.user?.email} />
+        {user.is_admin && !PULSE_WHITELIST.includes((user.email || '').toLowerCase()) && (
+          <div style={{ marginBottom: 8 }}>
+            <AdminPulseCard callerEmail={session?.user?.email} tabs={localTabs} setTabs={upd => { if (!saving) setAdminPulse(upd(localTabs)) }} />
+          </div>
+        )}
+        <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} callerEmail={session?.user?.email} hidePulse={user.is_admin} />
         {(user.is_admin || tabsChanged) && (
           <button style={{ ...(user.is_admin ? S.outlineBtn : S.primaryBtn), fontSize: 12.5, padding: '8px 16px', marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={() => (user.is_admin ? setConfirmRole(true) : savePermissions())} disabled={saving}>
             {saving ? 'Saving…' : user.is_admin ? `Make member (${localTabs.length} tab${localTabs.length === 1 ? '' : 's'})` : 'Save permissions'}
@@ -487,7 +504,7 @@ function TeamMembers({ session, showToast }) {
                   >
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#1E2321', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
                     <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 2 }}>
-                      {u.is_admin ? 'Admin · all tabs' : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
+                      {u.is_admin ? `Admin · all tabs${(permissions[u.user_id] || []).includes('ask') ? ' + Pulse' : ''}` : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
                     </div>
                   </div>
                 )
