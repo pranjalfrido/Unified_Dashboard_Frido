@@ -73,7 +73,7 @@ export async function runPnlTool(args = {}, seen) {
   ];
   const lines = [
     `P&L → ${LABEL[tab]} · ${start} to ${end} (IST) · as the P&L page computes it`,
-    `ACCURACY: ${exact ? 'matches the P&L page' : 'Approximate, check the P&L page (numbers not yet verified against the screen for this channel)'}`,
+    `ACCURACY: ${exact ? 'matches the P&L page' : 'UNVERIFIED. Start your answer with exactly "Unverified, please cross-check the P&L page:" and then give the numbers.'}`,
     `COGS month used: ${cogsLines.length ? cogsLines.join('; ') : 'not available'}`,
     'metric\tvalue',
     ...rows.map(([m, v]) => { if (seen && v != null) seen.add(formatRupees(v)); return `${m}\t${money(v)}`; }),

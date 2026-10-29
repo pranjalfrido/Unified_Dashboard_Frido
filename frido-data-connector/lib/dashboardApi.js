@@ -155,13 +155,30 @@ function regularView(data, { sku, location }, seen) {
   return ['Regular facilities only (Inventory Health Regular view)' + (want ? ' · SKU ' + sku : ''), 'location	units', ...lines, 'TOTAL	' + indianInt(total), 'snapshot: ' + (data.lastSnapshotUpdated || data.asOf || 'n/a')].join(sep);
 }
 
+// Areas whose numbers have been checked against known dashboard values are listed in DASHBOARD_API_VERIFIED
+// (comma-separated endpoint names; "bq:ads" for the Ads block of bq). Everything else is served as UNVERIFIED and the
+// model must start its answer with "Unverified, please cross-check <page>:".
+const verifiedSet = () => new Set((process.env.DASHBOARD_API_VERIFIED || '').split(',').map(x => x.trim()).filter(Boolean));
+function verificationLine(endpoint, args) {
+  const v = verifiedSet();
+  const paths = args.paths || [];
+  let key = endpoint;
+  let page = ENDPOINTS[endpoint];
+  if (endpoint === 'bq' && (args.params?.adsMonthly || paths.some(p => /^ads/.test(p)))) { key = 'bq:ads'; page = 'Ads tab'; }
+  else if (endpoint === 'bq' && paths.some(p => /^(pnl|flipkart|myntra|ebo|blinkit|zepto|instamart|cred|firstcry|offline|international)/.test(p))) { key = 'bq:pnl'; page = 'P&L tab'; }
+  return v.has(key)
+    ? 'VERIFICATION: verified against known dashboard values for this area.'
+    : `VERIFICATION: UNVERIFIED. Start your answer with exactly "Unverified, please cross-check ${page}:" and then give the numbers.`;
+}
+
 export async function runDashboardApi(args = {}, seen) {
   const endpoint = String(args.endpoint || '').replace(/^\/?api\//, '').replace(/\.json$/, '');
   if (!(endpoint in ENDPOINTS)) return { text: `Unknown endpoint "${args.endpoint}". Allowed: ${Object.keys(ENDPOINTS).join(', ')}.` };
   const params = { ...(args.params || {}) };
   for (const k of Object.keys(params)) if (BLOCKED_PARAMS.has(k)) return { text: `Parameter "${k}" is not allowed (read-only).` };
   const { data, cached } = await fetchEndpoint(endpoint, params);
-  const head = `dashboard_api ${endpoint} (${ENDPOINTS[endpoint]}) · params ${JSON.stringify(params)}${cached ? ' · cached' : ''}`;
+  const head = `dashboard_api ${endpoint} (${ENDPOINTS[endpoint]}) · params ${JSON.stringify(params)}${cached ? ' · cached' : ''}
+${verificationLine(endpoint, args)}`;
   if (args.regular) {
     const t = regularView(data, args.regular === true ? {} : args.regular, seen);
     if (t) return { text: `${head}
