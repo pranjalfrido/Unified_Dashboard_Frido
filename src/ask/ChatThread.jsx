@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lightning, CheckCircle, Code } from '@phosphor-icons/react';
+import { SUGGESTIONS } from './pulseShared.js';
+import { renderMarkdown } from './markdown.js';
 
 function ThinkingDots() {
   return (
@@ -25,72 +27,6 @@ function AssistantTable({ table }) {
       </table>
     </div>
   );
-}
-
-function renderMarkdown(text) {
-  if (!text) return '';
-
-  const lines = text.split('\n');
-  const out = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Markdown table: line with | and next line is separator (---|---)
-    if (line.includes('|') && lines[i + 1] && /^[\s|:\-]+$/.test(lines[i + 1].replace(/\|/g, '|'))) {
-      const headers = line.split('|').map(c => c.trim()).filter(c => c);
-      i += 2; // skip separator
-      const rows = [];
-      while (i < lines.length && lines[i].includes('|')) {
-        const cells = lines[i].split('|').map(c => c.trim()).filter(c => c);
-        if (cells.length > 0) rows.push(cells);
-        i++;
-      }
-      const thead = `<thead><tr>${headers.map(h => `<th>${inlineFormat(h)}</th>`).join('')}</tr></thead>`;
-      const tbody = `<tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inlineFormat(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
-      out.push(`<div class="af-table-wrap"><table class="af-table">${thead}${tbody}</table></div>`);
-      continue;
-    }
-
-    // ### heading
-    if (/^###\s+/.test(line)) {
-      out.push(`<div class="af-md-h3">${inlineFormat(line.replace(/^###\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // ## heading
-    if (/^##\s+/.test(line)) {
-      out.push(`<div class="af-md-h2">${inlineFormat(line.replace(/^##\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // bullet - or *
-    if (/^[\-\*]\s+/.test(line)) {
-      out.push(`<div class="af-md-li">${inlineFormat(line.replace(/^[\-\*]\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // horizontal rule ---
-    if (/^---+$/.test(line.trim())) {
-      out.push('<hr class="af-md-hr"/>');
-      i++; continue;
-    }
-    // empty line
-    if (line.trim() === '') {
-      out.push('<div class="af-md-gap"></div>');
-      i++; continue;
-    }
-    // normal paragraph line
-    out.push(`<div>${inlineFormat(line)}</div>`);
-    i++;
-  }
-
-  return out.join('');
-}
-
-function inlineFormat(text) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code class="af-inline-code">$1</code>');
 }
 
 function AssistantMessage({ msg }) {
@@ -179,12 +115,7 @@ function ClarifyMessage({ msg, onChoice }) {
 }
 
 function EmptyState({ onSuggestion }) {
-  const suggestions = [
-    'What is our RTO rate this week?',
-    'Top 5 products by revenue this month',
-    'Show inventory across all warehouses',
-    'Compare Delhivery vs BlueDart delivery rate',
-  ];
+  const suggestions = SUGGESTIONS;
   return (
     <div className="af-empty-state">
       <div className="af-empty-icon"><Lightning size={32} weight="fill" /></div>

@@ -57,6 +57,9 @@ export function groupHeroTrend(rows, groupBy) {
 // ── Logistics & Ops (logisticsData = /api/logistics or /logistics-data.json `current`) ──
 export function logisticsMetrics(logisticsData) {
   const lkpi = logisticsData?.kpis || {}
+  // Speed & SLA Forward / RTO use the forward-only fields (fwd_*): Overview's query covers every
+  // direction, so the plain ones mix in Reverse shipments. Falls back while a cached file predates them.
+  const fwd = k => lkpi[`fwd_${k}`] ?? lkpi[k]
   const lTotal = parseInt(lkpi.total_shipments) || 0
   const lDelivered = parseInt(lkpi.delivered) || 0
   const lRto = parseInt(lkpi.rto) || 0
@@ -68,17 +71,17 @@ export function logisticsMetrics(logisticsData) {
   const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
   const lFasr = lkpi.delivered_1attempt && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_1attempt) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
   const lRasr = lkpi.delivered_multi && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_multi) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
-  const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
-  const lAvgProcessing = parseFloat(lkpi.avg_processing) || null
-  const lAvgPickup = parseFloat(lkpi.avg_pickup) || null
-  const lAvgIntransit = parseFloat(lkpi.avg_intransit) || null
-  const lOrdersWithOrderDate = parseInt(lkpi.orders_with_order_date) || 0
-  const lOrdersPickedUp = parseInt(lkpi.orders_picked_up) || 0
-  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
-  const lProcessedWithin24h = parseInt(lkpi.processed_within_24h) || 0
-  const lPickedUpWithin24h = parseInt(lkpi.picked_up_within_24h) || 0
-  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
-  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
+  const lAvgFul = parseFloat(fwd('avg_fulfilment')) || null
+  const lAvgProcessing = parseFloat(fwd('avg_processing')) || null
+  const lAvgPickup = parseFloat(fwd('avg_pickup')) || null
+  const lAvgIntransit = parseFloat(fwd('avg_intransit')) || null
+  const lOrdersWithOrderDate = parseInt(fwd('orders_with_order_date')) || 0
+  const lOrdersPickedUp = parseInt(fwd('orders_picked_up')) || 0
+  const lOrdersDeliveredTotal = parseInt(fwd('orders_delivered_total')) || 0
+  const lProcessedWithin24h = parseInt(fwd('processed_within_24h')) || 0
+  const lPickedUpWithin24h = parseInt(fwd('picked_up_within_24h')) || 0
+  const lDeliveredWithin3dPickup = parseInt(fwd('delivered_within_3d_of_pickup')) || 0
+  const lDeliveredWithin5dOrder = parseInt(fwd('delivered_within_5d_of_order')) || 0
   const lProcessedWithin24hPct = lOrdersWithOrderDate > 0 ? lProcessedWithin24h / lOrdersWithOrderDate * 100 : null
   const lPickedUpWithin24hPct = lOrdersPickedUp > 0 ? lPickedUpWithin24h / lOrdersPickedUp * 100 : null
   const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
@@ -88,10 +91,12 @@ export function logisticsMetrics(logisticsData) {
   const lNdrResolvedDelivered = parseInt(lkpi.ndr_resolved_delivered) || 0
   const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
   const lNdrResolvedPct = lNdrCount > 0 ? lNdrResolvedDelivered / lNdrCount * 100 : null
-  const lAvgRtoTat = parseFloat(lkpi.avg_rto_tat) || null
-  const lRtoCompleted = parseInt(lkpi.rto_completed) || 0
-  const lRtoDeliveredWithin5dMark = parseInt(lkpi.rto_delivered_within_5d_of_mark) || 0
-  const lRtoDeliveredWithin10dMark = parseInt(lkpi.rto_delivered_within_10d_of_mark) || 0
+  const lAvgRtoTat = parseFloat(fwd('avg_rto_tat')) || null
+  const lAvgAwbToRtoMark = parseFloat(lkpi.fwd_avg_awb_to_rto_mark) || null
+  const lAvgAwbToRtoDelivered = parseFloat(lkpi.fwd_avg_awb_to_rto_delivered) || null
+  const lRtoCompleted = parseInt(fwd('rto_completed')) || 0
+  const lRtoDeliveredWithin5dMark = parseInt(fwd('rto_delivered_within_5d_of_mark')) || 0
+  const lRtoDeliveredWithin10dMark = parseInt(fwd('rto_delivered_within_10d_of_mark')) || 0
   const lRtoDeliveredWithin5dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin5dMark / lRtoCompleted * 100 : null
   const lRtoDeliveredWithin10dMarkPct = lRtoCompleted > 0 ? lRtoDeliveredWithin10dMark / lRtoCompleted * 100 : null
   const lRvpCreated = parseInt(lkpi.rvp_created) || 0
@@ -109,7 +114,7 @@ export function logisticsMetrics(logisticsData) {
     lAvgProcessing, lAvgPickup, lAvgIntransit, lOrdersWithOrderDate, lOrdersPickedUp, lOrdersDeliveredTotal,
     lProcessedWithin24h, lPickedUpWithin24h, lDeliveredWithin3dPickup, lDeliveredWithin5dOrder,
     lProcessedWithin24hPct, lPickedUpWithin24hPct, lDeliveredWithin3dPickupPct, lDeliveredWithin5dOrderPct,
-    lNdrDenom, lNdrCount, lNdrResolvedDelivered, lNdrPct, lNdrResolvedPct,
+    lNdrDenom, lNdrCount, lNdrResolvedDelivered, lNdrPct, lNdrResolvedPct, lAvgAwbToRtoMark, lAvgAwbToRtoDelivered,
     lAvgRtoTat, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
     lRvpCreated, lRvpDone, lRvpDelivered, lRvpDoneWithin2d, lRvpDeliveredWithin5d, lRvpDoneWithin2dPct, lRvpDeliveredWithin5dPct,
     lAvgRvpCreatedToPickup, lAvgRvpPickupToDelivery, lAvgRvpTat,

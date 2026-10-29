@@ -127,6 +127,40 @@ for (const s of S) {
       ok(`${s.id}: control order date · filter · ⋯`, !h.missing && order.join() === want.join(), (h.ctl || []).join(' '))
       ok(`${s.id}: title on one line`, h.titleH <= 26, `${h.titleH}px`)
       ok(`${s.id}: header text ≥ 12px`, !h.small?.length, (h.small || []).join(' | '))
+      // deep-green header (HEADER_GREEN_PROMPT.md §5): chevron centred in the date pill, selected chip without a ring,
+      // contrast ≥ 4.5:1 for the title, chips and active tab against the gradient under each label (+ the row's dark band)
+      const g = await page.evaluate(sel => {
+        const root = document.querySelector(sel.replace(' >> nth=-1', ''))
+        const bar = (root?.matches('.mph') ? root : root?.querySelector('.mph'))?.querySelector('.mph-bar')
+        if (!bar) return { missing: true }
+        const B = bar.getBoundingClientRect(), a = 160 * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a), len = Math.abs(B.width * dx) + Math.abs(B.height * dy)
+        const stops = [[0, [0x1a, 0x4d, 0x34]], [0.55, [0x1f, 0x5a, 0x3d]], [1, [0x26, 0x6b, 0x49]]]
+        const under = el => {
+          const r = el.getBoundingClientRect(), x = r.left + r.width / 2 - (B.left + B.width / 2), y = r.top + r.height / 2 - (B.top + B.height / 2)
+          const t = Math.min(1, Math.max(0, (x * dx + y * dy) / len + 0.5)), i = t <= 0.55 ? 0 : 1, f = (t - stops[i][0]) / (stops[i + 1][0] - stops[i][0])
+          const c = stops[i][1].map((v, k) => v + (stops[i + 1][1][k] - v) * f)
+          const band = el.closest('.mph-r3b') ? 0.14 : el.closest('.mph-r3') ? 0.08 : 0
+          return c.map(v => v * (1 - band))
+        }
+        const rgb = s => s.match(/[\d.]+/g).slice(0, 3).map(Number)
+        const lum = c => { const [r, g2, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }); return 0.2126 * r + 0.7152 * g2 + 0.0722 * b }
+        const ratio = (p, q) => { const x = lum(p), y = lum(q); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+        const low = []
+        const test = (el, name) => { if (!el?.getBoundingClientRect().width) return; const cs = getComputedStyle(el); const bg = cs.backgroundColor === 'rgb(255, 255, 255)' ? [255, 255, 255] : under(el); const r = ratio(rgb(cs.color), bg); if (r < 4.5) low.push(`${name} ${el.textContent.trim().slice(0, 14)} ${r.toFixed(2)}`); return r }
+        const ratios = [test(bar.querySelector('.mph-title b'), 'title'), ...[...bar.querySelectorAll('.mph-chip:not(:disabled)')].map(e => test(e, 'chip')), ...[...bar.querySelectorAll('.mph-tab[aria-selected=true]')].map(e => test(e, 'tab'))].filter(Boolean)
+        const on = bar.querySelector('.mph-chip[aria-pressed=true]'), ocs = on && getComputedStyle(on)
+        const ring = on ? (ocs.boxShadow !== 'none' || (ocs.outlineStyle !== 'none' && parseFloat(ocs.outlineWidth) > 0) || parseFloat(ocs.borderTopWidth) > 0) : false
+        const pill = bar.querySelector('.drp-trigger, .mph-pill'), chev = pill?.querySelector('.drp-chev')
+        let chevOff = 0
+        if (chev) { const p = pill.getBoundingClientRect(), c = chev.getBoundingClientRect(); chevOff = Math.abs((c.top + c.height / 2) - (p.top + p.height / 2)) }
+        return { low, min: Math.min(...ratios), ring, chev: !!chev, chevOff }
+      }, sel)
+      if (!g.missing) {
+        ok(`${s.id}: contrast ≥ 4.5 (title, chips, active tab)`, !g.low.length, g.low.join(' | ') || `min ${g.min.toFixed(2)}`)
+        ok(`${s.id}: selected chip has no ring`, !g.ring)
+        if (g.chev) ok(`${s.id}: date chevron centred`, g.chevOff <= 1, `${g.chevOff.toFixed(1)}px`)
+        row.contrastMin = Math.round(g.min * 100) / 100
+      }
       // one fixed height: scrolling the page doesn't change the header (only the page header, not full-screen views)
       if (!s.hdr) {
         await page.evaluate(() => {

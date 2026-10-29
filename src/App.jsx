@@ -991,9 +991,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     // LOGISTICS_MOBILE_REDESIGN_PROMPT.md §2: same data and page state, mobile cards.
     return (
       // The page is mounted in a non-scrolling flex box (desktop scrolls its own inner div), so the
-      // mobile view is its own scroll container.
-      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
-        <LoadingOverlay loading={loading} label="Loading logistics" />
+      // mobile view is its own scroll container. The loading veil sits on a non-scrolling wrapper around
+      // it: inside the scroll box it only covered the first screen-height and scrolled away with the cards.
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+      <LoadingOverlay loading={loading} label="Loading logistics" />
+      <div className="log-mobile-scroll" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {error && !rawData && !staleData && (
           <div role="alert" style={{ margin: 12, padding: '10px 14px', borderRadius: 12, background: '#fff', border: `1px solid ${C.m.line}`, color: C.m.down, fontSize: 13 }}>
             Could not load logistics data. <button type="button" onClick={fetchLogistics} style={{ border: 'none', background: 'none', color: C.m.green, fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer' }}>Retry</button>
@@ -1004,6 +1006,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             sc={{ cSelected, setCSelected, cPrimary, setCPrimary, cView, cDrill, cTier, setCTier, cPayment, setCPayment }}
             rtoAgeingBase={rtoAgeingBase} setRtoAgeingBase={setRtoAgeingBase} ndrPayFilter={ndrPayFilter} setNdrPayFilter={setNdrPayFilter} />
         )}
+      </div>
       </div>
     )
   }
@@ -1105,10 +1108,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Shipment pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
-              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order date → delivery date" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order → AWB" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="AWB → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} invertColor />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order → delivery" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} invertColor />
               <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} subLabel="RTO marked → RTO delivered" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} invertColor />
             </div>
           </div>
@@ -3904,7 +3907,7 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
         <span className="drp-cal">{calIcon}</span>
         <span className="drp-long">{displayLabel}</span>
         <span className="drp-short">{shortLabel}</span>
-        <svg className="drp-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+        <svg className="drp-chev" width="9" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4" /></svg>
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
       {onRefresh && !isMobile && (
@@ -4951,7 +4954,8 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // first ⋯ item, a red dot on ⋯ while there are any), optional chips / sub-tabs / "Filtered:" strip,
   // and it folds to one 42px bar while scrolling down. Laptop and tablet keep the bar further below.
   const phone = bp.width <= 768 || bp.isPhoneLandscape
-  if (page === 'ask' && !phone) return null
+  // Pulse draws its own header on phones too (history · conversation title · new question · ⋯).
+  if (page === 'ask') return null
   if (phone) {
     const notifications = { count: combinedAlerts.length, onOpen: () => setTimeout(() => setAlertsOpen(true), 350) }
     const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>
@@ -5670,7 +5674,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const { lTotal, lDelPct, lRtoPct, lZRtoPct, lSlaPct, lFasr, lRasr, lAvgFul, lAvgProcessing, lAvgPickup, lAvgIntransit,
     lOrdersWithOrderDate, lOrdersPickedUp, lOrdersDeliveredTotal, lProcessedWithin24h, lPickedUpWithin24h, lDeliveredWithin3dPickup, lDeliveredWithin5dOrder,
     lProcessedWithin24hPct, lPickedUpWithin24hPct, lDeliveredWithin3dPickupPct, lDeliveredWithin5dOrderPct, lNdrPct, lNdrResolvedPct,
-    lAvgRtoTat, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
+    lAvgRtoTat, lAvgAwbToRtoMark, lAvgAwbToRtoDelivered, lRtoCompleted, lRtoDeliveredWithin5dMark, lRtoDeliveredWithin10dMark, lRtoDeliveredWithin5dMarkPct, lRtoDeliveredWithin10dMarkPct,
     lRvpCreated, lRvpDone, lRvpDoneWithin2d, lRvpDeliveredWithin5d, lRvpDoneWithin2dPct, lRvpDeliveredWithin5dPct,
     lAvgRvpCreatedToPickup, lAvgRvpPickupToDelivery, lAvgRvpTat } = logisticsMetrics(logisticsData)
   // (formulas and their reasoning: overview/overviewMetrics.js, unchanged from the inline versions)
@@ -6237,13 +6241,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   the UI before now — no new backend work needed. RTO Mark → RTO Delivered sits in
                   this same forward-labeled strip since it's read together with the other TAT legs. */}
               <Section>
-                <SecHdr info="Avg days per shipment stage, order to delivery. RTO Mark → RTO Delivered only counts RTOs that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
+                <SecHdr info="Avg days per shipment stage. Forward stages (Order → AWB → Pickup → Delivery) count forward shipments only. RTO stages count RTO-marked forward shipments only; RTO Mark → RTO Del and AWB → RTO Del. only those that completed the return loop. RVP Created → RVP Delivered covers customer-return pickups (shipment_type='Reverse').">Turnaround Time (TAT)</SecHdr>
                 <StatStrip items={[
-                  { label: 'Order → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
-                  { label: 'Order → Dispatch', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
-                  { label: 'Pickup → Del.', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
+                  { label: 'Order → AWB', val: lAvgProcessing !== null ? `${lAvgProcessing.toFixed(1)}d` : '—', color: lAvgProcessing === null ? C.t3 : C.t1 },
+                  { label: 'AWB → Pickup', val: lAvgPickup !== null ? `${lAvgPickup.toFixed(1)}d` : '—', color: lAvgPickup === null ? C.t3 : C.t1 },
+                  { label: 'Pickup → Delivery', val: lAvgIntransit !== null ? `${lAvgIntransit.toFixed(1)}d` : '—', color: lAvgIntransit === null ? C.t3 : C.t1 },
                   { label: 'Order → Del.', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul === null ? C.t3 : C.t1 },
-                  { label: 'RTO Mark → Del.', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Mark', val: lAvgAwbToRtoMark !== null ? `${lAvgAwbToRtoMark.toFixed(1)}d` : '—', color: lAvgAwbToRtoMark === null ? C.t3 : C.t1 },
+                  { label: 'RTO Mark → RTO Del', val: lAvgRtoTat !== null ? `${lAvgRtoTat.toFixed(1)}d` : '—', color: lAvgRtoTat === null ? C.t3 : C.t1 },
+                  { label: 'AWB → RTO Del.', val: lAvgAwbToRtoDelivered !== null ? `${lAvgAwbToRtoDelivered.toFixed(1)}d` : '—', color: lAvgAwbToRtoDelivered === null ? C.t3 : C.t1 },
                   { label: 'RVP → Pickup', val: lAvgRvpCreatedToPickup !== null ? `${lAvgRvpCreatedToPickup.toFixed(1)}d` : '—', color: lAvgRvpCreatedToPickup === null ? C.t3 : C.t1 },
                   { label: 'RVP Pickup → Del.', val: lAvgRvpPickupToDelivery !== null ? `${lAvgRvpPickupToDelivery.toFixed(1)}d` : '—', color: lAvgRvpPickupToDelivery === null ? C.t3 : C.t1 },
                   { label: 'RVP → Del.', val: lAvgRvpTat !== null ? `${lAvgRvpTat.toFixed(1)}d` : '—', color: lAvgRvpTat === null ? C.t3 : C.t1 },
@@ -17153,7 +17159,8 @@ function HeroSparkCard({ c }) {
   const linePts = vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' ')
   // area path: line + down to bottom-right + across to bottom-left + close
   const areaPath = `M ${vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')} L ${getX(vals.length - 1)},${H} L ${getX(0)},${H} Z`
-  const gradId = `sg-${c.label.replace(/\s/g, '')}`
+  // Only id-safe characters: "(" ")" (e.g. "LTV (12-MO REVENUE)") break url(#id) and the fill turns black.
+  const gradId = `sg-${c.label.replace(/[^A-Za-z0-9_-]/g, '')}`
   const hovIdx = hov !== null ? hov : vals.length - 1
   const hovX = getX(hovIdx), hovY = getY(vals[hovIdx])
   const handleMove = e => {
@@ -19946,6 +19953,26 @@ function AppInner() {
       .catch(() => setAllowedTabs([]))
   }, [session])
 
+  // An admin's change to this person's role or tabs applies when the tab is shown again (and every
+  // 5 minutes), without a reload. State only changes when something actually changed.
+  useEffect(() => {
+    if (!session || session === 'recovery') return
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
+        .then(({ data }) => { if (data) setProfile(p => (p && JSON.stringify(p) === JSON.stringify(data) ? p : data)) }, () => {})
+      supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
+        .then(({ data }) => {
+          if (!data) return
+          const next = data.map(r => r.tab)
+          setAllowedTabs(t => (t && [...t].sort().join() === [...next].sort().join() ? t : next))
+        }, () => {})
+    }
+    document.addEventListener('visibilitychange', refresh)
+    const id = setInterval(refresh, 5 * 60 * 1000)
+    return () => { document.removeEventListener('visibilitychange', refresh); clearInterval(id) }
+  }, [session])
+
   if (session === undefined) return (
     <LoadingScreen />
   )
@@ -20535,8 +20562,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   useEffect(() => {
     if (location.pathname === '/') {
-      const def = getDefaultPage()
-      setPage(def)
+      navigate('/overview', { replace: true })
       return
     }
     const isPageAllowed = page === 'profile' ? true :
@@ -21247,7 +21273,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             </div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
-            <AskFridoPage userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} session={session} />
+            <AskFridoPage key={session?.user?.id} userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} session={session}
+              areas={{ sales: hasSalesAccess(allowedTabs), returns: hasSalesAccess(allowedTabs), logistics: !allowedTabs || allowedTabs.includes('logistics'),
+                inventory: !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail'),
+                planning: !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:sales') }} />
           )}
         </div>
       </div>

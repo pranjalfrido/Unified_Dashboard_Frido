@@ -7,13 +7,21 @@ import { PERMISSION_TREE, getAllLeafKeys } from '../permissionTree.js'
 
 const API = import.meta.env.VITE_API_URL || ''
 
+// Team member actions go through the admin API (service role); the result always carries `error` when
+// anything failed (network, a refused change such as the last admin, a database error), so callers can
+// show it instead of a success message.
 export async function adminCall(action, session, payload) {
-  const res = await fetch(`${API}/api/auth-admin`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, callerToken: session.access_token, ...payload }),
-  })
-  return res.json()
+  try {
+    const res = await fetch(`${API}/api/auth-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, callerToken: session.access_token, ...payload }),
+    })
+    const body = await res.json().catch(() => ({}))
+    return res.ok ? body : { ...body, error: body.error || `Request failed (${res.status})` }
+  } catch {
+    return { error: "Can't reach the server. Check your connection and try again." }
+  }
 }
 
 export function fmtDate(ts) {

@@ -4,47 +4,64 @@ import ChatTopBar from './ChatTopBar.jsx';
 import ChatThread from './ChatThread.jsx';
 import ChatComposer from './ChatComposer.jsx';
 import { sendMessage } from './mockData.js';
+import PulseMobile from './PulseMobile.jsx';
+import { useBreakpoint } from '../responsive/useBreakpoint.js';
+import { cleanConversations, newChatId, titleFrom } from './pulseShared.js';
 
-let nextId = 1000;
+// History is saved per user (frido_pulse_conversations_<userId>), so the next person on a shared
+// laptop doesn't see it. Chats saved under the old shared key move to the first user who opens Pulse.
+const LEGACY_KEY = 'frido_pulse_conversations';
+const keyFor = userId => `${LEGACY_KEY}_${userId}`;
 
-const STORAGE_KEY = 'frido_pulse_conversations';
-
-function loadConversations() {
+function loadConversations(userId) {
+  if (!userId) return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    let raw = localStorage.getItem(keyFor(userId));
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (raw == null && legacy != null) {
+      raw = legacy;
+      localStorage.setItem(keyFor(userId), legacy);
+    }
+    if (legacy != null) localStorage.removeItem(LEGACY_KEY);
+    // Saved history is cleaned on load: no empty chats, unique ids, named by the first question.
+    return raw ? cleanConversations(JSON.parse(raw)) : [];
   } catch { return []; }
 }
 
-function saveConversations(convs) {
+function saveConversations(userId, convs) {
+  if (!userId) return;
   try {
     // Keep only last 50 conversations, trim messages to last 40 per conv to avoid storage limits
-    const trimmed = convs.slice(0, 50).map(c => ({
+    // A chat is saved only once it has a question.
+    const trimmed = convs.filter(c => c.messages.length).slice(0, 50).map(c => ({
       ...c,
       messages: c.messages.filter(m => !m.thinking).slice(-40),
     }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    localStorage.setItem(keyFor(userId), JSON.stringify(trimmed));
   } catch {}
 }
 
-export default function AskFridoPage({ userProfile, session }) {
-  const [conversations, setConversations] = useState(() => loadConversations());
+// areas: which quick-question areas the user can open (from the same access data as the sidebar).
+export default function AskFridoPage({ userProfile, session, areas }) {
+  const userId = session?.user?.id;
+  const [conversations, setConversations] = useState(() => loadConversations(userId));
   const [activeId, setActiveId] = useState(null);
   const [historyVisible, setHistoryVisible] = useState(true);
   const [sending, setSending] = useState(false);
 
   const active = conversations.find(c => c.id === activeId) || null;
+  // Phones get their own layout (same rule as the app's phone header and bottom bar).
+  const bp = useBreakpoint();
+  const phone = bp.width <= 768 || bp.isPhoneLandscape;
 
   // Persist to localStorage whenever conversations change
   useEffect(() => {
-    saveConversations(conversations);
-  }, [conversations]);
+    saveConversations(userId, conversations);
+  }, [userId, conversations]);
 
+  // New question: back to the first view. Nothing is saved until a question is sent.
   function handleNew() {
-    const id = 'new-' + (++nextId);
-    const conv = { id, date: 'today', title: 'New conversation', category: null, messages: [] };
-    setConversations(prev => [conv, ...prev]);
-    setActiveId(id);
+    setActiveId(null);
   }
 
   function handleSelect(id) {
@@ -56,14 +73,19 @@ export default function AskFridoPage({ userProfile, session }) {
     if (activeId === id) setActiveId(null);
   }
 
+  // Undo a delete: the chat goes back where it was.
+  function handleRestore(conv, index) {
+    setConversations(prev => prev.some(c => c.id === conv.id) ? prev : [...prev.slice(0, index), conv, ...prev.slice(index)]);
+  }
+
   async function handleSend(text) {
     if (sending) return;
 
     // Auto-create a conversation if none is active
     let currentId = activeId;
     if (!currentId) {
-      currentId = 'new-' + (++nextId);
-      const conv = { id: currentId, date: 'today', title: text.slice(0, 60), category: null, messages: [] };
+      currentId = newChatId();
+      const conv = { id: currentId, date: 'today', ts: Date.now(), title: titleFrom(text), category: null, messages: [] };
       setConversations(prev => [conv, ...prev]);
       setActiveId(currentId);
     }
@@ -79,7 +101,8 @@ export default function AskFridoPage({ userProfile, session }) {
       const isFirst = c.messages.length === 0;
       return {
         ...c,
-        title: isFirst ? text.slice(0, 60) : c.title,
+        title: isFirst ? titleFrom(text) : c.title,
+        ts: Date.now(),
         messages: [
           ...c.messages,
           { id: 'm' + Date.now(), role: 'user', text },
@@ -114,6 +137,14 @@ export default function AskFridoPage({ userProfile, session }) {
 
   function handleSuggestion(text) { handleSend(text); }
   function handleClarifyChoice(choice) { handleSend(choice); }
+
+  if (phone) {
+    return (
+      <PulseMobile conversations={conversations} activeId={activeId} active={active} sending={sending}
+        userProfile={userProfile} areas={areas}
+        onSelect={handleSelect} onNew={handleNew} onDelete={handleDelete} onRestore={handleRestore} onSend={handleSend} onClarifyChoice={handleClarifyChoice} />
+    );
+  }
 
   return (
     <div className={`af-page${historyVisible ? '' : ' af-history-hidden'}`}>

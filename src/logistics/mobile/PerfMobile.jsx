@@ -55,10 +55,10 @@ function PerfMaster({ data, prevData, start, end, layout }) {
       sub: `${pct2(k.delivered_multi, k.total_shipments)} of shipments`, def: 'Re-attempt success rate: delivered after more than one attempt ÷ attempted.' },
     { key: 'multi', label: 'Multi-attempt deliveries', tileLabel: 'Multi-att', value: fmtBig(k.delivered_multi), delta: kpiDelta(k.delivered_multi, pk.delivered_multi),
       sub: `${pct2(k.delivered_multi, k.total_shipments)} of shipments`, def: 'Shipments delivered after more than one attempt.' },
-    { key: 'proc', label: 'Avg processing', tileLabel: 'Processing', value: d1(k.avg_processing), delta: kpiDelta(k.avg_processing, pk.avg_processing), lowerIsBetter: true, sub: 'Order date → shipment creation', def: 'Average days from order date to shipment creation.', ...tat('avg_processing_days') },
-    { key: 'pick', label: 'Avg pickup TAT', tileLabel: 'Pickup', value: d1(k.avg_pickup), delta: kpiDelta(k.avg_pickup, pk.avg_pickup), lowerIsBetter: true, sub: 'Shipment creation → pickup', def: 'Average days from shipment creation to pickup.', ...tat('avg_pickup_days') },
-    { key: 'transit', label: 'Avg in-transit', tileLabel: 'In-transit', value: d1(k.avg_intransit), delta: kpiDelta(k.avg_intransit, pk.avg_intransit), lowerIsBetter: true, sub: 'Shipment pickup → delivery', def: 'Average days from pickup to delivery.', ...tat('avg_intransit_days') },
-    { key: 'fulfil', label: 'Avg fulfilment', tileLabel: 'Fulfilment', value: d1(k.avg_fulfilment), delta: kpiDelta(k.avg_fulfilment, pk.avg_fulfilment), lowerIsBetter: true, sub: 'Order date → delivery date', def: 'Average days from order date to delivery.', ...tat('avg_fulfilment_days') },
+    { key: 'proc', label: 'Avg processing', tileLabel: 'Order→AWB', value: d1(k.avg_processing), delta: kpiDelta(k.avg_processing, pk.avg_processing), lowerIsBetter: true, sub: 'Order → AWB', def: 'Average days from order date to AWB (shipment) creation.', ...tat('avg_processing_days') },
+    { key: 'pick', label: 'Avg pickup TAT', tileLabel: 'AWB→Pickup', value: d1(k.avg_pickup), delta: kpiDelta(k.avg_pickup, pk.avg_pickup), lowerIsBetter: true, sub: 'AWB → pickup', def: 'Average days from AWB (shipment) creation to pickup.', ...tat('avg_pickup_days') },
+    { key: 'transit', label: 'Avg in-transit', tileLabel: 'Pickup→Del', value: d1(k.avg_intransit), delta: kpiDelta(k.avg_intransit, pk.avg_intransit), lowerIsBetter: true, sub: 'Pickup → delivery', def: 'Average days from pickup to delivery.', ...tat('avg_intransit_days') },
+    { key: 'fulfil', label: 'Avg fulfilment', tileLabel: 'Order→Del', value: d1(k.avg_fulfilment), delta: kpiDelta(k.avg_fulfilment, pk.avg_fulfilment), lowerIsBetter: true, sub: 'Order → delivery', def: 'Average days from order date to delivery.', ...tat('avg_fulfilment_days') },
   ]
   return <MasterTrendCard metrics={metrics} rawRows={data} groupTrend={groupTrend} start={start} end={end} layout={layout} />
 }

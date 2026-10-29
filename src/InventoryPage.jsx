@@ -416,6 +416,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // because Health's date-sync effect below needs its (possibly auto-corrected)
   // dateFilters to exist before Health can sync to them.
   const inv = useStaticInv(tab === 'health', healthFilters.avgSaleWindowDays || 7)
+  // The pre-built inv-data-*.json files call it lastSalesDateConsidered; the live /api/inventory
+  // fallback (used when those files are missing or over 2 h old) calls it lastSalesDate.
+  const invLastSales = inv.data?.lastSalesDateConsidered || inv.data?.lastSalesDate || null
   const sales = useStatic('/sales-alloc-data.json', '/api/sales-allocation', salesFilterBody, true)
   const inward = useStatic('/inward-data.json', '/api/inward', inwardFilterBody, tab === 'inward')
   const active = tab === 'health' ? inv : tab === 'sales' ? sales : inward
@@ -447,7 +450,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       setInvHealthFilters: setHealthFilters,
       invHealthOpts: inv.data?.filterOptions || null,
       invHealthAsOf: inv.data?.asOf || null,
-      invHealthLastSales: inv.data?.lastSalesDateConsidered || null,
+      invHealthLastSales: invLastSales,
       invSalesFilters: salesFilters,
       setInvSalesFilters: setSalesFilters,
       invSalesOpts: sales.data?.filterOptions || null,
@@ -480,7 +483,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, healthMenu, salesMenu, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, inv.data?.lastSalesDateConsidered, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
+  }, [tab, healthMenu, salesMenu, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, invLastSales, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -503,9 +506,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
               Updated {new Date(inv.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
             </span>
           )}
-          {inv.data?.lastSalesDateConsidered && (
+          {invLastSales && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
-              Latest sales {inv.data.lastSalesDateConsidered.slice(8,10)} {new Date(inv.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
+              Latest sales {invLastSales.slice(8,10)} {new Date(invLastSales + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
             </span>
           )}
         </div>
@@ -691,7 +694,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           tabs={[(!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')) && { id: 'health', label: 'Inventory Health' }, (!allowedTabs || allowedTabs.includes('inventory:sales')) && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)}
           ctrl={{
             invHealthFilters: healthFilters, setInvHealthFilters: setHealthFilters, invHealthOpts: inv.data?.filterOptions || null,
-            invHealthAsOf: inv.data?.asOf || null, invHealthLastSales: inv.data?.lastSalesDateConsidered || null,
+            invHealthAsOf: inv.data?.asOf || null, invHealthLastSales: invLastSales,
             invSalesFilters: salesFilters, setInvSalesFilters: setSalesFilters, invSalesOpts: sales.data?.filterOptions || null,
             invSalesLastSales: sales.data?.lastSalesDateConsidered || null, invMenu: tab === 'sales' ? salesMenu : healthMenu,
           }} />
@@ -705,7 +708,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </div>
         )}
 
-        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={invMobile ? 'regular' : facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={inv.data?.lastSalesDateConsidered || null} allowedTabs={allowedTabs} invMobile={invMobile} onMenu={setHealthMenu} /></div>
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={invMobile ? 'regular' : facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={invLastSales} allowedTabs={allowedTabs} invMobile={invMobile} onMenu={setHealthMenu} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} invMobile={invMobile} onMenu={setSalesMenu} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>

@@ -105,7 +105,7 @@ for (const row of invRows) {
   invBySku.set(key, (invBySku.get(key) || 0) + totalInventory)
 }
 
-// Avg sale anchoring: d-1 of max sales date, same as Inventory Health
+// Avg sale anchoring: ends on the latest sales date, same as Inventory Health
 let maxSalesDate = null
 for (const row of cleanSalesRows) {
   const d = row.order_date?.value || row.order_date
@@ -113,7 +113,7 @@ for (const row of cleanSalesRows) {
 }
 let salesWindowEnd = todayStr, salesWindowStart = todayStr
 if (maxSalesDate) {
-  const anchorEnd = new Date(maxSalesDate); anchorEnd.setDate(anchorEnd.getDate() - 1)
+  const anchorEnd = new Date(maxSalesDate)
   const anchorStart = new Date(anchorEnd); anchorStart.setDate(anchorStart.getDate() - (AVG_SALE_WINDOW_DAYS - 1))
   salesWindowEnd = anchorEnd.toISOString().slice(0, 10)
   salesWindowStart = anchorStart.toISOString().slice(0, 10)
