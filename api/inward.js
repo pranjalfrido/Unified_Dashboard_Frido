@@ -65,7 +65,7 @@ export default async function inwardHandler(req, res) {
                   Quantity_Received AS qtyReceived, Quantity_Rejected AS qtyRejected,
                   Rejection_Reason AS rejectionReason, Grn_item_Status AS grnStatus,
                   GRN_Received_Timestamp AS grnReceivedTs, QC_Completed_On AS qcCompletedOn
-                FROM \`frido-429506.production.Unicommerce_GRN_Report\`
+                FROM \`frido-429506.production.stg_unicommerce_grn_report\`
                 WHERE DATE(GRN_Date) BETWEEN '${start}' AND '${end}'`,
         maximumBytesBilled: '5000000000',
       }),
