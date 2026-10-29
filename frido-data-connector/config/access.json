@@ -6,7 +6,7 @@
       "allowed_tables": [
         "production.fact_all_platform_sales_report",
         "production.Clickpost_Shipment_Tracking_Report",
-        "production.Aggregated_uniware_sales_report",
+        "production.aggregated_uniware_sales_report",
         "production.pincode_city_master",
         "sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
         "sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping",
@@ -24,7 +24,7 @@
       "allowed_targets": ["bigquery", "supabase", "repo"],
       "allowed_tables": [
         "production.fact_all_platform_sales_report",
-        "production.Aggregated_uniware_sales_report",
+        "production.aggregated_uniware_sales_report",
         "sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
         "inv_snapshot",
         "cogs_ledger",
@@ -38,7 +38,7 @@
       "allowed_targets": ["bigquery", "supabase", "repo"],
       "allowed_tables": [
         "production.Clickpost_Shipment_Tracking_Report",
-        "production.Aggregated_uniware_sales_report",
+        "production.aggregated_uniware_sales_report",
         "production.pincode_city_master",
         "sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
         "sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping",
@@ -67,7 +67,7 @@
       "allowed_tables": [
         "production.fact_all_platform_sales_report",
         "production.Clickpost_Shipment_Tracking_Report",
-        "production.Aggregated_uniware_sales_report",
+        "production.aggregated_uniware_sales_report",
         "production.pincode_city_master",
         "sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
         "sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping",

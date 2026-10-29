@@ -2,7 +2,7 @@
   "bigquery": [
     "frido-429506.production.fact_all_platform_sales_report",
     "frido-429506.production.Clickpost_Shipment_Tracking_Report",
-    "frido-429506.production.Aggregated_uniware_sales_report",
+    "frido-429506.production.aggregated_uniware_sales_report",
     "frido-429506.production.fact_shopify_inventory",
     "frido-429506.production.fact_shopify_international_orders",
     "frido-429506.production.pincode_city_master",

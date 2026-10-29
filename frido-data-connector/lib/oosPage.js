@@ -22,7 +22,7 @@ function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(
 function round(v, p) { const f = 10 ** p; return Math.round(v * f) / f; }
 
 async function buildOos() {
-  const [rows] = await getBQ().query({ query: SQL, location: 'asia-south1', maximumBytesBilled: String(MAX_BYTES_BILLED) });
+  const [rows] = await getBQ().query({ query: SQL, maximumBytesBilled: String(MAX_BYTES_BILLED) });
   const skus = rows.map(r => {
     const longOk = r.window_days >= MIN_WINDOW_DAYS;
     const avg = longOk ? r.window_units / r.window_days : (r.units_180 || 0) / WINDOW_DAYS;
