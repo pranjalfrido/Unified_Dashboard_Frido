@@ -357,9 +357,9 @@ const httpServer = http.createServer(async (req, res) => {
         const tried = queriesRun
           ? `I ran ${queriesRun} data ${queriesRun === 1 ? 'request' : 'requests'}${denials ? ` (${denials} denied)` : ''}${queryErrors ? ` (${queryErrors} failed)` : ''}`
           : 'I could not start a data query';
-        const missing = lastProblem ? ` but ${lastProblem}, so there is no number I can stand behind yet.` : ' but got no usable result, so there is no number I can stand behind yet.';
+        const missing = lastProblem ? `; the last problem was: ${lastProblem}. Missing: a usable result, so I can't give a number yet.` : '; nothing usable came back, so I cannot give a number yet.';
         res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `${tried}${missing} Please rephrase with a date range or channel, or contact data.team@myfrido.com.` }));
+        res.end(JSON.stringify({ error: `${tried}${missing} Try again, or contact data.team@myfrido.com.` }));
         return;
       }
 
