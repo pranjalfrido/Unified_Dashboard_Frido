@@ -466,7 +466,51 @@ export async function prewarm() {
   warmTimer.unref?.()
 }
 
+// ── Single-flight + concurrency cap for the aggregate request ──────────────────────
+// On 29 Oct several identical cold-cache requests each ran the full-ledger scans at once, which
+// starved the shared Supabase database (PostgREST 503, "Couldn't load your profile"). The
+// response cache only helps AFTER the first request finishes, so:
+//   1. identical requests (same cacheKey) wait for the one already running, then read its cache entry;
+//   2. at most LC_MAX_BUILDS (default 2) different aggregate requests run at a time per instance;
+//      the rest queue instead of piling more scans onto the database.
+// Only the plain aggregate request (no `action`) is guarded; claims, export and invalidate are not.
+const MAX_BUILDS = Math.max(1, Number(process.env.LC_MAX_BUILDS) || 2)
+const inflight = new Map()
+let activeBuilds = 0
+const buildQueue = []
+
+async function acquireBuildSlot() {
+  if (activeBuilds < MAX_BUILDS) { activeBuilds++; return }
+  await new Promise(resolve => buildQueue.push(resolve))
+}
+function releaseBuildSlot() {
+  const next = buildQueue.shift()
+  if (next) next()          // hand the slot straight over; activeBuilds stays the same
+  else activeBuilds--
+}
+
 export default async function handler(req, res) {
+  const f = req.body || {}
+  if (req.method !== 'POST' || f.action) return handlerCore(req, res)
+  const key = cacheKey(f)
+  // A waiter re-checks after each wait: if the running request succeeded its response is now in
+  // respCache and handlerCore returns it without touching the database; if it failed, the next
+  // waiter becomes the single runner instead of every waiter retrying together.
+  while (inflight.has(key)) await inflight.get(key)
+  const hit = respCache.get(key)
+  if (hit && Date.now() - hit.at < RESP_TTL_MS) return handlerCore(req, res)
+  let done
+  inflight.set(key, new Promise(resolve => { done = resolve }))
+  try {
+    await acquireBuildSlot()
+    try { return await handlerCore(req, res) } finally { releaseBuildSlot() }
+  } finally {
+    inflight.delete(key)
+    done()
+  }
+}
+
+async function handlerCore(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
   const f = req.body || {}
