@@ -19911,6 +19911,29 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Last good profile + tab list per user, kept on this device so a database outage does not lock
+// people out of the app (see the resilient load in AppInner). Every access is guarded: storage can
+// be blocked or full, and a missing or unreadable entry just means "no saved copy".
+const PROFILE_CACHE_PREFIX = 'frido_profile_cache_v1:'
+const PROFILE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+function readProfileCache(uid) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_PREFIX + uid)
+    if (!raw) return null
+    const c = JSON.parse(raw)
+    if (!c || !c.profile || Date.now() - c.at > PROFILE_CACHE_TTL_MS) return null
+    return c
+  } catch { return null }
+}
+function writeProfileCache(uid, profile, tabs) {
+  try { localStorage.setItem(PROFILE_CACHE_PREFIX + uid, JSON.stringify({ at: Date.now(), profile, tabs })) } catch { /* storage unavailable */ }
+}
+function clearProfileCache() {
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith(PROFILE_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k))
+  } catch { /* storage unavailable */ }
+}
+
 function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
@@ -19930,27 +19953,58 @@ function AppInner() {
 
   const [profileError, setProfileError] = useState(false)
 
+  // Signed out: drop the saved profile copies so they never outlive the session on a shared device.
+  useEffect(() => { if (session === null) clearProfileCache() }, [session])
+
   useEffect(() => {
     if (!session || session === 'recovery') return
     setProfileError(false)
-    // Confirmed fix 2026-10-23: Supabase outages/503s on user_profiles previously left the app
-    // stuck on LoadingScreen forever (the .then() callback just never fires), with no visible
-    // error — indistinguishable from a blank/broken page. A 15s timeout now degrades to an error
-    // screen with a retry button instead of hanging silently; a slow-but-successful real response
-    // still wins the race normally (clearTimeout below) and nothing changes for the happy path.
-    let settled = false
-    const timeout = setTimeout(() => { if (!settled) setProfileError(true) }, 15000)
-    supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
-      .then(({ data, error }) => {
-        settled = true
-        clearTimeout(timeout)
-        if (error) { console.error('profile fetch error:', error); setProfileError(true); return }
-        setProfile(data || { is_admin: false })
-      })
-      .catch(err => { settled = true; clearTimeout(timeout); console.error('profile fetch error:', err); setProfileError(true) })
-    supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
-      .then(({ data }) => setAllowedTabs(data ? data.map(r => r.tab) : []))
-      .catch(() => setAllowedTabs([]))
+    // Resilient load (29 Oct: a busy Supabase returned 503 and every user hit "Couldn't load
+    // your profile"). The lookup is retried with short backoff, and if it still fails the last
+    // profile and tab list saved on this device for THIS user (up to 24 h old) are used so the app
+    // opens; a quiet background retry then replaces them with the live values. The saved copy
+    // only decides which screens are shown: the database's own access rules still apply to every
+    // data request. Nothing is saved or used without a session, and it is removed on sign-out.
+    const uid = session.user.id
+    let cancelled = false
+    const cached = readProfileCache(uid)
+    const tryLoad = async () => {
+      const [pr, perm] = await Promise.all([
+        supabase.from('user_profiles').select('*').eq('user_id', uid).single().then(r => r, e => ({ error: e })),
+        supabase.from('user_permissions').select('tab').eq('user_id', uid).then(r => r, e => ({ error: e })),
+      ])
+      if (pr.error || !pr.data) throw pr.error || new Error('no profile row')
+      return { profile: pr.data, tabs: perm.error || !perm.data ? null : perm.data.map(r => r.tab) }
+    }
+    const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('profile fetch timeout')), ms))])
+    const apply = ({ profile, tabs }) => {
+      setProfile(profile)
+      // Tabs failing while the profile succeeded keeps the saved tabs rather than locking the user out.
+      const t = tabs || (cached && cached.tabs) || []
+      setAllowedTabs(t)
+      writeProfileCache(uid, profile, tabs || (cached && cached.tabs) || null)
+    }
+    ;(async () => {
+      const delays = [0, 1500, 3500]
+      let lastErr = null
+      for (const d of delays) {
+        if (d) await new Promise(r => setTimeout(r, d))
+        if (cancelled) return
+        try { const r = await withTimeout(tryLoad(), 8000); if (cancelled) return; apply(r); return } catch (e) { lastErr = e }
+      }
+      if (cancelled) return
+      console.error('profile fetch error:', lastErr)
+      if (!cached) { setProfileError(true); return }
+      // Open with the saved copy, then keep retrying quietly until the live profile arrives.
+      setProfile(cached.profile)
+      setAllowedTabs(cached.tabs || [])
+      for (let n = 0; n < 20 && !cancelled; n++) {
+        await new Promise(r => setTimeout(r, 15000))
+        if (cancelled) return
+        try { const r = await withTimeout(tryLoad(), 8000); if (cancelled) return; apply(r); return } catch { /* keep the saved copy */ }
+      }
+    })()
+    return () => { cancelled = true }
   }, [session])
 
   // An admin's change to this person's role or tabs applies when the tab is shown again (and every
