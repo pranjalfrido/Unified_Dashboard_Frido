@@ -65,3 +65,40 @@ function inlineFormat(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code class="af-inline-code">$1</code>');
 }
+
+// Phone view: the answer split into blocks so tables can render as their own component.
+//   { type: 'md', text }  ordinary lines (renderMarkdown)
+//   { type: 'table', headers, rows }  cells are raw markdown (inline formatting, <br> = second line)
+//   { type: 'src', text }  a "Source: …" line, shown small and grey
+export function splitAnswer(text) {
+  const lines = (text || '').split('\n');
+  const blocks = [];
+  let md = [];
+  const flush = () => { if (md.length) blocks.push({ type: 'md', text: md.join('\n') }); md = []; };
+  // Empty cells are kept, so a row with a blank cell (e.g. a Total row) stays under its headers.
+  const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes('|') && lines[i + 1] && /^[\s|:-]+$/.test(lines[i + 1])) {
+      flush();
+      const headers = cells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes('|')) {
+        const r = cells(lines[i]);
+        if (r.length) rows.push(r);
+        i++;
+      }
+      i--;
+      blocks.push({ type: 'table', headers, rows });
+      continue;
+    }
+    const src = line.trim().replace(/^[*_]+|[*_]+$/g, '');
+    if (/^source\s*:/i.test(src)) { flush(); blocks.push({ type: 'src', text: src }); continue; }
+    md.push(line);
+  }
+  flush();
+  return blocks;
+}
+
+export { inlineFormat };
