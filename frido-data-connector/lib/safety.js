@@ -72,7 +72,7 @@ function checkSql(cmd, target) {
     return { ok: false, reason: 'multiple statements are not permitted' };
   }
 
-  const normalized = cmd.replace(/\s+/g, ' ').toUpperCase().trimStart();
+  const normalized = stripped.replace(/\s+/g, ' ').toUpperCase().trimStart(); // comments removed: a leading -- or /* */ comment is fine
   if (!normalized.startsWith('SELECT') && !normalized.startsWith('WITH')) {
     return { ok: false, reason: 'only SELECT and WITH...SELECT queries are permitted' };
   }
