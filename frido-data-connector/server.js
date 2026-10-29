@@ -18,6 +18,7 @@ import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTra
 import { formatTsv, unformattedNumbers } from './lib/format.js';
 import { runOosPage } from './lib/oosPage.js';
 import { runPnlTool } from './lib/pnlTool.js';
+import { runDashboardApi, ENDPOINTS as DASH_ENDPOINTS } from './lib/dashboardApi.js';
 import { isBillingError, alertBilling, UNAVAILABLE_MESSAGE } from './lib/billingAlert.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
@@ -29,7 +30,7 @@ const readKnowledge = name => {
 };
 // KNOWLEDGE_FILE (tests only) points at a candidate CLAUDE.md instead of knowledge/CLAUDE.md.
 const CORE = process.env.KNOWLEDGE_FILE ? readFileSync(process.env.KNOWLEDGE_FILE, 'utf8') : readKnowledge('CLAUDE.md');
-const KNOWLEDGE = [CORE, readKnowledge('PULSE_PLAYBOOK.md'), readKnowledge('PULSE_METRICS.md')].filter(Boolean).join('\n\n---\n\n');
+const KNOWLEDGE = [CORE, readKnowledge('PULSE_PLAYBOOK.md'), readKnowledge('PULSE_METRICS.md'), readKnowledge('ENDPOINT_MAP.md')].filter(Boolean).join('\n\n---\n\n');
 
 const TOOL_DESCRIPTION = `Run a read-only command against Frido live data. Use for ANY Frido business question — stock, revenue, returns, logistics, courier, ads, or any metric.
 - target=bigquery → SQL query against BigQuery tables
@@ -136,6 +137,23 @@ async function executePnl(user, args, seen) {
     return { ok: false, text: `P&L page calculation failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
   }
 }
+
+// Generic read-only access to the dashboard's own /api/* endpoints (see knowledge/ENDPOINT_MAP.md for what is where).
+async function executeDashboardApi(user, args, seen) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  try {
+    const { text } = await runDashboardApi(args, seen);
+    log({ user: user.email, role: user.role, target: 'dashboard_api', command: JSON.stringify({ endpoint: args?.endpoint, params: args?.params, paths: args?.paths }).slice(0, 500), allowed: true, resultSize: text.length, duration: Date.now() - start });
+    return { ok: true, text, skus: new Map(), sql: `dashboard_api ${args?.endpoint}` };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'dashboard_api', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `Dashboard endpoint call failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
+const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by calling the page's own /api endpoint (same params the page sends). USE THIS FIRST for any dashboard question (read knowledge ENDPOINT_MAP.md for which endpoint, params and paths answer which question). endpoint: one of ${Object.keys(DASH_ENDPOINTS).join(', ')}. params: the request body the page sends (e.g. {start,end} or {months:['2026-09']}). paths: dot-paths into the response ("a.b", "rows.*.sku"); describe:true returns the response structure instead. For arrays of rows you can add groupBy (field), sum (fields to add up), sortBy, limit (default 20, max 200). First call for given params can take up to ~60-90 s, repeats are cached 30 min. Read-only.`;
 
 const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
 
@@ -297,6 +315,23 @@ const httpServer = http.createServer(async (req, res) => {
         },
       },
     }, {
+      name: 'dashboard_api',
+      description: DASHBOARD_API_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          endpoint: { type: 'string', description: 'bq, logistics, logistics-cost, inventory, inventory-oos, sales-allocation, inward, return-analysis, returns, customer, customer-support, financial-mis, cogs-monthly, cat-daily, courier-allocation, inv-data-7d, logistics-data-forward, logistics-cost-data, pnl-data-lastmonth, sales-alloc-data, inward-data, ads-data' },
+          params: { type: 'object', description: 'Request body the page sends, e.g. {"start":"2026-09-01","end":"2026-09-30"}' },
+          paths: { type: 'array', items: { type: 'string' }, description: 'Dot-paths into the response to return (max 8)' },
+          describe: { type: 'boolean', description: 'Return the response structure instead of values' },
+          groupBy: { type: 'string' }, sum: { type: 'array', items: { type: 'string' } }, sortBy: { type: 'string' },
+          limit: { type: 'integer' },
+          where: { type: 'object', description: 'Keep only array rows where field = value, e.g. {"stockStatus":"Critical"}' },
+          regular: { description: 'inv-data files only: true or {sku, location} — Regular-facility stock per location (the Inventory Health Regular view)' },
+        },
+        required: ['endpoint'],
+      },
+    }, {
       name: 'pnl',
       description: PNL_TOOL_DESCRIPTION,
       input_schema: {
@@ -347,7 +382,7 @@ const httpServer = http.createServer(async (req, res) => {
 
         for (const block of response.content) {
           if (block.type === 'text') finalText = block.text;
-          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'pnl' ? 'pnl' : usedSql);
+          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'pnl' ? 'pnl' : block.name === 'dashboard_api' ? 'dashboard_api' : usedSql);
         }
 
         if (response.stop_reason !== 'tool_use') break;
@@ -361,7 +396,9 @@ const httpServer = http.createServer(async (req, res) => {
             ? await executeOos(user, block.input, seenFormatted)
             : block.name === 'pnl'
               ? await executePnl(user, block.input, seenFormatted)
-              : await executeTool(user, command, target, seenFormatted);
+              : block.name === 'dashboard_api'
+                ? await executeDashboardApi(user, block.input, seenFormatted)
+                : await executeTool(user, command, target, seenFormatted);
           queriesRun++;
           let content = result.text;
           if (result.denied) {

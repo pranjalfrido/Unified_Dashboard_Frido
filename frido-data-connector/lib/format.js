@@ -83,3 +83,13 @@ export function unformattedNumbers(answer, seen) {
   }
   return [...new Set(bad)];
 }
+
+// One value formatted by its field name (used by dashboard_api for scalar fields): money -> ₹ Cr/L, count -> Indian commas,
+// percent -> 1 decimal. Unrecognised names stay as they are.
+export function formatValueByName(name, value, seen) {
+  const k = kindOf(String(name));
+  if (k === 'money') { const f = formatRupees(value); if (seen) seen.add(f); return `${f} (raw ${value})`; }
+  if (k === 'count') { const f = indianInt(value); if (seen) seen.add(f); return f; }
+  if (k === 'pct') return `${Number(value).toFixed(1)}% (raw ${value})`;
+  return String(value);
+}
