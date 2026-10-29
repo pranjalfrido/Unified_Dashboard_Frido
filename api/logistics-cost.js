@@ -1534,13 +1534,19 @@ export default async function handler(req, res) {
     const scope = typeof f.scope === 'string' ? f.scope : null
     const needsB2cDetail = scope === null || scope === 'all' || scope === 'b2c'
     const EMPTY = { rows: [] }
+    // Light cache build (scripts/generate-logistics-cost-cache.mjs, hourly): skip ONLY the four
+    // full-ledger detail scans below. Each one runs for minutes on the live database; the hourly
+    // build keeps their last published values instead and the nightly full build refreshes them.
+    // Deliberately separate from needsB2cDetail, which also gates the B2C halves of refCache.
+    // Internal flag: no client sends it.
+    const runHeavyDetail = needsB2cDetail && f.__lightCache !== true
 
     const [grouped, lanes, lfl, drift, product, cubeRes] = await mapLimit([
       groupedQ,
-      needsB2cDetail ? lanesQ : () => EMPTY,
-      needsB2cDetail ? lflQ : () => EMPTY,
-      needsB2cDetail ? driftQ : () => EMPTY,
-      needsB2cDetail ? productQ : () => EMPTY,
+      runHeavyDetail ? lanesQ : () => EMPTY,
+      runHeavyDetail ? lflQ : () => EMPTY,
+      runHeavyDetail ? driftQ : () => EMPTY,
+      runHeavyDetail ? productQ : () => EMPTY,
       cubeQ,
     // Concurrency 1, not 3.
     //

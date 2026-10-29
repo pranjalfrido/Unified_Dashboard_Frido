@@ -20,10 +20,11 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      # The logistics cost cache build runs several full scans of the 17 lakh-row B2C ledger.
-      # On the shared Supabase database that starves PostgREST for its duration ("Couldn't load
-      # your profile", 503 PGRST002 on 29 Oct). So it no longer runs every hour: only in the
-      # 21:00 UTC run (02:31 IST, off hours), or when dispatched by hand with refresh_cost.
+      # The FULL logistics cost build (and the lc_cube checksum/rebuild) run several full scans of
+      # the 17 lakh-row B2C ledger. On the shared Supabase database that starves PostgREST for
+      # their duration ("Couldn't load your profile", 503 PGRST002 on 29 Oct). So they run only
+      # in the 21:00 UTC run (02:31 IST, off hours), or when dispatched by hand with refresh_cost.
+      # Every other hour the cost JSON is a light build (see that step).
       # Decided first, so a run that starts late in the hour is still judged by its start time.
       - name: Decide whether to rebuild the logistics cost cache
         id: costgate
@@ -31,7 +32,7 @@ jobs:
           H=$(date -u +%H)
           if [ "${{ inputs.refresh_cost }}" = "true" ] || [ "$H" = "21" ]; then RUN=true; else RUN=false; fi
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
-          echo "UTC hour $H, refresh_cost=${{ inputs.refresh_cost }} -> logistics cost rebuild + cache: $RUN"
+          echo "UTC hour $H, refresh_cost=${{ inputs.refresh_cost }} -> full logistics cost rebuild: $RUN"
 
       - uses: actions/checkout@v4
 
@@ -113,11 +114,16 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/sync-3pl-shipments.mjs
 
+      # Runs every hour as a LIGHT build (transaction pooler, 120 s cap, no full-ledger detail
+      # scans; those four sections are carried over). LC_FULL_BUILD=true only off hours / on demand.
       - name: Generate static logistics cost JSON
-        if: steps.costgate.outputs.run == 'true'
+        # Hourly light build is non-fatal: on failure the previous file stays and the ads / P&L / commit
+        # steps still run. The nightly FULL build stays fatal so a broken refresh is visible.
+        continue-on-error: ${{ steps.costgate.outputs.run != 'true' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          LC_FULL_BUILD: ${{ steps.costgate.outputs.run }}
         run: node scripts/generate-logistics-cost-cache.mjs
 
       - name: Generate static ads JSON
