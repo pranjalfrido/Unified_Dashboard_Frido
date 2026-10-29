@@ -1,5 +1,5 @@
---- /tmp/claude_orig.md	2026-10-29 06:24:08.663965400 +0530
-+++ frido-data-connector/knowledge/CLAUDE.md	2026-10-29 06:24:06.971980900 +0530
+--- /dev/fd/63	2026-10-29 06:45:08.000000000 +0530
++++ frido-data-connector/knowledge/CLAUDE.md	2026-10-29 06:45:07.729536300 +0530
 @@ -1,14 +1,16 @@
  # Frido Data Knowledge
  
@@ -26,15 +26,17 @@
  
  ## Tables
  
-@@ -16,7 +18,7 @@
+@@ -16,8 +18,8 @@
  | Table | Use for |
  |---|---|
  | `production.fact_all_platform_sales_report` | All sales, revenue, returns, RTO, CIR, orders, units |
 -| `production.Clickpost_Shipment_Tracking_Report` | Logistics: delivery rate, RTO%, TAT, courier performance, **shipment cost, delivery cost, freight cost, cost per shipment** — this is the ONLY table for any courier cost question |
+-| `production.Aggregated_uniware_sales_report` | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
 +| `production.Clickpost_Shipment_Tracking_Report` | Logistics → Performance: RTO %, delivery rate, TAT, EDD breach, stuck, pending, NDR, courier performance. Courier **cost** is NOT answered from here — it comes from Logistics → Cost (courier invoice ledger); if you can't reach it, say so |
- | `production.Aggregated_uniware_sales_report` | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
++| `production.aggregated_uniware_sales_report` (table name is lower-case) | Inward/receiving, warehouse movements, **B2C unit sales for OOS/inventory-planning avg daily sale** |
  | `production.historical_inventory_till_date_UC` | Daily stock history per SKU per facility — used to find in-stock runs for OOS loss calculation |
  | `production.pincode_city_master` | State, city, region, tier mapping by pincode |
+ | `sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master` | Product master: category, GST rate, weight, dimensions |
 @@ -35,19 +37,19 @@
  
  ## Known metrics — reuse these, don't regenerate
@@ -49,11 +51,12 @@
 -| RTO % | locked formula below | **REVENUE-BASED** — RTO Revenue ÷ Gross Revenue (Inc GST) × 100. NEVER order-count-based. See "EXACT formula for RTO %" section. |
 +| RTO % | locked formula below | **Logistics → Performance only (Clickpost, shipment-based)** — RTO shipments ÷ forward shipments. Sep 2026 = 8.2%. See "EXACT SQL for Logistics Performance". Never the revenue-based version. |
  | CIR % | locked formula below | **REVENUE-BASED** — CIR Revenue ÷ Gross Revenue (Inc GST) × 100. NEVER order-count-based. See "EXACT formula for CIR %" section. |
- | Returns % | locked formula below | Mature window (today-44d to today-14d), NOT selected date range — see "EXACT SQL for SKU return %" section |
+-| Returns % | locked formula below | Mature window (today-44d to today-14d), NOT selected date range — see "EXACT SQL for SKU return %" section |
 -| Delivery Rate | locked formula below | Delivered shipments ÷ Total shipments (Clickpost) — see "EXACT formula for Delivery Rate" |
 -| Stuck Shipments | locked formula below | Forward only, no RTO-% statuses, guard pre-2020 timestamps — see "EXACT formula for Stuck Shipments" |
 -| DOI | locked formula below | Total inventory / Avg daily sale — use the "EXACT query for total inventory" section, do NOT read _inventory_shared.js |
 -| Avg Daily Sale (OOS loss / inventory planning) | locked formula below | **DIFFERENT from Inventory Health's Avg Sale** — longest in-stock run method, not recent-days average. See "EXACT formula for Avg Daily Sale (OOS/planning)" section. |
++| Returns % | locked formula below | **The answer period is the period asked** ("last month" = the previous calendar month, "this month", a date range), using the provisional/actual rules in "EXACT SQL for Returns". The mature window (today−43 to today−14) is NEVER the answer period: it only supplies each SKU's rolling rate for the latest 15 days (inside that SQL) and SKU-level return % ranking ("EXACT SQL for SKU return %"). |
 +| Delivery Rate, TAT, EDD breach | locked formula below | Same Clickpost base as RTO % — see "EXACT SQL for Logistics Performance" |
 +| Stuck Shipments | locked formula below | The page's "Critical Stuck" — see "EXACT SQL for Stuck Shipments" |
 +| DOI | Inventory Health logic | DOI = floor(stock ÷ ceil(max(avg sale, order allocation))), avg sale per Location (7/15/30-day page toggle). Stock from the "EXACT query for total inventory" section (Regular + Live). You may read `api/_inventory_shared.js` (target=repo) to follow the page logic exactly. |
@@ -181,10 +184,12 @@
 -**Two critical rules confirmed against live data:**
 -1. Exclude ALL `RTO-%` statuses — RTO orders are actively being returned, not stuck. Only excluding `RTO-Delivered` (the common mistake) overcounts by ~182 shipments.
 -2. Guard `DATE(latest_timestamp) > '2020-01-01'` — 74 rows have garbage epoch-style timestamps that falsely match any "stuck > N days" filter without this guard.
--
--```sql
++The dashboard's definition is **"Critical Stuck"**: a forward shipment that is in transit, whose expected delivery date (EDD) was more than 5 days ago and has no delivery date, within the selected created-date range. (The older "no update for 3+ days" rule is not on the dashboard; do not use it.)
+ 
++Use the `base` CTE from "EXACT SQL for Logistics Performance" (same filters and `unified_status`), then:
+ ```sql
 --- Stuck shipments: no movement for 3+ days, by staleness bucket
--SELECT
+ SELECT
 -  CASE
 -    WHEN DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY) BETWEEN 3 AND 7  THEN '4–7 days no update'
 -    WHEN DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY) BETWEEN 8 AND 14 THEN '8–14 days no update'
@@ -202,13 +207,18 @@
 -  AND DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
 -GROUP BY staleness_bucket
 -ORDER BY MIN(DATE_DIFF(CURRENT_DATE(), DATE(latest_timestamp), DAY))
--```
-+The dashboard's definition is **"Critical Stuck"**: a forward shipment that is in transit, whose expected delivery date (EDD) was more than 5 days ago and has no delivery date, within the selected created-date range. (The older "no update for 3+ days" rule is not on the dashboard; do not use it.)
++  courier_group AS courier,
++  COUNTIF(edd IS NOT NULL AND edd < DATE_SUB(CURRENT_DATE('Asia/Kolkata'), INTERVAL 5 DAY)
++          AND delivery_date IS NULL AND unified_status = 'Intransit') AS critical_stuck_shipments
++FROM base
++GROUP BY courier_group
++ORDER BY critical_stuck_shipments DESC
+ ```
++For the total, remove `courier_group` and the GROUP BY. "EDD breached" (a separate card) = not Delivered/RTO-Delivered, has a pickup date and EDD, and today is after EDD.
  
 -For courier breakdown, replace the SELECT/GROUP BY:
-+Use the `base` CTE from "EXACT SQL for Logistics Performance" (same filters and `unified_status`), then:
- ```sql
- SELECT
+-```sql
+-SELECT
 -  courier_partner,
 -  COUNT(*) AS stuck_shipments
 -FROM `frido-429506.production.Clickpost_Shipment_Tracking_Report`
@@ -222,15 +232,8 @@
 -  AND DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
 -GROUP BY courier_partner
 -ORDER BY stuck_shipments DESC
-+  courier_group AS courier,
-+  COUNTIF(edd IS NOT NULL AND edd < DATE_SUB(CURRENT_DATE('Asia/Kolkata'), INTERVAL 5 DAY)
-+          AND delivery_date IS NULL AND unified_status = 'Intransit') AS critical_stuck_shipments
-+FROM base
-+GROUP BY courier_group
-+ORDER BY critical_stuck_shipments DESC
- ```
-+For the total, remove `courier_group` and the GROUP BY. "EDD breached" (a separate card) = not Delivered/RTO-Delivered, has a pickup date and EDD, and today is after EDD.
- 
+-```
+-
 -**Wrong patterns — never use:**
 -```
 -❌ Only excluding 'RTO-Delivered' from NOT IN — misses RTO-InTransit, RTO-Marked etc. (+182 overcounts)
@@ -277,11 +280,13 @@
  - Pack-qty scaling (`× PO##`) applies ONLY to RAW SKUs — SKU contains 'RAW', standalone '-RW'/'-RWA', OR facility is `myfrido-Vadgaon_ITEM` (always raw). Never apply pack-qty to RTD SKUs.
  - `Vadgaon_OPS` and `Frido_Sudhawadi` have pre-computed RTD/Raw/RawBlocked columns — use those as-is, do NOT apply pack-qty logic.
  - Exclude pseudo-SKUs: `COUP` and `DFA` in item_sku_code.
-@@ -306,6 +320,89 @@
+@@ -306,6 +320,91 @@
  - "Unmapped" facility rows (facility not in facility_master) = not Live, exclude them.
  - **For warehouse-wise inventory question**, add `GROUP BY i.facility` to the locked SQL above and also join `facility_master` to get the location name.
  
 +## EXACT SQL for Returns — PROVISIONAL (as on Sales) and ACTUAL (Return Analysis)
++
++**The period of the answer is always the period asked** — "last month" = the previous calendar month from the Dates block (e.g. 1–30 Sep 2026), "this month" = month to date, or the date range given. Never answer a returns question with the mature window (that is only inside the SQL, for the latest 15 days). Use `${start}`/`${end}` = the asked period.
 +
 +Two definitions exist on the dashboard; show both when they differ.
 +- **PROVISIONAL return % = what Sales, P&L, Overview and net revenue show** (`api/_returnComponents.js`, `computeNetRevenueMeasures` in `api/_bq.js`). Days older than 15 days use each SKU's REAL status revenue; the **latest 15 days** (`d >= mature_end` from the Dates block) use that SKU's rolling 30-day rate from the mature window (`mature_start`..`mature_end`) times that day's own gross (capped at the day's gross). **Total = RTO + CIR + Return-status + full Cancellations (COD included)** — the tile says "RTO+CIR+Cancelled rev"; Exchange is shown separately and is NOT in the total. SKU = the dashboard's MasterSKU (masterskucode, else ChannelSKUCode, else ProductId, cleaned).
@@ -367,9 +372,21 @@
  ## Default behaviors (critical — wrong answers come from ignoring these)
  
  ### Logistics
-@@ -357,9 +454,7 @@
+@@ -332,7 +431,7 @@
  
- Return % for SKUs uses a **mature window anchored to today**, NOT the user's selected date range. Recent orders haven't had time to settle their RTO/CIR/Cancelled status yet, so using the current period gives artificially low return rates.
+ ### Return rates
+ - Minimum 30 units required for SKU-level rate; below this, falls back to category rate
+-- Mature window: today-44d to today-14d (30 days)
++- Mature window: today−43 to today−14 (30 days) — used only for rolling rates of the latest 15 days and SKU-level return % ranking, never as the period of an answer
+ - Flipkart uses a different return rate formula — see `api/_bq.js` → `buildFkReturnRateMature()`
+ - Myntra uses `FulfilmentStatus` for cancellations, not `Order_Status`
+ 
+@@ -355,11 +454,9 @@
+ 
+ ## EXACT SQL for SKU return % — use this, never invent
+ 
+-Return % for SKUs uses a **mature window anchored to today**, NOT the user's selected date range. Recent orders haven't had time to settle their RTO/CIR/Cancelled status yet, so using the current period gives artificially low return rates.
++**This section is ONLY for SKU-level return % (ranking SKUs / categories by return rate).** It does NOT answer "what is the return % for last month / this month / a date range" — for any asked period use "EXACT SQL for Returns" over exactly that period. For SKU ranking, return % uses a **mature window anchored to today** because recent orders haven't settled their RTO/CIR/Cancelled status yet, so the current period gives artificially low return rates.
  
 -**Window**: `today - 44 days` to `today - 14 days` (30-day window, always fixed to today)
 -- `rollingEnd = DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)`
@@ -378,7 +395,7 @@
  
  **Formula**: `(rto_rev + cir_rev + return_rev + prepaid_cancel_rev) / gross_inc_gst`
  - Same as `computeNetRevenueMeasures().overallReturnPct` → `totalReturnPct`
-@@ -382,8 +477,8 @@
+@@ -382,8 +479,8 @@
      SUM(CASE WHEN Order_Status = 'Cancelled' AND payment_type != 'COD'
                                               THEN SellingPrice_Inc_GST ELSE 0 END) AS prepaid_cancel_rev
    FROM `frido-429506.production.fact_all_platform_sales_report`
@@ -389,26 +406,27 @@
      AND NOT (OrderId LIKE '%_EX%')
      AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
      AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
-@@ -424,46 +519,15 @@
+@@ -424,46 +521,15 @@
  - Myntra uses `FulfilmentStatus` for cancellations, not `Order_Status`.
  - Never use `Order_Status = 'Return'` alone — that misses RTO and CIR which are the bigger buckets.
  
 -## EXACT formula for RTO % — use this, never invent
--
++## RTO % — there is no revenue-based RTO answer
+ 
 -**RTO % is REVENUE-BASED, not order-count-based.**
--
++A question about RTO % is answered ONLY from Logistics → Performance (see "EXACT SQL for Logistics Performance"): RTO shipments ÷ forward shipments, Clickpost. The revenue-based RTO (RTO revenue ÷ gross revenue) is no longer used as a standalone answer. It only appears inside the D2C returns breakdown, labelled "RTO (in returns, as on Sales)".
+ 
 -Correct formula (matches dashboard):
 -```
 -RTO % = SUM(SellingPrice_Inc_GST WHERE Order_Status = 'RTO') / SUM(SellingPrice_Inc_GST) × 100
 -```
-+## RTO % — there is no revenue-based RTO answer
++## EXACT formula for Avg Daily Sale (OOS loss) — use this, never invent
  
 -**Wrong formula — never use this:**
 -```
 -❌ RTO orders / (Delivered orders + RTO orders)   ← order-count ratio, always wrong
 -```
-+A question about RTO % is answered ONLY from Logistics → Performance (see "EXACT SQL for Logistics Performance"): RTO shipments ÷ forward shipments, Clickpost. The revenue-based RTO (RTO revenue ÷ gross revenue) is no longer used as a standalone answer. It only appears inside the D2C returns breakdown, labelled "RTO (in returns, as on Sales)".
- 
+-
 -### EXACT SQL for RTO % over a date range
 -```sql
 -SELECT
@@ -426,8 +444,7 @@
 -  AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
 -  AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
 -```
-+## EXACT formula for Avg Daily Sale (OOS loss) — use this, never invent
- 
+-
 -**Critical rules:**
 -- Denominator is **gross revenue (Inc GST)** — SUM of ALL `SellingPrice_Inc_GST` rows in the period, not just delivered orders.
 -- Numerator is revenue of rows where `Order_Status = 'RTO'` only.
@@ -441,7 +458,34 @@
  
  **This is NOT the same as Inventory Health's "Avg Sale".** Do not collapse them into one formula.
  
-@@ -596,13 +660,111 @@
+@@ -476,7 +542,7 @@
+ 
+ **Step 2 — Find the longest consecutive in-stock run in the last 180 days**, ending on or before the SKU's latest sales date. A day with no snapshot at all does NOT break a run (treat as in-stock). If two runs are equally long, use the more recent one.
+ 
+-**Step 3 — Count B2C units sold during that run** from `production.Aggregated_uniware_sales_report`. B2C only — `uc_channel_desc = 'B2C Order'` OR not listed in the channel reference (unmapped = B2C, same rule as Inventory Health). Exclude B2B Order, Purchase Order, Stock transfer. Resolve SKU aliases via `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` (ProductId → masterskucode).
++**Step 3 — Count B2C units sold during that run** from `production.aggregated_uniware_sales_report`. B2C only — `uc_channel_desc = 'B2C Order'` OR not listed in the channel reference (unmapped = B2C, same rule as Inventory Health). Exclude B2B Order, Purchase Order, Stock transfer. Resolve SKU aliases via `sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` (ProductId → masterskucode).
+ 
+ **Step 4 — Divide:**
+ ```
+@@ -571,7 +637,7 @@
+     r'', ''
+   ) AS master_sku,
+   SUM(s.sale_qty) AS b2c_units
+-FROM `frido-429506.production.Aggregated_uniware_sales_report` s
++FROM `frido-429506.production.aggregated_uniware_sales_report` s
+ LEFT JOIN `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping` m
+   ON s.item_sku_code = m.productid
+ WHERE s.sale_date BETWEEN '${run_start}' AND '${run_end}'
+@@ -584,7 +650,7 @@
+ 
+ **Critical rules — never break these:**
+ - Use longest in-stock run, NOT a fixed recent window like "last 30 days".
+-- B2C only — exclude B2B Order, Purchase Order, Stock transfer from `Aggregated_uniware_sales_report`.
++- B2C only — exclude B2B Order, Purchase Order, Stock transfer from `aggregated_uniware_sales_report`.
+ - Apply the 14-day minimum run length fallback — a 1–3 day run gives a wildly misleading daily rate.
+ - Always flag when 180-day fallback is used.
+ - OOS loss uses ASP from `fact_all_platform_sales_report`, not a hardcoded price.
+@@ -596,13 +662,111 @@
  ❌ Using total units (B2C + B2B + PO) instead of B2C only
  ```
  
@@ -554,7 +598,7 @@
  
  When asking, reply with ONLY this block — nothing else:
  ```clarify
-@@ -610,22 +772,23 @@
+@@ -610,22 +774,23 @@
  ```
  Options must be real values found while exploring — never invented.
  
