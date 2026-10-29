@@ -10,6 +10,16 @@ import { createServer } from 'http'
 import { config } from 'dotenv'
 config()
 
+// The unfiltered build runs the endpoint's full-ledger B2C queries (lanes, like-for-like,
+// rate drift, product). On the transaction pooler (port 6543) every statement is killed at a
+// hard 120 s regardless of the statement_timeout the handler asks for, and with the ledger
+// past 17 lakh rows those queries now exceed it — the cache silently stopped regenerating
+// from 27 Oct. Use the session connection instead (SUPABASE_DB_URL, else the same pooler
+// host on 5432), where the handler's 600 s statement_timeout applies. Same rule as
+// scripts/refresh-lc-cube-only.mjs. This only affects this script; the deployed API is unchanged.
+const sessionUrl = process.env.SUPABASE_DB_URL || (process.env.SUPABASE_URL || '').replace(':6543/', ':5432/')
+if (sessionUrl) process.env.SUPABASE_URL = sessionUrl
+
 // Import the handler directly to avoid needing an HTTP server
 // This runs the exact same code path as the API, using the same SUPABASE_URL env var.
 const { default: handler } = await import('../api/logistics-cost.js')

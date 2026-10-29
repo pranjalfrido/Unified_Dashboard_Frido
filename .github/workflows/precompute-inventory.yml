@@ -89,6 +89,7 @@ jobs:
       - name: Generate static logistics cost JSON
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/generate-logistics-cost-cache.mjs
 
       - name: Generate static ads JSON
