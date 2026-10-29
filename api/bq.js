@@ -1733,8 +1733,10 @@ export default async function handler(req, res) {
 
   try {
     // Bounded-concurrency + retry-with-backoff runner (api/_bq.js) — replaces the old
-    // Object.entries(queries).map(...) + Promise.all, which fired all ~150 of this request's
-    // queries as truly concurrent BigQuery jobs and regularly tripped BigQuery's per-user
+    // Object.entries(queries).map(...) + Promise.all, which fired all 317 of this request's
+    // queries (verified 2026-10-29 by direct instrumentation — this comment previously said
+    // ~150, stale after the file grew) as truly concurrent BigQuery jobs and regularly tripped
+    // BigQuery's per-user
     // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
     // silently keep showing stale data from the last successful fetch).
     // Phase filtering: fast phase skips slow detail queries, slow phase skips fast queries

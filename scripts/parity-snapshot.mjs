@@ -129,7 +129,11 @@ async function main() {
       try {
         const { status, ms, json } = await callEndpoint(name, variant)
         const outPath = join(OUT_DIR, `${name}__${label}.json`)
-        writeFileSync(outPath, JSON.stringify(json, null, 2))
+        // No pretty-printing — bq.js alone returns ~317 queries' worth of data and a 2-space
+        // indent inflates that to 100MB+ per snapshot file, which exhausted local disk space
+        // during this task's runs (confirmed: 5 snapshot dirs x ~400MB each hit ENOSPC on a disk
+        // with only ~6GB free). Compact JSON is still diffable by parity-diff.mjs, which parses it.
+        writeFileSync(outPath, JSON.stringify(json))
         console.log(`status=${status} ms=${ms} -> ${outPath}`)
         summary.push({ name, label, status, ms, ok: status === 200 })
       } catch (e) {

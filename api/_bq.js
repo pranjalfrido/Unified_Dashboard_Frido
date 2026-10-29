@@ -68,7 +68,9 @@ function sanitizeTimingName(name) {
   return String(name).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40)
 }
 
-// api/bq.js fires ~150 distinct queries per request in one Promise.all — firing them all as
+// api/bq.js fires 317 distinct queries per request (verified 2026-10-29 by direct instrumentation
+// — see requestTimer below; this count was previously documented as ~150, stale after the file
+// grew) in one Promise.all — firing them all as
 // truly concurrent BigQuery jobs regularly trips BigQuery's per-user JobService.query rate limit
 // (confirmed 2026-08-19: real 500s in production, which made the frontend silently keep showing
 // stale data — see App.jsx's fetchData). runQueriesLimited caps how many queries are in flight at

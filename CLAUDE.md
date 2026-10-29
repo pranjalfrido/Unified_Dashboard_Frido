@@ -31,7 +31,7 @@ Each dashboard tab has its own API endpoint. The frontend sends `{ start, end, .
 - `_inventory_shared.js` — Pure JS utility functions for inventory calculations (DOI, stock status, dead stock). No BQ calls.
 - `bq.js` — Sales & Ads tab. Sends courier/shipmentType/category filters to BQ; zone/payment/state/city are filtered client-side in `App.jsx`.
 - `logistics.js` — Single massive BQ query with ~28 CTEs. Date filter uses `DATE(created_at)`. The `all_channels` CTE was removed — channels now come from `base` to avoid a second full table scan.
-- `inventory.js` — 6 parallel Supabase queries. All 6 source tables are synced from BigQuery to Supabase hourly by `export_to_supabase.mjs`. Normally this endpoint is NOT called by the frontend — `public/inv-data.json` (pre-computed static JSON, served from CDN) is used instead. This endpoint is the fallback when the static file is missing or older than 2 hours.
+- `inventory.js` — 9 parallel Supabase queries (verified 2026-10-29 by direct count of the `Promise.all` destructure / `cachedQuery(...)` call sites — this line previously said 6, which was stale). All 9 source tables are synced from BigQuery to Supabase hourly by `export_to_supabase.mjs`. Normally this endpoint is NOT called by the frontend — `public/inv-data.json` (pre-computed static JSON, served from CDN) is used instead. This endpoint is the fallback when the static file is missing or older than 2 hours.
 - `inward.js`, `returns.js`, `customer.js`, `sales-allocation.js` — Each fires one BQ query.
 - `admin.js` — Admin/sync utilities.
 
