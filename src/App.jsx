@@ -34,6 +34,7 @@ import { ChartFrame } from './responsive/ChartFrame.jsx'
 import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
+import AppBanner from './responsive/AppBanner.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
 import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
@@ -3637,8 +3638,11 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     await supabase.auth.signOut()
     onSignOut?.()
   }
-  return <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
-    onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} />
+  return <>
+    <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
+      onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} />
+    <AppBanner />
+  </>
 }
 
 // ── Topnav ─────────────────────────────────────────────────────

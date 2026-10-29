@@ -1602,7 +1602,7 @@ svg text, svg tspan{
    sits under the green bar on the light page background. */
 /* No backdrop-filter: it would make the header the containing block of the date picker's fixed sheet. */
 .mph{ font-family:var(--font); -webkit-tap-highlight-color:transparent; position:relative; z-index:1 }
-.mph-bar{ background:linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%); box-shadow:0 8px 18px -8px rgba(20,50,35,.45); position:relative; z-index:1 }
+.mph-bar{ background:linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%); box-shadow:0 8px 18px -8px rgba(20,50,35,.45); position:relative; z-index:1; padding-top:var(--safe-top) }
 .mph button{ -webkit-tap-highlight-color:transparent }
 .mph button:focus{ outline:none }
 .mph button:focus-visible{ outline:2px solid #9fe0b9; outline-offset:2px }
