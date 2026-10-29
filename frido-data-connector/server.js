@@ -17,6 +17,7 @@ import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
 import { formatTsv, unformattedNumbers } from './lib/format.js';
 import { runOosPage } from './lib/oosPage.js';
+import { runPnlTool } from './lib/pnlTool.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
 import { freshnessNote } from './lib/freshness.js';
@@ -119,6 +120,23 @@ async function executeOos(user, args, seen) {
     return { ok: false, text: `OOS page query failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
   }
 }
+
+// P&L per channel and month, as the P&L page computes it (TEMPORARY COPY of the page logic, see lib/pnlTool.js).
+async function executePnl(user, args, seen) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  try {
+    const { text } = await runPnlTool(args, seen);
+    log({ user: user.email, role: user.role, target: 'pnl', command: JSON.stringify(args || {}), allowed: true, resultSize: text.length, duration: Date.now() - start });
+    return { ok: true, text, skus: new Map(), sql: 'pnl (P&L page logic)' };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'pnl', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `P&L page calculation failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
+const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
 
 const OOS_TOOL_DESCRIPTION = 'Out-of-stock SKUs and OOS loss exactly as the dashboard\'s Inventory Health > OOS loss page shows them (same SQL and maths). Use for ANY question about OOS / out-of-stock SKUs, loss of sales, days out of stock. Optional: limit (top N by loss, default 10) and sku (one SKU).';
 
@@ -272,6 +290,20 @@ const httpServer = http.createServer(async (req, res) => {
           sku: { type: 'string', description: 'One master SKU, e.g. FR-ERFT-B1' },
         },
       },
+    }, {
+      name: 'pnl',
+      description: PNL_TOOL_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          channel: { type: 'string', description: 'd2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry or myntra' },
+          month: { type: 'string', description: 'Calendar month as YYYY-MM, e.g. 2026-09' },
+          start: { type: 'string', description: 'Start date YYYY-MM-DD (instead of month)' },
+          end: { type: 'string', description: 'End date YYYY-MM-DD (instead of month)' },
+          breakdown: { type: 'boolean', description: 'Also return top/bottom product margins' },
+        },
+        required: ['channel'],
+      },
     }];
 
     try {
@@ -309,7 +341,7 @@ const httpServer = http.createServer(async (req, res) => {
 
         for (const block of response.content) {
           if (block.type === 'text') finalText = block.text;
-          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : usedSql);
+          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'pnl' ? 'pnl' : usedSql);
         }
 
         if (response.stop_reason !== 'tool_use') break;
@@ -321,7 +353,9 @@ const httpServer = http.createServer(async (req, res) => {
           const { command, target } = block.input;
           const result = block.name === 'oos_loss'
             ? await executeOos(user, block.input, seenFormatted)
-            : await executeTool(user, command, target, seenFormatted);
+            : block.name === 'pnl'
+              ? await executePnl(user, block.input, seenFormatted)
+              : await executeTool(user, command, target, seenFormatted);
           queriesRun++;
           let content = result.text;
           if (result.denied) {

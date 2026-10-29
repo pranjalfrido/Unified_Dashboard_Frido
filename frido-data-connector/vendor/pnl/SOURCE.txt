@@ -1,0 +1,3 @@
+source: origin/main @ 6fa774124428889af1082e2d127fedde9be7d0b6
+bundle sha256: f0f858e7d1dba00d35dfdf595829331731d65df4908b1d04bd73cc6e5ac84410
+TEMPORARY copy of PnLPage logic — replace with a shared module (docs/BACKLOG.md)

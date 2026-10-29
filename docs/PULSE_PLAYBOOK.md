@@ -33,7 +33,8 @@ Rules that code can enforce are enforced in the connector (section 1); text rule
 | Inventory numbers (stock, by warehouse, by SKU, DOI, avg sale, critical) | **Inventory Health logic** (`_inventory_shared.js` / `inv-data*.json`), **Regular + Live facilities only** | never EBO, dark stores, Frido stores, FBA or non-live; say "as of <time>" |
 | OOS SKUs and loss | Inventory → Out-of-stock loss — the **`oos_loss` tool** runs the page's own SQL (`api/data/inventory_oos.sql`) and maths (`api/inventory-oos.js`) | numbers match the page; the old in-stock-run SQL in CLAUDE.md is reference only |
 | **Inventory planning** (how much to order / transfer / required) | section 6 | inventory from Inventory Health (Regular + Live); avg sale by the planning method |
-| Ads, P&L, customers | their pages | ACoS / TACoS → "not tracked on the dashboard yet"; Overall P&L → "not available yet" |
+| **P&L, COGS totals, CM1, margins, marketing %** | P&L page — the **`pnl` tool** (runs the page's own code; TEMPORARY copy, see BACKLOG) | one channel + month at a time; says which COGS month is used; labelled "Approximate, check the P&L page" until verified; Overall P&L "not available yet" |
+| Ads, customers | their pages | ACoS / TACoS → "not tracked on the dashboard yet"; Overall P&L → "not available yet" |
 
 Pulse may read `_inventory_shared.js` (read-only) so inventory answers can follow the Inventory Health logic.
 

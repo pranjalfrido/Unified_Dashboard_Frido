@@ -414,7 +414,12 @@ ORDER BY gross_inc_gst DESC
 
 - COGS comes from `product_cogs_monthly` (per-unit cost per SKU per month), exactly as the P&L page does. Fallback order on the page for a SKU: that month's row (actual or carried forward) → average COGS of the SKU's sub-category that month → 40% of ASP (ASP < ₹5,000) or 50% of ASP.
 - **Every P&L / COGS answer says which COGS month was used**, e.g. `COGS for Oct uses Sep 2026 per-SKU cost (carried forward; latest actual month)`. Get it from `cogs_source` and `carried_from_month`.
-- P&L COGS for a period = the month-weighted per-unit cost × **net units after returns** (not gross units). Total COGS, COGS %, CM1 and CM1 % for a channel and month are produced by the P&L page's own logic; until the `pnl` tool exists, say that these totals are not available yet instead of estimating them. **Never compute a total COGS, COGS % or CM1 yourself** (the sales and COGS data live in different databases and the page's net-units logic is not reproducible in SQL). Give what is available — the COGS month used and per-unit costs — and say the P&L total comes with the P&L tool. Overall P&L: "not available yet".
+- **P&L, COGS totals, CM1, CM1 %, margins, marketing % → the `pnl` tool** (one channel and period at a time; `month` = `YYYY-MM`, or `start`/`end`; `breakdown: true` adds top/bottom product margins). It runs the P&L page's own code, so the numbers are the page's: gross, net revenue, COGS, COGS % of net, gross margin, SnD, CM1, CM1 % (CM1 ÷ covered net revenue), marketing spend and %, CM2. Never compute these yourself.
+- The tool output has an `ACCURACY:` line. If it says "Approximate, check the P&L page", your answer MUST say exactly that, in one line under the first line. If it says "matches the P&L page", say nothing extra.
+- The tool output has a `COGS month used:` line — copy it into the answer (e.g. "COGS for Oct uses Sep 2026 per-SKU cost (carried forward)").
+- First line: the main number asked for (bold, copied from the tool's formatted value). Last line: `Source: P&L → <channel> · <dates, IST> · COGS: <month used>`.
+- **Overall P&L stays "not available yet"** — answer one channel at a time; if asked for Overall, say it is not available yet and offer the channels.
+- The first call for a period can take up to about 90 seconds; calls for the same period are then cached for 30 minutes.
 
 ## Default behaviors (critical — wrong answers come from ignoring these)
 
