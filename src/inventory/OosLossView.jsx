@@ -2,10 +2,9 @@
 // One row per SKU that is out of stock today and sold (B2C) in the last 180 days:
 // days out of stock x avg daily sale (longest in-stock run) x ASP = loss of sale opportunity.
 // Data: POST /api/inventory-oos (api/inventory-oos.js + api/data/inventory_oos.sql).
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { IC, fmtNum, fmtInt, GlassCard, KpiTile, SearchableMultiSelect, SortableTh, ExportButton } from './theme.jsx'
-
-const API = import.meta.env.VITE_API_URL || ''
+import { useOosData, stockedSkus, ageOf, oosSummary, lossByCategory, lossByAge, OOS_EXPORT_COLS } from './oosData.js'
 const inr = (n) => (n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN'))
 const inrShort = (n) => (n == null || n === 0 ? '—' : '₹' + fmtNum(n))
 const dt = (iso) => (iso ? new Date(iso + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—')
@@ -33,41 +32,23 @@ const TIPS = {
   dailyLoss: 'Avg daily sale x ASP — what each further day out of stock costs',
 }
 
-// Stock-out ageing buckets (days out of stock) for the second chart.
-const AGE_BUCKETS = [
-  { k: '1-7 d', lo: 0, hi: 7 }, { k: '8-15 d', lo: 8, hi: 15 }, { k: '16-30 d', lo: 16, hi: 30 },
-  { k: '31-60 d', lo: 31, hi: 60 }, { k: '60+ d', lo: 61, hi: Infinity },
-]
 // Bar fills: green gradients from the theme accent tokens (they follow a theme switch).
 // Read at render time - IC getters resolve the live CSS variables.
 // Dark greens: accent -> deep accent.
 const gradMain = () => `linear-gradient(90deg, ${IC.acc}, ${IC.accBorder})`    // loss by category
 
-const ageOf = (d) => AGE_BUCKETS.find(b => d >= b.lo && d <= b.hi)?.k
-
 // lastSalesDate: the Inventory Health page's latest-sales date, shown the same way as on that page;
 // the stock-history date the OOS figures use is shown under it.
 export default function OosLossView({ onBack, lastSalesDate }) {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
+  // Data + summaries are shared with the phone view (oosData.js), so both show the same numbers.
+  const { data, error } = useOosData()
   const [search, setSearch] = useState('')
   const [cats, setCats] = useState([])
   const [age, setAge] = useState(null)   // ageing bucket picked on the chart
   const [sort, setSort] = useState({ key: 'lossToDate', dir: 'desc' })
 
-  useEffect(() => {
-    let alive = true
-    fetch(`${API}/api/inventory-oos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-      .then(r => r.json())
-      .then(j => { if (!alive) return; if (j.error) setError(j.error); else setData(j) })
-      .catch(e => alive && setError(e.message))
-    return () => { alive = false }
-  }, [])
-
-  // SKUs with no stock in any live warehouse for all 180 days are left out: they kept selling, so
-  // they are made-to-order / vendor-shipped items (wheelchairs, scooter parts) or stock held only
-  // in non-live facilities - not stock-outs.
-  const scoped = useMemo(() => (data?.skus || []).filter(r => !r.neverInStock), [data])
+  // SKUs never in stock in a live warehouse in 180 days are left out (see stockedSkus).
+  const scoped = useMemo(() => stockedSkus(data), [data])
   const categories = useMemo(() => [...new Set(scoped.map(r => r.category))].sort(), [scoped])
   // Cross-filtering: each chart is drawn from the rows matching every OTHER filter, so picking a
   // category keeps the whole ageing picture for it (and vice versa) and the picked bar stays visible.
@@ -90,35 +71,11 @@ export default function OosLossView({ onBack, lastSalesDate }) {
     })
   }, [scoped, cats, age, search, sort])
 
-  const sum = (f) => rows.reduce((s, r) => s + (r[f] || 0), 0)
-  const kpi = {
-    skus: rows.length,
-    loss: sum('lossToDate'),
-    daily: sum('dailyLoss'),
-    avgDays: rows.length ? sum('daysOos') / rows.length : 0,
-    maxDays: rows.length ? Math.max(...rows.map(r => r.daysOos)) : 0,
-    // simple average of the SKUs' ASPs (SKUs without an ASP left out)
-    avgAsp: (() => { const a = rows.filter(r => r.asp != null); return a.length ? a.reduce((s, r) => s + r.asp, 0) / a.length : null })(),
-    aspSkus: rows.filter(r => r.asp != null).length,
-  }
-  const byCat = useMemo(() => {
-    const m = new Map()
-    for (const r of scoped) if (match(r, { skipCat: true })) m.set(r.category, (m.get(r.category) || 0) + (r.lossToDate || 0))
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-  }, [scoped, age, search])
+  const kpi = oosSummary(rows)
+  const byCat = useMemo(() => lossByCategory(scoped.filter(r => match(r, { skipCat: true }))), [scoped, age, search])
   const maxCat = byCat[0]?.[1] || 1
-  // Ageing x PO status: loss so far per days-out bucket, split by whether a PO is already open.
-  const byAge = useMemo(() => {
-    const out = AGE_BUCKETS.map(b => ({ k: b.k, loss: 0, skus: 0 }))
-    for (const r of scoped) {
-      if (!match(r, { skipAge: true })) continue
-      const b = out.find(x => x.k === ageOf(r.daysOos))
-      if (!b) continue
-      b.skus++
-      b.loss += r.lossToDate || 0
-    }
-    return out
-  }, [scoped, cats, search])
+  // Loss so far per days-out bucket.
+  const byAge = useMemo(() => lossByAge(scoped.filter(r => match(r, { skipAge: true }))), [scoped, cats, search])
   const maxAge = Math.max(1, ...byAge.map(b => b.loss))
   const onSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
 
@@ -157,17 +114,7 @@ export default function OosLossView({ onBack, lastSalesDate }) {
     }
   }
 
-  const exportCols = [
-    { label: 'SKU', key: 'sku' }, { label: 'Product name', key: 'name' }, { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' },
-    { label: 'No. of days OOS', key: 'daysOos' }, { label: 'OOS since', key: 'oosSince' }, { label: 'OOS since source', key: 'oosSource' },
-    { label: 'Last D2C sale', key: 'd2cLastSale' }, { label: 'D2C sale days (30 d before)', key: 'd2cSaleDays30' }, { label: 'Stock-based OOS since', key: 'stockOosSince' },
-    { label: 'Avg daily sale count', key: 'avgDailySale' },
-    { label: 'ASP', key: 'asp' }, { label: 'Loss of sale opportunity', key: 'lossToDate' }, { label: 'Loss per day', key: 'dailyLoss' },
-    { label: 'Avg basis', key: 'basis' }, { label: 'Window start', key: 'windowStart' },
-    { label: 'Window end', key: 'windowEnd' }, { label: 'Window days', key: 'windowDays' }, { label: 'Window units', key: 'windowUnits' },
-    { label: 'B2C units 180d', key: 'units180' }, { label: 'In-stock days 180d', key: 'inStockDays180' }, { label: 'Last sale', key: 'lastSale' },
-    { label: 'ASP source', key: 'aspSource' },
-  ]
+  const exportCols = OOS_EXPORT_COLS
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
