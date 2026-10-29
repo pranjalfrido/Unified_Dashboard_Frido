@@ -18,26 +18,30 @@ async function load() {
   const aliasRows = await q('SELECT productid, sellerskucode, masterskucode FROM `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping`');
   const master = new Map();
   for (const r of masterRows) {
-    if (r.Product_Code) master.set(String(r.Product_Code).trim().toUpperCase(), { sub: r.Sub_category || '', cat: r.Category_Name || '' });
+    if (r.Product_Code) master.set(clean(r.Product_Code), { sub: r.Sub_category || '', cat: r.Category_Name || '' });
   }
   const alias = new Map();
   for (const r of aliasRows) {
-    const m = r.masterskucode && String(r.masterskucode).trim().toUpperCase();
+    const m = r.masterskucode && clean(r.masterskucode);
     if (!m) continue;
-    for (const k of [r.productid, r.sellerskucode]) if (k) alias.set(String(k).trim().toUpperCase(), m);
+    for (const k of [r.productid, r.sellerskucode]) if (k) alias.set(clean(k), clean(m));
   }
   cache = { at: Date.now(), master, alias };
   return cache;
 }
 
+const clean = x => String(x).toUpperCase().replace(/[^A-Z0-9-]/g, '');
 const SKU_HEADER = /^(sku|masterskucode|master_sku|item_sku_code|itemskucode|final_sku|sku_code|product_code|channelskucode)$/i;
 
 function lookup(c, code) {
-  const key = String(code).trim().toUpperCase();
-  let hit = c.master.get(key);
-  if (!hit && c.alias.has(key)) hit = c.master.get(c.alias.get(key));
-  if (!hit) hit = c.master.get(key.replace(/(_RAW)?(_PO\d+)?$/, ''));
-  return hit || null;
+  // Try the code as given, then without a _RAW / _PO24 pack suffix, then its first "_" segment.
+  const raw = String(code).trim().toUpperCase();
+  for (const t of [raw, raw.replace(/(_RAW)?(_PO\d+)?$/, ''), raw.split('_')[0]]) {
+    const key = clean(t);
+    const hit = c.master.get(key) || (c.alias.has(key) ? c.master.get(c.alias.get(key)) : null);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // Appends Sub_Category and Category columns after any result that has a SKU column.

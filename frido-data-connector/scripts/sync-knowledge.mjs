@@ -11,3 +11,6 @@ for (const f of ['PULSE_PLAYBOOK.md', 'PULSE_METRICS.md']) {
   copyFileSync(path.join(docs, f), path.join(knowledge, f));
   console.log(`synced ${f}`);
 }
+// The OOS loss page's own SQL, run by lib/oosPage.js (the dashboard's api/data/inventory_oos.sql).
+copyFileSync(path.join(here, '..', '..', 'api', 'data', 'inventory_oos.sql'), path.join(knowledge, 'oos_page.sql'));
+console.log('synced oos_page.sql');

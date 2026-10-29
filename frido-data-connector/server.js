@@ -15,7 +15,8 @@ import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
-import { formatTsv } from './lib/format.js';
+import { formatTsv, unformattedNumbers } from './lib/format.js';
+import { runOosPage } from './lib/oosPage.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
 import { freshnessNote } from './lib/freshness.js';
@@ -44,7 +45,7 @@ ${KNOWLEDGE}`;
 // Single tool executor — used by both MCP and /chat.
 // Returns { ok, text, denied?, skus?, note?, sql? }. `denied` = refused by the authorization or safety
 // layer (not a query error); /chat counts these and tells the model not to retry.
-async function executeTool(user, command, target) {
+async function executeTool(user, command, target, seen) {
   const start = Date.now();
   // Force IST in any SQL the model wrote (CURRENT_DATE() -> CURRENT_DATE('Asia/Kolkata')).
   if (target === 'bigquery' || target === 'supabase') command = normalizeSql(command, target);
@@ -76,7 +77,7 @@ async function executeTool(user, command, target) {
       // SKU rows get Sub-category + Category from the SKU master; amounts and counts are formatted
       // in the Indian system here so the model copies them instead of converting units itself.
       ({ text, skus } = await enrichSkus(text));
-      text = formatTsv(text);
+      text = formatTsv(text, seen);
       if (target === 'bigquery') note = await freshnessNote(command);
     }
     const truncated = text.length > 50000;
@@ -95,6 +96,31 @@ async function executeTool(user, command, target) {
     return { ok: false, text: `Query failed (ref: ${reqId}): ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
   }
 }
+
+// OOS loss as the Inventory Health "OOS loss" page computes it (its own SQL + maths, see lib/oosPage.js).
+async function executeOos(user, args, seen) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  try {
+    const { text } = await runOosPage({ limit: args?.limit, sku: args?.sku });
+    const [head, ...rest] = text.split('\n');
+    let body = rest.join('\n');
+    let skus = new Map();
+    if (body) {
+      ({ text: body, skus } = await enrichSkus(body));
+      body = formatTsv(body, seen);
+    }
+    const out = body ? `${head}\n${body}` : head;
+    log({ user: user.email, role: user.role, target: 'oos_loss', command: JSON.stringify(args || {}), allowed: true, resultSize: out.length, duration: Date.now() - start });
+    return { ok: true, text: out, skus, sql: 'oos_loss (Inventory Health > OOS loss page logic)' };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'oos_loss', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `OOS page query failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
+const OOS_TOOL_DESCRIPTION = 'Out-of-stock SKUs and OOS loss exactly as the dashboard\'s Inventory Health > OOS loss page shows them (same SQL and maths). Use for ANY question about OOS / out-of-stock SKUs, loss of sales, days out of stock. Optional: limit (top N by loss, default 10) and sku (one SKU).';
 
 function createMcpServer(user) {
   const server = new McpServer({ name: 'frido-data-connector', version: '1.0.0' });
@@ -117,6 +143,16 @@ function createMcpServer(user) {
     },
     async ({ command, target }) => {
       const result = await executeTool(user, command, target);
+      return { content: [{ type: 'text', text: result.text }] };
+    }
+  );
+
+  server.tool(
+    'oos_loss',
+    OOS_TOOL_DESCRIPTION,
+    { limit: z.number().optional(), sku: z.string().optional() },
+    async args => {
+      const result = await executeOos(user, args, new Set());
       return { content: [{ type: 'text', text: result.text }] };
     }
   );
@@ -226,6 +262,16 @@ const httpServer = http.createServer(async (req, res) => {
         },
         required: ['command', 'target'],
       },
+    }, {
+      name: 'oos_loss',
+      description: OOS_TOOL_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', description: 'Top N SKUs by loss (default 10, max 50)' },
+          sku: { type: 'string', description: 'One master SKU, e.g. FR-ERFT-B1' },
+        },
+      },
     }];
 
     try {
@@ -240,6 +286,7 @@ const httpServer = http.createServer(async (req, res) => {
       let queryErrors = 0;
       let lastProblem = '';
       const seenSkus = new Map();
+      const seenFormatted = new Set();
       const syncNotes = new Set();
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
@@ -262,7 +309,7 @@ const httpServer = http.createServer(async (req, res) => {
 
         for (const block of response.content) {
           if (block.type === 'text') finalText = block.text;
-          if (block.type === 'tool_use' && block.input?.command) usedSql = block.input.command;
+          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : usedSql);
         }
 
         if (response.stop_reason !== 'tool_use') break;
@@ -272,7 +319,9 @@ const httpServer = http.createServer(async (req, res) => {
         for (const block of response.content) {
           if (block.type !== 'tool_use') continue;
           const { command, target } = block.input;
-          const result = await executeTool(user, command, target);
+          const result = block.name === 'oos_loss'
+            ? await executeOos(user, block.input, seenFormatted)
+            : await executeTool(user, command, target, seenFormatted);
           queriesRun++;
           let content = result.text;
           if (result.denied) {
@@ -340,6 +389,31 @@ const httpServer = http.createServer(async (req, res) => {
               ...loopMessages,
               { role: 'assistant', content: finalText },
               { role: 'user', content: `Some product names in your answer are not the SKU master's sub-category. Rewrite the same answer using exactly these names (never invent a product name): ${fix}` },
+            ],
+          }).catch(() => null);
+          if (retry) {
+            totalInputTokens += retry.usage?.input_tokens || 0;
+            totalOutputTokens += retry.usage?.output_tokens || 0;
+            for (const block of retry.content) if (block.type === 'text') finalText = block.text;
+          }
+        }
+      }
+
+      // Safety net: a rupee amount, or a bare number >= 1,00,000, that is not one of the connector's formatted
+      // values is sent back once (the model must copy formatted values, never convert units itself).
+      if (finalText && seenFormatted.size) {
+        const odd = unformattedNumbers(finalText, seenFormatted);
+        if (odd.length) {
+          const retry = await anthropic.messages.create({
+            model,
+            max_tokens: 4096,
+            system: buildSystemPrompt(),
+            tools,
+            tool_choice: { type: 'none' },
+            messages: [
+              ...loopMessages,
+              { role: 'assistant', content: finalText },
+              { role: 'user', content: `These numbers in your answer are not values the connector formatted: ${odd.slice(0, 12).join(', ')}. Rewrite the same answer using only the formatted values exactly as they appear in the results (never convert units yourself). If a number is a total you computed, take it from the query result instead, or say it is a computed figure.` },
             ],
           }).catch(() => null);
           if (retry) {

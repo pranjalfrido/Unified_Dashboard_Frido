@@ -4,10 +4,20 @@
 //   counts: Indian commas (1,53,451)     percentages: 1 decimal
 // Every formatted cell carries the raw value:  ₹1.23 Cr (raw 12330000)
 
-const MONEY = /(revenue|\brev\b|_rev\b|sales|amount|cost|spend|gmv|price|\basp\b|\baov\b|\bvalue\b|loss|cogs|margin|\bcm1\b|\bmrp\b|freight|charges|refund|\bgst\b)/i;
-const COUNT = /(units|\bqty\b|quantity|orders|\bcount\b|shipments|stock|inventory|skus|customers|tickets|^n$|_n$|total_rows|\brows\b|\bnum_|stuck|pending|delivered|\brto\b$|\bcir\b$)/i;
+// Money columns are recognised by the words in the column name (split on _ , spaces and camelCase):
+// rev, revenue, gross, net, amount, value, cost, sales, asp, aov, price (and names ending in them, e.g. cir_rev,
+// totalrevenue, invoicevalue), plus loss / spend / cogs / margin / mrp / freight / refund. CLAUDE.md tells the
+// model to ALWAYS alias money columns with one of these words.
+const MONEY_WORDS = /^(rev|revenue|gross|net|amount|value|cost|sales|asp|aov|price|loss|spend|cogs|margin|cm1|mrp|freight|refund|gmv)$/;
+const MONEY_SUFFIX = /(rev|revenue|amount|value|cost|sales|price|loss|spend|cogs|margin|freight|refund|gmv)$/;
+const COUNT = /(units|qty|quantity|orders|count|shipments|stock|inventory|skus|customers|tickets|^n$|_n$|total_rows|rows|num_|stuck|pending|delivered|rto$|cir$)/i;
 const PCT = /(pct|percent|_percentage)/i;
 const NOT_MONEY = /(pct|percent|rate$|ratio|share|qty|units|orders|count|days|doi|lakhs|crores|per_day|daily|_cr$|_l$)/i;
+
+function isMoneyName(header) {
+  const tokens = header.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return tokens.some(t => t !== 'prev' && (MONEY_WORDS.test(t) || MONEY_SUFFIX.test(t)));
+}
 
 export function indianInt(n) {
   const neg = n < 0;
@@ -29,13 +39,13 @@ export function formatRupees(n) {
 
 function kindOf(header) {
   if (PCT.test(header)) return 'pct';
-  if (MONEY.test(header) && !NOT_MONEY.test(header)) return 'money';
+  if (isMoneyName(header) && !NOT_MONEY.test(header)) return 'money';
   if (COUNT.test(header) && !NOT_MONEY.test(header.replace(/(units|qty|orders|count)/i, ''))) return 'count';
   return null;
 }
 
 // Input: tab-separated text (header line first) as produced by lib/bigquery.js / lib/supabase.js.
-export function formatTsv(text) {
+export function formatTsv(text, seen) {
   const lines = String(text).split('\n');
   if (lines.length < 2 || !lines[0].includes('\t')) return text;
   const headers = lines[0].split('\t');
@@ -49,10 +59,27 @@ export function formatTsv(text) {
       const k = kinds[j];
       if (!k || c === '' || c === 'NULL' || !/^-?\d+(\.\d+)?$/.test(c.trim())) return c;
       const n = Number(c);
-      if (k === 'money') return `${formatRupees(n)} (raw ${c})`;
-      if (k === 'count') return `${indianInt(n)}`;
+      if (k === 'money') { const f = formatRupees(n); if (seen) seen.add(f); return `${f} (raw ${c})`; }
+      if (k === 'count') { const f = indianInt(n); if (seen) seen.add(f); return f; }
       return `${n.toFixed(1)}% (raw ${c})`;
     }).join('\t'));
   }
   return out.join('\n');
+}
+
+// Numbers in a model answer that did not come from the formatted results: any rupee amount, or a bare
+// number >= 1,00,000, that is not one of the values the connector formatted. Used to send an answer back once.
+export function unformattedNumbers(answer, seen) {
+  const bad = [];
+  const text = String(answer);
+  for (const m of text.matchAll(/₹\s?-?[\d,]+(?:\.\d+)?(?:\s?(?:Cr|L)(?![A-Za-z]))?/g)) {
+    const v = m[0].replace(/\s+/g, ' ').replace('₹ ', '₹').trim();
+    if (![...seen].some(f => f === v || f.replace(/\s/g, '') === v.replace(/\s/g, ''))) bad.push(v);
+  }
+  for (const m of text.matchAll(/(?<![\d,.₹])(\d{1,3}(?:,\d{2,3})+|\d{6,})(?![\d,]*\.\d)(?!\s?(?:Cr|L)(?![A-Za-z]))/g)) {
+    const raw = m[1];
+    const n = Number(raw.replace(/,/g, ''));
+    if (n >= 100000 && !/^(19|20)\d{2}$/.test(raw) && ![...seen].includes(raw) && ![...seen].includes(indianInt(n))) bad.push(raw);
+  }
+  return [...new Set(bad)];
 }

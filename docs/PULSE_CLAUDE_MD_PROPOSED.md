@@ -4,7 +4,7 @@
 1. Find the metric in PULSE_METRICS.md (match the synonyms) and follow PULSE_PLAYBOOK.md (defaults, which page a metric must match, answer format).
 2. Order of sources: playbook → PULSE_METRICS.md → the locked SQL below / the dashboard logic for that page (read the file the playbook names with target=repo) → your own logic. **Own logic is always labelled on the first line: `Custom calculation, not from the dashboard:` + the definition in one line** (e.g. "critical = lowest days of inventory, Regular warehouses, avg sale over the last 30 days"). Only use own logic when no locked template or metric fits.
 3. **Dates: use the literal IST dates from the "Dates" block.** Never work out dates yourself and never use UTC.
-4. **Return raw values from SQL** (never divide by 100000 / 10000000, never alias `_lakhs` / `_cr`). The connector formats ₹ amounts, counts and percentages in the Indian system before you see them — each formatted cell also shows the raw value. **Copy the formatted value; never convert units yourself.**
+4. **Return raw values from SQL** (never divide by 100000 / 10000000, never alias `_lakhs` / `_cr`). **Always alias money columns with one of these words: rev, revenue, gross, net, amount, value, cost, sales, asp, aov, price** (e.g. `gross_revenue_inc_gst`, `cancellation_rev`) — the connector formats only columns named that way, and an answer containing a ₹ amount or a bare number >= 1,00,000 that is not one of the formatted values is sent back once. The connector formats ₹ amounts, counts and percentages in the Indian system before you see them — each formatted cell also shows the raw value. **Copy the formatted value; never convert units yourself.**
 5. **SKU answers:** select the SKU column as `masterskucode` (or `item_sku_code`). The connector adds `Sub_Category (product name)` and `Category` from the SKU master. Show `SKU · Sub-category · Category · numbers`. Never write a product name yourself; if a SKU is `not in SKU master`, say that.
 6. Before filtering on any text column (status, channel, courier, SKU), run SELECT DISTINCT to see the real values.
 7. Sanity-check your result before answering — plausible numbers, sensible row counts.
@@ -48,8 +48,8 @@ Sales percentages (CIR, cancellation, return components) are **REVENUE-BASED** (
 | Returns % | locked formula below | Mature window (today-44d to today-14d), NOT selected date range — see "EXACT SQL for SKU return %" section |
 | Delivery Rate, TAT, EDD breach | locked formula below | Same Clickpost base as RTO % — see "EXACT SQL for Logistics Performance" |
 | Stuck Shipments | locked formula below | The page's "Critical Stuck" — see "EXACT SQL for Stuck Shipments" |
-| DOI | locked formula below | Total inventory / Avg daily sale — use the "EXACT query for total inventory" section, do NOT read _inventory_shared.js |
-| Avg Daily Sale (OOS loss / inventory planning) | locked formula below | **DIFFERENT from Inventory Health's Avg Sale** — longest in-stock run method, not recent-days average. See "EXACT formula for Avg Daily Sale (OOS/planning)" section. |
+| DOI | Inventory Health logic | DOI = floor(stock ÷ ceil(max(avg sale, order allocation))), avg sale per Location (7/15/30-day page toggle). Stock from the "EXACT query for total inventory" section (Regular + Live). You may read `api/_inventory_shared.js` (target=repo) to follow the page logic exactly. |
+| Avg Daily Sale | THREE different methods — say which | **OOS loss** = longest in-stock run (use the `oos_loss` tool). **Planning** (how much to order/transfer/required) = the section "Planning avg daily sale" below. **Inventory Health** = last 7/15/30 days B2C units ÷ days. A bare "avg sale of <SKU>" gets both the planning avg and the Inventory Health avg (see that section). |
 | Channel mapping | locked below | See channel groups section |
 
 ## EXACT formula for Gross Revenue — use this, never invent
@@ -73,7 +73,7 @@ WHERE OrderDate BETWEEN '${start}' AND '${end}'
 
 Net Revenue = Gross Revenue Exc GST × Retained Share, where Retained Share accounts for RTO/CIR/Returns/Cancels using mature-window rates.
 
-**This is an approximation of the Sales page, not the page itself** (the page uses each day's real statuses for days older than 15 days and the SKU's rolling 30-day rate for the last 15, per-channel rules, and deducts the full cancellation incl. COD). Label the answer `Custom calculation, not from the dashboard:` + "net revenue = gross ex GST × (1 − RTO − CIR − Return − prepaid cancel %) using the mature window". The Step 4 `sales_summary` tool replaces this.
+**This is an approximation of the Sales page, not the page itself** (the page uses each day's real statuses for days older than 15 days and the SKU's rolling 30-day rate for the last 15, per-channel rules, and deducts the full cancellation incl. COD). Label the answer `Custom calculation, not from the dashboard:` + "net revenue = gross ex GST × (1 − RTO − CIR − Return − prepaid cancel %) using the mature window". The Step 4 `sales_summary` tool replaces this. **Net revenue on the dashboard uses the provisional return rate for the latest 15 days** (see "EXACT SQL for Returns"): say so in the answer when the period includes the latest 15 days.
 
 ```sql
 WITH base AS (
@@ -242,7 +242,10 @@ For the total, remove `courier_group` and the GROUP BY. "EDD breached" (a separa
 
 ## EXACT SQL template for SKU-level revenue — use this, never invent
 ```sql
-SELECT masterskucode,
+SELECT COALESCE(
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(masterskucode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+    NULLIF(REGEXP_REPLACE(UPPER(TRIM(ProductId)), r'[^A-Z0-9-]', ''), '')) AS masterskucode,   -- the dashboard's MasterSKU (api/_bq.js)
   SUM(SellingPrice_Inc_GST) AS gross_revenue_inc_gst,
   SUM(SellingPrice_Exc_GST) AS gross_revenue_exc_gst,
   COUNT(DISTINCT OrderId) AS orders,
@@ -254,8 +257,8 @@ GROUP BY masterskucode
 ORDER BY gross_revenue_inc_gst DESC
 LIMIT 10
 ```
-- GROUP BY `masterskucode` only — never COALESCE with ChannelSKUCode or ProductId
-- Never REGEXP_REPLACE or UPPER/TRIM the SKU column — use it as-is
+- The SKU is the **dashboard's MasterSKU**: masterskucode, else ChannelSKUCode, else ProductId, cleaned (upper-case, only A-Z 0-9 -). Some Shopify rows land with a NULL masterskucode and a corrupted ChannelSKUCode; the dashboard backfills them (api/_bq.js, 2026-10-23), so Pulse does too. Group by the aliased expression exactly as above.
+- A row that still has no SKU after this stays unmapped (shown as "(no master SKU)").
 
 ## EXACT SQL template for revenue by channel — use this, never invent filters
 ```sql
@@ -317,46 +320,84 @@ WHERE f.fcs_status_for_invt = 'Live'
 - "Unmapped" facility rows (facility not in facility_master) = not Live, exclude them.
 - **For warehouse-wise inventory question**, add `GROUP BY i.facility` to the locked SQL above and also join `facility_master` to get the location name.
 
-## EXACT SQL for Returns (D2C breakdown and all channels)
+## EXACT SQL for Returns — PROVISIONAL (as on Sales) and ACTUAL (Return Analysis)
 
-Follows the Sales page (`computeNetRevenueMeasures` in `api/_bq.js`): every % is ÷ gross revenue Inc GST; **Total return = RTO + CIR + Return-status + prepaid-only cancellation**; Cancellations are shown at the full amount (COD incl.); Exchange is shown separately and is not part of Total return. Over the selected range with each order's actual status (the page also adds a rolling estimate for the last 15 days — say "actual statuses" in the Source line).
+Two definitions exist on the dashboard; show both when they differ.
+- **PROVISIONAL return % = what Sales, P&L, Overview and net revenue show** (`api/_returnComponents.js`, `computeNetRevenueMeasures` in `api/_bq.js`). Days older than 15 days use each SKU's REAL status revenue; the **latest 15 days** (`d >= mature_end` from the Dates block) use that SKU's rolling 30-day rate from the mature window (`mature_start`..`mature_end`) times that day's own gross (capped at the day's gross). **Total = RTO + CIR + Return-status + full Cancellations (COD included)** — the tile says "RTO+CIR+Cancelled rev"; Exchange is shown separately and is NOT in the total. SKU = the dashboard's MasterSKU (masterskucode, else ChannelSKUCode, else ProductId, cleaned).
+- **ACTUAL return % = the Return Analysis page** (`api/return-analysis.js`): actual statuses only, total = RTO + CIR + Return-status + **prepaid-only** cancellations.
 
-One query for both (the percentages and Total return are computed IN SQL — copy them, never re-add components yourself; the bold first-line total must equal the table):
+One query returns both (use the `${scope}` line for D2C or for all channels; copy the percentages and totals from the result, never re-add components yourself):
 ```sql
-WITH t AS (
-  SELECT
-    Channel,
-    SUM(SellingPrice_Inc_GST) AS gross_inc_gst,
-    SUM(IF(Order_Status = 'Cancelled', SellingPrice_Inc_GST, 0)) AS cancellation_rev,
-    SUM(IF(Order_Status = 'RTO', SellingPrice_Inc_GST, 0)) AS rto_rev,
-    SUM(IF(Order_Status = 'CIR', SellingPrice_Inc_GST, 0)) AS cir_rev,
-    SUM(IF(Order_Status = 'Exchange', SellingPrice_Inc_GST, 0)) AS exchange_rev,
-    SUM(IF(Order_Status = 'Return', SellingPrice_Inc_GST, 0)) AS return_status_rev,
-    -- Total return = RTO + CIR + Return-status + prepaid-only cancellation (Exchange is NOT included)
-    SUM(IF(Order_Status IN ('RTO', 'CIR', 'Return')
-           OR (Order_Status = 'Cancelled' AND COALESCE(payment_type, '') != 'COD'), SellingPrice_Inc_GST, 0)) AS total_return_rev
-  FROM `frido-429506.production.fact_all_platform_sales_report`
-  WHERE OrderDate BETWEEN '${start}' AND '${end}'
-    AND NOT (OrderId LIKE '%_EX%')
-    AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
-    AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
-    -- D2C only: add  AND Channel = 'Shopify' AND SubChannel NOT IN ('Shopify International', 'Retail Store')  and use GROUP BY Channel
-  GROUP BY ROLLUP(Channel)          -- all channels: one row per channel + the all-channel total (Channel IS NULL)
+WITH fx AS (
+  SELECT f.Channel, f.OrderDate AS d, f.SellingPrice_Inc_GST AS rev, f.Order_Status AS st, COALESCE(f.payment_type, '') AS pay,
+    -- the dashboard's MasterSKU (api/_bq.js): masterskucode, else ChannelSKUCode, else ProductId, upper-cased and cleaned
+    COALESCE(
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(f.masterskucode)), r'[^A-Z0-9-]', ''), ''),
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(f.ChannelSKUCode)), r'[^A-Z0-9-]', ''), ''),
+      NULLIF(REGEXP_REPLACE(UPPER(TRIM(f.ProductId)), r'[^A-Z0-9-]', ''), '')) AS sku
+  FROM `frido-429506.production.fact_all_platform_sales_report` f
+  WHERE NOT (f.OrderId LIKE '%_EX%')
+    AND NOT (f.Channel = 'offline_sales' AND COALESCE(f.Order_Status, '') = 'Credit Note')
+    AND NOT (f.Channel = 'Amazon' AND COALESCE(f.Order_Status, '') = 'RTV (Return to vendor)')
+    ${scope}
+),
+daily AS (   -- per channel, SKU and day: real revenue by status
+  SELECT Channel, sku, d, SUM(rev) AS gross,
+    SUM(IF(st = 'RTO', rev, 0)) AS rto, SUM(IF(st = 'CIR', rev, 0)) AS cir, SUM(IF(st = 'Return', rev, 0)) AS ret,
+    SUM(IF(st = 'Cancelled', rev, 0)) AS cancel, SUM(IF(st = 'Cancelled' AND pay != 'COD', rev, 0)) AS cancel_prepaid,
+    SUM(IF(st = 'Exchange', rev, 0)) AS exch
+  FROM fx WHERE d BETWEEN '${start}' AND '${end}' AND sku IS NOT NULL GROUP BY Channel, sku, d
+),
+roll AS (    -- each SKU's own rate in the mature window (the 30 days ending 14 days ago)
+  SELECT Channel, sku,
+    SAFE_DIVIDE(SUM(IF(st = 'RTO', rev, 0)), SUM(rev)) AS rto_r, SAFE_DIVIDE(SUM(IF(st = 'CIR', rev, 0)), SUM(rev)) AS cir_r,
+    SAFE_DIVIDE(SUM(IF(st = 'Return', rev, 0)), SUM(rev)) AS ret_r, SAFE_DIVIDE(SUM(IF(st = 'Cancelled', rev, 0)), SUM(rev)) AS cancel_r,
+    SAFE_DIVIDE(SUM(IF(st = 'Exchange', rev, 0)), SUM(rev)) AS exch_r
+  FROM fx WHERE d BETWEEN '${mature_start}' AND '${mature_end}' AND sku IS NOT NULL GROUP BY Channel, sku HAVING SUM(rev) > 0
+),
+res AS (     -- days older than 15: real; the latest 15 days (d >= mature_end): the SKU's rolling rate x that day's own gross
+  SELECT d.Channel, d.gross, d.d >= '${mature_end}' AS immature,
+    IF(d.d >= '${mature_end}', IFNULL(r.rto_r, 0) * d.gross, d.rto) AS rto_x,
+    IF(d.d >= '${mature_end}', IFNULL(r.cir_r, 0) * d.gross, d.cir) AS cir_x,
+    IF(d.d >= '${mature_end}', IFNULL(r.ret_r, 0) * d.gross, d.ret) AS ret_x,
+    IF(d.d >= '${mature_end}', IFNULL(r.cancel_r, 0) * d.gross, d.cancel) AS cancel_x,
+    IF(d.d >= '${mature_end}', IFNULL(r.exch_r, 0) * d.gross, d.exch) AS exch_x,
+    d.rto AS rto_a, d.cir AS cir_a, d.ret AS ret_a, d.cancel_prepaid AS cancel_prepaid_a
+  FROM daily d LEFT JOIN roll r USING (Channel, sku)
+),
+capped AS (  -- an estimated day never returns more than its own gross
+  SELECT *, IF(immature AND gross > 0 AND rto_x + cir_x + ret_x + cancel_x > gross, gross / (rto_x + cir_x + ret_x + cancel_x), 1) AS sc FROM res
+),
+t AS (
+  SELECT Channel, SUM(gross) AS gross_inc_gst,
+    SUM(cancel_x * sc) AS cancellation_rev, SUM(rto_x * sc) AS rto_rev, SUM(cir_x * sc) AS cir_rev,
+    SUM(ret_x * sc) AS return_status_rev, SUM(exch_x) AS exchange_rev,
+    SUM((rto_x + cir_x + ret_x + cancel_x) * sc) AS total_return_rev,                 -- PROVISIONAL (Sales / P&L / Overview)
+    SUM(rto_a + cir_a + ret_a + cancel_prepaid_a) AS actual_total_return_rev,         -- ACTUAL (Return Analysis): actual statuses, prepaid-only cancel
+    LOGICAL_OR(immature) AS includes_latest_15_days
+  FROM capped GROUP BY ROLLUP(Channel)
 )
-SELECT
-  IFNULL(Channel, 'ALL CHANNELS') AS channel,
-  gross_inc_gst, cancellation_rev, rto_rev, cir_rev, exchange_rev, return_status_rev, total_return_rev,
+SELECT IFNULL(Channel, 'ALL CHANNELS') AS channel, includes_latest_15_days,
+  gross_inc_gst, cancellation_rev, rto_rev, cir_rev, return_status_rev, exchange_rev, total_return_rev, actual_total_return_rev,
   ROUND(SAFE_DIVIDE(cancellation_rev, gross_inc_gst) * 100, 1) AS cancellation_pct,
   ROUND(SAFE_DIVIDE(rto_rev, gross_inc_gst) * 100, 1) AS rto_in_returns_pct,
   ROUND(SAFE_DIVIDE(cir_rev, gross_inc_gst) * 100, 1) AS cir_pct,
   ROUND(SAFE_DIVIDE(exchange_rev, gross_inc_gst) * 100, 1) AS exchange_pct,
   ROUND(SAFE_DIVIDE(return_status_rev, gross_inc_gst) * 100, 1) AS return_status_pct,
-  ROUND(SAFE_DIVIDE(total_return_rev, gross_inc_gst) * 100, 1) AS total_return_pct
+  ROUND(SAFE_DIVIDE(total_return_rev, gross_inc_gst) * 100, 1) AS provisional_total_return_pct,
+  ROUND(SAFE_DIVIDE(actual_total_return_rev, gross_inc_gst) * 100, 1) AS actual_total_return_pct
 FROM t
 ORDER BY gross_inc_gst DESC
 ```
-- **D2C returns:** use the D2C `WHERE` addition and show one block: Cancellations, RTO, CIR, Exchange, Total return (₹ and %). Label RTO **"RTO (in returns, as on Sales)"** — a standalone RTO % question still uses Logistics.
-- **General "returns":** show each channel's total return % and the ALL CHANNELS row exactly as returned, with the all-channel total as the bold first line.
+`${scope}` is one of:
+- D2C: `AND f.Channel = 'Shopify' AND f.SubChannel NOT IN ('Shopify International', 'Retail Store')` (take the row `Shopify`)
+- All channels: `AND f.Channel NOT IN ('Blinkit', 'Zepto', 'Instamart')` (quick commerce has no order status; take the `ALL CHANNELS` row and list each channel row)
+
+**Answer format**
+- If the period includes the latest 15 days (`includes_latest_15_days` = true): first line `**Returns (provisional, as on Sales): X%** · Actual so far (Return Analysis): Y%` (X = `provisional_total_return_pct`, Y = `actual_total_return_pct`). Then one short line: *Provisional = actual statuses for days older than 15 days plus each SKU's rolling 30-day rate for the latest 15 days (as on Sales / P&L / Overview); actual = Return Analysis, actual statuses only, prepaid cancellations only.* Then the breakdown for the provisional view: Cancellation, RTO (in returns, as on Sales), CIR, Exchange, Total — ₹ and %.
+- If the whole period is older than 15 days: one number `**Returns: X%**` and say "all days are older than 15 days, so provisional = actual statuses". Same breakdown.
+- A standalone "RTO %" question still uses Logistics → Performance, never this.
+- Net revenue: say it uses the provisional return rate for the latest 15 days.
 
 ## Inventory critical / planning questions (until the Step 4 inventory tool exists)
 
@@ -413,9 +454,7 @@ Never burn multiple tool calls trying to find the data elsewhere. Data not in th
 
 Return % for SKUs uses a **mature window anchored to today**, NOT the user's selected date range. Recent orders haven't had time to settle their RTO/CIR/Cancelled status yet, so using the current period gives artificially low return rates.
 
-**Window**: `today - 44 days` to `today - 14 days` (30-day window, always fixed to today)
-- `rollingEnd = DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)`
-- `rollingStart = DATE_SUB(rollingEnd, INTERVAL 29 DAY)` (= today - 43d, effectively today-44d to today-14d)
+**Window**: the mature window from the Dates block — `'${mature_start}'` to `'${mature_end}'` (today−43 to today−14, 30 days, IST). Use those literal dates; never `CURRENT_DATE()` arithmetic.
 
 **Formula**: `(rto_rev + cir_rev + return_rev + prepaid_cancel_rev) / gross_inc_gst`
 - Same as `computeNetRevenueMeasures().overallReturnPct` → `totalReturnPct`
@@ -438,8 +477,8 @@ WITH mature AS (
     SUM(CASE WHEN Order_Status = 'Cancelled' AND payment_type != 'COD'
                                              THEN SellingPrice_Inc_GST ELSE 0 END) AS prepaid_cancel_rev
   FROM `frido-429506.production.fact_all_platform_sales_report`
-  WHERE OrderDate BETWEEN DATE_SUB(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY), INTERVAL 29 DAY)
-                      AND DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+  WHERE OrderDate BETWEEN '${mature_start}'
+                      AND '${mature_end}'
     AND NOT (OrderId LIKE '%_EX%')
     AND NOT (Channel = 'offline_sales' AND COALESCE(Order_Status, '') = 'Credit Note')
     AND NOT (Channel = 'Amazon' AND COALESCE(Order_Status, '') = 'RTV (Return to vendor)')
@@ -486,7 +525,9 @@ A question about RTO % is answered ONLY from Logistics → Performance (see "EXA
 
 ## EXACT formula for Avg Daily Sale (OOS loss) — use this, never invent
 
-**Used for OOS-loss answers only.** Inventory planning (how much to order / transfer) uses the "best 30-day window" method in PULSE_PLAYBOOK.md section 6, labelled as custom. Always say which method you used.
+**OOS questions (OOS SKUs, OOS loss, days out of stock, "loss of sales") are answered with the `oos_loss` tool.** It runs the Inventory Health "OOS loss" page's own SQL (`api/data/inventory_oos.sql`) and per-day maths (`api/inventory-oos.js`), so the numbers match that page. Do not rebuild the calculation with run_command. Optional arguments: `limit` (top N by loss, default 10) and `sku`. Answer: first line = the page's SKU count and total loss so far; then the top-N table `SKU | Sub-category | Category | days out | avg daily sale | ASP | daily loss | loss so far | loss till restock`; Source line: `Source: Inventory Health → OOS loss · as of <date>`. Mention `oos_source` / `basis` when a row says "D2C sales stop" or a 180-day average.
+
+**Everything below in this OOS section — the step-by-step method and both SQL blocks — is REFERENCE ONLY** (it explains how the page works). Never run it instead of the `oos_loss` tool. Inventory planning (how much to order / transfer) uses the "Planning avg daily sale" section, labelled custom. Always say which method you used.
 
 **This is NOT the same as Inventory Health's "Avg Sale".** Do not collapse them into one formula.
 
@@ -619,6 +660,104 @@ GROUP BY master_sku
 ❌ Using total units (B2C + B2B + PO) instead of B2C only
 ```
 
+## Planning avg daily sale (planning questions: how much to order / transfer / plan, replenishment)
+
+**Method (PULSE_PLAYBOOK.md section 6):** B2C daily sales (Unicommerce, B2C Order or unmapped channels), last 180 days, aliases resolved to the master SKU. Spike days (a day above 3× the window's median) are removed. Every window of 7 to 30 days is considered; the highest average is the best, and **if a longer window's average is within 10% of the best, the longest such window is used** (more stable). Windows need at least 7 selling days. Run this query (it implements all of that; `${sku}` = master SKU, `${end}` = the IST yesterday from the Dates block):
+```sql
+
+WITH sku_map AS (
+  SELECT REGEXP_REPLACE(UPPER(TRIM(productid)), r'[\s_]+', '') AS k, ANY_VALUE(REGEXP_REPLACE(UPPER(TRIM(masterskucode)), r'[\s_]+', '')) AS master
+  FROM `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping`
+  WHERE TRIM(masterskucode) NOT IN ('', 'not found') AND REGEXP_REPLACE(UPPER(TRIM(productid)), r'[\s_]+', '') != ''
+  GROUP BY 1
+),
+b2c_channel AS (
+  SELECT UPPER(TRIM(uniware_channels)) AS ch, ANY_VALUE(channel_description) AS descr
+  FROM `frido-429506.inventory_sales_allocation.uc_channel_desc` GROUP BY 1
+),
+raw_sales AS (
+  SELECT s.order_date AS d, s.total_quantity AS qty,
+    REGEXP_REPLACE(UPPER(TRIM(TRIM(REPLACE(SUBSTR(s.final_sku, 1, LEAST(
+      IF(STRPOS(s.final_sku, '_') > 0, STRPOS(s.final_sku, '_') - 1, LENGTH(s.final_sku)),
+      IF(STRPOS(LOWER(s.final_sku), '-raw') > 0, STRPOS(LOWER(s.final_sku), '-raw') - 1, LENGTH(s.final_sku)))), '_', ' ')))), r'[\s_]+', '') AS k0
+  FROM `frido-429506.production.aggregated_uniware_sales_report` s
+  LEFT JOIN b2c_channel c ON c.ch = UPPER(TRIM(s.channel))
+  WHERE s.order_date BETWEEN DATE_SUB('${end}', INTERVAL 179 DAY) AND '${end}'
+    AND (c.descr = 'B2C Order' OR c.descr IS NULL)
+),
+sales_day AS (
+  SELECT r.d, SUM(r.qty) AS u
+  FROM raw_sales r LEFT JOIN sku_map m ON m.k = r.k0
+  WHERE COALESCE(m.master, r.k0) = REGEXP_REPLACE(UPPER(TRIM('${sku}')), r'[\s_]+', '')
+  GROUP BY r.d
+),
+daily AS (
+  SELECT d, IFNULL(u, 0) AS u
+  FROM UNNEST(GENERATE_DATE_ARRAY(DATE_SUB('${end}', INTERVAL 179 DAY), '${end}')) AS d
+  LEFT JOIN sales_day USING (d)
+),
+lens AS (SELECT L FROM UNNEST(GENERATE_ARRAY(7, 30)) AS L),
+w AS (
+  SELECT a.d AS s, l.L, b.u
+  FROM daily a CROSS JOIN lens l
+  JOIN daily b ON b.d BETWEEN a.d AND DATE_ADD(a.d, INTERVAL l.L - 1 DAY)
+  WHERE DATE_ADD(a.d, INTERVAL l.L - 1 DAY) <= '${end}'
+),
+med AS (SELECT s, L, APPROX_QUANTILES(u, 2)[OFFSET(1)] AS med FROM w GROUP BY s, L),
+agg AS (
+  SELECT w.s, w.L, SUM(w.u) AS units_raw,
+    SUM(IF(m.med > 0 AND w.u > 3 * m.med, 0, w.u)) AS units_kept,
+    COUNTIF(NOT (m.med > 0 AND w.u > 3 * m.med)) AS days_kept,
+    COUNTIF(m.med > 0 AND w.u > 3 * m.med) AS spike_days,
+    COUNTIF(w.u > 0) AS selling_days
+  FROM w JOIN med m USING (s, L) GROUP BY w.s, w.L
+),
+cand AS (
+  SELECT *, SAFE_DIVIDE(units_kept, days_kept) AS avg_per_day FROM agg WHERE selling_days >= 7
+),
+best AS (SELECT MAX(avg_per_day) AS best_avg FROM cand),
+pick AS (
+  SELECT c.* FROM cand c, best b WHERE c.avg_per_day >= 0.9 * b.best_avg
+  ORDER BY c.L DESC, c.avg_per_day DESC, c.s DESC LIMIT 1
+),
+tot AS (SELECT SUM(u) AS units_180d, COUNTIF(u > 0) AS selling_days_180d FROM daily),
+trend AS (
+  SELECT STRING_AGG(FORMAT('%s %d', FORMAT_DATE('%b', m), u), ' · ' ORDER BY m) AS monthly_units
+  FROM (SELECT DATE_TRUNC(d, MONTH) AS m, SUM(u) AS u FROM daily WHERE d >= DATE_SUB('${end}', INTERVAL 179 DAY) GROUP BY m)
+)
+SELECT CAST(p.s AS STRING) AS window_start, CAST(DATE_ADD(p.s, INTERVAL p.L - 1 DAY) AS STRING) AS window_end, p.L AS window_days,
+  p.units_raw AS window_units, p.spike_days AS spike_days_removed, p.units_kept AS units_used, p.days_kept AS days_used,
+  ROUND(p.avg_per_day, 2) AS planning_avg_per_day, ROUND(b.best_avg, 2) AS best_window_avg_per_day,
+  o.units_180d, o.selling_days_180d, t.monthly_units
+FROM tot o CROSS JOIN trend t LEFT JOIN pick p ON TRUE LEFT JOIN best b ON TRUE
+```
+Answer with: **window dates and length** (`window_start`–`window_end`, `window_days`), units (`window_units`, spike days removed), **planning avg per day**, and the 6-month monthly trend (`monthly_units`) in one line. Say which method was used ("planning avg"). If the query returns no window (`window_start` is NULL = fewer than 7 selling days in 180 days) use `units_180d` ÷ the number of days the SKU was in stock (from `historical_inventory_till_date_UC`, Live facilities, stock > 0; if you cannot get it, ÷ 180) and say clearly that it is a fallback. Planning questions use ONLY this avg.
+
+**"avg sale / avg daily sale of <SKU>" with no context:** give both in one line — first `Planning avg: X/day (best window <dates>, N days)` from the query above, then `Inventory Health avg (last 30 days): Y/day` from this query (B2C units over the 30 days ending at the latest sales date ÷ 30; the page's own source `inventory_sales_window`):
+```sql
+WITH sku_map AS (
+  SELECT REGEXP_REPLACE(UPPER(TRIM(productid)), r'[\s_]+', '') AS k, ANY_VALUE(REGEXP_REPLACE(UPPER(TRIM(masterskucode)), r'[\s_]+', '')) AS master
+  FROM `frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping`
+  WHERE TRIM(masterskucode) NOT IN ('', 'not found') AND REGEXP_REPLACE(UPPER(TRIM(productid)), r'[\s_]+', '') != ''
+  GROUP BY 1
+),
+b2c_channel AS (
+  SELECT UPPER(TRIM(uniware_channels)) AS ch, ANY_VALUE(channel_description) AS descr
+  FROM `frido-429506.inventory_sales_allocation.uc_channel_desc` GROUP BY 1
+),
+latest AS (SELECT MAX(order_date) AS asof FROM `frido-429506.production.inventory_sales_window`)
+SELECT CAST(l.asof AS STRING) AS sales_as_of, SUM(s.qty) AS units_30d, ROUND(SUM(s.qty) / 30, 2) AS inventory_health_avg_per_day
+FROM `frido-429506.production.inventory_sales_window` s
+CROSS JOIN latest l
+LEFT JOIN b2c_channel c ON c.ch = UPPER(TRIM(s.channel))
+LEFT JOIN sku_map m ON m.k = REGEXP_REPLACE(UPPER(TRIM(s.final_sku)), r'[\s_]+', '')
+WHERE s.order_date BETWEEN DATE_SUB(l.asof, INTERVAL 29 DAY) AND l.asof
+  AND (c.descr = 'B2C Order' OR c.descr IS NULL)
+  AND COALESCE(m.master, REGEXP_REPLACE(UPPER(TRIM(s.final_sku)), r'[\s_]+', '')) = REGEXP_REPLACE(UPPER(TRIM('${sku}')), r'[\s_]+', '')
+GROUP BY l.asof
+```
+(OOS loss avg is a third, different number: use the `oos_loss` tool only when OOS loss is asked.)
+
 ## When to ask vs assume
 Ask ONLY if the ambiguity would change the number materially:
 - Product name matches multiple real SKUs with clearly different totals
@@ -637,6 +776,7 @@ Options must be real values found while exploring — never invented.
 - **First line:** the main number in **bold**, copied from the connector's formatted value (₹1.23 Cr, ₹12.33 L, ₹45,320, 1,53,451, 8.2%), plus the change vs the previous period if the page shows one. For own-logic answers the first line is the `Custom calculation, not from the dashboard:` label, then the bold number.
 - A short table if there is a breakdown (max 10 rows). SKU tables use **separate columns**: `SKU | Sub-category | Category | numbers` (copy Sub_Category and Category from the result; a SKU shown as NULL is listed as "(no master SKU)"). **The bold first-line number must equal the matching total in your table** — recompute before answering if they differ.
 - **Last line:** `Source: <page> · <channel> · <dates, IST> · <filters>` with any assumption, e.g. `Source: Logistics → Performance · all forward shipments · 1–30 Sep 2026`.
+- Money columns are formatted by the connector only when aliased with rev / revenue / gross / net / amount / value / cost / sales / asp / aov / price.
 - If data is missing, say so in one line and stop. No long explanations unless asked. **No emojis or symbols such as ✓ ⚠️ ★ in answers.**
 
 ## Known gotchas
@@ -648,7 +788,7 @@ Options must be real values found while exploring — never invented.
 - `_EX` suffix orders must always be excluded or you'll double-count exchanges
 - GST rate: use `GST_Tax_Type_Code` from item master, not other GST columns
 - BQ column is `masterskucode` (lowercase), not `MasterSKU`
-- **NEVER use COALESCE(masterskucode, ChannelSKUCode, ProductId) for SKU grouping** — this fragments revenue across multiple rows and produces wrong totals. Always GROUP BY `masterskucode` directly. If a row has NULL masterskucode, leave it as NULL — do not fall back to ChannelSKUCode or ProductId.
+- SKU grouping uses the dashboard's MasterSKU expression (masterskucode, else ChannelSKUCode, else ProductId, cleaned) — see "EXACT SQL template for SKU-level revenue". Never invent a different fallback.
 - BQ payment column is `payment_type`, not `PaymentMode`
 - Supabase inventory columns: `rtd_invt`, `raw_invt`, `raw_blocked_invt` (not rtd_qty etc.)
 - **Net Revenue ALWAYS uses mature window rates, not current-period rates** — compute RTO/CIR/Cancel% from today-44d to today-14d window, then apply those rates against current-period gross exc GST. Using current-period rates will give wrong (lower) net rev because recent orders haven't had time to return yet. Confirmed matches dashboard at ₹17.71 Cr vs ₹17.81 Cr (Oct 1-23 2026 D2C).

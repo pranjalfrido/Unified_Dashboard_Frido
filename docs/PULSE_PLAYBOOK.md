@@ -7,7 +7,7 @@ Rules that code can enforce are enforced in the connector (section 1); text rule
 
 | # | Rule | Where |
 |---|---|---|
-| 1 | **Indian number format, done before the model sees results.** ₹ amounts: ≥ 1 Cr → `₹x.xx Cr`, ≥ 1 L → `₹x.xx L`, below → `₹45,320`. Counts with Indian commas (1,53,451). Percentages 1 decimal. Each formatted cell also carries the raw value, e.g. `₹1.23 Cr (raw 12330000)`. **Copy the formatted value; never convert units yourself.** | `lib/format.js`, applied in `executeTool` |
+| 1 | **Indian number format, done before the model sees results.** ₹ amounts: ≥ 1 Cr → `₹x.xx Cr`, ≥ 1 L → `₹x.xx L`, below → `₹45,320`. Counts with Indian commas (1,53,451). Percentages 1 decimal. Each formatted cell also carries the raw value, e.g. `₹1.23 Cr (raw 12330000)`. **Copy the formatted value; never convert units yourself.** Money columns are recognised by name (rev, revenue, gross, net, amount, value, cost, sales, asp, aov, price — always alias money columns with one of these words). If the final answer contains a ₹ amount, or a bare number ≥ 1,00,000, that is not one of the formatted values, it is sent back once. | `lib/format.js`, applied in `executeTool` and `server.js` |
 | 2 | **Dates are IST.** The connector computes today / yesterday / this week (Mon–Sun) / last week / this month / last month / last 7 / 30 days / mature window in IST and puts them in the system prompt. A bare `CURRENT_DATE()` in SQL is rewritten to `CURRENT_DATE('Asia/Kolkata')`. | `lib/dates.js` |
 | 3 | **Product name = sub-category from the SKU master, never generated.** After any query with a SKU column the connector adds `Sub_Category (product name)` and `Category` from `Frido_Item_Master__frido_item_sku_master` (aliases via `productid_sku_mapping`). Not found → `not in SKU master`. If the final answer shows a different name for a SKU, it is sent back once with the correct names. | `lib/skuMaster.js`, `server.js` |
 | 4 | **No bare failures.** If no answer can be produced, the reply is one line saying what was tried and what is missing. | `server.js` |
@@ -28,10 +28,10 @@ Rules that code can enforce are enforced in the connector (section 1); text rule
 | **RTO %** (any question just about RTO) | **Logistics → Performance (Clickpost)** | shipment-based: RTO shipments ÷ forward shipments. Sep 2026 = 8.2% (18,695 / 228,645). **No revenue-based RTO as a standalone answer.** |
 | **Logistics operations:** TAT, EDD breach, delivery rate, stuck, pending, NDR, courier performance | **Logistics → Performance (Clickpost)** (`api/logistics.js`) | forward shipments unless reverse asked |
 | Logistics cost | Logistics → Cost (`api/logistics-cost.js`, courier invoices) | say if the latest month isn't loaded |
-| **Returns** (general) | Sales page + Return Analysis, **all channels** | each channel's return % and the all-channel total |
-| **Returns for D2C** | Sales → D2C | Cancellations, RTO, CIR, Exchange, Total return (₹ and %). Inside this breakdown RTO is the returns-component RTO; label it "RTO (in returns, as on Sales)". A standalone "RTO %" question still uses Logistics. |
+| **Returns** (general) | Sales page (provisional) + Return Analysis (actual), **all channels** | each channel's return % and the all-channel total; two definitions, see section 7 |
+| **Returns for D2C** | Sales → D2C (provisional) + Return Analysis (actual) | Cancellation, RTO (in returns, as on Sales), CIR, Exchange, Total (₹ and %). A standalone "RTO %" question still uses Logistics. |
 | Inventory numbers (stock, by warehouse, by SKU, DOI, avg sale, critical) | **Inventory Health logic** (`_inventory_shared.js` / `inv-data*.json`), **Regular + Live facilities only** | never EBO, dark stores, Frido stores, FBA or non-live; say "as of <time>" |
-| OOS SKUs and loss | Inventory → Out-of-stock loss (`api/inventory-oos.js`) | page method, unchanged |
+| OOS SKUs and loss | Inventory → Out-of-stock loss — the **`oos_loss` tool** runs the page's own SQL (`api/data/inventory_oos.sql`) and maths (`api/inventory-oos.js`) | numbers match the page; the old in-stock-run SQL in CLAUDE.md is reference only |
 | **Inventory planning** (how much to order / transfer / required) | section 6 | inventory from Inventory Health (Regular + Live); avg sale by the planning method |
 | Ads, P&L, customers | their pages | ACoS / TACoS → "not tracked on the dashboard yet"; Overall P&L → "not available yet" |
 
@@ -59,16 +59,16 @@ Pulse may read `_inventory_shared.js` (read-only) so inventory answers can follo
 **Stock** = Inventory Health logic, Regular + Live facilities (per warehouse or total as asked). Stock reaches 3PL warehouses by transfer from Pune (Vadgaon_OPS / Frido_Sudhawadi).
 
 **Avg daily sale for planning (the most important step):**
-1. Take the SKU's **B2C** sales (`Aggregated_uniware_sales_report`; B2C Order or unmapped = B2C; no B2B, PO or stock transfer) for the **last 6 months (180 days)**, daily, aliases resolved to the master SKU.
-2. Find the **best sales window**: the 30-day stretch (rolling) with the highest B2C units per day.
-3. **Avg daily sale = B2C units in that best window ÷ 30.**
-4. Guards (flag each in the answer):
-   - If the best window has one day with more than 3× the window's median daily sale (sale event / bulk order), drop that day and use the remaining days.
-   - If the SKU has fewer than 30 days with sales in 180 days, use B2C units in 180 days ÷ number of days it was in stock; say so.
-   - Per warehouse: same method on that warehouse's B2C sales.
-5. Always show: the window used (dates), units in it, the avg daily sale, and the 6-month trend in one line (e.g. monthly units: May 120 · Jun 140 · …).
+1. Take the SKU's **B2C** daily sales (`aggregated_uniware_sales_report`; channel description "B2C Order" or unmapped = B2C; no B2B, PO or stock transfer) for the **last 180 days**, aliases resolved to the master SKU.
+2. **Remove spike days** (a day above 3× the window's median daily sale — sale event / bulk order).
+3. Consider **every window from 7 to 30 days**. Take the highest average. **If a longer window's average is within 10% of the best, use the longest such window** (more stable). A window needs at least 7 selling days.
+4. **Avg daily sale = units in the chosen window (spike days removed) ÷ days in it.**
+5. If the SKU has **fewer than 7 selling days** in 180 days, use B2C units in 180 days ÷ the days it was in stock, and flag it as a fallback.
+6. Per warehouse: same method on that warehouse's B2C sales.
+7. Always show: **window dates and length**, units, avg/day, and the 6-month monthly trend in one line (e.g. May 120 · Jun 140 · …).
+The locked SQL is in CLAUDE.md ("Planning avg daily sale").
 
-This planning avg sale is different from the OOS-loss page's method (longest in-stock run). OOS-loss answers keep the page method; planning answers use this one. Say which one was used.
+This planning avg sale is different from the OOS-loss page's method (longest in-stock run) and from Inventory Health's avg sale (last 7/15/30 days). Say which one was used. **A bare "avg sale / avg daily sale of <SKU>"** gets both in one line: `Planning avg: X/day (best window <dates>, N days)` first, then `Inventory Health avg (last 30 days): Y/day`. Planning questions use only the planning avg.
 
 **Quantities:**
 - **Lead time** = measured Pune → warehouse transfer days (median, last 90 days); **safety days** = 80th percentile − median, minimum 3. Until measured, use 7 + 3 days and say so.
@@ -82,3 +82,8 @@ This planning avg sale is different from the OOS-loss page's method (longest in-
 Where Suraj's sheet and the code differed, the code wins. The list of changes is in `PULSE_METRICS.md` (each marked **Changed to match code**).
 - Dashboard "today" uses UTC; **Pulse uses IST everywhere**. Logged in `docs/BACKLOG.md` as a separate dashboard fix.
 - Mature window = today−43 to today−14 (30 days), as in the code.
+- **Returns have two definitions; show both when they differ.**
+  - **Provisional (as on Sales / P&L / Overview / net revenue):** days older than 15 days use each SKU's actual statuses; the latest 15 days use that SKU's rolling 30-day rate from the window before them (today−43 … today−14) × that day's own gross. Total = RTO + CIR + Return-status + full Cancellations (COD included); Exchange is separate. Source: `api/_returnComponents.js`, `computeNetRevenueMeasures` in `api/_bq.js`.
+  - **Actual (Return Analysis):** actual statuses only; total = RTO + CIR + Return-status + prepaid-only cancellations. Source: `api/return-analysis.js`.
+  - When the period includes the latest 15 days, the first line is `**Returns (provisional, as on Sales): X%** · Actual so far (Return Analysis): Y%`, then one short line explaining provisional, then the breakdown (Cancellation, RTO (in returns), CIR, Exchange, Total; ₹ and %) for the provisional view. When the period is fully older than 15 days, show one number and say provisional = actual. Net revenue uses the provisional return rate for the latest 15 days.
+  - Check (D2C, 1–28 Oct 2026, Sales tile, viewed with "today" = 28 Oct UTC): Returns 18.0% (₹5.30 Cr), Cancellation 4.6%, RTO 7.0%, CIR 6.4%, Exchange 6.2%, gross ₹29.51 Cr. Pulse (IST "today" = 29 Oct): 17.9% (₹5.28 Cr), 4.6%, 6.9%, 6.3%, 6.2%; with "today" = 28 Oct it gives 17.99% — the 0.1-point gap is the dashboard's UTC "today" (logged in `docs/BACKLOG.md`).

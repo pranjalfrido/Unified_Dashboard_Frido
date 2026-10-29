@@ -8,7 +8,11 @@
     "frido-429506.production.pincode_city_master",
     "frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master",
     "frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping",
-    "frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot"
+    "frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot",
+    "frido-429506.production.inventory_sales_window",
+    "frido-429506.production.historical_inventory_till_date_UC",
+    "frido-429506.inventory_sales_allocation.uc_channel_desc",
+    "frido-429506.inventory_sales_allocation.facility_master"
   ],
   "supabase": [
     "inv_snapshot",

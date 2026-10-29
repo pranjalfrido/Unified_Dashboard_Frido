@@ -7,12 +7,12 @@ Format per entry: **Name** (also called) · *Answer from* · Definition · Chann
 ## Sales — answer from the Sales page (`api/bq.js`, `api/_bq.js`)
 
 1. **Gross revenue** (sales, revenue, GMV, topline) · *Sales → channel → Overall* · SUM(SellingPrice_Inc_GST), all order statuses · All channels by default; Shopify International is added from its own table, as the page does · Selected range (OrderDate, IST) · Excl `_EX` orders, offline Credit Notes, Amazon RTV · ₹ Cr/L + vs previous period %.
-2. **Net revenue** (net sales, realised revenue) · *Sales → Net Rev tile* · **Changed to match code:** the page uses each day's real statuses for days older than 15 days and the SKU's rolling 30-day rate for the last 15 days; it deducts the **full** cancellation (COD included), and the result is ex-GST. Per-channel rules apply (Shopify: RTO+CIR+Cancel; Amazon/Flipkart/Myntra/Retail: +Return; CRED/Firstcry: Return only; Blinkit/Zepto/Instamart: no rates) · ₹ + vs previous %.
+2. **Net revenue** (net sales, realised revenue) · *Sales → Net Rev tile* · **Changed to match code:** the page uses each day's real statuses for days older than 15 days and the SKU's rolling 30-day rate for the last 15 days; it deducts the **full** cancellation (COD included), and the result is ex-GST. Per-channel rules apply (Shopify: RTO+CIR+Cancel; Amazon/Flipkart/Myntra/Retail: +Return; CRED/Firstcry: Return only; Blinkit/Zepto/Instamart: no rates) · **uses the provisional return rate for the latest 15 days (say so)** · ₹ + vs previous %.
 3. **Orders** (order count) · COUNT(DISTINCT OrderId) · Flipkart/Myntra include the page's estimates for missing recent days (say so) · count + vs prev %.
 4. **Units** (quantity, qty sold) · SUM(ItemQty), same note as Orders · count + vs prev %.
 5. **AOV** (average order value) · *Sales → AOV tile* · **Changed to match code:** revenue Inc GST ÷ distinct orders over Shopify (not Intl), Amazon Seller Central, Myntra, Flipkart, Firstcry, CRED only. Vendor Central, quick commerce and offline are out · ₹ + vs prev %.
 6. **ASP** (average selling price) · *Sales → ASP tile* · **Changed to match code:** gross Inc GST ÷ units with COUP/DFA SKUs removed from the unit count only (revenue still includes them), same six-channel scope as AOV · ₹.
-7. **Returns %** (return rate) · *Sales → Returns tile / Return Analysis* · **Changed to match code:** per-channel engine over the **selected range** (real statuses + rolling estimate for recent days), full Cancel; only return-trackable channels count; SKU < 30 units → category → channel rate. Return Analysis is D2C only · % + SKU table. Say which view was used.
+7. **Returns %** (return rate) · *Sales → Returns tile (provisional) and Return Analysis (actual)* · **Two definitions, show both when they differ.** Provisional (Sales / P&L / Overview): actual statuses for days older than 15 days, each SKU's rolling 30-day rate for the latest 15 days; total = RTO + CIR + Return-status + full Cancellations (COD included); Exchange separate. Actual (Return Analysis, D2C): actual statuses only, prepaid-only cancellations. Format: `**Returns (provisional, as on Sales): X%** · Actual so far (Return Analysis): Y%`, one explaining line, then Cancellation / RTO (in returns) / CIR / Exchange / Total in ₹ and %. Fully older than 15 days: one number, provisional = actual.
 8. **CIR %** (customer initiated return) · CIR revenue ÷ gross Inc GST · Only D2C and Retail carry a CIR status · %.
 9. **Cancellation %** (cancel rate) · *Overview and Return Analysis tiles* · Cancelled revenue ÷ gross Inc GST (revenue, not order count; full amount, COD included; the Sales category table shows D2C prepaid-only) · %.
 10. **Revenue by channel** · `byChannel` · Gross grouped by Channel/SubChannel; D2C = Channel 'Shopify', EBO = Channel 'Retail' · table.
@@ -39,16 +39,18 @@ Format per entry: **Name** (also called) · *Answer from* · Definition · Chann
 25. **Total inventory** (stock, sellable inventory) · *Inventory Health (Regular view)* · Live facilities, excl COUP/DFA/Uncategorized, Regular type only · "as of <time>" · units.
 26. **Inventory by warehouse** · same data; the page groups by Location (PNQ, GGN, BLR, MUM, KOL, HYD, CHN) with the Facility underneath.
 27. **SKU stock** · same, by SKU and warehouse; alias SKUs roll up to the master SKU.
-28. **DOI** (days of inventory) · **Changed to match code:** DOI = floor(stock ÷ ceil(max(avg sale, order allocation))), avg sale rounded up per Location; null when stock > 0 and no demand. Bands: Critical ≤ 2, Low ≤ 15, Sufficient ≤ 45, Excess > 45.
+28. **DOI** (days of inventory) · (read `api/_inventory_shared.js` to follow the page exactly) · **Changed to match code:** DOI = floor(stock ÷ ceil(max(avg sale, order allocation))), avg sale rounded up per Location; null when stock > 0 and no demand. Bands: Critical ≤ 2, Low ≤ 15, Sufficient ≤ 45, Excess > 45.
 29. **Avg daily sale (Inventory Health)** · follows the page toggle: 7 days by default (15 / 30 available), B2C units, per Location; window ends at the latest sales date.
 30. **Dead / slow stock** · SKU status "Dead" = stock > 0, no sale in 90 days, not a new launch. The page's Dead Stock card (sub-category DOI > 200) is different; say which one.
 31. **OOS SKUs** · *Inventory → Out-of-stock loss* · **Changed to match code:** stock ≤ 0 on the latest snapshot across all Live facilities, B2C units in 180 days > 0.
-32. **OOS loss** · days out × avg daily sale (longest in-stock run) × ASP; run < 14 days → 180-day average (flagged) · ₹ + top SKUs. Page details: days-out clock can start from the D2C sales stop; ASP falls back to Unicommerce B2C.
+32. **OOS loss** · answered by the **`oos_loss` tool**, which runs the Out-of-stock loss page's own SQL and maths: days out × avg daily sale (longest in-stock run) × ASP; run < 14 days → 180-day average (flagged) · ₹ + top SKUs. Page details: days-out clock can start from the D2C sales stop; ASP falls back to Unicommerce B2C.
 
 ## Planning (new tools, Step 5)
 
-33. **Replenishment priority** · see playbook section 6.
-34. **Plan qty for X days** · see playbook section 6.
+29a. **Avg sale of <SKU> (no context)** · one line with both: `Planning avg: X/day (best window <dates>, N days)` then `Inventory Health avg (last 30 days): Y/day`.
+
+33. **Replenishment priority** · see playbook section 6 (planning avg = every window 7–30 days, spike days removed, highest average, longest window within 10% of the best; show window dates, length, units, avg/day, 6-month trend; < 7 selling days → 180-day units ÷ in-stock days, flagged).
+34. **Plan qty for X days** · see playbook section 6, same planning avg.
 
 ## Ads, P&L, Customers
 
