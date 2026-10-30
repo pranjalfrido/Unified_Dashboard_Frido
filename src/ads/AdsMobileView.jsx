@@ -18,6 +18,8 @@ import PacingBar from '../responsive/PacingBar.jsx'
 import CompactRankRow from '../responsive/CompactRankRow.jsx'
 import MixBar from '../responsive/MixBar.jsx'
 import { monthlyTable } from './adsData.js'
+import { DetailGate } from '../DetailGate.jsx'
+import { useDetailReady } from '../detailPhase.js'
 
 // Ads below 1024px (ADS_MASTER_PLAN.md Part B §3, mockups/ads_mockup.html phone). Display only: AdsTab
 // passes the same values its laptop cards / tables show. Order: master card → watchlist → daily spend →
@@ -33,6 +35,9 @@ export default function AdsMobileView({
   unattributed, totalSpend, catRows, prodRows, beRoas, pendingNote,
 }) {
   const bp = useBreakpoint()
+  // Watchlist, daily-by-channel revenue and category / product spend come from the ads_detail group
+  // of /api/bq (or the ads-data.json cache) — staged loading, one loader card each until it lands.
+  const detailReady = useDetailReady('ads_detail')
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const [dayMode, setDayMode] = useState('spend')
   const [daySel, setDaySel] = useState(null)
@@ -66,9 +71,10 @@ export default function AdsMobileView({
     <div className="ads-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
       <MasterTrendCard key={channel} metrics={metrics} rawRows={trendRows} groupTrend={groupSumTrend} start={start} end={end} layout={layout} />
 
-      {watch && <WatchlistCard result={watch} channel={channel} variant="mobile" title="Ads watchlist" onOpenRule={setRuleOpen} />}
+      {!detailReady && <DetailGate phase="ads_detail" label="Loading watchlist & daily spend" height={200} />}
+      {detailReady && watch && <WatchlistCard result={watch} channel={channel} variant="mobile" title="Ads watchlist" onOpenRule={setRuleOpen} />}
 
-      {dayRows.length > 0 && (
+      {detailReady && dayRows.length > 0 && (
         <Card title="Daily spend by channel" right={<span style={{ fontSize: 12, color: M.muted }}>tap a day</span>}>
           <SegmentToggle options={[{ id: 'spend', label: 'Spend' }, { id: 'rev', label: 'Revenue' }]} value={dayMode} onChange={setDayMode} label="Daily view" full />
           <div style={{ height: 8 }} />
@@ -106,7 +112,8 @@ export default function AdsMobileView({
 
       {unattributed > 0 && <InfoStrip text={`${fmt(unattributed)} (${totalSpend > 0 ? (unattributed / totalSpend * 100).toFixed(1) : 0}%) not linked to a product`} detail={'e.g. "all products" sale campaigns. Category and product ROAS are on linked spend only; totals include it.'} />}
 
-      {(prodRows.length > 0 || catRows.length > 0) && (
+      {!detailReady && <DetailGate phase="ads_detail" label="Loading category & product spend" height={200} />}
+      {detailReady && (prodRows.length > 0 || catRows.length > 0) && (
         <Card title="By category · By product" right={<span style={{ fontSize: 12, color: M.muted }}>{grp === 'prod' ? `${prodRows.length} products` : `${catRows.length} categories`}</span>}>
           <SegmentToggle options={[{ id: 'cat', label: 'Category' }, { id: 'prod', label: 'Product' }]} value={grp} onChange={setGrp} label="Group by" full />
           <div style={{ height: 6 }} />

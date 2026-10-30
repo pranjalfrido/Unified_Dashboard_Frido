@@ -37,6 +37,9 @@ import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import AppBanner from './responsive/AppBanner.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
+import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES } from './bqPhaseMerge.js'
+import { DetailGate } from './DetailGate.jsx'
+import { DetailPhaseContext, useDetailReady } from './detailPhase.js'
 import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
 import { rememberSalesSpot, peekSalesSpot, takeSalesSpot, useRaBasis } from './sales/returnAnalysisData.js'
 import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonList, eboStoreRows } from './sales/salesMobileData.js'
@@ -5508,6 +5511,8 @@ const WideCard = ({ span = 12, children, style }) => (
 
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders, onOpenInventory }) {
   const [productSearch, setProductSearch] = useState('')
+  // Product Performance / Top States read the sales_detail group (staged /api/bq loading).
+  const overviewDetailReady = useDetailReady()
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
   // every value shown below is computed exactly as before.
   //   phone (portrait)    KPIs 2-up, scorecard 2-up, everything full width
@@ -5916,9 +5921,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         {mobileSectionLabel('Where Revenue Came From')}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
-          {topProductsBySubCat.length > 0 && renderProductListMobile()}
-          <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
-            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
+          {/* Product Performance and Top States come from the sales_detail group (skuRows /
+              subCatMap / stateMap / cityRows) — a loader until it lands (src/DetailGate.jsx). */}
+          <DetailGate label="Loading product performance" height={180}>
+            {topProductsBySubCat.length > 0 && renderProductListMobile()}
+          </DetailGate>
+          <DetailGate label="Loading top states" height={180}>
+            <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
+              map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
+          </DetailGate>
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
@@ -6064,7 +6075,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           </div>
         </WideCard>
 
-        {topProductsBySubCat.length > 0 && (() => {
+        {/* Product Performance + Top States: sales_detail fields (skuRows, subCatMap, stateMap,
+            cityRows) — a per-section loader / error until that group lands. */}
+        {!overviewDetailReady && (
+          <WideCard span={wide ? 8 : 12}>
+            {secHdr('Product Performance', 'By sub-category')}
+            <DetailGate label="Loading product performance" height={260} style={{ border: 'none', background: 'transparent', padding: 0 }} />
+          </WideCard>
+        )}
+        {overviewDetailReady && topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
           return (
@@ -6142,7 +6161,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
         <WideCard span={wide ? 4 : 12} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
-          <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
+          <DetailGate label="Loading top states" height={260} style={{ border: 'none', background: 'transparent', padding: 0 }}>
+            <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
+          </DetailGate>
         </WideCard>
 
         {deckSectionLabel('Logistics & Ops Performance')}
@@ -8484,7 +8505,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'stretch' }}>
         <div style={{ height: 340 }}><ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} /></div>
-        <div style={{ height: 340 }}><CategoryRevenueCard
+        <div style={{ height: 340 }}><DetailGate label="Loading category revenue" height={340}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRowsRaw}
           skuMap={skuChannelMapBySku}
@@ -8494,17 +8515,17 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={340}
-        /></div>
-        <div style={{ height: 340 }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
+        /></DetailGate></div>
+        <div style={{ height: 340 }}><DetailGate label="Loading region & tier split" height={340}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></DetailGate></div>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} /></DetailGate>
       {(() => {
         const { enrichedStates, enrichedCities } = allGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport /></DetailGate>
           </div>
         )
       })()}
@@ -9076,6 +9097,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   const salesBp = useBreakpoint()
   const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
+  const shDetailReady = useDetailReady()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
   // Channel='International' tab) — no region toggle, no filters.subChannel default needed.
@@ -9482,6 +9504,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()
     return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (sh.catPrevMap || {}), subCatPrevMap: (sh.subCatPrevMap || {}), skuPrevMap: (sh.skuPrevMap || {}), mobilityNetBySubCat: (reconciledMobilityNetBySubCat), netScale: (d2cMatrixNetScale) }
   }
+  // MyFrido / Mobility: the daily series, sparklines and "per day" tiles are rebuilt from
+  // sh.dailySKU, which arrives with the sales_detail group (staged /api/bq loading) — until then
+  // the whole sub-channel view is one loader rather than tiles computed from an empty series.
+  if (isD2CSubChFiltered && !shDetailReady) return <DetailGate label={`Loading ${filters.subChannel} daily data`} height={420} />
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const cancelledOrders = orderStatusMap['Cancelled'] || 0
@@ -9724,7 +9750,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()}
         {isIntl
           ? <Card title="Category Revenue"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category data not available for International orders</div></Card>
-          : <CategoryRevenueCard
+          : <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={allSubCatRows}
               skuMap={(() => {
@@ -9751,17 +9777,17 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
               view={catRevView}
               setView={setCatRevView}
               height={320}
-            />}
+            /></DetailGate>}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} />}
+          : <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} /></DetailGate>}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
         const __mx = d2cMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} /></DetailGate>
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9837,10 +9863,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()}
       </div>}
       {!isIntl && <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
       </div>}
-      {!isD2CSubChFiltered && <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />}
+      {!isD2CSubChFiltered && <DetailGate label="Loading return reasons" height={220}><ShopifyReturnReasonsTable reasons={sh.returnReasons || []} /></DetailGate>}
     </div>
   )
 }
@@ -10264,7 +10290,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             ))}
           </div>
         </div>
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRows}
           skuMap={skuMap}
@@ -10272,12 +10298,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           view={catRevView}
           setView={setCatRevView}
           height={320}
-        />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
+        /></DetailGate>
+        <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} /></DetailGate>
       </div>
       {(() => {
         const __mx = eboMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} /></DetailGate>
       })()}
       {/* Store-wise table */}
       {(() => {
@@ -10356,11 +10382,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       })()}
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
       </div>
       {/* Return reasons */}
-      <ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} />
+      <DetailGate label="Loading return reasons" height={220}><ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} /></DetailGate>
     </div>
   )
 }
@@ -10996,18 +11022,18 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                 </Card>
                 {(() => {
                   const __mx = amzCategoryInputs()
-                  return <CategoryRevenueCard
+                  return <DetailGate label="Loading category revenue" height={325}><CategoryRevenueCard
                     catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                     height={325}
-                  />
+                  /></DetailGate>
                 })()}
                 {/* boxHeight, not boxheight — JSX props are case-sensitive, so the lowercase
                     spelling was silently ignored and this donut fell back to its natural
                     height instead of matching the 325px trend card beside it. */}
                 {channelView === 'sc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
+                  ? <DetailGate label="Loading region & tier split" height={325}><GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} /></DetailGate>
                   : (() => {
                       const { rows, maxRev, chNote } = amzAccountInputs()
                       return (
@@ -11038,7 +11064,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
           })()}
           {(() => {
             const __mx = amzMatrixInputs()
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} />
+            return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} /></DetailGate>
           })()}
           {(() => {
             const { enrichedStates, enrichedCities } = amzGeoInputs()
@@ -11050,8 +11076,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             )
             return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
-                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" note="Seller Central only" />
-                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" note="Seller Central only" />
+                <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" note="Seller Central only" /></DetailGate>
+                <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" note="Seller Central only" /></DetailGate>
               </div>
             )
           })()}
@@ -11507,16 +11533,16 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
             </Card>
             {(() => {
               const __mx = fkCategoryInputs()
-              return <CategoryRevenueCard
+              return <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
                 catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                 height={320}
-              />
+              /></DetailGate>
             })()}
             {(() => {
               const __mx = fkRegionInputs()
-              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} />
+              return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} /></DetailGate>
             })()}
           </div>
         )
@@ -11525,7 +11551,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
       {/* Category Revenue Matrix */}
       {(() => {
         const __mx = fkMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} /></DetailGate>
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -11533,8 +11559,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         const { enrichedStates, enrichedCities } = fkGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
           </div>
         )
       })()}
@@ -11718,6 +11744,11 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   // Ads Phase 2: watchlist rule filtering the By product table; the last-6-months data (session-cached)
   const [adsFlagRule, setAdsFlagRule] = useState(null)
   const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
+  // Staged /api/bq loading: the daily-by-channel revenue, watchlist and category / product spend
+  // read the ads_detail group (or the ads-data.json cache); the hidden P&L probe below reads
+  // pnl_detail — each waits for its own group (src/DetailGate.jsx).
+  const adsDetailReady = useDetailReady('ads_detail')
+  const adsPnlReady = useDetailReady('pnl_detail')
   const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
   const adsBp = useBreakpoint()
   const adsMobileLayout = adsBp.width < 1024 || adsBp.isPhoneLandscape
@@ -12103,7 +12134,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     })()
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
-        {adsPnlTab && data && (
+        {adsPnlTab && data && adsPnlReady && (
           <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
             offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
             onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
@@ -12633,15 +12664,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
         {/* Category table + Product table (with Category column) — same component for every
             sub-tab (All + each platform), reconciled to that tab's own KPI Total Spend. */}
-        {adsPnlTab && data && (
+        {adsPnlTab && data && adsPnlReady && (
           <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
             offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
             onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
         )}
-        {!isMob && selPlatform !== 'CRED' && (
+        {!isMob && selPlatform !== 'CRED' && !adsDetailReady && <DetailGate phase="ads_detail" label="Loading daily spend, watchlist & pacing" height={320} />}
+        {!isMob && selPlatform !== 'CRED' && adsDetailReady && (
           <AdsLaptopSections watch={adsWatch} activeRule={adsFlagRule} onRule={setAdsFlagRule} channel={ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'}
             dayRows={adsDayRows} series={adsSeries} fmt={fmt} pendingNote={adsPendingNote} monthly={adsMonthly} pacing={adsPacing} shareRows={adsShareRows} />
         )}
+        <DetailGate phase="ads_detail" label="Loading category & product spend" height={320}>
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
           // D3: the labelled CRED / estimate rows (adsExtraRows above)
@@ -12944,6 +12977,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             </div>
           )
         })()}
+        </DetailGate>
 
       </div>}
     </div>
@@ -13542,7 +13576,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={bl.skuMatrix || {}}
@@ -13552,23 +13586,23 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = blRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
       {/* Category Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns channel="blinkit" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns channel="blinkit" /></DetailGate>
 
       {/* Cities + States */}
       {(() => {
         const { enrichedStates, enrichedCities } = blGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -13744,7 +13778,7 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={ins.skuMatrix || {}}
@@ -13754,21 +13788,21 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = insRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" /></DetailGate>
 
       {(() => {
         const { enrichedStates, enrichedCities } = insGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -13944,7 +13978,7 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={zp.skuMatrix || {}}
@@ -13954,21 +13988,21 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = zpRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" /></DetailGate>
 
       {(() => {
         const { enrichedStates, enrichedCities } = zpGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -14270,7 +14304,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={subCatRows}
               skuMap={cr.skuMatrix || {}}
@@ -14280,19 +14314,19 @@ function CredTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} />
+            /></DetailGate>
+            <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} /></DetailGate>
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} /></DetailGate>
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -14581,7 +14615,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={subCatRows}
               skuMap={fc.skuMatrix || {}}
@@ -14591,17 +14625,17 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} />
+            /></DetailGate>
+            <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} /></DetailGate>
           </div>
         )
       })()}
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} /></DetailGate>
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -14899,7 +14933,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRowsForCatSubCat}
               subCatRows={subCatRowsForCatSubCat}
               skuMap={mn.skuMatrix || {}}
@@ -14909,22 +14943,22 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
+            /></DetailGate>
             {(() => {
               const __mx = mnRegionInputs()
-              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+              return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
             })()}
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} /></DetailGate>
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={mnEnrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={mnEnrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={mnEnrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={mnEnrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -15317,7 +15351,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={325}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={allSubCatRows}
               skuMap={skuMatrixData}
@@ -15327,21 +15361,21 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
               height={325}
-            />
+            /></DetailGate>
             {/* boxHeight, not boxheight — the lowercase spelling is silently dropped, which
                 left this donut shorter than the 325px trend card in the same row. */}
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} />
+            <DetailGate label="Loading region & tier split" height={325}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} /></DetailGate>
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch — offline distribution has no such concept, Credit Notes are tracked separately at the KPI level) */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns /></DetailGate>
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={true} showASP={false} />
-        <ShopifyGeoRichTable title="Top Cities" rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={true} showASP={false} />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={true} showASP={false} /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={true} showASP={false} /></DetailGate>
       </div>
     </div>
   )
@@ -15608,6 +15642,8 @@ function FilterIconPopover({ children, activeCount }) {
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage, onMenu }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
+  // Exports read the sales_detail group of /api/bq (staged loading) — disabled until it has loaded.
+  const salesDetailReady = useDetailReady()
   const filteredData = data
 
   // Return Analysis opened from Sales → D2C (the phone entry card or "⋯"): remember the D2C sub-tab
@@ -16526,12 +16562,13 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       : activeTab === 'amazon' ? std.filter(([key]) => !(key === 'states' && channelView === 'vc'))
       : handlers[activeTab] ? std : []
     const run = activeTab === 'shopify' ? handleD2CExport : activeTab === 'all' ? handleAllExport : handlers[activeTab]
-    const items = opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) }))
+    // Exports read the sales_detail group: offered once it has loaded (staged /api/bq loading).
+    const items = salesDetailReady ? opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) })) : []
     if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') }, ...(raMenu || []))
     if (activeTab === 'shopify' && shopifyView !== 'returns') items.unshift({ id: 'returns', label: 'Return analysis', group: 'View', onSelect: openReturns })
     onMenu(items)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu])
+  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu, salesDetailReady])
   useEffect(() => () => onMenu?.([]), [onMenu])
 
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
@@ -16571,7 +16608,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'shopify' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setD2cExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {d2cExportOpen && (
@@ -16592,7 +16629,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'amazon' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setAmzExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {amzExportOpen && (
@@ -16613,7 +16650,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'flipkart' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setFkExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {fkExportOpen && (
@@ -16634,7 +16671,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'blinkit' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setBlExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {blExportOpen && (
@@ -16655,7 +16692,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'instamart' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setInsExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {insExportOpen && (
@@ -16676,7 +16713,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'zepto' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setZtExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {ztExportOpen && (
@@ -16697,7 +16734,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'cred' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setCrExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {crExportOpen && (
@@ -16718,7 +16755,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'firstcry' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setFcExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {fcExportOpen && (
@@ -16739,7 +16776,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'myntra' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setMnExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {mnExportOpen && (
@@ -16760,7 +16797,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'offline' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setOffExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {offExportOpen && (
@@ -16781,7 +16818,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'all' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setAllExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {allExportOpen && (
@@ -20126,6 +20163,9 @@ function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.include
 // The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect
 // has always applied (productAge → subCategory, D2C sub-channels sharing the ShopifyIndia request, …).
 // Shared with the mobile Overview's previous-period loader so both send the same request shape.
+// Client-side /api/bq response cache size (entries = one request × one phase).
+const BQ_CLIENT_CACHE_MAX = 16
+
 function buildBqExtra(f, subCatFirstOrderMap) {
   const { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = f
   const extra = {}
@@ -20362,27 +20402,103 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const reqIdRef = useRef(0)
   const activeTabRef = useRef(activeTab)
   activeTabRef.current = activeTab
-  // Client-side cache: key → response data. Cleared when dates change.
+  // ── /api/bq staged loading (src/bqPhaseMerge.js, api/_bqPhases.js) ──
+  // A page first gets phase 'fast' (KPIs, chMap, trends, channel totals — rendered immediately),
+  // then the detail group(s) it needs (PAGE_DETAIL_PHASES) in the background, merged into the same
+  // `rawRows` object every page already reads. Sections built from a detail group show a
+  // <DetailGate> skeleton until it lands, or an inline error + Retry if it fails.
+  //
+  // Client-side response cache: one entry per (request, phase). The key is
+  //   JSON.stringify({ start, end, ...every filter sent to /api/bq, channel, phase })
+  // so a response is only ever reused for the exact same range + filters + channel + phase.
+  // phase 'full' marks a complete pre-computed payload (public/pnl-data*.json). Bounded, oldest
+  // dropped first — detail responses for long ranges are large.
   const clientCacheRef = useRef(new Map())
+  const cacheGet = k => {
+    const m = clientCacheRef.current
+    if (!m.has(k)) return undefined
+    const v = m.get(k); m.delete(k); m.set(k, v)
+    return v
+  }
+  const cacheSet = (k, v) => {
+    const m = clientCacheRef.current
+    m.delete(k); m.set(k, v)
+    while (m.size > BQ_CLIENT_CACHE_MAX) m.delete(m.keys().next().value)
+  }
+  const pageRef = useRef(page)
+  pageRef.current = page
+  // Which request (key without phase) `rawRows` currently holds — a detail response is merged only
+  // into the data of the request it belongs to, never into another range's / filter's data.
+  const rawKeyRef = useRef(null)
+  const [rawKey, setRawKey] = useState(null)
+  // Which phases are merged into the current rawRows ('full' = a complete static payload). This, not
+  // the bounded cache, is what the per-section loaders read — an evicted cache entry can never leave
+  // a section stuck on its loader when the data is already on screen.
+  const [rawPhases, setRawPhases] = useState([])
+  const setRawFor = (reqKey, next, phases = []) => { rawKeyRef.current = reqKey; setRawKey(reqKey); setRawPhases(phases); setRawRows(next) }
+  const lastReqRef = useRef(null)
+  // Detail requests in flight / failed, by phase cache key: { status: 'loading' | 'error', error }.
+  const [phaseStatus, setPhaseStatus] = useState({})
+  const detailInflightRef = useRef(new Set())
+  // Bumped by a forced refresh so a detail response requested before it is never merged after it.
+  const forceGenRef = useRef(new Map())
+
+  const fetchDetailPhase = useCallback(async (req, phase) => {
+    const k = req.keyFor(phase)
+    const merge = part => {
+      if (rawKeyRef.current !== req.reqKey) return
+      setRawRows(prev => (prev && rawKeyRef.current === req.reqKey ? mergePhase(prev, part) : prev))
+      setRawPhases(prev => (rawKeyRef.current === req.reqKey && !prev.includes(phase) ? [...prev, phase] : prev))
+    }
+    const cached = cacheGet(k)
+    if (cached) { merge(cached); return }
+    if (detailInflightRef.current.has(k)) return
+    detailInflightRef.current.add(k)
+    const gen = forceGenRef.current.get(req.reqKey) || 0
+    setPhaseStatus(s => ({ ...s, [k]: { status: 'loading' } }))
+    try {
+      const body = { start: req.start, end: req.end, ...req.extraFilters, ...(req.ch ? { channel: req.ch } : {}), phase }
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!res.ok) throw new Error(`API error ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      const json = await res.json()
+      if ((forceGenRef.current.get(req.reqKey) || 0) !== gen) return
+      cacheSet(k, json)
+      merge(json)
+      setPhaseStatus(s => { const n = { ...s }; delete n[k]; return n })
+    } catch (e) {
+      setPhaseStatus(s => ({ ...s, [k]: { status: 'error', error: e.message } }))
+    } finally {
+      detailInflightRef.current.delete(k)
+    }
+  }, [API])
 
   const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false, force = false) => {
     const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
-    const cacheKey = JSON.stringify({ start, end, ...extraFilters, channel: ch })
-
-    // Client-side cache hit: skip the fetch entirely. Checked for every call, not
-    // just keepPrev ones - the cache key already identifies the response exactly, so
-    // re-requesting it would return the same rows after a visible delay.
-    if (!force && clientCacheRef.current.has(cacheKey)) {
-      const cached = clientCacheRef.current.get(cacheKey)
-      setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
-        return cached
-      })
-      setFetchPending(false)
-      return
-    }
-
+    const keyFor = phase => JSON.stringify({ start, end, ...extraFilters, channel: ch, phase })
+    const reqKey = keyFor(null)
+    const req = { start, end, extraFilters, ch, keyFor, reqKey }
+    lastReqRef.current = req
+    const details = PAGE_DETAIL_PHASES[pageRef.current] || []
     const reqId = ++reqIdRef.current
+    if (force) {
+      for (const p of ['full', 'fast', ...DETAIL_PHASES]) clientCacheRef.current.delete(keyFor(p))
+      forceGenRef.current.set(reqKey, (forceGenRef.current.get(reqKey) || 0) + 1)
+      setPhaseStatus(s => Object.fromEntries(Object.entries(s).filter(([k]) => !DETAIL_PHASES.some(p => k === keyFor(p)))))
+    }
+    // keepPrev (no current callers): overlay the new response on the previous one, as before.
+    const show = (next, phases) => setRawFor(reqKey, keepPrev ? (prev => (prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...next } : next)) : next, phases)
+    // fast + every detail group already cached for this exact request (and which ones those were)
+    const cachedDetails = () => DETAIL_PHASES.filter(p => clientCacheRef.current.has(keyFor(p)))
+    const assemble = fast => cachedDetails().reduce((d, p) => mergePhase(d, clientCacheRef.current.get(keyFor(p))), fast)
+    const loadDetails = () => details.forEach(p => { if (!clientCacheRef.current.has(keyFor(p))) fetchDetailPhase(req, p) })
+
+    // Client-side cache hit: skip the fetch entirely. Checked for every call - the key identifies
+    // the response exactly, so re-requesting it would return the same rows after a visible delay.
+    const fullCached = !force && cacheGet(keyFor('full'))
+    if (fullCached) { show(fullCached, ['full']); setLoading(false); setFetchPending(false); return }
+    const fastCached = !force && cacheGet(keyFor('fast'))
+    if (fastCached) { show(assemble(fastCached), ['fast', ...cachedDetails()]); setLoading(false); setFetchPending(false); loadDetails(); return }
+
     if (!keepPrev) setLoading(true)
     setError(null)
 
@@ -20391,6 +20507,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // pre-computed daily by GitHub Actions so these date ranges never hit BigQuery.
     // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
     // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
+    // These are complete (unphased) payloads, cached as phase 'full': every section is ready.
     const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
     const effectiveSubCh = extraFilters.subChannel
     const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
@@ -20409,8 +20526,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) setSubCatFirstOrderMap(c.subCatFirstOrderMap)
-          clientCacheRef.current.set(cacheKey, c)
-          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...c } : c)
+          cacheSet(keyFor('full'), c)
+          show(c, ['full'])
           setLoading(false); setFetchPending(false)
           return
         }
@@ -20426,31 +20543,33 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (lm.subCatFirstOrderMap && Object.keys(lm.subCatFirstOrderMap).length) setSubCatFirstOrderMap(lm.subCatFirstOrderMap)
-          clientCacheRef.current.set(cacheKey, lm)
-          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...lm } : lm)
+          cacheSet(keyFor('full'), lm)
+          show(lm, ['full'])
           setLoading(false); setFetchPending(false)
           return
         }
       } catch (_) {}
     }
 
-    const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }
+    const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}), phase: 'fast' }
+    const fastGen = forceGenRef.current.get(reqKey) || 0
 
     try {
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
-      if (reqId !== reqIdRef.current) return // stale response, ignore
       const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
+      // Cached under its own key even if superseded (e.g. a page switch re-issued fetchData while
+      // this was in flight) — it is still the exact response for this key, unless a forced refresh
+      // of the same key happened meanwhile.
+      if ((forceGenRef.current.get(reqKey) || 0) === fastGen) cacheSet(keyFor('fast'), next)
+      if (reqId !== reqIdRef.current) return // stale response, ignore
       if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
         setSubCatFirstOrderMap(json.subCatFirstOrderMap)
       }
-      setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
-        return next
-      })
-      clientCacheRef.current.set(cacheKey, next)
-
+      show(assemble(next), ['fast', ...cachedDetails()])
+      // Fast is on screen: now the detail group(s) this page needs, in parallel with each other.
+      loadDetails()
     } catch (e) {
       if (reqId === reqIdRef.current) {
         setError(e.message)
@@ -20459,11 +20578,31 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
         // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
         // that the switch never actually completed) — confirmed 2026-08-19.
-        setRawRows(null)
+        setRawFor(null, null)
       }
     }
     finally { if (reqId === reqIdRef.current) { setLoading(false); setFetchPending(false) } }
-  }, [API])
+  }, [API, fetchDetailPhase])
+
+  // Detail-group status of the open page, for <DetailGate> (src/DetailGate.jsx): the page's main
+  // group's { status, error, retry }, plus byPhase for every group the page loads. null = all in.
+  const pageDetailPhases = PAGE_DETAIL_PHASES[page] || []
+  const detailCtx = (() => {
+    const req = lastReqRef.current
+    if (!pageDetailPhases.length || !req || !rawKey) return null
+    const READY_ST = { status: 'ready', error: null, retry: null }
+    const statusOf = p => {
+      if (req.reqKey !== rawKey) return { status: 'loading', error: null, retry: null }
+      if (rawPhases.includes('full') || rawPhases.includes(p)) return READY_ST
+      // the Ads static cache (ads-data.json) carries the Ads detail itself
+      if (p === 'ads_detail' && page === 'ads' && adsCache) return READY_ST
+      const st = phaseStatus[req.keyFor(p)]
+      if (st?.status === 'error') return { status: 'error', error: st.error, retry: () => fetchDetailPhase(req, p) }
+      return { status: 'loading', error: null, retry: null }
+    }
+    const byPhase = Object.fromEntries(pageDetailPhases.map(p => [p, statusOf(p)]))
+    return { ...byPhase[pageDetailPhases[0]], byPhase }
+  })()
 
   const debounceRef = useRef(null)
   const prevDateRef = useRef({ start: null, end: null })
@@ -20478,7 +20617,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
-    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawFor(null, null) }
     // Debounce only when the date changed (user may still be typing in date picker).
     // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
     const debounceMs = dateChanged ? 600 : 0
@@ -20556,7 +20695,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Each one repeats a request the page already makes, for another date range, and returns the
   // response without touching any page state. Same endpoints, same bodies, same static-cache
   // shortcuts, same server-side byte limits - only the dates differ.
-  const loadSalesPeriod = useCallback(async (start, end) => {
+  // `details`: the /api/bq detail groups the caller reads on top of 'fast' (src/bqPhaseMerge.js) —
+  // none for the mobile Overview's ▲/▼ (KPIs + daily trend), ['pnl_detail'] for P&L's previous
+  // period. Requested in parallel and merged the same way as the page's own data.
+  const loadSalesPeriod = useCallback(async (start, end, details = []) => {
     const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
     // fetchData's static-cache rule: unfiltered requests whose dates match a pre-computed window
     // are served from public/pnl-data*.json instead of BigQuery.
@@ -20566,12 +20708,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (c && c.mtdStart === start && c.mtdEnd === end) return c
       }
     }
-    const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra }) })
-    if (!res.ok) throw new Error(`API error ${res.status}`)
-    const json = await res.json()
+    const post = async phase => {
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra, phase }) })
+      if (!res.ok) throw new Error(`API error ${res.status}`)
+      return res.json()
+    }
+    const [json, ...parts] = await Promise.all(['fast', ...details].map(post))
     // Same response handling as the page's own `data`.
-    return json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+    const base = json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+    return parts.reduce((d, p) => mergePhase(d, p), base)
   }, [API, subCatFirstOrderMap])
+  const loadPnlPeriod = useCallback((start, end) => loadSalesPeriod(start, end, ['pnl_detail']), [loadSalesPeriod])
   const loadLogisticsPeriod = useCallback(async (start, end) => {
     const res = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
     if (!res.ok) throw new Error(`API error ${res.status}`)
@@ -20929,16 +21076,19 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               </div>
             </div>
           )}
+          {/* Detail-group status for this page's <DetailGate> sections (staged /api/bq loading). */}
+          <DetailPhaseContext.Provider value={detailCtx}>
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} onOpenInventory={openInventoryHealth} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
-          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadSalesPeriod} />}
+          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadPnlPeriod} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <AdsTab data={adsCache ? { ...(data || {}), cred: (credIsCurrent ? data.cred : null) ?? (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
+          </DetailPhaseContext.Provider>
           {page === 'intelligence' && (
             <div className="page-scroll">
               <IntelPage data={data} />
