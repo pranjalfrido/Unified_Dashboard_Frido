@@ -1,7 +1,7 @@
 # Staged loading for `/api/bq`: status, design, verification
 
-Worktree `C:/wt-staged`, branch `fix/staged-loading` (from `origin/main` @ `476cc4c3`). Local commits only:
-nothing pushed, merged or deployed, and no other branch or worktree was touched.
+Worktree `C:/wt-staged`, branch `fix/staged-loading` (from `origin/main` @ `476cc4c3`). Pushed to
+`origin/fix/staged-loading` for a Vercel preview; not merged, and `main` was not touched.
 
 ## STATUS
 
@@ -12,11 +12,11 @@ nothing pushed, merged or deployed, and no other branch or worktree was touched.
 | Frontend: staged fetch, merge into the same `data`, per-section loading and error states, phase-aware cache keys | **Done** |
 | Fast size fix (round 2): `resolvedDailySKU` rows out of fast, small server-side reductions in, identical numbers | **Done** (YTD fast 189 MB → **3.1 MB**, peak RSS 1467 → **775 MB**) |
 | Parity on real BigQuery: 17 cases (1/3/5 months, each filter type, MyFrido, Mobility) | **PASS**: 0 diffs; reductions byte-identical |
-| YTD per phase under a 1024 MB heap | **Done**: nothing crashes. ⚠ RSS is still above 1 GB for `sales_detail` (1120 MB) and `pnl_detail` (2032 MB). See §6. |
+| YTD per phase under a 1024 MB heap | **Done**: nothing crashes. Peak RSS: `sales_detail` 1120 MB, `pnl_detail` 2032 MB. Vercel functions are now 4 GB (were 2 GB, never 1024 MB), so all phases fit. See §6. |
 | Unused-query audit (report only) | **Done**: 4 safe to remove, 2 unsure (§8) |
 | Navigation check | **Code-level only.** The interactive run was blocked: it needed the saved signed-in session, which the permission system refused. See §5. |
 | `npm run build` | passes |
-| **Needs the user** | (1) Decide whether to accept the P&L YTD memory risk or fund a follow-up (§6). (2) Decide whether the 4 "safe" queries should be removed (§8). (3) Optional: the real browser check needs a signed-in session. |
+| **Needs the user** | (1) Test YTD on the Vercel preview (4 GB functions); the §6 follow-ups are now optional, not required. (2) Decide whether the 4 "safe" queries should be removed (§8). (3) Optional: the real browser check needs a signed-in session. |
 
 ### Commits on `fix/staged-loading`
 | Hash | Message |
@@ -25,7 +25,9 @@ nothing pushed, merged or deployed, and no other branch or worktree was touched.
 | `e60bd06a` | api/bq: generated staged phases (fast/sales_detail/pnl_detail/ads_detail); fix phase:'slow' crash |
 | `5ac29104` | frontend: staged /api/bq fetch, phase-aware cache keys, per-section loading/error states |
 | `eb0f3fe4` | fast: ship resolvedDailySKU reductions instead of the rows (YTD fast 189MB -> 3.1MB) |
-| (this commit) | docs: PERF_STATUS, unused-query audit script, mapping report |
+| `8b07d3fc` | docs: staged-loading status report, unused-query audit script, mapping report |
+| `c7d5c438` | chore: trigger Vercel preview after verifying author email (empty) |
+| (this commit) | docs: correct Vercel function memory (2 GB Standard, now 4 GB) in PERF_STATUS |
 
 The fetch logic, cache keys and loading states are in one frontend commit. They live together in `src/App.jsx`, and splitting that file's hunks needs interactive staging, which isn't available here.
 
@@ -274,13 +276,21 @@ No phase crashes under the heap cap.
 
 **Was the memory risk driven by the big arrays?** For fast, yes: removing the rows took peak RSS from 1467 to 775 MB, now under 1024 MB. What remains is mostly the raw BigQuery rows held during the request. `shDailySKU` alone is 151k rows and is needed in fast because chMap and Net Revenue are built from it.
 
-⚠ **Remaining risk:**
-* `sales_detail` is at 1120 MB RSS, from the same resolved-engine queries plus about 190 detail queries.
-* `pnl_detail` is at 2032 MB. It is the only group that ships the rows (268 MB), and the Ads page also loads it for the margin instance.
+**Correction (2026-10-30): the 1024 MB limit assumed above was wrong.** The Vercel project is on the Pro plan. Function memory was **2 GB (Standard)** when the YTD failures happened, and it has now been raised to **4 GB (Performance)**. The 1024 MB heap cap used for the measurements above was stricter than production ever was. The numbers stay valid as worst-case figures, but the risk reading changes:
 
-Vercel limits the whole process to 1024 MB, so P&L at YTD will likely still fail there. The old single request already failed at YTD, so this is not a regression. I didn't test on Vercel itself.
+| Phase | Peak RSS (YTD) | vs 2 GB (old setting) | vs 4 GB (current) |
+|---|---|---|---|
+| fast | 775 MB | fits | fits |
+| sales_detail | 1120 MB | fits | fits |
+| pnl_detail | 2032 MB | **at the limit, likely fails** | fits, about 2 GB of headroom |
+| ads_detail | 425 MB | fits | fits |
+| full response, new code (no phase) | 2247 MB | over | fits, about 1.8 GB of headroom |
 
-**Follow-ups:**
+This also fits the original failure: the old full response needed about 1.8 GB of RSS even on a large heap, plus overhead, so it was over the 2 GB Standard limit at YTD.
+
+**Remaining risk:** with 4 GB, no phase is expected to fail at YTD. `pnl_detail` is the closest, at about half the limit. Ranges longer than YTD (12+ months) were not measured. Data growth will push all of these up over time. None of this has been tested on Vercel itself yet; the preview deploy of this branch is the first real check.
+
+**Follow-ups (optional with 4 GB; they'd cut memory and payload further):**
 * Have P&L read reductions instead of rows. Its uses: per-SKU units/returns, the per-SKU-per-day trend, and the net-revenue scale.
 * Give Ads its own small margins request instead of the whole `pnl_detail`.
 * Give Overview a tiny dedicated group. It needs only `skuRows`, `subCatMap`, `stateMap` and `cityRows`, not all of `sales_detail`.
