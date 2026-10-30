@@ -1,0 +1,1054 @@
+{
+ "start": "2026-09-01",
+ "end": "2026-09-30",
+ "extra": {
+  "subChannel": "International"
+ },
+ "queryKeys": [
+  "totals",
+  "byChannel",
+  "aspAovTotals",
+  "shopifyIntlTotals",
+  "prevShopifyIntlTotals",
+  "mobilityNetCalc",
+  "shNetCalc",
+  "prevShNetCalc",
+  "byDate",
+  "byCategory",
+  "byState",
+  "shCategory",
+  "shSubCategory",
+  "shSubCategoryPrev",
+  "shDailySubCat",
+  "shSKU",
+  "shDailySKU",
+  "shSKUPrev",
+  "shSKUWeight",
+  "shListingPrice",
+  "shPrepaidAsp",
+  "shReturnRateMature",
+  "shComponentRateMature",
+  "amzSCReturnRateMature",
+  "amzSCComponentRateMature",
+  "fkReturnRateMature",
+  "fkComponentRateMature",
+  "fkDailySKUComponents",
+  "mnReturnRateMature",
+  "mnComponentRateMature",
+  "mnDailySKUComponents",
+  "eboReturnRateMature",
+  "eboComponentRateMature",
+  "eboDailySKUComponents",
+  "overallReturnRateMature",
+  "allTabReturnRateMature",
+  "offlineCreditNoteRateMature",
+  "offComponentRateMature",
+  "offDailySKUComponents",
+  "shSkuCosts",
+  "shDailySkuCosts",
+  "shState",
+  "shStateComponentRateMature",
+  "shDailyStateComponents",
+  "shStatePrev",
+  "shRegion",
+  "shTier",
+  "shCity",
+  "shCityComponentRateMature",
+  "shDailyCityComponents",
+  "shCityPrev",
+  "byRegion",
+  "byTier",
+  "byOrderValue",
+  "byVoucher",
+  "bySubChannel",
+  "allSubChannels",
+  "byPaymentMode",
+  "shPaymentTypes",
+  "byOrderStatus",
+  "highTicket",
+  "multiItem",
+  "repeatRate",
+  "prevRepeatRate",
+  "bySubCategory",
+  "prevByCategory",
+  "prevBySubCategory",
+  "byCategoryChannel",
+  "byCategoryChannelFk",
+  "bySubCategoryChannel",
+  "bySubCategoryChannelFk",
+  "byCity",
+  "byStatePrev",
+  "byCityPrev",
+  "bySKU",
+  "byFinancialStatus",
+  "byFulfilmentStatus",
+  "byRefundTrend",
+  "byDailyReturnTrend",
+  "topOrders",
+  "byVoucherRaw",
+  "shReturnReasons",
+  "returnNumerator",
+  "prevTotals",
+  "momYoyTotals",
+  "prevByChannel",
+  "prevByDate",
+  "prevShopify",
+  "shTotals",
+  "shDaily",
+  "prevShopifyDaily",
+  "prevAmzSC",
+  "prevDailyByChannel",
+  "prevFk",
+  "prevBl",
+  "prevCr",
+  "prevFc",
+  "amzSCTotals",
+  "amzSCNetCalc",
+  "amzSCFulfillment",
+  "amzSCStatus",
+  "amzSCStates",
+  "amzSCCities",
+  "amzSCStateComponentRateMature",
+  "amzSCDailyStateComponents",
+  "amzSCCityComponentRateMature",
+  "amzSCDailyCityComponents",
+  "amzSCStatesPrev",
+  "amzSCCitiesPrev",
+  "amzSCSKUs",
+  "amzSCDaily",
+  "amzSCCatChannel",
+  "amzSCSubCatChannel",
+  "amzSCSKUChannel",
+  "amzSCCatChannelPrev",
+  "amzSCSubCatChannelPrev",
+  "amzSCSKUChannelPrev",
+  "amzSCMFNOrderWeights",
+  "amzSCLineItemWeights",
+  "amzSCRollingRate",
+  "amzSCRollingNetRevenue",
+  "amzSCDailyNetBySKU",
+  "amzSCDailySettlement",
+  "amzVCCat",
+  "amzVCSubCat",
+  "amzVCSKU",
+  "amzVCCatPrev",
+  "amzVCSubCatPrev",
+  "amzVCSKUPrev",
+  "amzVCDailySKU",
+  "amzVCComponentRateMature",
+  "amzVCDailySKUComponents",
+  "amzSCRegion",
+  "amzSCTier",
+  "amzVCAccounts",
+  "amzVCDaily",
+  "amzVCASINs",
+  "fkTotals",
+  "fkDaily",
+  "fkStatus",
+  "fkSKUs",
+  "fkCategories",
+  "fkStates",
+  "fkCities",
+  "fkStateComponentRateMature",
+  "fkDailyStateComponents",
+  "fkCityComponentRateMature",
+  "fkDailyCityComponents2",
+  "fkStatesPrev",
+  "fkCitiesPrev",
+  "fkReturnRate",
+  "fkRegions",
+  "fkSubCategory",
+  "fkSKUMatrix",
+  "fkSKUMatrixDaily",
+  "fkDailyCat",
+  "fkCatPrev",
+  "fkSubCatPrev",
+  "fkSKUPrev",
+  "amzSCDailyCat",
+  "amzVCDailyCat",
+  "blDailySKU",
+  "zpDailySKU",
+  "inDailySKU",
+  "blTotals",
+  "blDaily",
+  "blCategories",
+  "blSubCategories",
+  "blStates",
+  "blStatesPrev",
+  "blSKUs",
+  "blSKUMatrix",
+  "blCities",
+  "blCitiesPrev",
+  "blSKUPrev",
+  "inTotals",
+  "inDaily",
+  "inCategories",
+  "inSubCategories",
+  "inStates",
+  "inStatesPrev",
+  "inSKUs",
+  "inSKUMatrix",
+  "inCities",
+  "inCitiesPrev",
+  "inSKUPrev",
+  "zpTotals",
+  "zpDaily",
+  "zpCategories",
+  "zpSubCategories",
+  "zpStates",
+  "zpStatesPrev",
+  "zpSKUs",
+  "zpSKUMatrix",
+  "zpCities",
+  "zpCitiesPrev",
+  "zpSKUPrev",
+  "crTotals",
+  "crComponentRateMature",
+  "crDailySKUComponents",
+  "crDaily",
+  "crSKUs",
+  "crCategories",
+  "crSubCategories",
+  "crSKUMatrix",
+  "crCatPrev",
+  "crSubCatPrev",
+  "crStates",
+  "crStatesPrev",
+  "crRegion",
+  "crTier",
+  "crStatus",
+  "crCities",
+  "crCitiesPrev",
+  "intlTotals",
+  "prevIntl",
+  "prevIntlNetCalc",
+  "intlDaily",
+  "intlCategories",
+  "intlSubCategories",
+  "intlSKUMatrix",
+  "intlCatPrev",
+  "intlSubCatPrev",
+  "fcTotals",
+  "fcComponentRateMature",
+  "fcDailySKUComponents",
+  "fcDaily",
+  "fcSKUs",
+  "fcCategories",
+  "fcSubCategories",
+  "fcSKUMatrix",
+  "fcStates",
+  "fcStatesPrev",
+  "fcCatPrev",
+  "fcSubCatPrev",
+  "fcRegion",
+  "fcTier",
+  "fcStatus",
+  "fcCities",
+  "fcCitiesPrev",
+  "mnTotals",
+  "mnDaily",
+  "mnStatus",
+  "mnCategories",
+  "mnSubCategories",
+  "mnSKUMatrix",
+  "mnSKUs",
+  "mnStates",
+  "mnStateComponentRateMature",
+  "mnDailyStateComponents",
+  "mnCityComponentRateMature",
+  "mnDailyCityComponents",
+  "mnStatesPrev",
+  "mnCatPrev",
+  "mnSubCatPrev",
+  "mnCities",
+  "mnCitiesPrev",
+  "prevMn",
+  "masterSkuList",
+  "offlineTotals",
+  "prevOffline",
+  "prevOfflineDaily",
+  "offlineDaily",
+  "offlineSubChannel",
+  "offlineCategory",
+  "offlineSubCategory",
+  "offlineSKU",
+  "offlineState",
+  "offlineCity",
+  "offCatPrev",
+  "offSubCatPrev",
+  "offStatesPrev",
+  "offCitiesPrev",
+  "offlineRegion",
+  "offlineTier",
+  "adsTotals",
+  "adsDaily",
+  "adsByAdType",
+  "adsCampaigns",
+  "adsByCategory",
+  "adsBySku",
+  "adsCategoryBreakdown",
+  "adsZeroOrder",
+  "salesCategoryOrders",
+  "salesCategoryOrdersFk",
+  "channelDailyExcRev",
+  "adsDailyByCategory",
+  "salesDailyByCategory",
+  "prevAdsTotals",
+  "shopifyNewCusts",
+  "eboTotals",
+  "eboNetCalc",
+  "prevEboNetCalc",
+  "eboDaily",
+  "prevEbo",
+  "eboCategory",
+  "eboCategoryPrev",
+  "eboSubCategory",
+  "eboSubCategoryPrev",
+  "eboDailySubCat",
+  "eboSKU",
+  "prevEboSKU",
+  "eboState",
+  "eboStatePrev",
+  "eboStateComponentRateMature",
+  "eboDailyStateComponents",
+  "eboCity",
+  "eboCityComponentRateMature",
+  "eboDailyCityComponents",
+  "eboCityPrev",
+  "eboRegion",
+  "eboTier",
+  "eboReturnReasons",
+  "eboDailyReturnTrend",
+  "eboStoreMonthly",
+  "eboStoreSkuCosts",
+  "pnlAdRawTotals"
+ ],
+ "volatile": [],
+ "units": {
+  "source": [],
+  "prevRev": [
+   "prevTotals"
+  ],
+  "prevExcRev": [
+   "prevTotals"
+  ],
+  "prevOrders": [
+   "prevTotals"
+  ],
+  "prevQty": [
+   "prevTotals"
+  ],
+  "prevRtoOrders": [],
+  "prevCirOrders": [],
+  "prevRtoRev": [],
+  "prevCirRev": [],
+  "prevScopedAOV": [],
+  "prevScopedASP": [],
+  "prevDailyArr": [
+   "prevByDate"
+  ],
+  "prevChMap": [
+   "prevShNetCalc"
+  ],
+  "totalRev": [
+   "totals"
+  ],
+  "totalExcRev": [
+   "totals"
+  ],
+  "totalQty": [
+   "totals"
+  ],
+  "aspQty": [
+   "totals"
+  ],
+  "nOrders": [
+   "totals"
+  ],
+  "nDays": [],
+  "blendedAOV": [
+   "totals"
+  ],
+  "scopedAOV": [],
+  "scopedASP": [],
+  "gstCollected": [
+   "totals"
+  ],
+  "rtoRev": [],
+  "returnRev": [
+   "fkDailySKUComponents",
+   "mnDailySKUComponents",
+   "eboDailySKUComponents",
+   "amzVCDailySKUComponents",
+   "crDailySKUComponents",
+   "fcDailySKUComponents"
+  ],
+  "cancellRev": [
+   "fkDailySKUComponents",
+   "mnDailySKUComponents",
+   "eboDailySKUComponents"
+  ],
+  "cirRev": [
+   "eboDailySKUComponents"
+  ],
+  "rtoRevDirect": [],
+  "netRevenueCalc": [
+   "shNetCalc"
+  ],
+  "returnTrackableRev": [],
+  "returnRateMature": [
+   "overallReturnRateMature"
+  ],
+  "allTabReturnRateMature": [
+   "allTabReturnRateMature"
+  ],
+  "cirOrders": [],
+  "exchangeOrders": [],
+  "exchangeRev": [],
+  "momRev": [
+   "momYoyTotals"
+  ],
+  "yoyRev": [
+   "momYoyTotals"
+  ],
+  "momOrders": [
+   "momYoyTotals"
+  ],
+  "yoyOrders": [
+   "momYoyTotals"
+  ],
+  "momPeriod": [],
+  "yoyPeriod": [],
+  "nCusts": [],
+  "repeatCusts": [],
+  "prevNCusts": [
+   "prevRepeatRate"
+  ],
+  "prevRepeatCusts": [
+   "prevRepeatRate"
+  ],
+  "uniqueDates": [
+   "byDate"
+  ],
+  "dailyArr": [
+   "byDate"
+  ],
+  "chMap": [
+   "shNetCalc",
+   "amzSCNetCalc",
+   "amzVCDailySKUComponents"
+  ],
+  "catMap": [
+   "byCategory",
+   "fkDailySKUComponents",
+   "mnDailySKUComponents",
+   "eboDailySKUComponents",
+   "amzVCDailySKUComponents",
+   "crDailySKUComponents",
+   "fcDailySKUComponents"
+  ],
+  "subCatMap": [
+   "fkDailySKUComponents",
+   "mnDailySKUComponents",
+   "bySubCategory",
+   "amzVCDailySKUComponents"
+  ],
+  "catPrevMap": [
+   "prevByCategory"
+  ],
+  "subCatPrevMap": [
+   "prevBySubCategory"
+  ],
+  "stateMap": [
+   "byState"
+  ],
+  "statePrevMap": [
+   "byStatePrev"
+  ],
+  "stateTotal": [
+   "byState"
+  ],
+  "cityRows": [],
+  "cityPrevMap": [],
+  "cityTotal": [],
+  "regionRows": [],
+  "tierRows": [],
+  "catChannelMap": [
+   "byCategoryChannel"
+  ],
+  "subCatChannelMap": [
+   "bySubCategoryChannel"
+  ],
+  "orderStatusMap": [
+   "byOrderStatus"
+  ],
+  "orderStatusRevMap": [
+   "byOrderStatus"
+  ],
+  "buckets": [
+   "byOrderValue"
+  ],
+  "bucketRev": [
+   "byOrderValue"
+  ],
+  "voucherMap": [],
+  "subChannelMap": [
+   "mobilityNetCalc",
+   "salesCategoryOrders"
+  ],
+  "allSubChannels": [
+   "allSubChannels"
+  ],
+  "paymentModeMap": [],
+  "tatOrders": [],
+  "htCount": [],
+  "htRev": [],
+  "multiItemOrders": [],
+  "financialStatusMap": [],
+  "fulfilmentStatusMap": [],
+  "refundTrend": [],
+  "dailyReturnTrend": [],
+  "voucherList": [],
+  "orders": [
+   "topOrders"
+  ],
+  "skuRows": [
+   "bySKU"
+  ],
+  "rows": [],
+  "pnlSalesRows": [
+   "salesCategoryOrders",
+   "salesCategoryOrdersFk"
+  ],
+  "pnlAdSpendMap": [
+   "adsCategoryBreakdown",
+   "salesCategoryOrders"
+  ],
+  "pnlRawAdSpend": [
+   "pnlAdRawTotals"
+  ],
+  "masterSkuList": [
+   "masterSkuList"
+  ],
+  "shopify.netCalc": [
+   "shNetCalc"
+  ],
+  "shopify.prevNetCalc": [
+   "prevShNetCalc"
+  ],
+  "shopify.totals": [
+   "shTotals"
+  ],
+  "shopify.daily": [
+   "shDaily"
+  ],
+  "shopify.dailySKU": [],
+  "shopify.resolvedDailySKU": [],
+  "shopify.prevRev": [
+   "prevShopify"
+  ],
+  "shopify.prevExcRev": [
+   "prevShopify"
+  ],
+  "shopify.prevOrders": [
+   "prevShopify"
+  ],
+  "shopify.prevUnits": [
+   "prevShopify"
+  ],
+  "shopify.prevRtoOrders": [],
+  "shopify.prevCirOrders": [],
+  "shopify.prevExchangeOrders": [],
+  "shopify.prevCancelledOrders": [],
+  "shopify.prevDaily": [
+   "prevShopifyDaily"
+  ],
+  "shopify.catMap": [],
+  "shopify.catPrevMap": [],
+  "shopify.subCatMap": [],
+  "shopify.subCatPrevMap": [],
+  "shopify.subCatDateMap": [],
+  "shopify.skuMap": [],
+  "shopify.skuPrevMap": [],
+  "shopify.mobilityNetBySubCat": [
+   "mobilityNetCalc"
+  ],
+  "shopify.listingPriceBySku": [
+   "shListingPrice"
+  ],
+  "shopify.prepaidAspBySku": [
+   "shPrepaidAsp"
+  ],
+  "shopify.returnRateMature": [
+   "shReturnRateMature"
+  ],
+  "shopify.skuCostRows": [],
+  "shopify.skuWeightGm": [],
+  "shopify.dailySkuCostRows": [],
+  "shopify.skuMapBySubChannel": [],
+  "shopify.skuWeightShares": [],
+  "shopify.stateMap": [],
+  "shopify.cityRows": [],
+  "shopify.statePrevMap": [],
+  "shopify.cityPrevMap": [],
+  "shopify.cityTotal": [],
+  "shopify.stateTotal": [],
+  "shopify.paymentTypes": [],
+  "shopify.regionRows": [],
+  "shopify.tierRows": [],
+  "shopify.topStates": [],
+  "shopify.returnReasons": [
+   "shReturnReasons"
+  ],
+  "ebo.resolvedDailySKU": [
+   "eboDailySKUComponents"
+  ],
+  "ebo.netCalc": [],
+  "ebo.prevNetCalc": [],
+  "ebo.returnRateMature": [
+   "eboReturnRateMature"
+  ],
+  "ebo.totals": [
+   "eboTotals"
+  ],
+  "ebo.skuCostRows": [],
+  "ebo.daily": [],
+  "ebo.prevDaily": [],
+  "ebo.prevRev": [],
+  "ebo.prevExcRev": [],
+  "ebo.prevOrders": [],
+  "ebo.prevUnits": [],
+  "ebo.prevRtoOrders": [],
+  "ebo.prevCirOrders": [],
+  "ebo.prevExchangeOrders": [],
+  "ebo.catMap": [],
+  "ebo.catPrevMap": [],
+  "ebo.subCatMap": [],
+  "ebo.subCatPrevMap": [],
+  "ebo.subCatDateMap": [],
+  "ebo.skuMap": [],
+  "ebo.prevSkuMap": [],
+  "ebo.stateMap": [],
+  "ebo.cityRows": [],
+  "ebo.statePrevMap": [],
+  "ebo.stateTotal": [],
+  "ebo.cityPrevMap": [],
+  "ebo.cityTotal": [],
+  "ebo.regionRows": [],
+  "ebo.tierRows": [],
+  "ebo.returnReasons": [],
+  "ebo.cir": [],
+  "ebo.returnData": [],
+  "ebo.exchange": [],
+  "ebo.rto": [],
+  "ebo.dailyReturnTrend": [],
+  "ebo.storeRows": [],
+  "ebo.storeSkuCostRows": [],
+  "amzSC.totalOrders": [],
+  "amzSC.totalUnits": [],
+  "amzSC.netCalc": [],
+  "amzSC.prevRev": [],
+  "amzSC.prevExcRev": [],
+  "amzSC.prevOrders": [],
+  "amzSC.prevUnits": [],
+  "amzSC.prevFbaRev": [],
+  "amzSC.prevCancelledOrders": [],
+  "amzSC.prevShippedOrders": [],
+  "amzSC.prevDaily": [],
+  "amzSC.fulfillment": [],
+  "amzSC.status": [],
+  "amzSC.states": [],
+  "amzSC.statePrevMap": [],
+  "amzSC.cityPrevMap": [],
+  "amzSC.stateTotal": [],
+  "amzSC.cityTotal": [],
+  "amzSC.skus": [],
+  "amzSC.daily": [],
+  "amzSC.returnRate": [],
+  "amzSC.returnRateMature": [
+   "amzSCReturnRateMature"
+  ],
+  "amzSC.regionRows": [],
+  "amzSC.tierRows": [],
+  "amzSC.topStates": [],
+  "amzSC.cities": [],
+  "amzSC.catChannel": [],
+  "amzSC.subCatChannel": [],
+  "amzSC.skuChannel": [],
+  "amzSC.dailyCat": [],
+  "amzSC.catPrevMap": [],
+  "amzSC.subCatPrevMap": [],
+  "amzSC.skuPrevMap": [],
+  "amzSC.sndBySku": [],
+  "amzSC.dailyPnLBySku": [],
+  "amzSC.resolvedDailySKU": [],
+  "amzVCMatrix.catData": [],
+  "amzVCMatrix.subCatData": [],
+  "amzVCMatrix.skuData": [],
+  "amzVCMatrix.dailyCat": [],
+  "amzVCMatrix.catPrevMap": [],
+  "amzVCMatrix.subCatPrevMap": [],
+  "amzVCMatrix.skuPrevMap": [],
+  "amzVCMatrix.sndBySku": [],
+  "amzVCMatrix.dailyPnLBySku": [
+   "amzVCDailySKUComponents"
+  ],
+  "amzVC.resolvedDailySKU": [
+   "amzVCDailySKUComponents"
+  ],
+  "amzVC.prevRev": [],
+  "amzVC.prevExcRev": [],
+  "amzVC.prevUnits": [],
+  "amzVC.accounts": [],
+  "amzVC.daily": [],
+  "amzVC.latestVCDate": [],
+  "amzVC.asins": [],
+  "flipkart.resolvedDailySKU": [
+   "fkDailySKUComponents"
+  ],
+  "flipkart.prevRev": [],
+  "flipkart.prevExcRev": [],
+  "flipkart.prevOrders": [],
+  "flipkart.prevUnits": [],
+  "flipkart.prevFbfRev": [],
+  "flipkart.prevNonFbfRev": [],
+  "flipkart.prevCancelOrders": [],
+  "flipkart.prevReturnRev": [],
+  "flipkart.prevDeliveredRev": [],
+  "flipkart.prevDaily": [],
+  "flipkart.totals": [],
+  "flipkart.netCalc": [],
+  "flipkart.estTotalRev": [],
+  "flipkart.estTotalExcRev": [],
+  "flipkart.estTotalOrders": [],
+  "flipkart.estTotalUnits": [],
+  "flipkart.daily": [],
+  "flipkart.latestRealDate": [],
+  "flipkart.estimatedDays": [],
+  "flipkart.dataShifted": [],
+  "flipkart.status": [],
+  "flipkart.skus": [],
+  "flipkart.returnRate": [],
+  "flipkart.returnRateMature": [
+   "fkReturnRateMature"
+  ],
+  "flipkart.categories": [],
+  "flipkart.states": [],
+  "flipkart.cities": [],
+  "flipkart.statePrevMap": [],
+  "flipkart.cityPrevMap": [],
+  "flipkart.stateTotalMap": [],
+  "flipkart.cityTotalMap": [],
+  "flipkart.catPrevMap": [],
+  "flipkart.subCatPrevMap": [],
+  "flipkart.skuPrevMap": [],
+  "flipkart.regions": [],
+  "flipkart.subCategories": [],
+  "flipkart.dailyCat": [],
+  "flipkart.skuMatrix": [],
+  "flipkart.sndBySku": [],
+  "flipkart.dailyPnLBySku": [],
+  "cred.resolvedDailySKU": [
+   "crDailySKUComponents"
+  ],
+  "cred.netCalc": [],
+  "cred.prevNetCalc": [],
+  "cred.prevRev": [],
+  "cred.prevExcRev": [],
+  "cred.prevOrders": [],
+  "cred.prevUnits": [],
+  "cred.prevSkus": [],
+  "cred.prevCities": [],
+  "cred.prevDaily": [],
+  "cred.totals": [
+   "crTotals"
+  ],
+  "cred.daily": [],
+  "cred.skus": [],
+  "cred.categories": [],
+  "cred.subCategories": [],
+  "cred.catPrevMap": [],
+  "cred.subCatPrevMap": [],
+  "cred.skuMatrix": [],
+  "cred.states": [],
+  "cred.statePrevMap": [],
+  "cred.stateTotal": [],
+  "cred.cityTotal": [],
+  "cred.status": [],
+  "cred.cities": [],
+  "cred.cityPrevMap": [],
+  "cred.regionRows": [],
+  "cred.tierRows": [],
+  "cred.byCategory": [],
+  "cred.byProduct": [],
+  "cred.dailyByCategory": [],
+  "cred.additionalSpend": [],
+  "cred.additionalSpendByProduct": [],
+  "international.netCalc": [
+   "intlTotals"
+  ],
+  "international.prevNetCalc": [
+   "prevIntlNetCalc"
+  ],
+  "international.prevRev": [
+   "prevIntl"
+  ],
+  "international.prevExcRev": [
+   "prevIntl"
+  ],
+  "international.prevOrders": [
+   "prevIntl"
+  ],
+  "international.prevUnits": [
+   "prevIntl"
+  ],
+  "international.prevDaily": [
+   "prevDailyByChannel"
+  ],
+  "international.totals": [
+   "intlTotals"
+  ],
+  "international.daily": [
+   "intlDaily"
+  ],
+  "international.categories": [
+   "intlCategories"
+  ],
+  "international.subCategories": [
+   "intlSubCategories"
+  ],
+  "international.catPrevMap": [
+   "intlCatPrev"
+  ],
+  "international.subCatPrevMap": [
+   "intlSubCatPrev"
+  ],
+  "international.skuMatrix": [
+   "intlSKUMatrix"
+  ],
+  "firstcry.resolvedDailySKU": [
+   "fcDailySKUComponents"
+  ],
+  "firstcry.netCalc": [],
+  "firstcry.prevNetCalc": [],
+  "firstcry.prevRev": [],
+  "firstcry.prevExcRev": [],
+  "firstcry.prevOrders": [],
+  "firstcry.prevUnits": [],
+  "firstcry.prevSkus": [],
+  "firstcry.prevCities": [],
+  "firstcry.prevDaily": [],
+  "firstcry.totals": [
+   "fcTotals"
+  ],
+  "firstcry.daily": [],
+  "firstcry.skus": [],
+  "firstcry.categories": [],
+  "firstcry.subCategories": [],
+  "firstcry.skuMatrix": [],
+  "firstcry.states": [],
+  "firstcry.statePrevMap": [],
+  "firstcry.stateTotal": [],
+  "firstcry.cityTotal": [],
+  "firstcry.catPrevMap": [],
+  "firstcry.subCatPrevMap": [],
+  "firstcry.status": [],
+  "firstcry.cities": [],
+  "firstcry.cityPrevMap": [],
+  "firstcry.regionRows": [],
+  "firstcry.tierRows": [],
+  "zepto.prevRev": [],
+  "zepto.prevExcRev": [],
+  "zepto.prevUnits": [],
+  "zepto.prevSkus": [],
+  "zepto.prevCities": [],
+  "zepto.prevOrders": [],
+  "zepto.prevDaily": [],
+  "zepto.totals": [
+   "zpTotals"
+  ],
+  "zepto.daily": [],
+  "zepto.categories": [],
+  "zepto.subCategories": [],
+  "zepto.skus": [],
+  "zepto.skuMatrix": [],
+  "zepto.cities": [],
+  "zepto.states": [],
+  "zepto.statePrevMap": [],
+  "zepto.cityPrevMap": [],
+  "zepto.stateTotal": [],
+  "zepto.cityTotal": [],
+  "zepto.catPrevMap": [],
+  "zepto.subCatPrevMap": [],
+  "zepto.skuPrevMap": [],
+  "zepto.sndBySku": [],
+  "zepto.dailyPnLBySku": [],
+  "instamart.prevRev": [],
+  "instamart.prevExcRev": [],
+  "instamart.prevUnits": [],
+  "instamart.prevSkus": [],
+  "instamart.prevCities": [],
+  "instamart.prevOrders": [],
+  "instamart.prevDaily": [],
+  "instamart.totals": [
+   "inTotals"
+  ],
+  "instamart.daily": [],
+  "instamart.categories": [],
+  "instamart.subCategories": [],
+  "instamart.skus": [],
+  "instamart.skuMatrix": [],
+  "instamart.cities": [],
+  "instamart.states": [],
+  "instamart.statePrevMap": [],
+  "instamart.cityPrevMap": [],
+  "instamart.stateTotal": [],
+  "instamart.cityTotal": [],
+  "instamart.catPrevMap": [],
+  "instamart.subCatPrevMap": [],
+  "instamart.skuPrevMap": [],
+  "instamart.sndBySku": [],
+  "instamart.dailyPnLBySku": [],
+  "myntra.resolvedDailySKU": [
+   "mnDailySKUComponents"
+  ],
+  "myntra.netCalc": [],
+  "myntra.prevNetCalc": [],
+  "myntra.prevRev": [],
+  "myntra.prevExcRev": [],
+  "myntra.prevOrders": [],
+  "myntra.prevDaily": [],
+  "myntra.totals": [
+   "mnTotals"
+  ],
+  "myntra.returnRateMature": [
+   "mnReturnRateMature"
+  ],
+  "myntra.daily": [],
+  "myntra.estimatedDays": [],
+  "myntra.estTotalExcRev": [],
+  "myntra.latestRealDate": [],
+  "myntra.status": [],
+  "myntra.categories": [],
+  "myntra.subCategories": [],
+  "myntra.catPrevMap": [],
+  "myntra.subCatPrevMap": [],
+  "myntra.skuMatrix": [],
+  "myntra.skus": [],
+  "myntra.states": [],
+  "myntra.statePrevMap": [],
+  "myntra.stateTotal": [],
+  "myntra.cityTotal": [],
+  "myntra.cities": [],
+  "myntra.cityPrevMap": [],
+  "blinkit.prevRev": [],
+  "blinkit.prevExcRev": [],
+  "blinkit.prevUnits": [],
+  "blinkit.prevSkus": [],
+  "blinkit.prevCities": [],
+  "blinkit.prevOrders": [],
+  "blinkit.totals": [
+   "blTotals"
+  ],
+  "blinkit.daily": [],
+  "blinkit.categories": [],
+  "blinkit.subCategories": [],
+  "blinkit.skus": [],
+  "blinkit.skuMatrix": [],
+  "blinkit.cities": [],
+  "blinkit.states": [],
+  "blinkit.statePrevMap": [],
+  "blinkit.cityPrevMap": [],
+  "blinkit.stateTotal": [],
+  "blinkit.cityTotal": [],
+  "blinkit.catPrevMap": [],
+  "blinkit.subCatPrevMap": [],
+  "blinkit.skuPrevMap": [],
+  "blinkit.sndBySku": [],
+  "blinkit.dailyPnLBySku": [],
+  "offline.resolvedDailySKU": [
+   "offDailySKUComponents"
+  ],
+  "offline.creditNoteRateMature": [
+   "offlineCreditNoteRateMature"
+  ],
+  "offline.totalsBySub": [],
+  "offline.prevBySub": [],
+  "offline.prevDaily": [],
+  "offline.daily": [],
+  "offline.subChannelRows": [],
+  "offline.categoryRows": [],
+  "offline.subCategoryRows": [],
+  "offline.skuRows": [],
+  "offline.stateRows": [],
+  "offline.cityRows": [],
+  "offline.catPrevRows": [],
+  "offline.subCatPrevRows": [],
+  "offline.statePrevRows": [],
+  "offline.cityPrevRows": [],
+  "offline.stateTotalRows": [],
+  "offline.cityTotalRows": [],
+  "offline.regionRows": [],
+  "offline.tierRows": [],
+  "ads.totals": [
+   "adsTotals"
+  ],
+  "ads.flipkartEstRev": [],
+  "ads.daily": [
+   "adsDaily"
+  ],
+  "ads.channelDailyExcRev": [
+   "channelDailyExcRev"
+  ],
+  "ads.channelSalesOrders": [],
+  "ads.adsDailyByCategory": [
+   "adsDailyByCategory"
+  ],
+  "ads.salesDailyByCategory": [
+   "salesDailyByCategory"
+  ],
+  "ads.byAdType": [
+   "adsByAdType"
+  ],
+  "ads.campaigns": [
+   "adsCampaigns"
+  ],
+  "ads.byCategory": [
+   "adsByCategory"
+  ],
+  "ads.bySku": [
+   "adsBySku"
+  ],
+  "ads.categoryBreakdown": [
+   "adsCategoryBreakdown",
+   "salesCategoryOrders"
+  ],
+  "ads.allSpendDetail": [
+   "shNetCalc",
+   "adsCategoryBreakdown",
+   "salesCategoryOrders",
+   "salesCategoryOrdersFk"
+  ],
+  "ads.spendDetailByPlatform": [
+   "shNetCalc",
+   "adsCategoryBreakdown",
+   "salesCategoryOrders",
+   "salesCategoryOrdersFk"
+  ],
+  "ads.zeroOrder": [
+   "adsZeroOrder"
+  ],
+  "ads.prevTotals": [
+   "prevAdsTotals"
+  ],
+  "ads.prevCategoryBreakdown": [],
+  "ads.nCusts": [
+   "shopifyNewCusts"
+  ],
+  "ads.repeatCusts": [
+   "shopifyNewCusts"
+  ],
+  "ads.additionalSpend": [],
+  "subCatFirstOrderMap": []
+ }
+}
