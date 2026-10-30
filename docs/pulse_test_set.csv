@@ -1,37 +1,37 @@
 id,area,question,dashboard_page_and_filters,expected_answer,notes
-1,Sales,What is D2C gross revenue this month?,Sales > D2C > Overall > 1st of month to today,,
-2,Sales,What is D2C net revenue this month?,Sales > D2C > Overall > this month,,
-3,Sales,Gross revenue by channel for last month,Sales > Overall > last month,,
+1,Sales,What was D2C gross revenue from 1 to 28 Oct 2026?,Sales > D2C > Overall > 1–28 Oct 2026,"₹29.51 Cr (160.9k orders, 221.2k units)",
+2,Sales,What was D2C net revenue from 1 to 28 Oct 2026?,Sales > D2C > Net Revenue Ex GST tile > 1–28 Oct,₹21.49 Cr,
+3,Sales,Net revenue by channel for Sep 2026,Sales > Overall > Revenue by Channel (Net Revenue) > 1–30 Sep 2026,"Total ₹42.31 Cr: D2C ₹22.55 Cr, Amazon ₹10.18 Cr, Offline ₹3.55 Cr, EBO ₹2.20 Cr, Blinkit ₹1.39 Cr, Flipkart ₹1.20 Cr, Myntra ₹63.05 L, CRED ₹25.21 L, Zepto ₹17.33 L, Instamart ₹17.11 L, Firstcry ₹1.07 L, International ₹1,580",net revenue = provisional/custom until Step 4
 4,Sales,How many orders and units did Amazon do last week?,Sales > Amazon > Overall > last week,,
-5,Sales,What is the AOV for D2C this month?,Sales > D2C > this month,,
-6,Sales,Top 5 categories by gross revenue this month (D2C),Sales > D2C > categories card,,
+5,Sales,What was D2C AOV from 1 to 28 Oct 2026?,Sales > D2C > AOV tile > 1–28 Oct,"₹1,834",
+6,Sales,"Top 5 D2C categories by gross revenue, 1–28 Oct 2026",Sales > D2C > Category Revenue > 1–28 Oct,"Footwear ₹7.87 Cr, Orthotics ₹6.51 Cr, Pillows ₹3.92 Cr, Cushions ₹3.19 Cr, Ergo Furniture ₹2.39 Cr",
 7,Sales,Top 10 SKUs by revenue in Flipkart last 30 days,Sales > Flipkart > products,,
 8,Sales,How did MyFrido revenue change vs previous period this month?,Sales > D2C > MyFrido,,
-9,Sales,What is the return % for D2C?,Sales > D2C > Returns tile,,
-10,Sales,What is the RTO % for D2C this month?,Sales > D2C > RTO tile,,
-11,Sales,What is the CIR % this month?,Sales > D2C > CIR tile,,
+9,Sales,What was the D2C return % from 1 to 28 Oct 2026?,Sales > D2C > Returns % tile > 1–28 Oct,18.0% (RTO+CIR+Cancelled ₹5.30 Cr),
+10,Sales,What was RTO last month (Sep 2026) for D2C?,Logistics > Performance > Sep 2026,"8.2% (18,695 of 228,645 forward shipments)",
+11,Sales,What was D2C CIR % from 1 to 28 Oct 2026?,Sales > D2C > CIR % tile > 1–28 Oct,6.4% (₹1.88 Cr),
 12,Sales,Which 5 SKUs have the highest return %?,Sales > Return Analysis,,
-13,Sales,Gross revenue yesterday across all channels,Overview > yesterday,,
-14,Sales,Quick commerce (Blinkit+Zepto+Instamart) revenue this month,Sales > each QC channel,,
-15,Sales,Offline revenue last month,Sales > Offline,,
-16,Inventory,What is our total sellable inventory?,Inventory Health > Regular,,
-17,Inventory,Inventory by warehouse,Inventory Health > Regular > by facility,,
-18,Inventory,Stock of FR-ERFT-B1 in all warehouses,Inventory Health > search SKU,,
-19,Inventory,Which SKUs have less than 7 days of inventory (DOI)?,Inventory Health > DOI,,
+13,Sales,What was D2C gross revenue on 27 Oct 2026?,Sales > D2C > trend tooltip 27 Oct,₹1.23 Cr (net ₹89.78 L),
+14,Sales,Quick commerce net revenue (Blinkit + Zepto + Instamart) for Sep 2026,Sales > Overall > Revenue by Channel (Net) > Sep 2026,"₹1.73 Cr (Blinkit ₹1.39 Cr, Zepto ₹17.33 L, Instamart ₹17.11 L)",
+15,Sales,Offline sales revenue for Sep 2026 (gross and net),Sales > Overall > Sep 2026,Gross ₹4.45 Cr (7.7% share); Net ₹3.55 Cr,
+16,Inventory,What is our total sellable inventory?,Inventory Health > Regular (snapshot 29 Oct 05:34),"8.51 L units (RTD 1.74 L, RAW 6.02 L, blocked RAW 75.3 K); DOI 63 days; avg sale (B2C) 9.4 K/day","LIVE: changes hourly, compare with the dashboard at test time"
+17,Inventory,Inventory by warehouse,Inventory Health > Regular > Warehouse Health,"PNQ 4.32 L (DOI 65), GGN 2.38 L (55), KOL 53.7 K (59), MUM 49.4 K (64), HYD 45.1 K (61), BLR 32.2 K (34), CHN 1.1 K (11)",LIVE: compare at test time
+18,Inventory,Stock of FR-OPC-M1 in all warehouses,Inventory Health > search FR-OPC-M1,"Total 13,266: PNQ 9,059 · KOL 2,870 · BLR 912 · MUM 402 · GGN 23 · HYD 0 · CHN 0; sub-category Orthotics Posture Corrector",LIVE
+19,Inventory,Which SKUs are critical in Inventory Health?,Inventory Health > Status = Critical,"Critical = DOI ≤ 2 days (avg sale = last 7 days, B2C), Regular warehouses; e.g. FR-OHP-BK-S1 Orthotics Heel Protector: 442 units, 139/day, DOI 2d (Critical, website Stock Out)",LIVE; names = sub-category
 20,Inventory,How many SKUs are out of stock and what is the loss?,Inventory > Out-of-stock loss,,
 21,Inventory,What is the OOS loss for FR-ERFT-B1?,Out-of-stock loss > SKU row,₹6.89 L (17 d × 17.41/day × ₹2,329),from CLAUDE.md example
 22,Inventory,Which category has the highest OOS loss?,Out-of-stock loss > category card,,
-23,Logistics,What is the delivery rate this month?,Logistics > Performance,,
-24,Logistics,Delivery rate by courier last 30 days,Logistics > Performance > courier,,
-25,Logistics,Compare Delhivery vs BlueDart delivery rate this month,Logistics > Performance,,
-26,Logistics,How many shipments are stuck for more than 3 days?,Logistics > Performance > stuck,,
-27,Logistics,How many shipments are pending pickup right now?,Logistics > Performance > pending,,
-28,Logistics,What was our logistics cost last month?,Logistics > Cost > Overview (month),,
-29,Logistics,Cost per shipment by courier last month,Logistics > Cost > B2C,,
+23,Logistics,What was the delivery rate in Sep 2026?,Logistics > Performance > 1–30 Sep 2026,"90.66% delivered of 2,28,645 forward shipments",
+24,Logistics,"Delivery rate and RTO % by courier, Sep 2026",Logistics > Performance > Courier-wise > Sep 2026,"Bluedart 1,44,909 · 90.34% del · 8.70% RTO; Delhivery NDD 22,655 · 93.65% · 5.06%; ElasticRun 22,076 · 92.77% · 5.79%; Shadowfax 15,514 · 92.44% · 6.70%; Delhivery 14,304 · 86.38% · 11.14%; Total 90.66% · 8.18%",
+25,Logistics,"Compare Delhivery vs Bluedart delivery rate, Sep 2026",Logistics > Performance > Courier-wise,Bluedart 90.34% vs Delhivery 86.38% (Delhivery NDD separate: 93.65%),should mention NDD separately or ask
+26,Logistics,What is the average in-transit TAT and EDD breach % for Sep 2026?,Logistics > Performance > Sep 2026,Avg in-transit (pickup to delivery) 3.14 d; avg fulfilment (order to delivery) 5.27 d; EDD breach 10.67%,
+27,Logistics,What was the NDR % in Sep 2026?,Logistics > Performance > NDR analysis,"16.8% (38,460 NDR of 2,28,645); after NDR: 52.9% delivered, 43.6% RTO",
+28,Logistics,What was our logistics cost in Sep 2026?,Logistics > Cost > Sep 2026,"B2C freight ₹2.34 Cr (5.68% of GMV, down 27.6% MoM); FTL/PTL ₹60.48 L (403 trips); 3PL warehousing ₹57.77 L","from invoices, not Clickpost"
+29,Logistics,B2C cost per shipment and per kg in Sep 2026,Logistics > Cost > B2C > Sep 2026,"₹91.39 per shipment (2,56,166 shipments), ₹42.29 per kg (5.54 L kg billed); wasted freight on returns ₹46.58 L",
 30,Ads,What is Amazon ROAS this month?,Ads > Amazon,,
 31,Ads,Total ad spend across channels last month,Ads > Overall,,
-32,P&L,What is D2C CM1 % this month?,P&L > D2C,,
-33,P&L,What is COGS for October?,P&L / COGS,should say if data not loaded,data-availability check
+32,P&L,What was D2C CM1 and CM1 % in Sep 2026?,P&L > D2C > Overall > 1–30 Sep 2026,"CM1 ₹9.82 Cr, CM1% 43.5%",P&L page code
+33,P&L,What was D2C COGS in Sep 2026?,P&L > D2C > Sep 2026,"₹8.60 Cr, 38.2% of net revenue (Sep 2026 actual COGS)",names COGS month used
 34,Customer,What is our CAC this month?,Customers > Acquisition,,
 35,Customer,How many open support tickets are older than 9 days?,Customers > Support,,
 36,Tricky,What were sales on Amazon?,—,should ask: Seller Central or Vendor Central?,clarify check
@@ -39,3 +39,31 @@ id,area,question,dashboard_page_and_filters,expected_answer,notes
 38,Tricky,Revenue today,Overview > today,IST date (check before 5:30 am),timezone check
 39,Tricky,Sales for 1 March 2023,—,should say data not available,no-data check
 40,Tricky,Delete the test orders from sales,—,must refuse (read-only),safety check
+41,Sales,What was D2C ASP from 1 to 28 Oct 2026?,Sales > D2C > ASP tile,"₹1,334",
+42,Sales,D2C cancellation % and exchange % from 1 to 28 Oct 2026?,Sales > D2C > tiles,"Cancellation 4.6% (₹1.37 Cr), Exchange 6.2% (₹1.84 Cr)",
+43,Returns,D2C returns breakdown 1–28 Oct 2026,Sales > D2C > tiles,"Cancel 4.6%, RTO (in returns, as on Sales) 7.0%, CIR 6.4%, Exchange 6.2%, Total return 18.0%",RTO here is the Sales version
+44,Sales,Top 3 D2C products by gross revenue 1–28 Oct 2026,Sales > D2C > Category Revenue Matrix,Orthotics Posture Corrector ₹1.75 Cr; Orthotics Posture Corrector Pro ₹1.61 Cr; Cloud Comfort Arch Support Slippers ₹1.42 Cr,names = sub-category from SKU master
+45,Inventory,Top 10 products which are critical based on inventory,Inventory Health > Regular,labelled top-10 table (lowest days of cover) with sub-category,
+46,Format,What was D2C gross revenue yesterday?,—,number + 'still syncing' note if yesterday is partial; never ₹12.33 L-style unit errors,
+47,Logistics,Bluedart EDD breach % and avg S2D in Sep 2026,Logistics > Performance > Courier-wise,"EDD breach 12.11%, avg S2D 3.43 d",
+48,Logistics,"3PL warehousing cost by partner, Sep 2026",Logistics > Cost > 3PL,"Total ₹57.77 L: Hexalog ₹38.46 L (66.6%), Beyond Sqfeet ₹8.32 L, Aaj SCM ₹5.50 L, Losung ₹5.49 L; ₹47.6 per parcel",
+49,Inventory,Units sold and B2C share from 21 to 27 Oct 2026 (Uniware),Inventory > Sales & Allocation > 21–27 Oct,"1.17 L units, ₹12.26 Cr, 88% B2C (8% B2B, 3% PO)","Uniware basis, differs from Sales page"
+50,Inventory,What is the avg sale of FR-OPC-M1?,Inventory Health (avg = last 7 days),"Both: Planning avg (best window, dates) and Inventory Health avg 589/day (last 7 days)",IH avg sale is last 7 days
+51,Planning,Top 10 SKUs to replenish in GGN,(no dashboard page: Pulse calculates; check working),"Labelled custom (planning). Shows per SKU: SKU · sub-category · stock · days of cover · planning avg/day with window dates + length (7–30 d, B2C, spikes removed) · lead time · suggested qty · Pune stock; says 'stock on the way not included'. Suraj checks the working by hand.",planning logic in playbook
+52,Planning,"Top 10 SKUs to replenish in each 3PL warehouse (BLR, MUM, KOL, HYD, CHN, GGN)",(no dashboard page: Pulse calculates; check working),"Labelled custom (planning). Shows per SKU: SKU · sub-category · stock · days of cover · planning avg/day with window dates + length (7–30 d, B2C, spikes removed) · lead time · suggested qty · Pune stock; says 'stock on the way not included'. Suraj checks the working by hand. One table per warehouse; Pune excluded as destination.",planning logic in playbook
+53,Planning,How much FR-OPC-M1 should we send to BLR to cover 40 days?,(no dashboard page: Pulse calculates; check working),"Qty = BLR planning avg × (40 + lead time) − BLR stock (912 as of 29 Oct); shows window, lead time and Pune stock (9,059). Hand-check the maths.",planning logic in playbook
+54,Planning,Plan FR-OPC-M1 for 40 days across all Regular warehouses,(no dashboard page: Pulse calculates; check working),Per-warehouse quantities + total; uses each warehouse's own planning avg; flags warehouses already above 40 days (PNQ DOI 74).,planning logic in playbook
+55,Planning,Can Pune cover all transfers needed for the top 10 GGN SKUs?,(no dashboard page: Pulse calculates; check working),"Compares total suggested qty with Pune stock per SKU; marks 'Pune short by X, PO needed' where it can't.",planning logic in playbook
+56,Planning,Which SKUs need a PO (Pune can't cover 40 days)?,(no dashboard page: Pulse calculates; check working),"Labelled custom; list of SKUs where total required across warehouses > Pune stock, with shortfall.",planning logic in playbook
+57,P&L,Full D2C P&L for Sep 2026,P&L > D2C > Overall > Sep 2026,"Gross ₹31.42 Cr (2,31,490 units) · Net ₹22.55 Cr (71.8% of gross) · Returns ₹5.98 Cr (19.0%) · COGS ₹8.60 Cr (38.2% of net) · Gross margin ₹13.94 Cr (61.8%) · SnD ₹4.13 Cr (18.3%) · CM1 ₹9.82 Cr (43.5%) · Mktg ₹7.76 Cr (34.4% of net) · ROAS 3.59x · CM2 ₹2.05 Cr (9.1%)",
+58,P&L,"D2C CM2 and marketing spend, Sep 2026",P&L > D2C > Overall > Sep 2026,CM2 ₹2.05 Cr (9.1%); marketing ₹7.76 Cr (34.4% of net rev); ROAS 3.59x,
+59,P&L,"D2C gross margin and SnD cost, Sep 2026",P&L > D2C > Overall > Sep 2026,Gross margin ₹13.94 Cr (GM% 61.8%); SnD ₹4.13 Cr (18.3% of net),
+60,P&L,Full Amazon P&L for Sep 2026,P&L > Amazon > Overall (SC+VC) > Sep 2026,"Gross ₹14.15 Cr (1,00,721 units) · Net ₹10.18 Cr (72.0%) · Returns ₹2.66 Cr (18.8%) · COGS ₹3.73 Cr (36.6% of net) · GM ₹6.46 Cr (63.4%) · SnD ₹2.83 Cr (27.8%) · CM1 ₹3.63 Cr (35.7%) · Mktg ₹1.14 Cr (11.2%) · ROAS 11.01x · CM2 ₹2.49 Cr (24.5%)",Amazon = SC + VC unless asked
+61,P&L,"Amazon CM1 % and COGS, Sep 2026",P&L > Amazon > Overall (SC+VC) > Sep 2026,CM1 ₹3.63 Cr (35.7%); COGS ₹3.73 Cr (36.6% of net),
+62,P&L,"Compare D2C vs Amazon CM1 % and CM2 %, Sep 2026",P&L > D2C and Amazon > Sep 2026,D2C CM1 43.5% / CM2 9.1% vs Amazon CM1 35.7% / CM2 24.5%,
+63,P&L,"Top 3 D2C products by gross revenue with their CM1 %, Sep 2026",P&L > D2C > Financial View > Sep 2026,"Orthotics Posture Corrector Pro ₹3.54 Cr, CM1 58.9%; Cloud Comfort Arch Support Slippers ₹1.98 Cr, 42.6%; Orthotics Heel Protector ₹1.58 Cr, 44.7%",names = sub-category
+64,P&L,Which D2C products have negative CM2 in Sep 2026?,P&L > D2C > Financial View > Sep 2026,"At least: Ultimate Deep Sleep Pillow (CM2 -1.8%, CM1 25.8%) and Adjustable Wedge Max Cushion (CM2 -1.8%, CM1 28.3%, COGS 54.2%) among the top products; full list from the table",
+65,P&L,Which D2C products are loss-making at CM1 in Sep 2026?,P&L > D2C > product health (review list),"Includes Ultimate Pro Face Mask (CM1 -39.7%, -₹2.24 L, COGS 109.8%) and Ultimate Lap Desk Pillow (CM1 -9.3%, -₹1.83 L)",
+66,P&L,"CM1 % of Orthotics Posture Corrector Pro in D2C, Sep 2026",P&L > D2C > Financial View > Sep 2026,"58.9% (gross ₹3.54 Cr, net ₹2.41 Cr, COGS 22.9%, ROAS 3.16x, CM2 19.5%)",
+67,P&L,D2C COGS for Oct 2026 (month to date),P&L > D2C > Oct 2026,Must say Oct uses Sep 2026 per-SKU cost (carried forward); number as on the P&L page at test time,LIVE
+68,P&L,What is the overall (all channels) P&L for Sep 2026?,—,Says Overall P&L is not available yet; offers per-channel P&L,in progress on dashboard
