@@ -94,7 +94,6 @@ export default function MobileRankedList({ title, noun = 'items', items, itemKey
             ))}
           </div>
         )}
-        {selected && renderSheet?.(selected)}
       </BottomSheet>
     </div>
   )
