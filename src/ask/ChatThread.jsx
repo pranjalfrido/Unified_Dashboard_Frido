@@ -119,7 +119,7 @@ function EmptyState({ onSuggestion }) {
   return (
     <div className="af-empty-state">
       <div className="af-empty-icon"><Lightning size={32} weight="fill" /></div>
-      <div className="af-empty-title">Ask anything with Frido Pulse</div>
+      <div className="af-empty-title">Ask anything with NavAI</div>
       <div className="af-empty-sub">Sales, inventory, logistics, P&L — all in one place</div>
       <div className="af-suggestions">
         {suggestions.map(s => (

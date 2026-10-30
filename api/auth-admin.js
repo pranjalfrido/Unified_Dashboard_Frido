@@ -7,7 +7,7 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// Frido Pulse ('ask') can only be granted or removed by these two (the same list as the app).
+// NavAI ('ask') can only be granted or removed by these two (the same list as the app).
 const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com']
 
 // Every action returns { error } with a 4xx/5xx status when anything fails, so the Profile screens can
@@ -120,9 +120,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, tabs: await setTabs(t.user_id, payload.tabs) })
     }
 
-    // ── Give or remove Frido Pulse (members and admins: being admin doesn't include Pulse) ──
+    // ── Give or remove NavAI (members and admins: being admin doesn't include Pulse) ──
     if (action === 'set_pulse') {
-      if (!canPulse) return fail(403, 'Only Suraj or Pranjal can give or remove Frido Pulse access.')
+      if (!canPulse) return fail(403, 'Only Suraj or Pranjal can give or remove NavAI access.')
       const { t, err, status } = await target(payload.user_id)
       if (err) return fail(status || 400, err)
       const { data: rows, error: selErr } = await admin.from('user_permissions').select('tab').eq('user_id', t.user_id).eq('tab', 'ask')

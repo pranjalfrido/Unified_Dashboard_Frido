@@ -3388,7 +3388,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
     { id: 'documents', label: 'Documents', Icon: FileText },
-    { id: 'ask', label: 'Frido Pulse', Icon: Lightning },
+    { id: 'ask', label: 'NavAI', Icon: Lightning },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -5102,11 +5102,11 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
         subTabs, activeSub, onSub })
     }
-    // Every other screen (Documents, Frido Pulse, the internal tools …): the same header,
+    // Every other screen (Documents, NavAI, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
     const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
     const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
-    const phoneTitles = { ...titles, ask: 'Frido Pulse', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
+    const phoneTitles = { ...titles, ask: 'NavAI', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
     const hasDate = ['intelligence'].includes(page)
     return H({ title: phoneTitles[page] || page,
       onBack: back ? () => { if (back === 'sales') setSalesActiveTab('all'); setPage(back) } : undefined, backLabel: back ? backLabels[back] : undefined,
@@ -20042,7 +20042,7 @@ function AppInner() {
   )
 
   const isAdmin = profile.is_admin === true
-  // Frido Pulse is never auto-granted to admins — only these two emails have it by default.
+  // NavAI is never auto-granted to admins — only these two emails have it by default.
   // Anyone else (admin or member) must be explicitly granted 'ask' in their allowed_tabs.
   const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
   const userEmail = session?.user?.email?.toLowerCase() || '';

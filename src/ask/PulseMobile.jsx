@@ -7,7 +7,7 @@ import { renderMarkdown, splitAnswer } from './markdown.js'
 import { chatTime, displayTitle, groupByDate, QUICK_QUESTIONS } from './pulseShared.js'
 import PulseTable from './PulseTable.jsx'
 
-// Frido Pulse on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html). Layout only:
+// NavAI on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html). Layout only:
 // AskFridoPage owns the conversations and passes the same handlers the laptop view uses.
 //   header   green MobilePageHeader: 🕘 your chats · title · + New. One job per button, no ⋯ menu, and
 //            nothing moves when a chat opens (⋯ used to appear where ✎ was, so a second tap on ✎ hit ⋯).
@@ -50,7 +50,7 @@ function firstName(name) {
 function Who({ model }) {
   return (
     <div className="pm-who">
-      <i aria-hidden="true"><Lightning size={11} weight="fill" /></i>Frido Pulse
+      <i aria-hidden="true"><Lightning size={11} weight="fill" /></i>NavAI
       {model && <span className="pm-badge">{model.includes('opus') ? '⚡ Opus' : '· Sonnet'}</span>}
     </div>
   )
@@ -169,7 +169,7 @@ function Composer({ onSend, disabled, onFocusChange, apiRef }) {
           <ArrowUp size={16} weight="bold" />
         </button>
       </div>
-      <div className="pm-disc">Pulse can make mistakes. Verify key numbers.</div>
+      <div className="pm-disc">NavAI can make mistakes. Verify key numbers.</div>
     </div>
   )
 }
@@ -352,7 +352,7 @@ export default function PulseMobile({ conversations, activeId, active, sending, 
     <div className="topnav m-header" data-page="ask">
       <MobilePageHeader
         lead={<button type="button" className="mph-ib" aria-label="Your chats" onClick={() => setHistOpen(true)}><ClockCounterClockwise size={19} /></button>}
-        title={inChat ? displayTitle(active) : 'Frido Pulse'}
+        title={inChat ? displayTitle(active) : 'NavAI'}
         right={<button type="button" className="pm-new" aria-label="New chat" onClick={startNew}><span><Plus size={14} weight="bold" aria-hidden="true" />New</span></button>}
       />
     </div>

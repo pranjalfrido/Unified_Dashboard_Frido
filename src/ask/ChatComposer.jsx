@@ -48,7 +48,7 @@ export default function ChatComposer({ onSend, disabled }) {
         </button>
       </div>
       <div className="af-disclaimer">
-        Frido Pulse can make mistakes. Verify important numbers.
+        NavAI can make mistakes. Verify key numbers.
       </div>
     </div>
   );

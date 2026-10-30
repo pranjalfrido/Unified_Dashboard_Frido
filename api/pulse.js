@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       .eq('tab', 'ask')
       .limit(1)
     if (grantErr) return res.status(503).json({ error: 'Auth service unavailable.' })
-    if (!grant?.length) return res.status(403).json({ error: "You don't have access to Frido Pulse" })
+    if (!grant?.length) return res.status(403).json({ error: "You don't have access to NavAI" })
   }
 
   // Forward to connector — credentials stay server-side

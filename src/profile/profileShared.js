@@ -46,7 +46,7 @@ export function useActivity(userId) {
   return state
 }
 
-// Frido Pulse can only be granted by these two (unchanged rule).
+// NavAI can only be granted by these two (unchanged rule).
 export const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com']
 
 // Access sections for the phone member page / "My access": one per section of the app, built from

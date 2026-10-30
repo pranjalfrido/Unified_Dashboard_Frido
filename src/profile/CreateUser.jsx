@@ -74,7 +74,7 @@ export function CreateUserForm({ session, onCancel, onCreated, existingUsers = [
             </div>
             {isAdmin && <p style={{ fontSize: 12, color: '#4B534F', marginTop: 6 }}>Admins can see all tabs and manage team members.</p>}
           </div>
-          {isAdmin && <AdminPulseCard callerEmail={session?.user?.email} tabs={tabs} setTabs={setTabs} note="Admins don’t get Pulse automatically. Tap to give it now." />}
+          {isAdmin && <AdminPulseCard callerEmail={session?.user?.email} tabs={tabs} setTabs={setTabs} note="Admins don’t get NavAI automatically. Tap to give it now." />}
           {!isAdmin && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

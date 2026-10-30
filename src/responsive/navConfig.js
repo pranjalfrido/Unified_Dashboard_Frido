@@ -11,7 +11,7 @@ export const NAV_PAGES = [
   { id: 'customer', label: 'Customer', group: 'main', desc: 'Acquisition, retention, support' },
   { id: 'ads', label: 'Ads', group: 'analytics', desc: 'Spend, ROAS and campaigns' },
   { id: 'documents', label: 'Documents', group: 'workspace', desc: 'Ledgers and uploads' },
-  { id: 'ask', label: 'Frido Pulse', group: 'workspace', desc: 'Ask questions about the data' },
+  { id: 'ask', label: 'NavAI', group: 'workspace', desc: 'Ask questions about the data' },
   { id: 'cogs', label: 'COGS Ledger', group: 'tools', desc: 'Cost of goods by SKU and month' },
   { id: 'courier-allocation', label: 'Courier Allocation', group: 'tools', desc: 'Which courier ships where' },
   { id: 'logistics-ledger', label: 'Logistics Bill Ledger', group: 'tools', desc: 'Freight and courier invoices' },
