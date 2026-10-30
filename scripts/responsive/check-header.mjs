@@ -56,7 +56,6 @@ const S = [
   { id: 'purchase-ledger', route: '/purchase-ledger' },
   { id: 'packaging-bom', route: '/packaging-bom' },
   { id: 'courier-allocation', route: '/logistics/courier_allocation' },
-  { id: 'financial-mis', route: '/financial-mis' },
   { id: 'full-list', route: '/sales/all', taps: ['text:/^Show all \\d+ .*→/'], hdr: '.fullscreen-list' },
   { id: 'full-table', route: '/customer-support', taps: ['text:Full heatmap →'], hdr: '.fullscreen-table' },
 ].filter(s => !only || only.split(',').some(o => s.id.startsWith(o)))

@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package, Calculator } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
 import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -3386,9 +3386,6 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'inventory', label: 'Inventory', Icon: Cube },
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
-    // 'financial-mis' (Financial MIS) deliberately has no sidebar entry (2026-10-20) — reached
-    // only via a link in Sales → Overall (AllTab), not a nav item. Its route and permission key
-    // are both still real/grantable; re-adding a row here would just give it a second entry point.
     { id: 'documents', label: 'Documents', Icon: FileText },
     { id: 'ask', label: 'Frido Pulse', Icon: Lightning },
   ]
@@ -3602,7 +3599,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
 const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: Lightning,
-  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package, 'financial-mis': Calculator }
+  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const can = id => {
     if (!allowedTabs) return true
@@ -3614,7 +3611,6 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
     if (id === 'courier-allocation') return hasCostAccess(allowedTabs)
     if (['cogs', 'logistics-ledger', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
-    if (id === 'financial-mis') return allowedTabs.includes('sales:financial-mis')
     return allowedTabs.includes(id)
   }
   const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
@@ -4939,7 +4935,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
 function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', 'financial-mis': 'Financial MIS', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -5102,12 +5098,12 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
         subTabs, activeSub, onSub })
     }
-    // Every other screen (Documents, Frido Pulse, the internal tools, Financial MIS …): the same header,
+    // Every other screen (Documents, Frido Pulse, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
-    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost', 'financial-mis': 'sales' }[page]
+    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
     const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
     const phoneTitles = { ...titles, ask: 'Frido Pulse', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
-    const hasDate = ['financial-mis', 'intelligence'].includes(page)
+    const hasDate = ['intelligence'].includes(page)
     return H({ title: phoneTitles[page] || page,
       onBack: back ? () => { if (back === 'sales') setSalesActiveTab('all'); setPage(back) } : undefined, backLabel: back ? backLabels[back] : undefined,
       date: hasDate && datePill(filters, setFilters, onRefresh, loading) })
@@ -8431,26 +8427,6 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Entry point to the Financial MIS report — a formal, channel-by-channel P&L rollup,
-          distinct from this tab's own exploratory KPIs/tables. Placed here (Sales → Overall)
-          rather than as its own sidebar nav item (2026-10-20) since this is where someone
-          looking at overall sales performance would naturally want to jump into financials;
-          the page/route/permission itself still exists exactly as before, just reached only
-          via this link now, not a dedicated nav entry. Same tool-btn pill pattern PnLPage.jsx
-          already uses for Price Simulator/Breakeven ROAS, for visual consistency.
-          REMOVED FROM UI 2026-10-21 per explicit instruction ("not feasible for now") — the
-          `false &&` below hides the entry point only; FinancialMISPage, its route, its API
-          endpoint and its permission key are all left fully intact to re-enable later. */}
-      {false && setPage && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (
-        <div className="mob-hidden" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={() => setPage('financial-mis')} className="tool-btn">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" />
-            </svg>
-            Financial MIS
-          </button>
-        </div>
-      )}
       {/* Mobile KPI list — same style as Ads tab */}
       <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
         {mobKpis.map(k => (
@@ -20015,301 +19991,10 @@ function AppInner() {
   const hasPulse = PULSE_WHITELIST.includes(userEmail) || (allowedTabs || []).includes('ask');
   // Admins get null (all tabs) but pulse is added/removed based on whitelist
   const effectiveTabs = isAdmin
-    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','sales:financial-mis','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
+    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
     : allowedTabs
 
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
-}
-
-// Financial MIS — finance-facing report at the Category_Finance/SubCategory_Finance grain and the
-// fact table's own Channel_Group (D2C/EBO/Marketplace/Non - EBO), with Return%/Net Revenue derived
-// from a rolling mature-window rate (not summed actuals) for any range touching the last 14 days —
-// see api/financial-mis.js header for the full fallback-chain rationale. Fetched ONLY on demand,
-// when this page mounts — never as part of the Sales tab's own load.
-// Matches AllTab's own palette (Sales -> Overall) rather than an ad-hoc set: C.series leads with
-// the theme accent (green), same as every other chart on that page.
-const MIS_CHGROUP_COLORS = { 'D2C': C.acc, 'Marketplace': C.series[2], 'EBO': C.series[3], 'Non - EBO': C.t3 }
-
-function FinancialMISPage({ rangeStart, rangeEnd, onBack }) {
-  const API = import.meta.env.VITE_API_URL || ''
-  // Uses the same top-bar date range as the rest of Sales — no separate date picker here.
-  const start = rangeStart, end = rangeEnd
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  // Channel-group filter pills removed for now (2026-10-21) — kept pinned to 'All' so the
-  // existing filter plumbing below stays intact for when they're reintroduced.
-  const chgroupFilter = 'All'
-  const [topProductsSort, setTopProductsSort] = useState('gross')
-
-  useEffect(() => {
-    let cancelled = false
-    async function run() {
-      setLoading(true); setError(null)
-      try {
-        const r = await fetch(`${API}/api/financial-mis`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start, end }),
-        })
-        const json = await r.json()
-        if (cancelled) return
-        if (json.error) { setError(json.error); setData(null) }
-        else setData(json)
-      } catch (e) {
-        if (!cancelled) setError(e.message)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [start, end, API])
-
-  const rows = data?.rows || []
-  const filteredRows = chgroupFilter === 'All' ? rows : rows.filter(r => r.channelGroup === chgroupFilter)
-
-  // Uses the API's own totals (includes the reporting-lag top-up for Amazon Vendor
-  // Central/Flipkart/Myntra) rather than summing rows client-side, since rows deliberately
-  // excludes that estimate — see api/financial-mis.js's chgroupTopUp comment.
-  const totals = data?.totals || { grossIncGst: 0, grossExcGst: 0, netRevenueExcGst: 0, units: 0, orders: 0, returnPct: 0, hasEstimate: false }
-
-  // Sub-category (Finance) rollup, not per-SKU — per explicit instruction (2026-10-21).
-  const topProducts = useMemo(() => {
-    const all = data?.topProducts || []
-    const src = chgroupFilter === 'All' ? all : all.filter(r => r.channelGroup === chgroupFilter)
-    const sorted = [...src].sort((a, b) => {
-      if (topProductsSort === 'return') return b.returnPct - a.returnPct
-      if (topProductsSort === 'net') return b.netRevenueExcGst - a.netRevenueExcGst
-      return b.grossIncGst - a.grossIncGst
-    })
-    return sorted.slice(0, 20)
-  }, [data, chgroupFilter, topProductsSort])
-
-  const trendData = (data?.dailyTrend || []).map(d => ({ ...d, returnPctNum: d.returnPct * 100 }))
-
-  // Single CSV covering all three sections (Channel Group, Top Products, Geography), stacked
-  // with a blank row + section header between each — exportCSV() itself only handles one flat
-  // table shape at a time (it reads columns from rows[0]), so this builds the multi-section CSV
-  // text directly rather than forcing all three into one shared column set.
-  const handleExport = () => {
-    if (!data) return
-    const esc = v => JSON.stringify(v ?? '')
-    const section = (title, cols, rowsArr) => [
-      title, cols.join(','),
-      ...rowsArr.map(r => cols.map(c => esc(r[c])).join(',')),
-      '',
-    ]
-    const lines = [
-      `Financial MIS — ${start} to ${end}`,
-      '',
-      ...section('Channel Group Wise', ['Channel Group', 'Orders', 'Units', 'Gross Rev (Inc GST)', 'Gross Rev (Exc GST)', 'Net Revenue (Exc GST)', 'Return %'],
-        data.channelGroups.map(g => ({
-          'Channel Group': g.channelGroup, 'Orders': g.orders, 'Units': g.units,
-          'Gross Rev (Inc GST)': g.grossIncGst.toFixed(2), 'Gross Rev (Exc GST)': g.grossExcGst.toFixed(2),
-          'Net Revenue (Exc GST)': g.netRevenueExcGst.toFixed(2), 'Return %': (g.returnPct * 100).toFixed(1),
-        }))),
-      ...section('Top Products (Sub-category wise)', ['Category (Finance)', 'Sub-category (Finance)', 'Units', 'Gross Rev (Inc GST)', 'Net Revenue (Exc GST)', 'Return %'],
-        (data.topProducts || []).map(r => ({
-          'Category (Finance)': r.category, 'Sub-category (Finance)': r.subCategory, 'Units': r.units,
-          'Gross Rev (Inc GST)': r.grossIncGst.toFixed(2), 'Net Revenue (Exc GST)': r.netRevenueExcGst.toFixed(2),
-          'Return %': (r.returnPct * 100).toFixed(1),
-        }))),
-      ...section('Geography — State Detail', ['State', 'Orders', 'Units', 'Gross Rev (Inc GST)', 'Gross Rev (Exc GST)'],
-        (data.geo?.state || []).map(s => ({
-          'State': s.state, 'Orders': s.orders, 'Units': s.units,
-          'Gross Rev (Inc GST)': parseFloat(s.gross_inc_gst).toFixed(2), 'Gross Rev (Exc GST)': parseFloat(s.gross_exc_gst).toFixed(2),
-        }))),
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = `financial_mis_${start}_${end}.csv`; a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          {onBack && (
-            <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.card, border: `1.5px solid ${C.acc}`, color: C.acc, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '6px 12px', borderRadius: 20, marginBottom: 10 }}>
-              ← Back to Sales
-            </button>
-          )}
-          <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Financial MIS</div>
-          <div style={{ fontSize: 12, color: C.t3 }}>Finance-grain revenue &amp; return view — by channel group, product, and geography</div>
-        </div>
-        {data && (
-          <button onClick={handleExport}
-            style={{ fontSize: 11.5, fontWeight: 400, padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-            Export CSV
-          </button>
-        )}
-      </div>
-
-      {error && <div style={{ color: '#ef4444', fontSize: 13, padding: 12, background: 'rgba(239,68,68,0.08)', borderRadius: 8 }}>Error: {error}</div>}
-      {loading && <div style={{ color: C.t3, fontSize: 13 }}>Loading Financial MIS…</div>}
-
-      {data && !loading && (
-        <>
-          {data.meta?.needsMatureRate && (
-            <div style={{ fontSize: 11.5, color: C.t3, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
-              Selected range touches the last 14 days — Return% / Net Revenue for recent, not-yet-matured orders uses each SKU's rolling {data.meta.rollingStart} → {data.meta.rollingEnd} return rate (falling back to Sub-category → Category average when that SKU's own rate isn't reliable yet), not the raw live rate.
-            </div>
-          )}
-
-          {/* KPI cards — same sales-kpi-grid used across the rest of the dashboard */}
-          {totals.hasEstimate && (
-            <div style={{ fontSize: 11, color: C.t3 }}>
-              ⏳ Includes a 7-day rolling-average top-up for Amazon Vendor Central / Flipkart / Myntra days that haven't posted yet.
-            </div>
-          )}
-          <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
-            <KPICard label="Gross Revenue (Inc GST)" value={fmt(totals.grossIncGst)} />
-            <KPICard label="Gross Revenue (Exc GST)" value={fmt(totals.grossExcGst)} />
-            <KPICard label="Net Revenue (Exc GST)" value={fmt(totals.netRevenueExcGst)} />
-            <KPICard label="Overall Return%" value={`${(totals.returnPct * 100).toFixed(1)}%`} accent={totals.returnPct > 0.2 ? '#7A1A1A' : undefined} />
-            <KPICard label="Orders" value={fmtN(totals.orders)} />
-            <KPICard label="Units" value={fmtN(totals.units)} />
-          </div>
-
-          {/* Trend chart — same visual language as AllTab's Revenue & Returns Trend / Returns & Pickup % charts */}
-          <Card title="Revenue Trend">
-            {trendData.some(d => d.hasEstimate) && (
-              <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>
-                ⏳ Some recent days include channels (Amazon Vendor Central, Flipkart, Myntra) whose latest data hasn't posted yet — those gaps are filled with that channel's own 7-day rolling average.
-              </div>
-            )}
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={trendData} margin={{ top: 10, right: 40, left: 0, bottom: 10 }}>
-                <defs>
-                  <linearGradient id="misGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.2} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} strokeOpacity={0.5} />
-                <XAxis dataKey="date" tick={{ fill: C.t3, fontSize: 10 }} tickFormatter={d => d?.slice(5)} />
-                <YAxis yAxisId="rev" tick={{ fill: C.t1, fontSize: 10 }} tickFormatter={v => fmtBig(v)} domain={[0, 'dataMax']} />
-                <YAxis yAxisId="pct" orientation="right" tick={{ fill: C.t3, fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}%`} domain={[0, dataMax => Math.ceil((dataMax + 1) / 5) * 5]} ticks={(() => { const maxPct = Math.max(5, ...trendData.map(d => d.returnPctNum || 0)); const top = Math.ceil((maxPct + 1) / 5) * 5; const out = []; for (let v = 0; v <= top; v += 5) out.push(v); return out })()} />
-                <Tooltip formatter={(v, name) => name === 'Return%' ? [`${v.toFixed(1)}%`, name] : [fmtBig(v), name]} />
-                <Legend {...chartLegendProps({ fontSize: 11 })} />
-                <Area yAxisId="rev" type="monotone" dataKey="grossIncGst" name="Gross Revenue" stroke={C.acc} fill="url(#misGrossGrad)" strokeWidth={2} dot={false} />
-                <Line yAxisId="rev" type="monotone" dataKey="netRevenueExcGst" name="Net Revenue" stroke={C.acd} strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                <Line yAxisId="pct" type="monotone" dataKey="returnPctNum" name="Return%" stroke={C.red.tx} strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </Card>
-
-
-          {/* Channel Group table */}
-          <Card title="Channel Group Wise">
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                <thead>
-                  <tr style={{ color: C.t3, textAlign: 'right' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Channel Group</th>
-                    <th style={{ padding: '6px 10px' }}>Orders</th>
-                    <th style={{ padding: '6px 10px' }}>Units</th>
-                    <th style={{ padding: '6px 10px' }}>Gross Rev (Inc GST)</th>
-                    <th style={{ padding: '6px 10px' }}>Gross Rev (Exc GST)</th>
-                    <th style={{ padding: '6px 10px' }}>Net Revenue (Exc GST)</th>
-                    <th style={{ padding: '6px 10px' }}>Return%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.channelGroups || []).map(g => (
-                    <tr key={g.channelGroup} style={{ borderTop: `1px solid ${C.border}`, textAlign: 'right' }}>
-                      <td style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 600, color: C.t1 }}>
-                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: MIS_CHGROUP_COLORS[g.channelGroup] || C.acc, marginRight: 6 }} />
-                        {g.channelGroup}
-                        {g.estimatedGrossIncGst > 0 && <span title="Includes a 7-day rolling-average top-up for channels whose latest data hasn't posted yet" style={{ marginLeft: 6, color: C.t3, fontWeight: 400, fontSize: 11 }}>⏳</span>}
-                      </td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(g.orders)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(g.units)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(g.grossIncGst)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(g.grossExcGst)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{fmt(g.netRevenueExcGst)}</td>
-                      <td style={{ padding: '6px 10px', color: g.returnPct > 0.2 ? C.red.tx : C.t2 }}>{(g.returnPct * 100).toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Top Products */}
-          <Card title="Top Products" action={
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[['gross', 'Gross Rev'], ['net', 'Net Rev'], ['return', 'Return%']].map(([k, label]) => (
-                <button key={k} onClick={() => setTopProductsSort(k)} className="tool-btn"
-                  style={{ fontSize: 11, padding: '4px 10px', background: topProductsSort === k ? C.acc : C.bg2, color: topProductsSort === k ? '#fff' : C.t2 }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          }>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                <thead>
-                  <tr style={{ color: C.t3, textAlign: 'right' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Category (Finance)</th>
-                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Sub-category (Finance)</th>
-                    <th style={{ padding: '6px 10px' }}>Units</th>
-                    <th style={{ padding: '6px 10px' }}>Gross Rev (Inc GST)</th>
-                    <th style={{ padding: '6px 10px' }}>Net Revenue (Exc GST)</th>
-                    <th style={{ padding: '6px 10px' }}>Return%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProducts.map((r, i) => (
-                    <tr key={r.channelGroup + r.category + r.subCategory + i} style={{ borderTop: `1px solid ${C.border}`, textAlign: 'right' }}>
-                      <td style={{ textAlign: 'left', padding: '6px 10px', color: C.t3 }}>{r.category}</td>
-                      <td style={{ textAlign: 'left', padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{r.subCategory}</td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmtN(r.units)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t2 }}>{fmt(r.grossIncGst)}</td>
-                      <td style={{ padding: '6px 10px', color: C.t1, fontWeight: 600 }}>{fmt(r.netRevenueExcGst)}</td>
-                      <td style={{ padding: '6px 10px', color: r.returnPct > 0.2 ? C.red.tx : C.t2 }}>{(r.returnPct * 100).toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                  {topProducts.length === 0 && <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center', color: C.t3 }}>No data for this selection.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Geography — same GeoToggleDonutCard + ShopifyGeoRichTable components AllTab uses, no custom bar chart */}
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <GeoToggleDonutCard
-              regionRows={(data.geo?.regionTier || []).reduce((acc, r) => {
-                const ex = acc.find(x => x.region === r.Region)
-                const rev = parseFloat(r.gross_inc_gst) || 0
-                if (ex) { ex.rev += rev; ex.orders += r.orders || 0 } else acc.push({ region: r.Region, rev, orders: r.orders || 0 })
-                return acc
-              }, [])}
-              tierRows={(data.geo?.regionTier || []).reduce((acc, r) => {
-                const tier = r.Tier_Label || r.City_Tier
-                const ex = acc.find(x => x.tier === tier)
-                const rev = parseFloat(r.gross_inc_gst) || 0
-                if (ex) { ex.rev += rev; ex.orders += r.orders || 0 } else acc.push({ tier, rev, orders: r.orders || 0 })
-                return acc
-              }, [])}
-            />
-            <ShopifyGeoRichTable
-              title="Top States"
-              firstKey="state" firstLabel="State"
-              formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v}
-              showAOV={false} showRTO={false} showASP={true}
-              rows={(() => {
-                const list = data.geo?.state || []
-                const total = list.reduce((s, r) => s + (parseFloat(r.gross_inc_gst) || 0), 0)
-                return list.map(r => {
-                  const rev = parseFloat(r.gross_inc_gst) || 0
-                  return { state: r.state, rev, orders: r.orders || 0, asp: r.units > 0 ? rev / r.units : 0, sharePct: total > 0 ? rev / total * 100 : 0, mom: null }
-                })
-              })()}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  )
 }
 
 function DocumentsPage({ setPage }) {
@@ -20578,11 +20263,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
       (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
-      // Financial MIS has no sidebar nav entry of its own — it's reached only via the link in
-      // Sales -> Overall, and its real permission key is nested under Sales as
-      // 'sales:financial-mis' (not a bare 'financial-mis' key), so the generic
-      // allowedTabs.includes(page) check below would always fail for it.
-      page === 'financial-mis' ? (!allowedTabs || allowedTabs.includes('sales:financial-mis')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -21171,7 +20851,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <div className="app-main">
         {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'financial-mis' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -21238,9 +20918,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerSupportPage dateRange={csRange} refreshTick={csRefresh} onExportReady={setCsExport} onNavigate={dest => (dest === 'returns' ? goTo('sales', 'shopify', 'return_analysis') : setPage('logistics'))} />
             </div>
-          )}
-          {page === 'financial-mis' && (!allowedTabs || allowedTabs.includes('sales:financial-mis')) && (
-            <FinancialMISPage rangeStart={filters.start} rangeEnd={filters.end} onBack={() => goTo('sales', 'all')} />
           )}
           {page === 'documents' && (
             <div className="page-scroll">
