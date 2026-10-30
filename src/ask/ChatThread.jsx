@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lightning, CheckCircle, Code } from '@phosphor-icons/react';
+import { CheckCircle, Code } from '@phosphor-icons/react';
+import NavAIIcon from './NavAIIcon.jsx';
 import { SUGGESTIONS } from './pulseShared.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -35,7 +36,7 @@ function AssistantMessage({ msg }) {
   return (
     <div className="af-msg af-msg-assistant">
       <div className="af-assistant-icon">
-        <Lightning size={14} weight="fill" />
+        <NavAIIcon size={16} />
       </div>
       <div className="af-assistant-body">
         {msg.thinking ? (
@@ -98,7 +99,7 @@ function ClarifyMessage({ msg, onChoice }) {
   return (
     <div className="af-msg af-msg-assistant">
       <div className="af-assistant-icon">
-        <Lightning size={14} weight="fill" />
+        <NavAIIcon size={16} />
       </div>
       <div className="af-assistant-body">
         <div className="af-answer">{msg.question}</div>
@@ -118,7 +119,7 @@ function EmptyState({ onSuggestion }) {
   const suggestions = SUGGESTIONS;
   return (
     <div className="af-empty-state">
-      <div className="af-empty-icon"><Lightning size={32} weight="fill" /></div>
+      <div className="af-empty-icon"><NavAIIcon size={32} /></div>
       <div className="af-empty-title">Ask anything with NavAI</div>
       <div className="af-empty-sub">Sales, inventory, logistics, P&L — all in one place</div>
       <div className="af-suggestions">

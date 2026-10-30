@@ -2,7 +2,8 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
+import NavAIIcon from './ask/NavAIIcon.jsx'
 import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -3388,7 +3389,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
     { id: 'documents', label: 'Documents', Icon: FileText },
-    { id: 'ask', label: 'NavAI', Icon: Lightning },
+    { id: 'ask', label: 'NavAI', Icon: NavAIIcon },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -3599,7 +3600,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
-const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: Lightning,
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon,
   cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const can = id => {

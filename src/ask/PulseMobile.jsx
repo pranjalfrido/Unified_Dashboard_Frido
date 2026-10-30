@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ClockCounterClockwise, Lightning, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle } from '@phosphor-icons/react'
+import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle } from '@phosphor-icons/react'
+import NavAIIcon from './NavAIIcon.jsx'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { renderMarkdown, splitAnswer } from './markdown.js'
@@ -50,7 +51,7 @@ function firstName(name) {
 function Who({ model }) {
   return (
     <div className="pm-who">
-      <i aria-hidden="true"><Lightning size={11} weight="fill" /></i>NavAI
+      <i aria-hidden="true"><NavAIIcon size={12} /></i>NavAI
       {model && <span className="pm-badge">{model.includes('opus') ? '⚡ Opus' : '· Sonnet'}</span>}
     </div>
   )
