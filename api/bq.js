@@ -115,7 +115,7 @@ const SLOW_QUERY_KEYS = new Set([
   'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
   'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
   'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','shComponentRateMature','amzSCReturnRateMature','amzSCComponentRateMature','fkReturnRateMature','fkComponentRateMature','fkDailySKUComponents','mnReturnRateMature','mnComponentRateMature','mnDailySKUComponents','offlineCreditNoteRateMature','offComponentRateMature','offDailySKUComponents','eboReturnRateMature','eboComponentRateMature','eboDailySKUComponents','crComponentRateMature','crDailySKUComponents','fcComponentRateMature','fcDailySKUComponents','shStateComponentRateMature','shDailyStateComponents','shCityComponentRateMature','shDailyCityComponents','amzVCComponentRateMature','amzVCDailySKUComponents','amzSCStateComponentRateMature','amzSCDailyStateComponents','amzSCCityComponentRateMature','amzSCDailyCityComponents','fkStateComponentRateMature','fkDailyStateComponents','fkCityComponentRateMature','fkDailyCityComponents2','mnStateComponentRateMature','mnDailyStateComponents','mnCityComponentRateMature','mnDailyCityComponents','eboStateComponentRateMature','eboDailyStateComponents','eboCityComponentRateMature','eboDailyCityComponents','overallReturnRateMature','allTabReturnRateMature',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','shComponentRateMature','amzSCReturnRateMature','amzSCComponentRateMature','fkReturnRateMature','fkComponentRateMature','fkDailySKUComponents','mnReturnRateMature','mnComponentRateMature','mnDailySKUComponents','offlineCreditNoteRateMature','offComponentRateMature','offDailySKUComponents','eboReturnRateMature','eboComponentRateMature','eboDailySKUComponents','crComponentRateMature','crDailySKUComponents','fcComponentRateMature','fcDailySKUComponents','shStateComponentRateMature','shDailyStateComponents','shCityComponentRateMature','shDailyCityComponents','amzVCComponentRateMature','amzVCDailySKUComponents','amzSCStateComponentRateMature','amzSCDailyStateComponents','amzSCCityComponentRateMature','amzSCDailyCityComponents','fkStateComponentRateMature','fkDailyStateComponents','fkCityComponentRateMature','fkDailyCityComponents2','mnStateComponentRateMature','mnDailyStateComponents','mnCityComponentRateMature','mnDailyCityComponents','eboStateComponentRateMature','eboDailyStateComponents','eboCityComponentRateMature','eboDailyCityComponents','overallReturnRateMature','allTabReturnRateMature',
   'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
   'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
   'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
@@ -744,41 +744,9 @@ export default async function handler(req, res) {
       SUM(gross_inc_gst) AS gross_inc_gst
     FROM lined
     GROUP BY sku, category, sub_channel, order_status, weight_slab`,
-    // Same (sku, order_status, weight_slab) cost-line grain as shSkuCosts above, with OrderDate
-    // added to the GROUP BY — real day-wise weight-slab SnD, same standard as Amazon VC's
-    // dailyPnLBySku (fresh per-day computation, not a whole-range rate applied across days).
-    // Feeds PnLPage.jsx's shDailyPnL construction for the D2C trend chart's day-wise SnD%/CM1%.
-    shDailySkuCosts: `WITH q AS (${base}),
-    lined AS (
-      SELECT
-        CAST(OrderDate AS STRING) AS date,
-        MasterSKU AS sku,
-        SubChannel AS sub_channel,
-        COALESCE(Order_Status, 'Delivered') AS order_status,
-        ItemQty AS qty,
-        SellingPrice_Inc_GST AS gross_inc_gst,
-        CASE
-          WHEN Weight_gms IS NULL THEN NULL
-          WHEN (Weight_gms * ItemQty) <= 500 THEN 500
-          ELSE CAST(CEIL((Weight_gms * ItemQty) / 1000.0) * 1000 AS INT64)
-        END AS weight_slab
-      FROM q
-      WHERE Channel = 'Shopify'
-        AND SubChannel NOT IN ('Shopify International', 'Retail Store')
-        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
-    )
-    SELECT
-      date,
-      sku,
-      sub_channel,
-      order_status,
-      weight_slab,
-      COUNT(*) AS line_count,
-      SUM(qty) AS total_qty,
-      SUM(gross_inc_gst) AS gross_inc_gst
-    FROM lined
-    GROUP BY date, sku, sub_channel, order_status, weight_slab
-    ORDER BY date`,
+    // shDailySkuCosts removed 2026-10-30 (staged loading): it fed only shopify.dailySkuCostRows, which
+    // nothing in src/ ever read (grep -rn dailySkuCostRows src/ → 0 matches), and was the single most
+    // expensive query in this file (YTD: 302k rows / ~50MB / ~15s).
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     // Day-wise, State-wise component revenue + rolling-window rate, same resolved-rate engine as
     // the SKU-grain queries above (confirmed 2026-10-22) — Top States' Return% was still using the
@@ -3056,18 +3024,6 @@ export default async function handler(req, res) {
         // figure above, which is a courier-billing SHIPMENT weight (real weight × units in that
         // order), not a per-unit value.
         skuWeightGm: Object.fromEntries((r.shSKUWeight || []).map(x => [x.sku, parseFloat(x.weight_gms) || null])),
-        // Same shape as skuCostRows above, plus `date` — day-wise weight-slab cost lines for the
-        // PnL trend chart's real per-day SnD computation (see shDailySkuCosts query above).
-        dailySkuCostRows: (r.shDailySkuCosts || []).map(x => ({
-          date: x.date,
-          sku: x.sku,
-          subChannel: (x.sub_channel || '').toLowerCase(),
-          orderStatus: x.order_status || 'Delivered',
-          weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
-          lineCount: parseInt(x.line_count) || 0,
-          totalQty: parseInt(x.total_qty) || 0,
-          grossIncGst: parseFloat(x.gross_inc_gst) || 0,
-        })),
         // Category/Product/SKU rev breakdown split by SubChannel (MyFrido/Mobility/Shopify
         // International/...) — feeds the PnL tab's D2C All/MyFrido/Mobility toggle.
         skuMapBySubChannel: (() => { const m = {}; (r.shSKU || []).forEach(x => { const subCh = x.SubChannel||'Unknown', cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[subCh]) m[subCh] = {}; if (!m[subCh][cat]) m[subCh][cat] = {}; if (!m[subCh][cat][sc]) m[subCh][cat][sc] = {}; m[subCh][cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
@@ -5105,7 +5061,7 @@ export default async function handler(req, res) {
       fastPayload.prevAdsTotals = fastPayload.prevAdsTotals ?? []
       // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
       const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
-        'dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap',
+        'skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap',
         'cityRows','cityPrevMap','cityTotal','returnReasons',
         'catChannel','subCatChannel','skuChannel','sndBySku','dailyPnLBySku','dailyCat',
         'catChannelPrev','subCatChannelPrev','skuChannelPrev','returnCat','returnSubCat','returnSKU',
@@ -5162,7 +5118,7 @@ export default async function handler(req, res) {
         pnlAdSpendMap: payload.pnlAdSpendMap,
         pnlRawAdSpend: payload.pnlRawAdSpend,
         masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
+        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
         _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
         _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
         _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
