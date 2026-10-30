@@ -108,8 +108,11 @@ const redIf = (key, v) => (isRed(key, v) ? M.down : undefined)
 // ── Top products · high returns: the desktop ranked list (sub-category level, same API order) ──
 function TopProductsCard({ data, basis, paymentType, setPaymentType, period }) {
   const opts = [{ id: '', label: 'All' }, ...(data.paymentTypeTable || []).map(p => p.paymentType).filter(Boolean).map(p => ({ id: p, label: p }))]
+  // The sheet follows the list's payment-type chip: the split and the SKUs come from the same
+  // filtered request as the list (topProductsTypes / topProductsSkus), not the page-wide tables.
   const byProduct = {}
-  ;(data.categoryTable || []).forEach(r => { byProduct[`${r.category}::${r.subCategory}`] = r })
+  ;(data.topProductsTypes || []).forEach(r => { byProduct[`${r.category}::${r.subCategory}`] = r })
+  const payLabel = paymentType || 'all payment types'
   const sorts = [
     { key: 'rev', label: '₹ lost', value: r => r.returnRevLost, format: r => fmt(r.returnRevLost) },
     { key: 'qty', label: 'Units lost', value: r => r.returnQtyLost, format: r => `${fmtN(r.returnQtyLost)} units` },
@@ -124,13 +127,23 @@ function TopProductsCard({ data, basis, paymentType, setPaymentType, period }) {
         secondary={(r, k) => (k === 'qty' ? fmt(r.returnRevLost) : `${fmtN(r.returnQtyLost)} units`)}
         details={[{ label: '₹ lost', value: r => fmt(r.returnRevLost) }, { label: 'Units lost', value: r => fmtN(r.returnQtyLost) }, { label: 'Gross revenue', value: r => fmt(r.grossRev) }, { label: '% of gross rev', value: r => p1(r.returnPct) }]}
         renderSheet={r => {
-          const c = byProduct[`${r.category}::${r.subCategory}`]
-          if (!c) return null
+          const key = `${r.category}::${r.subCategory}`
+          const c = byProduct[key]
+          const skus = (data.topProductsSkus?.[key] || []).filter(s => s.grossRev > 0).sort((a, b) => b.returnRevLost - a.returnRevLost)
+          const mx = Math.max(...skus.map(s => s.returnPct), 0) || 1
           return (
             <>
-              <SheetHeading>By type · all payment types</SheetHeading>
-              <KV items={[['cancel', 'Cancel'], ['rto', 'RTO'], ['cir', 'CIR'], ['exchange', 'Exchange']].map(([id, label]) => ({
-                label: `${label} %`, value: `${p1(c[`${id}Pct`])} · ${fmt(c[`${id}Rev`])}`, color: redIf(`${id}Pct`, c[`${id}Pct`]) }))} />
+              {c && <>
+                <SheetHeading>By type · {payLabel}</SheetHeading>
+                <KV items={[['cancel', 'Cancel'], ['rto', 'RTO'], ['cir', 'CIR'], ['exchange', 'Exchange']].map(([id, label]) => ({
+                  label: `${label} %`, value: `${p1(c[`${id}Pct`])} · ${fmt(c[`${id}Rev`])}`, color: redIf(`${id}Pct`, c[`${id}Pct`]) }))} />
+              </>}
+              {skus.length > 0 && <>
+                <SheetHeading>SKUs · % of gross rev</SheetHeading>
+                {skus.map((s, i) => (
+                  <CompactRankRow key={s.sku} name={s.sku} value={p1(s.returnPct)} pct={fmt(s.returnRevLost)} barPct={(s.returnPct / mx) * 100} last={i === skus.length - 1} />
+                ))}
+              </>}
             </>
           )
         }} />

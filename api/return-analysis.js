@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures,
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 9 // 7: cancelByBucket counts each cancelled order once; 8: exchangeReasons counts orders; 9: reasonsBySubCategory (2026-10-26)
+const CACHE_VERSION = 10 // 7: cancelByBucket counts each cancelled order once; 8: exchangeReasons counts orders; 9: reasonsBySubCategory (2026-10-26); 10: topProductsTypes/topProductsSkus (2026-10-30)
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -181,6 +181,30 @@ export default async function handler(req, res) {
         GROUP BY category, sub_category
         HAVING lost_rev > 0
         ORDER BY lost_rev DESC`,
+
+      // The product sheet of section 3 (phone): the same list query one level down (per SKU), and
+      // the Cancel / RTO / CIR / Exchange split — both under section 3's own payment-type dropdown,
+      // so the sheet matches the row that was tapped. With "All" the split is byCategorySubCategory.
+      byProductSkuReturns: `WITH q AS (${base})
+        SELECT Category AS category, SubCategory AS sub_category, MasterSKU AS sku,
+          SUM(SellingPrice_Inc_GST) AS gross_rev,
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN SellingPrice_Inc_GST ELSE 0 END) AS lost_rev,
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN ItemQty ELSE 0 END) AS lost_qty
+        FROM q WHERE ${shWhere}${topProductsPaymentTypeClause} AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+        GROUP BY category, sub_category, sku`,
+      ...(topProductsPaymentType ? {
+        byProductTypes: `WITH q AS (${base})
+          SELECT Category AS category, SubCategory AS sub_category,
+            ${netRevenueSelectFragment('q')},
+            SUM(ItemQty) AS qty,
+            SUM(CASE WHEN Order_Status = 'CIR' THEN ItemQty ELSE 0 END) AS cir_qty,
+            SUM(CASE WHEN Order_Status = 'RTO' THEN ItemQty ELSE 0 END) AS rto_qty,
+            SUM(CASE WHEN Order_Status = 'Return' THEN ItemQty ELSE 0 END) AS return_qty,
+            SUM(CASE WHEN Order_Status = 'Cancelled' THEN ItemQty ELSE 0 END) AS cancel_qty,
+            SUM(CASE WHEN Order_Status = 'Exchange' THEN ItemQty ELSE 0 END) AS exch_qty
+          FROM q WHERE ${shWhere}${topProductsPaymentTypeClause}
+          GROUP BY category, sub_category`,
+      } : {}),
 
       // Return reasons breakdown — Customer_Return_Reason/Customer_Sub_Reason live on the raw
       // fact table but aren't projected through buildQuery()'s `q` CTE, so (same as api/bq.js's
@@ -434,6 +458,14 @@ export default async function handler(req, res) {
         returnPct: parseFloat(r.gross_rev) > 0 ? (parseFloat(r.lost_rev) / parseFloat(r.gross_rev) * 100) : 0,
       })),
       categoryTable: (results.byCategorySubCategory || []).map(r => ({ category: r.category || 'Others', subCategory: r.sub_category || 'Others', ...withPct(r) })),
+      // Section 3's product sheet, under its payment-type dropdown (see byProductSkuReturns).
+      topProductsTypes: ((topProductsPaymentType ? results.byProductTypes : results.byCategorySubCategory) || []).map(r => ({ category: r.category || 'Others', subCategory: r.sub_category || 'Others', ...withPct(r) })),
+      topProductsSkus: (results.byProductSkuReturns || []).reduce((acc, r) => {
+        const key = `${r.category || 'Others'}::${r.sub_category || 'Others'}`
+        const gross = parseFloat(r.gross_rev) || 0, lost = parseFloat(r.lost_rev) || 0
+        ;(acc[key] || (acc[key] = [])).push({ sku: r.sku, grossRev: gross, returnRevLost: lost, returnQtyLost: parseFloat(r.lost_qty) || 0, returnPct: gross > 0 ? lost / gross * 100 : 0 })
+        return acc
+      }, {}),
       // Keyed 'Category::SubCategory' so the frontend can expand a category row to its SKU
       // variants without a second round trip.
       skuVariants: (results.bySkuVariant || []).reduce((acc, r) => {
