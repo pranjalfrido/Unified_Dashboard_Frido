@@ -1,4 +1,4 @@
-import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature, requestTimer } from './_bq.js'
 import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
 import { getStoreIdMap, getStoreCosts, getCostForMonth, storeNameFor } from './_store_pnl.js'
@@ -184,6 +184,7 @@ function setInCache(key, data) {
 }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('bq')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -199,7 +200,8 @@ export default async function handler(req, res) {
     if (!isDate(from) || !isDate(to)) return res.status(400).json({ error: 'Bad from / to' })
     const ck = `adsMonthly|${from}|${to}`
     const hit = getFromCache(ck)
-    if (hit) return res.json(hit)
+    if (hit) { timer.markCacheHit(ck); timer.finish(res); return res.json(hit) }
+    timer.markCacheMiss(ck)
     try {
       const bqm = getBQ()
       const [[spendRows], [salesRows]] = await Promise.all([
@@ -212,8 +214,10 @@ export default async function handler(req, res) {
         sales: salesRows.map(x => ({ month: x.month, channel: x.Channel === 'Retail' ? 'EBO' : x.Channel, excRev: Number(x.exc_rev) || 0 })),
       }
       setInCache(ck, out)
+      timer.finish(res)
       return res.json(out)
     } catch (e) {
+      timer.finish(res)
       return res.status(500).json({ error: String(e.message || e).slice(0, 300) })
     }
   }
@@ -224,9 +228,12 @@ export default async function handler(req, res) {
   const cacheKey = getCacheKey(req.body)
   const cached = getFromCache(cacheKey)
   if (cached) {
+    timer.markCacheHit(cacheKey)
     res.setHeader('X-Cache', 'HIT')
+    timer.finish(res)
     return res.json(cached)
   }
+  timer.markCacheMiss(cacheKey)
 
   const bq = getBQ()
 
@@ -1726,8 +1733,10 @@ export default async function handler(req, res) {
 
   try {
     // Bounded-concurrency + retry-with-backoff runner (api/_bq.js) — replaces the old
-    // Object.entries(queries).map(...) + Promise.all, which fired all ~150 of this request's
-    // queries as truly concurrent BigQuery jobs and regularly tripped BigQuery's per-user
+    // Object.entries(queries).map(...) + Promise.all, which fired all 317 of this request's
+    // queries (verified 2026-10-29 by direct instrumentation — this comment previously said
+    // ~150, stale after the file grew) as truly concurrent BigQuery jobs and regularly tripped
+    // BigQuery's per-user
     // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
     // silently keep showing stale data from the last successful fetch).
     // Phase filtering: fast phase skips slow detail queries, slow phase skips fast queries
@@ -1743,7 +1752,7 @@ export default async function handler(req, res) {
     // payload — the store drill-down just renders with "—" costs instead, same convention as
     // every other missing-cost-data case on this page.
     const [results, storeIdMap, storeCosts] = await Promise.all([
-      runQueriesLimited(bq, filteredQueries),
+      runQueriesLimited(bq, filteredQueries, timer),
       getStoreIdMap().catch(e => { console.warn('getStoreIdMap failed:', e.message); return {} }),
       getStoreCosts().catch(e => { console.warn('getStoreCosts failed:', e.message); return {} }),
     ])
@@ -5116,6 +5125,7 @@ export default async function handler(req, res) {
       }
       setInCache(cacheKey, fastPayload)
       res.setHeader('X-Cache', 'MISS')
+      timer.finish(res)
       return res.json(fastPayload)
     }
 
@@ -5204,11 +5214,13 @@ export default async function handler(req, res) {
       for (const k of Object.keys(slowPayload)) if (slowPayload[k] === undefined) delete slowPayload[k]
       setInCache(cacheKey, slowPayload)
       res.setHeader('X-Cache', 'MISS')
+      timer.finish(res)
       return res.json(slowPayload)
     }
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
     res.json(payload)
 
     // Pre-warm D2C sub-channel cache entries in the background, AFTER the response is sent, so
@@ -5231,6 +5243,7 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('[api/bq]', err.message)
+    timer.finish(res)
     res.status(500).json({ error: err.message })
   }
 }

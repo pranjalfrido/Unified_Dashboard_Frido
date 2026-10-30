@@ -17,7 +17,6 @@ export const NAV_PAGES = [
   { id: 'logistics-ledger', label: 'Logistics Bill Ledger', group: 'tools', desc: 'Freight and courier invoices' },
   { id: 'purchase-ledger', label: 'Purchase Ledger', group: 'tools', desc: 'Domestic, import and packaging purchases' },
   { id: 'packaging-bom', label: 'Packaging BOM', group: 'tools', desc: 'Packaging per product' },
-  { id: 'financial-mis', label: 'Financial MIS', group: 'tools', desc: 'Monthly financial summary' },
 ]
 
 // Search words → page (besides the page names themselves).
@@ -28,7 +27,7 @@ export const NAV_KEYWORDS = {
   margin: 'pnl', cm1: 'pnl', cm2: 'pnl', profit: 'pnl', gm: 'pnl',
   stock: 'inventory', doi: 'inventory', allocation: 'inventory', warehouse: 'inventory',
   return: 'sales', revenue: 'sales', orders: 'sales', channel: 'sales',
-  cogs: 'cogs', cost: 'cogs', invoice: 'logistics-ledger', freight: 'logistics-ledger', purchase: 'purchase-ledger', packaging: 'packaging-bom', mis: 'financial-mis',
+  cogs: 'cogs', cost: 'cogs', invoice: 'logistics-ledger', freight: 'logistics-ledger', purchase: 'purchase-ledger', packaging: 'packaging-bom',
 }
 
 export const DEFAULT_DOCK = ['overview', 'sales', 'pnl', 'inventory', 'logistics', 'customer']

@@ -1,4 +1,4 @@
-import { getBQ } from './_bq.js'
+import { getBQ, requestTimer } from './_bq.js'
 import { buildFacilityMaps, norm, normSku, cleanLabel, computeRowInventory, isPseudoSku, buildSkuMap, resolveMasterSkuKey, sortByLocationOrder, salesTypeFor } from './_inventory_shared.js'
 
 // BigQuery NUMERIC columns come back as {value: "123.45"} objects, not plain numbers.
@@ -33,6 +33,7 @@ function quarterKey(dateStr) {
 function yearKey(dateStr) { return dateStr.slice(0, 4) }
 
 export default async function salesAllocationHandler(req, res) {
+  const timer = requestTimer('sales-allocation')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -716,6 +717,7 @@ export default async function salesAllocationHandler(req, res) {
       skus: [...skuSalesMap.values()].map(s => s.sku).sort(),
     }
 
+    timer.finish(res)
     res.json({
       dateRange: { start, end, days: daysInRange },
       lastSalesDate: maxSalesDate,
@@ -762,6 +764,7 @@ export default async function salesAllocationHandler(req, res) {
     })
   } catch (e) {
     console.error('[sales-allocation]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

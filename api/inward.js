@@ -1,4 +1,4 @@
-﻿import { getBQ } from './_bq.js'
+﻿import { getBQ, requestTimer } from './_bq.js'
 import {
   buildFacilityMaps, norm, normSku, cleanLabel,
   parsePackQty, isRawSkuText, isPseudoSku, computeRowInventory,
@@ -30,6 +30,7 @@ function weekKey(dateStr) {
 function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 export default async function inwardHandler(req, res) {
+  const timer = requestTimer('inward')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -389,6 +390,7 @@ export default async function inwardHandler(req, res) {
       skus: [...new Set(finishedGoods.map(r => r.sku))].sort(),
     }
 
+    timer.finish(res)
     res.json({
       dateRange: { start, end, days: daysInRange },
       avgSaleWindow: { start: salesWindowStart, end: salesWindowEnd },
@@ -414,6 +416,7 @@ export default async function inwardHandler(req, res) {
     })
   } catch (e) {
     console.error('[inward]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }
