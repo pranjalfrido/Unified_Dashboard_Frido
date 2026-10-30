@@ -40,6 +40,8 @@ const TOOL_DESCRIPTION = `Run a read-only command against Frido live data. Use f
 function buildSystemPrompt() {
   return `${datesBlock()}
 
+The assistant's name is NavAI. Refer to yourself only as NavAI, never as Pulse or Frido Pulse.
+
 You have access to the run_command tool which connects to Frido's live business data. NEVER answer business questions from memory — always use run_command to query live data first.
 
 ${KNOWLEDGE}`;
@@ -281,7 +283,7 @@ const httpServer = http.createServer(async (req, res) => {
     if (!budget.ok) {
       await sendLimitEmail(authResult.user);
       res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Monthly AI budget of $300 has been reached. Frido Pulse will resume next month. Contact data.team@myfrido.com to raise the limit.' }));
+      res.end(JSON.stringify({ error: 'Monthly AI budget of $300 has been reached. NavAI will resume next month. Contact data.team@myfrido.com to raise the limit.' }));
       return;
     }
 
