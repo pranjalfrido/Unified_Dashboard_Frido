@@ -5,7 +5,10 @@
 //
 // A "field" is a top-level response key, or channelObject.key for the per-channel objects below.
 //   fast          first paint for Overview / Sales / P&L / Ads: KPIs, chMap, daily trends, every
-//                 channel's totals/daily/netCalc/prev-period totals, resolvedDailySKU (Return %).
+//                 channel's totals/daily/netCalc/prev-period totals, plus <channel>.resolvedAgg — the
+//                 small reductions of resolvedDailySKU the KPI tiles / return trends read
+//                 (api/_resolvedAgg.js). The per-SKU-per-day rows ship only with pnl_detail;
+//                 sales_detail carries <channel>.resolvedAggDetail (per-SKU / sub-channel / category sums).
 //   sales_detail  Sales tabs (+ Overview's category / state / product sections): category, sub-
 //                 category, SKU, state, city, region/tier breakdowns.
 //   pnl_detail    P&L: SKU-grain cost/SnD rows, pnlSalesRows, category/SKU maps the P&L reads.
@@ -13,6 +16,8 @@
 // A field can belong to more than one detail phase (each tab gets everything it reads in one call).
 // fast + sales_detail + pnl_detail + ads_detail together = the full (no-phase) response.
 // No phase / an unrecognised phase = the full response, unchanged.
+
+import { computeResolvedAgg, computeCombinedAgg, computeResolvedAggDetail } from './_resolvedAgg.js'
 
 const TABLE = {
   fast: {
@@ -44,46 +49,44 @@ const TABLE = {
       'ads.daily', 'ads.flipkartEstRev', 'ads.nCusts', 'ads.prevCategoryBreakdown', 'ads.prevTotals', 'ads.repeatCusts',
       'ads.totals', 'allSubChannels', 'amzSC.daily', 'amzSC.fulfillment', 'amzSC.netCalc', 'amzSC.prevCancelledOrders',
       'amzSC.prevDaily', 'amzSC.prevExcRev', 'amzSC.prevFbaRev', 'amzSC.prevOrders', 'amzSC.prevRev', 'amzSC.prevShippedOrders',
-      'amzSC.prevUnits', 'amzSC.resolvedDailySKU', 'amzSC.returnRate', 'amzSC.status', 'amzSC.subCatChannel', 'amzSC.totalOrders',
-      'amzSC.totalUnits', 'amzVC.accounts', 'amzVC.asins', 'amzVC.daily', 'amzVC.latestVCDate', 'amzVC.prevExcRev',
-      'amzVC.prevRev', 'amzVC.prevUnits', 'amzVC.resolvedDailySKU', 'aspQty', 'blendedAOV', 'blinkit.categories',
-      'blinkit.daily', 'blinkit.prevCities', 'blinkit.prevExcRev', 'blinkit.prevOrders', 'blinkit.prevRev', 'blinkit.prevSkus',
-      'blinkit.prevUnits', 'blinkit.totals', 'cancellRev', 'catPrevMap', 'chMap', 'cirOrders',
-      'cirRev', 'cred.additionalSpend', 'cred.additionalSpendByProduct', 'cred.byCategory', 'cred.byProduct', 'cred.daily',
-      'cred.dailyByCategory', 'cred.netCalc', 'cred.prevCities', 'cred.prevDaily', 'cred.prevExcRev', 'cred.prevNetCalc',
-      'cred.prevOrders', 'cred.prevRev', 'cred.prevSkus', 'cred.prevUnits', 'cred.resolvedDailySKU', 'cred.status',
-      'cred.totals', 'dailyArr', 'dailyReturnTrend', 'ebo.cir', 'ebo.daily', 'ebo.dailyReturnTrend',
-      'ebo.exchange', 'ebo.netCalc', 'ebo.prevCirOrders', 'ebo.prevDaily', 'ebo.prevExcRev', 'ebo.prevExchangeOrders',
-      'ebo.prevNetCalc', 'ebo.prevOrders', 'ebo.prevRev', 'ebo.prevRtoOrders', 'ebo.prevSkuMap', 'ebo.prevUnits',
-      'ebo.resolvedDailySKU', 'ebo.returnData', 'ebo.returnReasons', 'ebo.rto', 'ebo.storeRows', 'ebo.totals',
-      'exchangeOrders', 'exchangeRev', 'financialStatusMap', 'firstcry.daily', 'firstcry.netCalc', 'firstcry.prevCities',
-      'firstcry.prevDaily', 'firstcry.prevExcRev', 'firstcry.prevNetCalc', 'firstcry.prevOrders', 'firstcry.prevRev', 'firstcry.prevSkus',
-      'firstcry.prevUnits', 'firstcry.resolvedDailySKU', 'firstcry.status', 'firstcry.totals', 'flipkart.categories', 'flipkart.daily',
-      'flipkart.dataShifted', 'flipkart.estTotalExcRev', 'flipkart.estTotalOrders', 'flipkart.estTotalRev', 'flipkart.estTotalUnits', 'flipkart.estimatedDays',
-      'flipkart.latestRealDate', 'flipkart.netCalc', 'flipkart.prevCancelOrders', 'flipkart.prevDaily', 'flipkart.prevDeliveredRev', 'flipkart.prevExcRev',
-      'flipkart.prevFbfRev', 'flipkart.prevNonFbfRev', 'flipkart.prevOrders', 'flipkart.prevReturnRev', 'flipkart.prevRev', 'flipkart.prevUnits',
-      'flipkart.resolvedDailySKU', 'flipkart.status', 'flipkart.totals', 'fulfilmentStatusMap', 'gstCollected', 'htCount',
+      'amzSC.prevUnits', 'amzSC.returnRate', 'amzSC.status', 'amzSC.subCatChannel', 'amzSC.totalOrders', 'amzSC.totalUnits',
+      'amzVC.accounts', 'amzVC.asins', 'amzVC.daily', 'amzVC.latestVCDate', 'amzVC.prevExcRev', 'amzVC.prevRev',
+      'amzVC.prevUnits', 'aspQty', 'blendedAOV', 'blinkit.categories', 'blinkit.daily', 'blinkit.prevCities',
+      'blinkit.prevExcRev', 'blinkit.prevOrders', 'blinkit.prevRev', 'blinkit.prevSkus', 'blinkit.prevUnits', 'blinkit.totals',
+      'cancellRev', 'catPrevMap', 'chMap', 'cirOrders', 'cirRev', 'cred.additionalSpend',
+      'cred.additionalSpendByProduct', 'cred.byCategory', 'cred.byProduct', 'cred.daily', 'cred.dailyByCategory', 'cred.netCalc',
+      'cred.prevCities', 'cred.prevDaily', 'cred.prevExcRev', 'cred.prevNetCalc', 'cred.prevOrders', 'cred.prevRev',
+      'cred.prevSkus', 'cred.prevUnits', 'cred.status', 'cred.totals', 'dailyArr', 'dailyReturnTrend',
+      'ebo.cir', 'ebo.daily', 'ebo.dailyReturnTrend', 'ebo.exchange', 'ebo.netCalc', 'ebo.prevCirOrders',
+      'ebo.prevDaily', 'ebo.prevExcRev', 'ebo.prevExchangeOrders', 'ebo.prevNetCalc', 'ebo.prevOrders', 'ebo.prevRev',
+      'ebo.prevRtoOrders', 'ebo.prevSkuMap', 'ebo.prevUnits', 'ebo.returnData', 'ebo.returnReasons', 'ebo.rto',
+      'ebo.storeRows', 'ebo.totals', 'exchangeOrders', 'exchangeRev', 'financialStatusMap', 'firstcry.daily',
+      'firstcry.netCalc', 'firstcry.prevCities', 'firstcry.prevDaily', 'firstcry.prevExcRev', 'firstcry.prevNetCalc', 'firstcry.prevOrders',
+      'firstcry.prevRev', 'firstcry.prevSkus', 'firstcry.prevUnits', 'firstcry.status', 'firstcry.totals', 'flipkart.categories',
+      'flipkart.daily', 'flipkart.dataShifted', 'flipkart.estTotalExcRev', 'flipkart.estTotalOrders', 'flipkart.estTotalRev', 'flipkart.estTotalUnits',
+      'flipkart.estimatedDays', 'flipkart.latestRealDate', 'flipkart.netCalc', 'flipkart.prevCancelOrders', 'flipkart.prevDaily', 'flipkart.prevDeliveredRev',
+      'flipkart.prevExcRev', 'flipkart.prevFbfRev', 'flipkart.prevNonFbfRev', 'flipkart.prevOrders', 'flipkart.prevReturnRev', 'flipkart.prevRev',
+      'flipkart.prevUnits', 'flipkart.status', 'flipkart.totals', 'fulfilmentStatusMap', 'gstCollected', 'htCount',
       'htRev', 'instamart.categories', 'instamart.daily', 'instamart.prevCities', 'instamart.prevDaily', 'instamart.prevExcRev',
       'instamart.prevOrders', 'instamart.prevRev', 'instamart.prevSkus', 'instamart.prevUnits', 'instamart.totals', 'international.daily',
       'international.netCalc', 'international.prevDaily', 'international.prevExcRev', 'international.prevNetCalc', 'international.prevOrders', 'international.prevRev',
       'international.prevUnits', 'international.totals', 'masterSkuList', 'momOrders', 'momPeriod', 'momRev',
       'multiItemOrders', 'myntra.daily', 'myntra.estTotalExcRev', 'myntra.estimatedDays', 'myntra.latestRealDate', 'myntra.netCalc',
-      'myntra.prevDaily', 'myntra.prevExcRev', 'myntra.prevNetCalc', 'myntra.prevOrders', 'myntra.prevRev', 'myntra.resolvedDailySKU',
-      'myntra.status', 'myntra.totals', 'nCusts', 'nDays', 'nOrders', 'netRevenueCalc',
-      'offline.daily', 'offline.prevBySub', 'offline.prevDaily', 'offline.resolvedDailySKU', 'offline.subChannelRows', 'offline.totalsBySub',
-      'orderStatusMap', 'orderStatusRevMap', 'orders', 'paymentModeMap', 'pnlRawAdSpend', 'prevChMap',
-      'prevCirOrders', 'prevCirRev', 'prevDailyArr', 'prevExcRev', 'prevNCusts', 'prevOrders',
-      'prevQty', 'prevRepeatCusts', 'prevRev', 'prevRtoOrders', 'prevRtoRev', 'prevScopedAOV',
-      'prevScopedASP', 'refundTrend', 'repeatCusts', 'returnRev', 'returnTrackableRev', 'rows',
-      'rtoRev', 'rtoRevDirect', 'scopedAOV', 'scopedASP', 'shopify.catMap', 'shopify.catPrevMap',
-      'shopify.daily', 'shopify.mobilityNetBySubCat', 'shopify.netCalc', 'shopify.paymentTypes', 'shopify.prevCancelledOrders', 'shopify.prevCirOrders',
-      'shopify.prevDaily', 'shopify.prevExcRev', 'shopify.prevExchangeOrders', 'shopify.prevNetCalc', 'shopify.prevOrders', 'shopify.prevRev',
-      'shopify.prevRtoOrders', 'shopify.prevUnits', 'shopify.resolvedDailySKU', 'shopify.skuMap', 'shopify.skuMapBySubChannel', 'shopify.subCatPrevMap',
-      'shopify.totals', 'source', 'subCatFirstOrderMap', 'subCatPrevMap', 'subChannelMap', 'tatOrders',
-      'totalExcRev', 'totalQty', 'totalRev', 'uniqueDates', 'voucherList', 'voucherMap',
-      'yoyOrders', 'yoyPeriod', 'yoyRev', 'zepto.categories', 'zepto.daily', 'zepto.prevCities',
-      'zepto.prevDaily', 'zepto.prevExcRev', 'zepto.prevOrders', 'zepto.prevRev', 'zepto.prevSkus', 'zepto.prevUnits',
-      'zepto.totals',
+      'myntra.prevDaily', 'myntra.prevExcRev', 'myntra.prevNetCalc', 'myntra.prevOrders', 'myntra.prevRev', 'myntra.status',
+      'myntra.totals', 'nCusts', 'nDays', 'nOrders', 'netRevenueCalc', 'offline.daily',
+      'offline.prevBySub', 'offline.prevDaily', 'offline.subChannelRows', 'offline.totalsBySub', 'orderStatusMap', 'orderStatusRevMap',
+      'orders', 'paymentModeMap', 'pnlRawAdSpend', 'prevChMap', 'prevCirOrders', 'prevCirRev',
+      'prevDailyArr', 'prevExcRev', 'prevNCusts', 'prevOrders', 'prevQty', 'prevRepeatCusts',
+      'prevRev', 'prevRtoOrders', 'prevRtoRev', 'prevScopedAOV', 'prevScopedASP', 'refundTrend',
+      'repeatCusts', 'returnRev', 'returnTrackableRev', 'rows', 'rtoRev', 'rtoRevDirect',
+      'scopedAOV', 'scopedASP', 'shopify.catMap', 'shopify.catPrevMap', 'shopify.daily', 'shopify.mobilityNetBySubCat',
+      'shopify.netCalc', 'shopify.paymentTypes', 'shopify.prevCancelledOrders', 'shopify.prevCirOrders', 'shopify.prevDaily', 'shopify.prevExcRev',
+      'shopify.prevExchangeOrders', 'shopify.prevNetCalc', 'shopify.prevOrders', 'shopify.prevRev', 'shopify.prevRtoOrders', 'shopify.prevUnits',
+      'shopify.skuMap', 'shopify.skuMapBySubChannel', 'shopify.subCatPrevMap', 'shopify.totals', 'source', 'subCatFirstOrderMap',
+      'subCatPrevMap', 'subChannelMap', 'tatOrders', 'totalExcRev', 'totalQty', 'totalRev',
+      'uniqueDates', 'voucherList', 'voucherMap', 'yoyOrders', 'yoyPeriod', 'yoyRev',
+      'zepto.categories', 'zepto.daily', 'zepto.prevCities', 'zepto.prevDaily', 'zepto.prevExcRev', 'zepto.prevOrders',
+      'zepto.prevRev', 'zepto.prevSkus', 'zepto.prevUnits', 'zepto.totals',
     ],
   },
   sales_detail: {
@@ -103,24 +106,25 @@ const TABLE = {
       'eboCity', 'eboCityComponentRateMature', 'eboCityPrev', 'eboComponentRateMature', 'eboDailyCityComponents', 'eboDailySKUComponents',
       'eboDailyStateComponents', 'eboDailySubCat', 'eboRegion', 'eboReturnRateMature', 'eboSKU', 'eboState',
       'eboStateComponentRateMature', 'eboStatePrev', 'eboSubCategory', 'eboSubCategoryPrev', 'eboTier', 'fcCatPrev',
-      'fcCategories', 'fcCities', 'fcCitiesPrev', 'fcDailySKUComponents', 'fcRegion', 'fcSKUMatrix',
-      'fcSKUs', 'fcStates', 'fcStatesPrev', 'fcSubCatPrev', 'fcSubCategories', 'fcTier',
-      'fkCatPrev', 'fkCities', 'fkCitiesPrev', 'fkCityComponentRateMature', 'fkComponentRateMature', 'fkDaily',
-      'fkDailyCat', 'fkDailyCityComponents2', 'fkDailySKUComponents', 'fkDailyStateComponents', 'fkRegions', 'fkReturnRate',
-      'fkReturnRateMature', 'fkSKUMatrix', 'fkSKUPrev', 'fkSKUs', 'fkStateComponentRateMature', 'fkStates',
-      'fkStatesPrev', 'fkSubCatPrev', 'fkSubCategory', 'inCities', 'inCitiesPrev', 'inSKUMatrix',
-      'inSKUPrev', 'inSKUs', 'inStates', 'inStatesPrev', 'inSubCategories', 'intlCatPrev',
-      'intlCategories', 'intlSKUMatrix', 'intlSubCatPrev', 'intlSubCategories', 'mnCatPrev', 'mnCategories',
-      'mnCities', 'mnCitiesPrev', 'mnCityComponentRateMature', 'mnComponentRateMature', 'mnDaily', 'mnDailyCityComponents',
-      'mnDailySKUComponents', 'mnDailyStateComponents', 'mnReturnRateMature', 'mnSKUMatrix', 'mnSKUs', 'mnStateComponentRateMature',
-      'mnStates', 'mnStatesPrev', 'mnSubCatPrev', 'mnSubCategories', 'offCatPrev', 'offCitiesPrev',
-      'offStatesPrev', 'offSubCatPrev', 'offlineCategory', 'offlineCity', 'offlineCreditNoteRateMature', 'offlineRegion',
-      'offlineSKU', 'offlineState', 'offlineSubCategory', 'offlineTier', 'offlineTotals', 'overallReturnRateMature',
-      'salesCategoryOrders', 'salesCategoryOrdersFk', 'shCity', 'shCityComponentRateMature', 'shCityPrev', 'shComponentRateMature',
-      'shDailyCityComponents', 'shDailySKU', 'shDailyStateComponents', 'shDailySubCat', 'shNetCalc', 'shRegion',
-      'shReturnRateMature', 'shReturnReasons', 'shSKU', 'shSKUPrev', 'shState', 'shStateComponentRateMature',
-      'shStatePrev', 'shSubCategory', 'shTier', 'shopifyIntlTotals', 'zpCities', 'zpCitiesPrev',
-      'zpSKUMatrix', 'zpSKUPrev', 'zpSKUs', 'zpStates', 'zpStatesPrev', 'zpSubCategories',
+      'fcCategories', 'fcCities', 'fcCitiesPrev', 'fcComponentRateMature', 'fcDailySKUComponents', 'fcRegion',
+      'fcSKUMatrix', 'fcSKUs', 'fcStates', 'fcStatesPrev', 'fcSubCatPrev', 'fcSubCategories',
+      'fcTier', 'fkCatPrev', 'fkCities', 'fkCitiesPrev', 'fkCityComponentRateMature', 'fkComponentRateMature',
+      'fkDaily', 'fkDailyCat', 'fkDailyCityComponents2', 'fkDailySKUComponents', 'fkDailyStateComponents', 'fkRegions',
+      'fkReturnRate', 'fkReturnRateMature', 'fkSKUMatrix', 'fkSKUPrev', 'fkSKUs', 'fkStateComponentRateMature',
+      'fkStates', 'fkStatesPrev', 'fkSubCatPrev', 'fkSubCategory', 'inCities', 'inCitiesPrev',
+      'inSKUMatrix', 'inSKUPrev', 'inSKUs', 'inStates', 'inStatesPrev', 'inSubCategories',
+      'intlCatPrev', 'intlCategories', 'intlSKUMatrix', 'intlSubCatPrev', 'intlSubCategories', 'mnCatPrev',
+      'mnCategories', 'mnCities', 'mnCitiesPrev', 'mnCityComponentRateMature', 'mnComponentRateMature', 'mnDaily',
+      'mnDailyCityComponents', 'mnDailySKUComponents', 'mnDailyStateComponents', 'mnReturnRateMature', 'mnSKUMatrix', 'mnSKUs',
+      'mnStateComponentRateMature', 'mnStates', 'mnStatesPrev', 'mnSubCatPrev', 'mnSubCategories', 'offCatPrev',
+      'offCitiesPrev', 'offComponentRateMature', 'offDailySKUComponents', 'offStatesPrev', 'offSubCatPrev', 'offlineCategory',
+      'offlineCity', 'offlineCreditNoteRateMature', 'offlineRegion', 'offlineSKU', 'offlineState', 'offlineSubCategory',
+      'offlineTier', 'offlineTotals', 'overallReturnRateMature', 'salesCategoryOrders', 'salesCategoryOrdersFk', 'shCity',
+      'shCityComponentRateMature', 'shCityPrev', 'shComponentRateMature', 'shDailyCityComponents', 'shDailySKU', 'shDailyStateComponents',
+      'shDailySubCat', 'shNetCalc', 'shRegion', 'shReturnRateMature', 'shReturnReasons', 'shSKU',
+      'shSKUPrev', 'shState', 'shStateComponentRateMature', 'shStatePrev', 'shSubCategory', 'shTier',
+      'shopifyIntlTotals', 'zpCities', 'zpCitiesPrev', 'zpSKUMatrix', 'zpSKUPrev', 'zpSKUs',
+      'zpStates', 'zpStatesPrev', 'zpSubCategories',
     ],
     fields: [
       'allTabReturnRateMature', 'amzSC.catChannel', 'amzSC.catPrevMap', 'amzSC.cities', 'amzSC.cityPrevMap', 'amzSC.cityTotal',
@@ -164,30 +168,31 @@ const TABLE = {
       'amzVCSubCat', 'blDailySKU', 'blSKUMatrix', 'blSKUs', 'blSubCategories', 'byChannel',
       'byDate', 'byOrderValue', 'bySKU', 'bySubCategory', 'crCategories', 'crComponentRateMature',
       'crDailySKUComponents', 'crSKUMatrix', 'crSKUs', 'crSubCategories', 'eboComponentRateMature', 'eboDailySKUComponents',
-      'eboReturnRateMature', 'eboSKU', 'eboStoreSkuCosts', 'eboSubCategory', 'fcCategories', 'fcDailySKUComponents',
-      'fcSKUMatrix', 'fcSKUs', 'fcSubCategories', 'fkComponentRateMature', 'fkDaily', 'fkDailySKUComponents',
-      'fkReturnRateMature', 'fkSKUMatrix', 'fkSKUMatrixDaily', 'fkSKUs', 'fkSubCategory', 'inDailySKU',
-      'inSKUMatrix', 'inSKUs', 'inSubCategories', 'intlCategories', 'intlSKUMatrix', 'intlSubCategories',
-      'mnCategories', 'mnComponentRateMature', 'mnDaily', 'mnDailySKUComponents', 'mnReturnRateMature', 'mnSKUMatrix',
-      'mnSKUs', 'mnSubCategories', 'offlineCategory', 'offlineSKU', 'offlineSubCategory', 'offlineTotals',
-      'overallReturnRateMature', 'pnlAdRawTotals', 'salesCategoryOrders', 'salesCategoryOrdersFk', 'shComponentRateMature', 'shDailySKU',
-      'shListingPrice', 'shNetCalc', 'shPrepaidAsp', 'shReturnRateMature', 'shSKU', 'shSKUWeight',
-      'shSkuCosts', 'shSubCategory', 'shopifyIntlTotals', 'zpDailySKU', 'zpSKUMatrix', 'zpSKUs',
-      'zpSubCategories',
+      'eboReturnRateMature', 'eboSKU', 'eboStoreSkuCosts', 'eboSubCategory', 'fcCategories', 'fcComponentRateMature',
+      'fcDailySKUComponents', 'fcSKUMatrix', 'fcSKUs', 'fcSubCategories', 'fkComponentRateMature', 'fkDaily',
+      'fkDailySKUComponents', 'fkReturnRateMature', 'fkSKUMatrix', 'fkSKUMatrixDaily', 'fkSKUs', 'fkSubCategory',
+      'inDailySKU', 'inSKUMatrix', 'inSKUs', 'inSubCategories', 'intlCategories', 'intlSKUMatrix',
+      'intlSubCategories', 'mnCategories', 'mnComponentRateMature', 'mnDaily', 'mnDailySKUComponents', 'mnReturnRateMature',
+      'mnSKUMatrix', 'mnSKUs', 'mnSubCategories', 'offComponentRateMature', 'offDailySKUComponents', 'offlineCategory',
+      'offlineSKU', 'offlineSubCategory', 'offlineTotals', 'overallReturnRateMature', 'pnlAdRawTotals', 'salesCategoryOrders',
+      'salesCategoryOrdersFk', 'shComponentRateMature', 'shDailySKU', 'shListingPrice', 'shNetCalc', 'shPrepaidAsp',
+      'shReturnRateMature', 'shSKU', 'shSKUWeight', 'shSkuCosts', 'shSubCategory', 'shopifyIntlTotals',
+      'zpDailySKU', 'zpSKUMatrix', 'zpSKUs', 'zpSubCategories',
     ],
     fields: [
-      'ads.adsDailyByCategory', 'ads.categoryBreakdown', 'amzSC.dailyPnLBySku', 'amzSC.returnRateMature', 'amzSC.skuChannel', 'amzSC.skus',
-      'amzSC.sndBySku', 'amzVCMatrix.dailyPnLBySku', 'amzVCMatrix.skuData', 'amzVCMatrix.sndBySku', 'amzVCMatrix.subCatData', 'blinkit.dailyPnLBySku',
-      'blinkit.skuMatrix', 'blinkit.skus', 'blinkit.sndBySku', 'blinkit.subCategories', 'buckets', 'cred.categories',
-      'cred.skuMatrix', 'cred.skus', 'cred.subCategories', 'ebo.returnRateMature', 'ebo.skuCostRows', 'ebo.skuMap',
-      'ebo.storeSkuCostRows', 'ebo.subCatMap', 'firstcry.categories', 'firstcry.skuMatrix', 'firstcry.skus', 'firstcry.subCategories',
-      'flipkart.dailyPnLBySku', 'flipkart.returnRateMature', 'flipkart.skuMatrix', 'flipkart.skus', 'flipkart.sndBySku', 'flipkart.subCategories',
+      'ads.adsDailyByCategory', 'ads.categoryBreakdown', 'amzSC.dailyPnLBySku', 'amzSC.resolvedDailySKU', 'amzSC.returnRateMature', 'amzSC.skuChannel',
+      'amzSC.skus', 'amzSC.sndBySku', 'amzVC.resolvedDailySKU', 'amzVCMatrix.dailyPnLBySku', 'amzVCMatrix.skuData', 'amzVCMatrix.sndBySku',
+      'amzVCMatrix.subCatData', 'blinkit.dailyPnLBySku', 'blinkit.skuMatrix', 'blinkit.skus', 'blinkit.sndBySku', 'blinkit.subCategories',
+      'buckets', 'cred.categories', 'cred.resolvedDailySKU', 'cred.skuMatrix', 'cred.skus', 'cred.subCategories',
+      'ebo.resolvedDailySKU', 'ebo.returnRateMature', 'ebo.skuCostRows', 'ebo.skuMap', 'ebo.storeSkuCostRows', 'ebo.subCatMap',
+      'firstcry.categories', 'firstcry.resolvedDailySKU', 'firstcry.skuMatrix', 'firstcry.skus', 'firstcry.subCategories', 'flipkart.dailyPnLBySku',
+      'flipkart.resolvedDailySKU', 'flipkart.returnRateMature', 'flipkart.skuMatrix', 'flipkart.skus', 'flipkart.sndBySku', 'flipkart.subCategories',
       'instamart.dailyPnLBySku', 'instamart.skuMatrix', 'instamart.skus', 'instamart.sndBySku', 'instamart.subCategories', 'international.categories',
-      'international.skuMatrix', 'international.subCategories', 'myntra.categories', 'myntra.returnRateMature', 'myntra.skuMatrix', 'myntra.skus',
-      'myntra.subCategories', 'offline.categoryRows', 'offline.skuRows', 'offline.subCategoryRows', 'pnlAdSpendMap', 'pnlSalesRows',
-      'returnRateMature', 'shopify.dailySKU', 'shopify.listingPriceBySku', 'shopify.prepaidAspBySku', 'shopify.returnRateMature', 'shopify.skuCostRows',
-      'shopify.skuWeightGm', 'shopify.subCatMap', 'skuRows', 'subCatMap', 'zepto.dailyPnLBySku', 'zepto.skuMatrix',
-      'zepto.skus', 'zepto.sndBySku', 'zepto.subCategories',
+      'international.skuMatrix', 'international.subCategories', 'myntra.categories', 'myntra.resolvedDailySKU', 'myntra.returnRateMature', 'myntra.skuMatrix',
+      'myntra.skus', 'myntra.subCategories', 'offline.categoryRows', 'offline.resolvedDailySKU', 'offline.skuRows', 'offline.subCategoryRows',
+      'pnlAdSpendMap', 'pnlSalesRows', 'returnRateMature', 'shopify.dailySKU', 'shopify.listingPriceBySku', 'shopify.prepaidAspBySku',
+      'shopify.resolvedDailySKU', 'shopify.returnRateMature', 'shopify.skuCostRows', 'shopify.skuWeightGm', 'shopify.subCatMap', 'skuRows',
+      'subCatMap', 'zepto.dailyPnLBySku', 'zepto.skuMatrix', 'zepto.skus', 'zepto.sndBySku', 'zepto.subCategories',
     ],
   },
   ads_detail: {
@@ -255,5 +260,30 @@ export function pickPhaseFields(payload, def) {
     } else if (owns(k)) out[k] = v
     else if (def.placeholders) out[k] = emptyLike(v)
   }
+  if (def.name === 'fast') addResolvedAggs(payload, out)
+  if (def.name === 'sales_detail' || def.name === 'slow') addResolvedAggDetails(payload, out)
   return out
+}
+
+// fast: <channel>.resolvedAgg for every channel with resolvedDailySKU rows (+ amzSC.resolvedAgg.plusVC,
+// Overview's combined SC+VC Return %). Not part of the full (no-phase) response — the frontend
+// computes the same reduction from the rows when it has them (resolvedAggOf).
+function addResolvedAggs(payload, out) {
+  for (const ch of CHANNEL_OBJECTS) {
+    const rows = payload[ch]?.resolvedDailySKU
+    if (!Array.isArray(rows) || !out[ch]) continue
+    out[ch].resolvedAgg = computeResolvedAgg(rows, { notIntl: ch === 'shopify' })
+  }
+  if (out.amzSC?.resolvedAgg) out.amzSC.resolvedAgg.plusVC = computeCombinedAgg(payload.amzSC.resolvedDailySKU, payload.amzVC?.resolvedDailySKU)
+}
+
+// sales_detail: <channel>.resolvedAggDetail — per-SKU sums (category matrices), Shopify per
+// sub-channel (MyFrido / Mobility), Flipkart per category / sub-category (its product filter).
+function addResolvedAggDetails(payload, out) {
+  for (const ch of CHANNEL_OBJECTS) {
+    const rows = payload[ch]?.resolvedDailySKU
+    if (!Array.isArray(rows)) continue
+    out[ch] = out[ch] || {}
+    out[ch].resolvedAggDetail = computeResolvedAggDetail(ch, rows)
+  }
 }

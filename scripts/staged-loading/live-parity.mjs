@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { loadKeyIntoEnv, importInstrumentedHandler, callHandler, quiet, toUnits } from './_harness.mjs'
 import { mergePhase } from '../../src/bqPhaseMerge.js'
+import { checkAggs, checkAggDetails, checkFrontendEquivalence, isAggUnit } from './agg-check.mjs'
 
 const args = process.argv.slice(2)
 const arg = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : d }
@@ -55,13 +56,16 @@ for (const c of CASES) {
   const t0 = Date.now()
   const full = await quiet(() => callHandler(oldHandler, { ...body }))
   const tFull = Date.now() - t0
-  let merged = null, phaseMs = {}, crash = null
+  let merged = null, phaseMs = {}, crash = null, fastBody = null, salesBody = null, phaseBytes = {}
   for (const p of ['fast', 'sales_detail', 'pnl_detail', 'ads_detail']) {
     const t1 = Date.now()
     const r = await quiet(() => callHandler(newHandler, { ...body, phase: p }))
     phaseMs[p] = Date.now() - t1
     if (r.status !== 200) { crash = `${p}: ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`; break }
     merged = mergePhase(merged, r.body)
+    phaseBytes[p] = JSON.stringify(r.body).length
+    if (p === 'fast') fastBody = r.body
+    if (p === 'sales_detail') salesBody = r.body
   }
   if (full.status !== 200 || crash) {
     results.push({ label: c.label, pass: false, error: crash || `full ${full.status}` })
@@ -71,14 +75,20 @@ for (const c of CASES) {
   const fu = toUnits(full.body), mu = toUnits(merged)
   // shopify.dailySkuCostRows is intentionally removed (decision 2): an "old" side that still has it is not a diff
   fu.delete('shopify.dailySkuCostRows')
+  for (const k of [...mu.keys()]) if (isAggUnit(k)) mu.delete(k)
+  // resolvedAgg is checked against the OLD full response's rows (exact) and the Overview Return % it drives
+  const agg = checkAggs(fastBody, full.body)
+  agg.problems.push(...checkAggDetails(salesBody, full.body).problems)
+  agg.problems.push(...checkFrontendEquivalence(fastBody, salesBody, full.body))
   const diffs = []
   for (const k of new Set([...fu.keys(), ...mu.keys()])) {
     if (!fu.has(k) || !mu.has(k)) { diffs.push({ path: k, old: fu.has(k) ? 'present' : 'MISSING', new: mu.has(k) ? 'present' : 'MISSING', tolerated: false }); continue }
     cmp(k, fu.get(k), mu.get(k), diffs)
   }
   const hard = diffs.filter(d => !d.tolerated)
-  results.push({ label: c.label, body: c.body, pass: hard.length === 0, fields: fu.size, diffs, fullMs: tFull, phaseMs })
-  console.log(`${c.label}: ${hard.length === 0 ? 'PASS' : 'FAIL'} — ${fu.size} fields, ${diffs.length} diffs (${hard.length} beyond tolerance) · full ${tFull}ms, phases ${JSON.stringify(phaseMs)}`)
+  agg.problems.forEach(p => hard.push({ path: 'resolvedAgg', old: p, new: '', tolerated: false }))
+  results.push({ label: c.label, body: c.body, pass: hard.length === 0, fields: fu.size, diffs, aggChannels: agg.channels, fullMs: tFull, phaseMs, fullBytes: JSON.stringify(full.body).length, phaseBytes })
+  console.log(`${c.label}: ${hard.length === 0 ? 'PASS' : 'FAIL'} — ${fu.size} fields, ${diffs.length} diffs (${hard.length} beyond tolerance), resolvedAgg ${agg.problems.length ? 'FAIL' : 'exact (' + agg.channels + ' ch)'} · full ${tFull}ms, phases ${JSON.stringify(phaseMs)}`)
   for (const d of hard.slice(0, 15)) console.log(`    ✗ ${d.path}: old=${JSON.stringify(d.old)} new=${JSON.stringify(d.new)}`)
 }
 writeFileSync(arg('--out', 'live-parity.json'), JSON.stringify(results, null, 1))

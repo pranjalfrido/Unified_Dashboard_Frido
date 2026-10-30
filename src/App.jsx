@@ -38,6 +38,7 @@ import AppBanner from './responsive/AppBanner.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
 import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES } from './bqPhaseMerge.js'
+import { resolvedAggOf, resolvedAggWhere, resolvedBySkuOf } from '../api/_resolvedAgg.js'
 import { DetailGate } from './DetailGate.jsx'
 import { DetailPhaseContext, useDetailReady } from './detailPhase.js'
 import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
@@ -5612,13 +5613,17 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     const returnRev = filtered.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
     return returnRev / gross * 100
   }
-  const shopifyReturnPct = resolvedReturnPct(sh.resolvedDailySKU, x => x.subChannel !== 'shopify international')
-  const amzReturnPct = resolvedReturnPct((data.amzSC?.resolvedDailySKU || []).concat(data.amzVC?.resolvedDailySKU || []))
-  const fkReturnPct = resolvedReturnPct(data.flipkart?.resolvedDailySKU)
-  const myntraReturnPct = resolvedReturnPct(data.myntra?.resolvedDailySKU)
-  const eboReturnPct = resolvedReturnPct(data.ebo?.resolvedDailySKU)
-  const credReturnPct = resolvedReturnPct(data.cred?.resolvedDailySKU)
-  const firstcryReturnPct = resolvedReturnPct(data.firstcry?.resolvedDailySKU)
+  // Staged /api/bq loading: the rows arrive with sales_detail; until then the 'fast' phase's
+  // <channel>.resolvedAgg (api/_resolvedAgg.js) carries the same count / gross / return sums,
+  // accumulated in the same row order — the same Return % to the last digit.
+  const aggReturnPct = a => (!a || !a.n || a.gross <= 0) ? null : a.totalReturnRev / a.gross * 100
+  const shopifyReturnPct = sh.resolvedDailySKU?.length ? resolvedReturnPct(sh.resolvedDailySKU, x => x.subChannel !== 'shopify international') : aggReturnPct(sh.resolvedAgg?.notIntl)
+  const amzReturnPct = (data.amzSC?.resolvedDailySKU?.length || data.amzVC?.resolvedDailySKU?.length) ? resolvedReturnPct((data.amzSC?.resolvedDailySKU || []).concat(data.amzVC?.resolvedDailySKU || [])) : aggReturnPct(data.amzSC?.resolvedAgg?.plusVC)
+  const fkReturnPct = data.flipkart?.resolvedDailySKU?.length ? resolvedReturnPct(data.flipkart.resolvedDailySKU) : aggReturnPct(data.flipkart?.resolvedAgg)
+  const myntraReturnPct = data.myntra?.resolvedDailySKU?.length ? resolvedReturnPct(data.myntra.resolvedDailySKU) : aggReturnPct(data.myntra?.resolvedAgg)
+  const eboReturnPct = data.ebo?.resolvedDailySKU?.length ? resolvedReturnPct(data.ebo.resolvedDailySKU) : aggReturnPct(data.ebo?.resolvedAgg)
+  const credReturnPct = data.cred?.resolvedDailySKU?.length ? resolvedReturnPct(data.cred.resolvedDailySKU) : aggReturnPct(data.cred?.resolvedAgg)
+  const firstcryReturnPct = data.firstcry?.resolvedDailySKU?.length ? resolvedReturnPct(data.firstcry.resolvedDailySKU) : aggReturnPct(data.firstcry?.resolvedAgg)
   // Offline Sales genuinely counts as a return for the company — Credit Notes against Sales
   // (confirmed 2026-10-22: "that's actually considered return as a company"). Reads
   // chMap.offline_sales.rev/.returnRev (NOT offline.resolvedDailySKU, which is scoped to
@@ -9159,11 +9164,13 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // 2026-10-22) — resolvedDailySKU is resolved per (sku, sub_channel) composite key server-side
   // (see api/bq.js), so each sub-channel already carries its OWN rolling rate; this just narrows
   // the array to the rows that belong to it, same scoping discipline as netCalcSrc/shCh above.
-  const shResolved = isD2CSubChFiltered
-    ? (sh.resolvedDailySKU || []).filter(r => r.subChannel === filters.subChannel.toLowerCase())
-    : (sh.resolvedDailySKU || [])
-  const shResolvedGross = shResolved.reduce((s, r) => s + r.gross, 0)
-  const shResolvedReturnRev = shResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums over these rows (shResolved, below) — from sh.resolvedDailySKU when loaded (P&L's group),
+  // else the reductions /api/bq ships: sh.resolvedAgg ('fast') and, for a MyFrido / Mobility filter,
+  // sh.resolvedAggDetail.bySubChannel ('sales_detail'). Same accumulation order, identical values
+  // (api/_resolvedAgg.js).
+  const shAgg = isD2CSubChFiltered ? resolvedAggWhere(sh, r => r.subChannel === filters.subChannel.toLowerCase(), ['bySubChannel', filters.subChannel.toLowerCase()]) : resolvedAggOf(sh)
+  const shResolvedGross = shAgg.gross
+  const shResolvedReturnRev = shAgg.totalReturnRev
   const returnRevPct = shResolvedGross > 0 ? (shResolvedReturnRev / shResolvedGross * 100) : 0
   // Net Revenue (Exc GST) — Gross-after-resolved-returns above is still Inc GST, so apply the same
   // blended GST ratio netRevenueOf() uses elsewhere: Net Exc GST = (Gross - Returns) x
@@ -9245,7 +9252,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   const shCodCancelRev = netCalcSrc.codCancelRev || 0
   const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
   // RTO% — resolved engine (confirmed 2026-10-22), same shResolved array as Returns%/Net Revenue.
-  const shResolvedRtoRev = shResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
+  const shResolvedRtoRev = shAgg.rto
   const rtoPct = shResolvedGross > 0 ? shResolvedRtoRev / shResolvedGross * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
@@ -9355,9 +9362,9 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // CIR%/Cancellation%/Exchange% — resolved engine (confirmed 2026-10-22), same shResolved
   // array used for Returns%/Net Revenue/RTO% above, so every return-related number on this page
   // is derived from the SAME resolved per-component data, never a mix of resolved-here/live-there.
-  const shResolvedCirRevSum = shResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
-  const shResolvedCancelRev = shResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
-  const shResolvedExchangeRev = shResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
+  const shResolvedCirRevSum = shAgg.cir
+  const shResolvedCancelRev = shAgg.cancel
+  const shResolvedExchangeRev = shAgg.exchange
   const shCirPct = shResolvedGross > 0 ? shResolvedCirRevSum / shResolvedGross * 100 : 0
   const shResolvedCancelPct = shResolvedGross > 0 ? shResolvedCancelRev / shResolvedGross * 100 : 0
   const shExchPct = shResolvedGross > 0 ? shResolvedExchangeRev / shResolvedGross * 100 : 0
@@ -9370,16 +9377,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // substitution for the last 15 days. isD2CSubChFiltered no longer branches this — shResolved
   // already carries every D2C sub-channel (shDailySKU's own query excludes only Shopify
   // International/Retail Store, same scope this page always showed).
-  const shReturnTrendMap = useMemo(() => {
-    const byDate = {}
-    shResolved.forEach(r => {
-      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-      d.gross += r.gross
-      d.rtoRev += r.components?.rto?.rev || 0
-      d.cirRev += r.components?.cir?.rev || 0
-      d.cancelRev += r.components?.cancel?.rev || 0
-      d.exchRev += r.components?.exchange?.rev || 0
-    })
+  const shReturnTrendMap = (() => {
+    const byDate = shAgg.byDate // per-day sums of the (sub-channel) rows (api/_resolvedAgg.js)
     const m = {}
     Object.entries(byDate).forEach(([date, d]) => {
       if (!d.gross) return
@@ -9392,7 +9391,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
       }
     })
     return m
-  }, [shResolved])
+  })()
   const shMobKpis = [
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
@@ -9907,14 +9906,15 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // (confirmed 2026-10-22), same engine as D2C: mature days use real per-day component revenue,
   // immature days (last 15) substitute this SKU's own rolling 30-day-window rate per component.
   // Replaces the old live-only ebo.netCalc-based figures and the "Provisional Return" sub-label.
-  const eboResolved = ebo.resolvedDailySKU || []
-  const eboResolvedGross = eboResolved.reduce((s, r) => s + r.gross, 0)
-  const eboResolvedRtoRev = eboResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
-  const eboResolvedReturnRev = eboResolved.reduce((s, r) => s + (r.components?.return?.rev || 0), 0)
-  const eboResolvedCirRev = eboResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
-  const eboResolvedCancelRev = eboResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
-  const eboResolvedExchangeRev = eboResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
-  const eboResolvedTotalReturnRev = eboResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums over the rows when loaded, else the 'fast' phase's ebo.resolvedAgg (identical values).
+  const eboAgg = resolvedAggOf(ebo)
+  const eboResolvedGross = eboAgg.gross
+  const eboResolvedRtoRev = eboAgg.rto
+  const eboResolvedReturnRev = eboAgg.return
+  const eboResolvedCirRev = eboAgg.cir
+  const eboResolvedCancelRev = eboAgg.cancel
+  const eboResolvedExchangeRev = eboAgg.exchange
+  const eboResolvedTotalReturnRev = eboAgg.totalReturnRev
   const cancelRev = eboResolvedCancelRev
   const rtoRev = eboResolvedRtoRev
   const returnRev = eboResolvedReturnRev
@@ -10048,14 +10048,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // the old convention folded Return into "rto" display — resolved engine tracks it separately,
   // so it's added here and folded into rtoRev for the matrix's own RTO-combines-Return display
   // convention (matching the KPI card's rtoPct above).
-  const eboResolvedBySku = {}
-  eboResolved.forEach(r => {
-    const s = eboResolvedBySku[r.sku] || (eboResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-    s.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
-    s.cirRev += r.components?.cir?.rev || 0
-    s.cancelRev += r.components?.cancel?.rev || 0
-    s.exchRev += r.components?.exchange?.rev || 0
-  })
+  // Per-SKU sums from the rows when loaded, else sales_detail's ebo.resolvedAggDetail (identical
+  // values, api/_resolvedAgg.js). rtoRev folds in Return, as before (rtoRetRev).
+  const eboResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(ebo)).map(([sku, v]) => [sku, { rtoRev: v.rtoRetRev, cirRev: v.cirRev, cancelRev: v.cancelRev, exchRev: v.exchRev }]))
   const pick = (v, sku) => {
     const resolved = sku ? eboResolvedBySku[sku] : null
     return {
@@ -10105,19 +10100,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // engine (confirmed 2026-10-22), built from eboResolved (ebo.resolvedDailySKU), same approach as
   // D2C's shReturnTrendMap, replacing the old live-only ebo.dailyReturnTrend.
   const eboReturnTrendMap = (() => {
-    const byDate = {}
-    eboResolved.forEach(r => {
-      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-      d.gross += r.gross
-      d.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
-      d.cirRev += r.components?.cir?.rev || 0
-      d.cancelRev += r.components?.cancel?.rev || 0
-      d.exchRev += r.components?.exchange?.rev || 0
-    })
+    const byDate = eboAgg.byDate // per-day sums (rtoRetRev = RTO + Return, per row), api/_resolvedAgg.js
     const m = {}
     Object.entries(byDate).forEach(([date, d]) => {
       if (!d.gross) return
-      m[date] = { date, rtoPct: d.rtoRev / d.gross * 100, cirPct: d.cirRev / d.gross * 100, cancelPct: d.cancelRev / d.gross * 100, exchPct: d.exchRev / d.gross * 100 }
+      m[date] = { date, rtoPct: d.rtoRetRev / d.gross * 100, cirPct: d.cirRev / d.gross * 100, cancelPct: d.cancelRev / d.gross * 100, exchPct: d.exchRev / d.gross * 100 }
     })
     return m
   })()
@@ -10429,14 +10416,14 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   // engine as D2C: mature days use real RTO+Return+CIR+Cancelled revenue, immature days (last 15)
   // substitute this SKU's own rolling 30-day-window rate per component. Replaces the old live-only
   // returnRate.pct and the "Provisional Return" sub-label entirely, per explicit instruction.
-  const amzSCResolved = amzSC.resolvedDailySKU || []
-  const amzSCResolvedGross = amzSCResolved.reduce((s, r) => s + r.gross, 0)
-  const amzSCResolvedReturnRev = amzSCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const amzSCAgg = resolvedAggOf(amzSC) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const amzSCResolvedGross = amzSCAgg.gross
+  const amzSCResolvedReturnRev = amzSCAgg.totalReturnRev
   const amzSCResolvedReturnPct = amzSCResolvedGross > 0 ? (amzSCResolvedReturnRev / amzSCResolvedGross * 100) : 0
   // Amazon Vendor Central's own resolved Return Revenue (single Return-status component).
-  const amzVCResolved = amzVC.resolvedDailySKU || []
-  const amzVCResolvedGross = amzVCResolved.reduce((s, r) => s + r.gross, 0)
-  const amzVCResolvedReturnRev = amzVCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const amzVCAgg = resolvedAggOf(amzVC)
+  const amzVCResolvedGross = amzVCAgg.gross
+  const amzVCResolvedReturnRev = amzVCAgg.totalReturnRev
   // Combined SC+VC Returns % for the "All" toggle — both sides now resolved-engine-derived, so
   // the combined figure is never a mix of one resolved and one raw-live number.
   const amzCombinedReturnedRev = amzSCResolvedReturnRev + amzVCResolvedReturnRev
@@ -10608,19 +10595,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             // sums resolveDailySkuComponents' already-resolved per-SKU totals for each side
             // separately, so each side can still be toggled on/off (showSC/showVC) independently
             // while using the resolved (not raw-live) numbers.
-            const scResolvedBySku = {}
-            amzSCResolved.forEach(r => {
-              const s = scResolvedBySku[r.sku] || (scResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, returnRev: 0 })
-              s.rtoRev += r.components?.rto?.rev || 0
-              s.cirRev += r.components?.cir?.rev || 0
-              s.cancelRev += r.components?.cancel?.rev || 0
-              s.returnRev += r.components?.return?.rev || 0
-            })
-            const vcResolvedBySku = {}
-            amzVCResolved.forEach(r => {
-              const s = vcResolvedBySku[r.sku] || (vcResolvedBySku[r.sku] = { returnRev: 0 })
-              s.returnRev += r.components?.return?.rev || 0
-            })
+            // per-SKU sums: rows when loaded, else sales_detail's resolvedAggDetail (identical values)
+            const scResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(amzSC)).map(([sku, v]) => [sku, { rtoRev: v.rtoRev, cirRev: v.cirRev, cancelRev: v.cancelRev, returnRev: v.returnRev }]))
+            const vcResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(amzVC)).map(([sku, v]) => [sku, { returnRev: v.returnRev }]))
             const pickAmz = (scChData, vc, sku) => {
               const r = {}
               const scResolved = sku ? scResolvedBySku[sku] : null
@@ -11111,14 +11088,15 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   // Revenue/Orders correctly narrowed to the selected category — a real scope mismatch between the
   // numerator/denominator of the GST ratio and totalReturnRev below). fkDailySKUComponents now
   // carries category/subcategory (api/bq.js), passed through resolveDailySkuComponents.
-  const fkResolvedAll = fk.resolvedDailySKU || []
-  const fkResolved = selectedSubCat
-    ? fkResolvedAll.filter(r => r.category === selectedCat && r.subCategory === selectedSubCat)
-    : selectedCat
-    ? fkResolvedAll.filter(r => r.category === selectedCat)
-    : fkResolvedAll
-  const fkResolvedGross = fkResolved.reduce((s, r) => s + r.gross, 0)
-  const fkResolvedReturnRev = fkResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums / per-day return revenue from the rows when loaded (or filtered), else the 'fast' phase's
+  // fk.resolvedAgg — same accumulation order, identical values (api/_resolvedAgg.js).
+  const fkFilterGroup = selectedSubCat ? ['bySubCat', `${selectedCat}::${selectedSubCat}`] : selectedCat ? ['byCat', selectedCat] : null
+  const fkAgg = fkFilterGroup
+    ? resolvedAggWhere(fk, selectedSubCat ? (r => r.category === selectedCat && r.subCategory === selectedSubCat) : (r => r.category === selectedCat), fkFilterGroup, { bySku: true })
+    : resolvedAggOf(fk)
+  const fkSkuSums = fkFilterGroup ? (fkAgg.bySku || {}) : resolvedBySkuOf(fk)
+  const fkResolvedGross = fkAgg.gross
+  const fkResolvedReturnRev = fkAgg.totalReturnRev
   const fkResolvedReturnPct = fkResolvedGross > 0 ? (fkResolvedReturnRev / fkResolvedGross * 100) : 0
 
   // When cat/subcat selected, derive totals+daily from dailyCat (FBF+Non-FBF combined — no split)
@@ -11181,7 +11159,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   // estimated-days backfill (for the 1-3 day reporting lag, a separate concern from the rolling-
   // 30-day Return% substitution) completely untouched.
   const fkResolvedByDate = {}
-  fkResolved.forEach(r => { fkResolvedByDate[r.date] = (fkResolvedByDate[r.date] || 0) + r.totalReturnRev })
+  Object.entries(fkAgg.byDate).forEach(([date, d]) => { fkResolvedByDate[date] = d.totalReturnRev })
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
     if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returns: 0, returnRev: 0, estimated: x.estimated || false }
@@ -11240,8 +11218,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — fk.skuMatrix carried no
         // returnRev at all (SKU rows always showed "—" for Return%); this adds it from the
         // resolved engine, same as D2C/Amazon.
-        const fkResolvedBySku = {}
-        fkResolved.forEach(r => { fkResolvedBySku[r.sku] = (fkResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+        const fkResolvedBySku = Object.fromEntries(Object.entries(fkSkuSums).map(([sku, v]) => [sku, v.totalReturnRev]))
         const catAggMatrix = {}
         ;(fk.categories || []).forEach(x => {
           if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
@@ -14021,16 +13998,16 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22). CRED has only a
   // Return status (confirmed live), so this is a single-component resolution: mature days use real
   // Return revenue, immature days (last 15) substitute this SKU's own rolling 30-day-window rate.
-  const crResolved = cr.resolvedDailySKU || []
-  const crResolvedGross = crResolved.reduce((s, r) => s + r.gross, 0)
-  const totalReturnRev = crResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const crAgg = resolvedAggOf(cr) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const crResolvedGross = crAgg.gross
+  const totalReturnRev = crAgg.totalReturnRev
   const returnPct = crResolvedGross > 0 ? (totalReturnRev / crResolvedGross * 100) : 0
   const crGstRatio = crResolvedGross > 0 ? (crResolvedGross - (t.excRev || 0)) / crResolvedGross : 0
   const netRev = Math.max(crResolvedGross - totalReturnRev, 0) * (1 - crGstRatio)
   const gstCollected = (crResolvedGross - totalReturnRev) - netRev
   // CRED also has a real Cancelled status (confirmed live 2026-10-22, corrected from an earlier
   // assumption it only had Return) — tracked as its own resolved component.
-  const cancelRev = crResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelRev = crAgg.cancel
   const cancelPct = crResolvedGross > 0 ? (cancelRev / crResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
@@ -14071,8 +14048,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
   // 2026-10-22), replacing the previous "CRED has no breakdown, always 0" state. simpleReturns
   // still applies (one combined Return+Cancelled figure, no RTO/CIR for this channel).
-  const crResolvedBySku = {}
-  crResolved.forEach(r => { crResolvedBySku[r.sku] = (crResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+  const crResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(cr)).map(([sku, v]) => [sku, v.totalReturnRev]))
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -14343,14 +14319,14 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
   // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22), same engine as
   // CRED: Return and Cancelled both tracked, mature days use real revenue, immature days (last 15)
   // substitute this SKU's own rolling 30-day-window rate per component.
-  const fcResolved = fc.resolvedDailySKU || []
-  const fcResolvedGross = fcResolved.reduce((s, r) => s + r.gross, 0)
-  const totalReturnRev = fcResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const fcAgg = resolvedAggOf(fc) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const fcResolvedGross = fcAgg.gross
+  const totalReturnRev = fcAgg.totalReturnRev
   const returnPct = fcResolvedGross > 0 ? (totalReturnRev / fcResolvedGross * 100) : 0
   const fcGstRatio = fcResolvedGross > 0 ? (fcResolvedGross - (t.excRev || 0)) / fcResolvedGross : 0
   const netRev = Math.max(fcResolvedGross - totalReturnRev, 0) * (1 - fcGstRatio)
   const gstCollected = (fcResolvedGross - totalReturnRev) - netRev
-  const cancelRev = fcResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelRev = fcAgg.cancel
   const cancelPct = fcResolvedGross > 0 ? (cancelRev / fcResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
@@ -14390,8 +14366,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
 
   // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
   // 2026-10-22), replacing the previous "Firstcry has no breakdown, always 0" state.
-  const fcResolvedBySku = {}
-  fcResolved.forEach(r => { fcResolvedBySku[r.sku] = (fcResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+  const fcResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(fc)).map(([sku, v]) => [sku, v.totalReturnRev]))
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -14660,9 +14635,9 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
   // D2C/Amazon/Flipkart: mature days use real RTO+Return+CIR+Cancelled revenue, immature days
   // (last 15) substitute this SKU's own rolling 30-day-window rate per component. Replaces the
   // old live-only totals.returnRev-based figures and the "Provisional Return" sub-label entirely.
-  const mnResolved = mn.resolvedDailySKU || []
-  const mnResolvedGross = mnResolved.reduce((s, r) => s + r.gross, 0)
-  const mnReturnRev = mnResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const mnAgg = resolvedAggOf(mn) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const mnResolvedGross = mnAgg.gross
+  const mnReturnRev = mnAgg.totalReturnRev
   const mnReturnPct = mnResolvedGross > 0 ? (mnReturnRev / mnResolvedGross * 100) : 0
   const mnGstRatio = mnResolvedGross > 0 ? (mnResolvedGross - (totals.excRev || 0)) / mnResolvedGross : 0
   const netRev = Math.max(mnResolvedGross - mnReturnRev, 0) * (1 - mnGstRatio)

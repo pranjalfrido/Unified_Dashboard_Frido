@@ -52,7 +52,7 @@ for (const [u, qs] of Object.entries(MANUAL_DEPS)) { (deps[u] ||= new Set()); qs
 const FORCE_FAST = ['amzSC.fulfillment', 'amzSC.status', 'flipkart.status', 'cred.status', 'firstcry.status',
   'flipkart.categories', 'blinkit.categories', 'instamart.categories', 'zepto.categories']
 for (const u of FORCE_FAST) (deps[u] || []).forEach(q => FAST_BUDGET.add(q))
-const DETAIL_ONLY =/^(?:[a-zA-Z]+\.(?:sndBySku|dailyPnLBySku|skuCostRows|storeSkuCostRows|skuWeightGm|skuWeightShares|subCatDateMap|dailySKU)|pnlSalesRows)$/
+const DETAIL_ONLY =/^(?:[a-zA-Z]+\.(?:sndBySku|dailyPnLBySku|skuCostRows|storeSkuCostRows|skuWeightGm|skuWeightShares|subCatDateMap|dailySKU|resolvedDailySKU)|pnlSalesRows)$/
 const units = Object.keys(deps).filter(u => u !== 'shopify.dailySkuCostRows').sort()
 const isFast = u => !DETAIL_ONLY.test(u) && [...deps[u]].every(q => FAST_BUDGET.has(q))
 const FAST = units.filter(isFast)
@@ -82,7 +82,9 @@ for (const u of DETAIL) {
   const qualified = u.includes('.') && new RegExp(`\\b${u.split('.')[0]}\\??\\.${u.split('.')[1]}\\b`).test(SRC.ads)
   if (u.startsWith('ads.') ? mentions(SRC.ads, u) : qualified) { owner.ads_detail.push(u); any = true }
   if (mentions(SRC.pnl, u)) { owner.pnl_detail.push(u); any = true }
-  if (!u.startsWith('ads.') && mentions(SRC.sales, u)) { owner.sales_detail.push(u); any = true }
+  // resolvedDailySKU rows: Sales reads their reductions (<channel>.resolvedAggDetail, api/_resolvedAgg.js)
+  // shipped with sales_detail instead; only P&L gets the rows themselves.
+  if (!u.startsWith('ads.') && !u.endsWith('.resolvedDailySKU') && mentions(SRC.sales, u)) { owner.sales_detail.push(u); any = true }
   if (!any) (u.startsWith('ads.') ? owner.ads_detail : owner.sales_detail).push(u)
 }
 // Run by every phase: the small queries chMap's gross / ex-GST / order figures and dailyArr are built
@@ -94,8 +96,11 @@ for (const u of DETAIL) {
 // left to the measured map. (chMap's heavy resolved-return inputs only move netRev, never these.)
 const ALWAYS = ['byChannel', 'byDate', 'fkDaily', 'mnDaily', 'shopifyIntlTotals', 'shNetCalc', 'amzSCNetCalc', 'amzVCAccounts', 'offlineTotals']
 const queriesFor = us => [...new Set([...us.flatMap(u => [...deps[u]]), ...ALWAYS])].sort()
-const out = { FAST: { units: FAST, queries: queriesFor(FAST) } }
-for (const [p, us] of Object.entries(owner)) out[p] = { units: us, queries: queriesFor(us) }
+// fast also ships <channel>.resolvedAgg (api/_resolvedAgg.js), computed from every resolvedDailySKU
+// at response time — so it runs their queries even though the rows themselves are detail fields.
+const AGG_SOURCES = units.filter(u => u.endsWith('.resolvedDailySKU'))
+const out = { FAST: { units: FAST, queries: queriesFor([...FAST, ...AGG_SOURCES]) } }
+for (const [p, us] of Object.entries(owner)) out[p] = { units: us, queries: queriesFor(p === 'sales_detail' ? [...us, ...AGG_SOURCES] : us) }
 const used = new Set(Object.values(out).flatMap(o => o.queries))
 out.unusedQueries = [...qk].filter(k => !used.has(k)).sort()
 console.log(JSON.stringify(out, null, 1))
