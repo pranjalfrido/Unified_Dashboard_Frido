@@ -2,7 +2,8 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Lightning, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
+import NavAIIcon from './ask/NavAIIcon.jsx'
 import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -3388,7 +3389,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     { id: 'logistics', label: 'Logistics', Icon: Truck },
     { id: 'customer',  label: 'Customer',  Icon: Users },
     { id: 'documents', label: 'Documents', Icon: FileText },
-    { id: 'ask', label: 'Frido Pulse', Icon: Lightning },
+    { id: 'ask', label: 'NavAI', Icon: NavAIIcon },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -3599,7 +3600,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
-const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: Lightning,
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon,
   cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const can = id => {
@@ -5102,11 +5103,11 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
         subTabs, activeSub, onSub })
     }
-    // Every other screen (Documents, Frido Pulse, the internal tools …): the same header,
+    // Every other screen (Documents, NavAI, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
     const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
     const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
-    const phoneTitles = { ...titles, ask: 'Frido Pulse', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
+    const phoneTitles = { ...titles, ask: 'NavAI', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
     const hasDate = ['intelligence'].includes(page)
     return H({ title: phoneTitles[page] || page,
       onBack: back ? () => { if (back === 'sales') setSalesActiveTab('all'); setPage(back) } : undefined, backLabel: back ? backLabels[back] : undefined,
@@ -20042,7 +20043,7 @@ function AppInner() {
   )
 
   const isAdmin = profile.is_admin === true
-  // Frido Pulse is never auto-granted to admins — only these two emails have it by default.
+  // NavAI is never auto-granted to admins — only these two emails have it by default.
   // Anyone else (admin or member) must be explicitly granted 'ask' in their allowed_tabs.
   const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com'];
   const userEmail = session?.user?.email?.toLowerCase() || '';

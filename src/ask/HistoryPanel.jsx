@@ -14,7 +14,7 @@ export default function HistoryPanel({ conversations, activeId, onSelect, onNew,
   return (
     <div className="af-history">
       <div className="af-history-header">
-        <div className="af-history-title">Frido Pulse</div>
+        <div className="af-history-title">NavAI</div>
         <div className="af-history-sub">Chat with your data</div>
       </div>
 

@@ -283,7 +283,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
     showToast(user.is_admin ? `${user.name} is now a member` : 'Permissions saved')
   }
 
-  // Frido Pulse for an admin is saved straight away (admins have no other tab rows to save).
+  // NavAI for an admin is saved straight away (admins have no other tab rows to save).
   async function setAdminPulse(next) {
     const on = next.includes('ask')
     setSaving(true)
@@ -292,7 +292,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
     if (result.error) { showToast(`Not saved: ${result.error}`); return }
     setLocalTabs(prev => on ? [...new Set([...prev, 'ask'])] : prev.filter(k => k !== 'ask'))
     onUpdate()
-    showToast(on ? `${user.name} can now use Frido Pulse` : `Frido Pulse removed for ${user.name}`)
+    showToast(on ? `${user.name} can now use NavAI` : `NavAI removed for ${user.name}`)
   }
 
   async function promoteUser() {
@@ -504,7 +504,7 @@ function TeamMembers({ session, showToast }) {
                   >
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#1E2321', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
                     <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 2 }}>
-                      {u.is_admin ? `Admin · all tabs${(permissions[u.user_id] || []).includes('ask') ? ' + Pulse' : ''}` : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
+                      {u.is_admin ? `Admin · all tabs${(permissions[u.user_id] || []).includes('ask') ? ' + NavAI' : ''}` : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
                     </div>
                   </div>
                 )

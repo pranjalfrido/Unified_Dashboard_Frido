@@ -93,15 +93,15 @@ function PermGroupFlat({ node, tabs, setTabs }) {
   )
 }
 
-// Frido Pulse for an admin: being admin gives every tab except Pulse, so it's granted on its own.
+// NavAI for an admin: being admin gives every tab except Pulse, so it's granted on its own.
 // Shown only to the two people who may grant Pulse; renders nothing for anyone else.
 export function AdminPulseCard({ callerEmail, tabs, setTabs, note }) {
   if (!PULSE_WHITELIST.includes((callerEmail || '').toLowerCase())) return null
   return (
     <div style={{ background: '#F7F5EF', border: '1px solid #E7E3D8', borderRadius: 10, padding: '10px 12px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: tabs.includes('ask') ? '#1E2321' : '#9BA5A1', marginBottom: 4 }}>Frido Pulse</div>
-      <div style={{ fontSize: 12, color: '#4B534F', marginBottom: 8 }}>{note || 'Admins don’t get Pulse automatically. Tap to give or remove it.'}</div>
-      <PermChip node={{ key: 'ask', label: 'Frido Pulse' }} tabs={tabs} setTabs={setTabs} />
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: tabs.includes('ask') ? '#1E2321' : '#9BA5A1', marginBottom: 4 }}>NavAI</div>
+      <div style={{ fontSize: 12, color: '#4B534F', marginBottom: 8 }}>{note || 'Admins don’t get NavAI automatically. Tap to give or remove it.'}</div>
+      <PermChip node={{ key: 'ask', label: 'NavAI' }} tabs={tabs} setTabs={setTabs} />
     </div>
   )
 }
@@ -111,7 +111,7 @@ export default function PermissionPanel({ tabs, setTabs, callerEmail, hidePulse 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {PERMISSION_TREE.map(node => {
-        // Hide Frido Pulse chip from anyone not on the whitelist (and where Pulse has its own card)
+        // Hide NavAI chip from anyone not on the whitelist (and where Pulse has its own card)
         if (node.key === 'ask' && (!canGrantPulse || hidePulse)) return null;
         if (!node.isGroup) {
           // Standalone tab — wrap in a card like the groups

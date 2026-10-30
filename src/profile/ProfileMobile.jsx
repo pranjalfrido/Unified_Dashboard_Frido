@@ -287,7 +287,7 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
         {!team.loading && !list.length && <div style={{ padding: 16, fontSize: 13, color: M.muted, textAlign: 'center' }}>No one matches.</div>}
         {list.slice(0, shown).map((u, i, arr) => {
           const self = u.user_id === team.selfId
-          const meta = self ? 'You · Admin' : u.is_admin ? `Admin · all tabs${(team.perms[u.user_id] || []).includes('ask') ? ' + Pulse' : ''}` : `${tabsOf(u)} of ${total} tabs`
+          const meta = self ? 'You · Admin' : u.is_admin ? `Admin · all tabs${(team.perms[u.user_id] || []).includes('ask') ? ' + NavAI' : ''}` : `${tabsOf(u)} of ${total} tabs`
           return (
             <button key={u.user_id} type="button" className="profile-team-row" onClick={() => onOpen(u.user_id)}
               style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,1fr) auto 14px', alignItems: 'center', gap: 10, width: '100%', minHeight: 60, padding: '8px 0', border: 'none', borderBottom: i < arr.length - 1 ? `1px solid ${M.line}` : 'none', background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer' }}>
@@ -328,7 +328,7 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
   const queue = useRef(Promise.resolve())
   const sections = accessSections(callerEmail)
   const readOnly = isSelf || user.is_admin
-  // Being admin doesn't include Frido Pulse: the two Pulse owners give it to an admin here.
+  // Being admin doesn't include NavAI: the two Pulse owners give it to an admin here.
   const pulseForAdmin = user.is_admin && !isSelf && PULSE_WHITELIST.includes((callerEmail || '').toLowerCase()) && !PULSE_WHITELIST.includes((user.email || '').toLowerCase())
   const setPulse = async on => {
     setBusy(true)
@@ -337,7 +337,7 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
     if (result.error) { setToast({ text: `Couldn't save: ${result.error}` }); return }
     setTabs(prev => on ? [...new Set([...prev, 'ask'])] : prev.filter(k => k !== 'ask'))
     onChanged()
-    setToast({ text: on ? `${user.name} can now use Frido Pulse` : `Frido Pulse removed for ${user.name}`, undo: () => setPulse(!on) })
+    setToast({ text: on ? `${user.name} can now use NavAI` : `NavAI removed for ${user.name}`, undo: () => setPulse(!on) })
   }
 
   // Saved by the admin API in one step, as on the laptop. Saves run one after another; a failed save
@@ -424,12 +424,12 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
             {!isSelf && <button type="button" onClick={() => openSheet('role')} style={{ ...outlineBtn(M.green), marginTop: 10 }}>Make member</button>}
             {pulseForAdmin && (
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${M.line}` }}>
-                <b style={{ display: 'block', color: M.ink, fontSize: 14, marginBottom: 2 }}>Frido Pulse</b>
-                <div style={{ marginBottom: 8 }}>Admins don’t get Pulse automatically. Tap to give or remove it.</div>
+                <b style={{ display: 'block', color: M.ink, fontSize: 14, marginBottom: 2 }}>NavAI</b>
+                <div style={{ marginBottom: 8 }}>Admins don’t get NavAI automatically. Tap to give or remove it.</div>
                 <button type="button" aria-pressed={tabs.includes('ask')} disabled={busy} onClick={() => setPulse(!tabs.includes('ask'))}
                   style={{ minHeight: 34, padding: '0 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
                     border: `1px solid ${tabs.includes('ask') ? 'rgba(31,90,61,.35)' : M.g4}`, background: tabs.includes('ask') ? 'rgba(31,90,61,.10)' : '#fff', color: tabs.includes('ask') ? M.green : M.muted,
-                    boxShadow: tabs.includes('ask') ? '0 0 8px 0 rgba(31,90,61,.18)' : 'none' }}>{tabs.includes('ask') ? '✓ ' : ''}Frido Pulse</button>
+                    boxShadow: tabs.includes('ask') ? '0 0 8px 0 rgba(31,90,61,.18)' : 'none' }}>{tabs.includes('ask') ? '✓ ' : ''}NavAI</button>
               </div>
             )}
           </div>
@@ -507,7 +507,7 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
       </BottomSheet>
       <BottomSheet open={sheet === 'role'} onClose={() => setSheet(null)} title={user.is_admin ? 'Make member' : 'Make admin'}>
         <p style={{ margin: '0 0 14px', fontSize: 14, color: M.ink }}>{user.is_admin
-          ? `Make ${user.name} a member? They lose admin and start with no tabs (Frido Pulse stays if they have it); pick their tabs on this screen right after.`
+          ? `Make ${user.name} a member? They lose admin and start with no tabs (NavAI stays if they have it); pick their tabs on this screen right after.`
           : `Make ${user.name} an admin? Admins see every tab and can manage the team.`}</p>
         {errLine}
         <div style={{ display: 'flex', gap: 10 }}>
