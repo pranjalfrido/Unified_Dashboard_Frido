@@ -101,7 +101,7 @@
 .fbx-check input { width: 18px; height: 18px; accent-color: #1f5a3d; }
 .fbx-save { flex: none; width: 100%; }
 
-/* ── My feedback / What's new ── */
+/* ── My feedback ── */
 .fbm { display: flex; flex-direction: column; gap: 10px; color: #1c2420; }
 .fbm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fbm-head h3 { margin: 0; font-size: 16px; font-weight: 700; }

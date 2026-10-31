@@ -13,12 +13,11 @@ function Detail({ id, token, onChanged, onBack, phone }) {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('new')
   const [reply, setReply] = useState('')
-  const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let off = false
-    fb('get', token, { id }).then(d => { if (off) return; setItem(d.item); setStatus(d.item.status); setReply(d.item.admin_reply || ''); setShow(d.item.show_in_whats_new) }, e => { if (!off) setError(e.message) })
+    fb('get', token, { id }).then(d => { if (off) return; setItem(d.item); setStatus(d.item.status); setReply(d.item.admin_reply || '') }, e => { if (!off) setError(e.message) })
     return () => { off = true }
   }, [id, token])
 
@@ -32,8 +31,8 @@ function Detail({ id, token, onChanged, onBack, phone }) {
     if (needReply) return
     setBusy(true); setError('')
     try {
-      const d = await fb('update', token, { id, status, admin_reply: reply, show_in_whats_new: status === 'done' && show })
-      setItem(p => ({ ...p, ...d.item })); setShow(d.item.show_in_whats_new); onChanged()
+      const d = await fb('update', token, { id, status, admin_reply: reply })
+      setItem(p => ({ ...p, ...d.item })); onChanged()
       showToast('Saved.')
     } catch (e) { setError(e.message) }
     setBusy(false)
@@ -72,9 +71,6 @@ function Detail({ id, token, onChanged, onBack, phone }) {
         </label>
         <label className="fbx-lab">Reply to {item.user_name?.split(' ')[0] || 'the user'}{closing ? ' (required)' : ''}
           <textarea value={reply} maxLength={1000} rows={3} onChange={e => setReply(e.target.value)} placeholder={closing ? 'A short note on what was done, or why not' : 'Optional'} aria-label="Reply" />
-        </label>
-        <label className={`fbx-check${status === 'done' ? '' : ' off'}`}>
-          <input type="checkbox" checked={status === 'done' && show} disabled={status !== 'done'} onChange={e => setShow(e.target.checked)} /> Show in What's new
         </label>
         {error && <div className="fb-err" role="alert">{error}</div>}
         <button type="button" className="fb-send fbx-save" disabled={busy || needReply} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>

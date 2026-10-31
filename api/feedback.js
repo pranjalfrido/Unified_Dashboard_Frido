@@ -184,12 +184,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
-    // Done items an admin chose to show: only the type, the admin's reply and the date (never who asked or what they wrote).
-    if (action === 'whatsnew') {
-      const rows = await store.whatsNew()
-      return res.status(200).json({ items: rows.map(r => ({ id: r.id, type: r.type, text: r.admin_reply, resolved_at: r.resolved_at })) })
-    }
-
     // ── admins only ───────────────────────────────────────────────────
     if (action === 'list' || action === 'get' || action === 'update' || action === 'digest') {
       if (denyNonAdmin()) return
@@ -218,8 +212,7 @@ export default async function handler(req, res) {
         if (!STATUSES.includes(status)) return fail(res, 400, 'Unknown status.')
         const reply = body.admin_reply === undefined ? (row.admin_reply || '') : clean(body.admin_reply, MAX_REPLY)
         if (['done', 'wont_do'].includes(status) && reply.length < 3) return fail(res, 400, 'Add a short reply before closing this item.')
-        const show = status === 'done' && body.show_in_whats_new === true
-        const patch = { status, admin_reply: reply || null, show_in_whats_new: show }
+        const patch = { status, admin_reply: reply || null }
         // A newly closed item, or a changed reply on a closed item, notifies the user again.
         if (['done', 'wont_do'].includes(status) && (status !== row.status || reply !== (row.admin_reply || ''))) patch.user_seen_at = null
         const updated = await store.update(row.id, patch)

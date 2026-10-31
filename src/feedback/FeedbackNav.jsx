@@ -1,28 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChatCircleDots, DotsThree, Sparkle, Tray } from '@phosphor-icons/react'
+import { ChatCircleDots, Tray } from '@phosphor-icons/react'
 import { useFeedback } from './feedbackCtx.js'
 import './feedback.css'
 
-// Laptop header, right side: "Feedback" button and a ⋯ menu (What's new).
-export function FeedbackHeaderButtons({ setPage }) {
+// Laptop header, right side: the "Feedback" button.
+export function FeedbackHeaderButtons() {
   const { open } = useFeedback()
-  const [menu, setMenu] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!menu) return
-    const off = e => { if (!ref.current?.contains(e.target)) setMenu(false) }
-    document.addEventListener('mousedown', off)
-    return () => document.removeEventListener('mousedown', off)
-  }, [menu])
   return (
-    <div className="fb-hdr" ref={ref}>
+    <div className="fb-hdr">
       <button type="button" className="fb-hbtn" onClick={() => open()} data-testid="fb-open-header"><ChatCircleDots size={16} /> Feedback</button>
-      <button type="button" className="fb-hmore" aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(v => !v)}><DotsThree size={20} weight="bold" /></button>
-      {menu && (
-        <div className="fb-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setMenu(false); setPage('whatsnew') }}><Sparkle size={15} /> What's new</button>
-        </div>
-      )}
     </div>
   )
 }

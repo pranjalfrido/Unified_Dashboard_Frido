@@ -2,12 +2,11 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package, Tray, Sparkle } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package, Tray } from '@phosphor-icons/react'
 import NavAIIcon from './ask/NavAIIcon.jsx'
 import FeedbackProvider from './feedback/FeedbackProvider.jsx'
 import { useFeedback } from './feedback/feedbackCtx.js'
 import FeedbackInbox from './feedback/FeedbackInbox.jsx'
-import WhatsNew from './feedback/WhatsNew.jsx'
 import { FeedbackHeaderButtons, FeedbackSidebarItems } from './feedback/FeedbackNav.jsx'
 import { LOCAL_MODE } from './feedback/feedbackApi.js'
 import { localSession, isLocalSession, localProfileFor } from './feedback/localAuth.js'
@@ -3611,13 +3610,12 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
-const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon, feedback: Tray, whatsnew: Sparkle,
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon, feedback: Tray,
   cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const fbk = useFeedback()
   const can = id => {
     if (id === 'feedback') return profile?.is_admin === true // admins only
-    if (id === 'whatsnew') return true
     if (!allowedTabs) return true
     if (id === 'sales') return hasSalesAccess(allowedTabs)
     if (id === 'ads') return hasAdsAccess(allowedTabs)
@@ -4957,7 +4955,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
   const [liveOpen, setLiveOpen] = useState(false)
   const liveCount = useLiveCount(isAdmin)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', feedback: 'Feedback', whatsnew: "What's new" }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', feedback: 'Feedback' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -5174,9 +5172,9 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       {page === 'overview' && <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>}
       {/* Admins only: "● N live" next to the alerts / date controls. */}
       <LivePill isAdmin={isAdmin} />
-      <FeedbackHeaderButtons setPage={setPage} />
+      <FeedbackHeaderButtons />
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'whatsnew' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
@@ -20347,7 +20345,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     }
     const isPageAllowed = page === 'profile' ? true :
       page === 'feedback' ? profile?.is_admin === true :
-      page === 'whatsnew' ? true :
       page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       // Shares Cost Analytics' permission: there is no separate allowedTabs entry for it,
       // so without this branch the generic allowedTabs.includes(page) test fails and a
@@ -20934,7 +20931,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
   const fbk = useFeedback()
   useEffect(() => {
-    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback', whatsnew: "What's new" }
+    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
     const channel = page === 'sales' ? (TABS.find(t => t.id === activeTab)?.label || activeTab)
       : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : 'Inventory Health') : ''
     const extra = {}
@@ -20967,7 +20964,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <div className="app-main">
         {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'whatsnew' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -21067,9 +21064,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'feedback' && profile?.is_admin === true && (
             <div className="page-scroll"><FeedbackInbox /></div>
-          )}
-          {page === 'whatsnew' && (
-            <div className="page-scroll"><div className="fbm-wrap"><WhatsNew /></div></div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
             <AskFridoPage key={session?.user?.id} userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} session={session}
