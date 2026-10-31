@@ -130,7 +130,7 @@ function supabaseStore() {
   return {
     mode: 'supabase',
     async countSince(userId, ms) {
-      return count(await db().from('feedback').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', new Date(Date.now() - ms).toISOString()))
+      return count(await db().from('feedback').select('id', { count: 'exact' }).eq('user_id', userId).gte('created_at', new Date(Date.now() - ms).toISOString()).limit(1))
     },
     async saveShot(userId, id, ext, buf) {
       const path = `${userId}/${id}.${ext}`
@@ -156,9 +156,9 @@ function supabaseStore() {
       const rows = must(await db().from('feedback').select('context').order('created_at', { ascending: false }).limit(1000))
       return [...new Set(rows.map(r => r.context?.page).filter(Boolean))].sort()
     },
-    async countNew() { return count(await db().from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new')) },
+    async countNew() { return count(await db().from('feedback').select('id', { count: 'exact' }).eq('status', 'new').limit(1)) },
     async countUnseen(userId) {
-      return count(await db().from('feedback').select('id', { count: 'exact', head: true }).eq('user_id', userId).in('status', ['done', 'wont_do']).not('admin_reply', 'is', null).is('user_seen_at', null))
+      return count(await db().from('feedback').select('id', { count: 'exact' }).eq('user_id', userId).in('status', ['done', 'wont_do']).not('admin_reply', 'is', null).is('user_seen_at', null).limit(1))
     },
     async ack(userId, ids) { must(await db().from('feedback').update({ user_seen_at: new Date().toISOString() }).eq('user_id', userId).in('id', ids)) },
     async whatsNew() {
