@@ -88,6 +88,22 @@ async function sendDigest(store) {
 
 const fail = (res, status, error) => res.status(status).json({ error })
 
+// What really went wrong, in words an admin can act on. Shown only to admins (and in local mode); everyone else
+// gets the plain "Something went wrong". The full error is always in the Vercel function log.
+function explain(e) {
+  const m = String(e?.message || e || 'unknown error')
+  if (/Missing SUPABASE/i.test(m)) return 'Server not configured: SUPABASE_PROJECT_URL / SUPABASE_SECRET_KEY are missing in Vercel.'
+  if (e?.code === '42P01' || /relation .* does not exist|schema cache|Could not find the table/i.test(m)) return 'The feedback table was not found in the database. Run docs/sql/feedback.sql.'
+  if (/Could not find the '.*' column/i.test(m) || e?.code === '42703' || e?.code === 'PGRST204') return `The feedback table is missing a column (${m.slice(0, 120)}). Re-run docs/sql/feedback.sql.`
+  if (e?.code === '42501' || /permission denied|row-level security/i.test(m)) return 'The database refused access to the feedback table (permission / RLS). Check the service key and grants.'
+  if (e?.code === '23514') return `A database check rejected the item (${m.slice(0, 120)}).`
+  if (e?.code === '23503') return 'The signed-in user was not found in the database (foreign key).'
+  if (/bucket not found/i.test(m)) return 'The storage bucket feedback-screenshots was not found.'
+  if (/Invalid API key|JWT|apikey/i.test(m)) return 'Server not configured: the Supabase service key looks wrong.'
+  if (/fetch failed|ENOTFOUND|ECONN/i.test(m)) return 'The server could not reach Supabase (network).'
+  return m.slice(0, 200)
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
@@ -96,6 +112,7 @@ export default async function handler(req, res) {
   if (LOCAL_FLAG_ON_VERCEL) { console.error('[feedback] FEEDBACK_LOCAL is set on Vercel: refusing to run. Remove it from the environment variables.'); return fail(res, 503, 'Feedback is unavailable.') }
   if (req.method === 'OPTIONS') return res.status(200).end()
   const store = getStore()
+  let caller = null
 
   try {
     // Vercel cron (7 pm IST) calls GET with "Authorization: Bearer <CRON_SECRET>".
@@ -111,6 +128,7 @@ export default async function handler(req, res) {
     const auth = await authenticate(token)
     if (auth.error) return fail(res, auth.status, auth.error)
     const user = auth.user
+    caller = user
     const action = String(body.action || '')
     const denyNonAdmin = () => { if (user.isAdmin) return false; fail(res, 403, 'Admins only.'); return true }
 
@@ -208,7 +226,7 @@ export default async function handler(req, res) {
 
     return fail(res, 400, 'Unknown action.')
   } catch (e) {
-    console.error('[feedback] error:', e.message)
-    return fail(res, 500, LOCAL ? e.message : 'Something went wrong. Please try again.')
+    console.error('[feedback] error:', e?.code || '', e?.message, e?.hint || '')
+    return res.status(500).json({ error: 'Something went wrong. Please try again.', ...(caller?.isAdmin || LOCAL ? { detail: explain(e) } : {}) })
   }
 }

@@ -122,3 +122,10 @@
   .fbm-wrap { padding: 12px 16px 24px; }
   .fbx-ctx div { grid-template-columns: 88px minmax(0, 1fr); }
 }
+
+/* keyboard open: tighter spacing so everything fits above the keyboard */
+.fb-form.fb-kb { gap: 8px; }
+.fb-form.fb-kb .fb-text { min-height: 72px; }
+.fb-form.fb-kb .fb-chip, .fb-form.fb-kb .fb-ghost, .fb-form.fb-kb .fb-urgent { min-height: 36px; }
+.fb-sheet .fb-actions { margin-top: 0; }
+.fb-sheet .fb-cancel, .fb-sheet .fb-send { min-height: 44px; }

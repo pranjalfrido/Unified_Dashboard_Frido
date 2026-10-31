@@ -124,8 +124,9 @@ function localStore() {
 
 function supabaseStore() {
   const db = () => getAdminClient()
-  const must = ({ data, error }) => { if (error) throw new Error(error.message); return data }
-  const count = ({ count: n, error }) => { if (error) throw new Error(error.message); return n || 0 }
+  const fail = error => { throw Object.assign(new Error(error.message), { code: error.code, hint: error.hint }) }
+  const must = ({ data, error }) => { if (error) fail(error); return data }
+  const count = ({ count: n, error }) => { if (error) fail(error); return n || 0 }
   return {
     mode: 'supabase',
     async countSince(userId, ms) {
@@ -134,7 +135,7 @@ function supabaseStore() {
     async saveShot(userId, id, ext, buf) {
       const path = `${userId}/${id}.${ext}`
       const { error } = await db().storage.from(BUCKET).upload(path, buf, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false })
-      if (error) throw new Error(error.message)
+      if (error) fail(error)
       return path
     },
     async removeShot(path) { try { await db().storage.from(BUCKET).remove([path]) } catch { /* best effort */ } },
