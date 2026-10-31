@@ -2,8 +2,16 @@
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package } from '@phosphor-icons/react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText, Receipt, Coins, Path, ShoppingCart, Package, Tray, Sparkle } from '@phosphor-icons/react'
 import NavAIIcon from './ask/NavAIIcon.jsx'
+import FeedbackProvider from './feedback/FeedbackProvider.jsx'
+import { useFeedback } from './feedback/feedbackCtx.js'
+import FeedbackInbox from './feedback/FeedbackInbox.jsx'
+import WhatsNew from './feedback/WhatsNew.jsx'
+import { FeedbackHeaderButtons, FeedbackSidebarItems } from './feedback/FeedbackNav.jsx'
+import { LOCAL_MODE } from './feedback/feedbackApi.js'
+import { localSession, isLocalSession, localProfileFor } from './feedback/localAuth.js'
+import LocalPicker from './feedback/LocalPicker.jsx'
 import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -3584,6 +3592,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
+        <FeedbackSidebarItems page={page} setPage={setPage} />
         <div className="theme-picker-slot" style={{ display: 'contents' }}><ThemePicker theme={theme} setTheme={setTheme} /></div>
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
@@ -3602,10 +3611,13 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // NAV_MOBILE_PROMPT.md: an icon bar (default Overview, Sales, P&L, Inventory, Logistics, Customer, then
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
-const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon,
+const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon, feedback: Tray, whatsnew: Sparkle,
   cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
+  const fbk = useFeedback()
   const can = id => {
+    if (id === 'feedback') return profile?.is_admin === true // admins only
+    if (id === 'whatsnew') return true
     if (!allowedTabs) return true
     if (id === 'sales') return hasSalesAccess(allowedTabs)
     if (id === 'ads') return hasAdsAccess(allowedTabs)
@@ -3639,7 +3651,7 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
   }
   return <>
     <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
-      onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} />
+      onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} onFeedback={() => setTimeout(() => fbk.open(), 350)} />
     <AppBanner />
   </>
 }
@@ -4945,7 +4957,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
   const [liveOpen, setLiveOpen] = useState(false)
   const liveCount = useLiveCount(isAdmin)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', feedback: 'Feedback', whatsnew: "What's new" }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -5162,8 +5174,9 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       {page === 'overview' && <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>}
       {/* Admins only: "● N live" next to the alerts / date controls. */}
       <LivePill isAdmin={isAdmin} />
+      <FeedbackHeaderButtons setPage={setPage} />
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'whatsnew' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
@@ -5197,6 +5210,8 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
 // Phones: the same alerts list as the bell's panel, in a bottom sheet. Opened from "Notifications (n)",
 // the first item of the header's ⋯ menu (HEADER_MOBILE_PROMPT.md §3).
 function AlertsSheet({ open, onClose, alerts }) {
+  const fbk = useFeedback()
+  useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
   return (
     <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -5226,6 +5241,8 @@ function AlertsBell({ alerts }) {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [open])
   const critical = alerts.filter(a => a.type === 'red').length
+  const fbk = useFeedback()
+  useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button
@@ -19937,6 +19954,9 @@ function AppInner() {
       setSession('recovery')
       return
     }
+    // Localhost test mode only (VITE_FEEDBACK_LOCAL=1): open as a made-up test person, no Supabase.
+    const ls = import.meta.env.DEV ? localSession() : null // dev server only: the test login is not in production builds
+    if (ls) { setSession(ls); return }
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => { if (!window._suppressAuth) setSession(s || null) })
     return () => subscription.unsubscribe()
@@ -19949,6 +19969,7 @@ function AppInner() {
 
   useEffect(() => {
     if (!session || session === 'recovery') return
+    if (import.meta.env.DEV && isLocalSession(session)) { const l = localProfileFor(session); setProfile(l.profile); setAllowedTabs(l.tabs); return }
     setProfileError(false)
     // Resilient load (29 Oct: a busy Supabase returned 503 and every user hit "Couldn't load
     // your profile"). The lookup is retried with short backoff, and if it still fails the last
@@ -20002,6 +20023,7 @@ function AppInner() {
   // 5 minutes), without a reload. State only changes when something actually changed.
   useEffect(() => {
     if (!session || session === 'recovery') return
+    if (import.meta.env.DEV && isLocalSession(session)) return
     const refresh = () => {
       if (document.visibilityState !== 'visible') return
       supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
@@ -20029,9 +20051,10 @@ function AppInner() {
       navigate('/overview', { replace: true })
       return null
     }
-    return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
   }
 
+  if (!session && import.meta.env.DEV && LOCAL_MODE) return <LocalPicker />
   if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
@@ -20063,7 +20086,7 @@ function AppInner() {
     ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
     : allowedTabs
 
-  return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
+  return <FeedbackProvider session={session} profile={profile}><Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} /></FeedbackProvider>
 }
 
 function DocumentsPage({ setPage }) {
@@ -20323,6 +20346,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       return
     }
     const isPageAllowed = page === 'profile' ? true :
+      page === 'feedback' ? profile?.is_admin === true :
+      page === 'whatsnew' ? true :
       page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       // Shares Cost Analytics' permission: there is no separate allowedTabs entry for it,
       // so without this branch the generic allowedTabs.includes(page) test fails and a
@@ -20906,6 +20931,25 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // exact same list, never two independently-computed copies that could drift.
   const combinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts), [data, logisticsData, invSnapshotData, alerts])
 
+  // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
+  const fbk = useFeedback()
+  useEffect(() => {
+    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback', whatsnew: "What's new" }
+    const channel = page === 'sales' ? (TABS.find(t => t.id === activeTab)?.label || activeTab)
+      : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : 'Inventory Health') : ''
+    const extra = {}
+    for (const [k, v] of Object.entries(filters)) { if (k === 'start' || k === 'end') continue; if (Array.isArray(v) ? v.length : v) extra[k] = v }
+    fbk.publishView({ page: labels[page] || page, path: location.pathname, channel, subChannel: filters.subChannel || (page === 'sales' && salesSub2 !== 'overall' ? salesSub2 : ''), start: filters.start, end: filters.end, dateRange: `${filters.start} to ${filters.end}`, filters: extra })
+  }, [page, location.pathname, activeTab, pnlActiveTab, adsSelPlatform, invTab, salesSub2, filters]) // eslint-disable-line react-hooks/exhaustive-deps -- fbk.publishView is stable
+  useEffect(() => {
+    fbk.registerRestore(ctx => {
+      if (!ctx?.path) return
+      const base = { category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' }
+      navigate(ctx.path)
+      if (ctx.start && ctx.end) setFilters(f => ({ ...f, ...base, start: ctx.start, end: ctx.end, ...(ctx.filters || {}) }))
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- navigate / setFilters are stable
+
   // When live data arrives, patch additionalSpend/additionalSpendByProduct into adsCache
   // (the cache script doesn't query the markting_spend Postgres table, so these fields are
   // absent from the static JSON — the live API response fills them in after ~7s).
@@ -20921,9 +20965,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
+        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'whatsnew' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -21020,6 +21064,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             <div className="page-scroll">
               <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} />
             </div>
+          )}
+          {page === 'feedback' && profile?.is_admin === true && (
+            <div className="page-scroll"><FeedbackInbox /></div>
+          )}
+          {page === 'whatsnew' && (
+            <div className="page-scroll"><div className="fbm-wrap"><WhatsNew /></div></div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
             <AskFridoPage key={session?.user?.id} userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst' }} session={session}

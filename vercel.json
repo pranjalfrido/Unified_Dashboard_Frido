@@ -7,6 +7,9 @@
       "maxDuration": 300
     }
   },
+  "crons": [
+    { "path": "/api/feedback?action=digest", "schedule": "30 13 * * *" }
+  ],
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[skip ci\\]' && exit 0 || exit 1",
   "git": {
     "deploymentEnabled": {
