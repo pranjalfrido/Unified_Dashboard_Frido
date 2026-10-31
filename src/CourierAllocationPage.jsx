@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { C as BASE_C, fmt, fmtN, exportCSV } from './utils.js'
 import { Card, Delta } from './components.jsx'
+import { authFetch } from './authFetch.js'
 
 // Same t3 darkening as the Logistics Cost tabs this page opens from — #94939F is 3.03:1 on
 // a white card and fails WCAG AA at the 9.5-11px these labels run at.
@@ -49,7 +50,7 @@ export default function CourierAllocationPage({ onBack }) {
       // triggers a cascading render (react-hooks/set-state-in-effect).
       setLoading(true); setErr(null)
       try {
-        const res = await fetch(`${API}/api/courier-allocation`, {
+        const res = await authFetch(`${API}/api/courier-allocation`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lookbackDays: lookback }), signal: ctl.signal,
         })
