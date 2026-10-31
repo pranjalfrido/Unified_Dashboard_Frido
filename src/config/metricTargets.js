@@ -93,6 +93,62 @@ export const SUPPORT_RULES = {
   per100UpPct: 10,            // 'Contacts per 100 orders up': ▲ at least this %
 }
 
+// Alerts Phase 1 bell rules — approved 2026-10-31 (docs/ALERTS_PHASE1_PROMPT.md + the 90-day
+// backtest in docs/ALERTS_BACKTEST.md). One block, one source of truth for every bell threshold;
+// computeCombinedAlerts (src/utils.js) reads these, nothing else needs to change to retune a bar.
+// #8 (D2C CM1%/COGS%) and #12 (D2C SnD%) are explicitly OUT of Phase 1 — left as comments only in
+// computeCombinedAlerts, not built, per the task brief.
+export const ALERT_RULES = {
+  // #1 Top-20 SKU stockout risk (inventory) — backtest: not backtestable (no historical inventory
+  // snapshot series in BQ); keep the existing in-app rule as-is. approved 2026-10-31.
+  top20StockoutMinAtRisk: 1,
+  // #2 Fleet-wide stockout risk (inventory) — backtest: not backtestable from history either; keep
+  // the existing "> 250 SKUs" threshold as-is (this is NOT the >50 number, which is Alert #5's
+  // candidate). approved 2026-10-31.
+  fleetStockoutSkus: 250,
+  // #3 Forward delivery % below threshold (logistics) — backtest recommends tightening the naive
+  // <90% bar (17.3% of mature days) to <88% (true floor, 0/75 fired in the 90-day window), evaluated
+  // over the latest mature 7 order-days. approved 2026-10-31.
+  deliveryPctMin: 88,
+  // #4 Forward RTO % above threshold (logistics, Clickpost) — backtest: >8% over-fires (41.3% of
+  // days); tighten to >9.5% (between real p90 9.05% and max 10.36%, 3/75 fired). approved 2026-10-31.
+  rtoPctMax: 9.5,
+  // #5 Stuck shipments above N (logistics) — backtest: proxy methodology not directly comparable to
+  // the live snapshot tile; keep N=50 (the brief's number, inside the backtest's own >50 candidate
+  // band of 10/85 fired = 11.8%). approved 2026-10-31.
+  stuckShipmentsMax: 50,
+  // #6 D2C return-rate red lines, bell-only (sales:shopify) — backtest: the live page's own
+  // RED_THRESH (cancel 3/rto 9/cir 9/exchange 6/total 20) is badly miscalibrated loose-to-tight
+  // drift; tighten each to ~p90 of the real 90-day distribution for the BELL condition only — the
+  // live Return Analysis page's own RED_THRESH/colors (src/sales/returnAnalysisData.js) are
+  // untouched. approved 2026-10-31.
+  d2cRedLines: { cancelPct: 6.5, rtoPct: 10, cirPct: 9, exchangePct: 8, totalReturnPct: 28 },
+  // #7 Channel with 0 orders (sales per channel) — backtest: CRED (5/90 true-zero days, 5.6%) and
+  // Firstcry (11/90, 12.2%) are naturally thin/intermittent channels, excluded per the backtest's
+  // recommendation; all other Sales channels checked for a true 0-orders day. approved 2026-10-31.
+  zeroOrderExcludeChannels: ['CRED', 'Firstcry'],
+  // #9 Ads: spend with no sales (ads:<channel>) — backtest: already well-calibrated (1/~90
+  // channel-days fired); keep ADS_RULES.noSalesSpend/noSalesRoas as-is, reused directly, no new
+  // constant needed here. approved 2026-10-31.
+  // #10 Inventory data stale > 2h (admin) — backtest: not backtestable (file-timestamp check, not
+  // historical data); keep the existing 2h fallback convention from api/inventory.js. approved 2026-10-31.
+  inventoryStaleHours: 2,
+  // #11 TAT/EDD breach % (SLA-breach share of delivered-with-EDD), forward (logistics) — backtest:
+  // flat >15% bar sits at the real p90/p95 boundary (7/75 fired, 9.3%); >10% over-fires at 70.7%.
+  // approved 2026-10-31.
+  slaBreachPctMax: 15,
+  // #13 Customers: CAC up WoW (customer) — backtest: existing CUSTOMER_RULES.cacUpPct=10 backtests
+  // acceptably (3/11 weeks, 27.3%, under the 1-in-3 ceiling) but brief asks for >=15%; using a
+  // bell-specific constant here (NOT overwriting CUSTOMER_RULES.cacUpPct, which also drives the
+  // Customer Intelligence page's own in-page tile coloring at 10% — changing that shared constant
+  // would silently recolor an unrelated in-page tile). approved 2026-10-31.
+  cacUpPctBell: 15,
+  // Logistics alerts (#3/#4/#11) evaluate the latest mature 7 order-days — forward shipments only,
+  // excluding the last 15 immature order-days per getMaturityAdjustedRange's own convention (same
+  // 15-day boundary the backtest itself used for Alerts 3/4/11).
+  logisticsLookbackDays: 7,
+}
+
 // 'good' | 'warn' | 'bad' | null (null = no target, show neutral)
 export function metricStatus(key, value) {
   const t = METRIC_TARGETS[key]

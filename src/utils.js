@@ -10,6 +10,7 @@
 // DATA ENCODINGS, not decoration - a reader maps them to a meaning - so they are
 // identical across themes and several are kept as plain static values.
 import { cssVar } from './theme.js'
+import { ALERT_RULES, ADS_RULES, CUSTOMER_RULES } from './config/metricTargets.js'
 
 const tok = (name, fallback) => cssVar(name, fallback)
 
@@ -336,15 +337,47 @@ export function detectAlerts(data) {
 // (Delivery% <80% red, RTO% >8%/>10% amber/red, SLA Breach% >15% amber, NDR% >20% amber, the two
 // 80%-target SLA thresholds) and the Days of Inventory bands, so the alert and the tile it
 // summarizes never disagree about what counts as a problem.
-export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts) {
+// Fleet-wide forward-shipment daily series (order_date grain), built from the already-loaded
+// Logistics byCourierDay rows (no extra fetch — Phase 1 is client-compute-only). Used by Alerts
+// #3/#4/#11, which all evaluate the latest MATURE 7 order-days per ALERT_RULES.logisticsLookbackDays,
+// excluding the last 15 immature order-days (same maturity boundary getMaturityAdjustedRange uses).
+function fleetDailySeries(logisticsData) {
+  const rows = logisticsData?.byCourierDay || []
+  if (!rows.length) return []
+  const byDate = {}
+  for (const r of rows) {
+    const d = (r.period_dt || '').slice(0, 10)
+    if (!d) continue
+    if (!byDate[d]) byDate[d] = { date: d, total: 0, delivered: 0, rto: 0 }
+    byDate[d].total += parseInt(r.total) || 0
+    byDate[d].delivered += parseInt(r.delivered) || 0
+    byDate[d].rto += parseInt(r.rto) || 0
+  }
+  const today = new Date()
+  const maturityBoundary = new Date(today); maturityBoundary.setDate(maturityBoundary.getDate() - 15)
+  return Object.values(byDate)
+    .filter(d => new Date(d.date + 'T00:00:00') <= maturityBoundary)
+    .sort((a, b) => a.date < b.date ? 1 : -1) // newest mature day first
+    .slice(0, ALERT_RULES.logisticsLookbackDays)
+    .reverse() // back to chronological for the date-range label
+}
+
+function dateRangeLabel(days) {
+  if (!days.length) return ''
+  const fmtD = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()} ${d.toLocaleString('en-US', { month: 'short' })}` }
+  return days.length === 1 ? `Orders ${fmtD(days[0].date)}` : `Orders ${fmtD(days[0].date).split(' ')[0]}–${fmtD(days[days.length - 1].date)}`
+}
+
+export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts, profile) {
   const lkpi = logisticsData?.kpis || {}
-  const lTotal = parseInt(lkpi.total_shipments) || 0
-  const lDelivered = parseInt(lkpi.delivered) || 0
-  const lRto = parseInt(lkpi.rto) || 0
-  const lSla = parseInt(lkpi.sla_breach) || 0
-  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
-  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
-  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
+  // Removed from Phase 1 bell per docs/ALERTS_PHASE1_PROMPT.md 2026-10-31 — superseded by ALERT_RULES.* — kept for reference
+  // const lTotal = parseInt(lkpi.total_shipments) || 0
+  // const lDelivered = parseInt(lkpi.delivered) || 0
+  // const lRto = parseInt(lkpi.rto) || 0
+  // const lSla = parseInt(lkpi.sla_breach) || 0
+  // const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
+  // const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
+  // const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
   const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
   const lNdrCount = parseInt(lkpi.ndr_count) || 0
   const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
@@ -353,13 +386,11 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
   const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
   const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
   const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
+  const lStuckCritical = parseInt(lkpi.critical_stuck) || 0
 
   const invSummary = invSnapshotData?.summary || {}
 
-  // Best-seller stockout check: of the top 20 SKUs by revenue, how many currently read
-  // Critical/Low/Out of Stock in the inventory snapshot? A sharper signal than the all-SKU
-  // Stockout-Risk count — losing sales on a BEST-SELLER is a bigger problem than the same status
-  // on a long-tail SKU, so this leads the alerts list.
+  // #1 Top-20 SKU stockout risk (inventory) — logic/threshold unchanged, click-nav added.
   const topSkuStockoutAlert = (() => {
     if (!invSnapshotData?.skus?.length || !data?.skuRows?.length) return null
     const topProductsMap = {}
@@ -375,23 +406,174 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
       return st === 'Critical' || st === 'Low' || st === 'Out of Stock'
     }).length
     if (atRisk === 0) return null
-    return { type: atRisk >= 5 ? 'red' : 'amber', title: `${atRisk} of your top 20 best-selling SKUs at stockout risk`, body: 'Critical, Low, or Out of Stock status on a top-20-by-revenue SKU.' }
+    return {
+      type: atRisk >= 5 ? 'red' : 'amber', title: `${atRisk} of your top 20 best-selling SKUs at stockout risk`,
+      body: 'Critical, Low, or Out of Stock status on a top-20-by-revenue SKU.',
+      key: 'top20Stockout', requiredPermission: 'inventory', nav: { page: 'inventory', sub: 'health' },
+    }
+  })()
+
+  // #2 Fleet-wide stockout risk (inventory) — ALERT_RULES.fleetStockoutSkus (> 250, unchanged).
+  const fleetStockoutAlert = invSnapshotData && (invSummary.criticalLowCount || 0) > ALERT_RULES.fleetStockoutSkus
+    ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: `Critical + Low stock status count above ${ALERT_RULES.fleetStockoutSkus} SKUs.`, key: 'fleetStockout', requiredPermission: 'inventory', nav: { page: 'inventory', sub: 'health' } }
+    : null
+
+  // #3/#4/#11 Logistics forward-shipment alerts — latest mature 7 order-days fleet-wide.
+  const fleetDays = fleetDailySeries(logisticsData)
+  const fleetTotal = fleetDays.reduce((s, d) => s + d.total, 0)
+  const fleetDelivered = fleetDays.reduce((s, d) => s + d.delivered, 0)
+  const fleetRto = fleetDays.reduce((s, d) => s + d.rto, 0)
+  const fleetDelPct = fleetTotal > 0 ? fleetDelivered / fleetTotal * 100 : null
+  const fleetRtoPct = fleetTotal > 0 ? fleetRto / fleetTotal * 100 : null
+  const rangeLbl = dateRangeLabel(fleetDays)
+
+  const deliveryAlert = fleetDelPct !== null && fleetDelPct < ALERT_RULES.deliveryPctMin
+    ? { type: 'red', title: `Delivery % below ${ALERT_RULES.deliveryPctMin}%`, body: `${rangeLbl}: Delivery ${fleetDelPct.toFixed(1)}%.`, key: 'deliveryPctLow', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+  const rtoAlert = fleetRtoPct !== null && fleetRtoPct > ALERT_RULES.rtoPctMax
+    ? { type: 'red', title: `RTO % above ${ALERT_RULES.rtoPctMax}%`, body: `${rangeLbl}: RTO ${fleetRtoPct.toFixed(1)}%.`, key: 'rtoPctHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+
+  // #11 TAT/EDD breach % = SLA-breach share of delivered-with-EDD, same kpis fields as api/logistics.js.
+  const lSlaBreach = parseInt(lkpi.sla_breach) || 0
+  const lDeliveredWithEdd = parseInt(lkpi.delivered_with_edd) || lOrdersDeliveredTotal || 0
+  const slaBreachPct = lDeliveredWithEdd > 0 ? lSlaBreach / lDeliveredWithEdd * 100 : null
+  const slaBreachAlert = slaBreachPct !== null && slaBreachPct > ALERT_RULES.slaBreachPctMax
+    ? { type: 'amber', title: `TAT/EDD breach % above ${ALERT_RULES.slaBreachPctMax}%`, body: `${rangeLbl || 'Selected range'}: SLA-breach share ${slaBreachPct.toFixed(1)}% of delivered shipments.`, key: 'slaBreachHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+
+  // #5 Stuck shipments above N — live snapshot count (kpis.critical_stuck), N=50.
+  const stuckAlert = lStuckCritical > ALERT_RULES.stuckShipmentsMax
+    ? { type: 'amber', title: `${fmtN(lStuckCritical)} shipments stuck`, body: `More than ${ALERT_RULES.stuckShipmentsMax} shipments stuck in-transit past EDD+5 days.`, key: 'stuckShipments', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+
+  // #6 D2C return-rate red lines (bell-only bars — the live Return Analysis page's own RED_THRESH
+  // in src/sales/returnAnalysisData.js is untouched). Uses the maturity-adjusted range, same
+  // convention as detectAlerts' CIR check above, over Shopify orders ex Retail Store/International.
+  const d2cRedLineAlert = (() => {
+    if (!data?.orders?.length || !data?.uniqueDates?.length) return null
+    const matRange = getMaturityAdjustedRange({ start: data.uniqueDates[0], end: data.uniqueDates[data.uniqueDates.length - 1] })
+    const matDates = new Set(data.uniqueDates.filter(d => d >= matRange.start && d <= matRange.end))
+    const shopO = data.orders.filter(o => o.channel === 'Shopify' && o.subChannel !== 'Retail Store' && o.subChannel !== 'Shopify International' && matDates.has(o.date))
+    if (!shopO.length) return null
+    const gross = shopO.reduce((s, o) => s + (o.rev || 0), 0)
+    if (gross <= 0) return null
+    const pctOf = f => shopO.filter(f).reduce((s, o) => s + (o.rev || 0), 0) / gross * 100
+    const cancelPct = pctOf(o => o.isCancelled)
+    const rtoPct = pctOf(o => o.isRTO || o.isReturn)
+    const cirPct = pctOf(o => o.isCIR)
+    const exchangePct = pctOf(o => o.isExchange)
+    const totalReturnPct = cancelPct + rtoPct + cirPct + exchangePct
+    const bars = ALERT_RULES.d2cRedLines
+    const fired = []
+    if (cancelPct > bars.cancelPct) fired.push(`Cancel ${cancelPct.toFixed(1)}%`)
+    if (rtoPct > bars.rtoPct) fired.push(`RTO ${rtoPct.toFixed(1)}%`)
+    if (cirPct > bars.cirPct) fired.push(`CIR ${cirPct.toFixed(1)}%`)
+    if (exchangePct > bars.exchangePct) fired.push(`Exchange ${exchangePct.toFixed(1)}%`)
+    if (totalReturnPct > bars.totalReturnPct) fired.push(`Total Return ${totalReturnPct.toFixed(1)}%`)
+    if (!fired.length) return null
+    return { type: 'amber', title: 'D2C return-rate red line breached', body: `${matRange.label.replace('· ', '')}: ${fired.join(', ')}.`, key: 'd2cRedLines', requiredPermission: 'sales:shopify', nav: { page: 'sales', sub: 'shopify' } }
+  })()
+
+  // #7 Channel with 0 orders yesterday (most recent complete calendar day), grouped into one alert.
+  // Excludes CRED/Firstcry (naturally thin/intermittent per the backtest). Checked against the
+  // already-loaded chMap for the selected range when it covers yesterday; this is a client-compute
+  // check over data already fetched, not a new server call.
+  const zeroOrderAlert = (() => {
+    if (!data?.chMap || !data?.uniqueDates?.length) return null
+    const yday = new Date(); yday.setDate(yday.getDate() - 1)
+    const y = yday.getFullYear(), m = String(yday.getMonth() + 1).padStart(2, '0'), d = String(yday.getDate()).padStart(2, '0')
+    const yStr = `${y}-${m}-${d}`
+    if (!data.uniqueDates.includes(yStr)) return null // selected range doesn't include yesterday — can't evaluate
+    const ordersYday = (data.orders || []).filter(o => o.date === yStr)
+    const channels = Object.keys(data.chMap).filter(c => !ALERT_RULES.zeroOrderExcludeChannels.includes(c))
+    const zero = channels.filter(c => !ordersYday.some(o => o.channel === c))
+    if (!zero.length) return null
+    const label = `${yday.getDate()} ${yday.toLocaleString('en-US', { month: 'short' })}`
+    return { type: 'amber', title: `0 orders yesterday: ${zero.join(', ')}`, body: `${label}: no orders recorded on ${zero.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
+  })()
+
+  // #9 Ads: spend with no sales — ADS_RULES.noSalesSpend/noSalesRoas, unchanged, one alert per
+  // platform grouped by permission. Meta/Google revenue is derived from D2C Shopify sales elsewhere
+  // in the app; byAdType's own revenue field is used here as the already-attributed figure.
+  const adsNoSalesAlerts = (() => {
+    const byAdType = data?.ads?.byAdType || data?.ads?.totals || []
+    if (!byAdType.length) return []
+    const byPlat = {}
+    for (const r of byAdType) {
+      const p = r.platform; if (!p) continue
+      if (!byPlat[p]) byPlat[p] = { spend: 0, revenue: 0 }
+      byPlat[p].spend += r.spend || 0
+      byPlat[p].revenue += r.revenue || 0
+    }
+    const ADS_KEY_MAP_LOWER = { All: 'ads:all', D2C: 'ads:d2c', Shopify: 'ads:d2c', Amazon: 'ads:amazon', Blinkit: 'ads:blinkit', Zepto: 'ads:zepto', Instamart: 'ads:instamart', Flipkart: 'ads:flipkart', Myntra: 'ads:myntra', CRED: 'ads:cred' }
+    return Object.entries(byPlat).map(([platform, { spend, revenue }]) => {
+      const roas = spend > 0 ? revenue / spend : 0
+      if (spend > ADS_RULES.noSalesSpend && roas < ADS_RULES.noSalesRoas) {
+        return { type: 'red', title: `${platform}: spend with no sales`, body: `Spend ${fmt(spend)} with ROAS ${roas.toFixed(2)}x (below ${ADS_RULES.noSalesRoas}x).`, key: `adsNoSales_${platform}`, requiredPermission: ADS_KEY_MAP_LOWER[platform] || 'ads:all', nav: { page: 'ads', sub: platform } }
+      }
+      return null
+    }).filter(Boolean)
+  })()
+
+  // #10 Inventory data stale > 2h (admin only) — ALERT_RULES.inventoryStaleHours, unchanged.
+  const staleInvAlert = (() => {
+    if (!invSnapshotData?.asOf || !profile?.is_admin) return null
+    const ageHours = (Date.now() - new Date(invSnapshotData.asOf).getTime()) / 36e5
+    if (ageHours <= ALERT_RULES.inventoryStaleHours) return null
+    return { type: 'amber', title: `Inventory data stale (${ageHours.toFixed(1)}h old)`, body: `public/inv-data.json is older than ${ALERT_RULES.inventoryStaleHours}h — the hourly precompute cron may be failing.`, key: 'invStale', requiredPermission: 'admin', nav: { page: 'inventory', sub: 'health' } }
+  })()
+
+  // #13 Customers: CAC up vs the previous period — ALERT_RULES.cacUpPctBell (15%), a bell-specific
+  // constant (NOT CUSTOMER_RULES.cacUpPct, which also colors the Customer Intelligence page's own
+  // in-page tile at 10% — kept separate so this alert doesn't silently recolor that tile).
+  const cacUpAlert = (() => {
+    const newCusts = (data?.nCusts || 0) - (data?.repeatCusts || 0)
+    const prevNewCusts = (data?.prevNCusts || 0) - (data?.prevRepeatCusts || 0)
+    if (newCusts <= 0 || prevNewCusts <= 0) return null
+    const metaGoogleSpend = (data?.ads?.totals || []).filter(t => t.platform === 'Meta' || t.platform === 'Google').reduce((s, t) => s + (t.spend || 0), 0)
+    const prevTotals = data?.ads?.prevTotals || {}
+    const prevMetaGoogleSpend = (prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)
+    if (!metaGoogleSpend || !prevMetaGoogleSpend) return null
+    const cac = metaGoogleSpend / newCusts
+    const prevCac = prevMetaGoogleSpend / prevNewCusts
+    if (prevCac <= 0) return null
+    const changePct = (cac - prevCac) / prevCac * 100
+    if (changePct < ALERT_RULES.cacUpPctBell) return null
+    return { type: 'amber', title: `CAC up ${changePct.toFixed(1)}% vs prior period`, body: `CAC ${fmt(cac)} vs ${fmt(prevCac)} previously.`, key: 'cacUp', requiredPermission: 'customer', nav: { page: 'customer' } }
   })()
 
   return [
     topSkuStockoutAlert,
+    fleetStockoutAlert,
+    deliveryAlert,
+    rtoAlert,
+    stuckAlert,
+    d2cRedLineAlert,
+    zeroOrderAlert,
+    ...adsNoSalesAlerts,
+    staleInvAlert,
+    slaBreachAlert,
+    cacUpAlert,
     ...(baseAlerts || []),
+    // Removed from Phase 1 bell per docs/ALERTS_PHASE1_PROMPT.md 2026-10-31 — superseded by ALERT_RULES.* — kept for reference
+    // ...(logisticsData ? [
+    //   lDelPct > 0 && lDelPct < 80 ? { type: 'red', title: `Delivery% at ${lDelPct.toFixed(1)}%`, body: 'Below the 80% healthy threshold for the selected range.' } : null,
+    //   lSlaPct > 15 ? { type: 'amber', title: `SLA Breach ${lSlaPct.toFixed(1)}%`, body: 'More than 15% of delivered shipments missed their committed SLA date.' } : null,
+    //   lRtoPct > 10 ? { type: 'red', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above 10% for the selected range.' } : (lRtoPct > 8 ? { type: 'amber', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above the 8% healthy threshold.' } : null),
+    //   lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.' } : null,
+    // ].filter(Boolean) : []),
     ...(logisticsData ? [
-      lDelPct > 0 && lDelPct < 80 ? { type: 'red', title: `Delivery% at ${lDelPct.toFixed(1)}%`, body: 'Below the 80% healthy threshold for the selected range.' } : null,
-      lSlaPct > 15 ? { type: 'amber', title: `SLA Breach ${lSlaPct.toFixed(1)}%`, body: 'More than 15% of delivered shipments missed their committed SLA date.' } : null,
-      lRtoPct > 10 ? { type: 'red', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above 10% for the selected range.' } : (lRtoPct > 8 ? { type: 'amber', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above the 8% healthy threshold.' } : null),
-      lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.' } : null,
-      lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.' } : null,
-      lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.' } : null,
+      lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.', key: 'ndrHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
+      lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.', key: 'del3dPickupLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
+      lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.', key: 'del5dOrderLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
     ].filter(Boolean) : []),
-    ...(invSnapshotData ? [
-      (invSummary.criticalLowCount || 0) > 250 ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: 'Critical + Low stock status count above 250 SKUs.' } : null,
-    ].filter(Boolean) : []),
+    // #8 D2C CM1%/COGS% and #12 D2C SnD% — EXPLICITLY excluded from Phase 1 build per the task
+    // brief ("exclude #8 ... and #12 ... — leave as commented placeholders only, do not build
+    // them"). Thresholds from the backtest (CM1<48%, COGS>43%, SnD>9%) are recorded here for
+    // whenever a future phase takes these up — NOT wired in.
+    // #8: PNL_RULE_BARS.d2c.cm1/cogs-based bell check (CM1 < 48, COGS > 43) — not built.
+    // #12: D2C SnD% > 9% bell check — not built (also has no existing PNL_RULE_BARS key).
   ].filter(Boolean)
 }
 
