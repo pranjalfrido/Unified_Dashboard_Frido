@@ -48,7 +48,6 @@ export async function authenticate(token) {
   return { user: { id: data.user.id, email: p.email || data.user.email, name: p.name || '', isAdmin: p.is_admin === true } }
 }
 
-const DAY = 24 * 60 * 60 * 1000
 const COLS = 'id,user_id,type,message,context,screenshot_path,urgent,status,admin_reply,show_in_whats_new,user_seen_at,alert_sent_at,created_at,updated_at,resolved_at'
 
 // Sets resolved_at the same way the SQL trigger does.
@@ -98,10 +97,6 @@ function localStore() {
       const db = readLocal(); const now = new Date().toISOString()
       db.items.forEach(i => { if (i.user_id === userId && ids.includes(i.id)) i.user_seen_at = now })
       writeLocal(db)
-    },
-    async whatsNew() {
-      const t = Date.now() - 30 * DAY
-      return readLocal().items.filter(i => i.status === 'done' && i.show_in_whats_new && Date.parse(i.resolved_at) >= t).sort((a, b) => b.resolved_at.localeCompare(a.resolved_at))
     },
     async pendingAlert() { return readLocal().items.filter(i => !i.alert_sent_at).sort((a, b) => a.created_at.localeCompare(b.created_at)) },
     async markAlerted(ids) {
@@ -161,9 +156,6 @@ function supabaseStore() {
       return count(await db().from('feedback').select('id', { count: 'exact' }).eq('user_id', userId).in('status', ['done', 'wont_do']).not('admin_reply', 'is', null).is('user_seen_at', null).limit(1))
     },
     async ack(userId, ids) { must(await db().from('feedback').update({ user_seen_at: new Date().toISOString() }).eq('user_id', userId).in('id', ids)) },
-    async whatsNew() {
-      return must(await db().from('feedback').select(COLS).eq('status', 'done').eq('show_in_whats_new', true).gte('resolved_at', new Date(Date.now() - 30 * DAY).toISOString()).order('resolved_at', { ascending: false }).limit(100))
-    },
     async pendingAlert() { return must(await db().from('feedback').select(COLS).is('alert_sent_at', null).order('created_at', { ascending: true }).limit(500)) },
     async markAlerted(ids) { if (ids.length) must(await db().from('feedback').update({ alert_sent_at: new Date().toISOString() }).in('id', ids)) },
     async people(ids) {

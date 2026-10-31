@@ -8,5 +8,5 @@ await mk('asha', 'wrong_number', 'D2C net revenue on Overview does not match Sho
 await mk('rohan', 'bug', 'The Sales filter sheet does not close after Apply on my phone.', { page: 'Sales', channel: 'D2C', path: '/sales/shopify/overall', device: dev('Phone', '375×812', 'Safari') }, true)
 await mk('rohan', 'suggestion', 'Could we get a weekly e-mail of the Overview numbers?', { page: 'Overview', path: '/overview', device: dev('Laptop', '1440×900', 'Edge') })
 const closed = await mk('asha', 'bug', 'Inventory export button was greyed out.', { page: 'Inventory', path: '/inventory/inventory_health', device: dev('Laptop', '1366×800', 'Chrome') })
-await call('update', 'admin', { id: closed.id, status: 'done', admin_reply: 'Fixed: the export works again for every inventory view.', show_in_whats_new: true })
+await call('update', 'admin', { id: closed.id, status: 'done', admin_reply: 'Fixed: the export works again for every inventory view.' })
 console.log('demo items added')

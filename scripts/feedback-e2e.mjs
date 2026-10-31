@@ -183,7 +183,6 @@ async function uiScenario(vp) {
   await a.page.getByLabel('Status', { exact: true }).selectOption('done')
   ok(`${tag}: Done without a reply is blocked`, await a.page.getByRole('button', { name: 'Save' }).isDisabled())
   await a.page.getByLabel('Reply', { exact: true }).fill(`Fixed in the latest release (${tag}).`)
-  await a.page.getByLabel("Show in What's new").check()
   await a.page.getByRole('button', { name: 'Save' }).click()
   await a.page.getByText('Saved.').waitFor({ timeout: 8000 })
   ok(`${tag}: admin closed an item with a reply`, true)
@@ -191,7 +190,7 @@ async function uiScenario(vp) {
   ok(`${tag}: user still gets 403 on update`, failedAsUser.status === 403)
   await a.browser.close()
 
-  // 3) the user sees the notification, My feedback reply and What's new
+  // 3) the user sees the notification, My feedback reply
   const u2 = await session(vp, 'asha')
   await u2.page.waitForTimeout(1500)
   if (vp.phone) {
@@ -208,13 +207,6 @@ async function uiScenario(vp) {
   await u2.page.getByTestId('my-feedback').waitFor({ timeout: 10000 })
   await u2.page.locator('.fbm-item').first().waitFor({ timeout: 8000 })
   ok(`${tag}: My feedback shows status + reply`, (await u2.page.getByTestId('my-feedback').getByText('Fixed in the latest release').count()) === 1 && (await u2.page.getByTestId('my-feedback').getByText('Done', { exact: true }).count()) >= 1)
-  await u2.page.goto(`${BASE}/whatsnew`, { waitUntil: 'domcontentloaded' })
-  await u2.page.getByTestId('whats-new').waitFor({ timeout: 10000 })
-  await u2.page.waitForTimeout(800)
-  ok(`${tag}: What's new shows the item`, (await u2.page.getByTestId('whats-new').getByText('Fixed in the latest release').count()) === 1)
-  await u2.page.screenshot({ path: `${OUT}/${tag}-whatsnew.png` })
-  const other = await call('whatsnew', 'rohan')
-  ok(`${tag}: What's new shows the note only, not who/what`, other.body.items.length === 1 && !('message' in other.body.items[0]) && !('user_id' in other.body.items[0]))
   await u2.browser.close()
 }
 

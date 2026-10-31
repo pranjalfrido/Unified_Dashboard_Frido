@@ -5,7 +5,7 @@ Branch `feat/feedback` (worktree `C:/wt-feedback`), local commits only: nothing 
 ## What's built
 
 **Entry points (everyone signed in)**
-- Laptop: "Feedback" button + ⋯ menu (What's new) at the right of the top header; "Feedback" at the bottom of the sidebar.
+- Laptop: "Feedback" button at the right of the top header; "Feedback" at the bottom of the sidebar.
 - Phone: "Send feedback" at the end of the header ⋯ menu (every page) and in the All pages launcher. The green header is unchanged.
 - NavAI: "Report this answer" (👎 icon) under every answer, laptop and phone → same form, type *Wrong number*, the question and answer attached.
 
