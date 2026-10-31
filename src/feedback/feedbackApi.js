@@ -14,7 +14,8 @@ export async function fb(action, token, extra = {}) {
   }
   const data = await res.json().catch(() => ({}))
   // Admins also get data.detail (the real reason); everyone else only the plain message.
-  if (!res.ok) throw Object.assign(new Error(data.detail ? `${data.error || 'Something went wrong.'} Admin info: ${data.detail}` : (data.error || 'Something went wrong. Please try again.')), { status: res.status })
+  // No JSON body (the platform answered, not our code: crash, timeout, wrong route) → show the HTTP status so it can be traced.
+  if (!res.ok) throw Object.assign(new Error(data.detail ? `${data.error || 'Something went wrong.'} Admin info: ${data.detail}` : (data.error || `Something went wrong. Please try again. (error ${res.status})`)), { status: res.status })
   return data
 }
 
