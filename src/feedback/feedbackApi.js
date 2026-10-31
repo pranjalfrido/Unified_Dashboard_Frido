@@ -13,7 +13,8 @@ export async function fb(action, token, extra = {}) {
     throw Object.assign(new Error('No connection. Please try again.'), { status: 0 })
   }
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { status: res.status })
+  // Admins also get data.detail (the real reason); everyone else only the plain message.
+  if (!res.ok) throw Object.assign(new Error(data.detail ? `${data.error || 'Something went wrong.'} Admin info: ${data.detail}` : (data.error || 'Something went wrong. Please try again.')), { status: res.status })
   return data
 }
 
