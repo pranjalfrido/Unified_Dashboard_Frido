@@ -8,7 +8,7 @@ import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange, loadAlertsCache} from './utils.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -20413,6 +20413,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // just re-fetched here for Overview's own summary tiles.
   const [salesAllocData, setSalesAllocData] = useState(null)
   const [invSnapshotData, setInvSnapshotData] = useState(null)
+  // Fixed-window alerts (#3/#4/#6/#11) read public/alerts-data.json, produced hourly by
+  // scripts/generate-alerts-cache.mjs — never the viewer's own selected date range. Fetched once on
+  // mount; _alertsTick just forces computeCombinedAlerts' useMemo to re-run once it resolves.
+  const [_alertsTick, _setAlertsTick] = useState(0)
+  useEffect(() => { loadAlertsCache().finally(() => _setAlertsTick(t => t + 1)) }, [])
   const [overviewCustData, setOverviewCustData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
   const [adsCachedChMap, setAdsCachedChMap] = useState(null)
@@ -20956,7 +20961,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
   // exact same list, never two independently-computed copies that could drift.
-  const rawCombinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts, profile), [data, logisticsData, invSnapshotData, alerts, profile])
+  const rawCombinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts, profile), [data, logisticsData, invSnapshotData, alerts, profile, _alertsTick])
   // Access control: filter the raw alert list down to what this user can actually see. An alert's
   // requiredPermission can be a single permission key, an array (sales:<channel> per fired
   // channel — any one grants visibility), or 'admin' (profile.is_admin, not a permission-tree key).

@@ -106,10 +106,11 @@ export const ALERT_RULES = {
   // the existing "> 250 SKUs" threshold as-is (this is NOT the >50 number, which is Alert #5's
   // candidate). approved 2026-10-31.
   fleetStockoutSkus: 250,
-  // #3 Forward delivery % below threshold (logistics) — backtest recommends tightening the naive
-  // <90% bar (17.3% of mature days) to <88% (true floor, 0/75 fired in the 90-day window), evaluated
-  // over the latest mature 7 order-days. approved 2026-10-31.
-  deliveryPctMin: 88,
+  // #3 Forward delivery % below threshold (logistics) — backtest recommended <88%; Suraj approved
+  // <89% (docs/ALERTS_BACKTEST.md's own tightened-but-not-quite-floor candidate). Evaluated over a
+  // FIXED latest-mature-7-order-days window (public/alerts-data.json), not the viewer's selected
+  // range. approved 2026-10-31.
+  deliveryPctMin: 89,
   // #4 Forward RTO % above threshold (logistics, Clickpost) — backtest: >8% over-fires (41.3% of
   // days); tighten to >9.5% (between real p90 9.05% and max 10.36%, 3/75 fired). approved 2026-10-31.
   rtoPctMax: 9.5,
@@ -143,9 +144,11 @@ export const ALERT_RULES = {
   // Customer Intelligence page's own in-page tile coloring at 10% — changing that shared constant
   // would silently recolor an unrelated in-page tile). approved 2026-10-31.
   cacUpPctBell: 15,
-  // Logistics alerts (#3/#4/#11) evaluate the latest mature 7 order-days — forward shipments only,
-  // excluding the last 15 immature order-days per getMaturityAdjustedRange's own convention (same
-  // 15-day boundary the backtest itself used for Alerts 3/4/11).
+  // Logistics alerts (#3/#4/#11) and the D2C return-rate alert (#6) now evaluate a FIXED window —
+  // orders 15-21 days ago (logistics) / 14-20 days ago (returns) — computed hourly by
+  // scripts/generate-alerts-cache.mjs directly from BigQuery into public/alerts-data.json, never
+  // from whatever date range the viewer currently has selected. This constant is kept for
+  // documentation of the window length; the actual offsets are in generate-alerts-cache.mjs.
   logisticsLookbackDays: 7,
 }
 

@@ -71,6 +71,9 @@ jobs:
       - name: Generate static logistics JSON
         run: node scripts/generate-logistics-cache.mjs
 
+      - name: Generate alerts cache (fixed-window bell alerts #3/#4/#6/#11)
+        run: node scripts/generate-alerts-cache.mjs
+
       # Pulls new AWB category / sub-category / dimensions from BigQuery into Supabase.
       # Runs BEFORE the aggregates so the cube is rebuilt from fresh categories in the same
       # pass — otherwise a re-categorised product would wait an extra hour to appear.

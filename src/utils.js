@@ -337,36 +337,23 @@ export function detectAlerts(data) {
 // (Delivery% <80% red, RTO% >8%/>10% amber/red, SLA Breach% >15% amber, NDR% >20% amber, the two
 // 80%-target SLA thresholds) and the Days of Inventory bands, so the alert and the tile it
 // summarizes never disagree about what counts as a problem.
-// Fleet-wide forward-shipment daily series (order_date grain), built from the already-loaded
-// Logistics byCourierDay rows (no extra fetch — Phase 1 is client-compute-only). Used by Alerts
-// #3/#4/#11, which all evaluate the latest MATURE 7 order-days per ALERT_RULES.logisticsLookbackDays,
-// excluding the last 15 immature order-days (same maturity boundary getMaturityAdjustedRange uses).
-function fleetDailySeries(logisticsData) {
-  const rows = logisticsData?.byCourierDay || []
-  if (!rows.length) return []
-  const byDate = {}
-  for (const r of rows) {
-    const d = (r.period_dt || '').slice(0, 10)
-    if (!d) continue
-    if (!byDate[d]) byDate[d] = { date: d, total: 0, delivered: 0, rto: 0 }
-    byDate[d].total += parseInt(r.total) || 0
-    byDate[d].delivered += parseInt(r.delivered) || 0
-    byDate[d].rto += parseInt(r.rto) || 0
-  }
-  const today = new Date()
-  const maturityBoundary = new Date(today); maturityBoundary.setDate(maturityBoundary.getDate() - 15)
-  return Object.values(byDate)
-    .filter(d => new Date(d.date + 'T00:00:00') <= maturityBoundary)
-    .sort((a, b) => a.date < b.date ? 1 : -1) // newest mature day first
-    .slice(0, ALERT_RULES.logisticsLookbackDays)
-    .reverse() // back to chronological for the date-range label
+// #3/#4/#6/#11 read a dedicated static file (public/alerts-data.json), produced hourly by
+// scripts/generate-alerts-cache.mjs directly from BigQuery for a FIXED mature window (orders
+// 15-21 days ago for logistics, 14-20 days ago for returns). This is intentional and must not be
+// changed back to reading logisticsData/data: those reflect whatever date range the user currently
+// has selected in the app, so an alert built on them would silently depend on the viewer's own
+// filter state instead of a fixed, always-current fact. See docs/ALERTS_BACKTEST.md.
+let _alertsCache = null
+let _alertsCachePromise = null
+export function loadAlertsCache() {
+  if (_alertsCachePromise) return _alertsCachePromise
+  _alertsCachePromise = fetch('/alerts-data.json').then(r => r.ok ? r.json() : null).then(j => { _alertsCache = j; return j }).catch(() => { _alertsCache = null; return null })
+  return _alertsCachePromise
 }
-
-function dateRangeLabel(days) {
-  if (!days.length) return ''
-  const fmtD = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()} ${d.toLocaleString('en-US', { month: 'short' })}` }
-  return days.length === 1 ? `Orders ${fmtD(days[0].date)}` : `Orders ${fmtD(days[0].date).split(' ')[0]}–${fmtD(days[days.length - 1].date)}`
-}
+// Synchronous read of whatever loadAlertsCache() last resolved (or null before the first load) —
+// computeCombinedAlerts can't be async, so the caller (App.jsx) calls loadAlertsCache() once on
+// mount and re-renders when it resolves, same pattern as the other static JSON fetches.
+function getAlertsCache() { return _alertsCache }
 
 export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts, profile) {
   const lkpi = logisticsData?.kpis || {}
@@ -418,28 +405,28 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
     ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: `Critical + Low stock status count above ${ALERT_RULES.fleetStockoutSkus} SKUs.`, key: 'fleetStockout', requiredPermission: 'inventory', nav: { page: 'inventory', sub: 'health' } }
     : null
 
-  // #3/#4/#11 Logistics forward-shipment alerts — latest mature 7 order-days fleet-wide.
-  const fleetDays = fleetDailySeries(logisticsData)
-  const fleetTotal = fleetDays.reduce((s, d) => s + d.total, 0)
-  const fleetDelivered = fleetDays.reduce((s, d) => s + d.delivered, 0)
-  const fleetRto = fleetDays.reduce((s, d) => s + d.rto, 0)
-  const fleetDelPct = fleetTotal > 0 ? fleetDelivered / fleetTotal * 100 : null
-  const fleetRtoPct = fleetTotal > 0 ? fleetRto / fleetTotal * 100 : null
-  const rangeLbl = dateRangeLabel(fleetDays)
+  // #3/#4/#11/#6 read scripts/generate-alerts-cache.mjs's hourly static output (public/alerts-data.json)
+  // for a FIXED mature window — NEVER logisticsData/data, which reflect the viewer's own selected
+  // date range. loadAlertsCache() is kicked off once in the Dashboard mount effect; until it
+  // resolves, getAlertsCache() returns null and these 4 alerts simply don't show this render.
+  const alertsCache = getAlertsCache()
+  const logCache = alertsCache?.logistics || null
+  const retCache = alertsCache?.returns || null
 
-  const deliveryAlert = fleetDelPct !== null && fleetDelPct < ALERT_RULES.deliveryPctMin
-    ? { type: 'red', title: `Delivery % below ${ALERT_RULES.deliveryPctMin}%`, body: `${rangeLbl}: Delivery ${fleetDelPct.toFixed(1)}%.`, key: 'deliveryPctLow', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+  const deliveryAlert = logCache?.deliveryPct != null && logCache.deliveryPct < ALERT_RULES.deliveryPctMin
+    ? { type: 'red', title: `Delivery % below ${ALERT_RULES.deliveryPctMin}%`, body: `${logCache.rangeLabel}: Delivery ${logCache.deliveryPct.toFixed(1)}%.`, key: 'deliveryPctLow', requiredPermission: 'logistics', nav: { page: 'logistics' } }
     : null
-  const rtoAlert = fleetRtoPct !== null && fleetRtoPct > ALERT_RULES.rtoPctMax
-    ? { type: 'red', title: `RTO % above ${ALERT_RULES.rtoPctMax}%`, body: `${rangeLbl}: RTO ${fleetRtoPct.toFixed(1)}%.`, key: 'rtoPctHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+  const rtoAlert = logCache?.rtoPct != null && logCache.rtoPct > ALERT_RULES.rtoPctMax
+    ? { type: 'red', title: `RTO % above ${ALERT_RULES.rtoPctMax}%`, body: `${logCache.rangeLabel}: RTO ${logCache.rtoPct.toFixed(1)}%.`, key: 'rtoPctHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
     : null
 
-  // #11 TAT/EDD breach % = SLA-breach share of delivered-with-EDD, same kpis fields as api/logistics.js.
-  const lSlaBreach = parseInt(lkpi.sla_breach) || 0
-  const lDeliveredWithEdd = parseInt(lkpi.delivered_with_edd) || lOrdersDeliveredTotal || 0
-  const slaBreachPct = lDeliveredWithEdd > 0 ? lSlaBreach / lDeliveredWithEdd * 100 : null
-  const slaBreachAlert = slaBreachPct !== null && slaBreachPct > ALERT_RULES.slaBreachPctMax
-    ? { type: 'amber', title: `TAT/EDD breach % above ${ALERT_RULES.slaBreachPctMax}%`, body: `${rangeLbl || 'Selected range'}: SLA-breach share ${slaBreachPct.toFixed(1)}% of delivered shipments.`, key: 'slaBreachHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+  // #11 TAT/EDD breach % = SLA-breach share of delivered-with-EDD (on_time + sla_breach), the exact
+  // kpis fields from api/logistics.js, computed by generate-alerts-cache.mjs against
+  // expected_delivery_date_by_courier_partner. No fallback field: if the cache couldn't compute a
+  // delivered-with-EDD population (slaBreachAvailable=false, or the cache is missing entirely), this
+  // alert is SKIPPED, never silently substituted with a different denominator.
+  const slaBreachAlert = logCache?.slaBreachAvailable && logCache.slaBreachPct != null && logCache.slaBreachPct > ALERT_RULES.slaBreachPctMax
+    ? { type: 'amber', title: `TAT/EDD breach % above ${ALERT_RULES.slaBreachPctMax}%`, body: `${logCache.rangeLabel}: SLA-breach share ${logCache.slaBreachPct.toFixed(1)}% of delivered-with-EDD shipments.`, key: 'slaBreachHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
     : null
 
   // #5 Stuck shipments above N — live snapshot count (kpis.critical_stuck), N=50.
@@ -448,31 +435,19 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
     : null
 
   // #6 D2C return-rate red lines (bell-only bars — the live Return Analysis page's own RED_THRESH
-  // in src/sales/returnAnalysisData.js is untouched). Uses the maturity-adjusted range, same
-  // convention as detectAlerts' CIR check above, over Shopify orders ex Retail Store/International.
+  // in src/sales/returnAnalysisData.js is untouched). Fixed window (orders 14-20 days ago), from the
+  // same static cache as #3/#4/#11 — never the viewer's selected range.
   const d2cRedLineAlert = (() => {
-    if (!data?.orders?.length || !data?.uniqueDates?.length) return null
-    const matRange = getMaturityAdjustedRange({ start: data.uniqueDates[0], end: data.uniqueDates[data.uniqueDates.length - 1] })
-    const matDates = new Set(data.uniqueDates.filter(d => d >= matRange.start && d <= matRange.end))
-    const shopO = data.orders.filter(o => o.channel === 'Shopify' && o.subChannel !== 'Retail Store' && o.subChannel !== 'Shopify International' && matDates.has(o.date))
-    if (!shopO.length) return null
-    const gross = shopO.reduce((s, o) => s + (o.rev || 0), 0)
-    if (gross <= 0) return null
-    const pctOf = f => shopO.filter(f).reduce((s, o) => s + (o.rev || 0), 0) / gross * 100
-    const cancelPct = pctOf(o => o.isCancelled)
-    const rtoPct = pctOf(o => o.isRTO || o.isReturn)
-    const cirPct = pctOf(o => o.isCIR)
-    const exchangePct = pctOf(o => o.isExchange)
-    const totalReturnPct = cancelPct + rtoPct + cirPct + exchangePct
+    if (!retCache || retCache.gross == null || retCache.gross <= 0) return null
     const bars = ALERT_RULES.d2cRedLines
     const fired = []
-    if (cancelPct > bars.cancelPct) fired.push(`Cancel ${cancelPct.toFixed(1)}%`)
-    if (rtoPct > bars.rtoPct) fired.push(`RTO ${rtoPct.toFixed(1)}%`)
-    if (cirPct > bars.cirPct) fired.push(`CIR ${cirPct.toFixed(1)}%`)
-    if (exchangePct > bars.exchangePct) fired.push(`Exchange ${exchangePct.toFixed(1)}%`)
-    if (totalReturnPct > bars.totalReturnPct) fired.push(`Total Return ${totalReturnPct.toFixed(1)}%`)
+    if (retCache.cancelPct != null && retCache.cancelPct > bars.cancelPct) fired.push(`Cancel ${retCache.cancelPct.toFixed(1)}%`)
+    if (retCache.rtoPct != null && retCache.rtoPct > bars.rtoPct) fired.push(`RTO ${retCache.rtoPct.toFixed(1)}%`)
+    if (retCache.cirPct != null && retCache.cirPct > bars.cirPct) fired.push(`CIR ${retCache.cirPct.toFixed(1)}%`)
+    if (retCache.exchangePct != null && retCache.exchangePct > bars.exchangePct) fired.push(`Exchange ${retCache.exchangePct.toFixed(1)}%`)
+    if (retCache.totalReturnPct != null && retCache.totalReturnPct > bars.totalReturnPct) fired.push(`Total Return ${retCache.totalReturnPct.toFixed(1)}%`)
     if (!fired.length) return null
-    return { type: 'amber', title: 'D2C return-rate red line breached', body: `${matRange.label.replace('· ', '')}: ${fired.join(', ')}.`, key: 'd2cRedLines', requiredPermission: 'sales:shopify', nav: { page: 'sales', sub: 'shopify' } }
+    return { type: 'amber', title: 'D2C return-rate red line breached', body: `${retCache.rangeLabel}: ${fired.join(', ')}.`, key: 'd2cRedLines', requiredPermission: 'sales:shopify', nav: { page: 'sales', sub: 'shopify' } }
   })()
 
   // #7 Channel with 0 orders yesterday (most recent complete calendar day), grouped into one alert.
