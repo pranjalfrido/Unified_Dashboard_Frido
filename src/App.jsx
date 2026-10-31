@@ -5162,7 +5162,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       {page === 'overview' && <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>}
       {/* Admins only: "● N live" next to the alerts / date controls. */}
       <LivePill isAdmin={isAdmin} />
-      <AlertsBell alerts={combinedAlerts} computedAt={alertsComputedAt} userId={session?.user?.id} onNav={navAlert} />
+      <AlertsBell alerts={combinedAlerts} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
