@@ -183,7 +183,7 @@ async function graphToken() {
   const t = e.AZURE_TENANT_ID || e.OTP_FRIDO_TENANT_ID; const c = e.AZURE_CLIENT_ID || e.OTP_FRIDO_CLIENT_ID; const s = e.AZURE_CLIENT_SECRET || e.OTP_FRIDO_CLIENT_SECRET
   if (!t || !c || !s) throw new Error('Missing Azure credentials for mailer')
   const r = await fetch(`https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    signal: AbortSignal.timeout(8000), method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'client_credentials', client_id: c, client_secret: s, scope: 'https://graph.microsoft.com/.default' }),
   })
   if (!r.ok) throw new Error(`Token fetch failed: ${await r.text()}`)
@@ -195,7 +195,7 @@ async function sendGraphMail(subject, html, to) {
   const sender = process.env.ALERT_SENDER_EMAIL || process.env.REPORT_MAIL_FROM || process.env.ALERT_EMAIL || to[0]
   const token = await graphToken()
   const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
-    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(8000), method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: html }, toRecipients: to.map(address => ({ emailAddress: { address } })) }, saveToSentItems: false }),
   })
   if (!r.ok) throw new Error(`sendMail failed: ${await r.text()}`)

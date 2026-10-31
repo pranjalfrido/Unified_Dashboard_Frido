@@ -101,7 +101,7 @@ function explain(e) {
   if (/bucket not found/i.test(m)) return 'The storage bucket feedback-screenshots was not found.'
   if (/Invalid API key|JWT|apikey/i.test(m)) return 'Server not configured: the Supabase service key looks wrong.'
   if (/fetch failed|ENOTFOUND|ECONN/i.test(m)) return 'The server could not reach Supabase (network).'
-  return m.slice(0, 200)
+  return `${e?.name || 'Error'}${e?.code ? ' ' + e.code : ''}: ${m}`.slice(0, 240) + (e?.cause?.message ? ` (cause: ${String(e.cause.message).slice(0, 120)})` : '')
 }
 
 export default async function handler(req, res) {
