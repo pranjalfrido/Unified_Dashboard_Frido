@@ -41,6 +41,11 @@ CREATE TRIGGER feedback_touch_trg BEFORE UPDATE ON public.feedback FOR EACH ROW 
 
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 
+-- The server (api/feedback.js, service key) needs explicit access to the table: on newer Supabase projects new
+-- tables are not granted to the API roles automatically ("permission denied for table feedback" otherwise).
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback TO service_role;
+
 -- Reads only. is_admin_user() is the existing SECURITY DEFINER helper from supabase-schema.sql.
 DROP POLICY IF EXISTS "Feedback: own rows or admin" ON public.feedback;
 CREATE POLICY "Feedback: own rows or admin" ON public.feedback
