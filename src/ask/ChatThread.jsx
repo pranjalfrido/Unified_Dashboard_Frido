@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Code } from '@phosphor-icons/react';
 import NavAIIcon from './NavAIIcon.jsx';
+import { ThumbsDown } from '@phosphor-icons/react';
+import { useFeedback } from '../feedback/feedbackCtx.js';
 import { SUGGESTIONS } from './pulseShared.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -30,8 +32,10 @@ function AssistantTable({ table }) {
   );
 }
 
-function AssistantMessage({ msg }) {
+function AssistantMessage({ msg, question }) {
   const [sqlOpen, setSqlOpen] = useState(false);
+  const fbk = useFeedback();
+  const reportable = !msg.thinking && !!msg.text && !msg.error;
 
   return (
     <div className="af-msg af-msg-assistant">
@@ -79,6 +83,11 @@ function AssistantMessage({ msg }) {
             )}
             {sqlOpen && msg.sql && (
               <pre className="af-sql-block">{msg.sql}</pre>
+            )}
+            {reportable && (
+              <button type="button" className="fb-report" data-testid="report-answer" onClick={() => fbk.open({ type: 'wrong_number', ai: { question, answer: msg.text } })}>
+                <ThumbsDown size={14} /> Report this answer
+              </button>
             )}
           </>
         )}
@@ -149,10 +158,11 @@ export default function ChatThread({ messages, onSuggestion, onClarifyChoice }) 
   return (
     <div className="af-thread">
       <div className="af-thread-inner">
-        {messages.map(msg => {
+        {messages.map((msg, idx) => {
           if (msg.role === 'user') return <UserMessage key={msg.id} msg={msg} />;
           if (msg.clarify) return <ClarifyMessage key={msg.id} msg={msg} onChoice={onClarifyChoice} />;
-          return <AssistantMessage key={msg.id} msg={msg} />;
+          const q = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user')?.text || '';
+          return <AssistantMessage key={msg.id} msg={msg} question={q} />;
         })}
         <div ref={bottomRef} />
       </div>

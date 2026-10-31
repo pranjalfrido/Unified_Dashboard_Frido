@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle } from '@phosphor-icons/react'
+import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle, ThumbsDown } from '@phosphor-icons/react'
 import NavAIIcon from './NavAIIcon.jsx'
+import { useFeedback } from '../feedback/feedbackCtx.js'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { renderMarkdown, splitAnswer } from './markdown.js'
@@ -57,8 +58,9 @@ function Who({ model }) {
   )
 }
 
-function Answer({ msg }) {
+function Answer({ msg, question }) {
   const [sqlOpen, setSqlOpen] = useState(false)
+  const fbk = useFeedback()
   const blocks = useMemo(() => (msg.text ? splitAnswer(msg.text) : []), [msg.text])
   if (msg.thinking) return <div className="pm-ai"><Who /><div className="af-thinking"><span /><span /><span /></div></div>
   if (isError(msg)) return <div className="pm-ai"><Who /><div className="pm-err" role="alert">{msg.text}</div></div>
@@ -84,6 +86,11 @@ function Answer({ msg }) {
         </div>
       )}
       {sqlOpen && msg.sql && <pre className="pm-sql">{msg.sql}</pre>}
+      {msg.text && (
+        <button type="button" className="fb-report" data-testid="report-answer" onClick={() => fbk.open({ type: 'wrong_number', ai: { question, answer: msg.text } })}>
+          <ThumbsDown size={14} /> Report this answer
+        </button>
+      )}
     </div>
   )
 }
@@ -366,10 +373,11 @@ export default function PulseMobile({ conversations, activeId, active, sending, 
       <div ref={scroller} className="pm-thread">
         {inChat ? (
           <div className="pm-thread-inner">
-            {messages.map(m => {
+            {messages.map((m, idx) => {
               if (m.role === 'user') return <div key={m.id} className="pm-me">{m.text}</div>
               if (m.clarify) return <Clarify key={m.id} msg={m} onChoice={onClarifyChoice} />
-              return <Answer key={m.id} msg={m} />
+              const q = [...messages.slice(0, idx)].reverse().find(x => x.role === 'user')?.text || ''
+              return <Answer key={m.id} msg={m} question={q} />
             })}
           </div>
         ) : (

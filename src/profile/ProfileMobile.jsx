@@ -8,6 +8,7 @@ import UndoToast from '../responsive/UndoToast.jsx'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import { paletteMapCss } from '../responsive/paletteMapCss.js'
 import Avatar from './Avatar.jsx'
+import MyFeedback from '../feedback/MyFeedback.jsx'
 import { CreateUserForm } from './CreateUser.jsx'
 import { adminCall, fmtDate, useActivity, useMyProfile, accessSections, sectionKeys, allTabKeys, PULSE_WHITELIST } from './profileShared.js'
 
@@ -173,6 +174,7 @@ export default function ProfileMobile({ session, profile, onProfileUpdated, them
         <Row title="My activity" sub={profile?.last_login_at ? `Last login ${fmtDate(profile.last_login_at)}` : 'Your logins'} onClick={() => setActivityOpen(true)} last />
       </section>
       {!isAdmin && <MyAccess session={session} />}
+      <section style={cardStyle} aria-label="My feedback"><MyFeedback compact /></section>
 
       {/* Edit name & photo */}
       <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Edit name & photo">

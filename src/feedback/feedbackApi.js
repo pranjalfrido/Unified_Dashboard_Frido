@@ -1,3 +1,4 @@
+/* global __APP_VERSION__ */
 // Client for api/feedback.js. The signed-in user is identified by the session token only.
 const API = import.meta.env.VITE_API_URL || ''
 

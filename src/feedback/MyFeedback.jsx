@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fb, TYPE_LABEL, STATUS_LABEL, when } from './feedbackApi.js'
-import { useFeedback } from './FeedbackProvider.jsx'
-import { TypeIcon } from './FeedbackInbox.jsx'
+import { useFeedback } from './feedbackCtx.js'
+import TypeIcon from './TypeIcon.jsx'
 import './feedback.css'
 
 // Profile → "My feedback": the person's own items with their status and the team's reply.

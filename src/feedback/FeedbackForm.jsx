@@ -1,45 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Camera, X } from '@phosphor-icons/react'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
-import { fb, TYPES, compressImage, when } from './feedbackApi.js'
+import { fb, TYPES, compressImage } from './feedbackApi.js'
+import { buildContext, contextLine } from './feedbackContext.js'
 import './feedback.css'
 
 const MAX = 1000
 
-// What the person was looking at, plus the device. Built once when the form opens.
-export function buildContext(view, version, ai) {
-  const w = window.innerWidth
-  const phone = w <= 768
-  const now = new Date()
-  const ctx = {
-    page: view?.page || document.title || 'Dashboard',
-    path: view?.path || window.location.pathname,
-    channel: view?.channel || '',
-    subChannel: view?.subChannel || '',
-    dateRange: view?.dateRange || '',
-    filters: view?.filters || {},
-    device: { kind: phone ? 'Phone' : w <= 1100 ? 'Tablet' : 'Laptop', viewport: `${w}×${window.innerHeight}`, browser: browserName() },
-    appVersion: version,
-    time: now.toISOString(),
-  }
-  if (ai) ctx.ai = { question: String(ai.question || '').slice(0, 300), answer: String(ai.answer || '').slice(0, 300) }
-  return ctx
-}
-function browserName() {
-  const u = navigator.userAgent
-  return /Edg\//.test(u) ? 'Edge' : /Firefox\//.test(u) ? 'Firefox' : /Chrome\//.test(u) ? 'Chrome' : /Safari\//.test(u) ? 'Safari' : 'Browser'
-}
-export function filterText(f) {
-  return Object.entries(f || {}).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' · ')
-}
-export function contextLine(c) {
-  return [c.page, c.channel, c.subChannel, c.dateRange, filterText(c.filters) && `Filters ${filterText(c.filters)}`, `${c.device.kind} ${c.device.viewport}`, `v${c.appVersion}`, when(c.time)].filter(Boolean).join(' · ')
-}
-
-function FormBody({ token, prefill, view, version, onClose, onSent }) {
-  const ctx = useMemo(() => buildContext(view, version, prefill?.ai), []) // eslint-disable-line react-hooks/exhaustive-deps -- captured once, when the form opens
+function FormBody({ token, prefill, getView, version, onClose, onSent }) {
+  const [ctx] = useState(() => buildContext(getView(), version, prefill?.ai)) // captured once, when the form opens
   const [type, setType] = useState(prefill?.type || '')
   const [message, setMessage] = useState('')
   const [urgent, setUrgent] = useState(false)
@@ -95,17 +66,17 @@ function FormBody({ token, prefill, view, version, onClose, onSent }) {
   )
 }
 
-export default function FeedbackForm({ token, prefill, view, version, onClose, onSent }) {
+export default function FeedbackForm({ token, prefill, getView, version, onClose, onSent }) {
   const bp = useBreakpoint()
   const phone = bp.width <= 768 || bp.isPhoneLandscape
   if (phone) {
     return (
       <BottomSheet open onClose={onClose} title="Send feedback">
-        <FormBody token={token} prefill={prefill} view={view} version={version} onClose={onClose} onSent={onSent} />
+        <FormBody token={token} prefill={prefill} getView={getView} version={version} onClose={onClose} onSent={onSent} />
       </BottomSheet>
     )
   }
-  return createPortal(<SidePanel onClose={onClose}><FormBody token={token} prefill={prefill} view={view} version={version} onClose={onClose} onSent={onSent} /></SidePanel>, document.body)
+  return createPortal(<SidePanel onClose={onClose}><FormBody token={token} prefill={prefill} getView={getView} version={version} onClose={onClose} onSent={onSent} /></SidePanel>, document.body)
 }
 
 function SidePanel({ onClose, children }) {

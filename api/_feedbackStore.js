@@ -1,3 +1,4 @@
+/* global process */
 // Storage + auth for api/feedback.js. Two interchangeable back ends with the same methods and the same
 // behaviour: Supabase (real) and a local JSON file + folder (FEEDBACK_LOCAL=1, for localhost testing only).
 import { createClient } from '@supabase/supabase-js'

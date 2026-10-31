@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChatCircleDots, DotsThree, Sparkle, Tray } from '@phosphor-icons/react'
-import { useFeedback } from './FeedbackProvider.jsx'
+import { useFeedback } from './feedbackCtx.js'
 import './feedback.css'
 
 // Laptop header, right side: "Feedback" button and a ⋯ menu (What's new).

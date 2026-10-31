@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FeedbackCtx } from './feedbackCtx.js'
 import { fb, APP_VERSION } from './feedbackApi.js'
 import { publishNavStat } from '../responsive/navStats.js'
 import FeedbackForm from './FeedbackForm.jsx'
@@ -9,9 +10,6 @@ import FeedbackForm from './FeedbackForm.jsx'
 //   open({ type?, ai? })    → the form (phone: bottom sheet · laptop: side panel)
 //   publishView(view)       → the Dashboard keeps the current page / filters here (read when the form opens)
 //   registerRestore(fn)     → the Dashboard says how to open a page with saved filters (inbox link)
-const Ctx = createContext(null)
-export const useFeedback = () => useContext(Ctx) || { open() {}, publishView() {}, registerRestore() {}, restore() {}, badge: { unseen: 0, newCount: 0 }, notices: [], ackNotices() {}, clearAcked() {}, isAdmin: false, token: null, refresh() {}, disabled: true }
-
 const POLL_MS = 2 * 60 * 1000
 
 export default function FeedbackProvider({ session, profile, children }) {
@@ -30,24 +28,23 @@ export default function FeedbackProvider({ session, profile, children }) {
   const registerRestore = useCallback(fn => { restoreRef.current = fn }, [])
   const restore = useCallback(ctx => restoreRef.current?.(ctx), [])
 
-  const refresh = useCallback(async () => {
-    if (!token) return
-    try {
-      const b = await fb('badge', token)
+  // Badge numbers + the user's closed-item notices. A failed poll keeps the last numbers.
+  const refresh = useCallback(() => {
+    if (!token) return Promise.resolve()
+    return fb('badge', token).then(b => {
       setBadge({ unseen: b.unseen || 0, newCount: b.newCount || 0 })
-      if (b.unseen > 0) {
-        const m = await fb('mine', token)
-        setNotices((m.items || []).filter(i => i.notify))
-      } else setNotices([])
-    } catch { /* a failed poll keeps the last numbers */ }
+      if (b.unseen > 0) return fb('mine', token).then(m => setNotices((m.items || []).filter(i => i.notify)))
+      setNotices([])
+      return undefined
+    }).catch(() => {})
   }, [token])
 
   useEffect(() => {
-    refresh()
+    const first = setTimeout(refresh, 0)
     const id = setInterval(refresh, POLL_MS)
     const onVis = () => { if (document.visibilityState === 'visible') refresh() }
     document.addEventListener('visibilitychange', onVis)
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+    return () => { clearTimeout(first); clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
   }, [refresh])
 
   // The launcher shows "n new" next to the admin Feedback page.
@@ -66,18 +63,19 @@ export default function FeedbackProvider({ session, profile, children }) {
 
   const showToast = useCallback(text => { setToast(text); setTimeout(() => setToast(t => (t === text ? null : t)), 4000) }, [])
 
-  const value = useMemo(() => ({ open, publishView, registerRestore, restore, badge, notices, ackNotices, clearAcked, isAdmin, token, refresh, showToast, getView: () => viewRef.current }),
-    [open, publishView, registerRestore, restore, badge, notices, ackNotices, clearAcked, isAdmin, token, refresh, showToast])
+  const getView = useCallback(() => viewRef.current, [])
+  const value = useMemo(() => ({ open, publishView, registerRestore, restore, badge, notices, ackNotices, clearAcked, isAdmin, token, refresh, showToast, getView }),
+    [open, publishView, registerRestore, restore, badge, notices, ackNotices, clearAcked, isAdmin, token, refresh, showToast, getView])
 
   return (
-    <Ctx.Provider value={value}>
+    <FeedbackCtx.Provider value={value}>
       {children}
       {formOpen && (
-        <FeedbackForm token={token} prefill={prefill} view={viewRef.current} version={APP_VERSION}
+        <FeedbackForm token={token} prefill={prefill} getView={getView} version={APP_VERSION}
           onClose={() => setFormOpen(false)}
           onSent={() => { setFormOpen(false); showToast("Thanks! Suraj's team will look into it."); refresh() }} />
       )}
       {toast && <div className="fb-toast" role="status">{toast}</div>}
-    </Ctx.Provider>
+    </FeedbackCtx.Provider>
   )
 }

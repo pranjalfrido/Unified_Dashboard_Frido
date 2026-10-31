@@ -1,3 +1,4 @@
+/* global process */
 // Local stand-in API for the Feedback feature (localhost testing only): serves just /api/feedback, with
 // storage in ./.feedback-local (gitignored) and e-mails logged instead of sent. Never talks to Supabase.
 //   node scripts/feedback-local-server.mjs         (port 3017, or PORT=…)

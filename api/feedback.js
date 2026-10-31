@@ -1,3 +1,4 @@
+/* global Buffer */
 // Feedback: users report bugs, wrong numbers and suggestions; admins manage them in an inbox.
 // One endpoint, POST { action, callerToken, ... }. Every write happens here with the service key
 // (the browser has no write access to the table); the user is always taken from the verified session,
@@ -15,6 +16,7 @@ const DAY = 24 * 60 * 60 * 1000
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 // Text only: control characters out, length capped. HTML is never interpreted anywhere (React renders text; e-mail uses esc()).
+// eslint-disable-next-line no-control-regex -- stripping control characters is the point
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max)
 
 // context is whatever the page knew when the form opened. Keep it small and flat-ish: strings capped, depth limited.

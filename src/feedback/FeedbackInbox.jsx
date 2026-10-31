@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Bug, WarningCircle, Lightbulb, PlusCircle, Flag, CaretLeft } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
+import { Flag, CaretLeft } from '@phosphor-icons/react'
+import TypeIcon from './TypeIcon.jsx'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fb, TYPES, TYPE_LABEL, STATUS_LABEL, when } from './feedbackApi.js'
-import { useFeedback } from './FeedbackProvider.jsx'
-import { filterText } from './FeedbackForm.jsx'
+import { useFeedback } from './feedbackCtx.js'
+import { filterText } from './feedbackContext.js'
 import './feedback.css'
-
-export const TYPE_ICON = { bug: Bug, wrong_number: WarningCircle, suggestion: Lightbulb, new_feature: PlusCircle }
-export function TypeIcon({ type, size = 18 }) { const I = TYPE_ICON[type] || Bug; return <I size={size} weight="duotone" aria-hidden="true" /> }
 
 function Detail({ id, token, onChanged, onBack, phone }) {
   const { restore, showToast } = useFeedback()
@@ -20,7 +18,6 @@ function Detail({ id, token, onChanged, onBack, phone }) {
 
   useEffect(() => {
     let off = false
-    setItem(null); setError('')
     fb('get', token, { id }).then(d => { if (off) return; setItem(d.item); setStatus(d.item.status); setReply(d.item.admin_reply || ''); setShow(d.item.show_in_whats_new) }, e => { if (!off) setError(e.message) })
     return () => { off = true }
   }, [id, token])
@@ -97,19 +94,18 @@ export default function FeedbackInbox() {
   const [error, setError] = useState('')
   const [sel, setSel] = useState(null)
 
-  const load = useCallback(async () => {
-    try {
-      const f = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
-      const d = await fb('list', token, { filters: f })
-      setData(d); setError('')
-    } catch (e) { setError(e.message) }
-    setLoaded(true)
-  }, [filters, token])
-  useEffect(() => { if (isAdmin) load() }, [isAdmin, load])
+  const [reload, setReload] = useState(0)
+  useEffect(() => {
+    if (!isAdmin) return
+    let off = false
+    const f = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
+    fb('list', token, { filters: f }).then(d => { if (!off) { setData(d); setError(''); setLoaded(true) } }, e => { if (!off) { setError(e.message); setLoaded(true) } })
+    return () => { off = true }
+  }, [isAdmin, filters, token, reload])
 
   if (!isAdmin) return null
   const set = k => e => setFilters(f => ({ ...f, [k]: e.target.value }))
-  const changed = () => { load(); refresh() }
+  const changed = () => { setReload(n => n + 1); refresh() }
   const showList = !phone || !sel
   const showDetail = sel && (!phone || true)
 

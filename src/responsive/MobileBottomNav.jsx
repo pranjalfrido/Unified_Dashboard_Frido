@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { DotsNine, MagnifyingGlass, Check } from '@phosphor-icons/react'
+import { DotsNine, MagnifyingGlass, Check, ChatCircleDots } from '@phosphor-icons/react'
 import { C } from '../utils.js'
 import { THEMES, ENABLED_THEMES } from '../theme.js'
 import BottomSheet from './BottomSheet.jsx'
@@ -42,7 +42,7 @@ function IconTile({ Icon, on }) {
   return <span aria-hidden="true" style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 10, display: 'grid', placeItems: 'center', background: on ? '#fff' : M.glowTile, color: M.green }}><Icon size={18} /></span>
 }
 
-export default function MobileBottomNav({ pages, active, onSelect, userId, profile, isAdmin, onProfile, theme, setTheme, onSignOut }) {
+export default function MobileBottomNav({ pages, active, onSelect, userId, profile, isAdmin, onProfile, theme, setTheme, onSignOut, onFeedback }) {
   const stats = useNavStats()
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('pages') // 'pages' | 'edit' | 'theme'
@@ -149,6 +149,17 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
                 <div key={title}>{groupLabel(title)}{list.map(p => row(p, { on: p.id === active, right: statOf(p.id) }))}</div>
               ))}
             </>}
+            {onFeedback && !q.trim() && (
+              <button type="button" onClick={() => { close(); onFeedback() }} className="mnav-row" data-testid="launcher-send-feedback"
+                style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto', alignItems: 'center', gap: 10, width: '100%', minHeight: 52, marginTop: 12, padding: '6px 8px 6px 9px', border: `1px dashed ${M.g4}`, borderRadius: 10, background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer' }}>
+                <IconTile Icon={ChatCircleDots} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>Send feedback</span>
+                  <span style={{ display: 'block', fontSize: 12, color: M.muted }}>Report a bug, a wrong number or an idea</span>
+                </span>
+                <span aria-hidden="true" style={{ color: M.muted, fontSize: 16 }}>›</span>
+              </button>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 14, paddingTop: 10, borderTop: `1px solid ${M.line}` }}>
               <button type="button" onClick={() => setMode('theme')} className="mnav-link" style={{ color: M.muted }}>Theme</button>
               <button type="button" onClick={() => setMode('edit')} className="mnav-link" style={{ color: M.green }}>Edit bar</button>

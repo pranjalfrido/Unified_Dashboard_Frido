@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import FilteredStrip from './FilteredStrip.jsx'
 import ActionMenu from './ActionMenu.jsx'
+import { useFeedback } from '../feedback/feedbackCtx.js'
 
 // Phone page header, deep green (docs/responsive/HEADER_GREEN_PROMPT.md, mockups/header_green_mockup.html;
 // MOBILE_DESIGN_SYSTEM.md §2). One header for every phone screen: the top bar (Topnav) and full-screen
@@ -32,9 +33,11 @@ export default function MobilePageHeader({ onBack, backLabel, lead, tag, title, 
 
   const hasStrip = !!strip?.items?.length
   const n = notifications?.count || 0
+  const fbk = useFeedback()
   const items = [
     ...(notifications ? [{ id: 'notifications', label: `Notifications (${n})`, onSelect: notifications.onOpen }] : []),
     ...(menu?.items || []),
+    { id: 'send-feedback', label: 'Send feedback', onSelect: () => fbk.open(), group: menu?.items?.length ? 'Help' : '' },
   ]
   const more = (items.length || menu?.note)
     ? <ActionMenu items={items} title={menu?.title || 'More'} note={menu?.note} dot={n > 0} label={n > 0 ? `More, ${n} notifications` : 'More actions'} />
