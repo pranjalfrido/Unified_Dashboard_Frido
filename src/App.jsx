@@ -5233,7 +5233,7 @@ function AlertsSheet({ open, onClose, alerts, computedAt, userId, onNav }) {
     <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
       {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 6px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {sorted.length > 0 ? sorted.map((a, i) => <AlertCard key={a.key || i} type={a.type} title={a.title} body={a.body} onClick={a.nav && onNav ? () => { onNav(a.nav); onClose?.() } : undefined} />) : (
+        {sorted.length > 0 ? sorted.map((a, i) => <AlertCard key={a.key || i} type={a.type} title={a.title} body={a.body} onClick={a.nav && onNav ? () => { onNav(a.nav, a.title); onClose?.() } : undefined} />) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px', color: C.m.up, fontSize: 13, fontWeight: 600 }}>
             <span>★</span> All systems normal: no alerts for the current period.
           </div>
@@ -5305,7 +5305,7 @@ function AlertsBell({ alerts, computedAt, userId, onNav }) {
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
           {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 4px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
-          {sorted.length > 0 ? sorted.map((a, i) => <AlertCard key={a.key || i} type={a.type} title={a.title} body={a.body} onClick={a.nav && onNav ? () => { onNav(a.nav); setOpen(false) } : undefined} />) : (
+          {sorted.length > 0 ? sorted.map((a, i) => <AlertCard key={a.key || i} type={a.type} title={a.title} body={a.body} onClick={a.nav && onNav ? () => { onNav(a.nav, a.title); setOpen(false) } : undefined} />) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: C.green.tx, fontSize: 12, fontWeight: 600 }}>
               <span style={{ fontSize: 13 }}>★</span> All systems normal — no alerts for the current period.
             </div>
@@ -20226,6 +20226,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
   const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
+  // Alerts Phase 1: title of the bell alert that navigated here, for the "From alert ✕" chip.
+  // Cleared on dismiss or on the next unrelated navigation (any goTo not coming from navAlert).
+  const [fromAlert, setFromAlert] = useState(null)
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -20266,7 +20269,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [invPreset, setInvPreset] = useState(null)
   const invPresetSeq = useRef(0)
   const openInventoryHealth = preset => { invPresetSeq.current += 1; setInvPreset({ ...preset, nonce: invPresetSeq.current }); goTo('inventory', 'health') }
-  const goTo = (page, sub, sub2) => {
+  const goTo = (page, sub, sub2, _fromAlertNav) => {
+    if (!_fromAlertNav) setFromAlert(null)
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
     else if (page === 'logistics-cost') path = '/logistics/cost_analytics'
@@ -20281,8 +20285,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   // Alerts Phase 1 click-nav: each alert carries { page, sub } (approved 2026-10-31) — restoring
   // underlying filters (e.g. a specific channel's date range) isn't in scope for Phase 1, just
-  // landing on the right page + channel tab via the existing goTo router.
-  const navAlert = (nav) => { if (nav?.page) goTo(nav.page, nav.sub, nav.sub2) }
+  // landing on the right page + channel tab via the existing goTo router. `fromAlert` tracks the
+  // title of the alert that triggered the nav so the destination page can show a "From alert ✕"
+  // chip; dismissing it only clears the chip itself (there's no applied filter to clear, since
+  // filter-restoration isn't in scope for Phase 1 — see comment above).
+  const navAlert = (nav, title) => { if (nav?.page) { goTo(nav.page, nav.sub, nav.sub2, true); setFromAlert(title || null) } }
 
   const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
   const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
@@ -20994,6 +21001,20 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
         {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} alertsComputedAt={alertsComputedAt} onAlertNav={navAlert} userId={session?.user?.id} />}
+        {fromAlert && (
+          <div className="from-alert-chip" style={{
+            display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px 0', padding: '5px 10px',
+            borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, width: 'fit-content',
+            fontSize: 12, color: C.t2,
+          }}>
+            <span>From alert: <strong>{fromAlert}</strong></span>
+            <button
+              onClick={() => setFromAlert(null)}
+              aria-label="Dismiss"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.t3, fontSize: 13, lineHeight: 1, padding: 0 }}
+            >✕</button>
+          </div>
+        )}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (

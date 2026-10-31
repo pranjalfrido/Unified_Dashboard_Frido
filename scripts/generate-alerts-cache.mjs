@@ -16,8 +16,31 @@
 
 import { writeFileSync } from 'fs'
 import { BigQuery } from '@google-cloud/bigquery'
+import returnAnalysisHandler from '../api/return-analysis.js'
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
+
+// Calls the real /api/return-analysis handler in-process (same code path server.js wires to that
+// route) instead of hand-rolling separate SQL — this reuses netRevenueSelectFragment/
+// computeNetRevenueMeasures from _bq.js so #6's numbers are guaranteed to reconcile with the live
+// Return Analysis page's own Cancel/RTO/CIR/Exchange/Return% cards for the same date range. An
+// earlier version of this script hand-wrote a query against `Revenue`/`is_cancelled`/`is_rto`/
+// `is_CIR_return`/`is_exchange` columns that don't exist on fact_all_platform_sales_report (the
+// real columns are SellingPrice_Inc_GST + Order_Status) — caught during Phase 1 verification
+// 2026-10-31 when the query failed with "Unrecognized name: Revenue".
+async function callReturnAnalysis(body) {
+  return new Promise((resolve, reject) => {
+    const req = { method: 'POST', body }
+    const res = {
+      _status: 200,
+      setHeader() { return this },
+      status(code) { this._status = code; return this },
+      json(payload) { if (this._status >= 400) reject(new Error(JSON.stringify(payload))); else resolve(payload) },
+      end() { resolve(null) },
+    }
+    returnAnalysisHandler(req, res).catch(reject)
+  })
+}
 
 const fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const today = new Date()
@@ -41,7 +64,11 @@ const dateRangeLabel = (startStr, endStr) => {
 }
 
 async function run(sql) {
-  const [rows] = await bq.query({ query: sql, location: 'US' })
+  // No explicit `location` — matches every other BQ call in this repo (api/_bq.js, api/logistics.js,
+  // api/return-analysis.js), which all let the client auto-detect it. A prior pass here hardcoded
+  // `location: 'US'`, which failed with "Dataset frido-429506:production was not found in location
+  // US" since the real dataset isn't in that region — caught during Phase 1 verification 2026-10-31.
+  const [rows] = await bq.query({ query: sql, maximumBytesBilled: '10000000000' })
   return rows
 }
 
@@ -101,30 +128,17 @@ FROM base
 
   // --- Returns: #6 D2C return-rate red lines (Shopify, ex Retail Store / Shopify International) ---
   try {
-    const returnsRows = await run(`
-SELECT
-  SUM(Revenue) AS gross,
-  SUM(IF(is_cancelled = 1, Revenue, 0)) AS cancel_rev,
-  SUM(IF(is_rto = 1, Revenue, 0)) AS rto_rev,
-  SUM(IF(is_CIR_return = 1, Revenue, 0)) AS cir_rev,
-  SUM(IF(is_exchange = 1, Revenue, 0)) AS exchange_rev
-FROM \`frido-429506.production.fact_all_platform_sales_report\`
-WHERE Channel = 'Shopify'
-  AND SubChannel NOT IN ('Retail Store', 'Shopify International')
-  AND DATE(OrderDate) BETWEEN '${retStartStr}' AND '${retEndStr}'
-    `)
-    const r = returnsRows[0] || {}
-    const gross = parseFloat(r.gross) || 0
-    const pctOf = v => gross > 0 ? +((parseFloat(v) || 0) / gross * 100).toFixed(2) : null
-    const cancelPct = pctOf(r.cancel_rev)
-    const rtoPct = pctOf(r.rto_rev)
-    const cirPct = pctOf(r.cir_rev)
-    const exchangePct = pctOf(r.exchange_rev)
-    const totalReturnPct = (cancelPct ?? 0) + (rtoPct ?? 0) + (cirPct ?? 0) + (exchangePct ?? 0)
+    const resp = await callReturnAnalysis({ start: retStartStr, end: retEndStr })
+    const k = resp?.kpis || {}
+    const gross = parseFloat(k.totalRevenue) || 0
     out.returns = {
       windowStart: retStartStr, windowEnd: retEndStr, rangeLabel: dateRangeLabel(retStartStr, retEndStr),
-      gross, cancelPct, rtoPct, cirPct, exchangePct,
-      totalReturnPct: gross > 0 ? +totalReturnPct.toFixed(2) : null,
+      gross,
+      cancelPct: gross > 0 ? +(k.cancelPct ?? 0).toFixed(2) : null,
+      rtoPct: gross > 0 ? +(k.rtoPct ?? 0).toFixed(2) : null,
+      cirPct: gross > 0 ? +(k.cirPct ?? 0).toFixed(2) : null,
+      exchangePct: gross > 0 ? +(k.exchangePct ?? 0).toFixed(2) : null,
+      totalReturnPct: gross > 0 ? +(k.returnPct ?? 0).toFixed(2) : null,
     }
   } catch (e) {
     console.error('generate-alerts-cache: returns window query failed —', e.message)
