@@ -4,6 +4,7 @@ import { DotsNine, MagnifyingGlass, Check } from '@phosphor-icons/react'
 import { C } from '../utils.js'
 import { THEMES, ENABLED_THEMES } from '../theme.js'
 import BottomSheet from './BottomSheet.jsx'
+import { LiveCount } from './LiveUsers.jsx'
 import { DEFAULT_DOCK, DOCK_MAX, DOCK_MIN, loadDock, saveDock, loadRecent, pushRecent, searchPages } from './navConfig.js'
 import { useNavStats } from './navStats.js'
 
@@ -122,7 +123,7 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ display: 'block', fontSize: 14 }}>{profile?.name || 'You'}</b>
-                <span style={{ display: 'block', fontSize: 12, color: M.muted }}>{isAdmin ? 'Admin · Profile & team access' : 'Profile'}</span>
+                <span style={{ display: 'block', fontSize: 12, color: M.muted }}>{isAdmin ? <>Admin · Profile & team access<LiveCount isAdmin={isAdmin} prefix /></> : 'Profile'}</span>
               </span>
               <span aria-hidden="true" style={{ color: M.muted, fontSize: 16 }}>›</span>
             </button>

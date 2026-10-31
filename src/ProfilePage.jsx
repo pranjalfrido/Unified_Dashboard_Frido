@@ -7,6 +7,8 @@ import { adminCall, fmtDate, useMyProfile, PULSE_WHITELIST } from './profile/pro
 import { S } from './profile/profileStyles.js'
 import ProfileMobile from './profile/ProfileMobile.jsx'
 import { useBreakpoint } from './responsive/useBreakpoint.js'
+import { useLivePresence, presenceOf } from './presence.js'
+import { LiveDot } from './responsive/LiveUsers.jsx'
 
 
 
@@ -418,6 +420,7 @@ function MemberDetailPane({ user, permissions, session, onUpdate, showToast }) {
 
 // ── Team Members ──────────────────────────────────────────────────────────────
 function TeamMembers({ session, showToast }) {
+  const presence = useLivePresence(true) // admin-only list: green dot when online, else "Last seen … ago"
   const [users, setUsers] = useState([])
   const [permissions, setPermissions] = useState({})
   const [loading, setLoading] = useState(true)
@@ -490,6 +493,7 @@ function TeamMembers({ session, showToast }) {
               filtered.map(u => {
                 const isSelected = u.user_id === selectedId
                 const tabCount = (permissions[u.user_id] || []).length
+                const pr = presenceOf(presence, u.user_id)
                 return (
                   <div key={u.user_id} onClick={() => setSelectedId(u.user_id)}
                     style={{
@@ -502,10 +506,11 @@ function TeamMembers({ session, showToast }) {
                     onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F7F5EF' }}
                     onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E2321', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#1E2321', minWidth: 0 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>{pr?.online && <LiveDot />}</div>
                     <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 2 }}>
                       {u.is_admin ? `Admin · all tabs${(permissions[u.user_id] || []).includes('ask') ? ' + NavAI' : ''}` : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
                     </div>
+                    {pr && <div style={{ fontSize: 12, color: pr.online ? '#1f8a4c' : '#7b847f', marginTop: 1, fontWeight: pr.online ? 600 : 400 }}>{pr.text}</div>}
                   </div>
                 )
               })

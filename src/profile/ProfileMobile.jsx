@@ -8,6 +8,8 @@ import UndoToast from '../responsive/UndoToast.jsx'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import { paletteMapCss } from '../responsive/paletteMapCss.js'
 import Avatar from './Avatar.jsx'
+import { useLivePresence, presenceOf } from '../presence.js'
+import { LiveDot } from '../responsive/LiveUsers.jsx'
 import { CreateUserForm } from './CreateUser.jsx'
 import { adminCall, fmtDate, useActivity, useMyProfile, accessSections, sectionKeys, allTabKeys, PULSE_WHITELIST } from './profileShared.js'
 
@@ -257,6 +259,7 @@ function MyAccess({ session }) {
 }
 
 function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
+  const presence = useLivePresence(true) // admin-only screen: green dot when online, else "Last seen … ago"
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [shown, setShown] = useState(PAGE)
@@ -287,14 +290,15 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
         {!team.loading && !list.length && <div style={{ padding: 16, fontSize: 13, color: M.muted, textAlign: 'center' }}>No one matches.</div>}
         {list.slice(0, shown).map((u, i, arr) => {
           const self = u.user_id === team.selfId
+          const pr = presenceOf(presence, u.user_id)
           const meta = self ? 'You · Admin' : u.is_admin ? `Admin · all tabs${(team.perms[u.user_id] || []).includes('ask') ? ' + NavAI' : ''}` : `${tabsOf(u)} of ${total} tabs`
           return (
             <button key={u.user_id} type="button" className="profile-team-row" onClick={() => onOpen(u.user_id)}
               style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,1fr) auto 14px', alignItems: 'center', gap: 10, width: '100%', minHeight: 60, padding: '8px 0', border: 'none', borderBottom: i < arr.length - 1 ? `1px solid ${M.line}` : 'none', background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer' }}>
               <Avatar url={u.avatar_url} name={u.name} size={40} />
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name || u.email}</span>
-                <span style={{ display: 'block', fontSize: 12, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta} · {u.last_login_at ? fmtDate(u.last_login_at) : 'never logged in'}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, minWidth: 0 }}><span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name || u.email}</span>{pr?.online && <LiveDot />}</span>
+                <span style={{ display: 'block', fontSize: 12, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta} · {pr ? pr.text : u.last_login_at ? fmtDate(u.last_login_at) : 'never logged in'}</span>
               </span>
               <span>{!u.is_active && <Chip tone="red">Revoked</Chip>}</span>
               <span aria-hidden="true" style={{ color: M.muted, fontSize: 16 }}>›</span>

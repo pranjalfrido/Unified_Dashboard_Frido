@@ -14,6 +14,8 @@ import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
 import LoadingOverlay, { LoadingScreen, BrandMark } from './LoadingOverlay.jsx'
 import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache } from './theme.js'
+import { usePresenceHeartbeat, useLiveCount } from './presence.js'
+import { LivePill, LiveSheet } from './responsive/LiveUsers.jsx'
 import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
@@ -4937,9 +4939,12 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
+  // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
+  const [liveOpen, setLiveOpen] = useState(false)
+  const liveCount = useLiveCount(isAdmin)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
@@ -4960,10 +4965,13 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   if (phone) {
     const notifications = { count: combinedAlerts.length, onOpen: () => setTimeout(() => setAlertsOpen(true), 350) }
     const datePill = (f, setF, refresh, busy) => <div className="tnav-right"><DateRangePicker filters={f} setFilters={setF} onRefresh={refresh} loading={busy} /></div>
+    // Admins: "Live users (N)" is the last ⋯ item on every page (not in the green header itself).
+    const liveItem = isAdmin ? { id: 'live-users', label: liveCount == null ? 'Live users' : `Live users (${liveCount})`, onSelect: () => setTimeout(() => setLiveOpen(true), 350) } : null
     const H = props => (
       <div className="topnav m-header" data-page={page}>
-        <MobilePageHeader notifications={notifications} {...props} />
+        <MobilePageHeader notifications={notifications} {...props} menu={liveItem ? { title: 'More', ...props.menu, items: [...(props.menu?.items || []), liveItem] } : props.menu} />
         <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
+        <LiveSheet isAdmin={isAdmin} open={liveOpen} onClose={() => setLiveOpen(false)} />
       </div>
     )
     if (page === 'inventory') {
@@ -5152,6 +5160,8 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
           Overview and disappeared the moment you scrolled down or switched tabs. */}
       {/* Phones only (index.css): shown while a Sales-tab filter is shaping the Overview numbers. */}
       {page === 'overview' && <span className="ov-filter-slot"><OverviewFilterButton filters={filters} setFilters={setFilters} /></span>}
+      {/* Admins only: "● N live" next to the alerts / date controls. */}
+      <LivePill isAdmin={isAdmin} />
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
@@ -20181,6 +20191,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   const navigate = useNavigate()
   const location = useLocation()
+  // Live users: every signed-in user reports the page they're on (URL path only) while the tab is
+  // visible; only admins can read it (api/presence.js).
+  usePresenceHeartbeat(location.pathname)
 
   // Parse URL → internal page/tab state
   const parseUrl = (pathname) => {
@@ -20908,7 +20921,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />}
+        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={combinedAlerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
