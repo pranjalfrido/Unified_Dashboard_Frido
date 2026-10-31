@@ -37,7 +37,7 @@ export default function MobilePageHeader({ onBack, backLabel, lead, tag, title, 
   const items = [
     ...(notifications ? [{ id: 'notifications', label: `Notifications (${n})`, onSelect: notifications.onOpen }] : []),
     ...(menu?.items || []),
-    { id: 'send-feedback', label: 'Send feedback', onSelect: () => fbk.open(), group: menu?.items?.length ? 'Help' : '' },
+    { id: 'send-feedback', label: 'Send feedback', onSelect: () => setTimeout(() => fbk.open(), 350), group: menu?.items?.length ? 'Help' : '' },
   ]
   const more = (items.length || menu?.note)
     ? <ActionMenu items={items} title={menu?.title || 'More'} note={menu?.note} dot={n > 0} label={n > 0 ? `More, ${n} notifications` : 'More actions'} />

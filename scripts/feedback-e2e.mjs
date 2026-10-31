@@ -206,6 +206,7 @@ async function uiScenario(vp) {
   await u2.page.waitForTimeout(2500) // acknowledged after it was shown
   await u2.page.goto(`${BASE}/profile`, { waitUntil: 'domcontentloaded' })
   await u2.page.getByTestId('my-feedback').waitFor({ timeout: 10000 })
+  await u2.page.locator('.fbm-item').first().waitFor({ timeout: 8000 })
   ok(`${tag}: My feedback shows status + reply`, (await u2.page.getByTestId('my-feedback').getByText('Fixed in the latest release').count()) === 1 && (await u2.page.getByTestId('my-feedback').getByText('Done', { exact: true }).count()) >= 1)
   await u2.page.goto(`${BASE}/whatsnew`, { waitUntil: 'domcontentloaded' })
   await u2.page.getByTestId('whats-new').waitFor({ timeout: 10000 })
@@ -231,7 +232,7 @@ async function navaiScenario(vp) {
   await s.page.waitForTimeout(1500)
   if (await s.page.getByTestId('report-answer').count() === 0) {
     // phone opens on the first-screen list: open the saved chat
-    const t = s.page.getByText('Revenue yesterday').first()
+    const t = s.page.getByText('What was revenue yesterday?').first()
     if (await t.count()) await t.click().catch(() => {})
     await s.page.waitForTimeout(800)
   }

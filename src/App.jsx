@@ -3649,7 +3649,7 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
   }
   return <>
     <MobileBottomNav pages={pages} active={active} onSelect={onSelect} userId={userId} profile={profile} isAdmin={!!profile?.is_admin}
-      onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} onFeedback={() => fbk.open()} />
+      onProfile={() => setPage('profile')} theme={theme} setTheme={setTheme} onSignOut={signOut} onFeedback={() => setTimeout(() => fbk.open(), 350)} />
     <AppBanner />
   </>
 }
