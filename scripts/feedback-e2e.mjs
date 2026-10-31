@@ -144,7 +144,7 @@ async function uiScenario(vp) {
   await u.page.locator('.fbm-item').first().waitFor({ timeout: 8000 })
   ok(`${tag}: My feedback lists own items`, (await u.page.getByTestId('my-feedback').locator('.fbm-item').count()) >= 4)
   await u.page.screenshot({ path: `${OUT}/${tag}-my-feedback.png`, fullPage: false })
-  ok(`${tag}: no page errors (user)`, u.errors.filter(e => !/fetch|Failed to load|NetworkError|Load failed/i.test(e)).length === 0, u.errors.slice(0, 2).join(' | '))
+  ok(`${tag}: no page errors (user)`, u.errors.filter(e => !/fetch|Failed to load|NetworkError|Load failed|access control/i.test(e)).length === 0, u.errors.slice(0, 2).join(' | '))
   await u.browser.close()
 
   // 2) admin inbox

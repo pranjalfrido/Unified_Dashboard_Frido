@@ -172,11 +172,12 @@ function supabaseStore() {
   }
 }
 
-// Same Microsoft Graph mailer as the data connector's alert e-mails (AZURE_* credentials, ALERT_SENDER_EMAIL).
+// Microsoft Graph, like the data connector's alert e-mails and the report e-mails: AZURE_* (or the OTP_FRIDO_* app already in .env.example) and ALERT_SENDER_EMAIL (or REPORT_MAIL_FROM).
 let tokenCache = null
 async function graphToken() {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 30000) return tokenCache.token
-  const { AZURE_TENANT_ID: t, AZURE_CLIENT_ID: c, AZURE_CLIENT_SECRET: s } = process.env
+  const e = process.env
+  const t = e.AZURE_TENANT_ID || e.OTP_FRIDO_TENANT_ID; const c = e.AZURE_CLIENT_ID || e.OTP_FRIDO_CLIENT_ID; const s = e.AZURE_CLIENT_SECRET || e.OTP_FRIDO_CLIENT_SECRET
   if (!t || !c || !s) throw new Error('Missing Azure credentials for mailer')
   const r = await fetch(`https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -188,7 +189,7 @@ async function graphToken() {
   return tokenCache.token
 }
 async function sendGraphMail(subject, html, to) {
-  const sender = process.env.ALERT_SENDER_EMAIL || process.env.ALERT_EMAIL || to[0]
+  const sender = process.env.ALERT_SENDER_EMAIL || process.env.REPORT_MAIL_FROM || process.env.ALERT_EMAIL || to[0]
   const token = await graphToken()
   const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
