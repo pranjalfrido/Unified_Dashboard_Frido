@@ -450,23 +450,29 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
     return { type: 'amber', title: 'D2C return-rate red line breached', body: `${retCache.rangeLabel}: ${fired.join(', ')}.`, key: 'd2cRedLines', requiredPermission: 'sales:shopify', nav: { page: 'sales', sub: 'shopify' } }
   })()
 
-  // #7 Channel with 0 orders yesterday (most recent complete calendar day), grouped into one alert.
-  // Excludes CRED/Firstcry (naturally thin/intermittent per the backtest). Reads the SAME static
+  // #7 Channel with 0 orders on its own latest FULLY-SYNCED day, grouped into one alert. Excludes
+  // CRED/Firstcry (naturally thin/intermittent per the backtest). Reads the SAME static
   // alerts-data.json cache as #3/#4/#6/#11 (generate-alerts-cache.mjs's `zeroOrders` block) —
   // NEVER the viewer's selected range or the browser's local clock. The original version of this
-  // alert (a client useMemo reading data.chMap/data.uniqueDates) had two compounding bugs found
-  // during Phase 1 verification 2026-10-31: (1) it only ran when the user's currently-selected
-  // date range happened to include yesterday, the same "must not depend on client filter state"
-  // bug class already fixed for #3/#4/#6/#11; (2) it built "yesterday" from the browser's own
-  // local timezone rather than IST, so on a mismatched clock the date it checked often had no
-  // real orders synced yet for ANY channel — which is what caused it to flag "nearly every
-  // channel" as zero-orders in the live test. Moved server-side with an explicit IST boundary.
+  // alert had THREE compounding bugs found during Phase 1 verification 2026-10-31: (1) it only
+  // ran when the user's currently-selected date range happened to include yesterday, the same
+  // "must not depend on client filter state" bug class already fixed for #3/#4/#6/#11; (2) it
+  // built "yesterday" from the browser's own local timezone rather than IST; (3) after fixing
+  // (1)/(2) and checking a single shared "yesterday" for every channel, it still false-fired for
+  // Flipkart/Myntra, which routinely have NOT synced yesterday's data yet (same multi-day
+  // ingestion lag api/bq.js already works around for Flipkart via fkLatestCache) — checking
+  // "yesterday" against a channel whose rows for that date simply haven't landed always reads as
+  // a false 0-orders alert. Fixed: each channel is now checked against its OWN MAX(OrderDate)
+  // (its latest fully-synced day, per-channel, possibly different dates across channels), not
+  // one shared date. ordersByChannel[c].date carries that channel's actual checked date.
   const zeroOrderAlert = (() => {
     const zc = alertsCache?.zeroOrders
     if (!zc?.zeroChannels?.length) return null
     const zero = zc.zeroChannels.filter(c => !ALERT_RULES.zeroOrderExcludeChannels.includes(c))
     if (!zero.length) return null
-    return { type: 'amber', title: `0 orders yesterday: ${zero.join(', ')}`, body: `${zc.label}: no orders recorded on ${zero.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
+    const fmtDate = iso => { const d = new Date(iso + 'T00:00:00'); return `${d.getDate()} ${d.toLocaleString('en-US', { month: 'short' })}` }
+    const parts = zero.map(c => `${c} (${fmtDate(zc.ordersByChannel[c]?.date || zc.date)})`)
+    return { type: 'amber', title: `0 orders on latest synced day: ${zero.join(', ')}`, body: `No orders recorded — ${parts.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
   })()
 
   // #9 Ads: spend with no sales — ADS_RULES.noSalesSpend/noSalesRoas, one alert per platform

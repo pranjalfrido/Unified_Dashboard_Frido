@@ -189,31 +189,58 @@ async function main() {
     out.returns = null
   }
 
-  // --- #7: channel with 0 orders yesterday (IST), grouped, CRED/Firstcry excluded ------------
-  // Standalone query against fact_all_platform_sales_report, same Channel grouping convention as
-  // api/bq.js's byChannel query. Independent of any client-selected date range (the original
-  // bug) and uses an explicit IST day boundary (Intl.DateTimeFormat), not the host machine's
-  // local clock.
+  // --- #7: channel with 0 orders on its latest FULLY-SYNCED day, grouped, CRED/Firstcry excluded
+  // Originally checked a single fixed "yesterday" (IST) for every channel, which produced false
+  // positives for channels with a known multi-day ingestion lag: Flipkart and Myntra's
+  // MAX(OrderDate) routinely sits 1-2 days behind Shopify/Amazon/Blinkit/Zepto/Instamart (the
+  // same lag api/bq.js already works around for Flipkart via its fkLatestCache/fkStart-shifting
+  // logic — see buildAds() above). Checking "yesterday" against a channel whose data simply
+  // hasn't landed yet always reads as a false 0-orders alert. Fixed: compute each channel's own
+  // MAX(OrderDate) first, then check orders ON that date (its latest fully-synced day), not a
+  // single shared "yesterday" for every channel. If a channel's latest synced day is itself
+  // more than 3 days stale, that's a separate pipeline-health problem, not a 0-orders day — skip
+  // it from this alert (CLAUDE.md/System alerts already cover data-staleness separately).
   try {
-    const rows = await run(`
-      SELECT Channel, COUNT(DISTINCT OrderId) AS orders
+    const latestRows = await run(`
+      SELECT Channel, MAX(OrderDate) AS latest
       FROM \`frido-429506.production.fact_all_platform_sales_report\`
-      WHERE OrderDate = '${yesterdayStr}'
-        AND Country = 'India'
-        AND NOT (Channel = 'Shopify' AND OrderId LIKE '%_EX%')
+      WHERE Country = 'India'
       GROUP BY Channel
     `)
-    const ordersByChannel = {}
-    rows.forEach(r => { ordersByChannel[r.Channel] = parseInt(r.orders) || 0 })
+    const latestByChannel = {}
+    latestRows.forEach(r => { latestByChannel[r.Channel] = r.latest?.value || r.latest })
     // Real channel list — same set the Sales page's channel tabs cover (src/permissionTree.js
     // sales:<channel> keys), minus CRED/Firstcry (excluded per the backtest: naturally
     // thin/intermittent channels that false-fire constantly — see ALERTS_BACKTEST.md).
     const ALL_CHANNELS = ['Shopify', 'Amazon', 'Flipkart', 'Blinkit', 'Zepto', 'Instamart', 'Myntra']
-    const zero = ALL_CHANNELS.filter(c => !(ordersByChannel[c] > 0))
+    const maxStaleDays = 3
+    const checked = ALL_CHANNELS
+      .map(c => ({ channel: c, latest: latestByChannel[c] }))
+      .filter(c => {
+        if (!c.latest) return false
+        const staleDays = Math.round((new Date(yesterdayStr) - new Date(c.latest)) / 86400000) + 1
+        return staleDays <= maxStaleDays
+      })
+    const rows = await run(`
+      SELECT Channel, OrderDate, COUNT(DISTINCT OrderId) AS orders
+      FROM \`frido-429506.production.fact_all_platform_sales_report\`
+      WHERE Channel IN (${checked.map(c => `'${c.channel}'`).join(',') || "''"})
+        AND OrderDate IN (${[...new Set(checked.map(c => `'${c.latest}'`))].join(',') || "''"})
+        AND Country = 'India'
+        AND NOT (Channel = 'Shopify' AND OrderId LIKE '%_EX%')
+      GROUP BY Channel, OrderDate
+    `)
+    const ordersByChannel = {}
+    checked.forEach(c => { ordersByChannel[c.channel] = { date: c.latest, orders: 0 } })
+    rows.forEach(r => {
+      if (ordersByChannel[r.Channel] && r.OrderDate?.value === ordersByChannel[r.Channel].date) {
+        ordersByChannel[r.Channel].orders = parseInt(r.orders) || 0
+      }
+    })
+    const zero = checked.filter(c => ordersByChannel[c.channel]?.orders === 0).map(c => c.channel)
     out.zeroOrders = {
-      date: yesterdayStr,
-      label: `${new Date(yesterdayStr + 'T00:00:00').getDate()} ${new Date(yesterdayStr + 'T00:00:00').toLocaleString('en-US', { month: 'short' })}`,
-      ordersByChannel,
+      date: yesterdayStr, // fallback label date for the alert header; per-channel dates are in ordersByChannel
+      ordersByChannel, // { Channel: { date, orders } } — each channel checked on its OWN latest synced day
       zeroChannels: zero,
     }
   } catch (e) {
