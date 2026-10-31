@@ -3680,7 +3680,9 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
+    // MTD = 1st → yesterday. On the 1st there is no completed day yet (start would be after end),
+    // so the preset is shown disabled instead of loading a reversed range (B6, MONTHLY_TREND_PLAN.md).
+    { label: 'MTD', off: today.getDate() === 1 ? 'No days yet' : null, fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'Last Quarter', fn: () => {
       // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
@@ -3711,7 +3713,7 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
+  const activePreset = PRESETS.find(p => { if (p.off) return false; const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
 
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
@@ -3948,9 +3950,9 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
               {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
                 const isActive = p.fn ? activePreset?.label === p.label : !activePreset
                 return (
-                  <button key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
-                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
-                    {p.label}
+                  <button key={p.label} disabled={!!p.off} title={p.off || undefined} onClick={() => { if (p.fn && !p.off) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn && !p.off ? 'pointer' : 'default', opacity: p.off ? 0.5 : 1, whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
+                    {p.off ? `${p.label} · ${p.off.toLowerCase()}` : p.label}
                   </button>
                 )
               })}
@@ -3967,11 +3969,11 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
             {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
               const isActive = p.fn ? activePreset?.label === p.label : !activePreset
               return (
-                <div key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
-                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bg }}
+                <div key={p.label} title={p.off || undefined} aria-disabled={p.off ? true : undefined} onClick={() => { if (p.fn && !p.off) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn && !p.off ? 'pointer' : 'default', opacity: p.off ? 0.5 : 1, whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
+                  onMouseEnter={e => { if (!isActive && !p.off) e.currentTarget.style.background = T.bg }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                  {p.label}
+                  {p.off ? `${p.label} · ${p.off.toLowerCase()}` : p.label}
                 </div>
               )
             })}
@@ -20716,10 +20718,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Only use cache when the selected range overlaps the rolling window.
-        // If end < rollingStart the entire range predates the cache — skip it so
-        // the live BQ result (data) is used instead of empty sliced arrays.
-        const cacheCovers = (json) => end >= json.rollingStart && end <= json.rollingEnd
+        // Only use the cache when it holds the WHOLE selected range; otherwise the live BQ result
+        // (data) is used. Checking only the end let a range that starts before rollingStart be
+        // sliced, silently dropping its first days (B5 in MONTHLY_TREND_PLAN.md: Aug 2026 lost
+        // 1 Aug, ₹28.0 L of ad spend, when the window started 2 Aug).
+        const cacheCovers = (json) => start >= json.rollingStart && end <= json.rollingEnd
         if (adsCacheRef.current && cacheCovers(adsCacheRef.current)) {
           if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
