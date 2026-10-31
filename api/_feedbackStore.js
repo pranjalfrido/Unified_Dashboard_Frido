@@ -124,7 +124,7 @@ function localStore() {
 
 function supabaseStore() {
   const db = () => getAdminClient()
-  const fail = error => { throw Object.assign(new Error(error.message), { code: error.code, hint: error.hint }) }
+  const fail = error => { throw Object.assign(new Error(error.message || '(empty message)'), { code: error.code, hint: error.hint, details: error.details, httpStatus: error.status }) }
   const must = ({ data, error }) => { if (error) fail(error); return data }
   const count = ({ count: n, error }) => { if (error) fail(error); return n || 0 }
   return {

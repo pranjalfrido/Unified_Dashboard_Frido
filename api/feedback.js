@@ -101,7 +101,8 @@ function explain(e) {
   if (/bucket not found/i.test(m)) return 'The storage bucket feedback-screenshots was not found.'
   if (/Invalid API key|JWT|apikey/i.test(m)) return 'Server not configured: the Supabase service key looks wrong.'
   if (/fetch failed|ENOTFOUND|ECONN/i.test(m)) return 'The server could not reach Supabase (network).'
-  return `${e?.name || 'Error'}${e?.code ? ' ' + e.code : ''}: ${m}`.slice(0, 240) + (e?.cause?.message ? ` (cause: ${String(e.cause.message).slice(0, 120)})` : '')
+  const bits = [e?.code && `code ${e.code}`, e?.httpStatus && `http ${e.httpStatus}`, e?.hint && `hint ${String(e.hint).slice(0, 80)}`, e?.details && `details ${String(e.details).slice(0, 80)}`, e?.cause?.message && `cause ${String(e.cause.message).slice(0, 100)}`].filter(Boolean)
+  return `${e?.name || 'Error'}: ${m}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`.slice(0, 400)
 }
 
 export default async function handler(req, res) {
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   const store = getStore()
   let caller = null
+  let step = 'start'
 
   try {
     // Vercel cron (7 pm IST) calls GET with "Authorization: Bearer <CRON_SECRET>".
@@ -125,6 +127,7 @@ export default async function handler(req, res) {
 
     const body = req.body || {}
     const token = body.callerToken || String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '')
+    step = 'checking your login'
     const auth = await authenticate(token)
     if (auth.error) return fail(res, auth.status, auth.error)
     const user = auth.user
@@ -139,6 +142,7 @@ export default async function handler(req, res) {
       const message = clean(body.message, MAX_MESSAGE)
       if (!message) return fail(res, 400, 'Please write a short message.')
       if (String(body.message || '').trim().length > MAX_MESSAGE) return fail(res, 400, `Please keep it under ${MAX_MESSAGE} characters.`)
+      step = 'rate-limit check'
       if (await store.countSince(user.id, DAY) >= DAILY_LIMIT) return fail(res, 429, `You've sent ${DAILY_LIMIT} items today. Please try again tomorrow.`)
       const context = cleanContext(body.context) || {}
       let shot = null
@@ -149,9 +153,11 @@ export default async function handler(req, res) {
       }
       const id = newId()
       let path = null
+      step = 'screenshot upload'
       if (shot) path = await store.saveShot(user.id, id, shot.ext, shot.buf)
       let row
       try {
+        step = 'saving the item'
         row = await store.insert({ id, user_id: user.id, type, message, context, screenshot_path: path, urgent: body.urgent === true, status: 'new', admin_reply: null, show_in_whats_new: false })
       } catch (e) {
         if (path) await store.removeShot(path)
@@ -227,6 +233,6 @@ export default async function handler(req, res) {
     return fail(res, 400, 'Unknown action.')
   } catch (e) {
     console.error('[feedback] error:', e?.code || '', e?.message, e?.hint || '')
-    return res.status(500).json({ error: 'Something went wrong. Please try again.', ...(caller?.isAdmin || LOCAL ? { detail: explain(e) } : {}) })
+    return res.status(500).json({ error: 'Something went wrong. Please try again.', ...(caller?.isAdmin || LOCAL ? { detail: `[${step}] ${explain(e)}` } : {}) })
   }
 }
