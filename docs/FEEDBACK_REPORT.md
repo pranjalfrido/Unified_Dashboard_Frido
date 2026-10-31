@@ -28,7 +28,7 @@ Branch `feat/feedback` (worktree `C:/wt-feedback`), local commits only: nothing 
 
 ## Test results (local mode, test people only)
 `node scripts/feedback-e2e.mjs` — 16 API checks + a 24-step UI run per device, 5 devices: laptop 1366, Chromium 375 / 360, WebKit 375 / 360.
-- Laptop 40/40, Chromium 375 40/40, Chromium 360 40/40, WebKit 375 and 360 39/40 each; the one miss was the script counting WebKit's CORS messages about *other* APIs that don't exist locally as "page errors" (script now ignores them; not re-run on WebKit after that edit).
+- Laptop 40/40, Chromium 375 40/40, Chromium 360 40/40, WebKit 375 40/40. WebKit 360 passed 39/40 on the first run: the one miss was the script counting WebKit's CORS messages about *other* APIs that don't exist locally as page errors (script now ignores them; WebKit 360 not re-run, WebKit 375 was).
 - Covered: every type from phone and laptop with and without screenshot; context captured (page, device kind, version, time); NavAI report with question + answer; inbox, type and status filters; Done blocked without a reply; Done with reply + What's new → user notification, My feedback reply, What's new; non-admin has no inbox (no sidebar item, no launcher row, `/feedback` redirects and renders nothing), 403 on every admin action, cannot see others' items.
 - Build passes. No new lint errors (files I added are clean; `src/App.jsx` 370 problems before and after).
 - Screenshots (not committed): `.feedback-local/shots-e2e/`.
@@ -45,7 +45,7 @@ Branch `feat/feedback` (worktree `C:/wt-feedback`), local commits only: nothing 
 - The pasted spec asked for a 👎 "under every NavAI answer": it is a text button "Report this answer" with the thumbs-down icon, hidden on error replies on the laptop thread.
 - Notifications are read at the first poll after login and then every 2 minutes (and when the tab is shown again), not instantly.
 - The existing "alert mailer" lives only on the connector branch; this uses the same Microsoft Graph approach inside `api/_feedbackStore.js`.
-- Local run: vite on http://localhost:5197 and the local API on :3017 (see below). The local store holds a few demo items.
+- Local run: vite on http://localhost:5197 and the local API on :3017 (see below). The local store holds a few demo items (`node scripts/feedback-seed-demo.mjs` re-adds them; running the e2e script wipes the store).
 
 ## Run it locally
 ```
