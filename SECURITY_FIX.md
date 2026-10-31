@@ -2,7 +2,7 @@
 
 Branch `fix/security-auth`, stacked on `fix/staged-loading`.
 
-## The problem (found 31 Oct – 1 Nov 2026)
+## The problem (found 31 Oct 2026)
 
 Anyone with the URL could read the dashboard's data without logging in:
 * **Static data files.** Every `.json` file in `public/` (pnl-data*.json, ads-data.json, inv-data*.json, logistics*.json, sales-alloc-data.json, cogs-data.json, snd-rates.json, vc-margin-rates.json, inward-data.json, …) was served straight from Vercel's CDN. The login only decided what the screens showed.
@@ -68,7 +68,7 @@ Run it with `node scripts/security/check-middleware.mjs`.
 | `scripts/responsive/measure-prev-cost.mjs` (manual, local) | posts to an API URL | against a protected deployment it needs a token, or `x-cron-secret` |
 | `frido-data-connector` (Pulse backend) | no: its own BigQuery access | nothing to change |
 
-## Verification (local, 1 Nov 2026)
+## Verification (local, 31 Oct 2026)
 
 Vercel previews are behind Vercel's own login (SSO), so curl can't reach them. A local harness ran `middleware.js` in front of the built `dist/` and the branch's API handlers, the way Vercel does.
 
