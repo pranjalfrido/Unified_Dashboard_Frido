@@ -451,26 +451,36 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
   })()
 
   // #7 Channel with 0 orders yesterday (most recent complete calendar day), grouped into one alert.
-  // Excludes CRED/Firstcry (naturally thin/intermittent per the backtest). Checked against the
-  // already-loaded chMap for the selected range when it covers yesterday; this is a client-compute
-  // check over data already fetched, not a new server call.
+  // Excludes CRED/Firstcry (naturally thin/intermittent per the backtest). Reads the SAME static
+  // alerts-data.json cache as #3/#4/#6/#11 (generate-alerts-cache.mjs's `zeroOrders` block) —
+  // NEVER the viewer's selected range or the browser's local clock. The original version of this
+  // alert (a client useMemo reading data.chMap/data.uniqueDates) had two compounding bugs found
+  // during Phase 1 verification 2026-10-31: (1) it only ran when the user's currently-selected
+  // date range happened to include yesterday, the same "must not depend on client filter state"
+  // bug class already fixed for #3/#4/#6/#11; (2) it built "yesterday" from the browser's own
+  // local timezone rather than IST, so on a mismatched clock the date it checked often had no
+  // real orders synced yet for ANY channel — which is what caused it to flag "nearly every
+  // channel" as zero-orders in the live test. Moved server-side with an explicit IST boundary.
   const zeroOrderAlert = (() => {
-    if (!data?.chMap || !data?.uniqueDates?.length) return null
-    const yday = new Date(); yday.setDate(yday.getDate() - 1)
-    const y = yday.getFullYear(), m = String(yday.getMonth() + 1).padStart(2, '0'), d = String(yday.getDate()).padStart(2, '0')
-    const yStr = `${y}-${m}-${d}`
-    if (!data.uniqueDates.includes(yStr)) return null // selected range doesn't include yesterday — can't evaluate
-    const ordersYday = (data.orders || []).filter(o => o.date === yStr)
-    const channels = Object.keys(data.chMap).filter(c => !ALERT_RULES.zeroOrderExcludeChannels.includes(c))
-    const zero = channels.filter(c => !ordersYday.some(o => o.channel === c))
+    const zc = alertsCache?.zeroOrders
+    if (!zc?.zeroChannels?.length) return null
+    const zero = zc.zeroChannels.filter(c => !ALERT_RULES.zeroOrderExcludeChannels.includes(c))
     if (!zero.length) return null
-    const label = `${yday.getDate()} ${yday.toLocaleString('en-US', { month: 'short' })}`
-    return { type: 'amber', title: `0 orders yesterday: ${zero.join(', ')}`, body: `${label}: no orders recorded on ${zero.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
+    return { type: 'amber', title: `0 orders yesterday: ${zero.join(', ')}`, body: `${zc.label}: no orders recorded on ${zero.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
   })()
 
-  // #9 Ads: spend with no sales — ADS_RULES.noSalesSpend/noSalesRoas, unchanged, one alert per
-  // platform grouped by permission. Meta/Google revenue is derived from D2C Shopify sales elsewhere
-  // in the app; byAdType's own revenue field is used here as the already-attributed figure.
+  // #9 Ads: spend with no sales — ADS_RULES.noSalesSpend/noSalesRoas, one alert per platform
+  // grouped by permission. Fixed 2026-10-31 (Phase 1 verification): this previously read
+  // byAdType/totals' own `revenue` field directly, which is the raw ads-table column and is
+  // ALWAYS 0 for Meta and Google (confirmed live: "Meta spend Rs6.85Cr, ROAS 0.00x" — a false
+  // alert on every run). The live Ads page never uses that raw column for these two platforms —
+  // src/ads/adsData.js's buildDailyByChannel/OVERALL_CHANNELS split D2C's Shopify sales between
+  // Meta and Google by each platform's SHARE of that day's combined Meta+Google spend (the
+  // platforms don't report attributed revenue for Shopify, so this is the same "total-sales
+  // ROAS" convention the Ads page's own TOTAL_SALES_ROAS_INFO describes). Every other platform's
+  // sales channel already carries real revenue 1:1 (Amazon ads -> Amazon sales, etc.), so only
+  // Meta/Google need the spend-share split; the rest still use data.ads's own revenue field
+  // because it already matches that platform's chMap entry by construction server-side.
   const adsNoSalesAlerts = (() => {
     const byAdType = data?.ads?.byAdType || data?.ads?.totals || []
     if (!byAdType.length) return []
@@ -481,6 +491,15 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
       byPlat[p].spend += r.spend || 0
       byPlat[p].revenue += r.revenue || 0
     }
+    // D2C (Meta+Google) sales-split revenue, same convention as adsData.js's buildDailyByChannel:
+    // each platform's revenue = Shopify's total ex-GST sales for the range * (that platform's
+    // spend / combined Meta+Google spend).
+    const metaSpend = byPlat.Meta?.spend || 0
+    const googleSpend = byPlat.Google?.spend || 0
+    const d2cSpend = metaSpend + googleSpend
+    const shopifyRev = data?.chMap?.Shopify?.excRev ?? data?.chMap?.Shopify?.rev ?? 0
+    if (byPlat.Meta) byPlat.Meta.revenue = d2cSpend > 0 ? shopifyRev * (metaSpend / d2cSpend) : 0
+    if (byPlat.Google) byPlat.Google.revenue = d2cSpend > 0 ? shopifyRev * (googleSpend / d2cSpend) : 0
     const ADS_KEY_MAP_LOWER = { All: 'ads:all', D2C: 'ads:d2c', Shopify: 'ads:d2c', Amazon: 'ads:amazon', Blinkit: 'ads:blinkit', Zepto: 'ads:zepto', Instamart: 'ads:instamart', Flipkart: 'ads:flipkart', Myntra: 'ads:myntra', CRED: 'ads:cred' }
     return Object.entries(byPlat).map(([platform, { spend, revenue }]) => {
       const roas = spend > 0 ? revenue / spend : 0
