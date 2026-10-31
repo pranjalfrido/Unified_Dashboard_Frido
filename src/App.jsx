@@ -19945,7 +19945,7 @@ function AppInner() {
       return
     }
     // Localhost test mode only (VITE_FEEDBACK_LOCAL=1): open as a made-up test person, no Supabase.
-    const ls = localSession()
+    const ls = import.meta.env.DEV ? localSession() : null // dev server only: the test login is not in production builds
     if (ls) { setSession(ls); return }
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => { if (!window._suppressAuth) setSession(s || null) })
@@ -19959,7 +19959,7 @@ function AppInner() {
 
   useEffect(() => {
     if (!session || session === 'recovery') return
-    if (isLocalSession(session)) { const l = localProfileFor(session); setProfile(l.profile); setAllowedTabs(l.tabs); return }
+    if (import.meta.env.DEV && isLocalSession(session)) { const l = localProfileFor(session); setProfile(l.profile); setAllowedTabs(l.tabs); return }
     setProfileError(false)
     // Resilient load (29 Oct: a busy Supabase returned 503 and every user hit "Couldn't load
     // your profile"). The lookup is retried with short backoff, and if it still fails the last
@@ -20013,7 +20013,7 @@ function AppInner() {
   // 5 minutes), without a reload. State only changes when something actually changed.
   useEffect(() => {
     if (!session || session === 'recovery') return
-    if (isLocalSession(session)) return
+    if (import.meta.env.DEV && isLocalSession(session)) return
     const refresh = () => {
       if (document.visibilityState !== 'visible') return
       supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
@@ -20041,10 +20041,10 @@ function AppInner() {
       navigate('/overview', { replace: true })
       return null
     }
-    return LOCAL_MODE ? <LocalPicker /> : <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
   }
 
-  if (!session && LOCAL_MODE) return <LocalPicker />
+  if (!session && import.meta.env.DEV && LOCAL_MODE) return <LocalPicker />
   if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of

@@ -3,7 +3,7 @@
 // One endpoint, POST { action, callerToken, ... }. Every write happens here with the service key
 // (the browser has no write access to the table); the user is always taken from the verified session,
 // never from the request. Storage is Supabase, or a local file when FEEDBACK_LOCAL=1 (see _feedbackStore.js).
-import { getStore, authenticate, newId, alertRecipients, cronOk, LOCAL } from './_feedbackStore.js'
+import { getStore, authenticate, newId, alertRecipients, cronOk, LOCAL, LOCAL_FLAG_ON_VERCEL } from './_feedbackStore.js'
 
 const TYPES = ['bug', 'wrong_number', 'suggestion', 'new_feature']
 const TYPE_LABEL = { bug: 'Bug', wrong_number: 'Wrong number', suggestion: 'Suggestion', new_feature: 'New feature/page' }
@@ -92,6 +92,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  // Misconfiguration guard: local test mode must never run on Vercel. Refuse everything, loudly, rather than fall back silently.
+  if (LOCAL_FLAG_ON_VERCEL) { console.error('[feedback] FEEDBACK_LOCAL is set on Vercel: refusing to run. Remove it from the environment variables.'); return fail(res, 503, 'Feedback is unavailable.') }
   if (req.method === 'OPTIONS') return res.status(200).end()
   const store = getStore()
 

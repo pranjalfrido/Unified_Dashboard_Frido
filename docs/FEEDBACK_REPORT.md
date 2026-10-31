@@ -28,7 +28,7 @@ Branch `feat/feedback` (worktree `C:/wt-feedback`), local commits only: nothing 
 
 ## Test results (local mode, test people only)
 `node scripts/feedback-e2e.mjs` — 16 API checks + a 24-step UI run per device, 5 devices: laptop 1366, Chromium 375 / 360, WebKit 375 / 360.
-- Laptop 40/40, Chromium 375 40/40, Chromium 360 40/40, WebKit 375 40/40. WebKit 360 passed 39/40 on the first run: the one miss was the script counting WebKit's CORS messages about *other* APIs that don't exist locally as page errors (script now ignores them; WebKit 360 not re-run, WebKit 375 was).
+- Laptop 40/40, Chromium 375 40/40, Chromium 360 40/40, WebKit 375 40/40. WebKit 360 passed 39/40 on the first run (the script counted WebKit's CORS messages about other, non-existent local APIs as page errors; fixed) and 40/40 on the re-run.
 - Covered: every type from phone and laptop with and without screenshot; context captured (page, device kind, version, time); NavAI report with question + answer; inbox, type and status filters; Done blocked without a reply; Done with reply + What's new → user notification, My feedback reply, What's new; non-admin has no inbox (no sidebar item, no launcher row, `/feedback` redirects and renders nothing), 403 on every admin action, cannot see others' items.
 - Build passes. No new lint errors (files I added are clean; `src/App.jsx` 370 problems before and after).
 - Screenshots (not committed): `.feedback-local/shots-e2e/`.
@@ -36,7 +36,7 @@ Branch `feat/feedback` (worktree `C:/wt-feedback`), local commits only: nothing 
 ## What you must do before it can go live
 1. Run `docs/sql/feedback.sql` in the Supabase SQL editor (table, indexes, RLS read-only policies, private bucket `feedback-screenshots`, admin read policy on the bucket).
 2. Vercel env: `SUPABASE_PROJECT_URL` and `SUPABASE_SECRET_KEY` (already used by `api/pulse.js`), `CRON_SECRET` (any long random string — Vercel then sends it with the cron), optional `FEEDBACK_ALERT_EMAILS`, and the mail credentials: `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` (or the existing `OTP_FRIDO_*` set) plus `ALERT_SENDER_EMAIL` (or the existing `REPORT_MAIL_FROM`). The Graph app needs permission to send as that mailbox, as for the connector.
-3. Do **not** set `FEEDBACK_LOCAL` / `VITE_FEEDBACK_LOCAL` in Vercel. With them absent the local test login and local store are dead code.
+3. Do **not** set `FEEDBACK_LOCAL` / `VITE_FEEDBACK_LOCAL` in Vercel. Even if they are set by mistake: the test login code is not in production builds at all (only compiled when `import.meta.env.DEV`), and `api/feedback.js` refuses to run (503) whenever `FEEDBACK_LOCAL` is set while `VERCEL` is set.
 4. Switch off local mode, deploy a preview, and test once with a real login and real Supabase (submit, screenshot, inbox as admin, reply, notification).
 
 ## Not done / worth knowing

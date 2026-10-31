@@ -6,7 +6,9 @@ import { randomUUID } from 'crypto'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from 'fs'
 import { join } from 'path'
 
-export const LOCAL = process.env.FEEDBACK_LOCAL === '1'
+// Local mode is impossible on Vercel: VERCEL is always set there, so a stray FEEDBACK_LOCAL=1 changes nothing (the handler also refuses to run, see api/feedback.js).
+export const LOCAL = process.env.FEEDBACK_LOCAL === '1' && !process.env.VERCEL
+export const LOCAL_FLAG_ON_VERCEL = process.env.FEEDBACK_LOCAL === '1' && !!process.env.VERCEL
 const BUCKET = 'feedback-screenshots'
 
 // ── Local stand-in ─────────────────────────────────────────────────────────────

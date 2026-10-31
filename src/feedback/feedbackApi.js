@@ -3,7 +3,7 @@
 const API = import.meta.env.VITE_API_URL || ''
 
 // Local stand-in (localhost testing): VITE_FEEDBACK_LOCAL=1 at build/dev time. Absent in production builds.
-export const LOCAL_MODE = import.meta.env.VITE_FEEDBACK_LOCAL === '1'
+export const LOCAL_MODE = import.meta.env.DEV && import.meta.env.VITE_FEEDBACK_LOCAL === '1' // DEV is false in every production build
 
 export async function fb(action, token, extra = {}) {
   let res
