@@ -3,6 +3,7 @@ import { CheckCircle, Code } from '@phosphor-icons/react';
 import NavAIIcon from './NavAIIcon.jsx';
 import { ThumbsDown } from '@phosphor-icons/react';
 import { useFeedback } from '../feedback/feedbackCtx.js';
+import { ranQuery } from './ranQuery.js';
 import { SUGGESTIONS } from './pulseShared.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -32,10 +33,13 @@ function AssistantTable({ table }) {
   );
 }
 
-function AssistantMessage({ msg, question }) {
+function AssistantMessage({ msg, question, isAdmin }) {
   const [sqlOpen, setSqlOpen] = useState(false);
   const fbk = useFeedback();
   const reportable = !msg.thinking && !!msg.text && !msg.error;
+  // Admins only: the SQL behind an answer (when one really ran) and which model answered.
+  const showSql = isAdmin && ranQuery(msg.sql);
+  const showModel = isAdmin && !!msg.model;
 
   return (
     <div className="af-msg af-msg-assistant">
@@ -57,7 +61,7 @@ function AssistantMessage({ msg, question }) {
             {msg.assumptions && (
               <div className="af-assumptions">Assumptions: {msg.assumptions}</div>
             )}
-            {(msg.matchesDashboard !== undefined || msg.sql || msg.model) && (
+            {(msg.matchesDashboard !== undefined || showSql || showModel) && (
               <div className="af-msg-actions">
                 {msg.matchesDashboard && (
                   <button className="af-action-btn af-action-verified">
@@ -65,7 +69,7 @@ function AssistantMessage({ msg, question }) {
                     Matches dashboard
                   </button>
                 )}
-                {msg.sql && (
+                {showSql && (
                   <button
                     className="af-action-btn af-action-sql"
                     onClick={() => setSqlOpen(o => !o)}
@@ -74,14 +78,14 @@ function AssistantMessage({ msg, question }) {
                     {sqlOpen ? 'Hide SQL' : 'Show SQL'}
                   </button>
                 )}
-                {msg.model && (
+                {showModel && (
                   <span className={`af-action-btn af-model-badge${msg.model.includes('opus') ? ' af-model-opus' : ' af-model-sonnet'}`}>
                     {msg.model.includes('opus') ? '⚡ Opus' : '· Sonnet'}
                   </span>
                 )}
               </div>
             )}
-            {sqlOpen && msg.sql && (
+            {sqlOpen && showSql && (
               <pre className="af-sql-block">{msg.sql}</pre>
             )}
             {reportable && (
@@ -140,7 +144,7 @@ function EmptyState({ onSuggestion }) {
   );
 }
 
-export default function ChatThread({ messages, onSuggestion, onClarifyChoice }) {
+export default function ChatThread({ messages, onSuggestion, onClarifyChoice, isAdmin }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -162,7 +166,7 @@ export default function ChatThread({ messages, onSuggestion, onClarifyChoice }) 
           if (msg.role === 'user') return <UserMessage key={msg.id} msg={msg} />;
           if (msg.clarify) return <ClarifyMessage key={msg.id} msg={msg} onChoice={onClarifyChoice} />;
           const q = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user')?.text || '';
-          return <AssistantMessage key={msg.id} msg={msg} question={q} />;
+          return <AssistantMessage key={msg.id} msg={msg} question={q} isAdmin={isAdmin} />;
         })}
         <div ref={bottomRef} />
       </div>
