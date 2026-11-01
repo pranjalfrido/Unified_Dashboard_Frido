@@ -167,6 +167,7 @@ export default function AskFridoPage({ userProfile, session, areas }) {
           messages={active?.messages || []}
           onSuggestion={handleSuggestion}
           onClarifyChoice={handleClarifyChoice}
+          isAdmin={userProfile?.isAdmin === true}
         />
         <ChatComposer onSend={handleSend} disabled={sending} />
       </div>
