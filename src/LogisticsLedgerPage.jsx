@@ -1,9 +1,66 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from "react";
 import * as XLSX from "xlsx";
 import * as XLSXStyle from "xlsx-js-style";
-import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, Warehouse, RefreshCw, Save, AlertCircle, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, Warehouse, RefreshCw, Save, AlertCircle, ArrowLeft, Receipt } from "lucide-react";
 import { supabase } from "./supabase.js";
 import { C as BASE_C } from "./utils.js";
+
+// ── CREDIT NOTES ─────────────────────────────────────────────────────────────
+
+// Category and reason are fixed lists, not free text: the summary groups on them, so a
+// "Weight dispute" / "weight-dispute" spelling split would show as two rows.
+const CN_CATEGORIES = ["B2C", "FTL/PTL", "3PL"];
+const CN_CATEGORY_LABEL = { B2C: "B2C Couriers", "FTL/PTL": "FTL/PTL", "3PL": "3PL" };
+// B2C reasons are the ones on finance's CN sheet. That sheet had none yet for FTL/PTL and
+// 3PL, so theirs are a starting list to be confirmed.
+const CN_REASONS = {
+  B2C: ["Weight Dispute", "Lost/Damage", "SLA Breach", "High Ageing", "Wrong Invoicing", "Other"],
+  "FTL/PTL": ["Rate Mismatch", "Detention", "Shortage/Damage", "Wrong Invoicing", "Other"],
+  "3PL": ["Storage Overbilling", "Inventory Loss/Damage", "Wrong Invoicing", "Other"],
+};
+const CN_STATUSES = ["raised", "partially received", "received", "rejected"];
+
+const squash = (v) => String(v ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+const pick = (list, v) => list.find((x) => squash(x) === squash(v));
+const CN_CATEGORY_ALIAS = { b2ccouriers: "B2C", b2ccourier: "B2C", courier: "B2C", ftl: "FTL/PTL", ptl: "FTL/PTL", ftlptl: "FTL/PTL" };
+const cnCategory = (v) => pick(CN_CATEGORIES, v) ?? CN_CATEGORY_ALIAS[squash(v).replace("/", "")];
+
+// Status follows the amounts. Only "rejected" is a judgement the amounts can't show, so it
+// is the one value a person enters.
+const cnStatus = (r) => {
+  if (squash(r.status) === "rejected") return "rejected";
+  const raised = num(r.raised_amount_ex_gst), received = num(r.received_amount_ex_gst);
+  if (received <= 0) return "raised";
+  return received < raised ? "partially received" : "received";
+};
+
+// Normalises a credit-note row in place and returns why it can't be saved, or null.
+function validateCreditNote(r) {
+  const cat = cnCategory(r.category);
+  if (!cat) return `category "${r.category}" — use ${CN_CATEGORIES.join(" / ")}`;
+  r.category = cat;
+  const reason = pick(CN_REASONS[cat], r.reason);
+  if (!reason) return `"${r.reason}" is not a ${cat} reason — use ${CN_REASONS[cat].join(", ")}`;
+  r.reason = reason;
+  r.partner_name = String(r.partner_name ?? "").trim();
+  r.invoice_number = String(r.invoice_number ?? "").trim();
+  if (!r.partner_name || !r.invoice_number) return "partner_name and invoice_number are mandatory";
+
+  const amount = (v) => (String(v ?? "").trim() === "" ? null : Number(String(v).replace(/[,₹\s]/g, "")));
+  const raised = amount(r.raised_amount_ex_gst), received = amount(r.received_amount_ex_gst);
+  if (raised == null || !Number.isFinite(raised) || raised < 0) return "raised_amount_ex_gst must be a number, 0 or more";
+  if (received != null && (!Number.isFinite(received) || received < 0)) return "received_amount_ex_gst must be a number, 0 or more";
+  if (received != null && received > raised) return `received (${received}) is more than raised (${raised})`;
+  r.raised_amount_ex_gst = String(raised);
+  r.received_amount_ex_gst = received == null ? "" : String(received);
+
+  for (const k of ["raised_on", "cn_date"]) {
+    if (r[k] && !/^\d{4}-\d{2}-\d{2}$/.test(r[k])) return `${k} "${r[k]}" — use YYYY-MM-DD`;
+  }
+  if (String(r.status ?? "").trim() && !pick(CN_STATUSES, r.status)) return `status "${r.status}" — leave blank or use rejected`;
+  r.status = cnStatus(r);
+  return null;
+}
 
 // ── SCHEMA CONFIG ────────────────────────────────────────────────────────────
 
@@ -168,6 +225,54 @@ const FORMATS = {
       "agreed_km is the distance included in that charge, for tracking overruns.",
     ],
   },
+  creditNotes: {
+    key: "creditNotes",
+    label: "Credit Notes",
+    // Opened from its own Documents card (App.jsx 'logistics-cn'), not as a bill-ledger tab.
+    standalone: true,
+    pageTitle: "Logistics Credit Notes",
+    kicker: "Claim-wise · per invoice",
+    addLabel: "Add claim",
+    icon: Receipt,
+    table: "logistics_credit_notes",
+    templateFile: "logistics_credit_note_template.xlsx",
+    exportPrefix: "logistics_credit_notes",
+    totalParts: [],
+    totalField: "raised_amount_ex_gst",
+    partyField: "partner_name",
+    // One claim per invoice per reason. The row is uploaded when the claim is raised and
+    // uploaded again once the CN arrives, which fills in the received side in place.
+    uniqueKey: "category,partner_name,invoice_number,reason",
+    // Two lines for the same claim in one file are a mistake to fix, not bills to add up
+    // as the 3PL ledger does: summing would double the raised amount.
+    rejectDuplicates: true,
+    validate: validateCreditNote,
+    fields: [
+      { key: "category", label: "category", type: "text", req: true, w: 110, ex: "B2C", desc: "B2C, FTL/PTL or 3PL", list: () => "cn-category" },
+      { key: "partner_name", label: "partner_name", type: "text", req: true, w: 160, ex: "Delhivery", desc: "Courier, transporter or 3PL, spelled as in the Logistics Bill Ledger" },
+      { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-08", desc: "Month of the invoice the CN is raised against" },
+      { key: "invoice_number", label: "invoice_number", type: "text", req: true, w: 160, ex: "INV-DLV-0081234", desc: "Partner invoice the CN is raised against" },
+      { key: "reason", label: "reason", type: "text", req: true, w: 160, ex: "Weight Dispute", desc: "Why the CN is claimed (allowed values below)", list: (r) => `cn-reason-${cnCategory(r.category) ?? "B2C"}` },
+      { key: "raised_amount_ex_gst", label: "raised_amount_ex_gst", type: "num", req: true, w: 180, ex: "45000", desc: "Amount claimed, ex-GST" },
+      { key: "raised_on", label: "raised_on", type: "date", w: 120, ex: "2026-09-10", desc: "Date the claim was sent to the partner" },
+      { key: "cn_number", label: "cn_number", type: "text", w: 140, ex: "", desc: "Partner's credit note number, once issued" },
+      { key: "received_amount_ex_gst", label: "received_amount_ex_gst", type: "num", w: 190, ex: "", desc: "Amount credited, ex-GST. Blank until the CN arrives" },
+      { key: "cn_date", label: "cn_date", type: "date", w: 120, ex: "", desc: "Date on the partner's credit note" },
+      { key: "status", label: "status", type: "text", w: 150, ex: "", desc: "Leave blank (worked out from the amounts), or enter rejected", list: () => "cn-status" },
+      { key: "remarks", label: "remarks", type: "text", w: 220, ex: "Charged 2 kg slab on 0.5 kg parcels", desc: "Free-text note" },
+    ],
+    searchKeys: ["category", "partner_name", "invoice_number", "reason", "cn_number", "status", "month_year"],
+    notes: [
+      "One row = one credit-note claim against ONE invoice for ONE reason. A claim on the same invoice for two reasons is two rows.",
+      "Re-uploading the same category + partner_name + invoice_number + reason UPDATES that claim. Upload the claim when raised, then again with cn_number and received_amount_ex_gst once the CN arrives.",
+      "All amounts are ex-GST. received_amount_ex_gst cannot be more than raised_amount_ex_gst.",
+      "category: B2C, FTL/PTL or 3PL.",
+      ...CN_CATEGORIES.map((c) => `reason for ${c}: ${CN_REASONS[c].join(", ")}.`),
+      "status: leave blank and it is set from the amounts (raised / partially received / received). Enter rejected when the partner refuses the claim.",
+      "If one claim is settled by several CNs, list them in cn_number (e.g. CN-101 + CN-117) and enter the combined received amount.",
+      "month_year is YYYY-MM; raised_on and cn_date are YYYY-MM-DD.",
+    ],
+  },
 };
 
 // ── DATA LAYER ───────────────────────────────────────────────────────────────
@@ -221,7 +326,11 @@ const db = {
         ? `&month_year=in.(${selected.join(",")})`
         : "";
     const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthParam}`;
-    const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" };
+    // The signed-in user's token, not the anon key: tables whose RLS reads
+    // auth.role() = 'authenticated' (3PL, fixed vehicles, credit notes) return no rows to anon.
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, Accept: "application/json", Prefer: "count=none" };
     // Sequential pagination — unknown total upfront, progress shows rows fetched so far
     const PAGE = 1000;
     const all = [];
@@ -301,6 +410,12 @@ const SAMPLE2 = {
     declared_weight_frido: "1", freight_charge: "95", surcharge: "12", other_charge: "20",
     total_cost: "152", remarks: "RTO due to customer refusal",
   },
+  creditNotes: {
+    category: "3PL", partner_name: "Hexalog", month_year: "2026-07", invoice_number: "3PL-INV-20713",
+    reason: "Storage Overbilling", raised_amount_ex_gst: "18000", raised_on: "2026-08-05",
+    cn_number: "CN-HX-0412", received_amount_ex_gst: "18000", cn_date: "2026-08-28",
+    status: "", remarks: "Billed 1,200 sq ft against 1,000 agreed",
+  },
 };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -327,7 +442,8 @@ const sumParts = (fmt, r) => fmt.totalParts.reduce((s, k) => s + num(r[k]), 0);
 // copies of the inline version had already drifted — one was fixed, the other was not, and
 // the unfixed one is what the UI actually calls.
 function mergeDuplicateRows(fmt, rows) {
-  if (!fmt.uniqueKey) return rows;
+  // rejectDuplicates formats are de-duplicated (and the extras reported) before this.
+  if (!fmt.uniqueKey || fmt.rejectDuplicates) return rows;
   const seen = new Map();
   for (const r of rows) {
     const k = keyOf(fmt, r);
@@ -408,10 +524,147 @@ const fromDbRow = (fmt, d) => {
   return r;
 };
 
+// ── CREDIT NOTE SUMMARY ──────────────────────────────────────────────────────
+
+// Category × reason roll-up of the credit-note register against what each category was
+// invoiced, laid out like finance's CN sheet: one block per category, reasons beneath.
+//
+// Invoice totals come from get_logistics_cn_summary(), which reads an hourly snapshot of the
+// bill ledgers (logistics_invoice_totals): summing the 1.5M-row B2C ledger live overruns the
+// statement timeout. CN rows are read straight from their table, so they are always current.
+function CnSummary({ C, months, version }) {
+  const [cn, setCn] = useState(null);
+  const [feed, setFeed] = useState(null);
+  const [error, setError] = useState(null);
+  const [partner, setPartner] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    Promise.all([
+      db.fetchAllRows(FORMATS.creditNotes, []),
+      supabase.rpc("get_logistics_cn_summary").then(({ data, error }) => { if (error) throw error; return data; }),
+    ])
+      .then(([rows, summary]) => { if (live) { setCn(rows); setFeed(summary); } })
+      .catch((e) => { if (live) setError(e.message ?? String(e)); });
+    return () => { live = false; };
+  }, [version]);
+
+  const view = useMemo(() => {
+    if (!cn || !feed) return null;
+    const inMonth = (m) => !months.length || months.includes(m);
+    const inPartner = (name) => !partner || String(name ?? "").trim().toLowerCase() === partner;
+
+    const blank = () => ({ invoice: 0, raised: 0, received: 0, rejected: 0, pending: 0, n: 0 });
+    const add = (t, r) => {
+      const raised = num(r.raised_amount_ex_gst), received = num(r.received_amount_ex_gst);
+      const rejected = cnStatus(r) === "rejected" ? Math.max(0, raised - received) : 0;
+      t.raised += raised; t.received += received; t.rejected += rejected;
+      t.pending += Math.max(0, raised - received - rejected); t.n += 1;
+    };
+
+    const blocks = CN_CATEGORIES.map((cat) => ({ cat, total: blank(), reasons: CN_REASONS[cat].map((reason) => ({ reason, ...blank() })) }));
+    const byCat = Object.fromEntries(blocks.map((b) => [b.cat, b]));
+    const grand = blank();
+
+    for (const r of feed.invoices ?? []) {
+      if (!byCat[r.category] || !inMonth(r.month_year) || !inPartner(r.partner)) continue;
+      byCat[r.category].total.invoice += num(r.amount);
+      grand.invoice += num(r.amount);
+    }
+    const unmatchedIds = new Set(feed.unmatched ?? []);
+    let unmatched = 0;
+    for (const r of cn) {
+      const b = byCat[r.category];
+      if (!b || !inMonth(r.month_year) || !inPartner(r.partner_name)) continue;
+      add(b.total, r); add(grand, r);
+      const line = b.reasons.find((x) => x.reason === r.reason);
+      if (line) add(line, r);
+      if (unmatchedIds.has(r.id)) unmatched += 1;
+    }
+
+    const names = new Map();
+    for (const n of [...cn.map((r) => r.partner_name), ...(feed.invoices ?? []).map((r) => r.partner)]) {
+      const s = String(n ?? "").trim();
+      if (s && !names.has(s.toLowerCase())) names.set(s.toLowerCase(), s);
+    }
+    const partners = [...names].sort((a, b) => a[1].localeCompare(b[1]));
+    return { blocks, grand, unmatched, partners };
+  }, [cn, feed, months, partner]);
+
+  if (error) return <div style={{ marginBottom: 12, fontSize: 12.5, color: C.red }}>Couldn't load the credit-note summary: {error}</div>;
+  if (!view) return <div style={{ marginBottom: 12, fontSize: 12.5, color: C.t3 }}>Loading summary…</div>;
+
+  const rs = (v) => (v ? `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—");
+  const pct = (a, b) => (b ? `${((a / b) * 100).toFixed(1)}%` : "—");
+  const th = { padding: "8px 12px", fontSize: 11, fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, textAlign: "right", whiteSpace: "nowrap", background: C.ach };
+  const td = { padding: "7px 12px", textAlign: "right", fontFamily: "monospace", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` };
+  const label = { ...td, textAlign: "left", fontFamily: "inherit" };
+  // Total invoice is shown on category and grand-total rows only: an invoice is not split
+  // by reason, so a per-reason figure would just repeat the category's.
+  const cells = (t, showInvoice) => [
+    showInvoice ? rs(t.invoice) : "", rs(t.raised), rs(t.received), rs(t.pending), rs(t.rejected), pct(t.received, t.raised),
+  ];
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Summary</div>
+        <select value={partner} onChange={(e) => setPartner(e.target.value)}
+          style={{ fontSize: 12, padding: "5px 8px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.card, color: C.t1, fontFamily: "inherit" }}>
+          <option value="">All partners</option>
+          {view.partners.map(([k, name]) => <option key={k} value={k}>{name}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: C.t3 }}>
+          {months.length ? `Invoice months: ${months.join(", ")}` : "All invoice months"} · amounts ex-GST
+        </span>
+      </div>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "auto", background: C.card }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left" }}>Category / reason</th>
+              {["Total invoice", "Raised CN", "Received CN", "Pending", "Rejected", "Recovery %"].map((h) => <th key={h} style={th}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {view.blocks.map((b) => (
+              <Fragment key={b.cat}>
+                <tr style={{ fontWeight: 700, color: C.t1 }}>
+                  <td style={label}>{CN_CATEGORY_LABEL[b.cat]}</td>
+                  {cells(b.total, true).map((v, i) => <td key={i} style={td}>{v}</td>)}
+                </tr>
+                {b.reasons.map((x) => (
+                  <tr key={x.reason} style={{ color: x.n ? C.t2 : C.t3 }}>
+                    <td style={{ ...label, paddingLeft: 28 }}>{x.reason}</td>
+                    {cells(x, false).map((v, i) => <td key={i} style={td}>{v}</td>)}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+            <tr style={{ fontWeight: 800, color: C.t1 }}>
+              <td style={{ ...label, borderBottom: "none" }}>Total</td>
+              {cells(view.grand, true).map((v, i) => <td key={i} style={{ ...td, borderBottom: "none" }}>{v}</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 11, color: C.t3, marginTop: 6, lineHeight: 1.6 }}>
+        Pending = raised − received − rejected; rejected is the unreceived part of a claim marked <em>rejected</em>.
+        Total invoice is the bill ledger as of {feed.refreshed_at ? new Date(feed.refreshed_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"} (refreshed hourly).
+        {view.unmatched > 0 && <> <strong style={{ color: C.red }}>{view.unmatched} B2C/3PL claim{view.unmatched === 1 ? "" : "s"}</strong> name an invoice number not found in that partner's bills.</>}
+      </div>
+    </div>
+  );
+}
+
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
-export default function LogisticsLedgerPage({ onBack }) {
-  const [tab, setTab] = useState("b2b");
+// `only` opens one standalone format as its own page (Documents → Logistics Credit Notes).
+export default function LogisticsLedgerPage({ onBack, only }) {
+  const [tab, setTab] = useState(only ?? "b2b");
+  // Bumped whenever the ledger is reloaded or saved, so the CN summary refetches with it.
+  const [version, setVersion] = useState(0);
   const fmt = FORMATS[tab];
   const [store, setStore] = useState({ b2b: null, b2c: null });
   const [monthsStore, setMonthsStore] = useState({ b2b: [], b2c: [] });
@@ -452,6 +705,7 @@ export default function LogisticsLedgerPage({ onBack }) {
       ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
+      setVersion((v) => v + 1);
 
       // Upload coverage, every month at once. Refreshed on the same load() that follows an
       // upload, so adding a file fills its cells in without a manual reload.
@@ -510,11 +764,16 @@ export default function LogisticsLedgerPage({ onBack }) {
   const setCell = (rid, key, val) => setRows((rs) => rs.map((r) => (r._uid === rid ? { ...r, [key]: val, _dirty: true } : r)));
 
   const commitCell = async (rid) => {
-    const row = rows.find((r) => r._uid === rid);
-    if (!row || !row._dirty || !row[PK]) return;
+    const found = rows.find((r) => r._uid === rid);
+    if (!found || !found._dirty || !found[PK]) return;
+    const row = { ...found };
+    const invalid = fmt.validate?.(row);
+    // Left dirty, so the edit stays on screen to be corrected.
+    if (invalid) { flash("error", `Not saved — ${invalid}`); return; }
     try {
       await db.updateRow(fmt, row);
-      setRows((rs) => rs.map((r) => (r._uid === rid ? { ...r, _dirty: false } : r)));
+      setRows((rs) => rs.map((r) => (r._uid === rid ? { ...row, _dirty: false } : r)));
+      setVersion((v) => v + 1);
     } catch (e) { flash("error", `Save failed: ${e.message ?? e}`); }
   };
 
@@ -525,7 +784,7 @@ export default function LogisticsLedgerPage({ onBack }) {
     if (!row) return;
     if (row[PK] && !confirm(`Delete invoice ${row.invoice_number || "(blank)"}? This removes it from Supabase.`)) return;
     setRows((rs) => rs.filter((r) => r._uid !== rid));
-    try { await db.deleteRow(fmt, row); } catch (e) { flash("error", `Delete failed: ${e.message ?? e}`); }
+    try { await db.deleteRow(fmt, row); setVersion((v) => v + 1); } catch (e) { flash("error", `Delete failed: ${e.message ?? e}`); }
   };
 
   const saveAll = async () => {
@@ -534,14 +793,20 @@ export default function LogisticsLedgerPage({ onBack }) {
       flash("error", `Fix duplicate ${label}s before saving: ${Array.from(dupKeys).slice(0, 5).join(", ")}`);
       return;
     }
-    const fresh = rows.filter((r) => !r[PK] && hasContent(fmt, r));
-    const dirty = rows.filter((r) => r[PK] && r._dirty);
+    // Copies, so validation's normalising never touches the rows React is rendering.
+    const fresh = rows.filter((r) => !r[PK] && hasContent(fmt, r)).map((r) => ({ ...r }));
+    const dirty = rows.filter((r) => r[PK] && r._dirty).map((r) => ({ ...r }));
     if (!fresh.length && !dirty.length) { flash("ok", "Nothing to save — everything is already in Supabase."); return; }
+    if (fmt.validate) {
+      const invalid = [...fresh, ...dirty].map((r) => fmt.validate(r)).filter(Boolean);
+      if (invalid.length) { flash("error", `Fix ${invalid.length} row${invalid.length === 1 ? "" : "s"} before saving — ${invalid[0]}`); return; }
+    }
     setBusy(true);
     try {
       for (const r of dirty) await db.updateRow(fmt, r);
       let inserted = [];
       if (fresh.length) inserted = await db.insertRows(fmt, fresh);
+      setVersion((v) => v + 1);
       setRows((rs) => {
         let i = 0;
         return rs.map((r) => {
@@ -589,6 +854,10 @@ export default function LogisticsLedgerPage({ onBack }) {
         let uploaded = 0, totalValid = 0;
         // Rows the worker rejected for missing mandatory fields — reported, never dropped silently
         let badRows = [];
+        // Rows with every mandatory column but a value the format's validate() refuses, or
+        // a repeat of a claim earlier in the file. Reported with the reason, never dropped silently.
+        const invalidRows = [];
+        const seenKeys = new Map();
         // Every parsed row, held until the worker finishes so duplicates can be merged
         // across the whole file rather than per streamed chunk.
         const pendingRows = [];
@@ -608,8 +877,17 @@ export default function LogisticsLedgerPage({ onBack }) {
               // The worker streams fixed-size batches, so two invoice lines sharing an
               // upsert key routinely land in different chunks. Merging per chunk misses
               // them and the unique index then drops one via ON CONFLICT.
-              for (const r of chunk) pendingRows.push(toDbRow(fmt, r));
-              uploaded += chunk.length;
+              for (const r of chunk) {
+                const invalid = fmt.validate?.(r);
+                if (invalid) { invalidRows.push({ line: r._line, why: invalid }); continue; }
+                if (fmt.rejectDuplicates) {
+                  const k = keyOf(fmt, r);
+                  if (seenKeys.has(k)) { invalidRows.push({ line: r._line, why: `same ${keyLabel(fmt)} as Excel row ${seenKeys.get(k)}` }); continue; }
+                  seenKeys.set(k, r._line);
+                }
+                pendingRows.push(toDbRow(fmt, r));
+                uploaded += 1;
+              }
               setUploadProgress({ done: uploaded, total: totalValid || uploaded });
             }
             uploading = false;
@@ -658,7 +936,8 @@ export default function LogisticsLedgerPage({ onBack }) {
           worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
           worker.postMessage({
             buffer: reader.result,
-            fields: fmt.fields,
+            // `list` is a function and postMessage cannot clone functions.
+            fields: fmt.fields.map(({ list, ...f }) => f),
             sampleSigs,
             sigKeys,
             totalParts: fmt.totalParts,
@@ -668,6 +947,10 @@ export default function LogisticsLedgerPage({ onBack }) {
         });
 
         setUploadProgress({ done: uploaded, total: uploaded, finished: true });
+        if (invalidRows.length) {
+          const detail = invalidRows.slice(0, 20).map((b) => `• Excel row ${b.line}: ${b.why}`).join("\n");
+          alert(`${invalidRows.length} row(s) were NOT uploaded:\n\n${detail}${invalidRows.length > 20 ? `\n… and ${invalidRows.length - 20} more` : ""}\n\nFix them and re-upload; rows already uploaded are updated, not duplicated.`);
+        }
         if (badRows.length) {
           // Group by the missing columns so a shifted/blank column reads as one line, not hundreds
           const byMissing = new Map();
@@ -680,8 +963,9 @@ export default function LogisticsLedgerPage({ onBack }) {
             `• ${lines.length} row(s) missing: ${cols}\n   Excel rows ${lines.slice(0, 15).join(", ")}${lines.length > 15 ? ", …" : ""}`).join("\n");
           alert(`${badRows.length} row(s) were NOT uploaded because mandatory columns are empty.\n${uploaded} row(s) uploaded.\n\n${detail}\n\nCheck the data is under the right headers (columns may be shifted), fix and re-upload only the skipped rows.`);
         }
-        if (uploaded) flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}${badRows.length ? ` — ${badRows.length} skipped` : ""}.`);
-        else flash("error", `Nothing uploaded to ${fmt.table}${badRows.length ? ` — all ${badRows.length} rows are missing mandatory columns` : ""}.`);
+        const skipped = badRows.length + invalidRows.length;
+        if (uploaded) flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}${skipped ? ` — ${skipped} skipped` : ""}.`);
+        else flash("error", `Nothing uploaded to ${fmt.table}${skipped ? ` — all ${skipped} rows were skipped` : ""}.`);
         setTimeout(() => setUploadProgress(null), 4000);
         // Reload grid and months after upload
         load(tab, singleMonth);
@@ -747,10 +1031,10 @@ export default function LogisticsLedgerPage({ onBack }) {
       const wsAll = XLSX.utils.aoa_to_sheet([head, ...body]);
       wsAll["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(12, Math.round(f.w / 8)) }));
       styleHdr(wsAll, head.length);
-      const party = fmt.key === "b2b" ? "transporter_name" : "courier_name";
+      const party = fmt.partyField ?? (fmt.key === "b2b" ? "transporter_name" : "courier_name");
       const agg = new Map();
       for (const r of data) { const k = `${r.month_year}||${r[party] || "(blank)"}`; const cur = agg.get(k) ?? { lines: 0, amount: 0 }; cur.lines += 1; cur.amount += num(effectiveTotal(fmt, r)); agg.set(k, cur); }
-      const sumHead = ["Month Year", fmt.fields.find((f) => f.key === party).label, "Lines", "Total Cost"];
+      const sumHead = ["Month Year", fmt.fields.find((f) => f.key === party).label, "Lines", fmt.key === "creditNotes" ? "Raised (ex-GST)" : "Total Cost"];
       const sumBody = Array.from(agg.entries()).sort(([a], [b]) => (a < b ? 1 : -1)).map(([k, v]) => { const [m, p] = k.split("||"); return [m, p, v.lines, Number(v.amount.toFixed(2))]; });
       const wsSum = XLSX.utils.aoa_to_sheet([sumHead, ...sumBody]);
       wsSum["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 16 }];
@@ -789,8 +1073,8 @@ export default function LogisticsLedgerPage({ onBack }) {
               <ArrowLeft size={14} /> Back to Documents
             </button>
           )}
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>Invoice-wise · transactional</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.5 }}>Logistics Bill Ledger</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{fmt.kicker ?? 'Invoice-wise · transactional'}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.5 }}>{only ? fmt.pageTitle : 'Logistics Bill Ledger'}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px' }}>
@@ -883,9 +1167,9 @@ export default function LogisticsLedgerPage({ onBack }) {
       )}
       <style>{`@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
 
-      {/* Format tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
-        {Object.values(FORMATS).filter((f) => !f.parent).map((f) => {
+      {/* Format tabs (a standalone page shows only its table name) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14, minHeight: only ? 24 : undefined }}>
+        {!only && Object.values(FORMATS).filter((f) => !f.parent && !f.standalone).map((f) => {
           const Ico = f.icon; const active = f.key === tab || FORMATS[tab]?.parent === f.key;
           return (
             <button key={f.key} onClick={() => setTab(f.key)}
@@ -923,6 +1207,15 @@ export default function LogisticsLedgerPage({ onBack }) {
       {/* Upload checklist — which partners' bills are in for this month, and which are not.
           Collapsed to a one-line summary by default: when everything is uploaded there is
           nothing to act on, and the panel should not push the grid down the page. */}
+      {fmt.key === 'creditNotes' && <CnSummary C={{ ...C, ach: BASE_C.ach }} months={monthFilter} version={version} />}
+      {fmt.key === 'creditNotes' && (
+        <>
+          <datalist id="cn-category">{CN_CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
+          {CN_CATEGORIES.map((c) => <datalist key={c} id={`cn-reason-${c}`}>{CN_REASONS[c].map((r) => <option key={r} value={r} />)}</datalist>)}
+          <datalist id="cn-status"><option value="rejected" /></datalist>
+        </>
+      )}
+
       {(() => {
         const cov = coverage[tab];
         if (!cov?.length) return null;
@@ -1017,7 +1310,7 @@ export default function LogisticsLedgerPage({ onBack }) {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button style={chipBtn} onClick={addRow}><Plus size={13} /> Add invoice line</button>
+        <button style={chipBtn} onClick={addRow}><Plus size={13} /> {fmt.addLabel ?? 'Add invoice line'}</button>
         <button style={{ ...chipBtn, ...(unsaved ? chipHot : {}) }} onClick={saveAll} disabled={busy}><Save size={13} /> Save{unsaved ? ` (${unsaved})` : ''}</button>
         <button style={chipBtn} onClick={() => load(tab, singleMonth)} disabled={busy}><RefreshCw size={13} /> Reload</button>
         <span style={{ fontSize: 11, color: C.t3, fontFamily: 'monospace', marginLeft: 4 }}>
@@ -1064,6 +1357,7 @@ export default function LogisticsLedgerPage({ onBack }) {
                   return (
                     <td key={f.key} style={{ padding: 0, background: C.card, position: i === 0 ? 'sticky' : undefined, left: i === 0 ? 0 : undefined, zIndex: i === 0 ? 1 : undefined }}>
                       <input
+                        list={f.list?.(r)}
                         value={derived ? (shown === "" ? "" : String(shown)) : shown}
                         placeholder={derived ? "auto" : f.type === "num" ? "0.00" : f.label}
                         inputMode={f.type === "num" || f.type === "int" ? "decimal" : undefined}
@@ -1090,7 +1384,9 @@ export default function LogisticsLedgerPage({ onBack }) {
       <p style={{ fontSize: 11.5, color: C.t3, marginTop: 12, lineHeight: 1.6 }}>
         <strong style={{ color: C.t2 }}>{fmt.label}</strong> ·{' '}
         {fmt.uniqueKey ? <>One row per <strong style={{ color: C.t2 }}>{keyLabel(fmt)}</strong>. Re-uploading an existing one <strong style={{ color: C.t2 }}>replaces</strong> that row.</> : <>One row per invoice line, appended — uploads never overwrite.</>}{' '}
-        {fmt.totalParts.length > 0
+        {fmt.key === 'creditNotes'
+          ? <>Amounts are ex-GST. Status is set from the amounts unless marked <em>rejected</em>.</>
+          : fmt.totalParts.length > 0
           ? <><span style={{ color: C.t3 }}>ƒ</span> Total Cost is computed from {fmt.totalParts.length} charge components when left blank; typing a value overrides it.</>
           : <>Cost is the standing monthly charge, entered directly.</>}
       </p>

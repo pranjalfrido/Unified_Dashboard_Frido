@@ -95,6 +95,9 @@ self.onmessage = function (e) {
       // skip empty & sample rows
       const isEmpty = !fields.some((f) => o[f.key] !== "");
       if (isEmpty || isSample(o)) continue;
+      // Spreadsheet row number, so rejections can point at the line to fix. Not a field,
+      // so toDbRow never sends it.
+      o._line = hIdx + 2 + i;
 
       // validate
       const missing = fields.filter((f) => f.req && !f.computed && o[f.key] === "").map((f) => f.label);

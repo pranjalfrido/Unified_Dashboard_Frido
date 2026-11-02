@@ -36,6 +36,8 @@ BEGIN
       SELECT m.my::text FROM m WHERE m.my IS NOT NULL ORDER BY 1 DESC;
   ELSIF tbl = 'logistics_invoices_b2b' THEN
     RETURN QUERY SELECT DISTINCT b.month_year FROM logistics_invoices_b2b b WHERE b.month_year IS NOT NULL ORDER BY 1 DESC;
+  ELSIF tbl = 'logistics_credit_notes' THEN
+    RETURN QUERY SELECT DISTINCT c.month_year FROM logistics_credit_notes c WHERE c.month_year IS NOT NULL ORDER BY 1 DESC;
   END IF;
 END;
 $function$;

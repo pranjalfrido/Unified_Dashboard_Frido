@@ -3611,7 +3611,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
 const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon, feedback: Tray,
-  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
+  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'logistics-cn': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const fbk = useFeedback()
   const can = id => {
@@ -3624,7 +3624,7 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     if (id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
     if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
     if (id === 'courier-allocation') return hasCostAccess(allowedTabs)
-    if (['cogs', 'logistics-ledger', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
+    if (['cogs', 'logistics-ledger', 'logistics-cn', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
     return allowedTabs.includes(id)
   }
   const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
@@ -4955,7 +4955,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
   const [liveOpen, setLiveOpen] = useState(false)
   const liveCount = useLiveCount(isAdmin)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', feedback: 'Feedback' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', 'logistics-cn': 'Logistics Credit Notes', feedback: 'Feedback' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -5123,7 +5123,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     }
     // Every other screen (Documents, NavAI, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
-    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
+    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'logistics-cn': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
     const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
     const phoneTitles = { ...titles, ask: 'NavAI', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
     const hasDate = ['intelligence'].includes(page)
@@ -5174,7 +5174,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       <LivePill isAdmin={isAdmin} />
       <FeedbackHeaderButtons />
       {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
@@ -20102,6 +20102,12 @@ function DocumentsPage({ setPage }) {
       icon: '🚚',
     },
     {
+      id: 'logistics-cn',
+      title: 'Logistics Credit Notes',
+      description: 'Track credit notes raised and received against courier, FTL/PTL & 3PL invoices.',
+      icon: '🧮',
+    },
+    {
       id: 'purchase-ledger',
       title: 'Purchase Ledger',
       description: 'Upload domestic, import & packaging purchase data.',
@@ -20356,7 +20362,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
-      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
+      (page === 'cogs' || page === 'logistics-ledger' || page === 'logistics-cn' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -20931,7 +20937,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
   const fbk = useFeedback()
   useEffect(() => {
-    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
+    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'logistics-cn': 'Logistics credit notes', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
     const channel = page === 'sales' ? (TABS.find(t => t.id === activeTab)?.label || activeTab)
       : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : 'Inventory Health') : ''
     const extra = {}
@@ -20964,7 +20970,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <div className="app-main">
         {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -20972,7 +20978,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -21045,6 +21051,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
               <LogisticsLedgerPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'logistics-cn' && (
+            <div className="page-scroll">
+              <LogisticsLedgerPage only="creditNotes" onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'purchase-ledger' && (
