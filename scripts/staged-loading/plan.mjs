@@ -75,17 +75,44 @@ const SRC = {
 }
 const token = u => u.includes('.') ? u.split('.')[1] : u
 const mentions = (src, u) => new RegExp(`\\b${token(u)}\\b`).test(src)
+// P&L reductions (PNL_REDUCTIONS_PLAN.md): P&L reads these per-SKU-per-day arrays only through
+// <channel>.pnlAgg / .pnlTrend (api/_pnlAgg.js), built at response time — so pnl_detail no longer
+// ships them. offline.resolvedDailySKU and the quick-commerce dailyPnLBySku are read by no page at
+// all. A unit here that no other tab owns ships in no phase (reducedOnly), rather than falling
+// through to sales_detail's catch-all.
+const PNL_REDUCED = new Set([
+  ...['shopify', 'ebo', 'amzSC', 'amzVC', 'flipkart', 'cred', 'firstcry', 'myntra', 'offline'].map(c => `${c}.resolvedDailySKU`),
+  ...['amzSC', 'amzVCMatrix', 'flipkart', 'blinkit', 'zepto', 'instamart'].map(c => `${c}.dailyPnLBySku`),
+  'shopify.dailySKU', 'ads.adsDailyByCategory',
+])
+// The units pnlAgg / pnlTrend are built from: their queries still run in pnl_detail.
+const PNL_SOURCES = [
+  ...['shopify', 'ebo', 'amzSC', 'amzVC', 'flipkart', 'cred', 'firstcry', 'myntra'].map(c => `${c}.resolvedDailySKU`),
+  'amzSC.dailyPnLBySku', 'amzVCMatrix.dailyPnLBySku', 'flipkart.dailyPnLBySku', 'shopify.dailySKU', 'ads.adsDailyByCategory',
+]
+// pnl_margin: only what Ads' hidden P&L probe needs for each product's CM1 on its six tabs
+// (D2C Overall, Amazon All, Flipkart, Blinkit, Zepto, Instamart — App.jsx ADS_PNL_TAB), read off
+// PnLPage's path to buildFinancialRows; everything else it touches is in fast. Plus
+// shopify / amzSC / flipkart .pnlAgg, built from MARGIN_SOURCES.
+const MARGIN_UNITS = [
+  'shopify.skuCostRows', 'pnlAdSpendMap', 'ads.categoryBreakdown',
+  'amzSC.skuChannel', 'amzSC.sndBySku', 'amzVCMatrix.skuData', 'amzVCMatrix.subCatData', 'amzVCMatrix.sndBySku',
+  ...['flipkart', 'blinkit', 'zepto', 'instamart'].flatMap(c => [`${c}.subCategories`, `${c}.skuMatrix`, `${c}.sndBySku`]),
+]
+const MARGIN_SOURCES = ['shopify.resolvedDailySKU', 'amzSC.resolvedDailySKU', 'amzVC.resolvedDailySKU', 'flipkart.resolvedDailySKU', 'flipkart.dailyPnLBySku']
+for (const u of [...PNL_REDUCED, ...PNL_SOURCES, ...MARGIN_UNITS, ...MARGIN_SOURCES]) if (!deps[u]) throw new Error(`unknown unit ${u}`)
 const owner = { sales_detail: [], pnl_detail: [], ads_detail: [] }
+const reducedOnly = []
 for (const u of DETAIL) {
   let any = false
   // Ads: ads.* by field name; anything else only when the Ads code reads it qualified (data.x.y / x.y)
   const qualified = u.includes('.') && new RegExp(`\\b${u.split('.')[0]}\\??\\.${u.split('.')[1]}\\b`).test(SRC.ads)
   if (u.startsWith('ads.') ? mentions(SRC.ads, u) : qualified) { owner.ads_detail.push(u); any = true }
-  if (mentions(SRC.pnl, u)) { owner.pnl_detail.push(u); any = true }
+  if (!PNL_REDUCED.has(u) && mentions(SRC.pnl, u)) { owner.pnl_detail.push(u); any = true }
   // resolvedDailySKU rows: Sales reads their reductions (<channel>.resolvedAggDetail, api/_resolvedAgg.js)
-  // shipped with sales_detail instead; only P&L gets the rows themselves.
+  // shipped with sales_detail instead; P&L reads pnlAgg / pnlTrend.
   if (!u.startsWith('ads.') && !u.endsWith('.resolvedDailySKU') && mentions(SRC.sales, u)) { owner.sales_detail.push(u); any = true }
-  if (!any) (u.startsWith('ads.') ? owner.ads_detail : owner.sales_detail).push(u)
+  if (!any) (PNL_REDUCED.has(u) ? reducedOnly : u.startsWith('ads.') ? owner.ads_detail : owner.sales_detail).push(u)
 }
 // Run by every phase: the small queries chMap's gross / ex-GST / order figures and dailyArr are built
 // from. byChannel/byDate: chMap / netRevenueCalc / dailyArr are built unconditionally (the old
@@ -100,7 +127,9 @@ const queriesFor = us => [...new Set([...us.flatMap(u => [...deps[u]]), ...ALWAY
 // at response time — so it runs their queries even though the rows themselves are detail fields.
 const AGG_SOURCES = units.filter(u => u.endsWith('.resolvedDailySKU'))
 const out = { FAST: { units: FAST, queries: queriesFor([...FAST, ...AGG_SOURCES]) } }
-for (const [p, us] of Object.entries(owner)) out[p] = { units: us, queries: queriesFor(p === 'sales_detail' ? [...us, ...AGG_SOURCES] : us) }
+for (const [p, us] of Object.entries(owner)) out[p] = { units: us, queries: queriesFor(p === 'sales_detail' ? [...us, ...AGG_SOURCES] : p === 'pnl_detail' ? [...us, ...PNL_SOURCES] : us) }
+out.pnl_margin = { units: [...MARGIN_UNITS].sort(), queries: queriesFor([...MARGIN_UNITS, ...MARGIN_SOURCES]) }
+out.reducedOnly = reducedOnly.sort()
 const used = new Set(Object.values(out).flatMap(o => o.queries))
 out.unusedQueries = [...qk].filter(k => !used.has(k)).sort()
 console.log(JSON.stringify(out, null, 1))
