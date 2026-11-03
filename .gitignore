@@ -52,3 +52,6 @@ docs/responsive/**/*.png
 # Parity-verification snapshots (scripts/parity-snapshot.mjs output) — regenerate on demand.
 parity/
 public/alerts-data.json
+
+# alerts phase 2 headless P\&L scratch
+.alerts-p2-tmp/

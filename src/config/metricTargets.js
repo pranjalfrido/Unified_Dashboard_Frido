@@ -150,6 +150,72 @@ export const ALERT_RULES = {
   // from whatever date range the viewer currently has selected. This constant is kept for
   // documentation of the window length; the actual offsets are in generate-alerts-cache.mjs.
   logisticsLookbackDays: 7,
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // Alerts Phase 2 (31 alerts) — bars approved by Suraj 2026-11-03 against docs/ALERTS_PHASE2_BACKTEST.md.
+  // scripts/generate-alerts-phase2.mjs writes only RAW numbers (public/alerts-phase2.json); every bar
+  // below is applied in the browser by src/alerts/phase2Rules.js, so retuning is a one-line change here.
+  // Two kinds: SPIKE alerts ring in the bell; TARGET alerts (fixed business targets that are missed on
+  // > 1 day in 3) go to the bell's separate "Targets missed" section, refreshed weekly, no unread badge.
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // How far a target miss must go beyond its bar (relative) before it is shown red instead of amber.
+  targetRedMargin: 0.25,
+
+  // #1 Revenue down vs the previous equal 7-day period (Overview / Sales numbers). Bar per channel;
+  // channels not listed are skipped (Zepto, Instamart, CRED, Firstcry, Offline: too small / lumpy).
+  // The window ends revenueLagDays before yesterday so Flipkart / Myntra reports have landed.
+  revenueDropPct: { Overall: 10, Shopify: 10, Amazon: 10, Blinkit: 10, EBO: 10, Flipkart: 20, Myntra: 20 },
+  revenueLagDays: 3,
+  // #2 Return % (resolved, the Sales-tab Return % tile) over the latest mature 7 days. Spike bar per
+  // channel; Flipkart / Myntra spike only above their own normal (their 20% is a Targets-missed target).
+  // Blinkit / Zepto / Instamart have no returns data and are skipped. Firstcry needs a volume floor.
+  returnPctMax: { Shopify: 20, Amazon: 20, CRED: 20, Firstcry: 20, Flipkart: 38, Myntra: 40 },
+  returnPctTarget: { Flipkart: 20, Myntra: 20 },
+  returnMinGross: { Firstcry: 100000 },        // ₹ gross in the window below which Firstcry isn't checked
+  // #5 EBO return %   #6 Offline credit-note rate
+  eboReturnPctMax: 10,
+  offlineCreditNotePctMax: 10,
+  // #3 Warehouse fill rate and #15 allocation: weekly TARGETS (warning / critical) plus a SPIKE when a
+  // warehouse is more than this many points below its own previous-4-week average.
+  fillRateMin: 80,
+  allocationWarnMin: 80,
+  allocationCritMin: 60,
+  fillRateDropPts: 10,
+  // #7 D2C sub-category return % jump (tightened per backtest: 2x, ₹1.5 L, top 3)
+  subCatReturnMultiple: 2,
+  subCatMinReturnRs: 150000,
+  subCatTopN: 3,
+  // #8-#11 P&L (the P&L page's own kpiSummary on the latest mature 7 days). Bars come from PNL_RULE_BARS
+  // (+ overrides) except where set here. D2C CM1 38.5 / COGS 43 per the backtest. SnD bars per channel
+  // from the backtest (≈ p90 + 1 pt). Offline (CM1 / GM / COGS) and CRED COGS are far off their bars every
+  // week, so they are TARGETS (Targets missed), not spikes.
+  // HOLD: pnlAlertsEnabled stays false until the live D2C P&L for 1-30 Oct has been read against
+  // docs/ALERTS_PHASE2_BACKTEST.md ("P&L reconciliation"); flip to true to switch #8-#11 on.
+  pnlAlertsEnabled: false,
+  pnlBarOverrides: { shopify: { cm1: 38.5, cogs: 43 } },
+  pnlSndMax: { shopify: 20, amazon: 31, flipkart: 28, ebo: 13, offline: 12, blinkit: 45, zepto: 33, instamart: 32 },
+  pnlTargetOnly: { offline: ['cm1', 'gm', 'cogs'], cred: ['cogs'] },
+  // #12 ROAS down (Ads-page ROAS) — bar and the spend floor come from ADS_RULES (20%, ₹50 k both periods)
+  // #13 Unattributed spend share of spend (admin only; a TARGET: Meta and Zepto sit above it most weeks)
+  unattributedShareMax: 0.20,
+  // #14 OOS loss (₹ lost so far on out-of-stock SKUs): overall and any single category
+  oosOverallWarn: 3500000, oosOverallCrit: 4000000,
+  oosCategoryWarn: 1200000, oosCategoryCrit: 1500000,
+  // #16 Courier spike: a courier's RTO or delivery % more than kSd standard deviations from its own
+  // normal (previous 4-8 weekly windows), only above a shipment floor and a minimum gap in points.
+  courierSpikeSd: 2.5, courierSpikeMinShipments: 1000, courierSpikeMinPts: 2,
+  // #17-#21 Logistics TARGETS (latest mature 7 days, forward)
+  rtoTargetMax: 8, codRtoTargetMax: 17, prepaidRtoTargetMax: 2,
+  deliveredWithin3dOfPickupMin: 80, deliveredWithin5dOfOrderMin: 80,
+  // #22 Cost per shipment TARGET (₹)   #23 cost per kg vs trailing 3 months   #25 freight % of GMV vs trailing 3 months
+  costPerShipmentMax: 90, costPerKgUpPct: 20, freightPctUpPts: 1.5,
+  // #24 Courier invoice not loaded: month M-1 is expected from the invoiceExpectedDay of month M; fires if
+  // a courier that shipped that month has no invoice rows, or invoiced AWBs / shipments is below the coverage.
+  invoiceExpectedDay: 25, invoiceCoverageMin: 0.95,
+  // #26 LTV:CAC floor (CUSTOMER_RULES.ltvCacMin), held this many consecutive 28-day periods
+  customerHeldPeriods: 2,
+  // #30 / #31 support floors (the page has none): minimum interactions / orders in both periods
+  supportEscMinInteractions: 200, supportPer100MinOrders: 200,
 }
 
 // 'good' | 'warn' | 'bad' | null (null = no target, show neutral)

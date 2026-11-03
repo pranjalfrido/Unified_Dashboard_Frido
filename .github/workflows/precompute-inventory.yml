@@ -76,6 +76,16 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
 
+      # Alerts Phase 2 (31 bell alerts): raw numbers from the pages' own handlers + the P&L page's own code,
+      # headless. Bars live in src/config/metricTargets.js (ALERT_RULES) and are applied in the browser. The
+      # "targets" block inside is refreshed weekly (carried forward otherwise). continue-on-error: a failure
+      # here must not cost this run's inventory / P&L / ads refresh; the previous file stays in place.
+      - name: Generate alerts Phase 2 cache (31 bell alerts, raw numbers)
+        continue-on-error: true
+        run: node scripts/generate-alerts-phase2.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
       # Pulls new AWB category / sub-category / dimensions from BigQuery into Supabase.
       # Runs BEFORE the aggregates so the cube is rebuilt from fresh categories in the same
       # pass — otherwise a re-categorised product would wait an extra hour to appear.
@@ -157,6 +167,7 @@ jobs:
                   public/logistics-data-forward.json public/logistics-data-reverse.json \
                   public/logistics-cost-data.json public/ads-data.json public/pnl-data.json \
                   public/pnl-data-lastmonth.json \
+                  public/alerts-data.json public/alerts-phase2.json \
                   public/logistics-data-forward-cod.json public/logistics-data-forward-prepaid.json \
                   public/logistics-data-reverse-cod.json public/logistics-data-reverse-prepaid.json
           git diff --cached --quiet && echo "No changes" && exit 0

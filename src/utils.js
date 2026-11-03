@@ -368,11 +368,7 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
   const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
   const lNdrCount = parseInt(lkpi.ndr_count) || 0
   const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
-  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
-  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
-  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
-  const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
-  const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
+  // (delivered-within-3d-of-pickup / 5d-of-order moved to Phase 2 #20/#21: fixed mature window, "Targets missed")
   const lStuckCritical = parseInt(lkpi.critical_stuck) || 0
 
   const invSummary = invSnapshotData?.summary || {}
@@ -416,9 +412,7 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
   const deliveryAlert = logCache?.deliveryPct != null && logCache.deliveryPct < ALERT_RULES.deliveryPctMin
     ? { type: 'red', title: `Delivery % below ${ALERT_RULES.deliveryPctMin}%`, body: `${logCache.rangeLabel}: Delivery ${logCache.deliveryPct.toFixed(1)}%.`, key: 'deliveryPctLow', requiredPermission: 'logistics', nav: { page: 'logistics' } }
     : null
-  const rtoAlert = logCache?.rtoPct != null && logCache.rtoPct > ALERT_RULES.rtoPctMax
-    ? { type: 'red', title: `RTO % above ${ALERT_RULES.rtoPctMax}%`, body: `${logCache.rangeLabel}: RTO ${logCache.rtoPct.toFixed(1)}%.`, key: 'rtoPctHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
-    : null
+  // (Phase 1's RTO > 9.5% alert lived here; replaced by Phase 2 #17, an 8% target in "Targets missed".)
 
   // #11 TAT/EDD breach % = SLA-breach share of delivered-with-EDD (on_time + sla_breach), the exact
   // kpis fields from api/logistics.js, computed by generate-alerts-cache.mjs against
@@ -547,7 +541,7 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
     topSkuStockoutAlert,
     fleetStockoutAlert,
     deliveryAlert,
-    rtoAlert,
+    // rtoAlert (> 9.5%) removed: Alerts Phase 2 #17 replaces it with the 8% RTO target in the bell's "Targets missed" section (src/alerts/phase2Rules.js).
     stuckAlert,
     d2cRedLineAlert,
     zeroOrderAlert,
@@ -565,8 +559,8 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
     // ].filter(Boolean) : []),
     ...(logisticsData ? [
       lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.', key: 'ndrHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
-      lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.', key: 'del3dPickupLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
-      lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.', key: 'del5dOrderLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
+      // lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.', key: 'del3dPickupLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,  // superseded by Phase 2 #20/#21 (fixed mature window, Targets missed) — was tied to the viewer's selected range
+      // lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.', key: 'del5dOrderLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,  // superseded by Phase 2 #20/#21 (fixed mature window, Targets missed) — was tied to the viewer's selected range
     ].filter(Boolean) : []),
     // #8 D2C CM1%/COGS% and #12 D2C SnD% — EXPLICITLY excluded from Phase 1 build per the task
     // brief ("exclude #8 ... and #12 ... — leave as commented placeholders only, do not build
