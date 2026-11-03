@@ -71,14 +71,19 @@ BEGIN
   GET DIAGNOSTICS n_replaced = ROW_COUNT;
 
   SELECT string_agg(quote_ident(c), ', '), string_agg('v.' || quote_ident(c), ', ') INTO cols, vcols FROM unnest(t.insert_cols) c;
-  EXECUTE format(
-    'INSERT INTO public.%1$I (%2$s, batch_id, source_row_no)
-     SELECT %3$s, $1, r.row_no
-       FROM public.cn_staging_rows r
-       JOIN public.cn_batch_scopes s ON s.batch_id = r.batch_id AND s.scope_key = r.scope_key AND s.status <> ''blocked''
-      CROSS JOIN LATERAL jsonb_populate_record(NULL::public.%1$I, r.parsed) v
-      WHERE r.batch_id = $1 AND NOT r.has_error', t.target_table, cols, vcols)
-  USING b.id;
+  BEGIN
+    EXECUTE format(
+      'INSERT INTO public.%1$I (%2$s, batch_id, source_row_no)
+       SELECT %3$s, $1, r.row_no
+         FROM public.cn_staging_rows r
+         JOIN public.cn_batch_scopes s ON s.batch_id = r.batch_id AND s.scope_key = r.scope_key AND s.status <> ''blocked''
+        CROSS JOIN LATERAL jsonb_populate_record(NULL::public.%1$I, r.parsed) v
+        WHERE r.batch_id = $1 AND NOT r.has_error', t.target_table, cols, vcols)
+    USING b.id;
+  EXCEPTION WHEN unique_violation THEN
+    -- e.g. a Lost/Damage AWB that is active under a scope this file has but which is blocked.
+    RAISE EXCEPTION 'Nothing was saved: some rows clash with rows already saved that this file could not replace (%). Fix the blocked rows and preview again.', SQLERRM;
+  END;
   GET DIAGNOSTICS n_inserted = ROW_COUNT;
 
   UPDATE public.cn_upload_batches

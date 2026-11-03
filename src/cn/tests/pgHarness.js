@@ -60,6 +60,7 @@ export async function engineDb() {
   await db.exec(sql("scripts/sql/cn/002_cn_master_seed.sql"));
   await db.exec(sql("scripts/sql/cn/003_cn_upload_engine.sql"));
   await db.exec(sql("scripts/sql/cn/004_cn_background_commit.sql"));
+  await db.exec(sql("scripts/sql/cn/005_cn_more_upload_types.sql"));
   return db;
 }
 

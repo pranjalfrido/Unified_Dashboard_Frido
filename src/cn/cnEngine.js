@@ -7,12 +7,27 @@ import { buildTemplateBytes, headerFor } from "./cnTemplate.js";
 
 export { headerFor };
 
-const STAGE_CHUNK = 2000;
+// 1,000 rows per call: about 1 s of database work, well inside the 8 s statement timeout
+// even when the shared database is busy (2,000-row calls measured 1.2–3.7 s).
+const STAGE_CHUNK = 1000;
 
 async function rpc(fn, args) {
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw new Error(error.message);
   return data;
+}
+
+// For calls that are safe to repeat (staging overwrites the same rows; validation recomputes
+// from scratch): retry a timeout or dropped connection a couple of times. Never used for commit.
+const TRANSIENT = /statement timeout|fetch|network|timed out|connection|ECONNRESET|503|504/i;
+async function rpcRetry(fn, args, tries = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await rpc(fn, args); }
+    catch (e) {
+      if (attempt >= tries || !TRANSIENT.test(e.message)) throw e;
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
+  }
 }
 
 export async function loadUploadType(code) {
@@ -54,15 +69,15 @@ export async function uploadAndValidate(cfg, fileName, parsed, onProgress) {
   const created = await rpc("cn_create_batch", { p_type: cfg.code, p_file_name: fileName, p_headers: parsed.headers });
   const id = created.batch_id;
   for (let i = 0; i < parsed.rows.length; i += STAGE_CHUNK) {
-    await rpc("cn_stage_rows", { p_batch_id: id, p_rows: parsed.rows.slice(i, i + STAGE_CHUNK) });
+    await rpcRetry("cn_stage_rows", { p_batch_id: id, p_rows: parsed.rows.slice(i, i + STAGE_CHUNK) });
     onProgress?.({ step: "staging", done: Math.min(i + STAGE_CHUNK, parsed.rows.length), total: parsed.rows.length });
   }
   onProgress?.({ step: "validating" });
-  const summary = await rpc("cn_validate_batch", { p_batch_id: id });
+  const summary = await rpcRetry("cn_validate_batch", { p_batch_id: id });
   return { batchId: id, ignored: created.ignored ?? [], headerMap: created.header_map, summary };
 }
 
-export const revalidate = (batchId) => rpc("cn_validate_batch", { p_batch_id: batchId });
+export const revalidate = (batchId) => rpcRetry("cn_validate_batch", { p_batch_id: batchId });
 export const commitBatch = (batchId, token) => rpc("cn_commit_batch", { p_batch_id: batchId, p_token: token });
 export const discardBatch = (batchId) => rpc("cn_discard_batch", { p_batch_id: batchId });
 

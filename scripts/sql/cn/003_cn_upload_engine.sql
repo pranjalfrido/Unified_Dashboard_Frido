@@ -514,52 +514,8 @@ END $$;
 
 -- ── Weight Dispute ───────────────────────────────────────────────────────────
 
--- Masters (courier; account must belong to that courier), amount warnings, scope key.
-CREATE OR REPLACE FUNCTION public.cn_rows_weight_dispute(p_batch_id bigint, p_from int, p_to int)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  UPDATE public.cn_staging_rows s
-     SET parsed = s.parsed || jsonb_build_object('courier_id', x.courier_id, 'courier_account_id', x.account_id),
-         scope_key = CASE WHEN s.parsed->>'month' IS NOT NULL AND x.courier_id IS NOT NULL
-                          THEN (s.parsed->>'month') || '|' || x.courier_id END,
-         errors = s.errors || x.errs,
-         warnings = s.warnings || x.warns
-    FROM (
-      SELECT r.row_no,
-             CASE WHEN c.is_active THEN c.id END AS courier_id,
-             CASE WHEN a.is_active THEN a.id END AS account_id,
-             array_remove(ARRAY[
-               CASE WHEN r.parsed->>'courier' IS NOT NULL AND c.id IS NULL
-                      THEN format('Courier "%s" is not in masters — add it under Masters → Couriers first', r.parsed->>'courier')
-                    WHEN c.id IS NOT NULL AND NOT c.is_active
-                      THEN format('Courier "%s" is deactivated in masters', c.name) END,
-               CASE WHEN r.parsed->>'courier_account' IS NULL OR c.id IS NULL OR NOT c.is_active THEN NULL
-                    WHEN a.id IS NULL AND o.couriers IS NOT NULL
-                      THEN format('Courier Account "%s" belongs to %s, not %s', r.parsed->>'courier_account', o.couriers, c.name)
-                    WHEN a.id IS NULL
-                      THEN format('Courier Account "%s" is not in masters under %s — add it under Masters → Courier accounts first',
-                                  r.parsed->>'courier_account', c.name)
-                    WHEN NOT a.is_active
-                      THEN format('Courier Account "%s" is deactivated in masters', a.name) END
-             ], NULL) AS errs,
-             array_remove(ARRAY[
-               CASE WHEN (r.parsed->>'received_cn')::numeric > (r.parsed->>'expected_cn')::numeric
-                      THEN format('Received CN (%s) is more than Expected CN (%s)', r.parsed->>'received_cn', r.parsed->>'expected_cn') END,
-               CASE WHEN (r.parsed->>'expected_cn')::numeric > (r.parsed->>'invoice_value')::numeric
-                      THEN format('Expected CN (%s) is more than Invoice Value (%s)', r.parsed->>'expected_cn', r.parsed->>'invoice_value') END
-             ], NULL) AS warns
-        FROM public.cn_staging_rows r
-        LEFT JOIN public.cn_couriers c ON c.name_key = public.cn_name_key(r.parsed->>'courier')
-        LEFT JOIN public.cn_courier_accounts a ON a.courier_id = c.id AND a.name_key = public.cn_name_key(r.parsed->>'courier_account')
-        LEFT JOIN LATERAL (
-          SELECT string_agg(DISTINCT oc.name, ', ') AS couriers
-            FROM public.cn_courier_accounts oa JOIN public.cn_couriers oc ON oc.id = oa.courier_id
-           WHERE oa.name_key = public.cn_name_key(r.parsed->>'courier_account')
-        ) o ON r.parsed->>'courier_account' IS NOT NULL AND a.id IS NULL
-       WHERE r.batch_id = p_batch_id AND r.row_no BETWEEN p_from AND p_to
-    ) x
-   WHERE s.batch_id = p_batch_id AND s.row_no = x.row_no;
-END $$;
+-- Row checks (cn_rows_weight_dispute) are in 005_cn_more_upload_types.sql, with the
+-- courier/account lookup the other courier uploads share.
 
 -- A courier-level row (no account) next to account rows for the same month + courier may
 -- count the same money twice.
@@ -622,7 +578,7 @@ GRANT SELECT ON public.cn_upload_types, public.cn_batch_scopes TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION
   public.cn_batch_for_caller(bigint, text),
-  public.cn_rows_weight_dispute(bigint, int, int), public.cn_cross_weight_dispute(bigint)
+  public.cn_cross_weight_dispute(bigint)
   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION
   public.cn_create_batch(text, text, text[]), public.cn_stage_rows(bigint, jsonb), public.cn_validate_batch(bigint),

@@ -19,10 +19,10 @@ const SECTIONS = [
   { key: "masters", label: "Masters", views: [{ key: "masters", label: "Masters" }] },
 ];
 
-const UPLOADS = ["weight_dispute"];
+const UPLOADS = ["weight_dispute", "lost_damage", "ftl_ptl", "3pl"];
 
 const COMING = {
-  lost_damage: "Phase 3", ftl_ptl: "Phase 3", "3pl": "Phase 3", batches: "Phase 4",
+  batches: "Phase 4",
 };
 
 export default function CnModulePage({ onBack }) {
