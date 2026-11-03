@@ -192,7 +192,7 @@ CREATE INDEX IF NOT EXISTS cn_upload_batches_type_time
 CREATE TABLE IF NOT EXISTS public.cn_staging_rows (
   batch_id  BIGINT NOT NULL REFERENCES public.cn_upload_batches(id) ON DELETE CASCADE,
   row_no    INT NOT NULL,                       -- spreadsheet row number
-  raw       JSONB NOT NULL,                     -- cell values keyed by header, as uploaded
+  raw       JSONB NOT NULL,                     -- cell values as uploaded, in the batch's header order
   parsed    JSONB,                              -- normalised values and master ids
   scope_key TEXT,                               -- e.g. '2026-04-01|courier:12'
   errors    TEXT[] NOT NULL DEFAULT '{}',

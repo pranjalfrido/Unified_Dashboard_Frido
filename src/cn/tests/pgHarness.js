@@ -33,6 +33,12 @@ const SUPABASE_STUBS = `
   CREATE FUNCTION public.is_admin_user(uid uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
     AS $$ SELECT EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = uid AND is_admin = true AND is_active = true) $$;
 
+  -- Same shape as scripts/sql/logistics-invoice-totals.sql (minus pg_cron, absent here).
+  CREATE TABLE public.logistics_invoice_totals (
+    category text NOT NULL, partner text NOT NULL, month_year text NOT NULL, invoice_number text NOT NULL,
+    lines int NOT NULL, amount numeric, refreshed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (category, partner, month_year, invoice_number));
+
   INSERT INTO public.user_profiles (user_id, is_admin) VALUES
     ('${USERS.admin}', true), ('${USERS.uploader}', false), ('${USERS.manager}', false), ('${USERS.outsider}', false);
   INSERT INTO public.user_permissions (user_id, tab) VALUES
@@ -45,6 +51,14 @@ export async function freshDb() {
   const db = new PGlite();
   await db.exec(SUPABASE_STUBS);
   await db.exec(sql("scripts/sql/cn/001_cn_schema.sql"));
+  return db;
+}
+
+// Schema + the real master seed + the upload engine.
+export async function engineDb() {
+  const db = await freshDb();
+  await db.exec(sql("scripts/sql/cn/002_cn_master_seed.sql"));
+  await db.exec(sql("scripts/sql/cn/003_cn_upload_engine.sql"));
   return db;
 }
 

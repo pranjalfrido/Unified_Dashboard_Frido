@@ -1,11 +1,12 @@
 // Documents → Logistics Credit Notes. Section navigation for the four CN uploaders, batch
-// history and masters. Phase 1 ships the masters; the uploaders and listings land in later
-// phases behind the same sections.
+// history and masters. Uploads whose cn_upload_types row exists are listed in UPLOADS; the
+// rest show where they land in the build.
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { C } from "../utils.js";
 import { canManage } from "./cnApi.js";
 import MastersPanel from "./MastersPanel.jsx";
+import UploadPanel from "./UploadPanel.jsx";
 
 const SECTIONS = [
   { key: "b2c", label: "B2C Couriers", views: [
@@ -18,8 +19,10 @@ const SECTIONS = [
   { key: "masters", label: "Masters", views: [{ key: "masters", label: "Masters" }] },
 ];
 
+const UPLOADS = ["weight_dispute"];
+
 const COMING = {
-  weight_dispute: "Phase 2", lost_damage: "Phase 3", ftl_ptl: "Phase 3", "3pl": "Phase 3", batches: "Phase 4",
+  lost_damage: "Phase 3", ftl_ptl: "Phase 3", "3pl": "Phase 3", batches: "Phase 4",
 };
 
 export default function CnModulePage({ onBack }) {
@@ -66,6 +69,8 @@ export default function CnModulePage({ onBack }) {
 
       {view === "masters" ? (
         <MastersPanel manage={manage} />
+      ) : UPLOADS.includes(view) ? (
+        <UploadPanel key={view} type={view} />
       ) : (
         <div style={{ border: `1px dashed ${C.border2}`, borderRadius: 10, padding: "36px 20px", textAlign: "center", color: C.t3, fontSize: 13, background: C.card }}>
           {sec.views.find((v) => v.key === view)?.label} — coming in {COMING[view]}.
