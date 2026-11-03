@@ -182,7 +182,7 @@ By channel (channel-filtered handler calls, weeks < 80 / < 60): Shopify BLR 13/1
 
 Decisions applied as approved (all bars in `ALERT_RULES`, `src/config/metricTargets.js`). Data: `scripts/generate-alerts-phase2.mjs` → `public/alerts-phase2.json` (hourly step added to `precompute-inventory.yml`, `continue-on-error`); rules and per-user grouping: `src/alerts/phase2Rules.js`; bell with Critical / Warnings / **Targets missed** sections: `AlertGroups` in `src/App.jsx` (laptop bell and phone Notifications sheet).
 
-- **#8–#11 P&L are built but switched off** (`ALERT_RULES.pnlAlertsEnabled = false`) until the live D2C P&L for 1–30 Oct is read against the headless numbers. With the switch on, D2C CM1 on the latest mature week reads 38.4% (bar 38.5%), so it would ring immediately.
+- **#8–#11 P&L are ON** (`ALERT_RULES.pnlAlertsEnabled = true`). Suraj read the live D2C P&L for 1–31 Oct: CM1 39.2% / COGS 41.9% / SnD 18.9%, an exact match with the headless render, so the Phase 1 notes (43.5 / 15.1) were wrong. On the latest mature week D2C CM1 reads 38.4% (bar 38.5%), so it rings now.
 - Phase 1's RTO > 9.5% alert and the two live-range "Delivered ≤3d / ≤5d" alerts are removed: #17, #20 and #21 replace them as Targets missed.
 - `precompute-inventory.yml`'s commit step did not list `public/alerts-data.json` (Phase 1's file), so the cron never committed it; it now lists it with `alerts-phase2.json`.
 - jsdom 26 (not 30) and esbuild are dev dependencies: the workflow runs Node 20 and jsdom 30 needs Node 22+.
