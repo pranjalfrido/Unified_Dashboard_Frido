@@ -28,7 +28,8 @@ const SUPABASE_STUBS = `
   CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE
     AS $$ SELECT current_user::text $$;
 
-  CREATE TABLE public.user_profiles (user_id uuid PRIMARY KEY, is_admin boolean NOT NULL DEFAULT false, is_active boolean NOT NULL DEFAULT true);
+  CREATE TABLE public.user_profiles (user_id uuid PRIMARY KEY, name text, full_name text, email text,
+    is_admin boolean NOT NULL DEFAULT false, is_active boolean NOT NULL DEFAULT true);
   CREATE TABLE public.user_permissions (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, user_id uuid NOT NULL, tab text NOT NULL);
   CREATE FUNCTION public.is_admin_user(uid uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
     AS $$ SELECT EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = uid AND is_admin = true AND is_active = true) $$;
@@ -39,8 +40,9 @@ const SUPABASE_STUBS = `
     lines int NOT NULL, amount numeric, refreshed_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (category, partner, month_year, invoice_number));
 
-  INSERT INTO public.user_profiles (user_id, is_admin) VALUES
-    ('${USERS.admin}', true), ('${USERS.uploader}', false), ('${USERS.manager}', false), ('${USERS.outsider}', false);
+  INSERT INTO public.user_profiles (user_id, full_name, email, is_admin) VALUES
+    ('${USERS.admin}', 'Ada Admin', 'admin@test', true), ('${USERS.uploader}', '', 'uploader@test', false),
+    ('${USERS.manager}', 'Mona Manager', 'manager@test', false), ('${USERS.outsider}', null, 'outsider@test', false);
   INSERT INTO public.user_permissions (user_id, tab) VALUES
     ('${USERS.uploader}', 'documents'),
     ('${USERS.manager}', 'documents'), ('${USERS.manager}', 'documents:cn-manage'),
@@ -61,6 +63,7 @@ export async function engineDb() {
   await db.exec(sql("scripts/sql/cn/003_cn_upload_engine.sql"));
   await db.exec(sql("scripts/sql/cn/004_cn_background_commit.sql"));
   await db.exec(sql("scripts/sql/cn/005_cn_more_upload_types.sql"));
+  await db.exec(sql("scripts/sql/cn/006_cn_listing.sql"));
   return db;
 }
 

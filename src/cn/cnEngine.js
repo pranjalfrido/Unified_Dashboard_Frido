@@ -30,12 +30,6 @@ async function rpcRetry(fn, args, tries = 3) {
   }
 }
 
-export async function loadUploadType(code) {
-  const { data, error } = await supabase.from("cn_upload_types").select("*").eq("code", code).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error(`Upload type ${code} is not set up in the database yet.`);
-  return data;
-}
 
 
 function download(bytes, fileName) {

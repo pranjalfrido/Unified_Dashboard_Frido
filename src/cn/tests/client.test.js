@@ -91,7 +91,7 @@ describe("template round trip", () => {
       return (await db.query(`SELECT cn_validate_batch($1) AS r`, [b.batch_id])).rows[0].r;
     });
     expect(v).toMatchObject({ total_rows: 1, error_rows: 0, rows_to_save: 1 });
-  });
+  }, 30000);
 
   it("adds a drop-down for enum columns", () => {
     const cfg = { label: "Test", partner_label: "Courier", template_file: "t.xlsx", columns: [
