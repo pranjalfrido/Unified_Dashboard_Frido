@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-03T14:08:58.562Z",
+ "generatedAt": "2026-11-03T15:08:03.211Z",
  "today": "2026-11-03",
  "windows": {
   "rev": {
@@ -1091,7 +1091,7 @@
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-03T13:17:41.699Z",
+  "asOf": "2026-11-03T14:19:51.442Z",
   "perShipment": 91.38949469307441,
   "perKg": 42.28528924979741,
   "perKgTrailing": 34.789143036075025,
@@ -1151,8 +1151,8 @@
     {
      "courier": "Safexpress",
      "shipped": 1387,
-     "invoiced": 0,
-     "coverage": 0
+     "invoiced": 1735,
+     "coverage": 1.250901225666907
     }
    ]
   }
