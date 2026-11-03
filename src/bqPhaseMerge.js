@@ -7,7 +7,9 @@
 
 export const BQ_CHANNEL_OBJECTS = new Set(['shopify', 'flipkart', 'blinkit', 'instamart', 'zepto', 'cred', 'firstcry', 'myntra', 'amzSC', 'amzVCMatrix', 'amzVC', 'amzIntl', 'ebo', 'offline', 'international', 'ads'])
 
-export const DETAIL_PHASES = ['sales_detail', 'pnl_detail', 'ads_detail']
+// Merge order when assembling cached groups: pnl_margin before pnl_detail, so where both are cached
+// the P&L page reads its own group's copy of the fields they share.
+export const DETAIL_PHASES = ['sales_detail', 'pnl_margin', 'pnl_detail', 'ads_detail']
 
 // Which detail group each page needs on top of 'fast'. Intelligence reads only fast fields.
 export const PAGE_DETAIL_PHASES = {
@@ -15,10 +17,14 @@ export const PAGE_DETAIL_PHASES = {
   sales: ['sales_detail'],
   pnl: ['pnl_detail'],
   // Ads also renders a hidden P&L probe (PnLPage summaryOnly) for each product's breakeven ROAS,
-  // which reads pnl_detail fields — both requested in parallel.
-  ads: ['ads_detail', 'pnl_detail'],
+  // which reads only the small pnl_margin group — both requested in parallel.
+  ads: ['ads_detail', 'pnl_margin'],
   intelligence: [],
 }
+
+// A group whose fields (and P&L reductions) are all inside another: once the larger one is cached or
+// merged, the smaller one is ready without a request of its own.
+export const PHASE_COVERED_BY = { pnl_margin: 'pnl_detail' }
 
 // Returns a new object; never mutates `base` or `part`.
 export function mergePhase(base, part) {

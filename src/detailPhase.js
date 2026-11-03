@@ -8,7 +8,7 @@ export const DetailPhaseContext = createContext(null)
 const READY = { status: 'ready', error: null, retry: null }
 
 // Context value: { status, error, retry } of the page's main detail group, plus `byPhase` — the
-// same triple for every detail group the page loads (Ads also loads pnl_detail for its margins).
+// same triple for every detail group the page loads (Ads also loads pnl_margin for its margins).
 // `phase` picks one of those; omitted = the page's main group.
 export function useDetailPhase(phase) {
   const ctx = useContext(DetailPhaseContext)
