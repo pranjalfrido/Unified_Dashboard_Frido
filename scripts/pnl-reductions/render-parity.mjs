@@ -53,7 +53,8 @@ const vite = await createServer({ configFile: join(HARNESS, 'vite.config.mjs') }
 await vite.listen()
 const { chromium } = await import('playwright')
 // The old page holds ~150 MB payloads at 3+ months: give the renderer a big heap.
-const browser = await chromium.launch({ args: ['--js-flags=--max-old-space-size=8192'] })
+const launch = () => chromium.launch({ args: ['--js-flags=--max-old-space-size=8192'] })
+let browser = await launch()
 const LAYOUTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } }
 const sndRates = readFileSync(join(ROOT, 'public', 'snd-rates.json'), 'utf8')
 
@@ -73,6 +74,8 @@ const ADS_TABS = ['shopify', 'amazon', 'flipkart', 'blinkit', 'zepto', 'instamar
 const viewName = v => [v.tab, v.d2c, v.amz, v.off, v.tool].filter(Boolean).join('/')
 
 async function openPage(version, layout, dir) {
+  // an out-of-memory tab can take the whole browser down (old page, YTD): start a fresh one
+  if (!browser.isConnected()) browser = await launch()
   const ctx = await browser.newContext({ viewport: LAYOUTS[layout], deviceScaleFactor: 1 })
   const page = await ctx.newPage()
   page.on('pageerror', e => { page.__errors = [...(page.__errors || []), e.message] })
@@ -133,7 +136,9 @@ async function timing(dir, body) {
   const out = {}
   for (const [layout, cpu] of [['desktop', 1], ['phone', 4]]) {
     for (const version of ['old', 'new']) {
-      const page = await openPage(version, layout, dir)
+      let page, step = 'open page'
+      try {
+      page = await openPage(version, layout, dir)
       const cdp = await page.context().newCDPSession(page)
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu })
       const parse = async file => page.evaluate(async u => {
@@ -145,19 +150,28 @@ async function timing(dir, body) {
       const r = { parseFast: [], parsePnl: [], parseAds: [], calcPnl: [], calcAds: [] }
       for (let k = 0; k < 4; k++) {
         const keep = k > 0 // first round = warm-up
+        step = 'parse responses'
         const pf = await parse('part-fast'), pp = await parse(parts.pnl), pa = await parse(parts.ads)
         if (keep) { r.parseFast.push(pf); r.parsePnl.push(pp); r.parseAds.push(pa) }
-        await page.evaluate(([a, b]) => Promise.all([window.__load('cur', a), window.__load('ads', b)]), [`/__data/${version}.json`, `/__data/${version === 'old' ? 'adsOld' : 'adsNew'}.json`])
-        for (const [key, data, tab] of [['calcPnl', 'cur', 'shopify'], ['calcAds', 'ads', 'shopify']]) {
-          const spec = { key: `t-${k}-${key}`, start: body.start, end: body.end, caseLabel: `timing-${k}`, tab, amz: 'all', off: 'all', d2c: 'all', data, main: false, probe: true }
+        // one payload in the tab at a time, as in the app (the P&L page holds its merged data; the
+        // Ads page holds its own)
+        for (const [key, file, tab] of [['calcPnl', version, 'shopify'], ['calcAds', version === 'old' ? 'adsOld' : 'adsNew', 'shopify']]) {
+          step = `load ${file}.json`
+          await page.evaluate(u => window.__load('d', u), `/__data/${file}.json`)
+          step = `${key} calculation`
+          const spec = { key: `t-${k}-${key}`, start: body.start, end: body.end, caseLabel: `timing-${k}`, tab, amz: 'all', off: 'all', d2c: 'all', data: 'd', main: false, probe: true }
           await page.evaluate(s => { window.__t0 = performance.now(); window.__render(s) }, spec)
           const ms = await (await page.waitForFunction(() => window.__summary != null && performance.now() - window.__t0, null, { polling: 'raf', timeout: 120000 })).jsonValue()
           if (keep) r[key].push(ms)
+          await page.evaluate(() => { window.__render({ main: false, probe: false }); return window.__drop('d') })
         }
-        await page.evaluate(() => { window.__render({ main: false, probe: false }); window.__drop('cur'); window.__drop('ads') })
       }
       out[`${layout}.${version}`] = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Math.round(med(v))]))
-      await page.context().close()
+      } catch (e) {
+        // the old page's long-range payloads can crash the tab (renderer out of memory)
+        out[`${layout}.${version}`] = { crash: `during ${step}: ${e.message.split('\n')[0]}` }
+      }
+      await page?.context().close().catch(() => {})
     }
   }
   const mb = f => +(readFileSync(join(dir, `${f}.json`)).length / 1048576).toFixed(1)

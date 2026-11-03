@@ -11,6 +11,8 @@
 // probe on its six tabs, and (--static) the new code on the full response.
 // The display components themselves are unchanged code, so identical props = identical pages.
 // Usage: SA_KEY_PATH=... COGS_ENV_PATH=... node --max-old-space-size=24576 node-parity.mjs --cases f.json [--static a,b]
+// Needs react-test-renderer matching the installed react, without adding it to package.json:
+//   npm install --no-save react-test-renderer@<react version>
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { createElement } from 'react'
