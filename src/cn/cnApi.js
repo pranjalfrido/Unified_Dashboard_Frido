@@ -55,9 +55,17 @@ export function friendlyError(e) {
   return msg;
 }
 
+// Whether the signed-in user may manage masters, edit rows and roll back. Retried a few
+// times, then thrown, so a network failure is never mistaken for "no access".
 export async function canManage() {
-  const { data, error } = await supabase.rpc("cn_can_manage");
-  return !error && data === true;
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase.rpc("cn_can_manage");
+    if (!error) return data === true;
+    last = error;
+    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+  }
+  throw new Error(last?.message || "network error");
 }
 
 export async function listMaster(m) {

@@ -29,8 +29,17 @@ export default function CnModulePage({ onBack }) {
   const [section, setSection] = useState("b2c");
   const [view, setView] = useState("weight_dispute");
   const [manage, setManage] = useState(false);
+  const [accessError, setAccessError] = useState(null);
 
-  useEffect(() => { canManage().then(setManage); }, []);
+  // A failed check is reported, not read as "no access": a dropped connection must not
+  // silently turn a manager's screens view-only.
+  useEffect(() => {
+    let live = true;
+    canManage()
+      .then((m) => { if (live) { setManage(m); setAccessError(null); } })
+      .catch((e) => { if (live) setAccessError(e.message); });
+    return () => { live = false; };
+  }, []);
 
   const sec = SECTIONS.find((s) => s.key === section);
   const pick = (s) => { setSection(s.key); setView(s.views[0].key); };
@@ -64,6 +73,12 @@ export default function CnModulePage({ onBack }) {
               {v.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {accessError && (
+        <div style={{ fontSize: 12.5, padding: "8px 12px", borderRadius: 8, marginBottom: 12, background: C.amber.bg, border: `1px solid ${C.amber.bd}`, color: C.amber.tx }}>
+          Couldn't check whether you can manage credit notes ({accessError}), so editing is off for now. Reload the page to try again.
         </div>
       )}
 
