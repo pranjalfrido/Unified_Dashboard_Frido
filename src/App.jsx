@@ -15,7 +15,8 @@ import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange, loadAlertsCache} from './utils.js'
+import { loadAlertsPhase2, getAlertsPhase2, computePhase2Alerts } from './alerts/phase2Rules.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -4956,7 +4957,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin }) {
+function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin, alertsComputedAt, onAlertNav, userId, targetAlerts, targetsAt }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
@@ -4987,7 +4988,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
     const H = props => (
       <div className="topnav m-header" data-page={page}>
         <MobilePageHeader notifications={notifications} {...props} menu={liveItem ? { title: 'More', ...props.menu, items: [...(props.menu?.items || []), liveItem] } : props.menu} />
-        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
+        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
         <LiveSheet isAdmin={isAdmin} open={liveOpen} onClose={() => setLiveOpen(false)} />
       </div>
     )
@@ -5180,7 +5181,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       {/* Admins only: "● N live" next to the alerts / date controls. */}
       <LivePill isAdmin={isAdmin} />
       <FeedbackHeaderButtons />
-      {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
+      <AlertsBell alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
@@ -5214,25 +5215,83 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
 
 // Phones: the same alerts list as the bell's panel, in a bottom sheet. Opened from "Notifications (n)",
 // the first item of the header's ⋯ menu (HEADER_MOBILE_PROMPT.md §3).
-function AlertsSheet({ open, onClose, alerts }) {
+// Alerts Phase 1 (approved 2026-10-31): group critical -> warning -> info, newest-computed-at
+// shown once at top. 'red' = critical, 'amber' = warning, everything else ('green'/'blue') = info.
+const ALERT_SEVERITY_ORDER = { red: 0, amber: 1, green: 2, blue: 2 }
+function sortBySeverity(alerts) {
+  return [...alerts].sort((a, b) => (ALERT_SEVERITY_ORDER[a.type] ?? 2) - (ALERT_SEVERITY_ORDER[b.type] ?? 2))
+}
+// Read/unread fingerprinting: keyed by user id + {alertKey, severity+value-ish string} so a
+// worsened recurrence of the same alert type (e.g. RTO climbing from 9.6% to 11%) still reads as
+// new/unread, while re-showing the identical fired state on reopen does not. alertKey falls back
+// to title (pre-Phase-1 base alerts without a `key` field) so nothing throws if it's missing.
+function alertFingerprint(a) {
+  return `${a.key || a.title}::${a.type}::${a.body}`
+}
+function seenStorageKey(userId) { return `frido_alerts_seen_${userId || 'anon'}` }
+function loadSeenSet(userId) {
+  try { return new Set(JSON.parse(localStorage.getItem(seenStorageKey(userId)) || '[]')) } catch { return new Set() }
+}
+function saveSeenSet(userId, set) {
+  try { localStorage.setItem(seenStorageKey(userId), JSON.stringify([...set])) } catch {}
+}
+function fmtComputedAt(d) {
+  if (!d) return ''
+  try { return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+}
+
+// Alerts Phase 2: one list for the bell panel (laptop) and the notifications sheet (phone) — Critical, then
+// Warnings, then the separate "Targets missed" section (fixed business targets, refreshed weekly by the alerts
+// job, never counted in the badge).
+function AlertGroups({ alerts, targets, targetsAt, onPick }) {
+  const crit = alerts.filter(a => a.type === 'red'), warn = alerts.filter(a => a.type === 'amber'), info = alerts.filter(a => a.type !== 'red' && a.type !== 'amber')
+  const tgt = sortBySeverity(targets || [])
+  const Head = ({ id, children, sub }) => <div data-testid={id} style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t3, padding: '8px 2px 2px', flexShrink: 0 }}>{children}{sub && <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>{sub}</span>}</div>
+  const card = a => <div key={a.key || a.title} style={{ flexShrink: 0 }}><AlertCard type={a.type} title={a.title} body={a.body} onClick={a.nav && onPick ? () => onPick(a) : undefined} /></div>
+  let since = ''
+  try { if (targetsAt) since = `refreshed weekly · ${new Date(targetsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` } catch { /* ignore */ }
+  return (
+    <>
+      {crit.length > 0 && <Head id="alerts-section-critical">Critical</Head>}
+      {crit.map(card)}
+      {warn.length > 0 && <Head id="alerts-section-warning">Warnings</Head>}
+      {warn.map(card)}
+      {info.length > 0 && <Head id="alerts-section-updates">Updates</Head>}
+      {info.map(card)}
+      {alerts.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: C.green.tx, fontSize: 12, fontWeight: 600 }}>
+          <span style={{ fontSize: 13 }}>★</span> All systems normal: no alerts for the current period.
+        </div>
+      )}
+      {tgt.length > 0 && <Head id="alerts-section-targets" sub={since}>Targets missed</Head>}
+      {tgt.map(card)}
+    </>
+  )
+}
+
+function AlertsSheet({ open, onClose, alerts, targets = [], targetsAt, computedAt, userId, onNav }) {
   const fbk = useFeedback()
   useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
+  useEffect(() => {
+    if (!open || !alerts.length) return
+    const seen = loadSeenSet(userId)
+    alerts.forEach(a => seen.add(alertFingerprint(a)))
+    saveSeenSet(userId, seen)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- mark-seen only fires on open, not every alerts recompute
   return (
     <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
+      {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 6px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px', color: C.m.up, fontSize: 13, fontWeight: 600 }}>
-            <span>★</span> All systems normal: no alerts for the current period.
-          </div>
-        )}
+        <AlertGroups alerts={alerts} targets={targets} targetsAt={targetsAt} onPick={a => { onNav?.(a.nav, a.title); onClose?.() }} />
       </div>
     </BottomSheet>
   )
 }
 
 // Bell icon + unread-style count badge (WhatsApp/notification-icon pattern) — click opens a
-// popover listing every alert. Lives in Topnav so it's visible on every page, not just Overview.
-function AlertsBell({ alerts }) {
+// popover listing every alert. Lives in Topnav so it's visible on every page (Phase 1, approved
+// 2026-10-31: removed the inventory/logistics page exclusion so the bell always renders).
+function AlertsBell({ alerts, targets = [], targetsAt, computedAt, userId, onNav }) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef(null)
   const popRef = useRef(null)
@@ -5245,6 +5304,17 @@ function AlertsBell({ alerts }) {
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [open])
+  // Opening the bell marks every currently-shown alert "seen" (localStorage, per-user). A
+  // worsened recurrence of the same alert type still gets a fresh fingerprint (body/severity
+  // change), so it counts as unread again even though its `key` is unchanged.
+  useEffect(() => {
+    if (!open || !alerts.length) return
+    const seen = loadSeenSet(userId)
+    alerts.forEach(a => seen.add(alertFingerprint(a)))
+    saveSeenSet(userId, seen)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- mark-seen only fires on open
+  const seenSet = useMemo(() => loadSeenSet(userId), [userId, open])
+  const unreadCount = alerts.filter(a => !seenSet.has(alertFingerprint(a))).length
   const critical = alerts.filter(a => a.type === 'red').length
   const fbk = useFeedback()
   useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
@@ -5263,13 +5333,13 @@ function AlertsBell({ alerts }) {
       >
         <span className="bell-emoji">🔔</span>
         <svg className="bell-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-        {alerts.length > 0 && (
+        {unreadCount > 0 && (
           <span className="alerts-badge" data-level={critical > 0 ? 'red' : 'amber'} style={{
             position: 'absolute', top: -5, right: -5, minWidth: 16, height: 16, padding: '0 3px',
             borderRadius: 8, background: critical > 0 ? '#B91C1C' : '#D97706', color: '#fff',
             fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
             lineHeight: 1, fontFamily: 'var(--font)',
-          }}>{alerts.length > 99 ? '99+' : alerts.length}</span>
+          }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
       </button>
       {open && (
@@ -5280,11 +5350,8 @@ function AlertsBell({ alerts }) {
           boxShadow: '0 12px 32px -8px rgba(0,0,0,0.22)', padding: 8,
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-          {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: C.green.tx, fontSize: 12, fontWeight: 600 }}>
-              <span style={{ fontSize: 13 }}>★</span> All systems normal — no alerts for the current period.
-            </div>
-          )}
+          {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 4px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
+          <AlertGroups alerts={alerts} targets={targets} targetsAt={targetsAt} onPick={a => { onNav?.(a.nav, a.title); setOpen(false) }} />
         </div>
       )}
     </div>
@@ -20218,6 +20285,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
   const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
+  // Alerts Phase 1: title of the bell alert that navigated here, for the "From alert ✕" chip.
+  // Cleared on dismiss or on the next unrelated navigation (any goTo not coming from navAlert).
+  const [fromAlert, setFromAlert] = useState(null)
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -20258,7 +20328,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [invPreset, setInvPreset] = useState(null)
   const invPresetSeq = useRef(0)
   const openInventoryHealth = preset => { invPresetSeq.current += 1; setInvPreset({ ...preset, nonce: invPresetSeq.current }); goTo('inventory', 'health') }
-  const goTo = (page, sub, sub2) => {
+  const goTo = (page, sub, sub2, _fromAlertNav) => {
+    if (!_fromAlertNav) setFromAlert(null)
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
     else if (page === 'logistics-cost') path = '/logistics/cost_analytics'
@@ -20270,6 +20341,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     else path = `/${page}`
     navigate(path)
   }
+
+  // Alerts Phase 1 click-nav: each alert carries { page, sub } (approved 2026-10-31) — restoring
+  // underlying filters (e.g. a specific channel's date range) isn't in scope for Phase 1, just
+  // landing on the right page + channel tab via the existing goTo router. `fromAlert` tracks the
+  // title of the alert that triggered the nav so the destination page can show a "From alert ✕"
+  // chip; dismissing it only clears the chip itself (there's no applied filter to clear, since
+  // filter-restoration isn't in scope for Phase 1 — see comment above).
+  const navAlert = (nav, title) => { if (nav?.page) { goTo(nav.page, nav.sub, nav.sub2, true); setFromAlert(title || null) } }
 
   const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
   const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
@@ -20401,6 +20480,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // just re-fetched here for Overview's own summary tiles.
   const [salesAllocData, setSalesAllocData] = useState(null)
   const [invSnapshotData, setInvSnapshotData] = useState(null)
+  // Fixed-window alerts (#3/#4/#6/#11) read public/alerts-data.json, produced hourly by
+  // scripts/generate-alerts-cache.mjs — never the viewer's own selected date range. Fetched once on
+  // mount; _alertsTick just forces computeCombinedAlerts' useMemo to re-run once it resolves.
+  const [_alertsTick, _setAlertsTick] = useState(0)
+  useEffect(() => { Promise.all([loadAlertsCache(), loadAlertsPhase2()]).finally(() => _setAlertsTick(t => t + 1)) }, [])
   const [overviewCustData, setOverviewCustData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
   const [adsCachedChMap, setAdsCachedChMap] = useState(null)
@@ -21052,7 +21136,28 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
   // exact same list, never two independently-computed copies that could drift.
-  const combinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts), [data, logisticsData, invSnapshotData, alerts])
+  const rawCombinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts, profile), [data, logisticsData, invSnapshotData, alerts, profile, _alertsTick])
+  // Access control: filter the raw alert list down to what this user can actually see. An alert's
+  // requiredPermission can be a single permission key, an array (sales:<channel> per fired
+  // channel — any one grants visibility), or 'admin' (profile.is_admin, not a permission-tree key).
+  // computedAt is captured once per recompute so the panel can show "as of HH:MM" and so the
+  // unread-fingerprint logic below has a stable snapshot time.
+  const alertsComputedAt = useMemo(() => new Date(), [rawCombinedAlerts])
+  // Alerts Phase 2: per-channel atoms are filtered to what this user may see BEFORE they are grouped
+  // (src/alerts/phase2Rules.js), so "Return % high: Amazon, Flipkart" never names a channel they can't open.
+  // Spikes join the bell list; fixed-target misses go to the bell's separate "Targets missed" section.
+  const phase2 = useMemo(() => computePhase2Alerts(getAlertsPhase2(), { can: k => hasPermission(allowedTabs, k), isAdmin: !!profile?.is_admin }), [allowedTabs, profile, _alertsTick])
+  const targetAlerts = phase2.targets
+  const targetsAt = getAlertsPhase2()?.targetsComputedAt || null
+  const combinedAlerts = useMemo(() => {
+    return [...rawCombinedAlerts.filter(a => {
+      const req = a.requiredPermission
+      if (!req) return true
+      if (req === 'admin') return !!profile?.is_admin
+      if (Array.isArray(req)) return req.some(k => hasPermission(allowedTabs, k))
+      return hasPermission(allowedTabs, req)
+    }), ...phase2.spikes]
+  }, [rawCombinedAlerts, allowedTabs, profile, phase2])
 
   // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
   const fbk = useFeedback()
@@ -21088,7 +21193,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
+        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} alertsComputedAt={alertsComputedAt} onAlertNav={navAlert} userId={session?.user?.id} targetAlerts={targetAlerts} targetsAt={targetsAt} />}
+        {fromAlert && (
+          <div className="from-alert-chip" style={{
+            display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px 0', padding: '5px 10px',
+            borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, width: 'fit-content',
+            fontSize: 12, color: C.t2,
+          }}>
+            <span>From alert: <strong>{fromAlert}</strong></span>
+            <button
+              onClick={() => setFromAlert(null)}
+              aria-label="Dismiss"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.t3, fontSize: 13, lineHeight: 1, padding: 0 }}
+            >✕</button>
+          </div>
+        )}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
