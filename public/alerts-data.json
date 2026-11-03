@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-11-03T12:42:15.223Z",
+  "logistics": {
+    "windowStart": "2026-10-13",
+    "windowEnd": "2026-10-19",
+    "rangeLabel": "Orders 13–19 Oct",
+    "total": 51931,
+    "delivered": 47464,
+    "rto": 3975,
+    "deliveryPct": 91.4,
+    "rtoPct": 7.65,
+    "slaBreachPct": 10.38,
+    "slaBreachAvailable": true
+  },
+  "returns": {
+    "windowStart": "2026-10-14",
+    "windowEnd": "2026-10-20",
+    "rangeLabel": "Orders 14–20 Oct",
+    "gross": 85075950.1799996,
+    "cancelPct": 5.14,
+    "rtoPct": 6.73,
+    "cirPct": 6.25,
+    "exchangePct": 5.9,
+    "totalReturnPct": 18.12
+  },
+  "zeroOrders": {
+    "date": "2026-11-02",
+    "ordersByChannel": {
+      "Shopify": {
+        "date": "2026-11-03",
+        "orders": 543
+      },
+      "Amazon": {
+        "date": "2026-11-03",
+        "orders": 272
+      },
+      "Blinkit": {
+        "date": "2026-11-02",
+        "orders": 329
+      },
+      "Zepto": {
+        "date": "2026-11-02",
+        "orders": 41
+      },
+      "Instamart": {
+        "date": "2026-11-02",
+        "orders": 33
+      },
+      "Myntra": {
+        "date": "2026-11-01",
+        "orders": 386
+      }
+    },
+    "zeroChannels": []
+  },
+  "d2cPnl": {
+    "windowStart": "2026-10-14",
+    "windowEnd": "2026-10-20",
+    "rangeLabel": "Orders 14–20 Oct",
+    "netRevenue": 62038444,
+    "cogsPct": 42.89,
+    "sndPct": 18.61,
+    "cm1Pct": 38.5
+  }
+}
