@@ -5,6 +5,7 @@ import ToolIntro from './ToolIntro.jsx'
 import ToolResultBar from '../responsive/ToolResultBar.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import { setPnlToolReset } from './pnlToolStore.js'
+import { authFetch } from '../authFetch.js'
 
 // Forward-looking, single-unit calculator for a NOT-YET-LAUNCHED product: given a listing price,
 // a discount (selling price defaults to 7% off listing — Frido's usual launch convention), COGS,
@@ -26,7 +27,7 @@ import { setPnlToolReset } from './pnlToolStore.js'
 // silently negative ROAS.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 

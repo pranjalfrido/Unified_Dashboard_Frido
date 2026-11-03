@@ -97,6 +97,7 @@ const INVENTORY_DATE_THEME = {
   t1: IC.t1, t2: IC.t2, t3: IC.t3,
 }
 import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
+import { authFetch } from './authFetch.js'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
@@ -509,9 +510,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           // Fetch main + COD + Prepaid CDN files in parallel — single loading bar
           const stPrefix = singleShipmentType ? `${singleShipmentType}-` : ''
           const [res, codRes, prepaidRes] = await Promise.all([
-            fetch(staticFile),
-            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
-            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
+            authFetch(staticFile),
+            canPrefetchPayment ? authFetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
+            canPrefetchPayment ? authFetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
           ])
           if (res.ok) {
             // Parse all 3 in parallel before touching state — single render, single loading bar
@@ -555,8 +556,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
         // await only main + prev
         const [r, rPrev] = await Promise.all([
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
+          authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+          authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
         ])
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
@@ -602,7 +603,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     const file = shipmentType
       ? `/logistics-data-${shipmentType}-${cPayment.toLowerCase()}.json`
       : `/logistics-data-${cPayment.toLowerCase()}.json`
-    fetch(file)
+    authFetch(file)
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
@@ -610,7 +611,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         // 3. Fallback: live BQ
         const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
         if (shipmentType) body.shipmentType = shipmentType
-        return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(r => r.ok ? r.json() : null)
           .then(json => { if (json) setCPaymentData(json) })
       })
@@ -838,7 +839,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
     try {
-      const r = await fetch(`${API}/api/returns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end }) })
+      const r = await authFetch(`${API}/api/returns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end }) })
       if (r.ok) setRetData(await r.json())
     } catch (e) { console.error('[returns]', e.message) }
   }, [filters.start, filters.end])
@@ -5335,7 +5336,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [], mobile = false }) 
   const width = 300, height = 300
   useEffect(() => {
     let cancelled = false
-    fetch(INDIA_TOPOJSON).then(r => r.json()).then(topo => {
+    authFetch(INDIA_TOPOJSON).then(r => r.json()).then(topo => {
       if (cancelled) return
       const geojson = topojsonFeature(topo, topo.objects.states)
       const projection = geoMercator().fitSize([width, height], geojson)
@@ -7321,7 +7322,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     if (willOpen && channel && !fetchedDateMap && !dateMapLoading) {
       setDateMapLoading(true)
       try {
-        const res = await fetch(`${API}/api/cat-daily`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: rangeStart, end: rangeEnd, channel }) })
+        const res = await authFetch(`${API}/api/cat-daily`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: rangeStart, end: rangeEnd, channel }) })
         if (res.ok) { const json = await res.json(); setFetchedDateMap(json.subCatDateMap || {}) }
       } catch (_) {}
       finally { setDateMapLoading(false) }
@@ -17280,7 +17281,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     prevCustFetchKey.current = custFetchKey
     setLoading(true)
     setCustError(null)
-    fetch(`${API}/api/customer`, {
+    authFetch(`${API}/api/customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start: filters.start, end: filters.end }),
@@ -20469,7 +20470,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     setPhaseStatus(s => ({ ...s, [k]: { status: 'loading' } }))
     try {
       const body = { start: req.start, end: req.end, ...req.extraFilters, ...(req.ch ? { channel: req.ch } : {}), phase }
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${(await res.text()).slice(0, 200)}`)
       const json = await res.json()
       if ((forceGenRef.current.get(req.reqKey) || 0) !== gen) return
@@ -20530,7 +20531,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           // API (VITE_API_URL) sent this request to the wrong host in local dev (API server runs
           // on a different port than the static file host), 404-ing every page load — harmless in
           // production only because Vercel happens to serve both from the same domain there.
-          const r = await fetch('/pnl-data.json')
+          const r = await authFetch('/pnl-data.json')
           if (r.ok) pnlCacheRef.current = await r.json()
         }
         const c = pnlCacheRef.current
@@ -20547,7 +20548,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       try {
         if (!pnlCacheRef.lastMonth) {
           // Same fix as pnl-data.json above — relative path, not API-prefixed.
-          const r = await fetch('/pnl-data-lastmonth.json')
+          const r = await authFetch('/pnl-data-lastmonth.json')
           if (r.ok) pnlCacheRef.lastMonth = await r.json()
         }
         const lm = pnlCacheRef.lastMonth
@@ -20566,7 +20567,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const fastGen = forceGenRef.current.get(reqKey) || 0
 
     try {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
@@ -20663,7 +20664,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Fall back to live BQ only if date range doesn't match.
         const tryStatic = async () => {
           try {
-            const res = await fetch('/logistics-data.json', { cache: 'no-cache' })
+            const res = await authFetch('/logistics-data.json', { cache: 'no-cache' })
             if (!res.ok) return false
             const json = await res.json()
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
@@ -20677,7 +20678,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         }
         tryStatic().then(hit => {
           if (!hit) {
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
+            authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
               .then(r => r.ok ? r.json() : null)
               .then(j => { if (j) setLogisticsData(j) })
               .catch(() => {})
@@ -20689,9 +20690,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // filter changes on other tabs don't waste BQ quota on /api/customer.
       if (page === 'overview') {
         Promise.all([
-          fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]).then(([salesAlloc, invSnapshot, custData]) => {
           if (salesAlloc) setSalesAllocData(salesAlloc)
           if (invSnapshot) setInvSnapshotData(invSnapshot)
@@ -20720,7 +20721,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       }
     }
     const post = async phase => {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra, phase }) })
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra, phase }) })
       if (!res.ok) throw new Error(`API error ${res.status}`)
       return res.json()
     }
@@ -20731,12 +20732,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }, [API, subCatFirstOrderMap])
   const loadPnlPeriod = useCallback((start, end) => loadSalesPeriod(start, end, ['pnl_detail']), [loadSalesPeriod])
   const loadLogisticsPeriod = useCallback(async (start, end) => {
-    const res = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    const res = await authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
     if (!res.ok) throw new Error(`API error ${res.status}`)
     return res.json()
   }, [API])
   const loadCustomerPeriod = useCallback(async (start, end) => {
-    const res = await fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    const res = await authFetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
     if (!res.ok) throw new Error(`API error ${res.status}`)
     return res.json()
   }, [API])
@@ -20771,7 +20772,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Same fix as pnl-data.json/pnl-data-lastmonth.json — relative path, not API-prefixed.
         // This is a static file in public/, served by the frontend's own origin, never the API
         // server; prefixing it with API (VITE_API_URL) 404'd every page load in local dev.
-        const res = await fetch('/ads-data.json')
+        const res = await authFetch('/ads-data.json')
         if (!res.ok) return
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return

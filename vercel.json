@@ -36,25 +36,25 @@
     {
       "source": "/inv-data-(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/(.*)-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/pnl-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/logistics-data(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     }
   ]

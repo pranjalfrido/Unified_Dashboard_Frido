@@ -16,6 +16,7 @@ import { toolPhoneCss } from './toolPhoneCss.js'
 import { setPnlTool, usePnlTool, clearPnlToast } from './pnlToolStore.js'
 import { DetailGate } from '../DetailGate.jsx'
 import { useDetailReady } from '../detailPhase.js'
+import { authFetch } from '../authFetch.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -130,7 +131,7 @@ function resolvedNetScale(resolvedDailySKU, rawSubCatData, subChannelFilter) {
 // SnD rates — {weightGm, forward, rto, reverse, fulfilment}, sorted ascending by weightGm.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 // Renormalizes the 4 outcome %ages (rto/cir/cancel/exchange) so they never sum above 1 — their
@@ -206,7 +207,7 @@ function loadCogsMonthly(startDate, endDate) {
   const endMonth = `${String(endDate).slice(0, 7)}-01`
   const key = `${startMonth}|${endMonth}`
   if (!cogsMonthlyCache.has(key)) {
-    cogsMonthlyCache.set(key, fetch('/api/cogs-monthly', {
+    cogsMonthlyCache.set(key, authFetch('/api/cogs-monthly', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startMonth, endMonth }),

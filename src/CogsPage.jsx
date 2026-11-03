@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabase.js";
 import { C as BASE_C } from "./utils.js";
+import { authFetch } from './authFetch.js';
 
 // ── COGS Tracker — row-wise layout ───────────────────────────────────────────
 // DB: cogs_ledger (itemskucode, month, cogs, is_explicit)
@@ -201,7 +202,7 @@ export default function CogsPage({ onBack }) {
     let ctxNow = skuContext;
     if (need.length) {
       try {
-        const res = await fetch(`${API}/api/cogs-context`, {
+        const res = await authFetch(`${API}/api/cogs-context`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ skus: need }),

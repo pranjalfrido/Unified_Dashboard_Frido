@@ -3,6 +3,7 @@
 // Display only - every figure comes from POST /api/inventory-oos (api/inventory-oos.js); these
 // helpers only filter, add up and group what it returns.
 import { useEffect, useState } from 'react'
+import { authFetch } from '../authFetch.js'
 
 const API = import.meta.env?.VITE_API_URL || ''   // ?. so the helpers also load outside Vite (tests)
 
@@ -11,7 +12,7 @@ const API = import.meta.env?.VITE_API_URL || ''   // ?. so the helpers also load
 let pending = null
 function loadOos() {
   if (!pending) {
-    pending = fetch(`${API}/api/inventory-oos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    pending = authFetch(`${API}/api/inventory-oos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(r => r.json())
       .then(j => { if (j.error) throw new Error(j.error); return j })
       .catch(e => { pending = null; throw e })

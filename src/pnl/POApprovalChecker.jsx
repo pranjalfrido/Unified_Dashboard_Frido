@@ -7,6 +7,7 @@ import ToolIntro from './ToolIntro.jsx'
 import ToolResultBar from '../responsive/ToolResultBar.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import { setPnlToolReset } from './pnlToolStore.js'
+import { authFetch } from '../authFetch.js'
 
 // Checks whether a specific PO a sales person has brought in is actually worth approving — given
 // its real Qty and Selling Price (both already fixed by the deal, not something being planned),
@@ -38,7 +39,7 @@ import { setPnlToolReset } from './pnlToolStore.js'
 //                      bars) — shown as a clear ✓ Approve / ⚠ Review flag, never silently hidden.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 // Uses pnlUtils.js's rateForWeightGm (the SAME lookup the Price Simulator/Breakeven ROAS already

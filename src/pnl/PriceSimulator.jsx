@@ -5,6 +5,7 @@ import ToolIntro from './ToolIntro.jsx'
 import ToolResultBar from '../responsive/ToolResultBar.jsx'
 import SegmentToggle from '../responsive/SegmentToggle.jsx'
 import { setPnlToolReset } from './pnlToolStore.js'
+import { authFetch } from '../authFetch.js'
 
 // Per-unit price values (Listing Price, ASP, Selling Price) are always shown in plain rupees —
 // never abbreviated to K/L like the aggregate totals (Gross/Net/CM) do via the shared fmt() —
@@ -14,7 +15,7 @@ const fmtPrice = v => (v == null || isNaN(v)) ? '₹0' : `₹${Math.round(v).toL
 
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 
