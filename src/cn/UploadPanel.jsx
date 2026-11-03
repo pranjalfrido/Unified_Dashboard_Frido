@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { FileSpreadsheet, Upload, Download, Check, X } from "lucide-react";
 import { C } from "../utils.js";
 import {
-  loadUploadType, downloadTemplate, parseFile, uploadAndValidate, revalidate, commitBatch, discardBatch,
+  loadUploadType, downloadTemplate, parseFile, uploadAndValidate, revalidate, commitBatch, discardBatch, fetchBatch,
   fetchStagedRows, fetchScopes, rowMessages, downloadErrorReport, headerFor,
 } from "./cnEngine.js";
 
@@ -33,7 +33,7 @@ function Stat({ label, value, tone }) {
 export default function UploadPanel({ type }) {
   const [cfg, setCfg] = useState(null);
   const [cfgError, setCfgError] = useState(null);
-  const [phase, setPhase] = useState("idle"); // idle | working | preview | committing | done
+  const [phase, setPhase] = useState("idle"); // idle | working | preview | committing | queued | done
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
   const [file, setFile] = useState(null);
@@ -101,16 +101,32 @@ export default function UploadPanel({ type }) {
     } finally { setProgress(null); }
   };
 
+  // After a failed save, re-run the checks so the preview shows what changed.
+  const refreshPreview = async () => {
+    try { const summary = await revalidate(batch.batchId); setBatch((b) => ({ ...b, summary })); setConfirmed(false); } catch { /* keep the old preview */ }
+    setPhase("preview");
+  };
+
   const onCommit = async () => {
     setPhase("committing"); setError(null);
     try {
-      setResult(await commitBatch(batch.batchId, batch.summary.token));
-      setPhase("done");
+      const res = await commitBatch(batch.batchId, batch.summary.token);
+      if (!res.queued) { setResult(res); setPhase("done"); return; }
+      // Large file: the database commits it in the background. Wait for the batch to settle.
+      setPhase("queued");
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const b = await fetchBatch(batch.batchId);
+        if (b.status === "committed") {
+          setResult({ batch_id: b.id, inserted_rows: b.inserted_rows, replaced_rows: b.replaced_rows, failed_rows: b.failed_rows, blocked_scopes: b.blocked_scopes });
+          setPhase("done");
+          return;
+        }
+        if (b.status !== "queued") { setError(b.commit_error ?? "The background save did not complete."); await refreshPreview(); return; }
+      }
     } catch (err) {
       setError(err.message);
-      // Show what changed: re-run the checks so the preview is current again.
-      try { const summary = await revalidate(batch.batchId); setBatch((b) => ({ ...b, summary })); setConfirmed(false); } catch { /* keep the old preview */ }
-      setPhase("preview");
+      await refreshPreview();
     }
   };
 
@@ -134,7 +150,7 @@ export default function UploadPanel({ type }) {
       {/* Actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         <button className="tool-btn" style={btn} onClick={() => downloadTemplate(cfg)}><FileSpreadsheet size={13} /> Download template</button>
-        <button className="tool-btn is-active" style={btn} onClick={() => input.current?.click()} disabled={phase === "working" || phase === "committing"}>
+        <button className="tool-btn is-active" style={btn} onClick={() => input.current?.click()} disabled={phase === "working" || phase === "committing" || phase === "queued"}>
           <Upload size={13} /> Upload file
         </button>
         <input ref={input} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{ display: "none" }} />
@@ -165,6 +181,12 @@ export default function UploadPanel({ type }) {
           {" "}{fmt(result.replaced_rows)} existing row{result.replaced_rows === 1 ? "" : "s"} replaced (archived)
           {result.failed_rows ? `, ${fmt(result.failed_rows)} not saved` : ""}{result.blocked_scopes ? ` (${result.blocked_scopes} blocked scope${result.blocked_scopes === 1 ? "" : "s"})` : ""}.
           <div style={{ marginTop: 8 }}><button className="tool-btn" onClick={reset}>Upload another file</button></div>
+        </div>
+      )}
+
+      {phase === "queued" && (
+        <div style={{ fontSize: 12.5, padding: "10px 12px", borderRadius: 8, marginBottom: 12, background: C.blue.bg, border: `1px solid ${C.blue.bd}`, color: C.blue.tx }}>
+          Saving in the background — this file touches {fmt((s?.rows_to_save ?? 0) + (s?.rows_to_replace ?? 0))} rows, too many to save in one request. It usually takes under a minute; you can leave this page and check Upload history later.
         </div>
       )}
 

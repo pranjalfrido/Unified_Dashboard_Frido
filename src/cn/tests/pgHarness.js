@@ -54,11 +54,12 @@ export async function freshDb() {
   return db;
 }
 
-// Schema + the real master seed + the upload engine.
+// Schema + the real master seed + the upload engine (with the background commit).
 export async function engineDb() {
   const db = await freshDb();
   await db.exec(sql("scripts/sql/cn/002_cn_master_seed.sql"));
   await db.exec(sql("scripts/sql/cn/003_cn_upload_engine.sql"));
+  await db.exec(sql("scripts/sql/cn/004_cn_background_commit.sql"));
   return db;
 }
 

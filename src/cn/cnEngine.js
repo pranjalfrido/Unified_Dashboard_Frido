@@ -66,6 +66,14 @@ export const revalidate = (batchId) => rpc("cn_validate_batch", { p_batch_id: ba
 export const commitBatch = (batchId, token) => rpc("cn_commit_batch", { p_batch_id: batchId, p_token: token });
 export const discardBatch = (batchId) => rpc("cn_discard_batch", { p_batch_id: batchId });
 
+// Batch status, for following a commit that runs in the background.
+export async function fetchBatch(batchId) {
+  const { data, error } = await supabase.from("cn_upload_batches")
+    .select("id, status, inserted_rows, replaced_rows, failed_rows, blocked_scopes, commit_error").eq("id", batchId).single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 const ROW_COLS = "row_no, raw, scope_key, errors, x_errors, warnings, x_warnings, has_error, has_warning, blocked_note";
 
 // One page of preview rows. filter: "all" | "errors" | "warnings".

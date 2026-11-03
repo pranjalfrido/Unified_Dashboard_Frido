@@ -331,3 +331,47 @@ describe("access", () => {
     expect(await fails(commit(b))).toMatch(/is discarded, not staged/);
   });
 });
+
+describe("background commit for large files", () => {
+  const queueThreshold = (n) => db.query(`UPDATE cn_settings SET value = $1::jsonb WHERE key = 'sync_commit_max_rows'`, [String(n)]);
+  const status = async (id) => q1(`SELECT status, inserted_rows, replaced_rows, commit_error, queued_at IS NOT NULL AS queued FROM cn_upload_batches WHERE id = $1`, [id]);
+
+  it("commits in place up to the threshold", async () => {
+    await queueThreshold(2);
+    expect(await commit(await upload([row(), row({ courier: "Swift" })]))).toMatchObject({ queued: false, inserted_rows: 2 });
+  });
+
+  it("queues a file over the threshold and lets the worker commit it as one transaction", async () => {
+    await commit(await upload([row({ received: "1" }), row({ courier: "Swift", received: "1" })]));
+    await queueThreshold(3);
+    const b = await upload([row({ received: "2" }), row({ courier: "Swift", received: "2" })]); // 2 saved + 2 replaced = 4
+    expect(await commit(b)).toEqual({ batch_id: b.id, queued: true, rows_touched: 4 });
+    expect(await status(b.id)).toMatchObject({ status: "queued", queued: true });
+    expect(await fails(as(db, USERS.uploader, () => db.query(`SELECT cn_discard_batch($1)`, [b.id])))).toMatch(/is queued, not staged/);
+    expect((await active()).map((r) => r.received_cn)).toEqual(["1.00", "1.00"]); // nothing changed yet
+
+    expect((await q1(`SELECT cn_run_commit_queue() AS n`)).n).toBe(1);
+    expect(await status(b.id)).toMatchObject({ status: "committed", inserted_rows: 2, replaced_rows: 2, commit_error: null });
+    expect((await active()).map((r) => r.received_cn)).toEqual(["2.00", "2.00"]);
+    expect((await q1(`SELECT cn_run_commit_queue() AS n`)).n).toBe(0);
+  });
+
+  it("sends a queued batch back to staged with the reason if the data changed before the worker ran", async () => {
+    await queueThreshold(0);
+    const a = await upload([row()]);
+    const b = await upload([row({ received: "9" })]);
+    expect((await commit(a)).queued).toBe(true);
+    expect((await commit(b)).queued).toBe(true);
+    await db.query(`SELECT cn_run_commit_queue()`); // a commits first, so b's scope changed
+    expect(await status(a.id)).toMatchObject({ status: "committed" });
+    expect(await status(b.id)).toMatchObject({ status: "staged", queued: false, commit_error: expect.stringMatching(/data changed since this file was previewed/) });
+    // It must be previewed again before it can be saved.
+    expect(await fails(commit(b))).toMatch(/changed since it was previewed/);
+    const again = await as(db, USERS.uploader, async () => (await q1(`SELECT cn_validate_batch($1) AS r`, [b.id])).r);
+    expect(again.scopes[0]).toMatchObject({ status: "replace", existing_rows: 1 });
+  });
+
+  it("is only callable by the database itself", async () => {
+    expect(await as(db, USERS.admin, () => fails(db.query(`SELECT cn_run_commit_queue()`)))).toMatch(/permission denied/);
+  });
+});

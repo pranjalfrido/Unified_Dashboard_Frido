@@ -462,73 +462,8 @@ BEGIN
 END $$;
 
 -- ── cn_commit_batch ──────────────────────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION public.cn_commit_batch(p_batch_id bigint, p_token text)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  b public.cn_upload_batches; t public.cn_upload_types; n_replaced int; n_inserted int; cols text; vcols text; changed int;
-BEGIN
-  b := public.cn_batch_for_caller(p_batch_id, 'staged');
-  PERFORM 1 FROM public.cn_upload_batches WHERE id = p_batch_id FOR UPDATE;
-  SELECT * INTO t FROM public.cn_upload_types WHERE code = b.upload_type;
-
-  -- One commit per upload type at a time; reads are not blocked.
-  EXECUTE format('LOCK TABLE public.%I IN SHARE ROW EXCLUSIVE MODE', t.target_table);
-
-  -- The user must have confirmed the CURRENT preview: staging more rows clears it.
-  IF b.validated_at IS NULL OR b.preview_token IS DISTINCT FROM p_token THEN
-    RAISE EXCEPTION 'This file has changed since it was previewed. Review the preview again before saving.';
-  END IF;
-  -- Masters edited since the preview could change which rows are valid.
-  IF (SELECT max(m) FROM (
-        SELECT max(updated_at) m FROM public.cn_couriers UNION ALL SELECT max(updated_at) FROM public.cn_courier_accounts
-        UNION ALL SELECT max(updated_at) FROM public.cn_transporters UNION ALL SELECT max(updated_at) FROM public.cn_3pl_partners
-        UNION ALL SELECT max(updated_at) FROM public.cn_3pl_facilities) x) > b.validated_at THEN
-    RAISE EXCEPTION 'Masters changed since this file was previewed. Review the preview again before saving.';
-  END IF;
-  -- Another upload or an edit since the preview changes what each scope replaces.
-  EXECUTE format(
-    'SELECT count(*) FROM public.cn_batch_scopes s
-       LEFT JOIN (SELECT d.month, d.%2$I AS partner_id, count(*)::int AS n FROM public.%1$I d
-                   WHERE d.is_active AND (d.month, d.%2$I) IN
-                         (SELECT (vals->>''month'')::date, (vals->>%2$L)::bigint FROM public.cn_batch_scopes WHERE batch_id = $1)
-                   GROUP BY 1, 2) e
-         ON e.month = (s.vals->>''month'')::date AND e.partner_id = (s.vals->>%2$L)::bigint
-      WHERE s.batch_id = $1 AND s.status <> ''blocked'' AND COALESCE(e.n, 0) <> s.existing_rows', t.target_table, t.partner_col)
-  INTO changed USING p_batch_id;
-  IF changed > 0 THEN
-    RAISE EXCEPTION 'The data changed since this file was previewed (someone else uploaded or edited it). Review the preview again before saving.';
-  END IF;
-  IF b.total_rows - b.failed_rows = 0 THEN
-    RAISE EXCEPTION 'Nothing to save: every row has errors or is in a blocked scope.';
-  END IF;
-
-  EXECUTE format(
-    'UPDATE public.%1$I d SET is_active = false, replaced_by_batch_id = $1, replaced_at = now()
-       FROM public.cn_batch_scopes s
-      WHERE s.batch_id = $1 AND s.status <> ''blocked'' AND d.is_active
-        AND d.month = (s.vals->>''month'')::date AND d.%2$I = (s.vals->>%2$L)::bigint', t.target_table, t.partner_col)
-  USING p_batch_id;
-  GET DIAGNOSTICS n_replaced = ROW_COUNT;
-
-  SELECT string_agg(quote_ident(c), ', '), string_agg('v.' || quote_ident(c), ', ') INTO cols, vcols FROM unnest(t.insert_cols) c;
-  EXECUTE format(
-    'INSERT INTO public.%1$I (%2$s, batch_id, source_row_no)
-     SELECT %3$s, $1, r.row_no
-       FROM public.cn_staging_rows r
-       JOIN public.cn_batch_scopes s ON s.batch_id = r.batch_id AND s.scope_key = r.scope_key AND s.status <> ''blocked''
-      CROSS JOIN LATERAL jsonb_populate_record(NULL::public.%1$I, r.parsed) v
-      WHERE r.batch_id = $1 AND NOT r.has_error', t.target_table, cols, vcols)
-  USING p_batch_id;
-  GET DIAGNOSTICS n_inserted = ROW_COUNT;
-
-  UPDATE public.cn_upload_batches
-     SET status = 'committed', committed_at = now(), inserted_rows = n_inserted, replaced_rows = n_replaced
-   WHERE id = p_batch_id;
-
-  RETURN jsonb_build_object('batch_id', p_batch_id, 'inserted_rows', n_inserted, 'replaced_rows', n_replaced,
-                            'failed_rows', b.failed_rows, 'blocked_scopes', b.blocked_scopes);
-END $$;
+-- Defined in 004_cn_background_commit.sql (commits in place, or queues a large file for the
+-- background worker).
 
 -- ── cn_rollback_batch ────────────────────────────────────────────────────────
 
@@ -691,9 +626,9 @@ REVOKE EXECUTE ON FUNCTION
   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION
   public.cn_create_batch(text, text, text[]), public.cn_stage_rows(bigint, jsonb), public.cn_validate_batch(bigint),
-  public.cn_commit_batch(bigint, text), public.cn_rollback_batch(bigint), public.cn_discard_batch(bigint)
+  public.cn_rollback_batch(bigint), public.cn_discard_batch(bigint)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION
   public.cn_create_batch(text, text, text[]), public.cn_stage_rows(bigint, jsonb), public.cn_validate_batch(bigint),
-  public.cn_commit_batch(bigint, text), public.cn_rollback_batch(bigint), public.cn_discard_batch(bigint)
+  public.cn_rollback_batch(bigint), public.cn_discard_batch(bigint)
   TO authenticated;
