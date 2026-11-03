@@ -16,6 +16,7 @@ export const NAV_PAGES = [
   { id: 'cogs', label: 'COGS Ledger', group: 'tools', desc: 'Cost of goods by SKU and month' },
   { id: 'courier-allocation', label: 'Courier Allocation', group: 'tools', desc: 'Which courier ships where' },
   { id: 'logistics-ledger', label: 'Logistics Bill Ledger', group: 'tools', desc: 'Freight and courier invoices' },
+  { id: 'logistics-cn', label: 'Logistics Credit Notes', group: 'tools', desc: 'Credit notes expected and received' },
   { id: 'purchase-ledger', label: 'Purchase Ledger', group: 'tools', desc: 'Domestic, import and packaging purchases' },
   { id: 'packaging-bom', label: 'Packaging BOM', group: 'tools', desc: 'Packaging per product' },
 ]
@@ -29,7 +30,7 @@ export const NAV_KEYWORDS = {
   stock: 'inventory', doi: 'inventory', allocation: 'inventory', warehouse: 'inventory',
   return: 'sales', revenue: 'sales', orders: 'sales', channel: 'sales',
   feedback: 'feedback', bug: 'feedback', report: 'feedback',
-  cogs: 'cogs', cost: 'cogs', invoice: 'logistics-ledger', freight: 'logistics-ledger', purchase: 'purchase-ledger', packaging: 'packaging-bom',
+  cogs: 'cogs', cost: 'cogs', invoice: 'logistics-ledger', cn: 'logistics-cn', 'credit note': 'logistics-cn', freight: 'logistics-ledger', purchase: 'purchase-ledger', packaging: 'packaging-bom',
 }
 
 export const DEFAULT_DOCK = ['overview', 'sales', 'pnl', 'inventory', 'logistics', 'customer']
