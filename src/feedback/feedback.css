@@ -129,3 +129,9 @@
 .fb-form.fb-kb .fb-chip, .fb-form.fb-kb .fb-ghost, .fb-form.fb-kb .fb-urgent { min-height: 36px; }
 .fb-sheet .fb-actions { margin-top: 0; }
 .fb-sheet .fb-cancel, .fb-sheet .fb-send { min-height: 44px; }
+
+.fbx-tabs { display: flex; gap: 6px; padding: 14px 24px 0; }
+.fbx-tabs button { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #d5dbd7; background: #fff; color: #1c2420; font-size: 13px; font-weight: 700; cursor: pointer; }
+.fbx-tabs button.on { background: #1f5a3d; border-color: #1f5a3d; color: #fff; }
+.fbx-single { max-width: 720px; padding: 16px 24px 24px; }
+@media (max-width: 768px) { .fbx-tabs { padding: 12px 16px 0; } .fbx-single { padding: 12px 16px 24px; } }
