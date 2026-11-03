@@ -1,0 +1,19 @@
+[
+  { "label": "1mo_oct", "body": { "start": "2026-10-01", "end": "2026-10-29" } },
+  { "label": "3mo_aug_oct", "body": { "start": "2026-08-01", "end": "2026-10-29" } },
+  { "label": "5mo_jun_oct", "body": { "start": "2026-06-01", "end": "2026-10-29" } },
+  { "label": "category", "body": { "start": "2026-10-01", "end": "2026-10-29", "category": "Orthotics" } },
+  { "label": "subCategory", "body": { "start": "2026-10-01", "end": "2026-10-29", "subCategory": "Orthotics Posture Corrector Pro" } },
+  { "label": "state", "body": { "start": "2026-10-01", "end": "2026-10-29", "state": "MAHARASHTRA" } },
+  { "label": "sku", "body": { "start": "2026-10-01", "end": "2026-10-29", "sku": "FR-OPPC-L1" } },
+  { "label": "subChannel_ShopifyIndia", "body": { "start": "2026-10-01", "end": "2026-10-29", "subChannel": "ShopifyIndia" } },
+  { "label": "subChannel_MyFrido", "body": { "start": "2026-10-01", "end": "2026-10-29", "subChannel": "MyFrido" } },
+  { "label": "subChannel_Mobility", "body": { "start": "2026-10-01", "end": "2026-10-29", "subChannel": "Mobility" } },
+  { "label": "voucher", "body": { "start": "2026-10-01", "end": "2026-10-29", "voucher": "pd20" } },
+  { "label": "region", "body": { "start": "2026-10-01", "end": "2026-10-29", "region": "West" } },
+  { "label": "tier", "body": { "start": "2026-10-01", "end": "2026-10-29", "tier": "Tier I" } },
+  { "label": "city", "body": { "start": "2026-10-01", "end": "2026-10-29", "city": "MUMBAI" } },
+  { "label": "country_intl", "body": { "start": "2026-10-01", "end": "2026-10-29", "subChannel": "International", "country": "UAE" } },
+  { "label": "paymentType", "body": { "start": "2026-10-01", "end": "2026-10-29", "paymentType": "Prepaid" } },
+  { "label": "channelGroup", "body": { "start": "2026-10-01", "end": "2026-10-29", "channelGroup": "marketplace" } }
+]
