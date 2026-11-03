@@ -33,7 +33,7 @@ export default function AppBanner() {
 
   if (!phone) return null
   const standalone = isStandalone()
-  const update = standalone && hasUpdate()
+  const update = hasUpdate() // installed app or browser tab: a deploy is waiting
   const ios = !standalone && isIOS()
   const android = !standalone && canPromptInstall()
   if (!update && (hidden || (!ios && !android))) return null

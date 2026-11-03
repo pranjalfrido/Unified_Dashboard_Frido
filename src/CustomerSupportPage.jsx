@@ -11,6 +11,7 @@ import CustomerSupportMobile from './customer/CustomerSupportMobile.jsx'
 import { C as BASE_C, fmtN, exportCSV } from './utils.js'
 import { yesterdayStillLoading, SUPPORT_LOAD_NOTE, orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
 import InfoStrip from './responsive/InfoStrip.jsx'
+import { authFetch } from './authFetch.js'
 
 // Customer Support (CC dashboard): Freshdesk tickets + Ozonetel calls + Shopify D2C orders,
 // laid out as the CC spec sheet does — KPIs down the side, periods across (Day 1..7,
@@ -687,7 +688,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   useEffect(() => {
     const ctl = new AbortController()
     setLoading(true); setError(null)
-    fetch(`${API}/api/customer-support`, {
+    authFetch(`${API}/api/customer-support`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
       body: JSON.stringify({ grain, start: dateRange?.start, end: dateRange?.end, refresh: refreshTick > 0 || undefined }),
     })
@@ -719,7 +720,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
     const body = dGrain === 'day' && end ? { grain: 'day', start: shiftDay(end, -7), end }
       : { grain: dGrain, end, periods: dGrain === 'week' ? 4 : 3 }
     setDLoading(true); setDError(null)
-    fetch(`${API}/api/customer-support`, {
+    authFetch(`${API}/api/customer-support`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
       body: JSON.stringify({ ...body, refresh: refreshTick > 0 || undefined }),
     })

@@ -12,6 +12,7 @@ export const NAV_PAGES = [
   { id: 'ads', label: 'Ads', group: 'analytics', desc: 'Spend, ROAS and campaigns' },
   { id: 'documents', label: 'Documents', group: 'workspace', desc: 'Ledgers and uploads' },
   { id: 'ask', label: 'NavAI', group: 'workspace', desc: 'Ask questions about the data' },
+  { id: 'feedback', label: 'Feedback', group: 'workspace', desc: 'Reports and ideas from your team' },
   { id: 'cogs', label: 'COGS Ledger', group: 'tools', desc: 'Cost of goods by SKU and month' },
   { id: 'courier-allocation', label: 'Courier Allocation', group: 'tools', desc: 'Which courier ships where' },
   { id: 'logistics-ledger', label: 'Logistics Bill Ledger', group: 'tools', desc: 'Freight and courier invoices' },
@@ -27,6 +28,7 @@ export const NAV_KEYWORDS = {
   margin: 'pnl', cm1: 'pnl', cm2: 'pnl', profit: 'pnl', gm: 'pnl',
   stock: 'inventory', doi: 'inventory', allocation: 'inventory', warehouse: 'inventory',
   return: 'sales', revenue: 'sales', orders: 'sales', channel: 'sales',
+  feedback: 'feedback', bug: 'feedback', report: 'feedback',
   cogs: 'cogs', cost: 'cogs', invoice: 'logistics-ledger', freight: 'logistics-ledger', purchase: 'purchase-ledger', packaging: 'packaging-bom',
 }
 

@@ -14,6 +14,9 @@ import { buildFinancialRows } from './financialRows.js'
 import UndoToast from '../responsive/UndoToast.jsx'
 import { toolPhoneCss } from './toolPhoneCss.js'
 import { setPnlTool, usePnlTool, clearPnlToast } from './pnlToolStore.js'
+import { DetailGate } from '../DetailGate.jsx'
+import { useDetailReady } from '../detailPhase.js'
+import { authFetch } from '../authFetch.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -128,7 +131,7 @@ function resolvedNetScale(resolvedDailySKU, rawSubCatData, subChannelFilter) {
 // SnD rates — {weightGm, forward, rto, reverse, fulfilment}, sorted ascending by weightGm.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 // Renormalizes the 4 outcome %ages (rto/cir/cancel/exchange) so they never sum above 1 — their
@@ -204,7 +207,7 @@ function loadCogsMonthly(startDate, endDate) {
   const endMonth = `${String(endDate).slice(0, 7)}-01`
   const key = `${startMonth}|${endMonth}`
   if (!cogsMonthlyCache.has(key)) {
-    cogsMonthlyCache.set(key, fetch('/api/cogs-monthly', {
+    cogsMonthlyCache.set(key, authFetch('/api/cogs-monthly', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startMonth, endMonth }),
@@ -249,6 +252,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // Phones: an open tool takes over the header ("‹ D2C  Price Simulator", PNL_REVIEW_FIXES.md §2).
   // The hidden previous-period instance (summaryOnly) never touches it.
   const toolStore = usePnlTool()
+  // Every P&L view (KPI cards, waterfall, Financial View, tools) mixes headline totals with the
+  // pnl_detail group of /api/bq (SKU cost / SnD / sales rows) — staged loading: the channel content
+  // shows one loader (or an inline error + Retry) until that group lands; tabs stay usable.
+  const pnlDetailReady = useDetailReady()
   useEffect(() => {
     if (summaryOnly) return
     const backLabel = activeTab === 'offline' ? 'Offline' : PNL_TABS.find(t => t.id === activeTab)?.label || 'P&L'
@@ -2294,7 +2301,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           <style>{`${toolPhoneCss()}.pnl-tool-phone input,.pnl-tool-phone select,.pnl-tool-phone textarea{font-size:16px!important;color:${C.m.ink}!important}.pnl-tool-phone{padding-bottom:72px}`}</style>
         )}
         {phoneHeader && activeTool && <UndoToast toast={toolStore.toast} onDone={clearPnlToast} />}
-        {activeTool === 'priceSimulator' ? (
+        {!pnlDetailReady ? (
+          <DetailGate label="Loading P&L detail (costs, SnD, margins)" height={420} />
+        ) : activeTool === 'priceSimulator' ? (
           <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><PriceSimulator key={toolProduct || 'none'} variantProducts={d2cProductList} productGroups={d2cProductGroups} initialProductKey={toolProduct} phone={phoneHeader} /></div>
         ) : activeTool === 'breakevenRoas' ? (
           <div className={phoneHeader ? 'pnl-tool-phone' : undefined}><BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} phone={phoneHeader} /></div>
@@ -2354,7 +2363,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           } : null}
         />
         )}
-        {!activeTool && activeTab === 'ebo' && !mobileLayout && <StorePnLTable rows={storePnLRows} />}
+        {pnlDetailReady && !activeTool && activeTab === 'ebo' && !mobileLayout && <StorePnLTable rows={storePnLRows} />}
         {needPrevPayload && prevView.data && prevPeriodRange && (
           <PnLPage data={prevView.data} filters={{ ...filters, start: prevPeriodRange.start, end: prevPeriodRange.end }} summaryOnly
             onSummary={values => { writePrevSummary(viewSig, values); setPrevSummaryRaw({ sig: viewSig, values }) }}

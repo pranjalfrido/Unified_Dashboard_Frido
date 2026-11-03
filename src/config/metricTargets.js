@@ -189,9 +189,9 @@ export const ALERT_RULES = {
   // (+ overrides) except where set here. D2C CM1 38.5 / COGS 43 per the backtest. SnD bars per channel
   // from the backtest (≈ p90 + 1 pt). Offline (CM1 / GM / COGS) and CRED COGS are far off their bars every
   // week, so they are TARGETS (Targets missed), not spikes.
-  // HOLD: pnlAlertsEnabled stays false until the live D2C P&L for 1-30 Oct has been read against
-  // docs/ALERTS_PHASE2_BACKTEST.md ("P&L reconciliation"); flip to true to switch #8-#11 on.
-  pnlAlertsEnabled: false,
+  // ON since 2026-11-03: Suraj read the live D2C P&L for 1-31 Oct (CM1 39.2 / COGS 41.9 / SnD 18.9) and it matches
+  // the headless render exactly (docs/ALERTS_PHASE2_BACKTEST.md, "P&L reconciliation"); the Phase 1 notes were wrong.
+  pnlAlertsEnabled: true,
   pnlBarOverrides: { shopify: { cm1: 38.5, cogs: 43 } },
   pnlSndMax: { shopify: 20, amazon: 31, flipkart: 28, ebo: 13, offline: 12, blinkit: 45, zepto: 33, instamart: 32 },
   pnlTargetOnly: { offline: ['cm1', 'gm', 'cogs'], cred: ['cogs'] },

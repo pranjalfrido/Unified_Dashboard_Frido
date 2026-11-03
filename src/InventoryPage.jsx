@@ -9,6 +9,7 @@ import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
 import InvTabletBar from './inventory/mobile/InvTabletBar.jsx'
+import { authFetch } from './authFetch.js'
 
 // Inventory Health's Avg Sale/DOI always use useEndpoint's default trailing-7-day window
 // (getDefaultDates()) — no visible date picker for that tab, so those numbers always read
@@ -117,7 +118,7 @@ function useEndpoint(path, extraFilters, enabled = true) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API}${path}`, {
+      const res = await authFetch(`${API}${path}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
@@ -169,7 +170,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`${API}${fallbackApiPath}`, {
+      const res = await authFetch(`${API}${fallbackApiPath}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ start, end, ...fallbackBodyRef.current }),
       })
@@ -194,7 +195,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
-      const res = await fetch(staticPath)
+      const res = await authFetch(staticPath)
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
@@ -323,7 +324,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
     setError(null)
     let staticOk = false
     try {
-      const res = await fetch(`/inv-data-${windowDays}d.json`, { cache: 'no-store' })
+      const res = await authFetch(`/inv-data-${windowDays}d.json`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
@@ -337,7 +338,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
       // fallback: hit live API
       try {
         const { start, end } = getDefaultDates()
-        const res2 = await fetch(`${API}/api/inventory`, {
+        const res2 = await authFetch(`${API}/api/inventory`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ start, end, avgSaleWindowDays: windowDays }),
         })

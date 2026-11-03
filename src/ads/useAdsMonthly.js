@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { authFetch } from '../authFetch.js'
 
 // Ads "Last 6 months" (ADS_MASTER_PLAN.md Part B §1.2): 5 full calendar months + the current month to
 // yesterday, independent of the date picker. One POST /api/bq { adsMonthly } per session (sessionStorage).
@@ -24,7 +25,7 @@ export function useAdsMonthly(enabled = true) {
   useEffect(() => {
     if (!enabled || state.status !== 'idle') return
     let gone = false
-    fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adsMonthly: true, from: win.from, to: win.to }) })
+    authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adsMonthly: true, from: win.from, to: win.to }) })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(data => {
         if (gone) return

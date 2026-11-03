@@ -11,6 +11,7 @@ import CostOverviewMobile from './logistics/mobile/CostOverviewMobile.jsx'
 import CostB2CMobile from './logistics/mobile/CostB2CMobile.jsx'
 import CostFtlMobile from './logistics/mobile/CostFtlMobile.jsx'
 import Cost3plMobile from './logistics/mobile/Cost3plMobile.jsx'
+import { authFetch } from './authFetch.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -1801,7 +1802,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
         const wantsStatic = isDefaultFilters && !baseData
         if (wantsStatic) {
-          const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
+          const staticRes = await authFetch('/logistics-cost-data.json', { signal: ctl.signal, cache: 'no-cache' }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
@@ -1810,7 +1811,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         }
 
         if (!j) {
-          const res = await fetch(`${API}/api/logistics-cost`, {
+          const res = await authFetch(`${API}/api/logistics-cost`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: filterKey,
@@ -3571,7 +3572,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const rawExport = useMemo(() => ({
     label: 'Raw invoice rows',
     run: async () => {
-      const res = await fetch(`${API}/api/logistics-cost`, {
+      const res = await authFetch(`${API}/api/logistics-cost`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rawExport', scope, months: filters.months || [] }),

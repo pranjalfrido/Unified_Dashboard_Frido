@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle } from '@phosphor-icons/react'
+import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle, ThumbsDown } from '@phosphor-icons/react'
 import NavAIIcon from './NavAIIcon.jsx'
+import { useFeedback } from '../feedback/feedbackCtx.js'
+import { ranQuery } from './ranQuery.js'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { renderMarkdown, splitAnswer } from './markdown.js'
@@ -57,14 +59,16 @@ function Who({ model }) {
   )
 }
 
-function Answer({ msg }) {
+function Answer({ msg, question, isAdmin }) {
   const [sqlOpen, setSqlOpen] = useState(false)
+  const fbk = useFeedback()
+  const showSql = isAdmin && ranQuery(msg.sql) // admins only, and only when a query really ran
   const blocks = useMemo(() => (msg.text ? splitAnswer(msg.text) : []), [msg.text])
   if (msg.thinking) return <div className="pm-ai"><Who /><div className="af-thinking"><span /><span /><span /></div></div>
   if (isError(msg)) return <div className="pm-ai"><Who /><div className="pm-err" role="alert">{msg.text}</div></div>
   return (
     <div className="pm-ai">
-      <Who model={msg.model} />
+      <Who model={isAdmin ? msg.model : undefined} />
       {blocks.length > 0 && (
         <div className="af-answer pm-answer">
           {blocks.map((b, i) => b.type === 'table' ? <PulseTable key={i} headers={b.headers} rows={b.rows} />
@@ -73,17 +77,22 @@ function Answer({ msg }) {
         </div>
       )}
       {msg.assumptions && <div className="af-assumptions">Assumptions: {msg.assumptions}</div>}
-      {(msg.matchesDashboard || msg.sql) && (
+      {(msg.matchesDashboard || showSql) && (
         <div className="pm-acts">
           {msg.matchesDashboard && <span className="pm-act"><CheckCircle size={13} weight="fill" />Matches dashboard</span>}
-          {msg.sql && (
+          {showSql && (
             <button type="button" className="pm-act" aria-expanded={sqlOpen} onClick={() => setSqlOpen(o => !o)}>
               <Code size={13} />{sqlOpen ? 'Hide SQL' : 'Show SQL'}
             </button>
           )}
         </div>
       )}
-      {sqlOpen && msg.sql && <pre className="pm-sql">{msg.sql}</pre>}
+      {sqlOpen && showSql && <pre className="pm-sql">{msg.sql}</pre>}
+      {msg.text && (
+        <button type="button" className="fb-report" data-testid="report-answer" onClick={() => fbk.open({ type: 'wrong_number', ai: { question, answer: msg.text } })}>
+          <ThumbsDown size={14} /> Report this answer
+        </button>
+      )}
     </div>
   )
 }
@@ -366,10 +375,11 @@ export default function PulseMobile({ conversations, activeId, active, sending, 
       <div ref={scroller} className="pm-thread">
         {inChat ? (
           <div className="pm-thread-inner">
-            {messages.map(m => {
+            {messages.map((m, idx) => {
               if (m.role === 'user') return <div key={m.id} className="pm-me">{m.text}</div>
               if (m.clarify) return <Clarify key={m.id} msg={m} onChoice={onClarifyChoice} />
-              return <Answer key={m.id} msg={m} />
+              const q = [...messages.slice(0, idx)].reverse().find(x => x.role === 'user')?.text || ''
+              return <Answer key={m.id} msg={m} question={q} isAdmin={userProfile?.isAdmin === true} />
             })}
           </div>
         ) : (
