@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-04T18:08:30.487Z",
+  "generatedAt": "2026-11-04T19:08:10.384Z",
   "logistics": {
     "windowStart": "2026-10-14",
     "windowEnd": "2026-10-20",
@@ -24,7 +24,7 @@
     "totalReturnPct": 18.11
   },
   "zeroOrders": {
-    "date": "2026-11-03",
+    "date": "2026-11-04",
     "ordersByChannel": {
       "Shopify": {
         "date": "2026-11-04",
