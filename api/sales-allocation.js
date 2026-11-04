@@ -137,7 +137,10 @@ export default async function salesAllocationHandler(req, res) {
     }
     let lastSalesDateConsidered = null
     if (maxSalesDate) {
-      lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
+      // max date is today's partial feed: report the last COMPLETE day (max - 1)
+      const d = new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z')
+      d.setDate(d.getDate() - 1)
+      lastSalesDateConsidered = d.toISOString().slice(0, 10)
     }
 
     const itemMaster = new Map()
