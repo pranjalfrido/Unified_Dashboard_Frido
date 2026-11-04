@@ -65,6 +65,8 @@ export async function engineDb() {
   await db.exec(sql("scripts/sql/cn/005_cn_more_upload_types.sql"));
   await db.exec(sql("scripts/sql/cn/006_cn_listing.sql"));
   await db.exec(sql("scripts/sql/cn/007_cn_fixes.sql"));
+  await db.exec(sql("scripts/sql/cn/008_cn_more_accounts.sql"));
+  await db.exec(sql("scripts/sql/cn/009_cn_lost_damage_by_month.sql"));
   return db;
 }
 

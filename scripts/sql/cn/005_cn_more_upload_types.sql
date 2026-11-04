@@ -111,24 +111,7 @@ BEGIN
    WHERE s.batch_id = p_batch_id AND s.row_no = x.row_no;
 END $$;
 
--- AWB + reason is unique among active rows across ALL months and couriers, and an upload
--- only replaces the scopes it contains. So an AWB + reason already saved under a scope this
--- file doesn't cover can't be saved again here; say where it is.
-CREATE OR REPLACE FUNCTION public.cn_cross_lost_damage(p_batch_id bigint)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  UPDATE public.cn_staging_rows s
-     SET x_errors = s.x_errors || format(
-           'AWB %s (%s) is already saved under %s / %s — only a file for that month and courier can replace it',
-           d.awb, d.reason, public.cn_month_label(d.month), c.name)
-    FROM public.cn_lost_damage d
-    JOIN public.cn_couriers c ON c.id = d.courier_id
-   WHERE s.batch_id = p_batch_id AND NOT s.has_error AND s.scope_key IS NOT NULL
-     AND d.is_active AND d.awb = s.parsed->>'awb' AND d.reason = s.parsed->>'reason'
-     AND (d.month::text || '|' || d.courier_id) <> s.scope_key
-     AND (d.month::text || '|' || d.courier_id) NOT IN
-         (SELECT DISTINCT scope_key FROM public.cn_staging_rows WHERE batch_id = p_batch_id AND scope_key IS NOT NULL);
-END $$;
+-- Cross-row check (cn_cross_lost_damage) is in 009_cn_lost_damage_by_month.sql.
 
 -- ── FTL/PTL ──────────────────────────────────────────────────────────────────
 
@@ -207,7 +190,7 @@ VALUES
 (
   'lost_damage', 'Lost/Damage/SLA Breach CN', 2, 'lost_damage_sla_cn_template.xlsx',
   'cn_lost_damage', 'courier_id', 'cn_couriers', 'Courier', NULL,
-  ARRAY['awb', 'reason'], 'AWB + Reason',
+  ARRAY['awb', 'reason', 'month'], 'AWB + Reason + Month',
   ARRAY['awb', 'month', 'courier_id', 'courier_account_id', 'reason', 'shipment_value', 'expected_cn',
         'expected_cn_defaulted', 'cn_received_amt', 'cn_number'],
   'cn_rows_lost_damage', 'cn_cross_lost_damage',
@@ -283,6 +266,6 @@ ON CONFLICT (code) DO UPDATE SET
 REVOKE EXECUTE ON FUNCTION
   public.cn_courier_lookup(text, text),
   public.cn_rows_weight_dispute(bigint, int, int),
-  public.cn_rows_lost_damage(bigint, int, int), public.cn_cross_lost_damage(bigint),
+  public.cn_rows_lost_damage(bigint, int, int),
   public.cn_rows_ftl_ptl(bigint, int, int), public.cn_rows_3pl(bigint, int, int)
   FROM PUBLIC, anon, authenticated;

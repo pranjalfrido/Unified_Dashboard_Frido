@@ -189,20 +189,21 @@ describe("scopes", () => {
     expect((await active()).map((r) => r.courier)).toEqual(["Bluedart"]);
   });
 
-  it("block every scope an unreadable month or unknown courier could belong to", async () => {
+  it("block a courier's scopes for an unreadable month, but let an unknown courier block only itself", async () => {
     const b = await upload([
       row({ courier: "Delhivery", month: label(2) }),
       row({ courier: "Delhivery", month: label(3) }),
       row({ courier: "Bluedart", month: label(2) }),
       row({ courier: "Bluedart", month: label(3) }),
-      row({ courier: "Delhivery", month: "??" }),   // blocks both Delhivery scopes
-      row({ courier: "Bluedrat", month: label(3) }), // blocks both scopes of that month
+      row({ courier: "Delhivery", month: "??" }),   // could be either Delhivery month: blocks both
+      row({ courier: "Bluedrat", month: label(3) }), // unknown courier: blocks nothing else
     ]);
     const st = Object.fromEntries(b.v.scopes.map((s) => [s.label, s.status]));
     expect(st).toEqual({
       [`${label(2)} / Delhivery`]: "blocked", [`${label(3)} / Delhivery`]: "blocked",
-      [`${label(2)} / Bluedart`]: "new", [`${label(3)} / Bluedart`]: "blocked",
+      [`${label(2)} / Bluedart`]: "new", [`${label(3)} / Bluedart`]: "new",
     });
+    expect(b.v).toMatchObject({ error_rows: 2, rows_to_save: 2 });
   });
 });
 

@@ -46,21 +46,31 @@ describe("errors", () => {
     expect(rows[3].errors[0]).toMatch(/Month .* is in the future/);
   });
 
-  it("treat the same AWB + reason twice in a file as a duplicate, but allow one AWB under two reasons", async () => {
-    const b = await t.upload([t.row(), t.row({ awb: "awb1001" }), t.row({ reason: "High Ageing" })]);
+  it("treat the same AWB + reason + month twice as a duplicate, but allow another reason or another month", async () => {
+    const b = await t.upload([t.row(), t.row({ awb: "awb1001" }), t.row({ reason: "High Ageing" }), t.row({ month: label(3) })]);
     const rows = await t.staged(b.id);
-    expect(rows.map((r) => r.errors)).toEqual([[], ["Duplicate of row 2 (same AWB + Reason)"], []]);
+    expect(rows.map((r) => r.errors)).toEqual([[], ["Duplicate of row 2 (same AWB + Reason + Month)"], [], []]);
   });
 
-  it("refuse an AWB + reason that is already saved under a month/courier this file doesn't cover", async () => {
-    await t.commit(await t.upload([t.row({ month: label(3) })]));
-    const b = await t.upload([t.row({ month: label(2) })]);
-    expect((await t.staged(b.id))[0].errors).toEqual([`AWB AWB1001 (Lost/Damage) is already saved under ${label(3)} / Bluedart — only a file for that month and courier can replace it`]);
-    // …but the same AWB can move when the file also covers its old scope.
-    const both = await t.upload([t.row({ month: label(2) }), t.row({ awb: "AWB2000", month: label(3) })]);
+  it("save the same AWB + reason in two months as two claims", async () => {
+    await t.commit(await t.upload([t.row({ month: label(3) }), t.row({ month: label(2) })]));
+    expect((await active()).map((r) => r.awb)).toEqual(["AWB1001", "AWB1001"]);
+  });
+
+  it("refuse a claim already saved for the same month under another courier this file doesn't cover", async () => {
+    await t.commit(await t.upload([t.row({ courier: "Bluedart" })]));
+    const b = await t.upload([t.row({ courier: "Delhivery" })]);
+    expect((await t.staged(b.id))[0].errors).toEqual([`AWB AWB1001 (Lost/Damage) for this month is already saved under ${label(2)} / Bluedart — only a file for that month and courier can replace it`]);
+    // …but it can move when the file also covers its old scope.
+    const both = await t.upload([t.row({ courier: "Delhivery" }), t.row({ awb: "AWB2000", courier: "Bluedart" })]);
     expect(both.v).toMatchObject({ error_rows: 0, rows_to_save: 2, rows_to_replace: 1 });
     await t.commit(both);
-    expect((await active()).map((r) => r.awb)).toEqual(["AWB1001", "AWB2000"]);
+    expect((await active()).map((r) => [r.awb, r.courier])).toEqual([["AWB1001", "Delhivery"], ["AWB2000", "Bluedart"]]);
+  });
+
+  it("let a row with an unknown courier block only itself", async () => {
+    const b = await t.upload([t.row(), t.row({ awb: "X1", courier: "Hexalog" }), t.row({ awb: "D1", courier: "Delhivery" })]);
+    expect(b.v).toMatchObject({ error_rows: 1, rows_to_save: 2, blocked_scopes: 0 });
   });
 });
 

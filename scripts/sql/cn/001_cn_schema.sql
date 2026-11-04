@@ -263,8 +263,9 @@ CREATE TABLE IF NOT EXISTS public.cn_lost_damage (
   FOREIGN KEY (courier_id, courier_account_id) REFERENCES public.cn_courier_accounts (courier_id, id)
 );
 
+-- One active claim per AWB, reason and month: a claim can recur in a later month.
 CREATE UNIQUE INDEX IF NOT EXISTS cn_lost_damage_active_key
-  ON public.cn_lost_damage (awb, reason) WHERE is_active;
+  ON public.cn_lost_damage (awb, reason, month) WHERE is_active;
 CREATE INDEX IF NOT EXISTS cn_lost_damage_awb ON public.cn_lost_damage (awb);
 CREATE INDEX IF NOT EXISTS cn_lost_damage_courier_month ON public.cn_lost_damage (courier_id, month) WHERE is_active;
 CREATE INDEX IF NOT EXISTS cn_lost_damage_month ON public.cn_lost_damage (month) WHERE is_active;
