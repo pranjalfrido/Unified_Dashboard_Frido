@@ -4,7 +4,7 @@ import { fmtInt, fmtCurrency } from '../theme.jsx'
 import MobileRankedList from '../../responsive/MobileRankedList.jsx'
 import SegmentToggle from '../../responsive/SegmentToggle.jsx'
 import FullScreenList from '../../responsive/FullScreenList.jsx'
-import { Card, Chips, ChipRow, ShowAllButton, RowText } from './ui.jsx'
+import { Card, Chips, ChipRow, ShowAllButton, RowText } from '../../responsive/CardKit.jsx'
 import { topProductsFrom } from './saMobileData.js'
 
 // Sales & Allocation mobile: Top products and Biggest movers (INVENTORY_MOBILE_REDESIGN_PROMPT.md §3d-e).

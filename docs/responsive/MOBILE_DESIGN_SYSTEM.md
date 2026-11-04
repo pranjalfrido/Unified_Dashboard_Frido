@@ -11,7 +11,10 @@
 **Colours — calm, one palette**
 | Token | Use |
 |---|---|
-| Frido green `#1f5a3d` (+ dark `#0f2a1d`, header gradient `#0f2a1d → #1c4630`) | brand, header, bars, selected states, primary buttons |
+| Frido green `#1f5a3d` (+ dark `#0f2a1d`) | brand, bars, selected states, primary buttons; the page header (below) |
+| Header deep green: gradient `linear-gradient(160deg, #1a4d34 0%, #1f5a3d 55%, #266b49 100%)`, shadow `0 8px 18px -8px rgba(20,50,35,.45)`, title `#fff`, context `#a9c9b6`, chip text `#c8dfd1`, icons `#d8e8de`, pressed `rgba(255,255,255,.10)`, date pill `rgba(255,255,255,.14)`, accent mint `#9fe0b9` (filter count, active underline, focus ring), notification dot `#e5534b` (`C.m.hdr`) | the phone page header (see `MobilePageHeader`) |
+| Bottom bar `#fbfaf7`, inactive icon `#8a938e`, hairline + shadow `0 -1px 0 #e6e2d8, 0 -6px 16px -6px rgba(28,52,40,.14)` (`C.m.nav`) | the phone bottom bar (see `MobileBottomNav`) |
+| Login band gradient `#0f2a1d → #1c4630` | the login page only (a brand moment) |
 | Green shades `#5f8f75`, `#9cc4ad`, `#d5dbd7` | secondary series, stacked parts |
 | Ink `#1c2420` | all values and titles |
 | Muted `#7b847f` | labels, captions |
@@ -23,7 +26,7 @@
 - Direction-aware good/bad: lower is better for Returns %, RTO %, CIR %, Cancellation %, Exchange %, NDR %, SLA breach %, CAC, COGS %, ACoS.
 
 **Type** (one font + `font-variant-numeric: tabular-nums`; no monospace)
-page title 17/700 · card title 15–16/700 · hero 28/700 · tile value 15.5/700 · list value 13.5/700 · body 12.5–13 · labels 11–12 uppercase 600 muted · minimum 12px · inputs ≥16px.
+page title 17/650 (header) · card title 15–16/700 · hero 28/700 · tile value 15.5/700 · list value 13.5/700 · body 12.5–13 · labels 11–12 uppercase 600 muted · minimum 12px · inputs ≥16px.
 
 **Shape & effects**
 card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,90,61,.08)` · **selected = soft glow**: `border 1px rgba(31,90,61,.22)` + `box-shadow 0 0 10px 1px rgba(31,90,61,.10)` · master card gradient `#dcebe2 → #e9f3ed → #f4f9f6 → #fff` with border `#dbe8df` · transitions 150–250ms, respect reduced motion.
@@ -33,9 +36,10 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 ## 2. Shared components (`src/responsive/`) — every page uses these, no page-specific copies
 | Component | What it is |
 |---|---|
-| `MobilePageHeader` | dark-green header: title + date pill; optional chips row (channels/platforms/locations), filter icon with count, underline sub-tabs (only if they exist), "Filtered:" strip; "⋯" menu for page actions (Export, Return Analysis, Refresh…) |
+| `MobilePageHeader` | **Deep-green header on every phone screen** (top bar and full-screen views; prompt `HEADER_GREEN_PROMPT.md`, mockup `mockups/header_green_mockup.html`). One fixed height per page, no collapse. Row 1 48px: [‹ back] title white 17/650 + context `#a9c9b6` 13/500, then **always date · filter · ⋯** (a control the page lacks is absent; the rest never move). Row 2 (chips) 36px with 26px text chips `#c8dfd1` (the mockup's `#b9d4c4` is 4.05:1 at the light end of the gradient; `#c8dfd1` keeps ≥ 4.5:1), selected = white fill + green `#1f5a3d` text, no ring, right edge fades, selected scrolls into view, 5px amber "in progress" dot. Row 3 sub-tabs 32px 12.5/600 `#a9c9b6` on `rgba(0,0,0,.08)` with a `rgba(255,255,255,.12)` top divider, active white + 2px mint `#9fe0b9` underline the label's width, spread when ≤ 4, scroll when more; second sub-tab row 30px 12px on `rgba(0,0,0,.14)`. "Filtered:" strip 28px under the green bar on the light page background, only filters that differ from the page default. Heights 48 / 84 / 116px (1 / 2 / 3 rows, +30 for a second sub-tab row), the same before and after scrolling; no backdrop blur (it would trap the date sheet). Date pill: 32px, radius 10, `rgba(255,255,255,.14)`, white 12.5/600, short form ("Sep 2026", "1–26 Oct") + a 9×6 SVG chevron (stroke 1.6, 70%) centred with the text, 5px gap. Filter / ⋯: borderless 16px icons `#d8e8de`, 44×44 tap target with a 34×34 pressed tile `rgba(255,255,255,.10)`; filter count = 14px mint `#9fe0b9` circle with `#143d2a` number; notifications = 7px red `#e5534b` dot with a 1.5px header-green ring on ⋯ and "Notifications (n)" as the first ⋯ item. No tap focus box; `:focus-visible` ring `#9fe0b9`. `theme-color` `#1a4d34` on phones. Bottom sheets keep their white sheet header with ✕; the launcher and the login page (own green band) are unchanged. |
 | `FilterSheet` + `FilterPicker` | level 1: one row per filter (current value + count), small toggles inline; level 2: search, Top by revenue / A–Z, checkboxes, pinned selections, dependent lists (Category → Sub-category → SKU), Apply (n). Scales to 1000+ items |
 | `MasterTrendCard` | gradient card: hero (fixed 2-line sub-line), full-width chart (no axes, prev dashed line, scrubber, auto granularity, override in "⋯"), even 2-col `KpiTile` grid that switches the chart |
+| `MasterTrendCard` layout (fixed, every page) | label + ⓘ left, ⋯ right (no date) · big value · one sub-line "▲x% vs prev · 2 key facts" · chart exactly as Overview (≈120px, thin green line with a gradient fill fading to transparent, previous period thin dashed grey, line kept inside the middle band, no axes) · legend row "This period / Prev period · Daily · auto" · 2-col tiles. Reference: released Overview hero. |
 | `KpiTile` | label + `DeltaBadge` on line 1, value on line 2; optional status dot; tap = select (glow) or InfoPopover |
 | `DeltaBadge` | ▲/▼ %, direction-aware colour, shimmer while loading, grey "—" if none |
 | `CompactRankRow` | name · value · % on one line + thin bar (breakdowns: channels, categories, regions, tiers) |
@@ -45,7 +49,7 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 | `InfoStrip` | slim neutral one-line note (data availability, snapshot time, partial period), tap to expand |
 | `CollapsibleSection` | tappable section heading with one-line summary when closed, lazy render, remembers state |
 | `BottomSheet`, `InfoPopover` | detail sheets and tap-to-see definitions |
-| `MobileBottomNav` | 5 labelled items (Overview, Sales, P&L, Inventory, More) + "More" sheet |
+| `MobileBottomNav` | light icon bar `#fbfaf7` with a hairline + soft shadow on top (`C.m.nav`), 48px + safe-area inset (same as header row 1), tap targets ≥ 44px; selected = green icon on a 34 × 30 mint tile `#edf6f0`, inactive `#8a938e`; last slot opens the All pages launcher (NAV_MOBILE_PROMPT.md) |
 
 ## 3. Translation rules — how any desktop element becomes mobile
 | Desktop element | Mobile |
@@ -65,6 +69,7 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 | Maps | full width, tap region → BottomSheet, ranked list below |
 
 ## 4. Behaviour rules
+- **Scrollbars (every scroll area, every page):** 3px, light Frido green `rgba(31,90,61,.28)`, transparent track, no arrow buttons — page, bottom sheets, full-screen lists, filter pickers, tables and any inner scroll. Use one global CSS rule with `::-webkit-scrollbar { width:3px; height:3px }`, a transparent track, a 3px rounded thumb and `::-webkit-scrollbar-button { display:none }`. **Important: do NOT set `scrollbar-width` / `scrollbar-color` for Chrome/Edge**: since Chrome 121 those standard properties override `::-webkit-scrollbar` and bring back the wide Windows scrollbar with arrows. Put them only inside `@supports not selector(::-webkit-scrollbar) { … }` (Firefox). Remove any existing `scrollbar-width` declarations elsewhere. Not per-component styles. Desktop uses the same rule.
 - Nothing that changes on touch may resize a card or move content below it (fixed heights).
 - No inner scroll containers in page flow; no page-level horizontal scroll.
 - Every number has a plain label; abbreviations get an InfoPopover definition.
@@ -83,11 +88,6 @@ card radius 18 · tile radius 12 · chip radius 999 · tile border `1px rgba(31,
 - [ ] Numbers identical to desktop/baseline
 - [ ] Laptop 1366 screenshot unchanged
 - [ ] Screenshots iPhone SE / 14 / Pixel / small Android / landscape / iPad portrait
-- [ ] WebKit (iPhone) checks pass: screenshots, overflow, palette and "no resize on touch" on
-      Playwright WebKit with the iPhone SE / iPhone 14 (+ landscape) device profiles (isMobile + hasTouch);
-      `RESPONSIVE_ENGINE=webkit` with the scripts in `scripts/responsive/` (check-touch, check-palette,
-      check-nav-header, …). Report Chromium vs WebKit differences; fix WebKit-only issues in the shared
-      components.
 
 ## 6. Order of pages
 Overview (with alignment addendum) → Sales → P&L (+ Financial MIS) → Ads → Inventory → Logistics → Customer → Profile → internal tools (usable level: COGS, Packaging BOM, ledgers, Courier Allocation, Documents, P&L calculators) → FLASH (minimal; replaced by Ask Frido later).

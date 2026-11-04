@@ -1,4 +1,4 @@
-﻿import { getBQ } from './_bq.js'
+﻿import { getBQ, requestTimer } from './_bq.js'
 import {
   buildFacilityMaps, norm, normSku, cleanLabel,
   parsePackQty, isRawSkuText, isPseudoSku, computeRowInventory,
@@ -30,6 +30,7 @@ function weekKey(dateStr) {
 function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 export default async function inwardHandler(req, res) {
+  const timer = requestTimer('inward')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -59,14 +60,14 @@ export default async function inwardHandler(req, res) {
     const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
       bq.query({
         query: `SELECT
-                  \`GRN Code\` AS grnCode, \`GRN Date\` AS grnDate, \`Item SkuCode\` AS itemSkuCode,
-                  Facility, Category AS rawCategory, \`Vendor Name\` AS vendorName, \`Vendor Code\` AS vendorCode,
-                  \`PO Code\` AS poCode, \`PO Date\` AS poDate,
-                  \`Quantity Received\` AS qtyReceived, \`Quantity Rejected\` AS qtyRejected,
-                  \`Rejection Reason\` AS rejectionReason, \`Grn item Status\` AS grnStatus,
-                  \`GRN Received Timestamp\` AS grnReceivedTs, \`QC Completed On\` AS qcCompletedOn
-                FROM \`frido-429506.production.Unicommerce_GRN_Report\`
-                WHERE DATE(\`GRN Date\`) BETWEEN '${start}' AND '${end}'`,
+                  GRN_Code AS grnCode, GRN_Date AS grnDate, Item_SkuCode AS itemSkuCode,
+                  Facility, Category AS rawCategory, Vendor_Name AS vendorName, Vendor_Code AS vendorCode,
+                  PO_Code AS poCode, PO_Date AS poDate,
+                  Quantity_Received AS qtyReceived, Quantity_Rejected AS qtyRejected,
+                  Rejection_Reason AS rejectionReason, Grn_item_Status AS grnStatus,
+                  GRN_Received_Timestamp AS grnReceivedTs, QC_Completed_On AS qcCompletedOn
+                FROM \`frido-429506.production.stg_unicommerce_grn_report\`
+                WHERE DATE(GRN_Date) BETWEEN '${start}' AND '${end}'`,
         maximumBytesBilled: '5000000000',
       }),
       bq.query({
@@ -389,6 +390,7 @@ export default async function inwardHandler(req, res) {
       skus: [...new Set(finishedGoods.map(r => r.sku))].sort(),
     }
 
+    timer.finish(res)
     res.json({
       dateRange: { start, end, days: daysInRange },
       avgSaleWindow: { start: salesWindowStart, end: salesWindowEnd },
@@ -414,6 +416,7 @@ export default async function inwardHandler(req, res) {
     })
   } catch (e) {
     console.error('[inward]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

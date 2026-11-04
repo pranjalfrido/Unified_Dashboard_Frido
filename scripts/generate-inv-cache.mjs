@@ -23,7 +23,9 @@ const STOCK_STATUS_VALUES = ['Critical', 'Low', 'Sufficient', 'Excess', 'Out of 
 
 const db = await pool.connect()
 
-// Use max(order_date) - 1 to avoid partial today's data skewing avg sale / DOI
+// Avg sale window ends on the last COMPLETE day: max(order_date) - 1. The latest date in the data
+// is the current day's partial feed (the aggregated sales report now carries today's sales as they
+// land), so including it would drag avg sale / DOI down and show today as "Latest sales".
 const { rows: maxDateRows } = await db.query(`SELECT MAX(order_date) AS max_date FROM sales_window`)
 const rawMax = maxDateRows[0]?.max_date
 const rawMaxStr = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)

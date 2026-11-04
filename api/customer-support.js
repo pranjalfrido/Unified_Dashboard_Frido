@@ -1,4 +1,4 @@
-import { getBQ, runQueriesLimited } from './_bq.js'
+import { getBQ, runQueriesLimited, requestTimer } from './_bq.js'
 
 // Customer Support KPIs: Freshdesk tickets + Ozonetel calls + Shopify D2C orders, bucketed by
 // day / ISO week / month so the page can lay periods out as columns (Day 1..7, Week 1..4,
@@ -263,6 +263,7 @@ function buildQueries(grain, start, end) {
 const num = (v) => (v == null ? null : Number(v.value ?? v))
 
 export default async function handler(req, res) {
+  const timer = requestTimer('customer-support')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -282,7 +283,8 @@ export default async function handler(req, res) {
 
   const key = JSON.stringify(range ? [grain, range.start, range.end] : [grain, count, end])
   const hit = cache.get(key)
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS && !body.refresh) return res.status(200).json(hit.data)
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS && !body.refresh) { timer.markCacheHit(key); timer.finish(res); return res.status(200).json(hit.data) }
+  timer.markCacheMiss(key)
 
   try {
     let { keys, start, end: winEnd } = range || { ...periodsFor(grain, end, count), end }
@@ -293,23 +295,28 @@ export default async function handler(req, res) {
     // (calls by hour, agent leaderboard) keep covering only the chosen day.
     const viewStart = start
     let hidden = 0
+    // CA10: 7 context days, so the chosen day is compared with the same weekday last week (the
+    // page's trend charts show the last 7; the contact heatmap below keeps its own 7-day window).
     if (grain === 'day' && keys.length === 1) {
       const day = keys[0]
-      start = addDays(day, -6); keys = Array.from({ length: 7 }, (_, i) => addDays(start, i)); hidden = 6
+      start = addDays(day, -7); keys = Array.from({ length: 8 }, (_, i) => addDays(start, i)); hidden = 7
     }
     const queries = buildQueries(grain, start, winEnd)
     if (hidden) {
       const view = buildQueries(grain, viewStart, winEnd)
       for (const k of ['agentBoard', 'callsHourly']) queries[k] = view[k]
+      queries.heat = buildQueries(grain, addDays(winEnd, -6), winEnd).heat
     }
-    const results = await runQueriesLimited(getBQ(), queries)
+    const results = await runQueriesLimited(getBQ(), queries, timer)
     const out = Object.fromEntries(results.map(({ key: k, rows }) => [k, rows.map(r =>
       Object.fromEntries(Object.entries(r).map(([c, v]) => [c, typeof v === 'object' && v !== null && !('value' in v) ? num(v) : (v?.value ?? v)])))]))
     const data = { grain, periods: keys, hidden, start: viewStart, trendStart: start, end: winEnd, asOf: new Date().toISOString(), ...out }
     cache.set(key, { at: Date.now(), data })
+    timer.finish(res)
     res.status(200).json(data)
   } catch (e) {
     console.error('[customer-support]', e)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

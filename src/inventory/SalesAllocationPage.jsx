@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
 import SalesAllocMobile from './mobile/SalesAllocMobile.jsx'
-import { topProductsFrom, matrixBucketKeyFor, matrixCellsFor, salesMatrixExport } from './mobile/saMobileData.js'
+import { topProductsFrom, matrixBucketKeyFor, matrixCellsFor } from './mobile/saMobileData.js'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -961,8 +961,43 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
               <button
                 onClick={() => {
-                  const x = salesMatrixExport({ filteredData, data, dateFilters, filters })
-                  exportCsv(x.filename, x.columns, x.rows)
+                  // Export the matrix exactly as shown: category, sub-category and SKU rows (current
+                  // search + channel filter), one column per visible date/week/month bucket for the
+                  // active metric, then Total and a Grand Total row. Built from the same cells as the
+                  // table (matrixCellsByPath) - the old export read rawRows, which only the pre-built
+                  // file carries, so it came out empty whenever the page was on the live API.
+                  const metricLabel = matrixMetric === 'rev' ? 'Revenue' : 'Units'
+                  const line = (level, category, subCategory, sku, path) => {
+                    const o = { level, category, subCategory, sku }
+                    for (const col of matrixColumns) o[col] = matrixValueFor(path, col)
+                    o.total = matrixValueFor(path, 'total')
+                    return o
+                  }
+                  const rows = []
+                  for (const { category, subs } of matrixCategoryTree) {
+                    rows.push(line('Category', category, '', '', `${category}${MSEP}${MSEP}`))
+                    for (const { subCategory, skus } of subs) {
+                      rows.push(line('Sub-category', category, subCategory, '', `${category}${MSEP}${subCategory}${MSEP}`))
+                      for (const sk of skus) rows.push(line('SKU', category, subCategory, sk.sku, `${category}${MSEP}${subCategory}${MSEP}${sk.skuKey}`))
+                    }
+                  }
+                  const gt = { level: 'Grand Total', category: '', subCategory: '', sku: '' }
+                  for (const col of matrixColumns) gt[col] = (matrixGrandTotal.perBucket.get(col) || { qty: 0, rev: 0 })[matrixMetric]
+                  gt.total = matrixGrandTotal.total[matrixMetric]
+                  rows.push(gt)
+                  const round = v => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
+                  exportCsv(
+                    `sales_matrix_${metricLabel.toLowerCase()}_${matrixGranularity}_${dateFilters?.start || 'all'}_${dateFilters?.end || 'all'}.csv`,
+                    [
+                      { label: 'Level', key: 'level' },
+                      { label: 'Category', key: 'category' },
+                      { label: 'Sub-Category', key: 'subCategory' },
+                      { label: 'SKU', key: 'sku' },
+                      ...matrixColumns.map(col => ({ label: col, get: r => round(r[col]) })),
+                      { label: `Total ${metricLabel}`, get: r => round(r.total) },
+                    ],
+                    rows
+                  )
                 }}
                 style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
                 ⭳ Export CSV

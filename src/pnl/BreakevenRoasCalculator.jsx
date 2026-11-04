@@ -1,6 +1,11 @@
 import { useState, useMemo, useEffect, Fragment } from 'react'
-import { C, fmt } from '../utils.js'
-import { perUnitWaterfall, rateForWeightGm } from './pnlUtils.js'
+import { C } from '../utils.js'
+import { perUnitWaterfall, rateForWeightGm, breakevenRoas as breakevenRoasOf, roasForTargetCm2, fmtSigned as fmt } from './pnlUtils.js'
+import ToolIntro from './ToolIntro.jsx'
+import ToolResultBar from '../responsive/ToolResultBar.jsx'
+import SegmentToggle from '../responsive/SegmentToggle.jsx'
+import { setPnlToolReset } from './pnlToolStore.js'
+import { authFetch } from '../authFetch.js'
 
 // Forward-looking, single-unit calculator for a NOT-YET-LAUNCHED product: given a listing price,
 // a discount (selling price defaults to 7% off listing — Frido's usual launch convention), COGS,
@@ -22,7 +27,7 @@ import { perUnitWaterfall, rateForWeightGm } from './pnlUtils.js'
 // silently negative ROAS.
 let sndRatesPromise = null
 function loadSndRates() {
-  if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (!sndRatesPromise) sndRatesPromise = authFetch('/snd-rates.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
 
@@ -214,7 +219,8 @@ function ReferenceProductPicker({ productGroups, onApply }) {
   )
 }
 
-export default function BreakevenRoasCalculator({ productGroups = [] }) {
+// phone: PNL_REVIEW_FIXES.md §2/§4 phone layout (intro + ⓘ, equal-width toggles, Reset in ⋯, sticky result bar).
+export default function BreakevenRoasCalculator({ productGroups = [], phone = false }) {
   const [slabs, setSlabs] = useState(null)
   useEffect(() => { loadSndRates().then(setSlabs) }, [])
 
@@ -330,13 +336,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
   // Breakeven ROAS = GrossExGST / CM1 (spend that exactly zeroes CM2). Only meaningful once CM1 > 0
   // — a negative CM1 means the product loses money before a single rupee of ad spend, so no ROAS
   // rescues it.
-  const breakevenRoas = waterfall && waterfall.cm1 > 0 ? waterfall.excGst / waterfall.cm1 : null
+  const breakevenRoas = waterfall ? breakevenRoasOf(waterfall.excGst, waterfall.cm1) : null
   // Breakeven ROAS @ 15% CM2 = GrossExGST / (CM1 − 0.15×NetRevenue) — the 15% CM2 target itself is
   // still defined as a share of Net Revenue (the real, return-adjusted revenue this product keeps),
   // only the ROAS ratio's own numerator switches to gross ex-GST. Needs CM1 to clear the 15% floor
   // BEFORE any ad spend, otherwise the target is unreachable regardless of ROAS.
-  const target15Budget = waterfall ? waterfall.cm1 - 0.15 * waterfall.netRev : null
-  const breakevenRoas15 = waterfall && target15Budget > 0 ? waterfall.excGst / target15Budget : null
+  // (shared with the P&L margin watchlist: pnlUtils.js roasForTargetCm2)
+  const breakevenRoas15 = waterfall ? roasForTargetCm2(waterfall.excGst, waterfall.cm1, waterfall.netRev, 0.15) : null
 
   const totalLossPct = (rtoPct || 0) + (cancelPct || 0) + (cirPct || 0) + (exchangePct || 0)
   const lossOver100 = totalLossPct > 100
@@ -355,7 +361,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     const netRev = waterfall.netRev
     setSavedScenarios(prev => [...prev, {
       id: `${Date.now()}-${prev.length}`,
-      productName: productName || '(unnamed product)',
+      productName: productName || 'Your product',
       listingPrice, discountPct, sellingPrice,
       cogs: waterfall.cogs, weightGm,
       logistics: waterfall.logistics, fulfilment: waterfall.fulfilment, paymentGw: waterfall.paymentGw, softwareFee: waterfall.softwareFee,
@@ -381,13 +387,32 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     setResetSignal(s => s + 1)
   }
 
+  // Phone: the header's ⋯ → Reset clears the form and saved rows; Undo puts them back.
+  useEffect(() => {
+    if (!phone) return
+    const snap = { savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct }
+    setPnlToolReset(() => {
+      resetAll()
+      return () => {
+        setSavedScenarios(snap.savedScenarios); setProductName(snap.productName); setListingPrice(snap.listingPrice); setDiscountPct(snap.discountPct)
+        setCogs(snap.cogs); setWeightGm(snap.weightGm); setGstPct(snap.gstPct)
+        setRtoPct(snap.rtoPct); setCancelPct(snap.cancelPct); setCirPct(snap.cirPct); setExchangePct(snap.exchangePct)
+      }
+    })
+    return () => setPnlToolReset(null)
+  }, [phone, savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct])
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1220 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 1220 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input.pnl-no-spinner { -moz-appearance: textfield; }
       `}</style>
+      {phone ? (
+        <ToolIntro title="Breakeven ROAS" short="Find the ROAS a product needs to break even, and to reach 15% CM2."
+          long="Model a new product's per-unit economics before launch, or check an already-launched product's real breakeven ROAS: the ad efficiency it needs to break even, and the efficiency it needs to hit a healthy 15% CM2." />
+      ) : (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.2 }}>Breakeven ROAS Calculator</div>
@@ -400,11 +425,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
           ↺ Reset Everything
         </button>
       </div>
+      )}
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
-        <div style={{ flex: '1 1 420px', display: 'flex' }}>
-          <Card style={{ flex: 1, gap: 10, padding: 16 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', minWidth: 0 }}>
+          <Card style={{ flex: 1, gap: 10, padding: 16, minWidth: 0 }}>
+            {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
               {[{ id: 'new', label: 'New Product' }, { id: 'launched', label: 'Already Launched' }].map(opt => (
                 <button key={opt.id} onClick={() => setMode(opt.id)}
@@ -415,6 +442,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                   }}>{opt.label}</button>
               ))}
             </div>
+            )}
 
             {mode === 'launched' ? (
               <ReferenceProductPicker key={resetSignal} productGroups={productGroups} onApply={applyReferenceRates} />
@@ -446,6 +474,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
               </div>
               <div>
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2 }}>GST Rate</span>
+                {phone ? <SegmentToggle options={GST_PRESETS.map(g => ({ id: g, label: `${g}%` }))} value={gstPct} onChange={setGstPct} label="GST rate" full style={{ marginTop: 4 }} /> : (
                 <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                   {GST_PRESETS.map((g, i) => (
                     <div key={g} style={{ display: 'flex', alignItems: 'center' }}>
@@ -458,6 +487,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
 
@@ -479,12 +509,28 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: '1 1 380px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Card>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 380px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || '(unnamed product)'}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || 'Your product'}</div>
                 <div style={{ height: 3, marginBottom: 10, borderRadius: 2, background: 'linear-gradient(90deg, rgba(27,94,32,0.22) 0%, rgba(27,94,32,0.05) 60%, rgba(27,94,32,0) 100%)' }} />
+                {phone ? (
+                  // Phone (PNL_REVIEW_FIXES.md §4): the four summary values as 2 × 2 chips
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+                    {[
+                      ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—'],
+                      ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—'],
+                      ['GST', `${gstPct}%`],
+                      ['Return %', `${((rtoPct || 0) + (cancelPct || 0) + (cirPct || 0)).toFixed(1)}%`],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ background: C.m.soft, borderRadius: 10, padding: '8px 10px', minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: C.m.muted }}>{label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.m.ink, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 14, rowGap: 6, paddingTop: 8 }}>
                   {[
                     ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
@@ -505,19 +551,20 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                     </Fragment>
                   ))}
                 </div>
+                )}
               </div>
             )}
             {!waterfall ? (
               <div style={{ fontSize: 13, color: C.t3, padding: '20px 0' }}>Enter a listing price to see the breakdown.</div>
             ) : (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 28, marginTop: 4, marginBottom: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 16 : 28, marginTop: 4, marginBottom: 20 }}>
                   <WaterfallBar label="Selling Price (Inc. GST, after discount)" value={waterfall.grossIncGst} scaleMax={waterfallScaleMax} tone="total" color={C.acc} />
                   <WaterfallBar label="Net Revenue (Ex. GST, after returns)" value={waterfall.netRev} scaleMax={waterfallScaleMax} tone="total" color={C.acm} />
                   <WaterfallBar label="Gross Margin (GM)" value={waterfall.gm} scaleMax={waterfallScaleMax} tone="total" color={waterfall.gm >= 0 ? C.acd : undefined} />
                   <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? C.t1 : undefined} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, 1fr)', gap: phone ? 8 : 10, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
                   <KpiTile label="COGS %" value={waterfall.netRev > 0 ? `${(waterfall.cogs / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.cogs)} />
                   <KpiTile label="GM %" value={waterfall.netRev > 0 ? `${(waterfall.gm / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.gm)} />
                   <KpiTile label="S&D %" value={waterfall.netRev > 0 ? `${(waterfall.snd / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.snd)} />
@@ -528,13 +575,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
           </Card>
 
           {waterfall && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: phone ? 8 : 12, flexWrap: 'wrap' }}>
               <div style={{
-                flex: '1 1 260px', background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
               }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Breakeven ROAS</div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Breakeven ROAS</div>
+                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
                   {breakevenRoas != null ? `${breakevenRoas.toFixed(2)}x` : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
@@ -543,11 +590,11 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
               </div>
 
               <div style={{
-                flex: '1 1 260px', background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
               }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>CM2 @ 15%</div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>CM2 @ 15%</div>
+                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
                   {breakevenRoas15 != null ? `${breakevenRoas15.toFixed(2)}x` : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
@@ -569,6 +616,11 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
 
       {savedScenarios.length > 0 && (
         <SavedScenariosTable scenarios={savedScenarios} onRemove={removeScenario} onReset={resetAll} />
+      )}
+      {phone && waterfall && (
+        <ToolResultBar tone={breakevenRoas == null ? 'bad' : undefined}>
+          {breakevenRoas != null ? `Breakeven ${breakevenRoas.toFixed(2)}x · Healthy ${breakevenRoas15 != null ? `${breakevenRoas15.toFixed(2)}x` : '—'}` : 'Unprofitable even with zero ad spend'}
+        </ToolResultBar>
       )}
     </div>
   )

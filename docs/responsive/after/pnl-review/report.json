@@ -1,0 +1,107 @@
+{
+  "iphoneSE-375x667": {
+    "errors": [],
+    "fvLine": "Top 8 of 125 products · by Returns % · highest first · products ≥ 2% of gross or ≥ 100 units · Show all",
+    "priceSimText": "Change price, discount, volume or ROAS and see CM1 / CM2 update.\ni\nProduct\nProduct Variant\nA Product blends all its color/size variants, weighted by units sold.\nProduct\nGross\n₹1.59 Cr\nUnits\n27,582\nASP\n₹547\nNet rev\n₹1.24 Cr\nCOGS %\n28.2%\nGM %\n71.8%\nCM1 %\n49.0%\nCM2 %\n18.1%\nDRR\n1,061/day\nPROMO LEVERS\nListing Price\n₹\nDiscount\n%\nCurrent discount 4.63%\nPlanned discount 4.63%\nCURRENT SELLING PRICE\n₹547\n→\nNEW SELLING PRICE\n₹547\nVolume Change\n0%\nTarget ROAS (Gross ex GST ÷ spend)\n4.0x\nReturn Rate\n18.4%\nCurrent (mature) Return% 18.4% — heavier discounts often pull in more low-intent, higher-return buyers.\nBREAKEVEN DISCOUNT\n26.5%\nMax discount before CM2 turns negative, at 0% volume and 4.0x ROAS\nPLANNED CONTRIBUTION MARGIN 2 (CM2)\n₹22.38 L\n18.1%\nCurrent CM2 (mature-normalised): ₹22.38 L (18.1%)\n₹0\nCONTRIBUTION WATERFALL\nOrthotics Posture Corrector\nGross Revenue\n₹1.59 Cr from ₹1.59 Cr\nNet Revenue\n₹1.24 Cr from ₹1.24 Cr\nGross Margin\n₹88.75 L from ₹88.75 L\nCM1\n₹60.61 L from ₹60.61 L\nCM2\n₹22.38 L from ₹22.38 L\nCurrent (mature-normalised)\nPlanned\nGM %\n71.8%\n→\n71.8%\nS&D %\n22.8%\n→\n22.8%\nCM1 %\n49.0%\n→\n49.0%\nCM2 %\n18.1%\n→\n18.1%",
+    "iphoneSE-375x667__price-simulator.png": {
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "docScrollWidth": 375,
+      "innerWidth": 375
+    },
+    "iphoneSE-375x667__breakeven-roas.png": {
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "docScrollWidth": 375,
+      "innerWidth": 375
+    },
+    "iphoneSE-375x667__b2b-costing.png": {
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "docScrollWidth": 375,
+      "innerWidth": 375
+    },
+    "iphoneSE-375x667__po-approval.png": {
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "docScrollWidth": 375,
+      "innerWidth": 375
+    }
+  },
+  "iphone14-390x844": {
+    "errors": [],
+    "fvLine": "Top 8 of 125 products · by Returns % · highest first · products ≥ 2% of gross or ≥ 100 units · Show all",
+    "priceSimText": "Change price, discount, volume or ROAS and see CM1 / CM2 update.\ni\nProduct\nProduct Variant\nA Product blends all its color/size variants, weighted by units sold.\nProduct\nGross\n₹1.59 Cr\nUnits\n27,582\nASP\n₹547\nNet rev\n₹1.24 Cr\nCOGS %\n28.2%\nGM %\n71.8%\nCM1 %\n49.0%\nCM2 %\n18.1%\nDRR\n1,061/day\nPROMO LEVERS\nListing Price\n₹\nDiscount\n%\nCurrent discount 4.63%\nPlanned discount 4.63%\nCURRENT SELLING PRICE\n₹547\n→\nNEW SELLING PRICE\n₹547\nVolume Change\n0%\nTarget ROAS (Gross ex GST ÷ spend)\n4.0x\nReturn Rate\n18.4%\nCurrent (mature) Return% 18.4% — heavier discounts often pull in more low-intent, higher-return buyers.\nBREAKEVEN DISCOUNT\n26.5%\nMax discount before CM2 turns negative, at 0% volume and 4.0x ROAS\nPLANNED CONTRIBUTION MARGIN 2 (CM2)\n₹22.38 L\n18.1%\nCurrent CM2 (mature-normalised): ₹22.38 L (18.1%)\n₹0\nCONTRIBUTION WATERFALL\nOrthotics Posture Corrector\nGross Revenue\n₹1.59 Cr from ₹1.59 Cr\nNet Revenue\n₹1.24 Cr from ₹1.24 Cr\nGross Margin\n₹88.75 L from ₹88.75 L\nCM1\n₹60.61 L from ₹60.61 L\nCM2\n₹22.38 L from ₹22.38 L\nCurrent (mature-normalised)\nPlanned\nGM %\n71.8%\n→\n71.8%\nS&D %\n22.8%\n→\n22.8%\nCM1 %\n49.0%\n→\n49.0%\nCM2 %\n18.1%\n→\n18.1%",
+    "iphone14-390x844__price-simulator.png": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "docScrollWidth": 390,
+      "innerWidth": 390
+    },
+    "iphone14-390x844__breakeven-roas.png": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "docScrollWidth": 390,
+      "innerWidth": 390
+    },
+    "iphone14-390x844__b2b-costing.png": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "docScrollWidth": 390,
+      "innerWidth": 390
+    },
+    "iphone14-390x844__po-approval.png": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "docScrollWidth": 390,
+      "innerWidth": 390
+    }
+  },
+  "laptop-1366x768": {
+    "errors": [],
+    "fvHeaders": [
+      "Product",
+      "Category",
+      "Units",
+      "ASP",
+      "Gross ▼",
+      "Ex GST",
+      "Net",
+      "Ret",
+      "COGS",
+      "GM",
+      "SnD",
+      "CM1",
+      "Spend",
+      "ROAS",
+      "BE ROAS",
+      "CM2",
+      "Flags"
+    ],
+    "priceSimText": "Price Simulator\nPick a product and adjust its price, discount, volume, and ROAS to see CM1 and CM2 update instantly — all against its real listing price and cost data.\nProduct\nProduct Variant\nA Product blends all its color/size variants, weighted by units sold.\nProduct\nGROSS REVENUE\n₹1.59 Cr\nUNITS SOLD\n27,582\nDRR (UNITS/DAY)\n1,061\nASP\n₹547\nNET REVENUE\n₹1.24 Cr\nCOGS / UNIT\n₹155\nGM %\n71.8%\nCM1 %\n49.0%\nCM2 %\n18.1%\nPROMO LEVERS\nListing Price\n₹\nDiscount\n%\nCurrent discount 4.63%\nPlanned discount 4.63%\nCURRENT SELLING PRICE\n₹547\n→\nNEW SELLING PRICE\n₹547\nVolume Change\n0%\nTarget ROAS (Gross ex GST ÷ spend)\n4.0x\nReturn Rate\n18.4%\nCurrent (mature) Return% 18.4% — heavier discounts often pull in more low-intent, higher-return buyers.\nBREAKEVEN DISCOUNT\n26.5%\nMax discount before CM2 turns negative, at 0% volume and 4.0x ROAS\nPLANNED CONTRIBUTION MARGIN 2 (CM2)\n₹22.38 L\n18.1%\nCurrent CM2 (mature-normalised): ₹22.38 L (18.1%)\n₹0\nCONTRIBUTION WATERFALL\nOrthotics Posture Corrector\nGross Revenue\n₹1.59 Cr\nfrom ₹1.59 Cr\nNet Revenue\n₹1.24 Cr\nfrom ₹1.24 Cr\nGross Margin\n₹88.75 L\nfrom ₹88.75 L\nCM1\n₹60.61 L\nfrom ₹60.61 L\nCM2\n₹22.38 L\nfrom ₹22.38 L\nCurrent (mature-normalised)\nPlanned\nGM %\n71.8%\n→\n71.8%\nS&D %\n22.8%\n→\n22.8%\nCM1 %\n49.0%\n→\n49.0%\nCM2 %\n18.1%\n→\n18.1%",
+    "laptop-1366x768__price-simulator.png": {
+      "scrollWidth": 1294,
+      "clientWidth": 1294,
+      "docScrollWidth": 1366,
+      "innerWidth": 1366
+    },
+    "laptop-1366x768__breakeven-roas.png": {
+      "scrollWidth": 1294,
+      "clientWidth": 1294,
+      "docScrollWidth": 1366,
+      "innerWidth": 1366
+    },
+    "laptop-1366x768__b2b-costing.png": {
+      "scrollWidth": 1294,
+      "clientWidth": 1294,
+      "docScrollWidth": 1366,
+      "innerWidth": 1366
+    },
+    "laptop-1366x768__po-approval.png": {
+      "scrollWidth": 1294,
+      "clientWidth": 1294,
+      "docScrollWidth": 1366,
+      "innerWidth": 1366
+    }
+  }
+}

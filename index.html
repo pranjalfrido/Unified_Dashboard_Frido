@@ -9,6 +9,16 @@
     <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
     <!-- Internal dashboard: keep it out of search engines (see also public/robots.txt). -->
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Phones: the status bar matches the Ivory page header (HEADER_MOBILE_PROMPT.md §2). -->
+    <meta name="theme-color" content="#1a4d34" media="(max-width: 768px)" />
+    <!-- Installable app (Android: Install app; iPhone: Share → Add to Home Screen). Opens full screen;
+         the iPhone status bar sits over the green header, which pads itself by the safe-area inset. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Frido" />
     <title>Frido Navigator</title>
     <script>
       // Applied before first paint so the saved theme is already on <html> when the

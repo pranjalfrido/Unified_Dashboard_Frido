@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, fmt, fmtN, pct } from '../utils.js'
+import { C, fmt, fmtN } from '../utils.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import MobileRankedList from '../responsive/MobileRankedList.jsx'
@@ -10,6 +10,8 @@ import FullScreenList from '../responsive/FullScreenList.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { groupSumTrend } from '../responsive/trend.js'
 import { SALES_MOBILE, PRODUCT_SORTS } from './mobileChannelConfig.js'
+import { DetailGate } from '../DetailGate.jsx'
+import { useDetailReady } from '../detailPhase.js'
 
 // Sales tab below 1024px (docs/responsive/SALES_MOBILE_REDESIGN_PROMPT.md). Display only: every
 // value comes in from the channel tab, which computes it exactly as its desktop view does; this
@@ -19,6 +21,7 @@ import { SALES_MOBILE, PRODUCT_SORTS } from './mobileChannelConfig.js'
 //   trendRows daily rows for the master card's chart ({ date, ...numbers }, summed per period)
 //   data      section inputs: { channels, categories, products, skus, regions, tiers, states, cities,
 //             stores, storeTotal, accounts, reasons, notes, period }
+//   footer    optional card after the last section (D2C: the Return analysis entry card)
 const M = C.m
 const titleCase = s => (s || '').toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
 const pctText = v => (v == null || !isFinite(v) ? '—' : `${v.toFixed(1)}%`)
@@ -77,15 +80,43 @@ function ChannelShareCard({ channels, onOpenChannel }) {
   )
 }
 
+// Category rows with the same sort chips as Products: Gross rev (and share) is the category's own
+// figure, exactly as the list showed before; the other metrics are the sums of that category's
+// product rows, with ASP / DRR / return %s recomputed from the sums (never averaged).
+function categoryRows(categories, products, totalRev) {
+  const by = {}
+  for (const p of products || []) {
+    const c = by[p.cat] || (by[p.cat] = { n: 0, gross: 0, net: 0, prevNet: 0, units: 0, drr: null, cancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, retRev: 0 })
+    c.n++; c.gross += p.gross || 0; c.net += p.net || 0; c.prevNet += p.prevNet || 0; c.units += p.units || 0
+    if (p.drr != null) c.drr = (c.drr || 0) + p.drr
+    c.cancelRev += p.cancelRev || 0; c.rtoRev += p.rtoRev || 0; c.cirRev += p.cirRev || 0; c.exchRev += p.exchRev || 0
+    c.retRev += (p.gross || 0) * (p.totalReturnPct || 0) / 100
+  }
+  const pc = (n, d) => (d > 0 ? n / d * 100 : 0)
+  return (categories || []).map(cat => {
+    const s = by[cat.name] || { n: 0, gross: 0, net: 0, prevNet: 0, units: 0, drr: null, cancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, retRev: 0 }
+    return {
+      cat: cat.name, n: s.n, gross: cat.rev, net: s.net, prevNet: s.prevNet, units: s.units, drr: s.drr,
+      sharePct: totalRev > 0 ? cat.rev / totalRev * 100 : 0, asp: s.units > 0 ? cat.rev / s.units : 0,
+      cancelPct: pc(s.cancelRev, s.gross), rtoPct: pc(s.rtoRev, s.gross), cirPct: pc(s.cirRev, s.gross), exchPct: pc(s.exchRev, s.gross), totalReturnPct: pc(s.retRev, s.gross),
+    }
+  })
+}
+
 function CategoriesCard({ data, sorts, period, hasSku }) {
   const [view, setView] = useState('category')
   const opts = [{ id: 'category', label: 'Category' }, { id: 'product', label: 'Product' }, ...(hasSku ? [{ id: 'sku', label: 'SKU' }] : [])]
   const totalRev = data.totalRev || 0
+  // Products carry net, units etc.; without them (no product rows) the category list keeps only revenue.
+  const catSorts = (data.products || []).length ? sorts : sorts.filter(s => s.key === 'gross')
   return (
     <Card title={view === 'category' ? 'Categories' : view === 'product' ? 'Products' : 'SKUs'} right={<SegmentToggle label="Show" value={view} onChange={setView} options={opts} />}>
       {view === 'category' && (
-        <CompactList noun="categories" top={8}
-          rows={(data.categories || []).map(c => ({ key: c.name, name: c.name, raw: c.rev, value: fmt(c.rev), pct: totalRev > 0 ? pct(c.rev, totalRev) : '—' }))} />
+        <MobileRankedList title={null} noun="categories" items={categoryRows(data.categories, data.products, totalRev)} itemKey={r => r.cat}
+          name={r => r.cat} sub={r => (r.n ? `${r.n} product${r.n === 1 ? '' : 's'}` : null)} searchText={r => r.cat}
+          sorts={catSorts} sheetSubtitle={period} topN={8} compact
+          secondary={(r, k) => (k === 'gross' ? `${r.sharePct.toFixed(1)}%${r.n ? ` · Net ${fmt(r.net)}` : ''}` : `Gross ${fmt(r.gross)}`)}
+          details={catSorts.map(s => ({ label: s.label, value: s.format })).concat([{ label: 'Products', value: r => fmtN(r.n) }])} />
       )}
       {view === 'product' && (
         <MobileRankedList title={null} noun="products" items={data.products || []} itemKey={r => `${r.cat}::${r.sc}`}
@@ -218,8 +249,14 @@ function ReasonsCard({ reasons, sub }) {
 }
 
 // ── View ────────────────────────────────────────────────────────────
-export default function SalesMobileView({ channel, metrics, trendRows, start, end, data = {}, onOpenChannel }) {
+// Mobile sections whose data comes from /api/bq's sales_detail group (label shown while loading).
+const DETAIL_SECTIONS = { categories: 'Loading categories', reasons: 'Loading return reasons', regionTier: 'Loading regions & tiers', geo: 'Loading top states & cities' }
+
+export default function SalesMobileView({ channel, metrics, trendRows, start, end, data = {}, onOpenChannel, footer = null }) {
   const bp = useBreakpoint()
+  // Category / reasons / region-tier / geography cards are built from the sales_detail group of
+  // /api/bq (staged loading) — a loader card until it lands, an inline error + Retry if it failed.
+  const detailReady = useDetailReady()
   const cfg = SALES_MOBILE[channel]
   if (!cfg) return null
   if (cfg.placeholder) {
@@ -250,7 +287,8 @@ export default function SalesMobileView({ channel, metrics, trendRows, start, en
     <div className="sales-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
       <MasterTrendCard key={channel} metrics={tiles} rawRows={trendRows || []} groupTrend={groupSumTrend} start={start} end={end} layout={layout}
         note={data.note ? <InfoStrip text={data.note} detail={data.noteDetail} /> : null} />
-      {cfg.sections.map(s => sec[s]?.()).filter(Boolean)}
+      {cfg.sections.map(s => (!detailReady && DETAIL_SECTIONS[s] ? <DetailGate key={s} label={DETAIL_SECTIONS[s]} height={160} /> : sec[s]?.())).filter(Boolean)}
+      {footer}
     </div>
   )
 }

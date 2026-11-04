@@ -1,9 +1,10 @@
-import { getBQ, buildQuery } from './_bq.js'
+import { getBQ, buildQuery, requestTimer } from './_bq.js'
 
 // On-demand date×subcategory breakdown for the Category Revenue Matrix drill-down.
 // Called only when the user clicks ▶ on a product row — never on page load.
 // POST { start, end, channel } → { subCatDateMap: { cat: { sc: { date: { rev, excRev, units, cancelRev, rtoRev, cirRev, exchRev } } } } }
 export default async function handler(req, res) {
+  const timer = requestTimer('cat-daily')
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
   const { start, end, channel } = req.body || {}
@@ -47,7 +48,9 @@ export default async function handler(req, res) {
 
   try {
     const bq = getBQ()
+    const qt0 = Date.now()
     const [rows] = await bq.query({ query: sql })
+    timer.queryTimings.push({ key: 'catDaily_main', ms: Date.now() - qt0 })
     const subCatDateMap = {}
     rows.forEach(x => {
       const cat = x.category || 'Others'
@@ -66,9 +69,11 @@ export default async function handler(req, res) {
       }
     })
     res.setHeader('Cache-Control', 'no-store')
+    timer.finish(res)
     return res.status(200).json({ subCatDateMap })
   } catch (e) {
     console.error('cat-daily error:', e.message)
+    timer.finish(res)
     return res.status(500).json({ error: e.message })
   }
 }

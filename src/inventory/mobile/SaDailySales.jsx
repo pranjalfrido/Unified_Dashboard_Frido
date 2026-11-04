@@ -5,7 +5,7 @@ import DrillDownList from '../../responsive/DrillDownList.jsx'
 import Sparkline from '../../responsive/Sparkline.jsx'
 import BottomSheet from '../../responsive/BottomSheet.jsx'
 import ActionMenu from '../../responsive/ActionMenu.jsx'
-import { Card } from './ui.jsx'
+import { Card } from '../../responsive/CardKit.jsx'
 import { matrixCellsFor, matrixBucketKeyFor, MSEP } from './saMobileData.js'
 
 // Sales & Allocation mobile: Daily sales by product (INVENTORY_MOBILE_REDESIGN_PROMPT.md §3f) - the

@@ -1,4 +1,4 @@
-import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, requestTimer } from './_bq.js'
 
 // D2C – Return Analysis. Dedicated endpoint (mirrors api/returns.js's single-purpose style)
 // rather than growing api/bq.js further. Reuses buildQuery/netRevenueSelectFragment/
@@ -7,7 +7,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
-const CACHE_VERSION = 6
+const CACHE_VERSION = 10 // 7: cancelByBucket counts each cancelled order once; 8: exchangeReasons counts orders; 9: reasonsBySubCategory (2026-10-26); 10: topProductsTypes/topProductsSkus (2026-10-30)
 
 function getCacheKey(body) {
   const { start, end, category, subCategory, subChannel, paymentType, topProductsPaymentType } = body
@@ -40,6 +40,7 @@ function shopifyWhere(filters) {
 }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('return-analysis')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -54,7 +55,8 @@ export default async function handler(req, res) {
 
   const cacheKey = getCacheKey(req.body)
   const cached = getFromCache(cacheKey)
-  if (cached) { res.setHeader('X-Cache', 'HIT'); return res.json(cached) }
+  if (cached) { timer.markCacheHit(cacheKey); res.setHeader('X-Cache', 'HIT'); timer.finish(res); return res.json(cached) }
+  timer.markCacheMiss(cacheKey)
 
   try {
     const bq = getBQ()
@@ -180,6 +182,30 @@ export default async function handler(req, res) {
         HAVING lost_rev > 0
         ORDER BY lost_rev DESC`,
 
+      // The product sheet of section 3 (phone): the same list query one level down (per SKU), and
+      // the Cancel / RTO / CIR / Exchange split — both under section 3's own payment-type dropdown,
+      // so the sheet matches the row that was tapped. With "All" the split is byCategorySubCategory.
+      byProductSkuReturns: `WITH q AS (${base})
+        SELECT Category AS category, SubCategory AS sub_category, MasterSKU AS sku,
+          SUM(SellingPrice_Inc_GST) AS gross_rev,
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN SellingPrice_Inc_GST ELSE 0 END) AS lost_rev,
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN ItemQty ELSE 0 END) AS lost_qty
+        FROM q WHERE ${shWhere}${topProductsPaymentTypeClause} AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+        GROUP BY category, sub_category, sku`,
+      ...(topProductsPaymentType ? {
+        byProductTypes: `WITH q AS (${base})
+          SELECT Category AS category, SubCategory AS sub_category,
+            ${netRevenueSelectFragment('q')},
+            SUM(ItemQty) AS qty,
+            SUM(CASE WHEN Order_Status = 'CIR' THEN ItemQty ELSE 0 END) AS cir_qty,
+            SUM(CASE WHEN Order_Status = 'RTO' THEN ItemQty ELSE 0 END) AS rto_qty,
+            SUM(CASE WHEN Order_Status = 'Return' THEN ItemQty ELSE 0 END) AS return_qty,
+            SUM(CASE WHEN Order_Status = 'Cancelled' THEN ItemQty ELSE 0 END) AS cancel_qty,
+            SUM(CASE WHEN Order_Status = 'Exchange' THEN ItemQty ELSE 0 END) AS exch_qty
+          FROM q WHERE ${shWhere}${topProductsPaymentTypeClause}
+          GROUP BY category, sub_category`,
+      } : {}),
+
       // Return reasons breakdown — Customer_Return_Reason/Customer_Sub_Reason live on the raw
       // fact table but aren't projected through buildQuery()'s `q` CTE, so (same as api/bq.js's
       // shReturnReasons) this queries the raw table directly rather than `WITH q AS (${base})`.
@@ -201,16 +227,26 @@ export default async function handler(req, res) {
         const sixMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5, 1))
         const sixStart = sixMonthsAgo.toISOString().slice(0, 10)
         const sixEnd = today.toISOString().slice(0, 10)
-        return `SELECT
+        // Each cancelled order is counted once, under its main product (its highest-value line),
+        // so the per-category / per-sub-category counts add up to the month's real number of
+        // cancelled orders. Before 2026-10-26 an order with products from 2+ sub-categories was
+        // counted once per sub-category and the chart's totals ran 14–20% high.
+        return `WITH o AS (
+          SELECT OrderId, OrderDate,
+            COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
+            COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+            ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY SellingPrice_Inc_GST DESC, SubCategory, Category) AS rn
+          FROM \`frido-429506.production.fact_all_platform_sales_report\`
+          WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
+            AND Order_Status = 'Cancelled')
+        SELECT
           FORMAT_DATE('%b %Y', OrderDate) AS month,
           DATE_TRUNC(OrderDate, MONTH) AS month_dt,
-          COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
-          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          category,
+          sub_category,
           '0-1' AS bucket,
           COUNT(DISTINCT OrderId) AS cancel_count
-        FROM \`frido-429506.production.fact_all_platform_sales_report\`
-        WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
-          AND Order_Status = 'Cancelled'
+        FROM o WHERE rn = 1
         GROUP BY month, month_dt, category, sub_category, bucket
         ORDER BY month_dt, category, sub_category, bucket`
       })(),
@@ -230,17 +266,36 @@ export default async function handler(req, res) {
         LIMIT 15`,
 
       // Exchange reasons — same direct-table pattern as returnReasons above (Customer_Return_Reason
-      // is not projected through `q`), but scoped to Order_Status = 'Exchange' only.
+      // is not projected through `q`), but scoped to Order_Status = 'Exchange' only. Counts distinct
+      // orders like returnReasons (was COUNT(*) of lines until 2026-10-26, when the Return Reasons card
+      // got its All / CIR / Exch toggle and the two had to add up in one unit).
       exchangeReasons: `SELECT
           COALESCE(NULLIF(TRIM(Customer_Return_Reason), ''), 'Unknown') AS reason,
           COALESCE(NULLIF(TRIM(Customer_Sub_Reason), ''), 'Unknown') AS sub_reason,
-          COUNT(*) AS cnt,
+          COUNT(DISTINCT OrderId) AS cnt,
           SUM(SellingPrice_Inc_GST) AS revenue_impact
         FROM \`frido-429506.production.fact_all_platform_sales_report\`
         WHERE OrderDate BETWEEN '${start}' AND '${end}' AND ${shWhere}
           AND Order_Status = 'Exchange'
           AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
         GROUP BY reason, sub_reason ORDER BY cnt DESC`,
+
+      // Return Reasons card's product slicer (one sub-category at a time): the same reason rows as
+      // returnReasons (kind 'cir') and exchangeReasons (kind 'exchange'), split by sub-category.
+      // Distinct orders per sub-category, so one product's numbers are exact; the card's
+      // "All products" view keeps using the two queries above.
+      reasonsBySubCategory: `SELECT
+          IF(Order_Status = 'Exchange', 'exchange', 'cir') AS kind,
+          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          COALESCE(NULLIF(TRIM(Customer_Return_Reason), ''), 'Unknown') AS reason,
+          COALESCE(NULLIF(TRIM(Customer_Sub_Reason), ''), 'Unknown') AS sub_reason,
+          COUNT(DISTINCT OrderId) AS cnt,
+          SUM(SellingPrice_Inc_GST) AS revenue_impact
+        FROM \`frido-429506.production.fact_all_platform_sales_report\`
+        WHERE OrderDate BETWEEN '${start}' AND '${end}' AND ${shWhere}
+          AND Order_Status IN ('RTO', 'Return', 'CIR', 'Exchange')
+          AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
+        GROUP BY kind, sub_category, reason, sub_reason`,
 
       // Exchange flow — from ReturnPrime historical data (2023–2025). Joins back to
       // fact_all_platform_sales_report to resolve sku → Category/SubCategory labels.
@@ -403,6 +458,14 @@ export default async function handler(req, res) {
         returnPct: parseFloat(r.gross_rev) > 0 ? (parseFloat(r.lost_rev) / parseFloat(r.gross_rev) * 100) : 0,
       })),
       categoryTable: (results.byCategorySubCategory || []).map(r => ({ category: r.category || 'Others', subCategory: r.sub_category || 'Others', ...withPct(r) })),
+      // Section 3's product sheet, under its payment-type dropdown (see byProductSkuReturns).
+      topProductsTypes: ((topProductsPaymentType ? results.byProductTypes : results.byCategorySubCategory) || []).map(r => ({ category: r.category || 'Others', subCategory: r.sub_category || 'Others', ...withPct(r) })),
+      topProductsSkus: (results.byProductSkuReturns || []).reduce((acc, r) => {
+        const key = `${r.category || 'Others'}::${r.sub_category || 'Others'}`
+        const gross = parseFloat(r.gross_rev) || 0, lost = parseFloat(r.lost_rev) || 0
+        ;(acc[key] || (acc[key] = [])).push({ sku: r.sku, grossRev: gross, returnRevLost: lost, returnQtyLost: parseFloat(r.lost_qty) || 0, returnPct: gross > 0 ? lost / gross * 100 : 0 })
+        return acc
+      }, {}),
       // Keyed 'Category::SubCategory' so the frontend can expand a category row to its SKU
       // variants without a second round trip.
       skuVariants: (results.bySkuVariant || []).reduce((acc, r) => {
@@ -424,6 +487,14 @@ export default async function handler(req, res) {
         exchPct: parseInt(r.total_qty) > 0 ? (parseInt(r.exch_qty) / parseInt(r.total_qty) * 100) : 0,
       })),
       exchangeReasons: (results.exchangeReasons || []).map(r => ({
+        reason: r.reason,
+        subReason: r.sub_reason,
+        count: parseInt(r.cnt) || 0,
+        revenueImpact: parseFloat(r.revenue_impact) || 0,
+      })),
+      reasonsBySubCategory: (results.reasonsBySubCategory || []).map(r => ({
+        kind: r.kind,
+        subCategory: r.sub_category,
         reason: r.reason,
         subReason: r.sub_reason,
         count: parseInt(r.cnt) || 0,
@@ -458,9 +529,11 @@ export default async function handler(req, res) {
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
     res.json(payload)
   } catch (e) {
     console.error('[return-analysis]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

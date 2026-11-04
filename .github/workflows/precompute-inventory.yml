@@ -2,6 +2,17 @@ name: Precompute Inventory Cache
 
 on:
   workflow_dispatch:        # triggered hourly by cron-job.org; manual trigger also available
+    inputs:
+      refresh_cost:
+        description: 'Also rebuild the logistics cost aggregates + JSON (heavy full-ledger queries on the live database - run outside business hours)'
+        type: boolean
+        default: false
+
+# One run at a time. cron-job.org fires hourly and a slow run used to overlap the next one,
+# doubling the load on the shared Supabase database. A new run now waits instead.
+concurrency:
+  group: precompute-inventory
+  cancel-in-progress: false
 
 jobs:
   precompute:
@@ -9,6 +20,20 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      # The FULL logistics cost build (and the lc_cube checksum/rebuild) run several full scans of
+      # the 17 lakh-row B2C ledger. On the shared Supabase database that starves PostgREST for
+      # their duration ("Couldn't load your profile", 503 PGRST002 on 29 Oct). So they run only
+      # in the 21:00 UTC run (02:31 IST, off hours), or when dispatched by hand with refresh_cost.
+      # Every other hour the cost JSON is a light build (see that step).
+      # Decided first, so a run that starts late in the hour is still judged by its start time.
+      - name: Decide whether to rebuild the logistics cost cache
+        id: costgate
+        run: |
+          H=$(date -u +%H)
+          if [ "${{ inputs.refresh_cost }}" = "true" ] || [ "$H" = "21" ]; then RUN=true; else RUN=false; fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+          echo "UTC hour $H, refresh_cost=${{ inputs.refresh_cost }} -> full logistics cost rebuild: $RUN"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -46,6 +71,21 @@ jobs:
       - name: Generate static logistics JSON
         run: node scripts/generate-logistics-cache.mjs
 
+      - name: Generate alerts cache (fixed-window bell alerts #3/#4/#6/#7/#8/#11)
+        run: node scripts/generate-alerts-cache.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+      # Alerts Phase 2 (31 bell alerts): raw numbers from the pages' own handlers + the P&L page's own code,
+      # headless. Bars live in src/config/metricTargets.js (ALERT_RULES) and are applied in the browser. The
+      # "targets" block inside is refreshed weekly (carried forward otherwise). continue-on-error: a failure
+      # here must not cost this run's inventory / P&L / ads refresh; the previous file stays in place.
+      - name: Generate alerts Phase 2 cache (31 bell alerts, raw numbers)
+        continue-on-error: true
+        run: node scripts/generate-alerts-phase2.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
       # Pulls new AWB category / sub-category / dimensions from BigQuery into Supabase.
       # Runs BEFORE the aggregates so the cube is rebuilt from fresh categories in the same
       # pass — otherwise a re-categorised product would wait an extra hour to appear.
@@ -72,15 +112,33 @@ jobs:
         run: |
           echo "::warning title=AWB dimension sync failed::awb_shipment_dims was NOT updated this run. Cost-by-product categories may be stale. The sync is incremental, so the next hourly run will catch up — but if this warning repeats, investigate."
 
+      # Also a full-ledger scan (checksum, then the lc_cube rebuild when it changed), so it is
+      # gated with the cost cache build: off hours or on demand, never during business hours.
       - name: Rebuild logistics cost aggregates if ledger changed
+        if: steps.costgate.outputs.run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/refresh-cost-aggregates-if-stale.mjs
 
-      - name: Generate static logistics cost JSON
+      # 3PL per-unit / per-kg denominators: Uniware dispatched units x SKU weight per facility.
+      # Non-fatal: if it fails, the previous volume stays in place and the cache still builds.
+      - name: Sync 3PL volume from Uniware
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/sync-3pl-shipments.mjs
+
+      # Runs every hour as a LIGHT build (transaction pooler, 120 s cap, no full-ledger detail
+      # scans; those four sections are carried over). LC_FULL_BUILD=true only off hours / on demand.
+      - name: Generate static logistics cost JSON
+        # Hourly light build is non-fatal: on failure the previous file stays and the ads / P&L / commit
+        # steps still run. The nightly FULL build stays fatal so a broken refresh is visible.
+        continue-on-error: ${{ steps.costgate.outputs.run != 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          LC_FULL_BUILD: ${{ steps.costgate.outputs.run }}
         run: node scripts/generate-logistics-cost-cache.mjs
 
       - name: Generate static ads JSON
@@ -109,6 +167,7 @@ jobs:
                   public/logistics-data-forward.json public/logistics-data-reverse.json \
                   public/logistics-cost-data.json public/ads-data.json public/pnl-data.json \
                   public/pnl-data-lastmonth.json \
+                  public/alerts-data.json public/alerts-phase2.json \
                   public/logistics-data-forward-cod.json public/logistics-data-forward-prepaid.json \
                   public/logistics-data-reverse-cod.json public/logistics-data-reverse-prepaid.json
           git diff --cached --quiet && echo "No changes" && exit 0

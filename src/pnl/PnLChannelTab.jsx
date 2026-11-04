@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { C, fmtN, pct } from '../utils.js'
 import { fmtSigned as fmt } from './pnlUtils.js'
 import { useIsMobile } from '../responsive/useBreakpoint.js'
@@ -54,6 +54,12 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
 import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, chartLegendProps } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
 import InfoPopover from '../responsive/InfoPopover.jsx'
+import { buildFinancialRows } from './financialRows.js'
+import { useMarginRules } from '../responsive/useMarginRules.js'
+import WatchlistCard from '../responsive/WatchlistCard.jsx'
+import MarginMatrix from '../responsive/MarginMatrix.jsx'
+import BiggestFixes from '../responsive/BiggestFixes.jsx'
+import PnLMobileView from './PnLMobileView.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
 // (legend, tooltip, checklist) so it always matches PnLFinancialTable.jsx's column order
@@ -365,8 +371,30 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null }) {
+export default function PnLChannelTab({ title, note, gross, net, units, orders, returnRev, prevGross, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false, cogsMonthlyMap, startDate, endDate, hasReturnBreakdown = true, inProgress = null, returnsNotCaptured = false, spendAllocated = false, estimatedDays = 0, creditNotesStep = false, marginInfo = null, tab, onSimulate, simulateLabel, mobileLayout = false, mobileExtras = null }) {
   const isMob = useIsMobile()
+  // Margin watchlist / matrix / biggest fixes (PNL_MASTER_PLAN.md Part B §3): read the Financial View's
+  // own rows, so every % here is the table's. The rules are off on In-progress tabs (no new
+  // calculations there); the rows still feed the mobile Financial view list, as the laptop table.
+  const fvRows = useMemo(() => (buildFinancialRows({ subCatData, skuData, adSpendMap: adSpendMap || {}, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate }).allRows),
+    [subCatData, skuData, adSpendMap, sndBySku, mobilityNetBySubCat, netScale, cogsMonthlyMap, startDate, endDate])
+  const prevStatusM = prevSummary?.status || 'off'
+  const margin = useMarginRules({
+    rows: fvRows, tab: inProgress ? null : tab,
+    avail: { cm1: kpiSummary?.cm1 != null, cogs: kpiSummary?.cogs != null, ret: !returnsNotCaptured, spend: showMarketing && !spendAllocated && adSpendMap != null },
+    prevRows: prevStatusM === 'ready' ? prevSummary.rows || null : null,
+  })
+  // ASP / Returns-up rules wait for the previous period: keep their place while it loads
+  const pendingPrev = margin && prevStatusM === 'loading' ? [`ASP down > ${margin.bars.aspDrop}%`, ...(margin.bars.retUp != null && !returnsNotCaptured ? [`Returns up > ${margin.bars.retUp} pts`] : [])] : []
+  const [activeRule, setActiveRule] = useState(null)
+  const [highlightKey, setHighlightKey] = useState(null)
+  // 'needs' = the watchlist header's "need action" list (2+ rules or loss), filtered like a rule tile
+  const needsRule = margin?.needsAction?.length ? { id: 'needs', name: 'Needs action (2+ rules or loss)', items: margin.needsAction, count: margin.needsAction.length } : null
+  const activeRuleObj = (activeRule === 'needs' ? needsRule : margin?.rules.find(r => r.id === activeRule && r.count > 0)) || null
+  const flagFilter = activeRuleObj ? { id: activeRuleObj.id, name: activeRuleObj.name, keys: new Set(activeRuleObj.items.map(x => x.key)) } : null
+  const cm1Rule = margin?.rules.find(r => r.id === 'cm1') || null
+  const fvRef = useRef(null)
+  const selectProduct = key => { setActiveRule(null); setHighlightKey(key); fvRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -460,6 +488,15 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
     ? `${fmtN(units)} units · ${grossOfTotalPct.toFixed(1)}% of total`
     : `${fmtN(units)} units${note ? ` · ${note}` : ''}`
 
+  if (mobileLayout && mobileExtras) {
+    return (
+      <PnLMobileView tab={tab} title={title} {...mobileExtras} start={startDate} end={endDate} gross={gross} net={net} units={units} returnRev={returnRev} prevGross={prevGross}
+        daily={daily} dailyPnL={dailyPnL} kpiSummary={kpiSummary} prevSummary={prevSummary} showMarketing={showMarketing} spendAllocated={spendAllocated}
+        returnsNotCaptured={returnsNotCaptured} inProgress={inProgress} actualNet={actualNet} margin={margin} fvRows={fvRows}
+        adSpendReal={showMarketing && !spendAllocated && adSpendMap != null} onSimulate={onSimulate} simulateLabel={simulateLabel} />
+    )
+  }
+
   const heroCard = (
     <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
       <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
@@ -535,7 +572,25 @@ export default function PnLChannelTab({ title, note, gross, net, units, orders, 
             pcts={{ gm: kpiSummary.gmPct, cm1: kpiSummary.cm1Pct, cm2: kpiSummary.cm2Pct }} creditNotes={creditNotesStep ? returnRev : null} marginInfo={marginInfo} />
         </div>
       </div>
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} spendAllocated={spendAllocated} headerInfo={marginInfo} />
+      {margin && !isMob && (
+        <WatchlistCard result={margin} channel={title} activeRule={activeRuleObj?.id || null} onRule={id => { setHighlightKey(null); setActiveRule(id) }} pendingPrev={pendingPrev} />
+      )}
+      {margin && cm1Rule && !isMob && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,3fr) minmax(0,2fr)', gap: 14 }}>
+          <div className="kpi-card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.t1, marginBottom: 6 }}>Margin matrix <span style={{ fontWeight: 400, fontSize: 12, color: C.t3 }}>· revenue vs CM1 % · click a dot to find it in the table</span></div>
+            <MarginMatrix rows={fvRows.filter(r => margin.derived[`${r.cat}::${r.sc}`]?.material)} bar={margin.bars.cm1} onSelect={selectProduct} />
+          </div>
+          <div className="kpi-card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.t1, marginBottom: 2 }}>Biggest fixes</div>
+            <div style={{ fontSize: 12, color: C.t3, marginBottom: 4 }}>₹ CM1 below the {margin.bars.cm1}% bar, largest first</div>
+            <BiggestFixes items={cm1Rule.items} bar={margin.bars.cm1} onSimulate={onSimulate} />
+          </div>
+        </div>
+      )}
+      <div ref={fvRef} style={{ scrollMarginTop: 80 }} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} cogsMonthlyMap={cogsMonthlyMap} startDate={startDate} endDate={endDate} hasReturnBreakdown={hasReturnBreakdown} spendAllocated={spendAllocated} headerInfo={marginInfo}
+        margin={margin} flagFilter={flagFilter} onClearFlag={() => setActiveRule(null)} onSimulate={onSimulate} simulateLabel={simulateLabel} highlightKey={highlightKey} />
     </div>
   )
 }

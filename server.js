@@ -18,10 +18,12 @@ import returnAnalysisHandler from './api/return-analysis.js'
 import logisticsHandler from './api/logistics.js'
 import customerHandler from './api/customer.js'
 import customerSupportHandler from './api/customer-support.js'
+import inventoryOosHandler from './api/inventory-oos.js'
 import cogsContextHandler from './api/cogs-context.js'
 import cogsMonthlyHandler from './api/cogs-monthly.js'
-import financialMisHandler from './api/financial-mis.js'
 import packagingProductsHandler from './api/packaging-products.js'
+import authAdminHandler from './api/auth-admin.js'
+import pulseHandler from './api/pulse.js'
 
 config()
 
@@ -312,9 +314,12 @@ app.post('/api/logistics', (req, res) => logisticsHandler(req, res))
 // never registered here — every request returned 404 and the whole tab rendered as an error.
 app.post('/api/customer', (req, res) => customerHandler(req, res))
 app.post('/api/customer-support', (req, res) => customerSupportHandler(req, res))
+app.post('/api/inventory-oos', (req, res) => inventoryOosHandler(req, res))
 app.post('/api/cogs-context', (req, res) => cogsContextHandler(req, res))
 app.post('/api/cogs-monthly', (req, res) => cogsMonthlyHandler(req, res))
-app.post('/api/financial-mis', (req, res) => financialMisHandler(req, res))
+// Profile → Team members (create / roles / tabs / revoke / restore / delete) and the login page's account lookup
+app.post('/api/auth-admin', (req, res) => authAdminHandler(req, res))
+app.post('/api/pulse', (req, res) => pulseHandler(req, res))
 app.get('/api/packaging-products', (req, res) => packagingProductsHandler(req, res))
 
 // ── API: Meta UTM analytics ───────────────────────────────────

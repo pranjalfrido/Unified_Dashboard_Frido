@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Shown in the Feedback form's context line (which build the person was on).
+  define: { __APP_VERSION__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 8)) },
   build: {
     chunkSizeWarningLimit: 1600,
     rollupOptions: {

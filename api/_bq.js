@@ -21,21 +21,75 @@ export function getBQ() {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-// api/bq.js fires ~150 distinct queries per request in one Promise.all — firing them all as
+// ============================================================================
+// Instrumentation (perf-audit item 1, 2026-10-29) — adds per-request/per-query timing and
+// cache hit/miss visibility WITHOUT touching any response body field, SQL text or filter logic.
+// Two pieces:
+//   1. requestTimer(routeName) — call once at the top of a route handler. Returns
+//      { markCacheHit(key)/markCacheMiss(key), queryTimings (array a route can push into, or that
+//      runQueriesLimited below fills automatically), finish(res) } — finish() logs one structured
+//      JSON line (total ms, per-query ms, cache hit/miss) and sets the Server-Timing response
+//      header, then returns — it never writes to the body.
+//   2. runQueriesLimited (below) now accepts an optional timer and records each query's own ms
+//      into it, so any route already using the shared query map (bq.js, customer.js) gets
+//      per-query timing for free with zero extra code at each call site.
+// ============================================================================
+export function requestTimer(routeName) {
+  const t0 = Date.now()
+  const queryTimings = []
+  const cacheEvents = []
+  return {
+    queryTimings,
+    markCacheHit(key) { cacheEvents.push({ key, hit: true }) },
+    markCacheMiss(key) { cacheEvents.push({ key, hit: false }) },
+    finish(res) {
+      const totalMs = Date.now() - t0
+      try {
+        const serverTiming = [`total;dur=${totalMs}`]
+          .concat(queryTimings.slice(0, 20).map((q, i) => `q${i}_${sanitizeTimingName(q.key)};dur=${q.ms}`))
+          .join(', ')
+        res.setHeader?.('Server-Timing', serverTiming)
+      } catch { /* header may already be sent in some edge paths — never fail the request over this */ }
+      const logLine = {
+        route: routeName,
+        totalMs,
+        queries: queryTimings.map(q => ({ key: q.key, ms: q.ms })),
+        cache: cacheEvents,
+      }
+      console.log(`[timing] ${JSON.stringify(logLine)}`)
+      return totalMs
+    },
+  }
+}
+
+// Server-Timing metric names must be a valid token (no spaces/semicolons/commas) — query keys are
+// plain camelCase identifiers in every caller so this is a defensive no-op in practice.
+function sanitizeTimingName(name) {
+  return String(name).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40)
+}
+
+// api/bq.js fires 317 distinct queries per request (verified 2026-10-29 by direct instrumentation
+// — see requestTimer below; this count was previously documented as ~150, stale after the file
+// grew) in one Promise.all — firing them all as
 // truly concurrent BigQuery jobs regularly trips BigQuery's per-user JobService.query rate limit
 // (confirmed 2026-08-19: real 500s in production, which made the frontend silently keep showing
 // stale data — see App.jsx's fetchData). runQueriesLimited caps how many queries are in flight at
 // once and retries a rate-limited query with backoff instead of failing the whole request.
 const QUERY_CONCURRENCY = 12
 const MAX_RETRIES = 4
-async function runQueryWithRetry(bqClient, sql, key) {
+async function runQueryWithRetry(bqClient, sql, key, timer) {
+  const t0 = Date.now()
   for (let attempt = 0; ; attempt++) {
     try {
       const [rows] = await bqClient.query({ query: sql })
+      timer?.queryTimings.push({ key, ms: Date.now() - t0 })
       return { key, rows }
     } catch (e) {
       const isRateLimit = e?.code === 403 && /rateLimitExceeded|Exceeded rate limits/i.test(e?.message || '')
-      if (!isRateLimit || attempt >= MAX_RETRIES) throw e
+      if (!isRateLimit || attempt >= MAX_RETRIES) {
+        timer?.queryTimings.push({ key, ms: Date.now() - t0, error: true })
+        throw e
+      }
       // Exponential backoff with jitter: 500ms, 1s, 2s, 4s (+ up to 250ms jitter)
       await sleep(500 * 2 ** attempt + Math.random() * 250)
     }
@@ -44,7 +98,11 @@ async function runQueryWithRetry(bqClient, sql, key) {
 
 // Runs {key: sql} query map with bounded concurrency instead of api/bq.js's old
 // Object.entries(queries).map(...) + Promise.all, which fired every query at once.
-export async function runQueriesLimited(bqClient, queries) {
+// `timer` (optional, from requestTimer() above) — purely additive instrumentation: when passed,
+// each query's own elapsed ms is recorded into timer.queryTimings for the route's structured log
+// line / Server-Timing header. Omitting it (existing callers before item 1) behaves exactly as
+// before.
+export async function runQueriesLimited(bqClient, queries, timer) {
   const entries = Object.entries(queries)
   const results = new Array(entries.length)
   let nextIndex = 0
@@ -53,7 +111,7 @@ export async function runQueriesLimited(bqClient, queries) {
       const i = nextIndex++
       if (i >= entries.length) return
       const [key, sql] = entries[i]
-      results[i] = await runQueryWithRetry(bqClient, sql, key)
+      results[i] = await runQueryWithRetry(bqClient, sql, key, timer)
     }
   }
   const workers = Array.from({ length: Math.min(QUERY_CONCURRENCY, entries.length) }, worker)

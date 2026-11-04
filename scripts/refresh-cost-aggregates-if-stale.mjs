@@ -2,11 +2,14 @@
 // Rebuilds lc_cube (and all dependent tables) only when the ledger has changed
 // since the last build — skips the 3-5 min rebuild when nothing was uploaded.
 //
-// Staleness check: compares the row count stored in public.lc_cube_meta against
-// the current row count of logistics_invoices_b2c. A new upload always adds rows,
-// so a count mismatch is a reliable signal that the cube is out of date.
-// lc_cube_meta is a single-row table written by refresh-cost-aggregates.mjs
-// at the end of every successful build.
+// Staleness check: compares the row count AND a checksum of the uploaded invoice
+// columns stored in public.lc_cube_meta against the current ledger. The count alone
+// missed revised re-uploads: the B2C upload upserts on awb_number, so a corrected
+// sheet for the same AWBs changes amounts without changing the row count. The
+// checksum covers only the columns that come from the invoice template, not the
+// frido_* / rmk_* columns other jobs fill in, so enrichment does not force hourly
+// rebuilds. If the checksum query fails, the check falls back to the count alone.
+// lc_cube_meta is a single-row table written below after every successful build.
 
 import pkg from 'pg'
 import { config } from 'dotenv'
@@ -30,18 +33,34 @@ async function q(sql) {
 // Current ledger size
 const [{ ledger_n }] = await q(`SELECT COUNT(*)::int AS ledger_n FROM public.logistics_invoices_b2c`)
 
-// Last recorded ledger size when lc_cube was built. Table may not exist yet.
-let last_n = -1
+// Order-independent checksum of the invoice-template columns (sum of per-row hashes).
+let ledger_fp = null
 try {
-  const rows = await q(`SELECT ledger_n FROM public.lc_cube_meta LIMIT 1`)
-  if (rows.length) last_n = rows[0].ledger_n
+  const [{ fp }] = await q(`
+    SELECT COALESCE(SUM(hashtext(concat_ws('|', month_year, invoice_number, courier_name, courier_account_type,
+      awb_number, shipment_value, shipment_date, order_id, payment_mode, shipment_mode, origin_pincode,
+      destination_pincode, zone, product, qty, charged_weight_courier, declared_weight_frido,
+      freight_charge, surcharge, other_charge, total_cost))::bigint), 0)::text AS fp
+    FROM public.logistics_invoices_b2c`)
+  ledger_fp = fp
+} catch (e) {
+  console.warn(`Ledger checksum failed (${e.message}) — falling back to the row-count check.`)
+}
+
+// Last recorded ledger snapshot when lc_cube was built. Table / column may not exist yet.
+let last_n = -1, last_fp = null
+try {
+  const rows = await q(`SELECT * FROM public.lc_cube_meta LIMIT 1`)
+  if (rows.length) { last_n = rows[0].ledger_n; last_fp = rows[0].ledger_fp ?? null }
 } catch {
   // table doesn't exist yet → treat as stale
 }
 
-console.log(`logistics_invoices_b2c: ${ledger_n} rows  |  last cube build snapshot: ${last_n === -1 ? 'none' : last_n}`)
+console.log(`logistics_invoices_b2c: ${ledger_n} rows, checksum ${ledger_fp ?? 'n/a'}  |  last cube build snapshot: ${last_n === -1 ? 'none' : `${last_n} rows, checksum ${last_fp ?? 'none'}`}`)
 
-if (ledger_n === last_n) {
+// A snapshot taken before the checksum existed has last_fp = null, so the first run after
+// this change rebuilds once and records it.
+if (ledger_n === last_n && (ledger_fp === null || ledger_fp === last_fp)) {
   console.log('lc_cube is up to date — skipping rebuild.')
   await pool.end()
   process.exit(0)
@@ -69,7 +88,8 @@ const pool2 = new pkg.Pool({
 })
 pool2.on('error', e => console.error('[pool2] non-fatal:', e.message))
 await pool2.query(`CREATE TABLE IF NOT EXISTS public.lc_cube_meta (ledger_n int, built_at timestamptz)`)
+await pool2.query(`ALTER TABLE public.lc_cube_meta ADD COLUMN IF NOT EXISTS ledger_fp text`)
 await pool2.query(`TRUNCATE public.lc_cube_meta`)
-await pool2.query(`INSERT INTO public.lc_cube_meta (ledger_n, built_at) VALUES ($1, now())`, [ledger_n])
+await pool2.query(`INSERT INTO public.lc_cube_meta (ledger_n, ledger_fp, built_at) VALUES ($1, $2, now())`, [ledger_n, ledger_fp])
 await pool2.end()
-console.log(`Recorded snapshot: ${ledger_n} rows at ${new Date().toISOString()}`)
+console.log(`Recorded snapshot: ${ledger_n} rows, checksum ${ledger_fp ?? 'n/a'} at ${new Date().toISOString()}`)

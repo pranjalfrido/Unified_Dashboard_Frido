@@ -1,7 +1,8 @@
-import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures, vcReturnsSelectFragment, runQueriesLimited, buildReturnRateMature, buildFkReturnRateMature, buildOfflineCreditNoteRateMature, requestTimer } from './_bq.js'
 import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
 import { getStoreIdMap, getStoreCosts, getCostForMonth, storeNameFor } from './_store_pnl.js'
+import { getPhaseDef, pickPhaseFields } from './_bqPhases.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -108,60 +109,14 @@ const FK_LATEST_TTL = 60 * 60 * 1000
 // CM1 already uses, instead of showing only the matched-settlement slice — a cached pre-gross-up
 // response would otherwise keep showing understated figures for any month below ~100% coverage.
 
-// Queries that touch per-channel detail (states/cities/SKUs/category matrix/settlement).
-// These are SLOW (~20-30s for full month ranges) — split into phase=slow so the fast
-// KPIs/daily chart return in ~8-10s first.
-const SLOW_QUERY_KEYS = new Set([
-  'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
-  'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
-  'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','shComponentRateMature','amzSCReturnRateMature','amzSCComponentRateMature','fkReturnRateMature','fkComponentRateMature','fkDailySKUComponents','mnReturnRateMature','mnComponentRateMature','mnDailySKUComponents','offlineCreditNoteRateMature','offComponentRateMature','offDailySKUComponents','eboReturnRateMature','eboComponentRateMature','eboDailySKUComponents','crComponentRateMature','crDailySKUComponents','fcComponentRateMature','fcDailySKUComponents','shStateComponentRateMature','shDailyStateComponents','shCityComponentRateMature','shDailyCityComponents','amzVCComponentRateMature','amzVCDailySKUComponents','amzSCStateComponentRateMature','amzSCDailyStateComponents','amzSCCityComponentRateMature','amzSCDailyCityComponents','fkStateComponentRateMature','fkDailyStateComponents','fkCityComponentRateMature','fkDailyCityComponents2','mnStateComponentRateMature','mnDailyStateComponents','mnCityComponentRateMature','mnDailyCityComponents','eboStateComponentRateMature','eboDailyStateComponents','eboCityComponentRateMature','eboDailyCityComponents','overallReturnRateMature','allTabReturnRateMature',
-  'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
-  'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
-  'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
-  'amzSCCatChannelPrev','amzSCSubCatChannelPrev','amzSCSKUChannelPrev',
-  'amzSCRollingRate','amzSCRollingNetRevenue','amzSCDailyNetBySKU',
-  'amzSCDailySettlement','amzSCMFNOrderWeights','amzSCLineItemWeights',
-  'amzSCRegion','amzSCTier','amzSCFulfillment','amzSCStatus',
-  'amzVCCat','amzVCSubCat','amzVCSKU','amzVCDailySKU','amzVCDailyCat',
-  'amzVCCatPrev','amzVCSubCatPrev','amzVCSKUPrev',
-  'fkCategories','fkSubCategory','fkSKUs','fkSKUMatrix','fkDailyCat',
-  'fkStates','fkStatesPrev','fkCities','fkCitiesPrev',
-  'fkRegions','fkReturnRate','fkStatus','fkCatPrev','fkSubCatPrev','fkSKUPrev',
-  'blCategories','blSubCategories','blStates','blStatesPrev','blSKUs','blSKUMatrix',
-  'blCities','blCitiesPrev','blSKUPrev',
-  'inCategories','inSubCategories','inStates','inStatesPrev','inSKUs','inSKUMatrix',
-  'inCities','inCitiesPrev','inSKUPrev',
-  'zpCategories','zpSubCategories','zpStates','zpStatesPrev','zpSKUs','zpSKUMatrix',
-  'zpCities','zpCitiesPrev','zpSKUPrev',
-  'crCategories','crSubCategories','crSKUs','crSKUMatrix','crStates','crStatesPrev',
-  'crCatPrev','crSubCatPrev','crCities','crCitiesPrev','crRegion','crTier','crStatus',
-  'fcCategories','fcSubCategories','fcSKUs','fcSKUMatrix','fcStates','fcStatesPrev',
-  'fcCatPrev','fcSubCatPrev','fcCities','fcCitiesPrev','fcRegion','fcTier','fcStatus',
-  'mnCategories','mnSubCategories','mnSKUs','mnSKUMatrix','mnStates','mnStatesPrev',
-  'mnCatPrev','mnSubCatPrev','mnCities','mnCitiesPrev',
-  'intlCategories','intlSubCategories','intlSKUMatrix','intlCatPrev','intlSubCatPrev',
-  'eboCategory','eboCategoryPrev','eboSubCategory','eboSubCategoryPrev','eboSKU',
-  'eboState','eboStatePrev','eboCity','eboCityPrev','eboRegion','eboTier',
-  'offlineCategory','offlineSubCategory','offlineSKU',
-  'offlineState','offlineCity','offlineRegion','offlineTier',
-  'offCatPrev','offSubCatPrev','offStatesPrev','offCitiesPrev',
-  'salesCategoryOrders','salesCategoryOrdersFk',
-  'adsCategoryBreakdown','adsZeroOrder','adsDailyByCategory','salesDailyByCategory',
-  'channelDailyExcRev',
-  // Per-channel prev-period totals — only needed when viewing individual channel tabs
-  'prevShopify','prevShopifyDaily','prevShNetCalc','prevShopifyIntlTotals',
-  'prevAmzSC',
-  'prevFk','prevBl',
-  'prevCr','prevFc',
-  'prevMn',
-  'prevEbo','prevEboNetCalc',
-  'prevIntl','prevIntlNetCalc',
-  'prevOffline','prevOfflineDaily',
-  'prevDailyByChannel','prevAdsTotals',
-])
+// Which queries each staged-loading phase runs and which response fields it returns live in
+// api/_bqPhases.js (generated from measured query→field dependencies — this replaces the old
+// hand-kept SLOW_QUERY_KEYS / SLOW_PAYLOAD_KEYS / CHANNEL_SLOW_FIELDS lists, which had drifted:
+// the old 'fast' phase returned chMap / netRevenueCalc / returnRev / *.resolvedDailySKU computed
+// WITHOUT the resolved-engine queries they need, and 'slow' alone crashed on chMap['Shopify']).
 
-const CACHE_VERSION = 13
+// v14: staged phases (fast/sales_detail/pnl_detail/ads_detail) + shopify.dailySkuCostRows removed
+const CACHE_VERSION = 14
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase: phase || null })
@@ -184,11 +139,43 @@ function setInCache(key, data) {
 }
 
 export default async function handler(req, res) {
+  const timer = requestTimer('bq')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Ads "Last 6 months" (ADS_MASTER_PLAN.md Part B §1.2): monthly ad spend / clicks / impressions per
+  // platform + monthly channel sales ex GST (same base and Channel grouping as the cards' chMap, no
+  // late-report estimates). One extra request, cached here and in the browser session.
+  if (req.body?.adsMonthly) {
+    const { from, to } = req.body
+    const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '')
+    if (!isDate(from) || !isDate(to)) return res.status(400).json({ error: 'Bad from / to' })
+    const ck = `adsMonthly|${from}|${to}`
+    const hit = getFromCache(ck)
+    if (hit) { timer.markCacheHit(ck); timer.finish(res); return res.json(hit) }
+    timer.markCacheMiss(ck)
+    try {
+      const bqm = getBQ()
+      const [[spendRows], [salesRows]] = await Promise.all([
+        bqm.query({ query: `SELECT FORMAT_DATE('%Y-%m', report_date) AS month, platform, SUM(spend) AS spend, SUM(clicks) AS clicks, SUM(impressions) AS impressions FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${from}' AND '${to}' GROUP BY 1, 2` }),
+        bqm.query({ query: `WITH q AS (${buildQuery(from, to, {})}) SELECT FORMAT_DATE('%Y-%m', OrderDate) AS month, Channel, SUM(SellingPrice_Exc_GST) AS exc_rev FROM q GROUP BY 1, 2` }),
+      ])
+      const out = {
+        from, to,
+        spend: spendRows.map(x => ({ month: x.month, platform: x.platform, spend: Number(x.spend) || 0, clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0 })),
+        sales: salesRows.map(x => ({ month: x.month, channel: x.Channel === 'Retail' ? 'EBO' : x.Channel, excRev: Number(x.exc_rev) || 0 })),
+      }
+      setInCache(ck, out)
+      timer.finish(res)
+      return res.json(out)
+    } catch (e) {
+      timer.finish(res)
+      return res.status(500).json({ error: String(e.message || e).slice(0, 300) })
+    }
+  }
 
   const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup, phase } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
@@ -196,9 +183,12 @@ export default async function handler(req, res) {
   const cacheKey = getCacheKey(req.body)
   const cached = getFromCache(cacheKey)
   if (cached) {
+    timer.markCacheHit(cacheKey)
     res.setHeader('X-Cache', 'HIT')
+    timer.finish(res)
     return res.json(cached)
   }
+  timer.markCacheMiss(cacheKey)
 
   const bq = getBQ()
 
@@ -709,41 +699,9 @@ export default async function handler(req, res) {
       SUM(gross_inc_gst) AS gross_inc_gst
     FROM lined
     GROUP BY sku, category, sub_channel, order_status, weight_slab`,
-    // Same (sku, order_status, weight_slab) cost-line grain as shSkuCosts above, with OrderDate
-    // added to the GROUP BY — real day-wise weight-slab SnD, same standard as Amazon VC's
-    // dailyPnLBySku (fresh per-day computation, not a whole-range rate applied across days).
-    // Feeds PnLPage.jsx's shDailyPnL construction for the D2C trend chart's day-wise SnD%/CM1%.
-    shDailySkuCosts: `WITH q AS (${base}),
-    lined AS (
-      SELECT
-        CAST(OrderDate AS STRING) AS date,
-        MasterSKU AS sku,
-        SubChannel AS sub_channel,
-        COALESCE(Order_Status, 'Delivered') AS order_status,
-        ItemQty AS qty,
-        SellingPrice_Inc_GST AS gross_inc_gst,
-        CASE
-          WHEN Weight_gms IS NULL THEN NULL
-          WHEN (Weight_gms * ItemQty) <= 500 THEN 500
-          ELSE CAST(CEIL((Weight_gms * ItemQty) / 1000.0) * 1000 AS INT64)
-        END AS weight_slab
-      FROM q
-      WHERE Channel = 'Shopify'
-        AND SubChannel NOT IN ('Shopify International', 'Retail Store')
-        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
-    )
-    SELECT
-      date,
-      sku,
-      sub_channel,
-      order_status,
-      weight_slab,
-      COUNT(*) AS line_count,
-      SUM(qty) AS total_qty,
-      SUM(gross_inc_gst) AS gross_inc_gst
-    FROM lined
-    GROUP BY date, sku, sub_channel, order_status, weight_slab
-    ORDER BY date`,
+    // shDailySkuCosts removed 2026-10-30 (staged loading): it fed only shopify.dailySkuCostRows, which
+    // nothing in src/ ever read (grep -rn dailySkuCostRows src/ → 0 matches), and was the single most
+    // expensive query in this file (YTD: 302k rows / ~50MB / ~15s).
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     // Day-wise, State-wise component revenue + rolling-window rate, same resolved-rate engine as
     // the SKU-grain queries above (confirmed 2026-10-22) — Top States' Return% was still using the
@@ -1565,7 +1523,10 @@ export default async function handler(req, res) {
     // validated only against a Category-only whitelist with no SubCategory resolution at all.
     salesDailyByCategory: `WITH item_master AS (SELECT REGEXP_REPLACE(UPPER(TRIM(Product_Code)), r'[^A-Z0-9-]', '') AS sku_key, CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Category_Name) END AS Category_Name, CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Sub_category) END AS Sub_category FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != '' GROUP BY sku_key) SELECT CAST(s.OrderDate AS STRING) AS date, s.Channel AS platform, COALESCE(im.Category_Name, 'Others') AS category, im.Sub_category AS sub_category, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(s.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Flipkart','Shopify','Zepto','Instamart','Myntra','Blinkit') AND s.Country = 'India' AND NOT (s.Channel = 'Shopify' AND s.OrderId LIKE '%_EX%') GROUP BY date, platform, category, sub_category`,
     prevAdsTotals: `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${ps}' AND '${pe}' GROUP BY platform`,
-    shopifyNewCusts: `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
+    // Ads CAC's new customers (D4, Suraj 27 Oct): the Customer tab's definition (api/customer.js Q1) —
+    // sales report, Shopify, first order date per CustomerId, _EX orders excluded. n_custs = customers
+    // ordering in range, repeat_custs = those whose first order is before it; new = n − repeat.
+    shopifyNewCusts: `WITH first_dates AS (SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') GROUP BY CustomerId), in_range AS (SELECT DISTINCT CustomerId FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel = 'Shopify' AND DATE(OrderDate) BETWEEN '${start}' AND '${end}' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')) SELECT COUNT(*) AS n_custs, COUNTIF(f.first_date < DATE('${start}')) AS repeat_custs FROM in_range ir JOIN first_dates f USING (CustomerId)`,
     // Same (sku, order_status, weight_slab) cost-line grain as shSkuCosts — EBO's SnD is the
     // identical D2C weight-slab-courier formula (confirmed 2026-08-20: ~70% of EBO orders are
     // punched online and shipped courier-direct from the warehouse, indistinguishable from a
@@ -1695,16 +1656,20 @@ export default async function handler(req, res) {
 
   try {
     // Bounded-concurrency + retry-with-backoff runner (api/_bq.js) — replaces the old
-    // Object.entries(queries).map(...) + Promise.all, which fired all ~150 of this request's
-    // queries as truly concurrent BigQuery jobs and regularly tripped BigQuery's per-user
+    // Object.entries(queries).map(...) + Promise.all, which fired all 317 of this request's
+    // queries (verified 2026-10-29 by direct instrumentation — this comment previously said
+    // ~150, stale after the file grew) as truly concurrent BigQuery jobs and regularly tripped
+    // BigQuery's per-user
     // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
     // silently keep showing stale data from the last successful fetch).
-    // Phase filtering: fast phase skips slow detail queries, slow phase skips fast queries
-    const filteredQueries = phase === 'fast'
-      ? Object.fromEntries(Object.entries(queries).filter(([k]) => !SLOW_QUERY_KEYS.has(k)))
-      : phase === 'slow'
-        ? Object.fromEntries(Object.entries(queries).filter(([k]) => SLOW_QUERY_KEYS.has(k)))
-        : queries
+    // Staged loading (api/_bqPhases.js): a recognised `phase` runs only the queries its response
+    // fields were measured to depend on; no phase (or an unrecognised one) runs every query and
+    // returns the full response exactly as before. byChannel/byDate are part of every phase's list —
+    // chMap/netRevenueCalc/dailyArr are built from them unconditionally further down.
+    const phaseDef = getPhaseDef(phase)
+    const filteredQueries = phaseDef
+      ? Object.fromEntries(Object.entries(queries).filter(([k]) => phaseDef.queries.has(k)))
+      : queries
 
     // Store P&L reference data lives in Supabase, not BigQuery — fetched alongside the BQ run
     // rather than blocking on it first. Defensive fallback to empty maps on failure (Supabase
@@ -1712,7 +1677,7 @@ export default async function handler(req, res) {
     // payload — the store drill-down just renders with "—" costs instead, same convention as
     // every other missing-cost-data case on this page.
     const [results, storeIdMap, storeCosts] = await Promise.all([
-      runQueriesLimited(bq, filteredQueries),
+      runQueriesLimited(bq, filteredQueries, timer),
       getStoreIdMap().catch(e => { console.warn('getStoreIdMap failed:', e.message); return {} }),
       getStoreCosts().catch(e => { console.warn('getStoreCosts failed:', e.message); return {} }),
     ])
@@ -2067,14 +2032,16 @@ export default async function handler(req, res) {
             cur.setDate(cur.getDate() + 1)
             while (cur <= end_) {
               const d = cur.toISOString().slice(0, 10)
-              estimatedDaily.push({ date: d, sub, rev: avgRev, excRev: avgExcRev, orders: avgOrders, units: avgUnits, estimated: true })
+              estimatedDaily.push({ date: d, sub, rev: avgRev, excRev: avgExcRev > 0 ? avgExcRev : avgRev, orders: avgOrders, units: avgUnits, estimated: true })
               cur.setDate(cur.getDate() + 1)
             }
           }
         }
-        const estBySub = { FBF: { rev: 0, orders: 0, units: 0 }, 'NON-FBF': { rev: 0, orders: 0, units: 0 } }
-        estimatedDaily.forEach(d => { const s = d.sub === 'FBF' ? 'FBF' : 'NON-FBF'; estBySub[s].rev += d.rev; estBySub[s].orders += d.orders; estBySub[s].units += d.units })
+        const estBySub = { FBF: { rev: 0, excRev: 0, orders: 0, units: 0 }, 'NON-FBF': { rev: 0, excRev: 0, orders: 0, units: 0 } }
+        estimatedDaily.forEach(d => { const s = d.sub === 'FBF' ? 'FBF' : 'NON-FBF'; estBySub[s].rev += d.rev; estBySub[s].excRev += d.excRev; estBySub[s].orders += d.orders; estBySub[s].units += d.units })
         const estTotalRev = estimatedDaily.reduce((s, d) => s + d.rev, 0)
+        // ex-GST estimate (D3, Suraj 27 Oct): ex-GST totals add this, never the Inc-GST estTotalRev
+        const estTotalExcRev = estimatedDaily.reduce((s, d) => s + d.excRev, 0)
         const estTotalOrders = estimatedDaily.reduce((s, d) => s + d.orders, 0)
         const estTotalUnits = estimatedDaily.reduce((s, d) => s + d.units, 0)
         // partialBySub: the tiny real revenue/orders/units sitting inside r.fkTotals' SQL-summed
@@ -2088,13 +2055,13 @@ export default async function handler(req, res) {
         })
         const realTotals = (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, cancelOrders: parseInt(x.cancel_orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, returnRev: parseFloat(x.return_rev)||0, totalReturnRev: parseFloat(x.total_return_rev)||0 }))
         const patchedTotals = realTotals.map(t => {
-          const e = estBySub[t.sub] || { rev: 0, orders: 0, units: 0 }
+          const e = estBySub[t.sub] || { rev: 0, excRev: 0, orders: 0, units: 0 }
           const p = partialBySub[t.sub] || { rev: 0, orders: 0, units: 0, excRev: 0 }
           // Only patch rev/excRev with estimated — orders/units stay as real COUNT(DISTINCT) to avoid inflation
-          return { ...t, rev: t.rev - p.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev - p.excRev + e.rev }
+          return { ...t, rev: t.rev - p.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev - p.excRev + e.excRev }
         })
-        if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'], excRev: estBySub['NON-FBF'].rev })
-        return { estTotalRev, estTotalOrders, estTotalUnits, estBySub, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
+        if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'] })
+        return { estTotalRev, estTotalExcRev, estTotalOrders, estTotalUnits, estBySub, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
     })()
 
     // Myntra — same "estimate missing recent days via 7-day trailing average" mechanism as
@@ -2158,13 +2125,13 @@ export default async function handler(req, res) {
 
     // Patch overall totals with Flipkart estimated days
     const adjTotalRev = totalRev + fkBlock.estTotalRev
-    const adjTotalExcRev = totalExcRev + fkBlock.estTotalRev
+    const adjTotalExcRev = totalExcRev + fkBlock.estTotalExcRev
     const adjNOrders = nOrders + fkBlock.estTotalOrders
     const adjTotalQty = totalQty + fkBlock.estTotalUnits
     const adjAspQty = aspQty + fkBlock.estTotalUnits
     if (chMap['Flipkart']) {
       chMap['Flipkart'].rev += fkBlock.estTotalRev
-      chMap['Flipkart'].excRev += fkBlock.estTotalRev
+      chMap['Flipkart'].excRev += fkBlock.estTotalExcRev
       chMap['Flipkart'].orders += fkBlock.estTotalOrders
       chMap['Flipkart'].qty += fkBlock.estTotalUnits
       // Override netRev using the exact same aggregate the Flipkart tab itself computes from
@@ -2244,14 +2211,20 @@ export default async function handler(req, res) {
         .filter(x => !salesChannels || salesChannels.includes(x.platform))
         .map(x => ({ ...x, category: normCat(x.category) }))
       const adsCB = (r.adsCategoryBreakdown || []).filter(x => !adsPlatforms || adsPlatforms.includes(x.platform))
+      // D2 (Suraj 27 Oct): spend not linked to a product — "all products" campaigns (target_type 'all',
+      // which the query spreads over every sub-category by revenue share, plus product / category
+      // targets that match nothing in the item master) or rows with no product — stays out of the
+      // category and product spend (so their ROAS is attributed-only) and is one "Unattributed" line,
+      // the same as the cached path. P&L reads adsCategoryBreakdown on its own and still spreads it.
+      const isUnattributed = x => x.target_type === 'all' || !x.product_name
       const adCatMapAll = {}
-      adsCB.forEach(x => {
+      adsCB.filter(x => !isUnattributed(x)).forEach(x => {
         const cat = normCat(x.category)
         if (!adCatMapAll[cat]) adCatMapAll[cat] = 0
         adCatMapAll[cat] += parseFloat(x.spend) || 0
       })
       const adSubCatMapAll = {}
-      adsCB.filter(x => x.product_name).forEach(x => {
+      adsCB.filter(x => !isUnattributed(x)).forEach(x => {
         const subCat = x.product_name.trim()
         if (!adSubCatMapAll[subCat]) adSubCatMapAll[subCat] = 0
         adSubCatMapAll[subCat] += parseFloat(x.spend) || 0
@@ -2260,7 +2233,7 @@ export default async function handler(req, res) {
       // any product) — this can't be joined to a sub-category, so it's tracked separately
       // and folded into "Others" below so total spend always reconciles to adCatMapAll.
       let unmatchedProductSpend = 0
-      adsCB.filter(x => !x.product_name).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
+      adsCB.filter(isUnattributed).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
 
       // Shared measures layer — same formula as Shopify/EBO/All tab.
       const netRevOf = row => computeNetRevenueMeasures({
@@ -2298,15 +2271,12 @@ export default async function handler(req, res) {
         if (others) others.spend += unmatchedCatSpend
         else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
       }
-      // Flipkart's feed lags real time — chMap['Flipkart'] (and so the KPI card's Net Revenue)
-      // is patched with a trailing-7-day-average estimate for the missing days, but that estimate
-      // has no category/product breakdown to attribute it to. Add it to "Others" so this table's
-      // total always reconciles to the KPI card's Net Revenue — only when Flipkart is in scope.
-      if (includesFlipkart && fkBlock.estTotalRev > 0) {
-        const others = categoryRowsAll.find(x => x.category === 'Others')
-        if (others) { others.revenue += Math.round(fkBlock.estTotalRev); others.netRevenue += Math.round(fkBlock.estTotalRev) }
-        else categoryRowsAll.push({ category: 'Others', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 })
-      }
+      // D2: one "Unattributed" category row (spend only), so no category's ROAS carries it
+      if (unmatchedProductSpend > 0) categoryRowsAll.push({ category: 'Unattributed', spend: unmatchedProductSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
+      // Flipkart / Myntra late-report estimates have no category / product breakdown: they are NOT
+      // put in "Others" here (D3, Suraj 27 Oct). The Ads tab shows them as one labelled row,
+      // "Flipkart / Myntra estimate (no product detail)", the same on the cached path; the
+      // reconcile target below leaves them out.
 
       // Sub-category level
       const subCatMap = {}
@@ -2381,13 +2351,7 @@ export default async function handler(req, res) {
         ? [{ category: 'Others', subCategory: 'Unattributed', spend: unmatchedProductSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }]
         : []
 
-      // Flipkart trailing-average estimate for lagging days (see categoryRowsAll above) —
-      // no product breakdown available, so it goes under Others / Flipkart Estimate.
-      const fkEstRows = includesFlipkart && fkBlock.estTotalRev > 0
-        ? [{ category: 'Others', subCategory: 'Flipkart Estimate', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 }]
-        : []
-
-      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherSpendRows, ...fkEstRows]
+      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherSpendRows]
 
       // Force exact reconciliation to the KPI card's own revenue number (same chMap source the
       // frontend's Net Revenue / Platform Overview use). The two sides are built from genuinely
@@ -2395,11 +2359,13 @@ export default async function handler(req, res) {
       // lag-shifted window, etc.) that can never be made to agree to the rupee by construction —
       // rather than let those small structural gaps grow with the date range, plug the residual
       // straight into "Others" so By Category / By Product always foot to the KPI exactly.
+      // without the Flipkart / Myntra estimates (their own labelled row in the Ads tab, D3)
+      const estOf = c => (c === 'Flipkart' ? fkBlock.estTotalExcRev || 0 : c === 'Myntra' ? mnBlock.estTotalExcRev || 0 : 0)
       const trueRevenue = platformFilter === 'D2C'
         ? (chMap['Shopify']?.excRev || 0)
         : platformFilter
-          ? (chMap[platformFilter]?.excRev || 0)
-          : ['Shopify', 'Amazon', 'Blinkit', 'Zepto', 'Instamart', 'Myntra', 'Flipkart'].reduce((s, c) => s + (chMap[c]?.excRev || 0), 0)
+          ? (chMap[platformFilter]?.excRev || 0) - estOf(platformFilter)
+          : ['Shopify', 'Amazon', 'Blinkit', 'Zepto', 'Instamart', 'Myntra', 'Flipkart'].reduce((s, c) => s + (chMap[c]?.excRev || 0) - estOf(c), 0)
       const reconcile = (rows) => {
         const currentTotal = rows.reduce((s, x) => s + x.revenue, 0)
         const residual = Math.round(trueRevenue - currentTotal)
@@ -3015,18 +2981,6 @@ export default async function handler(req, res) {
         // figure above, which is a courier-billing SHIPMENT weight (real weight × units in that
         // order), not a per-unit value.
         skuWeightGm: Object.fromEntries((r.shSKUWeight || []).map(x => [x.sku, parseFloat(x.weight_gms) || null])),
-        // Same shape as skuCostRows above, plus `date` — day-wise weight-slab cost lines for the
-        // PnL trend chart's real per-day SnD computation (see shDailySkuCosts query above).
-        dailySkuCostRows: (r.shDailySkuCosts || []).map(x => ({
-          date: x.date,
-          sku: x.sku,
-          subChannel: (x.sub_channel || '').toLowerCase(),
-          orderStatus: x.order_status || 'Delivered',
-          weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
-          lineCount: parseInt(x.line_count) || 0,
-          totalQty: parseInt(x.total_qty) || 0,
-          grossIncGst: parseFloat(x.gross_inc_gst) || 0,
-        })),
         // Category/Product/SKU rev breakdown split by SubChannel (MyFrido/Mobility/Shopify
         // International/...) — feeds the PnL tab's D2C All/MyFrido/Mobility toggle.
         skuMapBySubChannel: (() => { const m = {}; (r.shSKU || []).forEach(x => { const subCh = x.SubChannel||'Unknown', cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[subCh]) m[subCh] = {}; if (!m[subCh][cat]) m[subCh][cat] = {}; if (!m[subCh][cat][sc]) m[subCh][cat][sc] = {}; m[subCh][cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
@@ -3776,7 +3730,7 @@ export default async function handler(req, res) {
           const m = computeNetRevenueMeasures({ gross_inc_gst: all.rev, gross_exc_gst: all.excRev, cancel_rev: all.cancelRev, return_rev: all.returnRev, rto_rev: 0, cir_rev: 0 })
           return { gross: m.grossIncGst, cancelRev: m.cancelRev, returnRev: m.returnRev, netRev: m.netRevenueExcGst, gstRatio: m.grossIncGst > 0 ? (m.grossIncGst - m.grossExcGst) / m.grossIncGst : 0 }
         })(),
-        estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
+        estTotalRev: fkBlock.estTotalRev, estTotalExcRev: fkBlock.estTotalExcRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
         daily: fkBlock.daily,
         // fkBlock.latestFkDate checked FIRST (confirmed bug fix 2026-10-22, "the last sync was
         // happened [mid-day].. what it's considering is that we have the data till 18th") — it's
@@ -3880,6 +3834,7 @@ export default async function handler(req, res) {
           // per-component resolved-units pattern as revenue — shares the same `share` scaling).
           return rows.map(x => {
             const est = fkBlock.estBySub[x.sub === 'FBF' ? 'FBF' : 'NON-FBF']?.rev || 0
+            const estEx = fkBlock.estBySub[x.sub === 'FBF' ? 'FBF' : 'NON-FBF']?.excRev || 0
             const subCatKey = `${x.category}::${x.subcategory}`
             const resolved = fkResolvedByCatSubCat[subCatKey]
             const share = resolved && subCatRevTotal[subCatKey] > 0 ? x.rev / subCatRevTotal[subCatKey] : 0
@@ -3889,7 +3844,7 @@ export default async function handler(req, res) {
             const cancelUnits = resolved ? resolved.cancelUnits * share : 0
             if (est <= 0 || !subRevTotal[x.sub]) return { ...x, returnRev, cancelRev, returnUnits, cancelUnits }
             const estShare = x.rev / subRevTotal[x.sub]
-            return { ...x, rev: x.rev + est * estShare, excRev: x.excRev + est * estShare, returnRev, cancelRev, returnUnits, cancelUnits }
+            return { ...x, rev: x.rev + est * estShare, excRev: x.excRev + estEx * estShare, returnRev, cancelRev, returnUnits, cancelUnits }
           })
         })(),
         dailyCat: (r.fkDailyCat || []).map(x => ({ date: x.date, category: x.category, subcategory: x.subcategory, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
@@ -4159,6 +4114,7 @@ export default async function handler(req, res) {
         returnRateMature: buildReturnRateMature(r.mnReturnRateMature),
         daily: mnBlock.daily,
         estimatedDays: mnBlock.estimatedDays,
+        estTotalExcRev: mnBlock.estTotalExcRev,
         latestRealDate: mnBlock.latestMnDate,
         status: (r.mnStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         // cancelRev/rtoRev/cirRev/returnRev added from mnResolvedByCatSubCat (built above, keyed by
@@ -4289,7 +4245,7 @@ export default async function handler(req, res) {
         // the category/product breakdown below only sums rows actually present in the sales
         // table. Exposed here so the frontend can add the same estimate into Flipkart's
         // "Others" bucket, keeping the KPI and the breakdown tables' totals consistent.
-        flipkartEstRev: fkBlock.estTotalRev || 0,
+        flipkartEstRev: fkBlock.estTotalExcRev || 0, // ex-GST (D3)
         daily: (r.adsDaily || []).map(x => ({ date: x.date, platform: x.platform, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0 })),
         channelDailyExcRev: (() => {
           const map = {}
@@ -4429,7 +4385,7 @@ export default async function handler(req, res) {
             // above); add the same estimate here as an uncategorized row so this table's total
             // stays consistent with the KPI instead of silently running short.
             if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
-              categoryRows.push({ platform: plat, category: 'Others (est.)', subCategory: null, spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+              categoryRows.push({ platform: plat, category: 'Others (est.)', subCategory: null, spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalExcRev), orders: 0 })
             }
 
             // Product rows for this platform
@@ -4459,7 +4415,7 @@ export default async function handler(req, res) {
             }
             // Same Flipkart lag-estimate reconciliation as the category table above.
             if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
-              advertisedProducts.push({ platform: plat, category: 'Others (est.)', subCategory: 'Others (est.)', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+              advertisedProducts.push({ platform: plat, category: 'Others (est.)', subCategory: 'Others (est.)', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalExcRev), orders: 0 })
             }
           })
 
@@ -4998,183 +4954,23 @@ export default async function handler(req, res) {
     // Sub-category first order date map — loaded from static file (no BQ query)
     payload.subCatFirstOrderMap = loadSubCatFirstOrder()
 
-    // Phase-specific response: only return the relevant subset of payload keys so the
-    // frontend can merge fast+slow without the slow phase overwriting fast KPIs with zeros.
-    if (phase === 'fast') {
-      // Fast phase: KPIs, daily chart, chMap, prev comparison, top-line per-channel totals/daily.
-      // Exclude all slow-computed fields (catMap, stateMap, cityRows, per-channel detail, pnlSalesRows, etc.)
-      const SLOW_PAYLOAD_KEYS = new Set([
-        'catMap','subCatMap','catPrevMap','subCatPrevMap',
-        'stateMap','statePrevMap','stateTotal','cityRows','cityPrevMap','cityTotal',
-        'regionRows','tierRows','catChannelMap','subCatChannelMap',
-        'buckets','bucketRev','skuRows','pnlSalesRows','pnlAdSpendMap','pnlRawAdSpend',
-      ])
-      const fastPayload = Object.fromEntries(
-        Object.entries(payload).filter(([k]) => !SLOW_PAYLOAD_KEYS.has(k))
-      )
-      // Provide empty-but-non-null defaults for slow maps/arrays so components don't crash
-      // calling Object.entries()/Object.keys() before the slow phase arrives.
-      fastPayload.catMap = fastPayload.catMap ?? {}
-      fastPayload.subCatMap = fastPayload.subCatMap ?? {}
-      fastPayload.catPrevMap = fastPayload.catPrevMap ?? {}
-      fastPayload.subCatPrevMap = fastPayload.subCatPrevMap ?? {}
-      fastPayload.stateMap = fastPayload.stateMap ?? {}
-      fastPayload.statePrevMap = fastPayload.statePrevMap ?? {}
-      fastPayload.stateTotal = fastPayload.stateTotal ?? 0
-      fastPayload.cityRows = fastPayload.cityRows ?? []
-      fastPayload.cityPrevMap = fastPayload.cityPrevMap ?? {}
-      fastPayload.cityTotal = fastPayload.cityTotal ?? 0
-      fastPayload.regionRows = fastPayload.regionRows ?? []
-      fastPayload.tierRows = fastPayload.tierRows ?? []
-      fastPayload.catChannelMap = fastPayload.catChannelMap ?? {}
-      fastPayload.subCatChannelMap = fastPayload.subCatChannelMap ?? {}
-      fastPayload.buckets = fastPayload.buckets ?? []
-      fastPayload.bucketRev = fastPayload.bucketRev ?? 0
-      fastPayload.skuRows = fastPayload.skuRows ?? []
-      fastPayload.pnlSalesRows = fastPayload.pnlSalesRows ?? []
-      fastPayload.pnlAdSpendMap = fastPayload.pnlAdSpendMap ?? {}
-      fastPayload.pnlRawAdSpend = fastPayload.pnlRawAdSpend ?? 0
-      // Per-channel prev-period defaults (now slow) — components use ?.[0] or || fallback
-      fastPayload.prevShopify = fastPayload.prevShopify ?? []
-      fastPayload.prevShopifyDaily = fastPayload.prevShopifyDaily ?? []
-      fastPayload.prevShopifyCancel = fastPayload.prevShopifyCancel ?? []
-      fastPayload.prevShNetCalc = fastPayload.prevShNetCalc ?? []
-      fastPayload.prevShopifyIntlTotals = fastPayload.prevShopifyIntlTotals ?? []
-      fastPayload.prevAmzSC = fastPayload.prevAmzSC ?? []
-      fastPayload.prevAmzVC = fastPayload.prevAmzVC ?? []
-      fastPayload.prevFk = fastPayload.prevFk ?? []
-      fastPayload.prevBl = fastPayload.prevBl ?? []
-      fastPayload.prevIn = fastPayload.prevIn ?? []
-      fastPayload.prevZp = fastPayload.prevZp ?? []
-      fastPayload.prevCr = fastPayload.prevCr ?? []
-      fastPayload.prevCrNetCalc = fastPayload.prevCrNetCalc ?? []
-      fastPayload.prevFc = fastPayload.prevFc ?? []
-      fastPayload.prevFcNetCalc = fastPayload.prevFcNetCalc ?? []
-      fastPayload.prevMn = fastPayload.prevMn ?? []
-      fastPayload.prevMnNetCalc = fastPayload.prevMnNetCalc ?? []
-      fastPayload.prevEbo = fastPayload.prevEbo ?? []
-      fastPayload.prevEboNetCalc = fastPayload.prevEboNetCalc ?? []
-      fastPayload.prevIntl = fastPayload.prevIntl ?? []
-      fastPayload.prevIntlNetCalc = fastPayload.prevIntlNetCalc ?? []
-      fastPayload.prevOffline = fastPayload.prevOffline ?? []
-      fastPayload.prevOfflineDaily = fastPayload.prevOfflineDaily ?? []
-      fastPayload.prevDailyByChannel = fastPayload.prevDailyByChannel ?? []
-      fastPayload.prevAdsTotals = fastPayload.prevAdsTotals ?? []
-      // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
-      const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
-        'dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap',
-        'cityRows','cityPrevMap','cityTotal','returnReasons',
-        'catChannel','subCatChannel','skuChannel','sndBySku','dailyPnLBySku','dailyCat',
-        'catChannelPrev','subCatChannelPrev','skuChannelPrev','returnCat','returnSubCat','returnSKU',
-        'states','statesPrev','cities','citiesPrev','statesPrevMap','citiesPrevMap',
-        'categories','categoriesPrev','subCategories','subCategoriesPrev',
-        'skuMatrix','skuMatrixPrev','regions','tiers','status','region','tier',
-        'catPrev','subCatPrev','skuPrev','category','subCategory','sku',
-        'spendDetail','allSpendDetail','spendDetailByPlatform',
-        'additionalSpend','additionalSpendByProduct',
-      ]
-      for (const ch of ['shopify','flipkart','blinkit','instamart','zepto','cred','firstcry','myntra','amzSC','amzVCMatrix','amzVC','amzIntl','ebo','offline','international','ads']) {
-        if (fastPayload[ch]) {
-          fastPayload[ch] = Object.fromEntries(
-            Object.entries(fastPayload[ch]).filter(([k]) => !CHANNEL_SLOW_FIELDS.includes(k))
-          )
-        }
-      }
-      setInCache(cacheKey, fastPayload)
+    // Staged loading: a recognised phase returns only its own response fields (see api/_bqPhases.js).
+    // 'fast' also carries an empty placeholder ([] / {} / 0 / null) for every field it doesn't own, so
+    // the page can render (and show per-section loaders) without any component reading undefined;
+    // detail phases carry only their own fields, and the frontend merges them into the fast object
+    // two levels deep (top-level key, or channelObject.field) — fast + every detail group rebuilds
+    // the full response.
+    if (phaseDef) {
+      const phasePayload = pickPhaseFields(payload, phaseDef)
+      setInCache(cacheKey, phasePayload)
       res.setHeader('X-Cache', 'MISS')
-      return res.json(fastPayload)
-    }
-
-    if (phase === 'slow') {
-      // Slow phase: return only slow-computed fields. Per-channel objects are returned as
-      // _slow_<channel> keys (not overwriting the main channel object) so the frontend can
-      // deep-merge them without clobbering fast-phase totals/daily/netCalc fields.
-      // The slow fields within each channel are ONLY those derived from SLOW_QUERY_KEYS queries.
-      const chSlow = (ch, fields) => {
-        if (!payload[ch]) return undefined
-        const obj = {}
-        for (const f of fields) if (payload[ch][f] !== undefined) obj[f] = payload[ch][f]
-        return Object.keys(obj).length ? obj : undefined
-      }
-      const slowPayload = {
-        catMap: payload.catMap,
-        subCatMap: payload.subCatMap,
-        catPrevMap: payload.catPrevMap,
-        subCatPrevMap: payload.subCatPrevMap,
-        stateMap: payload.stateMap,
-        statePrevMap: payload.statePrevMap,
-        stateTotal: payload.stateTotal,
-        cityRows: payload.cityRows,
-        cityPrevMap: payload.cityPrevMap,
-        cityTotal: payload.cityTotal,
-        regionRows: payload.regionRows,
-        tierRows: payload.tierRows,
-        catChannelMap: payload.catChannelMap,
-        subCatChannelMap: payload.subCatChannelMap,
-        buckets: payload.buckets,
-        bucketRev: payload.bucketRev,
-        skuRows: payload.skuRows,
-        pnlSalesRows: payload.pnlSalesRows,
-        pnlAdSpendMap: payload.pnlAdSpendMap,
-        pnlRawAdSpend: payload.pnlRawAdSpend,
-        masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
-        _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
-        _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_zepto: chSlow('zepto', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_cred: chSlow('cred', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
-        _slow_firstcry: chSlow('firstcry', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
-        _slow_myntra: chSlow('myntra', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev']),
-        // returnCat/returnSubCat/returnSKU/orderStatusDebug removed 2026-10-19 — those amzSC
-        // payload fields no longer exist (their source queries were confirmed dead and removed);
-        // chSlow already skips any field name that isn't present, so this was harmless dead
-        // weight even before removal, but cleaned up for clarity alongside everything else.
-        _slow_amzSC: chSlow('amzSC', ['states','statesPrev','cities','citiesPrev','skus','catChannel','subCatChannel','skuChannel','catChannelPrev','subCatChannelPrev','skuChannelPrev','sndBySku','dailyPnLBySku','dailyCat','region','tier','fulfillment','status']),
-        _slow_amzVCMatrix: payload.amzVCMatrix,
-        _slow_amzVC: chSlow('amzVC', ['cat','subCat','sku','catPrev','subCatPrev','skuPrev','dailyCat','dailySKU']),
-        // _slow_amzIntl removed 2026-10-19 — the amzIntl payload block it referenced no longer
-        // exists (confirmed dead, removed above).
-        _slow_international: chSlow('international', ['categories','subCategories','skuMatrix','catPrev','subCatPrev']),
-        _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
-        _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
-        _slow_ads: chSlow('ads', ['spendDetail','allSpendDetail','spendDetailByPlatform','additionalSpend','additionalSpendByProduct','zeroOrder','dailyByCategory']),
-        // Per-channel prev-period totals (moved to slow so fast phase has fewer BQ scans)
-        prevShopify: payload.prevShopify,
-        prevShopifyDaily: payload.prevShopifyDaily,
-        prevShopifyCancel: payload.prevShopifyCancel,
-        prevShNetCalc: payload.prevShNetCalc,
-        prevShopifyIntlTotals: payload.prevShopifyIntlTotals,
-        prevAmzSC: payload.prevAmzSC,
-        prevAmzVC: payload.prevAmzVC,
-        prevFk: payload.prevFk,
-        prevBl: payload.prevBl,
-        prevIn: payload.prevIn,
-        prevZp: payload.prevZp,
-        prevCr: payload.prevCr,
-        prevCrNetCalc: payload.prevCrNetCalc,
-        prevFc: payload.prevFc,
-        prevFcNetCalc: payload.prevFcNetCalc,
-        prevMn: payload.prevMn,
-        prevMnNetCalc: payload.prevMnNetCalc,
-        prevEbo: payload.prevEbo,
-        prevEboNetCalc: payload.prevEboNetCalc,
-        prevIntl: payload.prevIntl,
-        prevIntlNetCalc: payload.prevIntlNetCalc,
-        prevOffline: payload.prevOffline,
-        prevOfflineDaily: payload.prevOfflineDaily,
-        prevDailyByChannel: payload.prevDailyByChannel,
-        prevAdsTotals: payload.prevAdsTotals,
-      }
-      // Remove undefined values
-      for (const k of Object.keys(slowPayload)) if (slowPayload[k] === undefined) delete slowPayload[k]
-      setInCache(cacheKey, slowPayload)
-      res.setHeader('X-Cache', 'MISS')
-      return res.json(slowPayload)
+      timer.finish(res)
+      return res.json(phasePayload)
     }
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
     res.json(payload)
 
     // Pre-warm D2C sub-channel cache entries in the background, AFTER the response is sent, so
@@ -5197,6 +4993,7 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('[api/bq]', err.message)
+    timer.finish(res)
     res.status(500).json({ error: err.message })
   }
 }

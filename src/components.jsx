@@ -80,13 +80,13 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, style,
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={spark} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <defs>
-                <linearGradient id={`kpiSpark-${sparkKey || label}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`kpiSpark-${String(sparkKey || label).replace(/[^A-Za-z0-9_-]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={sparkColor || C.acm} stopOpacity={0.34} />
                   <stop offset="100%" stopColor={sparkColor || C.acm} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <Area type="monotone" dataKey={sparkKey || 'v'} stroke={sparkColor || C.acm}
-                strokeWidth={1.75} fill={`url(#kpiSpark-${sparkKey || label})`} dot={false} />
+                strokeWidth={1.75} fill={`url(#kpiSpark-${String(sparkKey || label).replace(/[^A-Za-z0-9_-]/g, '')})`} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -98,12 +98,16 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, style,
 // compact=true: icon + bold title + body squeezed onto ONE row, body ellipsis-truncated with a
 // native title tooltip for the full text — for tight inline strips. compact=false (default): body
 // wraps onto its own line for full readability — used inside the alerts popover, which has room.
-export function AlertCard({ type, title, body, compact = false }) {
+// onClick (Phase 1, approved 2026-10-31): when an alert carries a nav target, the card becomes
+// clickable (pointer cursor + hover affordance) and navigates to the relevant page/channel tab.
+export function AlertCard({ type, title, body, compact = false, onClick }) {
   const s = { red: 'al-R', amber: 'al-A', green: 'al-G', blue: 'al-B' }[type] || 'al-B'
   const icon = type === 'green' ? '★' : type === 'blue' ? 'ℹ' : '⚠'
+  const clickableProps = onClick ? { onClick, role: 'button', tabIndex: 0, onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') onClick() } } : {}
+  const clickableStyle = onClick ? { cursor: 'pointer' } : {}
   if (compact) {
     return (
-      <div className={`flex items-center gap-2 rounded-lg border ${s}`} style={{ padding: '6px 12px', minHeight: 0 }}>
+      <div className={`flex items-center gap-2 rounded-lg border ${s}`} style={{ padding: '6px 12px', minHeight: 0, ...clickableStyle }} {...clickableProps}>
         <span style={{ fontSize: 12, flexShrink: 0 }}>{icon}</span>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
           <span className="text-xs font-bold" style={{ flexShrink: 0 }}>{title}</span>
@@ -113,7 +117,7 @@ export function AlertCard({ type, title, body, compact = false }) {
     )
   }
   return (
-    <div className={`flex items-start gap-2 rounded-lg border ${s}`} style={{ padding: '8px 12px', minHeight: 0 }}>
+    <div className={`flex items-start gap-2 rounded-lg border ${s}`} style={{ padding: '8px 12px', minHeight: 0, ...clickableStyle }} {...clickableProps}>
       <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{icon}</span>
       <div style={{ minWidth: 0 }}>
         <div className="text-xs font-bold" style={{ marginBottom: 2 }}>{title}</div>

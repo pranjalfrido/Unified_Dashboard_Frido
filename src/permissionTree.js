@@ -20,10 +20,6 @@ export const PERMISSION_TREE = [
           { key: 'sales:myntra',        label: 'Myntra' },
           { key: 'sales:international', label: 'International' },
           { key: 'sales:offline',       label: 'Offline Sales' },
-          // Reached via a link in Sales → Overall (AllTab in App.jsx), not its own sidebar nav
-          // item — nested under Sales so it's grantable per-user the same as any other Sales
-          // sub-tab, and locked by default like every key here (no automatic access).
-          { key: 'sales:financial-mis', label: 'Financial MIS' },
         ],
       },
       {
@@ -89,7 +85,7 @@ export const PERMISSION_TREE = [
     ],
   },
   { key: 'documents', label: 'Documents', children: [] },
-  { key: 'ask', label: 'Frido Pulse', children: [] },
+  { key: 'ask', label: 'NavAI', children: [] },
 ]
 
 export function hasPermission(allowedTabs, key) {

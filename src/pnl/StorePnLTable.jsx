@@ -21,7 +21,9 @@ const FIXED_KEYS = ['rent', 'utilities', 'employeeCost', 'cam', 'software', 'vol
 const MIN_REV_FOR_RATIOS = 100
 const pctOf = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : null
 
-export default function StorePnLTable({ rows = [] }) {
+// stickyFirst: the store column stays in place while the table scrolls sideways (mobile full-screen view).
+export default function StorePnLTable({ rows = [], stickyFirst = false }) {
+  const stick = z => (stickyFirst ? { position: 'sticky', left: 0, zIndex: z, background: C.card, boxShadow: `1px 0 0 ${C.border}` } : {})
   const { sort, sortRows, Th } = useSortableTable('gross')
 
   const getters = {
@@ -92,12 +94,12 @@ export default function StorePnLTable({ rows = [] }) {
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560, maxWidth: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 2280 }}>
           <colgroup>
-            <col style={{ width: '10%' }} />
+            <col style={{ width: stickyFirst ? 150 : '10%' }} />
             {Array.from({ length: 23 }).map((_, i) => <col key={i} style={{ width: `${90 / 23}%` }} />)}
           </colgroup>
           <thead className="tbl-head">
             <tr>
-              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
+              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3, ...(stickyFirst ? { left: 0, zIndex: 5, background: C.ach } : {}) }} align="left" />
               <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
               <Th label="Net Rev" sortKey="netRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
@@ -129,7 +131,7 @@ export default function StorePnLTable({ rows = [] }) {
               const ebitdaPct = r.ebitda != null ? pctOf(r.ebitda, r.netRev) : null
               return (
                 <tr key={r.storeName} className="tbl-row" style={{ cursor: 'default' }}>
-                  <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(r.isBucket ? { fontStyle: 'italic', color: C.t2 } : {}) }} title={r.isBucket ? `${r.storeName}: EBO sales from POS ids not mapped to a store` : r.storeName}>{r.storeName}</td>
+                  <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(r.isBucket ? { fontStyle: 'italic', color: C.t2 } : {}), ...stick(2) }} title={r.isBucket ? `${r.storeName}: EBO sales from POS ids not mapped to a store` : r.storeName}>{r.storeName}</td>
                   <td style={tdStyle}>{fmt(r.gross)}</td>
                   <td style={tdStyle}>{r.units.toLocaleString('en-IN')}</td>
                   <td style={tdStyle}>{fmt(r.netRev)}</td>
@@ -152,7 +154,7 @@ export default function StorePnLTable({ rows = [] }) {
           </tbody>
           <tfoot className="tbl-foot">
             <tr>
-              <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
+              <td style={{ ...totalTdStyle, textAlign: 'left', ...(stickyFirst ? { left: 0, zIndex: 4 } : {}) }}>Total</td>
               <td style={totalTdStyle}>{fmt(tot.gross)}</td>
               <td style={totalTdStyle}>{tot.units.toLocaleString('en-IN')}</td>
               <td style={totalTdStyle}>{fmt(tot.netRev)}</td>

@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Card, ChartTooltip, chartLegendProps, ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
-  ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
+  ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from './components.jsx'
-import { C as BASE_C, fmt, fmtN, exportCSV } from './utils.js'
+import MixBar from './responsive/MixBar.jsx'
+import WatchlistCard from './responsive/WatchlistCard.jsx'
+import { computeSupportRules } from './customer/customerRules.js'
+import { publishNavStat } from './responsive/navStats.js'
+import CustomerSupportMobile from './customer/CustomerSupportMobile.jsx'
+import { C as BASE_C, fmtN, exportCSV } from './utils.js'
+import { yesterdayStillLoading, SUPPORT_LOAD_NOTE, orders7Of, per100, reasonLink, GRAINS, chLabel, trimPunct, dur, hrs, pctF, ratio, int, div, periodLabel, buildModel, avg, PCT_DEFAULT, fcr, sections, changeOf, ttrColumns, ttrRows, AGE_BUCKETS, pendencyRows, pendencyCsv, driverRows, detailedCsv, DOW, MAIN, shiftDay } from './customer/supportModel.js'
+import InfoStrip from './responsive/InfoStrip.jsx'
+import { authFetch } from './authFetch.js'
 
 // Customer Support (CC dashboard): Freshdesk tickets + Ozonetel calls + Shopify D2C orders,
 // laid out as the CC spec sheet does — KPIs down the side, periods across (Day 1..7,
@@ -12,211 +20,14 @@ import { C as BASE_C, fmt, fmtN, exportCSV } from './utils.js'
 
 const C = BASE_C
 const API = import.meta.env.VITE_API_URL || ''
-const GRAINS = [
-  { id: 'day', label: 'Daily', n: 7, delta: 'DoD' },
-  { id: 'week', label: 'Weekly', n: 4, delta: 'WoW' },
-  { id: 'month', label: 'Monthly', n: 2, delta: 'MoM' },
-]
-const CHANNELS = ['Chat', 'Inbound', 'Email', 'Social media', 'Escalation']
-
-// ── formatting ──
-const dur = (s) => {
-  if (s == null || !isFinite(s)) return '—'
-  if (s < 60) return `${Math.round(s)}s`
-  if (s < 3600) return `${(s / 60).toFixed(1)}m`
-  return `${(s / 3600).toFixed(1)}h`
-}
-const hrs = (h) => (h == null || !isFinite(h) ? '—' : `${h.toFixed(1)}h`)
-const pctF = (v) => (v == null || !isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`)
-const ratio = (v) => (v == null || !isFinite(v) ? '—' : v.toFixed(2))
-const int = (v) => (v == null || !isFinite(v) ? '—' : fmtN(Math.round(v)))
-const money = (v) => (v == null || !isFinite(v) ? '—' : fmt(v))
-const div = (a, b) => (a == null || !b ? null : a / b)
-
-function periodLabel(grain, key) {
-  if (grain === 'month') {
-    const [y, m] = key.split('-').map(Number)
-    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' })
-  }
-  const d = new Date(key + 'T00:00:00Z')
-  const s = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
-  return grain === 'week' ? `Wk ${s}` : `${d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' })} ${s}`
-}
-
-// ── data shaping: one accessor per period ──
-function buildModel(data) {
-  const by = (rows, k = 'bucket') => Object.fromEntries((rows || []).map(r => [r[k], r]))
-  const tix = {}
-  for (const r of data.tickets || []) (tix[r.bucket] ||= {})[r.ch] = r
-  const calls = by(data.calls), voice = by(data.voiceAgents), orders = by(data.orders)
-  const agents = {}
-  for (const r of data.agents || []) (agents[r.bucket] ||= {})[r.channel] = r.agents
-  return data.periods.map(p => ({
-    key: p,
-    t: (ch = 'All') => tix[p]?.[ch] || null,
-    calls: calls[p] || null,
-    voice: voice[p] || null,
-    orders: orders[p] || null,
-    agents: agents[p] || {},
-  }))
-}
-
-// avg of a sum/count pair on a ticket row
-const avg = (row, sum, n) => (row && row[n] ? row[sum] / row[n] : null)
-
-// Tables that carry a % / Count toggle open in Count, except SLA, which is a share by nature.
-const PCT_DEFAULT = { sla: 'pct' }
-
-// FCR = share of Parent + blank tickets that did NOT need a child ticket (100% - MCR). A period's
-// child tickets are not always children of that same period's parents, so it is clamped at 0.
-const fcr = (row) => (row?.interactions ? Math.max(0, 1 - (row.tasks || 0) / row.interactions) : null)
-
-function sections(model) {
-  const T = (ch) => (p) => p.t(ch)
-  const channelRows = CHANNELS.flatMap(ch => {
-    if (ch === 'Inbound') {
-      return [
-        { group: ch, label: 'FRT', hint: 'Ozonetel inbound: average time to answer (answered calls)', fmt: dur, good: 'down', get: p => avg(p.calls, 'tta_sum', 'answered_calls') },
-        { group: ch, label: 'AHT', hint: 'Ozonetel inbound: average handling time (answered calls)', fmt: dur, good: 'down', get: p => avg(p.calls, 'aht_sum', 'ans_n') },
-        { group: ch, label: 'ACW', hint: 'Ozonetel inbound: average after-call wrap-up time', fmt: dur, good: 'down', get: p => avg(p.calls, 'acw_sum', 'ans_n') },
-      ]
-    }
-    return [
-      { group: ch, label: 'FRT', hint: 'Ticket created → first public reply from us (automated replies included), in Freshdesk business hours', fmt: dur, good: 'down', get: p => avg(T(ch)(p), 'frt_sum', 'frt_n') },
-      { group: ch, label: 'Agent FRT', hint: 'Ticket created → first public reply from a Freshdesk agent, in business hours (chat/email 10:00–19:00, social 08:00–22:00)', fmt: dur, good: 'down', get: p => avg(T(ch)(p), 'afrt_sum', 'afrt_n') },
-      { group: ch, label: 'ART', hint: 'Average resolution time of resolved tickets', fmt: hrs, good: 'down', get: p => avg(T(ch)(p), 'res_sum', 'res_n') },
-    ]
-  })
-
-  const units = p => p.orders?.units, ordersN = p => p.orders?.orders
-  const all = p => p.t('All')
-  return [
-    {
-      id: 'channel', title: 'Channel performance',
-      note: 'FRT · Agent FRT · AHT / ART · ACW by channel. CSAT is not shown: no survey data is synced to BigQuery yet.',
-      rows: channelRows,
-    },
-    {
-      id: 'business', title: 'Orders & interaction conversion',
-      note: 'Shopify D2C (MyFrido + Mobility). Interactions = Parent + blank association tickets.',
-      rows: [
-        { label: 'Revenue achieved', fmt: money, good: 'up', hint: 'Shopify D2C order value incl. GST', get: p => p.orders?.revenue },
-        { label: 'Actual orders', fmt: int, good: 'up', get: ordersN },
-        { label: 'Actual items', fmt: int, good: 'up', get: units },
-        { label: 'ITU', hint: 'Interaction to unit = interactions / Shopify D2C units sold (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.interactions, units(p)) },
-        { label: 'Task to unit', hint: 'Tasks (Child tickets) / Shopify D2C units sold (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.tasks, units(p)) },
-        { label: 'ITO', hint: 'Interaction to order = interactions / Shopify D2C orders (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.interactions, ordersN(p)) },
-        { label: 'Task to order', hint: 'Tasks (Child tickets) / Shopify D2C orders (lower is better)', fmt: ratio, good: 'down', get: p => div(all(p)?.tasks, ordersN(p)) },
-        { label: 'UITU', hint: 'Unique interaction to unit = ordered units / unique customers contacting', fmt: ratio, get: p => div(units(p), all(p)?.unique_int) },
-        { label: 'UITO', hint: 'Unique interaction to order = orders / unique customers contacting', fmt: ratio, get: p => div(ordersN(p), all(p)?.unique_int) },
-        { label: 'CITU', hint: 'Customer interaction to unit = units / customer-initiated interactions (outbound excluded)', fmt: ratio, get: p => div(units(p), all(p)?.cust_int) },
-        { label: 'CITO', hint: 'Customer interaction to order = orders / customer-initiated interactions', fmt: ratio, get: p => div(ordersN(p), all(p)?.cust_int) },
-      ],
-    },
-    {
-      id: 'interactions', title: 'Interactions',
-      note: 'Association type Parent + blank. Escalation = tickets in the Escalations / CXO-Escalations groups.',
-      rows: [
-        ...['Chat', 'Inbound', 'Email', 'Social media', 'Escalation'].map(ch => ({
-          label: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, fmt: int, get: p => p.t(ch)?.interactions,
-          pct: p => div(p.t(ch)?.interactions, all(p)?.interactions),
-          hint: { Chat: 'WhatsApp', Inbound: 'Freshdesk phone tickets', Email: 'Email, outbound email and portal', 'Social media': 'Instagram and Facebook', Escalation: 'Tickets in the Escalations / CXO-Escalations groups' }[ch],
-        })),
-        { label: 'Total interactions', fmt: int, strong: true, get: p => all(p)?.interactions, pct: p => div(all(p)?.interactions, all(p)?.interactions) },
-        { label: 'Unique interactions', fmt: int, hint: 'Distinct customers (contact id, else phone, else email)', get: p => all(p)?.unique_int, pct: p => div(all(p)?.unique_int, all(p)?.interactions) },
-        { label: 'Customer-initiated', fmt: int, hint: 'Excludes voice-outbound, outbound email and outbound-call tickets', get: p => all(p)?.cust_int, pct: p => div(all(p)?.cust_int, all(p)?.interactions) },
-        { label: 'Escalation to interaction', fmt: pctF, good: 'down', get: p => div(all(p)?.escalations, all(p)?.interactions) },
-      ],
-    },
-    {
-      id: 'tasks', title: 'Tasks',
-      note: 'Tasks are Child tickets.',
-      rows: [
-        { label: 'Tasks', fmt: int, get: p => all(p)?.tasks, pct: p => div(all(p)?.tasks, all(p)?.interactions), hint: '% = share of interactions' },
-        { label: 'Interaction to task', hint: 'Child / (Parent + blank)', fmt: pctF, good: 'down', get: p => div(all(p)?.tasks, all(p)?.interactions) },
-        { label: 'Tasks to units', hint: 'Child tickets / ordered units', fmt: pctF, good: 'down', get: p => div(all(p)?.tasks, units(p)) },
-        { label: 'FRT (all channels)', fmt: dur, good: 'down', get: p => avg(all(p), 'frt_sum', 'frt_n') },
-        { label: 'Agent FRT (all channels)', fmt: dur, good: 'down', get: p => avg(all(p), 'afrt_sum', 'afrt_n') },
-      ],
-    },
-    {
-      id: 'contact', title: 'Contact resolution (MCR / FCR)',
-      note: 'MCR = child tickets ÷ (Parent + blank association tickets): the share of contacts that needed a follow-up task. FCR = 100% − MCR. By channel, a child ticket counts on the channel it was created on.',
-      rows: [
-        { group: 'Overall', label: 'MCR', fmt: pctF, good: 'down', strong: true, hint: 'Child tickets ÷ (Parent + blank)', get: p => div(all(p)?.tasks, all(p)?.interactions) },
-        { group: 'Overall', label: 'FCR', fmt: pctF, good: 'up', strong: true, hint: '100% − MCR', get: p => fcr(all(p)) },
-        { group: 'Overall', label: 'Child tickets', fmt: int, get: p => all(p)?.tasks },
-        { group: 'Overall', label: 'Parent + blank (interactions)', fmt: int, get: p => all(p)?.interactions },
-        ...['Chat', 'Inbound', 'Email', 'Social media'].flatMap(ch => [
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'MCR', fmt: pctF, good: 'down', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
-          { group: ch === 'Chat' ? 'Chat (WhatsApp)' : ch, label: 'FCR', fmt: pctF, good: 'up', get: p => fcr(p.t(ch)) },
-        ]),
-      ],
-    },
-    {
-      id: 'escalations', title: 'Escalations & CXO escalations',
-      note: 'Tickets in the Escalations and CXO-Escalations groups (Parent + blank), same metrics as the other channels. Resolved rate = tickets with a resolution time ÷ tickets; MCR / FCR as in Contact resolution.',
-      rows: [
-        ...[
-          ['All escalations', 'Escalation'],
-          ['Escalations group', 'Escalations'],
-          ['CXO escalations', 'CXO-Escalations'],
-        ].flatMap(([label, ch]) => [
-          { group: label, label: 'Interactions', fmt: int, get: p => p.t(ch)?.interactions, pct: p => div(p.t(ch)?.interactions, all(p)?.interactions), hint: '% = share of all interactions' },
-          { group: label, label: 'Unique customers', fmt: int, get: p => p.t(ch)?.unique_int },
-          { group: label, label: 'FRT', fmt: dur, good: 'down', hint: 'Ticket created → first public reply from us, business hours', get: p => avg(p.t(ch), 'frt_sum', 'frt_n') },
-          { group: label, label: 'Agent FRT', fmt: dur, good: 'down', hint: 'Ticket created → first public reply from a Freshdesk agent, business hours', get: p => avg(p.t(ch), 'afrt_sum', 'afrt_n') },
-          { group: label, label: 'ART', fmt: hrs, good: 'down', hint: 'Average resolution time of resolved tickets', get: p => avg(p.t(ch), 'res_sum', 'res_n') },
-          { group: label, label: 'Resolved rate', fmt: pctF, good: 'up', hint: 'Tickets with a resolution time ÷ tickets created in the period', get: p => div(p.t(ch)?.res_n, p.t(ch)?.interactions) },
-          { group: label, label: 'Child tickets', fmt: int, get: p => p.t(ch)?.tasks },
-          { group: label, label: 'MCR', fmt: pctF, good: 'down', hint: 'Child tickets ÷ (Parent + blank)', get: p => div(p.t(ch)?.tasks, p.t(ch)?.interactions) },
-          { group: label, label: 'FCR', fmt: pctF, good: 'up', hint: '100% − MCR', get: p => fcr(p.t(ch)) },
-        ]),
-      ],
-    },
-    {
-      id: 'sla', title: 'SLA',
-      note: 'Share of tickets whose first agent reply came within the target, counted in business hours (of tickets that got an agent reply).',
-      rows: [
-        { label: 'Chat < 20 sec', ch: 'Chat', k: 'sla_20s' }, { label: 'Chat < 40 sec', ch: 'Chat', k: 'sla_40s' },
-        { label: 'Email < 10 min', ch: 'Email', k: 'sla_10m' }, { label: 'Email < 15 min', ch: 'Email', k: 'sla_15m' },
-        { label: 'Social media < 10 min', ch: 'Social media', k: 'sla_10m' }, { label: 'Social media < 15 min', ch: 'Social media', k: 'sla_15m' },
-      ].map(r => ({ label: r.label, fmt: int, good: 'up',
-        hint: 'Count = tickets whose first agent reply met the target; % = share of tickets that got an agent reply',
-        get: p => p.t(r.ch)?.[r.k], pct: p => div(p.t(r.ch)?.[r.k], p.t(r.ch)?.afrt_n) })),
-    },
-    {
-      id: 'ozonetel', title: 'Ozonetel — inbound calls',
-      note: 'Inbound line Inbound_918045152790 only. One count per call (Ozonetel call_id, not per ringing attempt), first ring 10:00–19:00 IST. Data starts 1 Oct 2026. A unique caller is missed only if none of their calls was answered.',
-      rows: [
-        // Count = the number; % = share of its base (total calls for the first three, unique callers for the rest).
-        { label: 'Total calls', fmt: int, get: p => p.calls?.total_calls, pct: p => div(p.calls?.total_calls, p.calls?.total_calls), hint: '% = 100% (the base)' },
-        { label: 'Answered calls', fmt: int, good: 'up', get: p => p.calls?.answered_calls, pct: p => div(p.calls?.answered_calls, p.calls?.total_calls), hint: '% = answered / total calls' },
-        { label: 'Unique calls', fmt: int, get: p => p.calls?.unique_calls, pct: p => div(p.calls?.unique_calls, p.calls?.total_calls), hint: '% = unique callers / total calls (lower = more repeat callers)' },
-        { label: 'Unique calls answered', fmt: int, good: 'up', get: p => p.calls?.unique_answered, pct: p => div(p.calls?.unique_answered, p.calls?.unique_calls), hint: '% = answered / unique callers' },
-        { label: 'Unique calls missed', fmt: int, good: 'down', get: p => p.calls?.unique_missed, pct: p => div(p.calls?.unique_missed, p.calls?.unique_calls), hint: '% = missed / unique callers' },
-      ],
-    },
-    {
-      id: 'agents', title: 'Agents available & available hours',
-      note: 'Inbound = Ozonetel agents logged in and their login hours. Other channels = Freshdesk agents who replied; hours are only tracked for voice.',
-      rows: [
-        ...['Chat', 'Email', 'Social media'].map(ch => ({ label: `${ch} — agents`, fmt: int, get: p => p.agents[ch] })),
-        { label: 'Inbound — agents', fmt: int, get: p => p.voice?.agents },
-        { label: 'Escalation — agents', fmt: int, hint: 'Not separable from channel agents in Freshdesk', get: () => null },
-        { label: 'Inbound — available hours', fmt: hrs, get: p => p.voice?.login_hours },
-      ],
-    },
-  ]
-}
 
 // ── UI ──
-function Delta({ cur, prev, good }) {
-  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev) || prev === 0) return <span style={{ color: C.t3 }}>—</span>
-  const ch = (cur - prev) / Math.abs(prev)
-  const better = good === 'up' ? ch > 0 : good === 'down' ? ch < 0 : null
-  const color = better == null || Math.abs(ch) < 0.005 ? C.t2 : better ? C.green.tx : C.red.tx
-  return <span style={{ color, fontWeight: 600 }}>{ch > 0 ? '▲' : ch < 0 ? '▼' : ''} {Math.abs(ch * 100).toFixed(1)}%</span>
+function Delta({ cur, prev, good, isRate = false }) {
+  const c = changeOf(cur, prev, isRate)
+  if (!c) return <span style={{ color: C.t3 }}>—</span>
+  const better = good === 'up' ? c.v > 0 : good === 'down' ? c.v < 0 : null
+  const color = better == null || c.flat ? C.t2 : better ? C.green.tx : C.red.tx
+  return <span style={{ color, fontWeight: 600 }}>{c.v > 0 ? '▲' : c.v < 0 ? '▼' : ''} {c.text}</span>
 }
 
 // Same segmented "% | Count" control as the other dashboard tables.
@@ -238,7 +49,8 @@ function ShareToggle({ mode, setMode }) {
 // `hidden` leading periods are context only: not shown as columns, but the change pill still
 // compares against them. With a single period on screen the previous one is shown beside it
 // (PREV | CURRENT | VS PREV); with several, the earlier ones are muted and the latest is bold.
-function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) {
+// back: how many periods earlier the change compares with (7 = same weekday last week in Day view, CA10).
+function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0, back = 1 }) {
   const th = { padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: '.07em', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}`, position: 'sticky', top: 0, zIndex: 1, background: C.card }
   const td = { padding: '13px 12px', fontSize: 13, borderTop: `1px solid ${C.border}`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   const shownModel = model.slice(hidden)
@@ -246,7 +58,7 @@ function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) 
   const cols = withPrev ? model.slice(-2) : shownModel
   let lastGroup = null
   return (
-    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
+    <div style={{ overflowX: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 240 + (cols.length + 1) * 96 }}>
         <thead>
           <tr>
@@ -278,9 +90,10 @@ function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) 
                 </td>
                 {shown.map((v, j) => {
                   const isLast = j === shown.length - 1
-                  return <td key={j} style={{ ...td, textAlign: 'right', fontSize: isLast ? 14 : 12.5, fontWeight: isLast || r.strong ? 700 : 400, color: v == null ? C.t3 : isLast ? C.t1 : C.t3 }}>{fmtV(v)}</td>
+                  const closed = v == null && r.closedSunday && grain === 'day' && new Date(`${cols[j]?.key}T00:00:00`).getDay() === 0
+                  return <td key={j} title={closed ? 'Inbound line is closed on Sundays' : undefined} style={{ ...td, textAlign: 'right', fontSize: isLast ? 14 : 12.5, fontWeight: isLast || r.strong ? 700 : 400, color: v == null ? C.t3 : isLast ? C.t1 : C.t3 }}>{closed ? 'Closed' : fmtV(v)}</td>
                 })}
-                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.at(-2)} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} /></td>
+                <td style={{ ...td, textAlign: 'right' }}><DeltaPill cur={vals.at(-1)} prev={vals.length > back ? vals.at(-1 - back) : null} good={asPct && r.goodPct ? r.goodPct : r.good} title={deltaLabel} isRate={asPct || r.fmt === pctF} /></td>
               </tr>,
             ]
           })}
@@ -290,53 +103,6 @@ function Matrix({ rows, model, grain, deltaLabel, mode = 'count', hidden = 0 }) 
   )
 }
 
-// TTR. Columns = parent tickets, child tickets (all), then the top 12 resolver groups; for each, per
-// period: tickets created, how many are resolved/closed, how many are still pending (created -
-// resolved, as of now) and the average TTR of the resolved ones = (Resolved, else Closed) time -
-// Created time, in hours.
-function ttrColumns(data) {
-  const byKey = (src, field) => {
-    const g = new Map()
-    for (const r of src || []) {
-      if (!g.has(r[field])) g.set(r[field], {})
-      g.get(r[field])[r.bucket] = { c: Number(r.created) || 0, n: Number(r.resolved) || 0, h: Number(r.hrs_sum) || 0 }
-    }
-    return g
-  }
-  const sum = (g) => {
-    const all = {}
-    for (const v of g.values()) for (const [b, x] of Object.entries(v)) {
-      all[b] = all[b] || { c: 0, n: 0, h: 0 }; all[b].c += x.c; all[b].n += x.n; all[b].h += x.h
-    }
-    return all
-  }
-  const types = byKey(data.ttrType, 'assoc')
-  const groups = byKey(data.ttr, 'grp')
-  const total = (v) => Object.values(v).reduce((a, x) => a + x.c, 0)
-  const list = [...groups.entries()].sort((a, b) => total(b[1]) - total(a[1])).slice(0, 12)
-  return [
-    { label: 'Parent tickets', kind: 'type', v: types.get('Parent') || {} },
-    { label: 'Child tickets', kind: 'type', v: types.get('Child') || sum(groups) },
-    ...list.map(([k, v]) => ({ label: k, kind: 'group', v })),
-  ]
-}
-
-const TTR_METRICS = [
-  { id: 'created', label: 'Created', hint: 'Tickets created in the period', get: x => x.c, fmt: int },
-  { id: 'resolved', label: 'Resolved', hint: 'Of those created, how many are resolved or closed now', get: x => x.n, fmt: int },
-  { id: 'pending', label: 'Pending', hint: 'Created − resolved: still open as of now', get: x => x.c - x.n, fmt: int },
-  { id: 'ttr', label: 'Avg TTR', hint: 'Resolved/Closed time − Created time, averaged over the resolved tickets', get: x => (x.n ? x.h / x.n : null), fmt: hrs, strong: true },
-]
-
-// Export rows (periods across, like the other tables): the same four metrics for every column.
-function ttrRows(data) {
-  return ttrColumns(data).flatMap(col => TTR_METRICS.map(m => ({
-    group: col.kind === 'group' ? `Resolver group: ${col.label}` : col.label,
-    label: m.label, fmt: m.fmt, hint: m.hint, strong: m.strong,
-    good: m.id === 'resolved' ? 'up' : m.id === 'pending' || m.id === 'ttr' ? 'down' : null,
-    get: p => (col.v[p.key] ? m.get(col.v[p.key]) : m.id === 'ttr' ? null : 0),
-  })))
-}
 
 // Day-on-day comparison in one table: a row per resolver group (after parent and child tickets in
 // total), and for every period in view four sub-columns: Created, Resolved, Pending, Avg TTR.
@@ -345,6 +111,14 @@ function ttrRows(data) {
 function TtrTable({ data, model, grain, hidden }) {
   const shown = model.slice(hidden)
   const cols = useMemo(() => ttrColumns(data), [data])
+  const box = useRef(null)
+  const [scrolls, setScrolls] = useState(false)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.scrollLeft = el.scrollWidth
+    setScrolls(el.scrollWidth > el.clientWidth + 4)
+  }, [shown.length, cols.length])
   const SUB = [
     { id: 'created', label: 'Created', get: x => x.c, fmt: int, good: null },
     { id: 'resolved', label: 'Resolved', get: x => x.n, fmt: int, good: 'up' },
@@ -360,7 +134,9 @@ function TtrTable({ data, model, grain, hidden }) {
     return better ? C.green.tx : C.red.tx
   }
   return (
-    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
+    <>
+    {scrolls && <div style={{ fontSize: 11.5, color: C.t3, padding: '8px 4px 2px' }}>← Scroll sideways for earlier {grain === 'day' ? 'days' : grain === 'week' ? 'weeks' : 'months'} (latest on the right)</div>}
+    <div ref={box} style={{ overflowX: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 230 + shown.length * SUB.length * W }}>
         <thead>
           <tr>
@@ -403,31 +179,10 @@ function TtrTable({ data, model, grain, hidden }) {
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
-// Pending ticket ageing: one table per kind (Parent / Child), resolver groups down, age buckets across.
-const AGE_BUCKETS = [
-  ['1', '1 day'], ['2', '2 days'], ['3', '3 days'], ['4-5', '4-5 days'],
-  ['6-8', '6-8 days'], ['9-10', '9-10 days'], ['11-15', '11-15 days'], ['15+', '15+ days'],
-]
-function pendencyRows(data, kind) {
-  const g = new Map()
-  for (const r of (data.pendency || []).filter(x => x.kind === kind)) {
-    if (!g.has(r.grp)) g.set(r.grp, {})
-    g.get(r.grp)[r.bucket] = Number(r.n) || 0
-  }
-  const tot = (v) => Object.values(v).reduce((a, b) => a + b, 0)
-  const rows = [...g.entries()].map(([grp, v]) => ({ grp, v, total: tot(v) })).sort((a, b) => b.total - a.total)
-  const all = {}
-  for (const r of rows) for (const [b, n] of Object.entries(r.v)) all[b] = (all[b] || 0) + n
-  return { rows, all, total: tot(all) }
-}
-function pendencyCsv(data, kind) {
-  const { rows, all, total } = pendencyRows(data, kind)
-  const line = (name, v, t) => ({ 'Resolver group': name, ...Object.fromEntries(AGE_BUCKETS.map(([k, l]) => [l, v[k] || 0])), Total: t })
-  return [line('All resolver groups', all, total), ...rows.map(r => line(r.grp, r.v, r.total))]
-}
 function PendencyTable({ data, kind }) {
   const { rows, all, total } = useMemo(() => pendencyRows(data, kind), [data, kind])
   if (!total) return <div style={{ color: C.t3, fontSize: 12.5, padding: 20 }}>No pending {kind.toLowerCase()} tickets.</div>
@@ -436,7 +191,7 @@ function PendencyTable({ data, kind }) {
   const td = { padding: '10px', fontSize: 12.5, borderTop: `1px solid ${C.border}`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const heat = (n) => (n ? `rgba(${C.accRgb},${(0.08 + 0.5 * (n / max)).toFixed(2)})` : 'transparent')
   return (
-    <div style={{ overflowX: 'auto', maxHeight: 300, overflowY: 'auto' }}>
+    <div style={{ overflowX: 'auto' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 240 + (AGE_BUCKETS.length + 1) * 84 }}>
         <thead>
           <tr>
@@ -464,57 +219,12 @@ function PendencyTable({ data, kind }) {
   )
 }
 
-// Top 15 by volume at sub category level 2. The same level-2 name sits under several parents
-// (e.g. 'Pick Up Delayed' under Exchange and Return), so a row is one Disposition > Sub category >
-// Sub category 2 path, labelled with the level-2 name and its disposition; hover for the full path.
-function driverRows(data, model) {
-  const keys = model.map(p => p.key)
-  const m = new Map()
-  for (const r of data.dispositions || []) {
-    // Tickets closed without a sub category 2 say nothing about why customers contact us.
-    if (r.sub2 === '(blank)') continue
-    const k = `${r.dispo}\u0001${r.sub1}\u0001${r.sub2}`
-    if (!m.has(k)) m.set(k, { dispo: r.dispo, sub1: r.sub1, sub2: r.sub2, v: Object.fromEntries(keys.map(x => [x, 0])) })
-    m.get(k).v[r.bucket] = Number(r.n) || 0
-  }
-  const last = keys.at(-1)
-  const clean = (x) => x.replace(/\.$/, '')
-  return [...m.values()].map(({ dispo, sub1, sub2, v }) => ({
-    label: `${sub2} · ${clean(dispo)}`, hint: `${clean(dispo)} › ${sub1} › ${sub2}`, fmt: int, good: 'down',
-    get: p => v[p.key], pct: p => div(v[p.key], p.t('All')?.interactions),
-  })).sort((a, b) => (b.get({ key: last }) || 0) - (a.get({ key: last }) || 0)).slice(0, 15)
-}
 
-function Drivers({ data, model, grain, deltaLabel, mode, hidden }) {
+function Drivers({ data, model, grain, deltaLabel, mode, hidden, back = 1 }) {
   const rows = useMemo(() => driverRows(data, model), [data, model])
-  return <Matrix rows={rows} model={model} grain={grain} deltaLabel={deltaLabel} mode={mode} hidden={hidden} />
+  return <Matrix rows={rows} model={model} grain={grain} deltaLabel={deltaLabel} mode={mode} hidden={hidden} back={back} />
 }
 
-// One flat CSV of every detailed table, in the view on screen. Columns: Table, Group, Metric, Unit,
-// one column per period (ISO key: day, week start or month), Change % (latest vs previous period).
-// Values are raw numbers (durations in seconds / hours, rates in %), and a row that has a % view
-// gets a second "(%)" row so the file holds both the Count and the % toggle states.
-function detailedCsv(tables, model, hidden) {
-  const unitOf = (fmtFn) => (fmtFn === dur ? 'seconds' : fmtFn === hrs ? 'hours' : fmtFn === pctF ? '%' : fmtFn === ratio ? 'ratio' : fmtFn === money ? 'INR' : 'count')
-  const round = (v, d = 4) => (v == null || !isFinite(v) ? '' : Math.round(v * 10 ** d) / 10 ** d)
-  const shown = model.slice(hidden)
-  const out = []
-  const push = (table, r, label, unit, vals, scale) => {
-    const row = { Table: table, Group: r.group || '', Metric: label, Unit: unit }
-    shown.forEach((p, i) => { row[p.key] = round(vals[hidden + i] == null ? null : vals[hidden + i] * scale) })
-    const cur = vals.at(-1), prev = vals.at(-2)
-    row['Change %'] = cur != null && prev != null && isFinite(cur) && isFinite(prev) && prev !== 0 ? round(((cur - prev) / Math.abs(prev)) * 100, 1) : ''
-    out.push(row)
-  }
-  for (const t of tables) {
-    for (const r of t.rows) {
-      const vals = model.map(p => r.get(p))
-      push(t.title, r, r.label, unitOf(r.fmt), vals, r.fmt === pctF ? 100 : 1)
-      if (r.pct) push(t.title, r, `${r.label} (%)`, '%', model.map(p => r.pct(p)), 100)
-    }
-  }
-  return out
-}
 
 // Export dropdown for the top bar. `data` = what the page registered: { items:[{id,title}], run(id), view, busy }.
 export function ExportMenu({ data }) {
@@ -560,15 +270,12 @@ const chColor = (ch) => ({
   Inbound: ramp(0), Chat: ramp(2), Email: ramp(3), 'Social media': ramp(4), Escalation: C.red.tx,
 }[ch] || C.t3)
 const axis = { fontSize: 10.5, fill: C.t3 }
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MAIN = ['Chat', 'Inbound', 'Email', 'Social media']
 const kfmt = (v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)
 
-const shiftDay = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
 
-function SectionTitle({ children, note, right }) {
+function SectionTitle({ children, note, right, id }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 -4px' }}>
+    <div id={id} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 -4px', scrollMarginTop: 12 }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase' }}>{children}</span>
       {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
       <div style={{ flex: 1, height: 1, background: C.border }} />
@@ -579,15 +286,16 @@ function SectionTitle({ children, note, right }) {
 
 // Change pill: coloured tint + arrow + %, green when the move is good, red when bad, grey when
 // the KPI has no good direction (volumes), too small to matter, or has no previous value.
-function DeltaPill({ cur, prev, good, title }) {
-  const ok = cur != null && prev != null && isFinite(cur) && isFinite(prev) && prev !== 0
-  const ch = ok ? (cur - prev) / Math.abs(prev) : null
-  const flat = ch == null || Math.abs(ch) < 0.005
-  const better = flat || !good ? null : good === 'up' ? ch > 0 : ch < 0
+// neutral: grey whatever the direction (C7: yesterday still loading before 11:00 IST)
+function DeltaPill({ cur, prev, good, title, isRate = false, neutral = false }) {
+  const c = changeOf(cur, prev, isRate)
+  const ch = c ? c.v : null
+  const flat = !c || c.flat
+  const better = flat || !good || neutral ? null : good === 'up' ? ch > 0 : ch < 0
   const tone = better == null ? { bg: C.bg, tx: C.t2 } : better ? C.green : C.red
   return (
     <span title={title} style={{ background: tone.bg, color: tone.tx, fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0 }}>
-      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${Math.abs(ch * 100).toFixed(1)}%`}
+      {ch == null ? '—' : `${ch > 0 ? '▲' : ch < 0 ? '▼' : ''} ${c.text}`}
     </span>
   )
 }
@@ -595,9 +303,10 @@ function DeltaPill({ cur, prev, good, title }) {
 // KPI card: label, big value with the change pill beside it, one line of context, and a
 // full-width sparkline over the visible periods. Every card has the same rows so a row of
 // cards lines up. `detail` = the counts behind the value; without it the previous value shows.
-function KpiCard({ label, values, f, good, prevLabel, detail, noPrev }) {
-  const cur = values.at(-1), prev = values.at(-2)
-  const series = values.map((v, i) => ({ i, v: v == null || !isFinite(v) ? null : v }))
+function KpiCard({ label, values, f, good, prevLabel, detail, noPrev, back = 1, neutral = false }) {
+  // back = 7: Day view compares with the same weekday last week (CA10); the sparkline shows the last 7 days
+  const cur = values.at(-1), prev = values.length > back ? values.at(-1 - back) : null
+  const series = (back > 1 ? values.slice(-back) : values).map((v, i) => ({ i, v: v == null || !isFinite(v) ? null : v }))
   const gid = `sp-${label.replace(/\W/g, '')}`
   const hasCur = cur != null && isFinite(cur), hasPrev = prev != null && isFinite(prev)
   const line = detail || (hasPrev ? `Previous: ${f(prev)}` : '\u00a0')
@@ -607,7 +316,7 @@ function KpiCard({ label, values, f, good, prevLabel, detail, noPrev }) {
       <div title={label} style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 24, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1.15 }}>{f(cur)}</div>
-        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} />
+        <DeltaPill cur={cur} prev={prev} good={good} title={pillTitle} isRate={f === pctF} neutral={neutral} />
       </div>
       <div title={hasCur && !hasPrev && noPrev ? `${line} · ${noPrev}` : line} style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
       <div style={{ height: 34, marginTop: 'auto', paddingTop: 4 }}>
@@ -638,39 +347,33 @@ function ChannelTrend({ model, grain }) {
         <Tooltip content={<ChartTooltip formatter={int} />} cursor={{ fill: C.hov }} />
         <Legend {...chartLegendProps()} />
         {MAIN.map((ch, i) => (
-          <Bar key={ch} dataKey={ch} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
+          <Bar key={ch} dataKey={ch} name={chLabel(ch)} stackId="a" fill={chColor(ch)} radius={i === MAIN.length - 1 ? [5, 5, 0, 0] : 0} maxBarSize={56} />
         ))}
       </BarChart>
     </ResponsiveContainer>
   )
 }
 
+// B1: no donut. Total, one split bar, then a row per channel.
 function ChannelMix({ latest }) {
   const data = MAIN.map(ch => ({ name: ch, value: latest.t(ch)?.interactions || 0 })).filter(d => d.value > 0)
   const total = data.reduce((s, d) => s + d.value, 0)
   const sorted = [...data].sort((a, b) => b.value - a.value)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 260 }}>
-      <div style={{ position: 'relative', width: '52%', height: '100%' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" innerRadius="62%" outerRadius="88%" paddingAngle={2} stroke="none" isAnimationActive={false}>
-              {data.map(d => <Cell key={d.name} fill={chColor(d.name)} />)}
-            </Pie>
-            <Tooltip content={<ChartTooltip formatter={int} />} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.t1 }}>{fmtN(total)}</div>
-          <div style={{ fontSize: 10.5, color: C.t3 }}>interactions</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 260 }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+          <span style={{ fontSize: 22, fontWeight: 800, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtN(total)}</span>
+          <span style={{ fontSize: 12, color: C.t3 }}>interactions</span>
         </div>
+        <MixBar height={12} label="Channel mix" fmt={fmtN} parts={sorted.map(d => ({ key: d.name, label: chLabel(d.name), value: d.value, color: chColor(d.name) }))} />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {sorted.map(d => (
           <div key={d.name}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.t2 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: chColor(d.name) }} />{d.name}</span>
-              <span style={{ fontWeight: 700, color: C.t1 }}>{((d.value / total) * 100).toFixed(1)}%</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.t2 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: chColor(d.name) }} />{chLabel(d.name)}</span>
+              <span style={{ color: C.t1 }}><b>{((d.value / total) * 100).toFixed(1)}%</b> <span style={{ color: C.t3 }}>· {fmtN(d.value)}</span></span>
             </div>
             <div style={{ height: 5, borderRadius: 3, background: C.bg }}><div style={{ height: '100%', width: `${(d.value / total) * 100}%`, borderRadius: 3, background: chColor(d.name) }} /></div>
           </div>
@@ -717,7 +420,7 @@ function SlaBars({ latest, prev }) {
           <div key={ch + k}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
               <span style={{ color: C.t2 }}><b style={{ color: C.t1 }}>{ch}</b> {lbl}</span>
-              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" /></span></span>
+              <span><b style={{ color }}>{pctF(v)}</b> <span style={{ fontSize: 10.5 }}><Delta cur={v} prev={pv} good="up" isRate /></span></span>
             </div>
             <div style={{ position: 'relative', height: 8, borderRadius: 4, background: C.bg }}>
               <div style={{ height: '100%', width: `${Math.min((v || 0) * 100, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.acd}, ${C.acc})` }} />
@@ -853,17 +556,23 @@ function ContactHeatmap({ rows }) {
 }
 
 // Always the last 7 days (to the "up to" date) vs the 7 days before - see dispo7 in the API.
-function DriversChart({ data }) {
+function DriversChart({ data, orders7, onNavigate }) {
   const rows = useMemo(() => (data.dispo7 || [])
     .filter(r => r.dispo !== '(blank)')
-    .map(r => ({ name: r.dispo, cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
+    .map(r => ({ name: trimPunct(r.dispo), cur: Number(r.cur) || 0, prev: Number(r.prev) || 0 }))
     .sort((a, b) => b.cur - a.cur).slice(0, 12), [data])
   const max = Math.max(...rows.map(r => r.cur), 1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8, padding: '2px', height: '100%', minHeight: 360 }}>
       {rows.map(r => (
         <div key={r.name} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 190px) 1fr 58px 70px', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
-          <span style={{ color: C.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>{r.name}</span>
+          <span style={{ overflow: 'hidden' }}>
+            <span style={{ display: 'block', color: C.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>{r.name}</span>
+            <span style={{ display: 'block', fontSize: 11, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {orders7 > 0 ? `${per100(r.cur, orders7)} per 100 orders` : ''}
+              {reasonLink(r.name) && onNavigate && <>{orders7 > 0 ? ' · ' : ''}<button type="button" onClick={() => onNavigate(reasonLink(r.name).dest)} style={{ border: 'none', background: 'none', padding: 0, color: C.acc, fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>{reasonLink(r.name).label} →</button></>}
+            </span>
+          </span>
           <div style={{ height: 16, borderRadius: 5, background: C.bg }}>
             <div style={{ height: '100%', width: `${(r.cur / max) * 100}%`, borderRadius: 5, background: `linear-gradient(90deg, ${C.acd}, ${C.acc})` }} />
           </div>
@@ -871,7 +580,7 @@ function DriversChart({ data }) {
           <span style={{ textAlign: 'right', fontSize: 11 }}><Delta cur={r.cur} prev={r.prev} good="down" /></span>
         </div>
       ))}
-      <div style={{ fontSize: 10.5, color: C.t3 }}>Last 7 days vs the 7 days before. Rising drivers (red) are where extra volume is coming from.</div>
+      <div style={{ fontSize: 10.5, color: C.t3 }}>Last 7 days vs the 7 days before. Rising drivers (red) are where extra volume is coming from.{orders7 > 0 ? ` Per 100 orders = contacts ÷ ${fmtN(orders7)} Shopify D2C orders in the same 7 days.` : ' Per 100 orders shows in the Daily view (orders for the same 7 days).'}</div>
     </div>
   )
 }
@@ -897,7 +606,7 @@ function AgentBoard({ rows }) {
               </td>
               <td style={{ ...td, textAlign: 'left' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: C.acd, background: C.acl }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{r.main_channel}
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: chColor(r.main_channel) }} />{chLabel(r.main_channel)}
                 </span>
               </td>
               <td style={td}>
@@ -906,8 +615,10 @@ function AgentBoard({ rows }) {
                   {fmtN(r.interactions)}
                 </div>
               </td>
-              <td style={td}>{dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
-              <td style={td}>{hrs(avg(r, 'res_sum', 'resolved'))}</td>
+              {/* CA13: phone tickets get no public agent reply and are closed when logged, so Agent FRT / ART
+                  don't apply to inbound (voice) agents: say so instead of '—' / 0.0h */}
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets have no agent reply in Freshdesk' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : dur(avg(r, 'afrt_sum', 'afrt_n'))}</td>
+              <td style={td} title={r.main_channel === 'Inbound' ? 'Phone tickets are closed when logged, so resolution time is ~0' : undefined}>{r.main_channel === 'Inbound' ? <span style={{ color: C.t3 }}>n/a (voice)</span> : hrs(avg(r, 'res_sum', 'resolved'))}</td>
             </tr>
           ))}
         </tbody>
@@ -960,7 +671,7 @@ const row2 = (a, b) => ({ display: 'grid', gridTemplateColumns: `minmax(0, ${a}f
 
 // The date range lives in App so the shared date-range picker can sit in the top bar; the top
 // bar's Refresh button bumps `refreshTick` to bypass the API's 30-minute cache.
-export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExportReady }) {
+export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExportReady, onNavigate }) {
   const [grain, setGrain] = useState('day')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -977,7 +688,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   useEffect(() => {
     const ctl = new AbortController()
     setLoading(true); setError(null)
-    fetch(`${API}/api/customer-support`, {
+    authFetch(`${API}/api/customer-support`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
       body: JSON.stringify({ grain, start: dateRange?.start, end: dateRange?.end, refresh: refreshTick > 0 || undefined }),
     })
@@ -1006,10 +717,10 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   useEffect(() => {
     const ctl = new AbortController()
     const end = dateRange?.end
-    const body = dGrain === 'day' && end ? { grain: 'day', start: shiftDay(end, -6), end }
+    const body = dGrain === 'day' && end ? { grain: 'day', start: shiftDay(end, -7), end }
       : { grain: dGrain, end, periods: dGrain === 'week' ? 4 : 3 }
     setDLoading(true); setDError(null)
-    fetch(`${API}/api/customer-support`, {
+    authFetch(`${API}/api/customer-support`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
       body: JSON.stringify({ ...body, refresh: refreshTick > 0 || undefined }),
     })
@@ -1028,6 +739,9 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   const dModel = useMemo(() => (dData ? buildModel(dData) : []), [dData])
   const secs = useMemo(() => (dModel.length ? sections(dModel) : []), [dModel])
   const gd = GRAINS.find(x => x.id === dGrain)
+  // Day view: 8 days fetched, the first is only the comparison base for the 7th (same weekday last week)
+  const dHidden = dGrain === 'day' ? 1 : (dData?.hidden || 0)
+  const dBack = dGrain === 'day' ? 7 : 1
   // Hands the top bar's Export menu its list of tables and a function that downloads one (or all).
   const exportTables = useMemo(() => (dData ? [
     ...secs.map(sec => ({ id: sec.id, title: sec.title, rows: sec.rows })),
@@ -1048,7 +762,7 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
         if (one?.csv) { exportCSV(one.csv(), `customer_support_${id}_${new Date().toISOString().slice(0, 10)}.csv`); return }
         const tables = (id === 'all' ? exportTables : exportTables.filter(t => t.id === id)).filter(t => t.rows)
         if (!tables.length || !dData) return
-        exportCSV(detailedCsv(tables, dModel, dData.hidden || 0), `customer_support_${id === 'all' ? 'detailed_kpis' : id}_${dGrain}_${dData.end}.csv`)
+        exportCSV(detailedCsv(tables, dModel, dGrain === 'day' ? 1 : (dData.hidden || 0)), `customer_support_${id === 'all' ? 'detailed_kpis' : id}_${dGrain}_${dData.end}.csv`)
       },
     })
     return () => onExportReady(null)
@@ -1056,7 +770,21 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
   // `hidden` = context periods the API adds so a single day still has a day-before to compare with.
   const hidden = data?.hidden || 0
   const view = model.slice(hidden)
-  const latest = model.at(-1), prev = model.at(-2)
+  // Day view (a single day + 7 context days): compare with the same weekday last week (CA10)
+  const back = grain === 'day' && hidden >= 7 ? 7 : 1
+  const latest = model.at(-1), prev = model.length > back ? model.at(-1 - back) : null
+  const trendModel = back > 1 ? model.slice(-7) : model
+  // B2.5: Shopify D2C orders of the 7 days the drivers cover (dispo7 = last 7 days to the end date); Day view only
+  const orders7 = grain === 'day' ? orders7Of(model) : 0
+  const watch = useMemo(() => computeSupportRules(data, model, back, grain), [data, model, back, grain])
+  // Phone launcher's live number for Customer (navStats): the watchlist's "Pending > 8 days" count
+  const pendRule = watch?.rules?.find(r => r.id === 'pending')
+  if (pendRule) publishNavStat('customer', { value: pendRule.valueText, label: pendRule.name.replace(/^Pending/, 'pending').replace('> 8 days', '9+ days') })
+  const dayLoading = yesterdayStillLoading(grain, latest?.key) // C7
+  const goRule = id => {
+    const target = watch?.rules.find(r => r.id === id)?.target
+    document.getElementById(`cs-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const kpis = latest ? [
     { label: 'Interactions', values: model.map(p => p.t('All')?.interactions), f: int, good: null, accent: C.acc },
@@ -1089,6 +817,18 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
       detail: `${int(latest.t('All')?.escalations)} of ${int(latest.t('All')?.interactions)} interactions` },
   ] : []
 
+  // Below 1024px: the phone view (CUSTOMER_MASTER_PLAN.md Part B §B4), same data and model
+  if (vw < 1024) {
+    if (error) return <div style={{ margin: 12, background: C.red.bg, color: C.red.tx, padding: '10px 14px', borderRadius: 10, fontSize: 13 }}>Couldn't load support data: {error}</div>
+    if (!data || !latest) return <div aria-busy="true" style={{ margin: 12, height: 360, borderRadius: 18, background: C.m.soft }} />
+    return (
+      <div style={{ padding: '12px 12px 0' }}>
+        <CustomerSupportMobile data={data} grain={grain} setGrain={setGrain} latest={latest} prev={prev} trendModel={trendModel} watch={watch} orders7={orders7} onNavigate={onNavigate} loading={loading}
+          dData={dData} dModel={dModel} dGrain={dGrain} setDGrain={setDGrain} dHidden={dHidden} dBack={dBack} secs={secs} dLoading={dLoading} dError={dError} />
+      </div>
+    )
+  }
+
   const btn = (active) => ({ padding: '6px 14px', fontSize: 12.5, fontWeight: 700, borderRadius: 20, cursor: 'pointer',
     border: `1.5px solid ${active ? C.acc : C.border2}`, background: active ? C.acc : C.card, color: active ? C.onAcc : C.t2 })
   const grid = (a, b) => (narrow ? { display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 14 } : row2(a, b))
@@ -1116,19 +856,22 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
 
       {data && latest && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${vw < 760 ? 2 : vw < 1100 ? 3 : vw < 1500 ? 4 : 6}, minmax(0, 1fr))`, gap: 12, ...dim }}>
-            {kpis.map(k => <KpiCard key={k.label} {...k} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
+          {dayLoading && <InfoStrip icon="◔" text={SUPPORT_LOAD_NOTE} detail="The support table rebuilds at 11:00 IST; until then yesterday's numbers are partial, so their changes are shown in grey." />}
+          <div id="cs-top" style={{ display: 'grid', gridTemplateColumns: `repeat(${vw < 760 ? 2 : vw < 1100 ? 3 : vw < 1500 ? 4 : 6}, minmax(0, 1fr))`, gap: 12, scrollMarginTop: 12, ...dim }}>
+            {kpis.map(k => <KpiCard key={k.label} {...k} back={back} neutral={dayLoading} prevLabel={prev ? `vs ${periodLabel(grain, prev.key)}` : ''} />)}
           </div>
+
+          {watch && <div style={dim}><WatchlistCard result={watch} channel="Support" title="Support watchlist" onRule={goRule} /></div>}
 
           <SectionTitle note="what came in, on which channel">Volume</SectionTitle>
           <div style={{ ...grid(2, 1), ...dim }}>
-            <Card title="Interactions by channel" note={g.label.toLowerCase()}><ChannelTrend model={model} grain={grain} /></Card>
+            <Card title="Interactions by channel" note={g.label.toLowerCase()}><ChannelTrend model={trendModel} grain={grain} /></Card>
             <Card title="Channel mix" note={periodLabel(grain, latest.key)}><ChannelMix latest={latest} /></Card>
           </div>
 
-          <SectionTitle note="how fast we respond">Speed & SLA</SectionTitle>
+          <SectionTitle id="cs-speed" note="how fast we respond">Speed & SLA</SectionTitle>
           <div style={{ ...grid(3, 2), ...dim }}>
-            <Card title="Agent first response time" note="first reply from a real agent, business hours, by channel"><FrtTrend model={model} grain={grain} /></Card>
+            <Card title="Agent first response time" note="first reply from a real agent, business hours, by channel"><FrtTrend model={trendModel} grain={grain} /></Card>
             <Card title="SLA attainment" note={periodLabel(grain, latest.key)}><SlaBars latest={latest} prev={prev} /></Card>
           </div>
 
@@ -1138,17 +881,17 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
             <Card title="Answered vs missed by hour" note={win}><CallsByHour rows={data.callsHourly} /></Card>
           </div>
 
-          <SectionTitle note="when customers contact us, and why">Demand</SectionTitle>
+          <SectionTitle id="cs-demand" note="when customers contact us, and why">Demand</SectionTitle>
           <div style={{ ...grid(3, 2), ...dim }}>
             <Card fill title="Contact heatmap" note={`interactions by weekday × hour (IST), ${data.trendStart || data.start} → ${data.end}`}><ContactHeatmap rows={data.heat} /></Card>
-            <Card fill title="Orders vs interactions" note="Shopify D2C orders against support interactions"><OrdersVsInteractions model={model} grain={grain} /></Card>
+            <Card fill title="Orders vs interactions" note="Shopify D2C orders against support interactions"><OrdersVsInteractions model={trendModel} grain={grain} /></Card>
           </div>
           <div style={{ ...grid(1, 1), ...dim }}>
-            <Card fill title="Top volume drivers" note={`dispositions, last 7 days to ${periodLabel('day', data.end)}`}><DriversChart data={data} /></Card>
+            <Card fill title="Top volume drivers" note={`dispositions, last 7 days to ${periodLabel('day', data.end)}`}><DriversChart data={data} orders7={orders7} onNavigate={onNavigate} /></Card>
             <Card title="Agent leaderboard" note={`assigned interactions, ${win}`}><AgentBoard rows={data.agentBoard} /></Card>
           </div>
 
-          <SectionTitle note="as of now, whatever dates are chosen">Pending tickets — ageing</SectionTitle>
+          <SectionTitle id="cs-pending" note="as of now, whatever dates are chosen">Pending tickets — ageing</SectionTitle>
           <div style={dim}>
             <Collapsible defaultOpen title="Parent tickets" note="Association type Parent or none. Created in the last 45 days and not Resolved / Closed (Junk, i.e. discarded spam, is left out). Age = today − created date; tickets created today count under 1 day.">
               <PendencyTable data={data} kind="Parent" />
@@ -1179,19 +922,19 @@ export default function CustomerSupportPage({ dateRange, refreshTick = 0, onExpo
                 <div key={sec.id} style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                   <Collapsible title={sec.title} note={sec.note} defaultOpen={i === 0}
                     toggle={sec.rows.some(r => r.pct) ? { default: PCT_DEFAULT[sec.id] || 'count' } : null}>
-                    {mode => <Matrix rows={sec.rows} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dData.hidden || 0} />}
+                    {mode => <Matrix rows={sec.rows} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dHidden} back={dBack} />}
                   </Collapsible>
                 </div>
               ))}
               <div style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                 <Collapsible title="TTR — time to resolve, parent and child tickets"
                   note="Parent and child tickets, then each resolver group (top 12), period by period: tickets created, resolved / closed, still pending (as of now) and TTR = average hours from Created to Resolved / Closed. Green = better than the previous period, red = worse.">
-                  <TtrTable data={dData} model={dModel} grain={dGrain} hidden={dData.hidden || 0} />
+                  <TtrTable data={dData} model={dModel} grain={dGrain} hidden={dHidden} />
                 </Collapsible>
               </div>
               <div style={{ opacity: dLoading ? 0.6 : 1, transition: 'opacity .2s' }}>
                 <Collapsible title="Volume drivers — top 15 by sub category level 2" note={`ranked on the latest period; each row is Sub category 2 · its disposition (hover for the full path); % = share of that period's interactions`} toggle={{ default: 'count' }}>
-                  {mode => <Drivers data={dData} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dData.hidden || 0} />}
+                  {mode => <Drivers data={dData} model={dModel} grain={dGrain} deltaLabel={gd.delta} mode={mode} hidden={dHidden} back={dBack} />}
                 </Collapsible>
               </div>
             </>

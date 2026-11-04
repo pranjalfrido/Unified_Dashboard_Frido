@@ -4,6 +4,7 @@ import InventoryHealthMobile from './mobile/InventoryHealthMobile.jsx'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
+import OosLossView from './OosLossView.jsx'
 
 // CSV columns, shared by the desktop Export buttons and the mobile "⋯" menu.
 const DETAIL_EXPORT_COLS = [
@@ -1251,6 +1252,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // and only after this session's fixes) — a hardcoded top-level switch removes that class of
   // "filter exists but silently doesn't apply everywhere" bug entirely.
   const [facilityViewLocal, setFacilityViewLocal] = useState('regular')
+  // "OOS loss" view (top-right button): shown in place of the page until its back button is
+  // pressed. Both stay MOUNTED and are swapped with display:none - unmounting this page meant
+  // rebuilding the KPI tiles and the big SKU table on every "back", which was visibly slow, and
+  // remounting the OOS view re-fetched its data. oosOpened delays mounting it until first use.
+  const [showOos, setShowOos] = useState(false)
+  const [oosOpened, setOosOpened] = useState(false)
+  const openOos = () => { setOosOpened(true); setShowOos(true) }
   const facilityView = facilityViewProp ?? facilityViewLocal
   const setFacilityView = setFacilityViewProp ?? setFacilityViewLocal
 
@@ -1518,6 +1526,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       <InventoryHealthMobile data={data} regular={regularSummary} locations={facilityScopedLocations || data.locations} lastSalesDate={lastSalesDate}
         showDetailOnly={showDetailOnly}
         skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)}
+        rtdLevel={filters.rtdLevel || []} setRtdLevel={v => setFilters(f => ({ ...f, rtdLevel: v }))} rtdOptions={data.filterOptions?.rtdLevels || []}
         slow={filteredSlowMoving} dead={filteredDeadStock} />
     )
   }
@@ -1529,7 +1538,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // the button's own position relative to the same --sb CSS variable the sidebar uses keeps
   // them locked together.
   return (
-    <div style={{ display: 'flex', gap: 0 }}>
+    <>
+    {oosOpened && (
+      <div className="inv-main-content" style={{ display: showOos ? 'block' : 'none', flex: 1, minWidth: 0, paddingLeft: 12, paddingRight: 24, paddingTop: 16 }}>
+        <OosLossView onBack={() => setShowOos(false)} lastSalesDate={lastSalesDate} />
+      </div>
+    )}
+    <div style={{ display: showOos ? 'none' : 'flex', gap: 0 }}>
       {isMobile && <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} facilityView={facilityView} />}
 
       {/* The collapse toggle is position:fixed and docked against the nav rail, so it no
@@ -1559,7 +1574,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 )}
               </div>
             )}
-            <InvFilterPopover filters={filters} setFilters={setFilters} data={data} sidebarTop={sidebarTop} facilityView={facilityView} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={openOos} title="Out-of-stock SKUs: days out, avg daily sale, ASP and the sale lost"
+                style={{ fontSize: 11, fontWeight: 600, color: IC.acc, background: IC.accDim, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                OOS loss ↗
+              </button>
+              <InvFilterPopover filters={filters} setFilters={setFilters} data={data} sidebarTop={sidebarTop} facilityView={facilityView} isMobile={isMobile} setSidebarOpen={setSidebarOpen} />
+            </div>
           </div>
         </div>
 
@@ -1791,6 +1812,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       )}
       </div>
     </div>
+    </>
   )
 })
 

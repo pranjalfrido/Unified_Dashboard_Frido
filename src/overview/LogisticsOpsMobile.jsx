@@ -91,12 +91,13 @@ export default function LogisticsOpsMobile({ m, prev, prevStatus, badgeText, inf
 
   const flows = {
     fwd: { tab: 'Forward', e2eLabel: 'Order → delivered', e2e: m.lAvgFul,
-      stages: [['Order → pickup', m.lAvgPickup], ['Order → dispatch', m.lAvgProcessing], ['Pickup → delivered', m.lAvgIntransit]],
+      stages: [['Order → AWB', m.lAvgProcessing], ['AWB → pickup', m.lAvgPickup], ['Pickup → delivery', m.lAvgIntransit]],
       sla: [['Processed ≤ 24h', m.lProcessedWithin24hPct, m.lProcessedWithin24h, m.lOrdersWithOrderDate],
         ['Picked up ≤ 24h', m.lPickedUpWithin24hPct, m.lPickedUpWithin24h, m.lOrdersPickedUp],
         ['Delivered ≤ 3d of pickup', m.lDeliveredWithin3dPickupPct, m.lDeliveredWithin3dPickup, m.lOrdersDeliveredTotal],
         ['Delivered ≤ 5d of order', m.lDeliveredWithin5dOrderPct, m.lDeliveredWithin5dOrder, m.lOrdersDeliveredTotal]] },
-    rto: { tab: 'RTO', e2eLabel: 'RTO mark → delivered back', e2e: m.lAvgRtoTat, stages: [],
+    rto: { tab: 'RTO', e2eLabel: 'AWB → RTO delivered', e2e: m.lAvgAwbToRtoDelivered,
+      stages: [['AWB → RTO mark', m.lAvgAwbToRtoMark], ['RTO mark → RTO del', m.lAvgRtoTat]],
       sla: [['RTO ≤ 5d of mark', m.lRtoDeliveredWithin5dMarkPct, m.lRtoDeliveredWithin5dMark, m.lRtoCompleted],
         ['RTO ≤ 10d of mark', m.lRtoDeliveredWithin10dMarkPct, m.lRtoDeliveredWithin10dMark, m.lRtoCompleted]] },
     rvp: { tab: 'Reverse', e2eLabel: 'Return created → delivered', e2e: m.lAvgRvpTat,

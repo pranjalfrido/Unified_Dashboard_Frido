@@ -49,6 +49,16 @@ function getCostPool() {
     // Without this, an idle-client error from the pooler becomes an unhandled
     // rejection that takes the whole server process down.
     costPool.on('error', e => console.error('[logistics-cost pool]', e.message))
+    // Cache build only (scripts/generate-logistics-cost-cache.mjs sets the flag and connects
+    // over the SESSION port). Supavisor ignores the startup `options` above, so the role's
+    // 120 s default still applied and the full-ledger queries were cancelled. A plain SET
+    // sticks for the life of a session-mode connection. Never done on the shared transaction
+    // pooler the deployed API uses, where a session SET could leak onto other clients.
+    if (process.env.LC_SESSION_STATEMENT_TIMEOUT === '1') {
+      costPool.on('connect', client => {
+        client.query('SET statement_timeout = 600000').catch(e => console.error('[logistics-cost pool] SET statement_timeout failed:', e.message))
+      })
+    }
   }
   return costPool
 }
@@ -70,6 +80,28 @@ let refCache = null
 // and the tab returned "timeout exceeded when trying to connect". Callers now await the
 // same promise instead of duplicating the work.
 let refCacheBuild = null
+
+// The five reference queries below (weight-vs-rate, rate grid, monthly trend, slab costs and the
+// zone x sub-category cube) take NO filters: they run with empty params and describe the whole
+// book. But they sit inside refCache, which is keyed on the B2B/month slicers, so changing the
+// month selection (or any B2B slicer) rebuilt ALL of them: full-ledger scans of 15-90 s each,
+// again and again, on the shared database (29 Oct outage). Memoising them separately, keyed by
+// name only, means a slicer change re-runs only the cheap, filter-dependent B2B queries.
+// One run at a time per name: concurrent callers await the same promise. A failure is not cached.
+const heavyMemo = new Map()
+export function memoHeavy(name, fn) {
+  return async () => {
+    const e = heavyMemo.get(name)
+    if (e && e.value !== undefined && Date.now() - e.at < REF_TTL_MS) return e.value
+    if (e && e.pending) return e.pending
+    const pending = Promise.resolve().then(fn).then(
+      v => { heavyMemo.set(name, { at: Date.now(), value: v }); return v },
+      err => { heavyMemo.delete(name); throw err },
+    )
+    heavyMemo.set(name, { pending })
+    return pending
+  }
+}
 
 // Full-response cache keyed on the filter payload. Bounded to RESP_CACHE_MAX entries so a
 // user cycling through slicers cannot grow it without limit; oldest key is evicted first.
@@ -456,7 +488,51 @@ export async function prewarm() {
   warmTimer.unref?.()
 }
 
+// ── Single-flight + concurrency cap for the aggregate request ──────────────────────
+// On 29 Oct several identical cold-cache requests each ran the full-ledger scans at once, which
+// starved the shared Supabase database (PostgREST 503, "Couldn't load your profile"). The
+// response cache only helps AFTER the first request finishes, so:
+//   1. identical requests (same cacheKey) wait for the one already running, then read its cache entry;
+//   2. at most LC_MAX_BUILDS (default 2) different aggregate requests run at a time per instance;
+//      the rest queue instead of piling more scans onto the database.
+// Only the plain aggregate request (no `action`) is guarded; claims, export and invalidate are not.
+const MAX_BUILDS = Math.max(1, Number(process.env.LC_MAX_BUILDS) || 2)
+const inflight = new Map()
+let activeBuilds = 0
+const buildQueue = []
+
+async function acquireBuildSlot() {
+  if (activeBuilds < MAX_BUILDS) { activeBuilds++; return }
+  await new Promise(resolve => buildQueue.push(resolve))
+}
+function releaseBuildSlot() {
+  const next = buildQueue.shift()
+  if (next) next()          // hand the slot straight over; activeBuilds stays the same
+  else activeBuilds--
+}
+
 export default async function handler(req, res) {
+  const f = req.body || {}
+  if (req.method !== 'POST' || f.action) return handlerCore(req, res)
+  const key = cacheKey(f)
+  // A waiter re-checks after each wait: if the running request succeeded its response is now in
+  // respCache and handlerCore returns it without touching the database; if it failed, the next
+  // waiter becomes the single runner instead of every waiter retrying together.
+  while (inflight.has(key)) await inflight.get(key)
+  const hit = respCache.get(key)
+  if (hit && Date.now() - hit.at < RESP_TTL_MS) return handlerCore(req, res)
+  let done
+  inflight.set(key, new Promise(resolve => { done = resolve }))
+  try {
+    await acquireBuildSlot()
+    try { return await handlerCore(req, res) } finally { releaseBuildSlot() }
+  } finally {
+    inflight.delete(key)
+    done()
+  }
+}
+
+async function handlerCore(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
   const f = req.body || {}
@@ -476,6 +552,7 @@ export default async function handler(req, res) {
   if (f.action === 'invalidate') {
     respCache.clear()
     refCache = null
+    heavyMemo.clear()
     return res.status(200).json({ ok: true, invalidated: true })
   }
 
@@ -1524,13 +1601,19 @@ export default async function handler(req, res) {
     const scope = typeof f.scope === 'string' ? f.scope : null
     const needsB2cDetail = scope === null || scope === 'all' || scope === 'b2c'
     const EMPTY = { rows: [] }
+    // Light cache build (scripts/generate-logistics-cost-cache.mjs, hourly): skip ONLY the four
+    // full-ledger detail scans below. Each one runs for minutes on the live database; the hourly
+    // build keeps their last published values instead and the nightly full build refreshes them.
+    // Deliberately separate from needsB2cDetail, which also gates the B2C halves of refCache.
+    // Internal flag: no client sends it.
+    const runHeavyDetail = needsB2cDetail && f.__lightCache !== true
 
     const [grouped, lanes, lfl, drift, product, cubeRes] = await mapLimit([
       groupedQ,
-      needsB2cDetail ? lanesQ : () => EMPTY,
-      needsB2cDetail ? lflQ : () => EMPTY,
-      needsB2cDetail ? driftQ : () => EMPTY,
-      needsB2cDetail ? productQ : () => EMPTY,
+      runHeavyDetail ? lanesQ : () => EMPTY,
+      runHeavyDetail ? lflQ : () => EMPTY,
+      runHeavyDetail ? driftQ : () => EMPTY,
+      runHeavyDetail ? productQ : () => EMPTY,
       cubeQ,
     // Concurrency 1, not 3.
     //
@@ -1938,10 +2021,10 @@ export default async function handler(req, res) {
         // trend — none of which the freight tab renders, so a freight-scoped request skips
         // them. b2bFilterKey carries needsB2cDetail, so this partial build can never be
         // served to a request that does need them.
-        needsB2cDetail ? wrQ : () => EMPTY,
-        needsB2cDetail ? gridQ : () => EMPTY,
-        needsB2cDetail ? trendQ : () => EMPTY,
-        slabQ, SUBCUBE_Q,
+        needsB2cDetail ? memoHeavy('wr', wrQ) : () => EMPTY,
+        needsB2cDetail ? memoHeavy('grid', gridQ) : () => EMPTY,
+        needsB2cDetail ? memoHeavy('trend', trendQ) : () => EMPTY,
+        memoHeavy('slab', slabQ), memoHeavy('subcube', SUBCUBE_Q),
         // ── Fixed vehicle rentals ──
         // Vehicles on a standing monthly charge rather than per-trip billing. Reported
         // separately from freight: there are no trips or lanes to divide by, so folding
@@ -2008,7 +2091,7 @@ export default async function handler(req, res) {
            ORDER BY c.cost DESC
         `).catch(() => ({ rows: [] })),
         () => query(pool, `
-          -- Volume joined from logistics_3pl_shipments (BigQuery Clickpost, synced by
+          -- Volume joined from logistics_3pl_shipments (Uniware dispatched units x SKU weight, synced by
           -- scripts/sync-3pl-shipments.mjs). Summed per month across only the warehouses
           -- that actually billed that month, so the denominator matches the numerator.
           -- Volume is summed over the DISTINCT (warehouse, month) pairs that were billed,

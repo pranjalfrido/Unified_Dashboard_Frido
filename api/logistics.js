@@ -1,6 +1,41 @@
-import { getBQ } from './_bq.js'
+import { getBQ, requestTimer } from './_bq.js'
+
+// Full-response cache keyed on the filter payload — modeled directly on api/logistics-cost.js's
+// respCache (read that file first; same shape: Map, FIFO eviction via RESP_CACHE_MAX, stable
+// sorted-key JSON.stringify). This endpoint has ZERO caching before this change (see PERF_AUDIT),
+// unlike logistics-cost.js's 60-min respCache or bq.js's getFromCache/setInCache — every slicer
+// change here, including the client-side-only zone/payment/state/city re-renders that don't even
+// change the filter payload, was a guaranteed ~6-20s BigQuery re-scan of
+// Clickpost_Shipment_Tracking_Report.
+//
+// TTL: 5 minutes, much shorter than logistics-cost.js's 60 min. logistics-cost.js's underlying
+// data (a hand-uploaded invoice ledger) only changes when someone uploads a new file, so a long
+// TTL costs nothing. This endpoint's source table (Clickpost_Shipment_Tracking_Report, filtered by
+// DATE(created_at)) is live operational shipment-tracking data with no documented sync cadence —
+// unlike Inventory Health's hourly cron (CLAUDE.md) there is no fixed refresh interval to key off
+// here, so 5 minutes is a conservative cap chosen to keep same-day numbers from ever reading
+// meaningfully stale during a user's session, while still absorbing the very common case of a
+// user toggling a client-only filter (zone/payment/state/city) or re-opening the tab shortly after
+// their last visit.
+const RESP_TTL_MS = 5 * 60 * 1000
+const RESP_CACHE_MAX = 24
+const respCache = new Map()
+
+// Stable key: JSON.stringify is order-sensitive, so sort the entries first (same convention as
+// logistics-cost.js's cacheKey) or the same filter set arriving in a different key order would
+// miss the cache.
+function cacheKey(f) {
+  const pick = {}
+  for (const k of Object.keys(f).sort()) {
+    const v = f[k]
+    if (v == null || (Array.isArray(v) && v.length === 0)) continue
+    pick[k] = Array.isArray(v) ? [...v].sort() : v
+  }
+  return JSON.stringify(pick)
+}
 
 export default async function handler(req, res) {
+  const timer = requestTimer('logistics')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -9,6 +44,16 @@ export default async function handler(req, res) {
 
   const { start, end, courier, shipmentType, sddNdd, paymentMode, pickupState, dropState, dropCity, category, subCategory, weightSlabs } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
+
+  const ck = cacheKey(req.body)
+  const hit = respCache.get(ck)
+  if (hit && Date.now() - hit.at < RESP_TTL_MS) {
+    timer.markCacheHit(ck)
+    res.setHeader('X-Cache', 'HIT')
+    timer.finish(res)
+    return res.json(hit.body)
+  }
+  timer.markCacheMiss(ck)
 
   // NDD split: show Delhivery NDD as separate row when Forward selected OR NDD chip selected
   const nddSelected = courier?.includes('Delhivery NDD')
@@ -207,7 +252,29 @@ kpis AS (
     COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 5) AS rvp_delivered_within_5d_of_done,
     ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 15, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 1) AS avg_rvp_created_to_pickup,
     ROUND(AVG(IF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 1) AS avg_rvp_pickup_to_delivery,
-    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat,
+    -- Forward-only copies for Overview's Speed & SLA Forward / RTO tabs: Overview queries every
+    -- direction (the RVP fields above need the Reverse rows), so these can't rely on the WHERE
+    -- filter the Logistics tab's Shipment Direction slicer adds. RTO is a forward-shipment leg.
+    ROUND(AVG(IF(shipment_type = 'Forward' AND created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS fwd_avg_processing,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS fwd_avg_pickup,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS fwd_avg_intransit,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS fwd_avg_fulfilment,
+    COUNTIF(shipment_type = 'Forward' AND order_date IS NOT NULL) AS fwd_orders_with_order_date,
+    COUNTIF(shipment_type = 'Forward' AND pickup_date IS NOT NULL) AS fwd_orders_picked_up,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL) AS fwd_orders_delivered_total,
+    COUNTIF(shipment_type = 'Forward' AND created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) <= 1) AS fwd_processed_within_24h,
+    COUNTIF(shipment_type = 'Forward' AND pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, HOUR) <= 24) AS fwd_picked_up_within_24h,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 3) AS fwd_delivered_within_3d_of_pickup,
+    COUNTIF(shipment_type = 'Forward' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) <= 5) AS fwd_delivered_within_5d_of_order,
+    COUNTIF(shipment_type = 'Forward' AND unified_status = 'RTO' AND clickpost_unified_status = 'RTO-Delivered') AS fwd_rto_completed,
+    COUNTIF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 5) AS fwd_rto_delivered_within_5d_of_mark,
+    COUNTIF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 10) AS fwd_rto_delivered_within_10d_of_mark,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS fwd_avg_rto_tat,
+    -- RTO tab stage averages, RTO-marked forward shipments only: shipment (AWB) created → RTO mark, and
+    -- AWB created → RTO delivered back (RTO-Delivered only; latest_ts_date is the RTO delivery, as above).
+    ROUND(AVG(IF(shipment_type = 'Forward' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(rto_mark_date, created_date, DAY), NULL)), 1) AS fwd_avg_awb_to_rto_mark,
+    ROUND(AVG(IF(shipment_type = 'Forward' AND clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, created_date, DAY) BETWEEN 0 AND 50, DATE_DIFF(latest_ts_date, created_date, DAY), NULL)), 1) AS fwd_avg_awb_to_rto_delivered
   FROM base
 ),
 by_courier AS (
@@ -1078,10 +1145,17 @@ SELECT
 
   try {
     const bq = getBQ()
+    const qt0 = Date.now()
     const [rows] = await bq.query({ query, maximumBytesBilled: '10000000000' })
-    if (!rows.length) return res.json({})
+    timer.queryTimings.push({ key: 'logistics_main', ms: Date.now() - qt0 })
+    if (!rows.length) {
+      respCache.set(ck, { at: Date.now(), body: {} })
+      while (respCache.size > RESP_CACHE_MAX) respCache.delete(respCache.keys().next().value)
+      timer.finish(res)
+      return res.json({})
+    }
     const r = rows[0]
-    res.json({
+    const body = {
       kpis: JSON.parse(r.kpis),
       byCourier: JSON.parse(r.by_courier),
       byStatus: JSON.parse(r.by_status),
@@ -1122,9 +1196,17 @@ SELECT
       byWeightSlab: JSON.parse(r.by_weight_slab),
       pickupAgeing: JSON.parse(r.pickup_ageing),
       filterOpts: JSON.parse(r.filter_opts),
-    })
+    }
+    respCache.set(ck, { at: Date.now(), body })
+    // Simple FIFO eviction — insertion order is Map's iteration order (same convention as
+    // logistics-cost.js's respCache).
+    while (respCache.size > RESP_CACHE_MAX) respCache.delete(respCache.keys().next().value)
+    res.setHeader('X-Cache', 'MISS')
+    timer.finish(res)
+    res.json(body)
   } catch (e) {
     console.error('[logistics]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

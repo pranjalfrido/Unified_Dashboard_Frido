@@ -39,14 +39,14 @@ console.log(`Fetching GRN ${startStr} â†’ ${endStr}, sales ${salesFetchStar
 const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
   bq.query({
     query: `SELECT
-              \`GRN Code\` AS grnCode, \`GRN Date\` AS grnDate, \`Item SkuCode\` AS itemSkuCode,
-              Facility, Category AS rawCategory, \`Vendor Name\` AS vendorName, \`Vendor Code\` AS vendorCode,
-              \`PO Code\` AS poCode, \`PO Date\` AS poDate,
-              \`Quantity Received\` AS qtyReceived, \`Quantity Rejected\` AS qtyRejected,
-              \`Rejection Reason\` AS rejectionReason, \`Grn item Status\` AS grnStatus,
-              \`GRN Received Timestamp\` AS grnReceivedTs, \`QC Completed On\` AS qcCompletedOn
-            FROM \`frido-429506.production.Unicommerce_GRN_Report\`
-            WHERE DATE(\`GRN Date\`) BETWEEN '${startStr}' AND '${endStr}'`,
+              GRN_Code AS grnCode, GRN_Date AS grnDate, Item_SkuCode AS itemSkuCode,
+              Facility, Category AS rawCategory, Vendor_Name AS vendorName, Vendor_Code AS vendorCode,
+              PO_Code AS poCode, PO_Date AS poDate,
+              Quantity_Received AS qtyReceived, Quantity_Rejected AS qtyRejected,
+              Rejection_Reason AS rejectionReason, Grn_item_Status AS grnStatus,
+              GRN_Received_Timestamp AS grnReceivedTs, QC_Completed_On AS qcCompletedOn
+            FROM \`frido-429506.production.stg_unicommerce_grn_report\`
+            WHERE DATE(GRN_Date) BETWEEN '${startStr}' AND '${endStr}'`,
     maximumBytesBilled: '5000000000',
   }),
   bq.query({
@@ -105,7 +105,7 @@ for (const row of invRows) {
   invBySku.set(key, (invBySku.get(key) || 0) + totalInventory)
 }
 
-// Avg sale anchoring: d-1 of max sales date, same as Inventory Health
+// Avg sale anchoring: d-1 of max sales date (the max date is today's partial feed), same as Inventory Health
 let maxSalesDate = null
 for (const row of cleanSalesRows) {
   const d = row.order_date?.value || row.order_date

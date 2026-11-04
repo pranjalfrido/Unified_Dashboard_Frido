@@ -10,7 +10,8 @@ export default function SegmentToggle({ options, value, onChange, label, full = 
         const on = o.id === value
         return (
           <button key={o.id} type="button" role="tab" aria-selected={on} onClick={() => onChange(o.id)}
-            style={{ flex: full ? 1 : '0 0 auto', minHeight: 32, border: 'none', borderRadius: 7, padding: '0 10px', fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
+            style={{ flex: full ? '1 1 0' : '0 0 auto', minWidth: full ? 0 : undefined, minHeight: 32, border: 'none', borderRadius: 7, padding: full ? '0 4px' : '0 10px', fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
+              ...(full ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } : {}),
               background: on ? '#fff' : 'transparent', color: on ? M.ink : M.muted, boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>
             {o.label}
           </button>

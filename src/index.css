@@ -94,12 +94,14 @@ a,button,select,input,textarea,label,summary,[role=button],[role=tab],[role=menu
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 
-/* Scrollbars: thin and light on every page (2026-10-26). Firefox via scrollbar-width / scrollbar-color. */
-@supports (-moz-appearance:none){ *{scrollbar-width:thin;scrollbar-color:rgba(28,36,32,.16) transparent} } /* Firefox only: in Chrome these would override the 3px bar below */
+/* Scrollbars: 3px light Frido green on every page (MOBILE_DESIGN_SYSTEM.md §4). Firefox via scrollbar-width /
+   scrollbar-color, only where ::-webkit-scrollbar is unsupported: in Chrome 121+ they would override the 3px bar. */
+@supports not selector(::-webkit-scrollbar){ *{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent} }
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:rgba(28,36,32,.32)}
+::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(31,90,61,.45)}
+::-webkit-scrollbar-button{display:none}
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:var(--app-h);overflow:hidden;background:var(--bg)}
@@ -184,7 +186,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* clip-path:none is not enough - the scroll container clips regardless. The side and
    bottom padding above is what actually gives the card hover glow room to render. */
 .page-scroll::-webkit-scrollbar{width:3px}
-.page-scroll::-webkit-scrollbar-thumb{background:rgba(28,36,32,.16);border-radius:3px}
+.page-scroll::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
@@ -1580,23 +1582,6 @@ svg text, svg tspan{
    hidden below 1024px; desktop keeps it. */
 @media (max-width:1023px){ .theme-picker-slot{ display:none !important } }
 
-/* Phone header (MobilePageHeader look, docs/responsive/MOBILE_DESIGN_SYSTEM.md §2): dark-green
-   gradient, white title, translucent date pill and bell. Phones only, Overview only for now; the
-   other pages move over as they are redesigned. !important beats the inline styles. */
-.bell-svg{ display:none }
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header{ background:linear-gradient(180deg,#0f2a1d,#1c4630); border-bottom:none; box-shadow:0 2px 8px rgba(0,0,0,.12) }
-  .topnav.m-header .tnav-title{ color:#fff }
-  .topnav.m-header .drp-trigger,
-  .topnav.m-header .drp-refresh,
-  .topnav.m-header .alerts-bell-btn{ background:rgba(255,255,255,.08) !important; border:1px solid rgba(255,255,255,.22) !important; color:#fff !important; border-radius:10px !important }
-  .topnav.m-header .drp-trigger{ font-size:12.5px !important; padding:6px 10px !important; min-height:34px }
-  .topnav.m-header .drp-trigger svg *{ stroke:rgba(255,255,255,.85) }
-  .topnav.m-header .drp-trigger svg rect[fill]:not([fill="none"]){ fill:rgba(255,255,255,.85) }
-  .topnav.m-header .bell-emoji{ display:none }
-  .topnav.m-header .bell-svg{ display:block }
-}
-
 /* Very narrow phones (360px Androids): a little less card padding and tile gap so every KPI tile's
    label + ▲/▼ fits without shrinking text below 12px. */
 @media (max-width:370px){
@@ -1604,32 +1589,205 @@ svg text, svg tspan{
   .master-tiles{ gap:6px !important }
 }
 
-/* Overview filter icon (OverviewFilterButton): lives in the green phone header only. */
+/* Overview filter icon (OverviewFilterButton): only inside the phone header (MobilePageHeader). */
 .ov-filter-slot{ display:none }
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header .ov-filter-slot{ display:flex; flex-shrink:0 }
-  .filtered-strip::-webkit-scrollbar{ display:none }
-}
+/* Laptop alerts bell: the emoji; the SVG bell is unused now that phones show alerts in ⋯. */
+.bell-svg{ display:none }
+.filtered-strip::-webkit-scrollbar{ display:none }
 
-/* Alerts count on the green phone header: 12px minimum, palette red / amber (MOBILE_DESIGN_SYSTEM §1). */
-@media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header .alerts-badge{ min-width:18px !important; height:18px !important; border-radius:9px !important; font-size:12px !important; top:-6px !important; right:-6px !important }
-  .topnav.m-header .alerts-badge[data-level="red"]{ background:#c0392b !important }
-  .topnav.m-header .alerts-badge[data-level="amber"]{ background:#c8860a !important }
-}
+/* Phone page header, deep green (HEADER_GREEN_PROMPT.md, mockups/header_green_mockup.html; src/responsive/
+   MobilePageHeader.jsx). One fixed height per page (no collapse): row 1 48px (title · context · date ·
+   filter · ⋯), chips row 36px (26px chips), sub-tabs 32px on a darker band, second sub-tab row 30px darker
+   still; totals 48 / 84 / 116px. Dividers are inset shadows (no extra px). The "Filtered:" strip (28px)
+   sits under the green bar on the light page background. */
+/* No backdrop-filter: it would make the header the containing block of the date picker's fixed sheet. */
+.mph{ font-family:var(--font); -webkit-tap-highlight-color:transparent; position:relative; z-index:1 }
+.mph-bar{ background:linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%); box-shadow:0 8px 18px -8px rgba(20,50,35,.45); position:relative; z-index:1; padding-top:var(--safe-top) }
+.mph button{ -webkit-tap-highlight-color:transparent }
+.mph button:focus{ outline:none }
+.mph button:focus-visible{ outline:2px solid #9fe0b9; outline-offset:2px }
+.mph-r1{ display:flex; align-items:center; gap:4px; height:48px; padding:0 max(4px, var(--safe-right)) 0 max(16px, var(--safe-left)); flex-shrink:0 }
+.mph-r1.mph-has-back{ padding-left:max(2px, var(--safe-left)) }
+.mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
+.mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#fff; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
+.mph-title span{ font-size:13px; font-weight:500; color:#a9c9b6; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto } /* the context gives way first; the title keeps its width */
+.mph-ctl{ display:flex; align-items:center; gap:0; flex:0 0 auto }
+.mph-filter, .mph-date{ display:contents }
+/* 44 × 44 tap target; the pressed tile is the 34 × 34 visual */
+.mph-ib{ position:relative; width:44px; height:44px; border-radius:10px; border:none; background:none; padding:0; color:#d8e8de; display:grid; place-items:center; cursor:pointer; flex:0 0 auto }
+.mph-ib::before{ content:''; position:absolute; inset:5px; border-radius:10px }
+.mph-ib:active::before{ background:rgba(255,255,255,.10) }
+.mph-ib > svg{ position:relative }
+.mph-ib:disabled{ opacity:.45; cursor:default }
+.mph-back{ color:#fff }
+.mph-count{ position:absolute; top:7px; right:6px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:#9fe0b9; color:#143d2a; font-size:12px; font-weight:800; line-height:14px; letter-spacing:-.02em; text-align:center; box-shadow:0 0 0 1.5px #1f5a3d }
+.mph-dot{ position:absolute; top:9px; right:9px; width:7px; height:7px; border-radius:50%; background:#e5534b; box-shadow:0 0 0 1.5px #1f5a3d }
+/* date pill (DateRangePicker trigger) and the Logistics Cost month pill: translucent white, chevron centred */
+.mph .drp-trigger, .mph .mph-pill{ display:inline-flex !important; align-items:center; gap:5px !important; height:32px; min-height:32px; padding:0 10px !important; border-radius:10px !important; border:none !important;
+  background:rgba(255,255,255,.14) !important; color:#fff !important; font-size:12.5px !important; font-weight:600; line-height:1; font-family:var(--font); white-space:nowrap; cursor:pointer; flex:0 0 auto }
+.mph .drp-trigger:active, .mph .mph-pill:active{ background:rgba(255,255,255,.22) !important }
+.drp-short, .drp-chev{ display:none }
+.mph .drp-cal, .mph .drp-long{ display:none }
+.mph .drp-short{ display:inline }
+.mph .drp-chev{ display:block; width:9px; height:6px; opacity:.7; flex:0 0 auto }
+.mph .tnav-right{ margin-left:0 }
+/* row 2: channel chips. Inactive text #c8dfd1, a touch lighter than the mockup #b9d4c4, so it keeps 4.5:1 at the light end of the gradient. */
+.mph-r2{ display:flex; align-items:center; gap:4px; height:36px; overflow-x:auto; padding:0 max(12px, var(--safe-right)) 4px max(12px, var(--safe-left)); scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent); mask-image:linear-gradient(90deg,#000 86%,transparent) }
+.mph-r2::-webkit-scrollbar, .mph-r3::-webkit-scrollbar{ display:none }
+.mph-chip{ flex:0 0 auto; height:26px; padding:0 11px; border-radius:999px; border:none; background:none; color:#c8dfd1; font-size:12.5px; font-weight:600; font-family:var(--font);
+  display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap }
+.mph-chip[aria-pressed="true"]{ background:#fff; color:#1f5a3d }
+.mph-chip:disabled{ opacity:.4; cursor:not-allowed }
+.mph-chip [role=img]{ width:5px !important; height:5px !important; background:#c8860a !important }
+/* row 3: underline sub-tabs on a darker band; 3b: the slimmer second level, darker still */
+.mph-r3{ display:flex; gap:20px; padding:0 max(16px, var(--safe-right)) 0 max(16px, var(--safe-left)); overflow-x:auto; scrollbar-width:none; background:rgba(0,0,0,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.12) }
+.mph-r3.mph-even{ justify-content:space-around }
+.mph-tab{ flex:0 0 auto; position:relative; height:32px; border:none; background:none; padding:0; color:#a9c9b6; font-size:12.5px; font-weight:600; font-family:var(--font); cursor:pointer; white-space:nowrap }
+.mph-tab[aria-selected="true"]{ color:#fff }
+.mph-tab[aria-selected="true"]::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px; background:#9fe0b9 }
+.mph-r3b{ background:rgba(0,0,0,.14); box-shadow:none }
+.mph-r3b .mph-tab{ height:30px; font-size:12px }
+.mph .filtered-strip{ height:28px; min-height:28px; padding-top:0 !important; padding-bottom:0 !important; padding-left:max(16px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important; border-bottom:none !important; background:#f4f2ed !important; box-shadow:none }
+.mph .filtered-strip button{ min-height:22px !important; height:22px }
 
-/* Phone header (MobilePageHeader inside the top bar): grows with its optional rows (chips, sub-tabs,
-   "Filtered:" strip). Row 1 keeps the plain bar's height and padding, so Overview looks the same. */
+/* The top bar holds the header on phones: it gives up its own bar look and grows with the rows. The
+   bottom bar is 48px + the safe-area inset, the same as header row 1 (content padding follows --bot). */
 @media (max-width:768px), (orientation:landscape) and (max-height:500px) and (pointer:coarse){
-  .topnav.m-header{ height:auto; min-height:var(--nav); flex-direction:column; align-items:stretch; padding:0; gap:0 }
-  .topnav.m-header .mph-pad{ padding-left:max(12px, var(--safe-left)); padding-right:max(12px, var(--safe-right)) }
-  .topnav.m-header .mph-row1{ gap:8px }
-  .topnav.m-header .filtered-strip{ padding-left:max(12px, var(--safe-left)) !important; padding-right:max(12px, var(--safe-right)) !important }
-  .topnav.m-header[data-page="sales"] .tnav-title{ font-size:17px; font-weight:600 }
-  .mph-chips::-webkit-scrollbar{ display:none }
+  :root{ --bot:48px }
+  .topnav.m-header{ height:auto; min-height:0; flex-direction:column; align-items:stretch; padding:0; gap:0; background:none; border-bottom:none; box-shadow:none; position:relative; z-index:100 }
+  .topnav.m-header .ov-filter-slot{ display:contents }
   /* The header carries the channel chips, sub-tabs, filters and "⋯" on phones. */
   .sales-tabs, .fbar{ display:none !important }
+  /* Frido Pulse: the shared header names the page, so the history panel's own title goes. */
+  .af-history-header{ display:none }
 }
 
-/* Phone portrait: the plain bar's 6px gap (index.css ≤768 block) also between header items. */
-@media (max-width:768px){ .topnav.m-header .mph-row1{ gap:6px } }
+/* Logistics mobile (LOGISTICS_MOBILE_REDESIGN_PROMPT.md §0): no outline on tap for chips and toggles;
+   a focus ring only for keyboard focus. */
+.log-mobile button:focus, .mph-tabs2 button:focus, .mrp-month:focus, .mrp-pill:focus{ outline:none }
+.log-mobile button:focus-visible, .mrp-month:focus-visible, .mrp-pill:focus-visible{ outline:2px solid rgba(31,90,61,.5); outline-offset:1px }
+.mph-tabs2 button:focus-visible{ outline:2px solid rgba(255,255,255,.8); outline-offset:-2px }
+
+
+/* Phone navigation (NAV_MOBILE_PROMPT.md; src/responsive/MobileBottomNav.jsx). Selected icon: a pale
+   green tile with a soft halo, faded / scaled in; no tap focus box, keyboard focus ring only. */
+.mnav{ -webkit-tap-highlight-color:transparent }
+.mnav-slot,.mnav-sheet button{ -webkit-tap-highlight-color:transparent }
+.mnav-slot:focus,.mnav-sheet button:focus{ outline:none }
+.mnav-slot:focus-visible,.mnav-sheet button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:-2px; border-radius:12px }
+.mnav-glow{ position:absolute; left:50%; top:50%; width:34px; height:30px; margin:-15px 0 0 -17px; border-radius:11px; background:#edf6f0;
+  box-shadow:0 0 8px 1px rgba(120,190,150,.22); opacity:0; transform:scale(.85); transition:opacity .25s ease, transform .25s ease; pointer-events:none }
+.mnav-glow.on{ opacity:1; transform:scale(1) }
+.mnav-link{ border:none; background:none; padding:8px 4px; min-height:40px; font-family:var(--font); font-size:13px; font-weight:600; cursor:pointer }
+@media (prefers-reduced-motion: reduce){ .mnav-glow{ transition:none } }
+/* Return Analysis mobile: no focus ring after a tap on its toggles / chips (keyboard focus still shows one). */
+.ra-mobile :focus:not(:focus-visible){ outline:none }
+
+/* ── Frido Pulse, phones (src/ask/PulseMobile.jsx; docs/responsive/mockups/pulse_mockup.html) ──────────
+   The view is fixed to the visible area: header, thread (the only scroller), composer. Its height leaves
+   room for the bottom bar, or fills the visible area while the keyboard is open (the bar hides then). */
+.pm-root{ position:fixed; left:0; right:0; z-index:90; display:flex; flex-direction:column; background:#f4f2ed; font-family:var(--font); color:#1c2420; font-variant-numeric:tabular-nums }
+.pm-root button{ -webkit-tap-highlight-color:transparent; font-family:var(--font) }
+.pm-root button:focus, .pm-root textarea:focus, .bottom-sheet .pm-chats button:focus, .bottom-sheet .pm-confirm button:focus, .pm-full button:focus, .pm-toast button:focus{ outline:none }
+.pm-root button:focus-visible, .bottom-sheet .pm-chats button:focus-visible, .bottom-sheet .pm-confirm button:focus-visible, .pm-full button:focus-visible{ outline:2px solid #1f5a3d; outline-offset:2px }
+.pm-root .mph button:focus-visible{ outline-color:#9fe0b9 }
+.pm-kb .mnav{ display:none !important }
+.mph-tag{ font-style:normal; font-size:12px; font-weight:700; color:#cfe5d7; background:rgba(255,255,255,.12); border-radius:6px; padding:2px 6px; flex:0 0 auto; align-self:center }
+.pm-thread{ position:relative; flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch }
+.pm-thread-inner{ padding:14px 14px 8px }
+/* empty state */
+.pm-sh{ font-size:12px; font-weight:700; letter-spacing:.06em; color:#7b847f; margin:18px 2px 8px; text-transform:uppercase }
+/* thread */
+.pm-me{ margin:4px 0 14px auto; width:fit-content; max-width:82%; background:#1f5a3d; color:#fff; font-size:14px; line-height:1.4; padding:9px 12px; border-radius:16px 16px 4px 16px; white-space:pre-wrap; overflow-wrap:anywhere }
+.pm-ai{ margin-bottom:14px; font-size:14px; line-height:1.5; min-width:0 }
+.pm-who{ display:flex; align-items:center; gap:6px; font-size:12px; color:#7b847f; font-weight:600; margin-bottom:6px }
+.pm-who i{ width:20px; height:20px; border-radius:6px; background:#eef5f0; display:grid; place-items:center; color:#1f5a3d; font-style:normal }
+.pm-badge{ margin-left:auto; font-size:12px; font-weight:700; color:#7b847f; background:#ebe8e1; border-radius:6px; padding:1px 6px }
+.pm-answer{ font-size:14px; line-height:1.5; color:#1c2420; overflow-wrap:anywhere; min-width:0 }
+.pm-answer .af-md-h2{ font-size:15.5px }
+.pm-answer .af-md-h3{ font-size:14.5px }
+.pm-answer .af-inline-code{ font-size:12.5px; overflow-wrap:anywhere }
+/* whole words stay together; the first column gets room for a name like "Instamart" or "Delhivery NDD" */
+/* no hover tint on touch (the laptop rule highlights the row under the pointer) */
+.pm-acts{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
+.pm-act{ height:30px; padding:0 10px; border-radius:9px; border:1px solid #eae7df; background:#fff; color:#1f5a3d; font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:5px; cursor:pointer }
+span.pm-act{ cursor:default; color:#1f8a4c }
+.pm-sql{ margin:6px 0 0; padding:10px 12px; background:#fbfaf7; border:1px solid #eae7df; border-radius:10px; font-size:12px; line-height:1.45; color:#3a4640; white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace }
+.pm-clar{ display:flex; flex-direction:column; gap:6px; margin:8px 0 }
+.pm-clar button{ width:100%; min-height:44px; text-align:left; font-size:13.5px; font-weight:500; padding:9px 12px; border-radius:12px; background:#fff; border:1px solid #d6e6dc; color:#1f5a3d; cursor:pointer }
+.pm-err{ background:#fbeeec; border:1px solid #f1d3ce; color:#8c2a1f; border-radius:12px; padding:10px 12px; font-size:13.5px; line-height:1.45 }
+/* composer */
+.pm-cmp{ flex:0 0 auto; padding:8px 10px 6px; background:linear-gradient(0deg,#f4f2ed 70%,rgba(244,242,237,0)) }
+.pm-box{ box-sizing:border-box; display:flex; align-items:flex-end; gap:8px; min-height:44px; background:#fff; border:1px solid #e1ded5; border-radius:14px; padding:0 4px 0 14px; box-shadow:0 4px 14px -8px rgba(28,52,40,.25) }
+.pm-box:focus-within{ border-color:#9cc4ad }
+.pm-box textarea{ flex:1; min-width:0; border:none; outline:none; resize:none; background:none; font-family:var(--font); font-size:16px; line-height:1.35; color:#1c2420; padding:10px 0; height:42px; max-height:130px; overflow-y:auto; display:block; box-sizing:border-box }
+.pm-box textarea::placeholder{ color:#9aa29d }
+.pm-send{ flex:0 0 auto; width:34px; height:34px; margin:4px 0; border-radius:10px; border:none; background:#1f5a3d; color:#fff; display:grid; place-items:center; cursor:pointer }
+.pm-send:disabled{ background:#d6e3da; cursor:default }
+.pm-disc{ font-size:12px; color:#7b847f; text-align:center; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+/* history sheet + delete confirm (inside the shared BottomSheet) */
+.pm-search{ display:flex; align-items:center; gap:8px; height:44px; border-radius:12px; background:#f4f2ed; padding:0 12px; color:#7b847f; margin-bottom:4px }
+.pm-search input{ flex:1; min-width:0; border:none; outline:none; background:none; font-size:16px; font-family:var(--font); color:#1c2420 }
+.pm-none{ font-size:13px; color:#7b847f; text-align:center; padding:18px 0 }
+.pm-confirm-text{ margin:0 0 14px; font-size:14px; color:#1c2420 }
+.pm-confirm{ display:flex; gap:8px }
+.pm-confirm button{ flex:1; min-height:44px }
+.pm-confirm .pm-danger-fill{ background:#c0392b; border-color:#c0392b; color:#fff }
+
+/* Pulse phone fixes (PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html) */
+.pm-root .mph-title b{ font-size:16px }
+.pm-new{ flex:0 0 auto; height:44px; padding:0 4px; margin-left:4px; border:none; background:none; display:grid; place-items:center; cursor:pointer; -webkit-tap-highlight-color:transparent }
+.pm-new span{ display:flex; align-items:center; gap:5px; height:32px; padding:0 11px; border-radius:10px; background:rgba(255,255,255,.14); color:#fff; font-size:13px; font-weight:650 }
+.pm-new:active span{ background:rgba(255,255,255,.22) }
+.pm-first{ padding:14px 14px 10px }
+.pm-hello{ font-size:20px; font-weight:700; margin:6px 2px 2px; letter-spacing:-.01em; color:#1c2420 }
+.pm-lede{ font-size:13px; line-height:1.45; color:#7b847f; margin:0 2px 4px }
+.pm-first .pm-sh{ margin:16px 2px 8px }
+.pm-chips{ display:flex; flex-wrap:wrap; gap:6px }
+.pm-chip{ display:flex; align-items:center; gap:6px; min-height:36px; padding:7px 11px; border-radius:12px; background:#fff; border:1px solid #e6e2d8; color:#1c2420; font-size:13px; font-weight:500; text-align:left; cursor:pointer }
+.pm-chip:active{ background:#f3f8f4 }
+.pm-chip i{ font-style:normal; font-size:12px; font-weight:700; color:#1f5a3d; background:#eef5f0; border-radius:6px; padding:1px 5px; flex:0 0 auto }
+.pm-rec{ display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; min-height:44px; padding:8px 2px; border:none; border-bottom:1px solid #eae7df; background:none; text-align:left; font-size:13.5px; color:#4e5a54; cursor:pointer }
+.pm-rec span{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pm-rec small{ flex:0 0 auto; font-size:12px; color:#9aa29d }
+.pm-src{ font-size:12px; color:#7b847f; margin-top:6px }
+.pm-tbw{ margin:8px 0 6px }
+.pm-tbox{ background:#fff; border:1px solid #eae7df; border-radius:12px; overflow:hidden }
+.pm-tb{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; line-height:1.4; font-variant-numeric:tabular-nums; margin:0; border:none }
+.pm-tb th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:left; padding:7px 8px; vertical-align:bottom; border:none }
+.pm-tb td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; overflow-wrap:break-word; word-break:normal }
+.pm-tb .n{ text-align:right; white-space:nowrap }
+.pm-tb td small{ display:block; font-size:12px; color:#9aa29d; margin-top:1px }
+.pm-tb tr.tot td{ font-weight:700; background:#fbfaf7 }
+.pm-tb .up{ color:#1f8a4c } .pm-tb .dn{ color:#c0392b }
+.pm-tb tbody tr:hover{ background:transparent }
+.pm-tbar{ display:flex; align-items:center; gap:4px; margin:2px 0 0 }
+.pm-tbar button{ display:inline-flex; align-items:center; gap:5px; min-height:40px; padding:0 4px; border:none; background:none; color:#1f5a3d; font-size:12.5px; font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent }
+.pm-tbar button + button{ margin-left:8px }
+.pm-tbar .pm-copy{ margin-left:auto }
+.pm-full{ position:fixed; inset:0; z-index:500; display:flex; flex-direction:column; background:#f4f2ed; font-family:var(--font); color:#1c2420 }
+.pm-full-body{ flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px max(12px, var(--safe-right)) calc(16px + var(--safe-bottom)) max(12px, var(--safe-left)) }
+.pm-full .pm-tb{ width:auto; min-width:100%; background:#fff; border:none; box-shadow:0 0 0 1px #eae7df; border-radius:12px }
+.pm-full .pm-tb th, .pm-full .pm-tb td{ white-space:nowrap }
+.pm-full .pm-tb td:first-child{ white-space:normal; min-width:120px; max-width:180px }
+.pm-full .pm-tb th:first-child, .pm-full .pm-tb td:first-child{ position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #eeebe4 }
+.pm-full .pm-tb th:first-child{ background:#f6f4ef }
+.pm-full .pm-tb tr.tot td:first-child{ background:#fbfaf7 }
+.pm-chats{ display:flex; flex-direction:column; min-height:min(56dvh, 420px) }
+.pm-chats .pm-search{ margin-bottom:2px }
+.pm-chats .pm-sh{ margin:14px 2px 4px }
+.pm-hi{ position:relative; overflow:hidden; border-bottom:1px solid #f0ede6 }
+.pm-hi.on{ border-bottom-color:transparent }
+.pm-hdel{ position:absolute; right:0; top:0; bottom:0; width:84px; border:none; background:#c0392b; color:#fff; font-size:13px; font-weight:700; cursor:pointer; font-family:var(--font) }
+.pm-hin{ position:relative; z-index:1; display:flex; align-items:center; gap:8px; width:100%; min-height:52px; padding:9px 8px 9px 10px; border:none; background:#fff; text-align:left; color:#1c2420; cursor:pointer; font-family:var(--font); touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; transition:transform 200ms ease }
+.pm-hi.on .pm-hin{ background:#f3f8f4; box-shadow:inset 3px 0 0 #1f5a3d; border-radius:10px }
+.pm-hmain{ flex:1; min-width:0 }
+.pm-hmain b{ display:block; font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pm-hmain small{ display:block; font-size:12px; color:#9aa29d; margin-top:1px }
+.pm-hi.on .pm-hmain small{ color:#1f5a3d; font-weight:600 }
+.pm-hin > svg{ color:#b3b9b5; flex:0 0 auto }
+.pm-hint{ font-size:12px; color:#9aa29d; text-align:center; margin-top:auto; padding:14px 0 2px }
+.pm-toast{ position:fixed; left:12px; right:12px; bottom:calc(var(--bot) + var(--safe-bottom) + 70px); z-index:600; display:flex; align-items:center; justify-content:space-between; gap:12px; background:#1c2420; color:#fff; border-radius:12px; padding:4px 6px 4px 14px; min-height:44px; font-size:13.5px; font-family:var(--font); box-shadow:0 8px 20px rgba(0,0,0,.25) }
+.pm-toast button{ min-height:40px; padding:0 10px; border:none; background:none; color:#9fe0b9; font-size:13.5px; font-weight:700; cursor:pointer; font-family:var(--font); -webkit-tap-highlight-color:transparent }
+@media (prefers-reduced-motion: reduce){ .pm-hin{ transition:none } }

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lightning, CheckCircle, Code } from '@phosphor-icons/react';
+import { CheckCircle, Code } from '@phosphor-icons/react';
+import NavAIIcon from './NavAIIcon.jsx';
+import { ThumbsDown } from '@phosphor-icons/react';
+import { useFeedback } from '../feedback/feedbackCtx.js';
+import { ranQuery } from './ranQuery.js';
+import { SUGGESTIONS } from './pulseShared.js';
+import { renderMarkdown } from './markdown.js';
 
 function ThinkingDots() {
   return (
@@ -27,79 +33,18 @@ function AssistantTable({ table }) {
   );
 }
 
-function renderMarkdown(text) {
-  if (!text) return '';
-
-  const lines = text.split('\n');
-  const out = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Markdown table: line with | and next line is separator (---|---)
-    if (line.includes('|') && lines[i + 1] && /^[\s|:\-]+$/.test(lines[i + 1].replace(/\|/g, '|'))) {
-      const headers = line.split('|').map(c => c.trim()).filter(c => c);
-      i += 2; // skip separator
-      const rows = [];
-      while (i < lines.length && lines[i].includes('|')) {
-        const cells = lines[i].split('|').map(c => c.trim()).filter(c => c);
-        if (cells.length > 0) rows.push(cells);
-        i++;
-      }
-      const thead = `<thead><tr>${headers.map(h => `<th>${inlineFormat(h)}</th>`).join('')}</tr></thead>`;
-      const tbody = `<tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inlineFormat(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
-      out.push(`<div class="af-table-wrap"><table class="af-table">${thead}${tbody}</table></div>`);
-      continue;
-    }
-
-    // ### heading
-    if (/^###\s+/.test(line)) {
-      out.push(`<div class="af-md-h3">${inlineFormat(line.replace(/^###\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // ## heading
-    if (/^##\s+/.test(line)) {
-      out.push(`<div class="af-md-h2">${inlineFormat(line.replace(/^##\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // bullet - or *
-    if (/^[\-\*]\s+/.test(line)) {
-      out.push(`<div class="af-md-li">${inlineFormat(line.replace(/^[\-\*]\s+/, ''))}</div>`);
-      i++; continue;
-    }
-    // horizontal rule ---
-    if (/^---+$/.test(line.trim())) {
-      out.push('<hr class="af-md-hr"/>');
-      i++; continue;
-    }
-    // empty line
-    if (line.trim() === '') {
-      out.push('<div class="af-md-gap"></div>');
-      i++; continue;
-    }
-    // normal paragraph line
-    out.push(`<div>${inlineFormat(line)}</div>`);
-    i++;
-  }
-
-  return out.join('');
-}
-
-function inlineFormat(text) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code class="af-inline-code">$1</code>');
-}
-
-function AssistantMessage({ msg }) {
+function AssistantMessage({ msg, question, isAdmin }) {
   const [sqlOpen, setSqlOpen] = useState(false);
+  const fbk = useFeedback();
+  const reportable = !msg.thinking && !!msg.text && !msg.error;
+  // Admins only: the SQL behind an answer (when one really ran) and which model answered.
+  const showSql = isAdmin && ranQuery(msg.sql);
+  const showModel = isAdmin && !!msg.model;
 
   return (
     <div className="af-msg af-msg-assistant">
       <div className="af-assistant-icon">
-        <Lightning size={14} weight="fill" />
+        <NavAIIcon size={16} />
       </div>
       <div className="af-assistant-body">
         {msg.thinking ? (
@@ -116,7 +61,7 @@ function AssistantMessage({ msg }) {
             {msg.assumptions && (
               <div className="af-assumptions">Assumptions: {msg.assumptions}</div>
             )}
-            {(msg.matchesDashboard !== undefined || msg.sql || msg.model) && (
+            {(msg.matchesDashboard !== undefined || showSql || showModel) && (
               <div className="af-msg-actions">
                 {msg.matchesDashboard && (
                   <button className="af-action-btn af-action-verified">
@@ -124,7 +69,7 @@ function AssistantMessage({ msg }) {
                     Matches dashboard
                   </button>
                 )}
-                {msg.sql && (
+                {showSql && (
                   <button
                     className="af-action-btn af-action-sql"
                     onClick={() => setSqlOpen(o => !o)}
@@ -133,15 +78,20 @@ function AssistantMessage({ msg }) {
                     {sqlOpen ? 'Hide SQL' : 'Show SQL'}
                   </button>
                 )}
-                {msg.model && (
+                {showModel && (
                   <span className={`af-action-btn af-model-badge${msg.model.includes('opus') ? ' af-model-opus' : ' af-model-sonnet'}`}>
                     {msg.model.includes('opus') ? '⚡ Opus' : '· Sonnet'}
                   </span>
                 )}
               </div>
             )}
-            {sqlOpen && msg.sql && (
+            {sqlOpen && showSql && (
               <pre className="af-sql-block">{msg.sql}</pre>
+            )}
+            {reportable && (
+              <button type="button" className="fb-report" data-testid="report-answer" onClick={() => fbk.open({ type: 'wrong_number', ai: { question, answer: msg.text } })}>
+                <ThumbsDown size={14} /> Report this answer
+              </button>
             )}
           </>
         )}
@@ -162,7 +112,7 @@ function ClarifyMessage({ msg, onChoice }) {
   return (
     <div className="af-msg af-msg-assistant">
       <div className="af-assistant-icon">
-        <Lightning size={14} weight="fill" />
+        <NavAIIcon size={16} />
       </div>
       <div className="af-assistant-body">
         <div className="af-answer">{msg.question}</div>
@@ -179,16 +129,11 @@ function ClarifyMessage({ msg, onChoice }) {
 }
 
 function EmptyState({ onSuggestion }) {
-  const suggestions = [
-    'What is our RTO rate this week?',
-    'Top 5 products by revenue this month',
-    'Show inventory across all warehouses',
-    'Compare Delhivery vs BlueDart delivery rate',
-  ];
+  const suggestions = SUGGESTIONS;
   return (
     <div className="af-empty-state">
-      <div className="af-empty-icon"><Lightning size={32} weight="fill" /></div>
-      <div className="af-empty-title">Ask anything with Frido Pulse</div>
+      <div className="af-empty-icon"><NavAIIcon size={32} /></div>
+      <div className="af-empty-title">Ask anything with NavAI</div>
       <div className="af-empty-sub">Sales, inventory, logistics, P&L — all in one place</div>
       <div className="af-suggestions">
         {suggestions.map(s => (
@@ -199,7 +144,7 @@ function EmptyState({ onSuggestion }) {
   );
 }
 
-export default function ChatThread({ messages, onSuggestion, onClarifyChoice }) {
+export default function ChatThread({ messages, onSuggestion, onClarifyChoice, isAdmin }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -217,10 +162,11 @@ export default function ChatThread({ messages, onSuggestion, onClarifyChoice }) 
   return (
     <div className="af-thread">
       <div className="af-thread-inner">
-        {messages.map(msg => {
+        {messages.map((msg, idx) => {
           if (msg.role === 'user') return <UserMessage key={msg.id} msg={msg} />;
           if (msg.clarify) return <ClarifyMessage key={msg.id} msg={msg} onChoice={onClarifyChoice} />;
-          return <AssistantMessage key={msg.id} msg={msg} />;
+          const q = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user')?.text || '';
+          return <AssistantMessage key={msg.id} msg={msg} question={q} isAdmin={isAdmin} />;
         })}
         <div ref={bottomRef} />
       </div>

@@ -1,4 +1,4 @@
-import { getBQ } from './_bq.js'
+import { getBQ, requestTimer } from './_bq.js'
 import { buildFacilityMaps, norm, normSku, cleanLabel, computeRowInventory, isPseudoSku, buildSkuMap, resolveMasterSkuKey, sortByLocationOrder, salesTypeFor } from './_inventory_shared.js'
 
 // BigQuery NUMERIC columns come back as {value: "123.45"} objects, not plain numbers.
@@ -33,6 +33,7 @@ function quarterKey(dateStr) {
 function yearKey(dateStr) { return dateStr.slice(0, 4) }
 
 export default async function salesAllocationHandler(req, res) {
+  const timer = requestTimer('sales-allocation')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -136,7 +137,10 @@ export default async function salesAllocationHandler(req, res) {
     }
     let lastSalesDateConsidered = null
     if (maxSalesDate) {
-      lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
+      // max date is today's partial feed: report the last COMPLETE day (max - 1)
+      const d = new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z')
+      d.setDate(d.getDate() - 1)
+      lastSalesDateConsidered = d.toISOString().slice(0, 10)
     }
 
     const itemMaster = new Map()
@@ -247,9 +251,11 @@ export default async function salesAllocationHandler(req, res) {
     // N is a request parameter (default 7) rather than two hardcoded windows, per roadmap 2.7 —
     // the frontend can request any window and get back a consistently-shaped result.
     function momentumFor(windowN) {
-      if (lookbackDates.length < windowN + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
-      const lastDate = lookbackDates[lookbackDates.length - 1]
-      const compareDate = lookbackDates[lookbackDates.length - 1 - windowN]
+      // Anchor on the last COMPLETE day (lastSalesDateConsidered = max - 1), not the partial newest day.
+      const dates = lastSalesDateConsidered ? lookbackDates.filter(d => d <= lastSalesDateConsidered) : lookbackDates
+      if (dates.length < windowN + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
+      const lastDate = dates[dates.length - 1]
+      const compareDate = dates[dates.length - 1 - windowN]
       const rows = []
       for (const [skuKey, perDate] of skuDailyMap) {
         const lastQty = perDate.get(lastDate) || 0
@@ -716,6 +722,7 @@ export default async function salesAllocationHandler(req, res) {
       skus: [...skuSalesMap.values()].map(s => s.sku).sort(),
     }
 
+    timer.finish(res)
     res.json({
       dateRange: { start, end, days: daysInRange },
       lastSalesDate: maxSalesDate,
@@ -762,6 +769,7 @@ export default async function salesAllocationHandler(req, res) {
     })
   } catch (e) {
     console.error('[sales-allocation]', e.message)
+    timer.finish(res)
     res.status(500).json({ error: e.message })
   }
 }

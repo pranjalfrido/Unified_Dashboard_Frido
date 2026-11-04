@@ -10,6 +10,7 @@
 // DATA ENCODINGS, not decoration - a reader maps them to a meaning - so they are
 // identical across themes and several are kept as plain static values.
 import { cssVar } from './theme.js'
+import { ALERT_RULES, ADS_RULES, CUSTOMER_RULES } from './config/metricTargets.js'
 
 const tok = (name, fallback) => cssVar(name, fallback)
 
@@ -62,11 +63,17 @@ export const C = {
     up: '#1f8a4c', down: '#c0392b', amber: '#c8860a', prev: '#a3aba6', // prev: previous-period line + its legend swatch
     downDark: '#7a1f1f', // Inventory "Out of stock" (darker than Critical red), approved 2026-10-26
     masterGrad: 'linear-gradient(180deg,#dcebe2 0px,#e9f3ed 140px,#f4f9f6 300px,#ffffff 460px)', masterBorder: '#dbe8df',
+    glowTile: '#e3f1e8', // phone nav launcher: current-page row
+    navTile: '#edf6f0', // phone bottom bar: selected icon tile (34 × 30, radius 11, tight soft halo)
+    // Phone page header, deep green (HEADER_GREEN_PROMPT.md): surface, context, chip text, icons, pressed, date pill, accent (count, underline), notification dot
+    hdr: { bg: 'linear-gradient(160deg,#1a4d34 0%,#1f5a3d 55%,#266b49 100%)', context: '#a9c9b6', chip: '#c8dfd1', icon: '#d8e8de', press: 'rgba(255,255,255,.10)', pill: 'rgba(255,255,255,.14)', accent: '#9fe0b9', dot: '#e5534b' },
+    // Phone bottom bar (light): surface, inactive icon, hairline + soft shadow
+    nav: { bg: '#fbfaf7', icon: '#8a938e', shadow: '0 -1px 0 #e6e2d8, 0 -6px 16px -6px rgba(28,52,40,.14)' },
     tileBorder: 'rgba(31,90,61,.08)', glowBorder: 'rgba(31,90,61,.22)', glow: '0 0 10px 1px rgba(31,90,61,.10)',
     cardShadow: '0 1px 3px rgba(0,0,0,.06)',
     radius: { card: 18, tile: 12, chip: 999 },
     // px; nothing below 12
-    type: { pageTitle: 17, cardTitle: 15.5, hero: 28, tileValue: 15.5, listValue: 13.5, body: 13, label: 12 },
+    type: { pageTitle: 17, cardTitle: 15.5, hero: 24, tileValue: 14, listValue: 13.5, body: 13, label: 12 }, // hero 24 / tile 14 on every page (2026-10-26)
   },
   // Mobile type scale (Overview mobile redesign): { size (px), weight }. Nothing on mobile goes
   // below 12px; labels are uppercase + muted (C.t3) at the `label` size.
@@ -330,30 +337,43 @@ export function detectAlerts(data) {
 // (Delivery% <80% red, RTO% >8%/>10% amber/red, SLA Breach% >15% amber, NDR% >20% amber, the two
 // 80%-target SLA thresholds) and the Days of Inventory bands, so the alert and the tile it
 // summarizes never disagree about what counts as a problem.
-export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts) {
+// #3/#4/#6/#11 read a dedicated static file (public/alerts-data.json), produced hourly by
+// scripts/generate-alerts-cache.mjs directly from BigQuery for a FIXED mature window (orders
+// 15-21 days ago for logistics, 14-20 days ago for returns). This is intentional and must not be
+// changed back to reading logisticsData/data: those reflect whatever date range the user currently
+// has selected in the app, so an alert built on them would silently depend on the viewer's own
+// filter state instead of a fixed, always-current fact. See docs/ALERTS_BACKTEST.md.
+let _alertsCache = null
+let _alertsCachePromise = null
+export function loadAlertsCache() {
+  if (_alertsCachePromise) return _alertsCachePromise
+  _alertsCachePromise = fetch('/alerts-data.json').then(r => r.ok ? r.json() : null).then(j => { _alertsCache = j; return j }).catch(() => { _alertsCache = null; return null })
+  return _alertsCachePromise
+}
+// Synchronous read of whatever loadAlertsCache() last resolved (or null before the first load) —
+// computeCombinedAlerts can't be async, so the caller (App.jsx) calls loadAlertsCache() once on
+// mount and re-renders when it resolves, same pattern as the other static JSON fetches.
+function getAlertsCache() { return _alertsCache }
+
+export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts, profile) {
   const lkpi = logisticsData?.kpis || {}
-  const lTotal = parseInt(lkpi.total_shipments) || 0
-  const lDelivered = parseInt(lkpi.delivered) || 0
-  const lRto = parseInt(lkpi.rto) || 0
-  const lSla = parseInt(lkpi.sla_breach) || 0
-  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
-  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
-  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
+  // Removed from Phase 1 bell per docs/ALERTS_PHASE1_PROMPT.md 2026-10-31 — superseded by ALERT_RULES.* — kept for reference
+  // const lTotal = parseInt(lkpi.total_shipments) || 0
+  // const lDelivered = parseInt(lkpi.delivered) || 0
+  // const lRto = parseInt(lkpi.rto) || 0
+  // const lSla = parseInt(lkpi.sla_breach) || 0
+  // const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
+  // const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
+  // const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
   const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
   const lNdrCount = parseInt(lkpi.ndr_count) || 0
   const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
-  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
-  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
-  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
-  const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
-  const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
+  // (delivered-within-3d-of-pickup / 5d-of-order moved to Phase 2 #20/#21: fixed mature window, "Targets missed")
+  const lStuckCritical = parseInt(lkpi.critical_stuck) || 0
 
   const invSummary = invSnapshotData?.summary || {}
 
-  // Best-seller stockout check: of the top 20 SKUs by revenue, how many currently read
-  // Critical/Low/Out of Stock in the inventory snapshot? A sharper signal than the all-SKU
-  // Stockout-Risk count — losing sales on a BEST-SELLER is a bigger problem than the same status
-  // on a long-tail SKU, so this leads the alerts list.
+  // #1 Top-20 SKU stockout risk (inventory) — logic/threshold unchanged, click-nav added.
   const topSkuStockoutAlert = (() => {
     if (!invSnapshotData?.skus?.length || !data?.skuRows?.length) return null
     const topProductsMap = {}
@@ -369,23 +389,185 @@ export function computeCombinedAlerts(data, logisticsData, invSnapshotData, base
       return st === 'Critical' || st === 'Low' || st === 'Out of Stock'
     }).length
     if (atRisk === 0) return null
-    return { type: atRisk >= 5 ? 'red' : 'amber', title: `${atRisk} of your top 20 best-selling SKUs at stockout risk`, body: 'Critical, Low, or Out of Stock status on a top-20-by-revenue SKU.' }
+    return {
+      type: atRisk >= 5 ? 'red' : 'amber', title: `${atRisk} of your top 20 best-selling SKUs at stockout risk`,
+      body: 'Critical, Low, or Out of Stock status on a top-20-by-revenue SKU.',
+      key: 'top20Stockout', requiredPermission: 'inventory', nav: { page: 'inventory', sub: 'health' },
+    }
+  })()
+
+  // #2 Fleet-wide stockout risk (inventory) — ALERT_RULES.fleetStockoutSkus (> 250, unchanged).
+  const fleetStockoutAlert = invSnapshotData && (invSummary.criticalLowCount || 0) > ALERT_RULES.fleetStockoutSkus
+    ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: `Critical + Low stock status count above ${ALERT_RULES.fleetStockoutSkus} SKUs.`, key: 'fleetStockout', requiredPermission: 'inventory', nav: { page: 'inventory', sub: 'health' } }
+    : null
+
+  // #3/#4/#11/#6 read scripts/generate-alerts-cache.mjs's hourly static output (public/alerts-data.json)
+  // for a FIXED mature window — NEVER logisticsData/data, which reflect the viewer's own selected
+  // date range. loadAlertsCache() is kicked off once in the Dashboard mount effect; until it
+  // resolves, getAlertsCache() returns null and these 4 alerts simply don't show this render.
+  const alertsCache = getAlertsCache()
+  const logCache = alertsCache?.logistics || null
+  const retCache = alertsCache?.returns || null
+
+  const deliveryAlert = logCache?.deliveryPct != null && logCache.deliveryPct < ALERT_RULES.deliveryPctMin
+    ? { type: 'red', title: `Delivery % below ${ALERT_RULES.deliveryPctMin}%`, body: `${logCache.rangeLabel}: Delivery ${logCache.deliveryPct.toFixed(1)}%.`, key: 'deliveryPctLow', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+  // (Phase 1's RTO > 9.5% alert lived here; replaced by Phase 2 #17, an 8% target in "Targets missed".)
+
+  // #11 TAT/EDD breach % = SLA-breach share of delivered-with-EDD (on_time + sla_breach), the exact
+  // kpis fields from api/logistics.js, computed by generate-alerts-cache.mjs against
+  // expected_delivery_date_by_courier_partner. No fallback field: if the cache couldn't compute a
+  // delivered-with-EDD population (slaBreachAvailable=false, or the cache is missing entirely), this
+  // alert is SKIPPED, never silently substituted with a different denominator.
+  const slaBreachAlert = logCache?.slaBreachAvailable && logCache.slaBreachPct != null && logCache.slaBreachPct > ALERT_RULES.slaBreachPctMax
+    ? { type: 'amber', title: `TAT/EDD breach % above ${ALERT_RULES.slaBreachPctMax}%`, body: `${logCache.rangeLabel}: SLA-breach share ${logCache.slaBreachPct.toFixed(1)}% of delivered-with-EDD shipments.`, key: 'slaBreachHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+
+  // #5 Stuck shipments above N — live snapshot count (kpis.critical_stuck), N=50.
+  const stuckAlert = lStuckCritical > ALERT_RULES.stuckShipmentsMax
+    ? { type: 'amber', title: `${fmtN(lStuckCritical)} shipments stuck`, body: `More than ${ALERT_RULES.stuckShipmentsMax} shipments stuck in-transit past EDD+5 days.`, key: 'stuckShipments', requiredPermission: 'logistics', nav: { page: 'logistics' } }
+    : null
+
+  // #6 D2C return-rate red lines (bell-only bars — the live Return Analysis page's own RED_THRESH
+  // in src/sales/returnAnalysisData.js is untouched). Fixed window (orders 14-20 days ago), from the
+  // same static cache as #3/#4/#11 — never the viewer's selected range.
+  const d2cRedLineAlert = (() => {
+    if (!retCache || retCache.gross == null || retCache.gross <= 0) return null
+    const bars = ALERT_RULES.d2cRedLines
+    const fired = []
+    if (retCache.cancelPct != null && retCache.cancelPct > bars.cancelPct) fired.push(`Cancel ${retCache.cancelPct.toFixed(1)}%`)
+    if (retCache.rtoPct != null && retCache.rtoPct > bars.rtoPct) fired.push(`RTO ${retCache.rtoPct.toFixed(1)}%`)
+    if (retCache.cirPct != null && retCache.cirPct > bars.cirPct) fired.push(`CIR ${retCache.cirPct.toFixed(1)}%`)
+    if (retCache.exchangePct != null && retCache.exchangePct > bars.exchangePct) fired.push(`Exchange ${retCache.exchangePct.toFixed(1)}%`)
+    if (retCache.totalReturnPct != null && retCache.totalReturnPct > bars.totalReturnPct) fired.push(`Total Return ${retCache.totalReturnPct.toFixed(1)}%`)
+    if (!fired.length) return null
+    return { type: 'amber', title: 'D2C return-rate red line breached', body: `${retCache.rangeLabel}: ${fired.join(', ')}.`, key: 'd2cRedLines', requiredPermission: 'sales:shopify', nav: { page: 'sales', sub: 'shopify' } }
+  })()
+
+  // #7 Channel with 0 orders on its own latest FULLY-SYNCED day, grouped into one alert. Excludes
+  // CRED/Firstcry (naturally thin/intermittent per the backtest). Reads the SAME static
+  // alerts-data.json cache as #3/#4/#6/#11 (generate-alerts-cache.mjs's `zeroOrders` block) —
+  // NEVER the viewer's selected range or the browser's local clock. The original version of this
+  // alert had THREE compounding bugs found during Phase 1 verification 2026-10-31: (1) it only
+  // ran when the user's currently-selected date range happened to include yesterday, the same
+  // "must not depend on client filter state" bug class already fixed for #3/#4/#6/#11; (2) it
+  // built "yesterday" from the browser's own local timezone rather than IST; (3) after fixing
+  // (1)/(2) and checking a single shared "yesterday" for every channel, it still false-fired for
+  // Flipkart/Myntra, which routinely have NOT synced yesterday's data yet (same multi-day
+  // ingestion lag api/bq.js already works around for Flipkart via fkLatestCache) — checking
+  // "yesterday" against a channel whose rows for that date simply haven't landed always reads as
+  // a false 0-orders alert. Fixed: each channel is now checked against its OWN MAX(OrderDate)
+  // (its latest fully-synced day, per-channel, possibly different dates across channels), not
+  // one shared date. ordersByChannel[c].date carries that channel's actual checked date.
+  const zeroOrderAlert = (() => {
+    const zc = alertsCache?.zeroOrders
+    if (!zc?.zeroChannels?.length) return null
+    const zero = zc.zeroChannels.filter(c => !ALERT_RULES.zeroOrderExcludeChannels.includes(c))
+    if (!zero.length) return null
+    const fmtDate = iso => { const d = new Date(iso + 'T00:00:00'); return `${d.getDate()} ${d.toLocaleString('en-US', { month: 'short' })}` }
+    const parts = zero.map(c => `${c} (${fmtDate(zc.ordersByChannel[c]?.date || zc.date)})`)
+    return { type: 'amber', title: `0 orders on latest synced day: ${zero.join(', ')}`, body: `No orders recorded — ${parts.join(', ')}.`, key: 'zeroOrders', requiredPermission: zero.map(c => `sales:${c.toLowerCase()}`), nav: { page: 'sales', sub: zero[0].toLowerCase() } }
+  })()
+
+  // #9 Ads: spend with no sales — ADS_RULES.noSalesSpend/noSalesRoas, one alert per platform
+  // grouped by permission. Fixed 2026-10-31 (Phase 1 verification): this previously read
+  // byAdType/totals' own `revenue` field directly, which is the raw ads-table column and is
+  // ALWAYS 0 for Meta and Google (confirmed live: "Meta spend Rs6.85Cr, ROAS 0.00x" — a false
+  // alert on every run). The live Ads page never uses that raw column for these two platforms —
+  // src/ads/adsData.js's buildDailyByChannel/OVERALL_CHANNELS split D2C's Shopify sales between
+  // Meta and Google by each platform's SHARE of that day's combined Meta+Google spend (the
+  // platforms don't report attributed revenue for Shopify, so this is the same "total-sales
+  // ROAS" convention the Ads page's own TOTAL_SALES_ROAS_INFO describes). Every other platform's
+  // sales channel already carries real revenue 1:1 (Amazon ads -> Amazon sales, etc.), so only
+  // Meta/Google need the spend-share split; the rest still use data.ads's own revenue field
+  // because it already matches that platform's chMap entry by construction server-side.
+  const adsNoSalesAlerts = (() => {
+    const byAdType = data?.ads?.byAdType || data?.ads?.totals || []
+    if (!byAdType.length) return []
+    const byPlat = {}
+    for (const r of byAdType) {
+      const p = r.platform; if (!p) continue
+      if (!byPlat[p]) byPlat[p] = { spend: 0, revenue: 0 }
+      byPlat[p].spend += r.spend || 0
+      byPlat[p].revenue += r.revenue || 0
+    }
+    // D2C (Meta+Google) sales-split revenue, same convention as adsData.js's buildDailyByChannel:
+    // each platform's revenue = Shopify's total ex-GST sales for the range * (that platform's
+    // spend / combined Meta+Google spend).
+    const metaSpend = byPlat.Meta?.spend || 0
+    const googleSpend = byPlat.Google?.spend || 0
+    const d2cSpend = metaSpend + googleSpend
+    const shopifyRev = data?.chMap?.Shopify?.excRev ?? data?.chMap?.Shopify?.rev ?? 0
+    if (byPlat.Meta) byPlat.Meta.revenue = d2cSpend > 0 ? shopifyRev * (metaSpend / d2cSpend) : 0
+    if (byPlat.Google) byPlat.Google.revenue = d2cSpend > 0 ? shopifyRev * (googleSpend / d2cSpend) : 0
+    const ADS_KEY_MAP_LOWER = { All: 'ads:all', D2C: 'ads:d2c', Shopify: 'ads:d2c', Amazon: 'ads:amazon', Blinkit: 'ads:blinkit', Zepto: 'ads:zepto', Instamart: 'ads:instamart', Flipkart: 'ads:flipkart', Myntra: 'ads:myntra', CRED: 'ads:cred' }
+    return Object.entries(byPlat).map(([platform, { spend, revenue }]) => {
+      const roas = spend > 0 ? revenue / spend : 0
+      if (spend > ADS_RULES.noSalesSpend && roas < ADS_RULES.noSalesRoas) {
+        return { type: 'red', title: `${platform}: spend with no sales`, body: `Spend ${fmt(spend)} with ROAS ${roas.toFixed(2)}x (below ${ADS_RULES.noSalesRoas}x).`, key: `adsNoSales_${platform}`, requiredPermission: ADS_KEY_MAP_LOWER[platform] || 'ads:all', nav: { page: 'ads', sub: platform } }
+      }
+      return null
+    }).filter(Boolean)
+  })()
+
+  // #10 Inventory data stale > 2h (admin only) — ALERT_RULES.inventoryStaleHours, unchanged.
+  const staleInvAlert = (() => {
+    if (!invSnapshotData?.asOf || !profile?.is_admin) return null
+    const ageHours = (Date.now() - new Date(invSnapshotData.asOf).getTime()) / 36e5
+    if (ageHours <= ALERT_RULES.inventoryStaleHours) return null
+    return { type: 'amber', title: `Inventory data stale (${ageHours.toFixed(1)}h old)`, body: `public/inv-data.json is older than ${ALERT_RULES.inventoryStaleHours}h — the hourly precompute cron may be failing.`, key: 'invStale', requiredPermission: 'admin', nav: { page: 'inventory', sub: 'health' } }
+  })()
+
+  // #13 Customers: CAC up vs the previous period — ALERT_RULES.cacUpPctBell (15%), a bell-specific
+  // constant (NOT CUSTOMER_RULES.cacUpPct, which also colors the Customer Intelligence page's own
+  // in-page tile at 10% — kept separate so this alert doesn't silently recolor that tile).
+  const cacUpAlert = (() => {
+    const newCusts = (data?.nCusts || 0) - (data?.repeatCusts || 0)
+    const prevNewCusts = (data?.prevNCusts || 0) - (data?.prevRepeatCusts || 0)
+    if (newCusts <= 0 || prevNewCusts <= 0) return null
+    const metaGoogleSpend = (data?.ads?.totals || []).filter(t => t.platform === 'Meta' || t.platform === 'Google').reduce((s, t) => s + (t.spend || 0), 0)
+    const prevTotals = data?.ads?.prevTotals || {}
+    const prevMetaGoogleSpend = (prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)
+    if (!metaGoogleSpend || !prevMetaGoogleSpend) return null
+    const cac = metaGoogleSpend / newCusts
+    const prevCac = prevMetaGoogleSpend / prevNewCusts
+    if (prevCac <= 0) return null
+    const changePct = (cac - prevCac) / prevCac * 100
+    if (changePct < ALERT_RULES.cacUpPctBell) return null
+    return { type: 'amber', title: `CAC up ${changePct.toFixed(1)}% vs prior period`, body: `CAC ${fmt(cac)} vs ${fmt(prevCac)} previously.`, key: 'cacUp', requiredPermission: 'customer', nav: { page: 'customer' } }
   })()
 
   return [
     topSkuStockoutAlert,
+    fleetStockoutAlert,
+    deliveryAlert,
+    // rtoAlert (> 9.5%) removed: Alerts Phase 2 #17 replaces it with the 8% RTO target in the bell's "Targets missed" section (src/alerts/phase2Rules.js).
+    stuckAlert,
+    d2cRedLineAlert,
+    zeroOrderAlert,
+    ...adsNoSalesAlerts,
+    staleInvAlert,
+    slaBreachAlert,
+    cacUpAlert,
     ...(baseAlerts || []),
+    // Removed from Phase 1 bell per docs/ALERTS_PHASE1_PROMPT.md 2026-10-31 — superseded by ALERT_RULES.* — kept for reference
+    // ...(logisticsData ? [
+    //   lDelPct > 0 && lDelPct < 80 ? { type: 'red', title: `Delivery% at ${lDelPct.toFixed(1)}%`, body: 'Below the 80% healthy threshold for the selected range.' } : null,
+    //   lSlaPct > 15 ? { type: 'amber', title: `SLA Breach ${lSlaPct.toFixed(1)}%`, body: 'More than 15% of delivered shipments missed their committed SLA date.' } : null,
+    //   lRtoPct > 10 ? { type: 'red', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above 10% for the selected range.' } : (lRtoPct > 8 ? { type: 'amber', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above the 8% healthy threshold.' } : null),
+    //   lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.' } : null,
+    // ].filter(Boolean) : []),
     ...(logisticsData ? [
-      lDelPct > 0 && lDelPct < 80 ? { type: 'red', title: `Delivery% at ${lDelPct.toFixed(1)}%`, body: 'Below the 80% healthy threshold for the selected range.' } : null,
-      lSlaPct > 15 ? { type: 'amber', title: `SLA Breach ${lSlaPct.toFixed(1)}%`, body: 'More than 15% of delivered shipments missed their committed SLA date.' } : null,
-      lRtoPct > 10 ? { type: 'red', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above 10% for the selected range.' } : (lRtoPct > 8 ? { type: 'amber', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above the 8% healthy threshold.' } : null),
-      lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.' } : null,
-      lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.' } : null,
-      lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.' } : null,
+      lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.', key: 'ndrHigh', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,
+      // lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.', key: 'del3dPickupLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,  // superseded by Phase 2 #20/#21 (fixed mature window, Targets missed) — was tied to the viewer's selected range
+      // lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.', key: 'del5dOrderLow', requiredPermission: 'logistics', nav: { page: 'logistics' } } : null,  // superseded by Phase 2 #20/#21 (fixed mature window, Targets missed) — was tied to the viewer's selected range
     ].filter(Boolean) : []),
-    ...(invSnapshotData ? [
-      (invSummary.criticalLowCount || 0) > 250 ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: 'Critical + Low stock status count above 250 SKUs.' } : null,
-    ].filter(Boolean) : []),
+    // #8 D2C CM1%/COGS% and #12 D2C SnD% — EXPLICITLY excluded from Phase 1 build per the task
+    // brief ("exclude #8 ... and #12 ... — leave as commented placeholders only, do not build
+    // them"). Thresholds from the backtest (CM1<48%, COGS>43%, SnD>9%) are recorded here for
+    // whenever a future phase takes these up — NOT wired in.
+    // #8: PNL_RULE_BARS.d2c.cm1/cogs-based bell check (CM1 < 48, COGS > 43) — not built.
+    // #12: D2C SnD% > 9% bell check — not built (also has no existing PNL_RULE_BARS key).
   ].filter(Boolean)
 }
 

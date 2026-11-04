@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navigation Mockup v2</title>
+<style>
+:root{--g:#1f5a3d;--gd:#0f2a1d;--ink:#1c2420;--mut:#7b847f;--line:#eeebe4;--bg:#f4f2ed;--soft:#e9f3ed;--glowb:rgba(31,90,61,.22);--up:#1f8a4c;--dn:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;background:#efebe4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);padding:24px 16px 40px;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none;padding:0;-webkit-tap-highlight-color:transparent}
+button:focus{outline:none}button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+h1.t{font-size:19px;margin:0 0 4px}.cap{font-size:13px;color:var(--mut);margin:0 0 14px}
+.wrap{max-width:1040px;margin:0 auto}
+.row{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+.ctl{font-size:13px;margin-bottom:12px}.ctl button{border:1px solid #eeebe4;background:#fff;border-radius:999px;padding:6px 12px;margin:0 6px 6px 0}
+.ctl button.on{border-color:#cfe3d7;font-weight:700;color:var(--g)}
+.phone{width:375px;height:720px;background:var(--bg);border-radius:36px;border:10px solid #111;box-shadow:0 20px 50px rgba(0,0,0,.18);position:relative;overflow:hidden;flex:0 0 auto}
+.mh{background:linear-gradient(160deg,#0f2a1d,#1c4630);color:#fff;padding:16px 14px;display:flex;align-items:center;gap:8px}
+.mh h2{margin:0;font-size:17px;font-weight:600;margin-right:auto}
+.ib{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.22);display:grid;place-items:center;font-size:14px;color:#fff;position:relative}
+.ib i{position:absolute;top:-5px;right:-5px;background:#fff;color:var(--g);font-style:normal;font-size:10px;font-weight:800;border-radius:999px;padding:1px 5px}
+.mb{position:absolute;top:66px;left:0;right:0;bottom:0;overflow:auto;padding:12px 12px 76px}
+.ph{background:#fff;border-radius:18px;height:130px;margin-bottom:12px;border:1px solid var(--line)}
+/* floating dock */
+.dock{position:absolute;left:0;right:0;bottom:0;height:60px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 2px;z-index:5;transition:transform .25s}
+.dock.hide{transform:translateY(70px)}
+.tab{flex:1 1 0;height:46px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--mut);transition:color .2s;min-width:0;position:relative}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+.tab .lb{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;max-width:0;opacity:0;transition:max-width .25s,opacity .2s}
+.tab .lb{display:none}
+.tab.on{color:var(--g)}
+.tab.on::before{content:'';position:absolute;width:42px;height:40px;border-radius:13px;background:#e3f1e8;box-shadow:0 0 14px 3px rgba(120,190,150,.38),inset 0 0 0 1px rgba(31,90,61,.10);z-index:-1;animation:gl .25s ease-out}
+.tab{z-index:0;isolation:isolate}
+.tab.on svg{stroke-width:2.1;filter:drop-shadow(0 0 3px rgba(31,90,61,.25))}
+@keyframes gl{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.tab.on::before{animation:none}}
+.tab .bd{position:absolute;top:6px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--dn);border:2px solid #fff}
+.tab.on .bd{display:none}
+/* sheet */
+.shade{position:absolute;inset:0;background:rgba(15,42,29,.38);opacity:0;pointer-events:none;transition:.2s;z-index:8}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-radius:24px 24px 0 0;transform:translateY(100%);transition:.28s cubic-bezier(.2,.8,.2,1);z-index:9;padding:8px 14px 18px;max-height:90%;overflow:auto}
+.phone.sh .shade{opacity:1;pointer-events:auto}.phone.sh .sheet{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:#d5d3cc;margin:0 auto 10px}
+.top{display:flex;align-items:center;gap:10px}
+.av{width:40px;height:40px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-weight:700;color:var(--g);flex:0 0 auto}
+.top .n b{display:block;font-size:14.5px}.top .n span{font-size:12px;color:var(--mut)}
+.top .x{margin-left:auto;width:34px;height:34px;border-radius:10px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;color:var(--mut)}
+.srch{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:12px 0 4px;color:var(--mut);font-size:15px}
+.srch input{border:none;outline:none;font-size:16px;flex:1;background:none;color:var(--ink)}
+.gl{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;color:#5f6b65;text-transform:uppercase;letter-spacing:.06em;margin:14px 2px 8px}
+.gl button{text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--g);font-weight:700}
+.recent{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.recent::-webkit-scrollbar{display:none}
+.recent button{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600}
+.recent svg{width:15px;height:15px;stroke:var(--g);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tile{background:#fff;border:1px solid rgba(31,90,61,.08);border-radius:16px;padding:12px;text-align:left;min-height:104px;display:flex;flex-direction:column;gap:6px;position:relative}
+.tile.on{border-color:var(--glowb);box-shadow:0 0 10px 1px rgba(31,90,61,.10)}
+.tile .ic{width:34px;height:34px;border-radius:11px;background:var(--soft);display:grid;place-items:center;color:var(--g)}
+.tile svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tile b{font-size:14px}
+.tile .st{font-size:12px;color:var(--mut);margin-top:auto}
+.tile .st em{font-style:normal;font-weight:700;color:var(--ink)}
+.tile .pin{position:absolute;top:10px;right:10px;font-size:11px;font-weight:700;color:var(--g);background:var(--soft);border-radius:999px;padding:2px 7px}
+.tile .bdg{position:absolute;top:10px;right:10px;font-size:11px;font-weight:700;border-radius:999px;padding:2px 7px;background:#fbe7e4;color:#8f2a1f}
+.tile.edit{border-style:dashed}
+.tile .tg{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--g3,#9cc4ad);display:grid;place-items:center;font-size:12px;color:#fff}
+.tile .tg.on{background:var(--g);border-color:var(--g)}
+.list{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.li{display:flex;align-items:center;gap:10px;padding:11px 12px;width:100%;text-align:left}
+.li+.li{border-top:1px solid var(--line)}
+.li svg{width:18px;height:18px;stroke:var(--g);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.li b{font-size:13.5px;flex:1}.li span{color:#c4c9c6}
+.foot{display:flex;gap:8px;margin-top:14px}
+.foot button{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:13px;font-weight:600}
+.foot .so{color:var(--dn);border-color:#f2cfc9}
+.hint{font-size:12px;color:var(--mut);margin:6px 2px 0}
+.toast{position:absolute;left:50%;bottom:86px;transform:translateX(-50%) translateY(10px);opacity:0;background:var(--gd);color:#fff;font-size:12.5px;border-radius:10px;padding:8px 12px;transition:.2s;z-index:20;white-space:nowrap}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.notes{background:#fff;border-radius:14px;border:1px solid var(--line);padding:16px 20px;font-size:14px;line-height:1.55;max-width:520px}
+.notes h2{font-size:16px;margin:0 0 8px}.notes li{margin-bottom:6px}.notes ul{padding-left:18px;margin:6px 0}
+.tag{font-size:12px;background:#fff3d6;border:1px solid #f1d99a;border-radius:8px;padding:8px 10px;margin-top:10px;color:#6b5414}
+.sheet{scrollbar-width:thin;scrollbar-color:rgba(31,90,61,.28) transparent}
+.sheet::-webkit-scrollbar{width:3px}.sheet::-webkit-scrollbar-thumb{background:rgba(31,90,61,.28);border-radius:3px}.sheet::-webkit-scrollbar-button{display:none}
+.srch{padding:8px 12px;margin:10px 0 2px;font-size:14px}
+.grp{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.pr{display:flex;align-items:center;gap:12px;padding:10px 12px;width:100%;text-align:left;position:relative}
+.pr+.pr{border-top:1px solid var(--line)}
+.pr .ic{width:34px;height:34px;border-radius:11px;background:var(--soft);display:grid;place-items:center;color:var(--g);flex:0 0 auto}
+.pr svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pr .n{flex:1;min-width:0}.pr .n b{display:block;font-size:14px}.pr .n span{font-size:12px;color:var(--mut)}
+.pr .v{font-size:13px;font-weight:700;text-align:right;white-space:nowrap}
+.pr .v small{display:block;font-size:11px;font-weight:500;color:var(--mut)}
+.pr.on{background:#f3f9f5}.pr.on::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--g)}
+.pr .chev{color:#c4c9c6;font-size:17px}
+.tg2{width:22px;height:22px;border-radius:50%;border:1.5px solid #9cc4ad;display:grid;place-items:center;font-size:12px;color:#fff;flex:0 0 auto}.tg2.on{background:var(--g);border-color:var(--g)}
+.lfoot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:0 4px;font-size:13px}
+.lfoot button{font-weight:600;color:var(--mut)}.lfoot .so{color:var(--dn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 class="t">Navigation: icon bar with soft green glow + launcher</h1>
+<p class="cap">Tap the dock, open ⋯, try search, "Edit dock", and scroll the page .</p>
+<div class="ctl" id="ctl"></div>
+<div class="row">
+<div class="phone" id="ph">
+  <div class="mh"><h2 id="title">Sales</h2><button class="ib">🔔<i>4</i></button><button class="ib">⋯</button></div>
+  <div class="mb" id="mb"></div>
+  <div class="dock" id="dock"></div>
+  <div class="shade" id="shade"></div>
+  <div class="sheet" id="sheet"></div>
+  <div class="toast" id="toast"></div>
+</div>
+<div class="notes">
+  <h2>What's better</h2>
+  <ul>
+    <li><b>Standard bottom bar (full width, white, top border), icons only.</b> The selected icon sits in a <b>soft light-green glow</b> (pale green tile + gentle halo), icon in Frido green. No labels; each icon has an accessible name and a long-press tooltip.</li>
+    <li><b>Bottom bar is always fixed</b> and visible (no hide on scroll).</li>
+    <li><b>7 icons:</b> Overview · Sales · P&amp;L · Inventory · Logistics · Customer · All pages. Ads, Documents, Frido Pulse and tools live in the launcher.</li>
+    <li><b>Your dock, your pages:</b> "Edit dock" lets each person pick up to 6 pages (CS team → Customer, logistics team → Logistics). Saved per user. Default: Overview, Sales, P&amp;L, Inventory, Logistics, Customer.</li>
+    <li><b>Launcher:</b> compact grouped list (Analytics · Workspace · Tools) with the live number on the right, current page marked with a green edge, slim 3px scrollbar, Theme / Sign out as a light footer line.</li>
+    <li><b>Search and Recent:</b> search ("Type a page… e.g. 'rto' → Logistics"), Recent pages, then tiles with <b>one live number each</b> (Ads ROAS, Logistics RTO %, Customer pending tickets) from data already loaded; a short description when the number isn't loaded yet.</li>
+    <li><b>Where am I:</b> the current page's tile is highlighted; on a launcher page the dock's 5th slot shows that page's icon and name.</li>
+    <li>Profile and team access on top, Theme and Sign out at the bottom. Only pages the user can open appear anywhere.</li>
+  </ul>
+  <div class="tag">Numbers on the tiles are from your screenshots (1–26 Oct); "Updated" times illustrative. Laptop sidebar unchanged.</div>
+</div>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const toast=t=>{const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2000)};
+const I={
+ Overview:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+ Sales:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>',
+ 'P&L':'<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+ Inventory:'<svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+ More:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><path d="M17 14v6M14 17h6"/></svg>',
+ Ads:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>',
+ Logistics:'<svg viewBox="0 0 24 24"><path d="M2 7h12v9H2zM14 10h4l3 3v3h-7M6 19a2 2 0 100-4 2 2 0 000 4zM18 19a2 2 0 100-4 2 2 0 000 4z"/></svg>',
+ Customer:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 14a6 6 0 013.5 6"/></svg>',
+ Documents:'<svg viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h7"/></svg>',
+ 'Frido Pulse':'<svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+ COGS:'<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.5 2.5-2.5-2.5z"/></svg>',
+ 'Courier Allocation':'<svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h7M17 4l3 2-3 2M14 16l3 2-3 2"/></svg>'};
+const PAGES={Overview:['Business at a glance','<em>₹58.01 Cr</em> gross'],Sales:['Channels, products, returns','<em>2.74 L</em> orders'],'P&L':['Margins and watchlist','<em>CM2 7.3%</em> D2C'],Inventory:['Stock health, allocation','<em>4,121</em> SKUs'],
+ Ads:['Spend, ROAS by channel','ROAS <em>5.23x</em>'],Logistics:['Performance and cost','RTO <em>4.1%</em>'],Customer:['Intelligence and support','<em>211</em> tickets 9+ days','bdg'],Documents:['Reports and files','—'],'Frido Pulse':['Daily flash numbers','Updated 9:30 am'],COGS:['Landed cost by SKU','—'],'Courier Allocation':['Rules and allocation','—']};
+const KEYS={rto:'Logistics',ndr:'Logistics',courier:'Logistics',roas:'Ads',spend:'Ads',cac:'Customer',retention:'Customer',ticket:'Customer',margin:'P&L',cm1:'P&L',cogs:'COGS',stock:'Inventory',doi:'Inventory',return:'Sales'};
+let dockPages=['Overview','Sales','P&L','Inventory','Logistics','Customer'], cur='Sales', recent=['Ads','Logistics','P&L'], editing=false;
+function dock(){const inDock=dockPages.includes(cur);
+  $('dock').innerHTML=dockPages.map(p=>`<button class="tab ${cur===p?'on':''}" data-p="${p}" aria-label="${p}" title="${p}">${I[p]}<span class="lb">${p}</span></button>`).join('')+
+   `<button class="tab ${!inDock?'on':''}" id="mbtn" aria-label="${!inDock?cur:'All pages'}" title="${!inDock?cur:'All pages'}">${!inDock?I[cur]:I.More}<span class="lb">${!inDock?cur:'More'}</span>${inDock?'<span class="bd"></span>':''}</button>`;
+  $('dock').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>go(b.dataset.p));
+  $('mbtn').onclick=launcher;$('title').textContent=cur;ctl();}
+const GROUPS=[['Analytics',['Ads','Logistics','Customer']],['Workspace',['Documents','Frido Pulse']],['Tools',['COGS','Courier Allocation']]];
+const STAT={Ads:['5.23x','ROAS'],Logistics:['4.1%','RTO'],Customer:['211','9+ days'],'Frido Pulse':['9:30 am','updated'],Overview:['₹58.01 Cr','gross'],Sales:['2.74 L','orders'],'P&L':['7.3%','CM2 D2C'],Inventory:['4,121','SKUs']};
+function launcher(){
+  const row=p=>{const st=STAT[p];const inD=dockPages.includes(p);
+    return `<button class="pr ${p===cur&&!editing?'on':''}" data-p="${p}"><span class="ic">${I[p]}</span><span class="n"><b>${p}</b><span>${PAGES[p][0]}</span></span>${editing?`<span class="tg2 ${inD?'on':''}">${inD?'✓':''}</span>`:st?`<span class="v">${st[0]}<small>${st[1]}</small></span>`:'<span class="chev">›</span>'}</button>`};
+  const groups=editing?[['Main',['Overview','Sales','P&L','Inventory']],...GROUPS]:GROUPS.map(([g,ps])=>[g,ps.filter(p=>!dockPages.includes(p))]).filter(([,ps])=>ps.length);
+  $('sheet').innerHTML=`<div class="grab"></div>
+   <div class="top"><div class="av">SS</div><div class="n"><b>Suraj Singh</b><span>Admin · Profile &amp; team access ›</span></div><button class="x" id="cl">✕</button></div>
+   ${editing?'':`<label class="srch">⌕<input id="q" placeholder="Search pages… 'rto', 'roas'"></label><div id="res"></div>
+   <div class="gl">Recent</div><div class="recent">${recent.map(p=>`<button data-p="${p}">${I[p]}${p}</button>`).join('')}</div>`}
+   ${groups.map(([g,ps],i)=>`<div class="gl">${editing&&i===0?'Pick up to 6 for your bar':g}${i===0?`<button id="ed">${editing?'Done':'Edit bar'}</button>`:''}</div><div class="grp">${ps.map(row).join('')}</div>`).join('')}
+   <div class="lfoot"><button>Theme: Light</button><button class="so">Sign out</button></div>`;
+  $('cl').onclick=close;
+  $('ed').onclick=()=>{editing=!editing;if(!editing)toast('Bar saved');launcher();dock();};
+  $('sheet').querySelectorAll('.pr,.recent button').forEach(b=>b.onclick=()=>{const p=b.dataset.p;
+    if(editing){if(dockPages.includes(p)){if(dockPages.length>2)dockPages=dockPages.filter(x=>x!==p)}else if(dockPages.length<6)dockPages.push(p);else toast('Bar holds 6 pages: remove one first');launcher();dock();return;}
+    go(p);close();});
+  const q=$('q');if(q)q.oninput=()=>{const v=q.value.toLowerCase().trim();if(!v){$('res').innerHTML='';return;}
+    const hits=[...new Set([...Object.keys(PAGES).filter(p=>p.toLowerCase().includes(v)),...Object.entries(KEYS).filter(([k])=>k.startsWith(v)).map(([,p])=>p)])];
+    $('res').innerHTML=`<div class="grp" style="margin-top:8px">${hits.length?hits.map(row).join(''):'<div class="pr" style="color:#7b847f">No page matches</div>'}</div>`;
+    $('res').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{go(b.dataset.p);close();});};
+  $('ph').classList.add('sh');}
+function close(){$('ph').classList.remove('sh');editing=false;}
+function go(p){cur=p;recent=[p,...recent.filter(x=>x!==p)].slice(0,4);dock();}
+function ctl(){$('ctl').innerHTML='Open page: '+Object.keys(PAGES).slice(0,7).map(p=>`<button class="${p===cur?'on':''}" data-p="${p}">${p}</button>`).join('');
+  $('ctl').querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.p));}
+$('mb').innerHTML=Array.from({length:8},()=>'<div class="ph"></div>').join('');
+
+$('shade').onclick=close;
+dock();
+</script>
+</body>
+</html>

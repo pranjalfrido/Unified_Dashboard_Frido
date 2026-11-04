@@ -1,15 +1,6 @@
 import { useState } from 'react';
 import { MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
-
-function groupByDate(conversations) {
-  const today = [], yesterday = [], week = [];
-  for (const c of conversations) {
-    if (c.date === 'today') today.push(c);
-    else if (c.date === 'yesterday') yesterday.push(c);
-    else week.push(c);
-  }
-  return { today, yesterday, week };
-}
+import { displayTitle, groupByDate } from './pulseShared.js';
 
 export default function HistoryPanel({ conversations, activeId, onSelect, onNew, onDelete }) {
   const [search, setSearch] = useState('');
@@ -23,7 +14,7 @@ export default function HistoryPanel({ conversations, activeId, onSelect, onNew,
   return (
     <div className="af-history">
       <div className="af-history-header">
-        <div className="af-history-title">Frido Pulse</div>
+        <div className="af-history-title">NavAI</div>
         <div className="af-history-sub">Chat with your data</div>
       </div>
 
@@ -85,8 +76,8 @@ function HistoryItem({ c, active, onClick, onDelete }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <span className="af-history-item-text" onClick={onClick} title={c.title}>
-        {c.title}
+      <span className="af-history-item-text" onClick={onClick} title={displayTitle(c)}>
+        {displayTitle(c)}
       </span>
       {hovered && (
         <button

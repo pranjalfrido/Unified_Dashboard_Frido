@@ -7,6 +7,9 @@
       "maxDuration": 300
     }
   },
+  "crons": [
+    { "path": "/api/feedback?action=digest", "schedule": "30 13 * * *" }
+  ],
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[skip ci\\]' && exit 0 || exit 1",
   "git": {
     "deploymentEnabled": {
@@ -14,31 +17,44 @@
     }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/)(?!.*\\.json$).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    },
+    {
       "source": "/inv-data-(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/(.*)-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/pnl-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/logistics-data(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
       ]
     }
   ]

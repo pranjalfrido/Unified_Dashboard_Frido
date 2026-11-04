@@ -6,7 +6,9 @@ const list = v => Array.isArray(v) ? v : (v ? String(v).split(',').map(x => x.tr
 
 export const SALES_FILTERS = [
   { key: 'channelGroup', label: 'Channel group', multi: true },
-  { key: 'subChannel', label: 'Sub-channel' },
+  // 'ShopifyIndia' is the D2C "Overall" sub-tab's own value (set from the URL when Sales → D2C opens),
+  // the page's default rather than something the user chose (HEADER_MOBILE_PROMPT.md §0).
+  { key: 'subChannel', label: 'Sub-channel', isDefault: v => v === 'ShopifyIndia' },
   { key: 'category', label: 'Category', multi: true, also: { subCategory: [] } },
   { key: 'subCategory', label: 'Sub-category', multi: true },
   { key: 'sku', label: 'SKU', multi: true },
@@ -20,11 +22,12 @@ export const SALES_FILTERS = [
   { key: 'country', label: 'Country' },
 ]
 
-// [{ key, label, values, text }] for every filter that is set.
+// [{ key, label, values, text }] for every filter that differs from the page's default (the "Filtered:"
+// strip and the filter counts show only these).
 export function activeSalesFilters(filters) {
   if (!filters) return []
   return SALES_FILTERS.map(d => {
-    const values = list(filters[d.key])
+    const values = list(filters[d.key]).filter(v => !d.isDefault?.(v))
     if (!values.length) return null
     const shown = values.map(v => d.show ? d.show(v) : v)
     return { key: d.key, label: d.label, values, text: shown.length > 1 ? `${shown[0]} +${shown.length - 1}` : shown[0] }
