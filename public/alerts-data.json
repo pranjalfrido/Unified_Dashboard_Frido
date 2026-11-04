@@ -1,54 +1,54 @@
 {
-  "generatedAt": "2026-11-04T04:08:40.114Z",
+  "generatedAt": "2026-11-04T05:07:17.365Z",
   "logistics": {
     "windowStart": "2026-10-14",
     "windowEnd": "2026-10-20",
     "rangeLabel": "Orders 14–20 Oct",
     "total": 45217,
-    "delivered": 41353,
-    "rto": 3429,
-    "deliveryPct": 91.45,
-    "rtoPct": 7.58,
-    "slaBreachPct": 9.86,
+    "delivered": 41365,
+    "rto": 3469,
+    "deliveryPct": 91.48,
+    "rtoPct": 7.67,
+    "slaBreachPct": 9.88,
     "slaBreachAvailable": true
   },
   "returns": {
     "windowStart": "2026-10-15",
     "windowEnd": "2026-10-21",
     "rangeLabel": "Orders 15–21 Oct",
-    "gross": 85194359.79999955,
-    "cancelPct": 5.03,
-    "rtoPct": 6.5,
-    "cirPct": 6.3,
-    "exchangePct": 5.96,
-    "totalReturnPct": 17.84
+    "gross": 85194359.79999958,
+    "cancelPct": 5.04,
+    "rtoPct": 6.71,
+    "cirPct": 6.36,
+    "exchangePct": 5.98,
+    "totalReturnPct": 18.11
   },
   "zeroOrders": {
     "date": "2026-11-03",
     "ordersByChannel": {
       "Shopify": {
-        "date": "2026-11-03",
-        "orders": 543
+        "date": "2026-11-04",
+        "orders": 706
       },
       "Amazon": {
-        "date": "2026-11-03",
-        "orders": 272
+        "date": "2026-11-04",
+        "orders": 267
       },
       "Blinkit": {
-        "date": "2026-11-02",
-        "orders": 329
+        "date": "2026-11-03",
+        "orders": 293
       },
       "Zepto": {
-        "date": "2026-11-02",
-        "orders": 41
+        "date": "2026-11-04",
+        "orders": 3
       },
       "Instamart": {
-        "date": "2026-11-02",
+        "date": "2026-11-03",
         "orders": 33
       },
       "Myntra": {
-        "date": "2026-11-01",
-        "orders": 386
+        "date": "2026-11-02",
+        "orders": 311
       }
     },
     "zeroChannels": []
@@ -57,9 +57,9 @@
     "windowStart": "2026-10-15",
     "windowEnd": "2026-10-21",
     "rangeLabel": "Orders 15–21 Oct",
-    "netRevenue": 62345422,
-    "cogsPct": 42.93,
-    "sndPct": 18.63,
-    "cm1Pct": 38.44
+    "netRevenue": 62141308,
+    "cogsPct": 42.94,
+    "sndPct": 18.72,
+    "cm1Pct": 38.35
   }
 }
