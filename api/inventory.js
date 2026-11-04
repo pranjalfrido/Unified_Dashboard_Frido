@@ -586,6 +586,11 @@ export default async function inventoryHandler(req, res) {
     const payload = {
       asOf: lastSnapshotUpdated,
       lastSalesDate: maxSalesDate,
+      // Last COMPLETE day (max - 1): maxSalesDate is today's partial feed. The page's
+      // "Latest sales" label and its first range auto-correction read this field.
+      lastSalesDateConsidered: maxSalesDate
+        ? new Date(new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10)
+        : null,
       avgSaleWindowDays: avgSaleWindowDaysVal,
       avgSaleWindow: { start, end },
       dateRange: { start, end, days: daysInRange },

@@ -28,7 +28,7 @@ export default function KeyboardSheet({ title, onClose, footer, children }) {
   }, [])
   const M = C.m
   return createPortal(
-    <div data-testid="fb-sheet-overlay" style={{ position: 'fixed', left: 0, right: 0, top: vp.top, height: vp.h, zIndex: C.z.modal, display: 'flex', alignItems: 'flex-end' }}>
+    <div data-testid="fb-sheet-overlay" style={{ position: 'fixed', left: 0, right: 0, top: vp.top, height: vp.h, maxHeight: '100dvh', overflow: 'hidden', zIndex: C.z.modal, display: 'flex', alignItems: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)' }} />
       <div role="dialog" aria-modal="true" aria-label={title} className="bottom-sheet fb-sheet" data-testid="fb-sheet"
         style={{ position: 'relative', width: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', background: M.card, borderRadius: vp.kb ? '14px 14px 0 0' : '20px 20px 0 0', boxShadow: '0 -8px 30px rgba(0,0,0,.18)', outline: 'none' }}>

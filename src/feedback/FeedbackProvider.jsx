@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FeedbackCtx } from './feedbackCtx.js'
-import { fb, APP_VERSION } from './feedbackApi.js'
+import { fb, APP_VERSION, setFeedbackViewerAdmin } from './feedbackApi.js'
 import { publishNavStat } from '../responsive/navStats.js'
 import FeedbackForm from './FeedbackForm.jsx'
 
@@ -15,6 +15,7 @@ const POLL_MS = 2 * 60 * 1000
 export default function FeedbackProvider({ session, profile, children }) {
   const token = session?.access_token || null
   const isAdmin = profile?.is_admin === true
+  setFeedbackViewerAdmin(isAdmin) // fb() shows admins the real failure reason
   const [formOpen, setFormOpen] = useState(false)
   const [prefill, setPrefill] = useState(null)
   const [badge, setBadge] = useState({ unseen: 0, newCount: 0 })

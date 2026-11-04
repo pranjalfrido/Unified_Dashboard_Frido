@@ -17,11 +17,11 @@ export function FeedbackSidebarItems({ page, setPage }) {
   const { open, isAdmin, badge } = useFeedback()
   return (
     <>
-      {isAdmin && (
+      {(
         <div onClick={() => setPage('feedback')} className={`sb-item${page === 'feedback' ? ' active' : ''}`} style={{ position: 'relative' }} data-testid="sb-inbox">
           <span className="sb-icon"><Tray size={20} weight={page === 'feedback' ? 'fill' : 'regular'} /></span>
           <span className="sb-label">Inbox</span>
-          {badge.newCount > 0 && <span className="fb-navbadge" aria-label={`${badge.newCount} new`}>{badge.newCount > 99 ? '99+' : badge.newCount}</span>}
+          {isAdmin && badge.newCount > 0 && <span className="fb-navbadge" aria-label={`${badge.newCount} new`}>{badge.newCount > 99 ? '99+' : badge.newCount}</span>}
         </div>
       )}
       <div onClick={() => open()} className="sb-item" data-testid="sb-feedback">

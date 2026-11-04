@@ -5,17 +5,48 @@ const API = import.meta.env.VITE_API_URL || ''
 // Local stand-in (localhost testing): VITE_FEEDBACK_LOCAL=1 at build/dev time. Absent in production builds.
 export const LOCAL_MODE = import.meta.env.DEV && import.meta.env.VITE_FEEDBACK_LOCAL === '1' // DEV is false in every production build
 
+// Who is looking, so an admin gets the real reason for a failure and everyone else only the plain message.
+// Set by FeedbackProvider; defaults to "not admin".
+let viewerIsAdmin = false
+export const setFeedbackViewerAdmin = v => { viewerIsAdmin = v === true }
+
+// middleware.js (the /api login wall) only lets a request through with `Authorization: Bearer <Supabase access token>`;
+// a token in the body alone is rejected with {"error":"Login required"} before this function even runs (SECURITY_FIX.md).
+// api/feedback.js still verifies the same token itself (admin.auth.getUser, as api/pulse.js does).
+const post = (action, token, extra) => fetch(`${API}/api/feedback`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  body: JSON.stringify({ action, callerToken: token, ...extra }),
+})
+
+// Why a call failed, for admins: which layer answered (the login wall, our function, or the platform) and what it said.
+function adminReason(res, data) {
+  if (data?.detail) return data.detail // our function: the real server-side reason, sent to admins only
+  if (res.status === 401 && data?.error === 'Login required') return 'HTTP 401 from the login wall (middleware.js), before the feedback function ran: the Authorization header was missing, expired or not a valid Supabase token.'
+  if (data?.error) return `HTTP ${res.status} from the feedback function: ${data.error}`
+  return `HTTP ${res.status} with no JSON body: the platform answered, not the feedback function (crash, timeout or wrong route). Check the Vercel function logs for /api/feedback.`
+}
+
 export async function fb(action, token, extra = {}) {
   let res
   try {
-    res = await fetch(`${API}/api/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, callerToken: token, ...extra }) })
+    res = await post(action, token, extra)
   } catch {
     throw Object.assign(new Error('No connection. Please try again.'), { status: 0 })
   }
+  // An expired access token: refresh the session once and retry (the Supabase client normally refreshes on its own).
+  if (res.status === 401 && !LOCAL_MODE) {
+    try {
+      const { supabase } = await import('../supabase.js')
+      const { data: s } = await supabase.auth.refreshSession()
+      if (s?.session?.access_token) res = await post(action, s.session.access_token, extra)
+    } catch { /* keep the first answer */ }
+  }
   const data = await res.json().catch(() => ({}))
-  // Admins also get data.detail (the real reason); everyone else only the plain message.
-  // No JSON body (the platform answered, not our code: crash, timeout, wrong route) → show the HTTP status so it can be traced.
-  if (!res.ok) throw Object.assign(new Error(data.detail ? `${data.error || 'Something went wrong.'} Admin info: ${data.detail}` : (data.error || `Something went wrong. Please try again. (error ${res.status})`)), { status: res.status })
+  if (!res.ok) {
+    const plain = data?.error === 'Login required' ? 'Your login was not accepted. Please log out and log in again.' : (data?.error || `Something went wrong. Please try again. (error ${res.status})`)
+    throw Object.assign(new Error(viewerIsAdmin ? `${plain} Admin info: ${adminReason(res, data)}` : plain), { status: res.status })
+  }
   return data
 }
 
