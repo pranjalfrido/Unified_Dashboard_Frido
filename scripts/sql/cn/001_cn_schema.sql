@@ -52,12 +52,12 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.cn_can_upload(), public.cn_can_manage() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cn_can_upload(), public.cn_can_manage() TO authenticated;
 
--- How names are matched: case-insensitive, trimmed, inner runs of spaces collapsed.
--- "  Delhivery   NDD " and "delhivery ndd" are the same name.
+-- How names are matched: case-insensitive, trimmed, runs of spaces and underscores collapsed.
+-- "  Delhivery   NDD ", "delhivery ndd" and "Delhivery_NDD" are the same name.
 CREATE OR REPLACE FUNCTION public.cn_name_key(v text)
 RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
-AS $$ SELECT regexp_replace(lower(btrim(v)), '\s+', ' ', 'g') $$;
+AS $$ SELECT btrim(regexp_replace(lower(v), '[\s_]+', ' ', 'g')) $$;
 
 -- updated_at / updated_by on every write.
 CREATE OR REPLACE FUNCTION public.cn_touch()
