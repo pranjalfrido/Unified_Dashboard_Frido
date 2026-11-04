@@ -48,7 +48,7 @@ import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import AppBanner from './responsive/AppBanner.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
-import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES } from './bqPhaseMerge.js'
+import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES, PHASE_COVERED_BY } from './bqPhaseMerge.js'
 import { resolvedAggOf, resolvedAggWhere, resolvedBySkuOf } from '../api/_resolvedAgg.js'
 import { DetailGate } from './DetailGate.jsx'
 import { DetailPhaseContext, useDetailReady } from './detailPhase.js'
@@ -11819,9 +11819,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
   // Staged /api/bq loading: the daily-by-channel revenue, watchlist and category / product spend
   // read the ads_detail group (or the ads-data.json cache); the hidden P&L probe below reads
-  // pnl_detail — each waits for its own group (src/DetailGate.jsx).
+  // pnl_margin (or pnl_detail, when P&L already loaded it) — each waits for its own group
+  // (src/DetailGate.jsx).
   const adsDetailReady = useDetailReady('ads_detail')
-  const adsPnlReady = useDetailReady('pnl_detail')
+  const adsPnlReady = useDetailReady('pnl_margin')
   const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
   const adsBp = useBreakpoint()
   const adsMobileLayout = adsBp.width < 1024 || adsBp.isPhoneLandscape
@@ -20588,7 +20589,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // fast + every detail group already cached for this exact request (and which ones those were)
     const cachedDetails = () => DETAIL_PHASES.filter(p => clientCacheRef.current.has(keyFor(p)))
     const assemble = fast => cachedDetails().reduce((d, p) => mergePhase(d, clientCacheRef.current.get(keyFor(p))), fast)
-    const loadDetails = () => details.forEach(p => { if (!clientCacheRef.current.has(keyFor(p))) fetchDetailPhase(req, p) })
+    const isCached = p => clientCacheRef.current.has(keyFor(p)) || (PHASE_COVERED_BY[p] && clientCacheRef.current.has(keyFor(PHASE_COVERED_BY[p])))
+    const loadDetails = () => details.forEach(p => { if (!isCached(p)) fetchDetailPhase(req, p) })
 
     // Client-side cache hit: skip the fetch entirely. Checked for every call - the key identifies
     // the response exactly, so re-requesting it would return the same rows after a visible delay.
@@ -20691,7 +20693,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const READY_ST = { status: 'ready', error: null, retry: null }
     const statusOf = p => {
       if (req.reqKey !== rawKey) return { status: 'loading', error: null, retry: null }
-      if (rawPhases.includes('full') || rawPhases.includes(p)) return READY_ST
+      if (rawPhases.includes('full') || rawPhases.includes(p) || (PHASE_COVERED_BY[p] && rawPhases.includes(PHASE_COVERED_BY[p]))) return READY_ST
       // the Ads static cache (ads-data.json) carries the Ads detail itself
       if (p === 'ads_detail' && page === 'ads' && adsCache) return READY_ST
       const st = phaseStatus[req.keyFor(p)]

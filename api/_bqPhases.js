@@ -7,17 +7,23 @@
 //   fast          first paint for Overview / Sales / P&L / Ads: KPIs, chMap, daily trends, every
 //                 channel's totals/daily/netCalc/prev-period totals, plus <channel>.resolvedAgg — the
 //                 small reductions of resolvedDailySKU the KPI tiles / return trends read
-//                 (api/_resolvedAgg.js). The per-SKU-per-day rows ship only with pnl_detail;
-//                 sales_detail carries <channel>.resolvedAggDetail (per-SKU / sub-channel / category sums).
+//                 (api/_resolvedAgg.js). sales_detail carries <channel>.resolvedAggDetail (per-SKU /
+//                 sub-channel / category sums).
 //   sales_detail  Sales tabs (+ Overview's category / state / product sections): category, sub-
 //                 category, SKU, state, city, region/tier breakdowns.
-//   pnl_detail    P&L: SKU-grain cost/SnD rows, pnlSalesRows, category/SKU maps the P&L reads.
+//   pnl_detail    P&L: SKU-grain cost/SnD rows, pnlSalesRows, category/SKU maps the P&L reads, plus
+//                 <channel>.pnlAgg (whole-range reductions) and <channel>.pnlTrend (column-packed
+//                 rows for the day-wise trend lines) from api/_pnlAgg.js, instead of the
+//                 per-SKU-per-day arrays themselves (PNL_REDUCTIONS_PLAN.md).
+//   pnl_margin    Ads' hidden P&L probe: only what each product's CM1 needs on the six P&L tabs Ads
+//                 maps to, plus shopify / amzSC / flipkart .pnlAgg.
 //   ads_detail    Ads: spend detail, category breakdowns, daily ads/sales by category.
 // A field can belong to more than one detail phase (each tab gets everything it reads in one call).
-// fast + sales_detail + pnl_detail + ads_detail together = the full (no-phase) response.
+// REDUCED_ONLY fields ship in no phase: their only reader is P&L, through pnlAgg / pnlTrend.
 // No phase / an unrecognised phase = the full response, unchanged.
 
 import { computeResolvedAgg, computeCombinedAgg, computeResolvedAggDetail } from './_resolvedAgg.js'
+import { computePnlAgg, computePnlTrend, PNL_AGG_CHANNELS } from './_pnlAgg.js'
 
 const TABLE = {
   fast: {
@@ -173,26 +179,42 @@ const TABLE = {
       'fkDailySKUComponents', 'fkReturnRateMature', 'fkSKUMatrix', 'fkSKUMatrixDaily', 'fkSKUs', 'fkSubCategory',
       'inDailySKU', 'inSKUMatrix', 'inSKUs', 'inSubCategories', 'intlCategories', 'intlSKUMatrix',
       'intlSubCategories', 'mnCategories', 'mnComponentRateMature', 'mnDaily', 'mnDailySKUComponents', 'mnReturnRateMature',
-      'mnSKUMatrix', 'mnSKUs', 'mnSubCategories', 'offComponentRateMature', 'offDailySKUComponents', 'offlineCategory',
-      'offlineSKU', 'offlineSubCategory', 'offlineTotals', 'overallReturnRateMature', 'pnlAdRawTotals', 'salesCategoryOrders',
-      'salesCategoryOrdersFk', 'shComponentRateMature', 'shDailySKU', 'shListingPrice', 'shNetCalc', 'shPrepaidAsp',
-      'shReturnRateMature', 'shSKU', 'shSKUWeight', 'shSkuCosts', 'shSubCategory', 'shopifyIntlTotals',
-      'zpDailySKU', 'zpSKUMatrix', 'zpSKUs', 'zpSubCategories',
+      'mnSKUMatrix', 'mnSKUs', 'mnSubCategories', 'offlineCategory', 'offlineSKU', 'offlineSubCategory',
+      'offlineTotals', 'overallReturnRateMature', 'pnlAdRawTotals', 'salesCategoryOrders', 'salesCategoryOrdersFk', 'shComponentRateMature',
+      'shDailySKU', 'shListingPrice', 'shNetCalc', 'shPrepaidAsp', 'shReturnRateMature', 'shSKU',
+      'shSKUWeight', 'shSkuCosts', 'shSubCategory', 'shopifyIntlTotals', 'zpDailySKU', 'zpSKUMatrix',
+      'zpSKUs', 'zpSubCategories',
     ],
     fields: [
-      'ads.adsDailyByCategory', 'ads.categoryBreakdown', 'amzSC.dailyPnLBySku', 'amzSC.resolvedDailySKU', 'amzSC.returnRateMature', 'amzSC.skuChannel',
-      'amzSC.skus', 'amzSC.sndBySku', 'amzVC.resolvedDailySKU', 'amzVCMatrix.dailyPnLBySku', 'amzVCMatrix.skuData', 'amzVCMatrix.sndBySku',
-      'amzVCMatrix.subCatData', 'blinkit.dailyPnLBySku', 'blinkit.skuMatrix', 'blinkit.skus', 'blinkit.sndBySku', 'blinkit.subCategories',
-      'buckets', 'cred.categories', 'cred.resolvedDailySKU', 'cred.skuMatrix', 'cred.skus', 'cred.subCategories',
-      'ebo.resolvedDailySKU', 'ebo.returnRateMature', 'ebo.skuCostRows', 'ebo.skuMap', 'ebo.storeSkuCostRows', 'ebo.subCatMap',
-      'firstcry.categories', 'firstcry.resolvedDailySKU', 'firstcry.skuMatrix', 'firstcry.skus', 'firstcry.subCategories', 'flipkart.dailyPnLBySku',
-      'flipkart.resolvedDailySKU', 'flipkart.returnRateMature', 'flipkart.skuMatrix', 'flipkart.skus', 'flipkart.sndBySku', 'flipkart.subCategories',
-      'instamart.dailyPnLBySku', 'instamart.skuMatrix', 'instamart.skus', 'instamart.sndBySku', 'instamart.subCategories', 'international.categories',
-      'international.skuMatrix', 'international.subCategories', 'myntra.categories', 'myntra.resolvedDailySKU', 'myntra.returnRateMature', 'myntra.skuMatrix',
-      'myntra.skus', 'myntra.subCategories', 'offline.categoryRows', 'offline.resolvedDailySKU', 'offline.skuRows', 'offline.subCategoryRows',
-      'pnlAdSpendMap', 'pnlSalesRows', 'returnRateMature', 'shopify.dailySKU', 'shopify.listingPriceBySku', 'shopify.prepaidAspBySku',
-      'shopify.resolvedDailySKU', 'shopify.returnRateMature', 'shopify.skuCostRows', 'shopify.skuWeightGm', 'shopify.subCatMap', 'skuRows',
-      'subCatMap', 'zepto.dailyPnLBySku', 'zepto.skuMatrix', 'zepto.skus', 'zepto.sndBySku', 'zepto.subCategories',
+      'ads.categoryBreakdown', 'amzSC.returnRateMature', 'amzSC.skuChannel', 'amzSC.skus', 'amzSC.sndBySku', 'amzVCMatrix.skuData',
+      'amzVCMatrix.sndBySku', 'amzVCMatrix.subCatData', 'blinkit.skuMatrix', 'blinkit.skus', 'blinkit.sndBySku', 'blinkit.subCategories',
+      'buckets', 'cred.categories', 'cred.skuMatrix', 'cred.skus', 'cred.subCategories', 'ebo.returnRateMature',
+      'ebo.skuCostRows', 'ebo.skuMap', 'ebo.storeSkuCostRows', 'ebo.subCatMap', 'firstcry.categories', 'firstcry.skuMatrix',
+      'firstcry.skus', 'firstcry.subCategories', 'flipkart.returnRateMature', 'flipkart.skuMatrix', 'flipkart.skus', 'flipkart.sndBySku',
+      'flipkart.subCategories', 'instamart.skuMatrix', 'instamart.skus', 'instamart.sndBySku', 'instamart.subCategories', 'international.categories',
+      'international.skuMatrix', 'international.subCategories', 'myntra.categories', 'myntra.returnRateMature', 'myntra.skuMatrix', 'myntra.skus',
+      'myntra.subCategories', 'offline.categoryRows', 'offline.skuRows', 'offline.subCategoryRows', 'pnlAdSpendMap', 'pnlSalesRows',
+      'returnRateMature', 'shopify.listingPriceBySku', 'shopify.prepaidAspBySku', 'shopify.returnRateMature', 'shopify.skuCostRows', 'shopify.skuWeightGm',
+      'shopify.subCatMap', 'skuRows', 'subCatMap', 'zepto.skuMatrix', 'zepto.skus', 'zepto.sndBySku',
+      'zepto.subCategories',
+    ],
+  },
+  pnl_margin: {
+    queries: [
+      'adsCategoryBreakdown', 'amzSCComponentRateMature', 'amzSCDailyNetBySKU', 'amzSCDailySettlement', 'amzSCLineItemWeights', 'amzSCMFNOrderWeights',
+      'amzSCNetCalc', 'amzSCRollingNetRevenue', 'amzSCRollingRate', 'amzSCSKUChannel', 'amzVCAccounts', 'amzVCComponentRateMature',
+      'amzVCDailySKU', 'amzVCDailySKUComponents', 'amzVCSKU', 'amzVCSubCat', 'blDailySKU', 'blSKUMatrix',
+      'blSubCategories', 'byChannel', 'byDate', 'fkComponentRateMature', 'fkDaily', 'fkDailySKUComponents',
+      'fkSKUMatrix', 'fkSKUMatrixDaily', 'fkSubCategory', 'inDailySKU', 'inSKUMatrix', 'inSubCategories',
+      'mnDaily', 'offlineTotals', 'pnlAdRawTotals', 'salesCategoryOrders', 'shComponentRateMature', 'shDailySKU',
+      'shNetCalc', 'shSKU', 'shSkuCosts', 'shopifyIntlTotals', 'zpDailySKU', 'zpSKUMatrix',
+      'zpSubCategories',
+    ],
+    fields: [
+      'ads.categoryBreakdown', 'amzSC.skuChannel', 'amzSC.sndBySku', 'amzVCMatrix.skuData', 'amzVCMatrix.sndBySku', 'amzVCMatrix.subCatData',
+      'blinkit.skuMatrix', 'blinkit.sndBySku', 'blinkit.subCategories', 'flipkart.skuMatrix', 'flipkart.sndBySku', 'flipkart.subCategories',
+      'instamart.skuMatrix', 'instamart.sndBySku', 'instamart.subCategories', 'pnlAdSpendMap', 'shopify.skuCostRows', 'zepto.skuMatrix',
+      'zepto.sndBySku', 'zepto.subCategories',
     ],
   },
   ads_detail: {
@@ -208,11 +230,17 @@ const TABLE = {
   },
 }
 
+const REDUCED_ONLY = [
+      'amzSC.dailyPnLBySku', 'amzSC.resolvedDailySKU', 'amzVC.resolvedDailySKU', 'amzVCMatrix.dailyPnLBySku', 'blinkit.dailyPnLBySku', 'cred.resolvedDailySKU',
+      'ebo.resolvedDailySKU', 'firstcry.resolvedDailySKU', 'flipkart.dailyPnLBySku', 'flipkart.resolvedDailySKU', 'instamart.dailyPnLBySku', 'myntra.resolvedDailySKU',
+      'offline.resolvedDailySKU', 'shopify.resolvedDailySKU', 'zepto.dailyPnLBySku',
+]
+
 // The per-channel objects whose own keys are phase fields ("shopify.catMap", …).
 const CHANNEL_OBJECTS = new Set(["shopify","flipkart","blinkit","instamart","zepto","cred","firstcry","myntra","amzSC","amzVCMatrix","amzVC","amzIntl","ebo","offline","international","ads"])
 
 const DETAIL_PHASES = ['sales_detail', 'pnl_detail', 'ads_detail']
-const KNOWN_FIELDS = new Set(Object.values(TABLE).flatMap(t => t.fields))
+const KNOWN_FIELDS = new Set([...Object.values(TABLE).flatMap(t => t.fields), ...REDUCED_ONLY])
 
 const PHASES = {}
 for (const [name, t] of Object.entries(TABLE)) {
@@ -262,6 +290,8 @@ export function pickPhaseFields(payload, def) {
   }
   if (def.name === 'fast') addResolvedAggs(payload, out)
   if (def.name === 'sales_detail' || def.name === 'slow') addResolvedAggDetails(payload, out)
+  if (def.name === 'pnl_detail' || def.name === 'slow') addPnl(payload, out, PNL_AGG_CHANNELS, true)
+  if (def.name === 'pnl_margin') addPnl(payload, out, ['shopify', 'amzSC', 'flipkart'], false)
   return out
 }
 
@@ -286,4 +316,12 @@ function addResolvedAggDetails(payload, out) {
     out[ch] = out[ch] || {}
     out[ch].resolvedAggDetail = computeResolvedAggDetail(ch, rows)
   }
+}
+
+// pnl_detail / pnl_margin: <channel>.pnlAgg (+ .pnlTrend for pnl_detail), api/_pnlAgg.js. A channel's
+// pnlAgg is the same whole object in both phases, so merging either over the other changes nothing.
+// Not part of the full (no-phase) response — the frontend computes the same from the rows.
+function addPnl(payload, out, channels, withTrend) {
+  for (const [ch, agg] of Object.entries(computePnlAgg(payload, channels))) (out[ch] ||= {}).pnlAgg = agg
+  if (withTrend) for (const [ch, t] of Object.entries(computePnlTrend(payload))) (out[ch] ||= {}).pnlTrend = t
 }

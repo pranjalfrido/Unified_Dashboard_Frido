@@ -116,7 +116,8 @@ const FK_LATEST_TTL = 60 * 60 * 1000
 // WITHOUT the resolved-engine queries they need, and 'slow' alone crashed on chMap['Shopify']).
 
 // v14: staged phases (fast/sales_detail/pnl_detail/ads_detail) + shopify.dailySkuCostRows removed
-const CACHE_VERSION = 14
+// v15: pnl_detail ships pnlAgg / pnlTrend instead of the per-SKU-per-day rows; new pnl_margin phase
+const CACHE_VERSION = 15
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase: phase || null })

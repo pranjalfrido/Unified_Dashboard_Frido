@@ -17,6 +17,9 @@ import { setPnlTool, usePnlTool, clearPnlToast } from './pnlToolStore.js'
 import { DetailGate } from '../DetailGate.jsx'
 import { useDetailReady } from '../detailPhase.js'
 import { authFetch } from '../authFetch.js'
+// The per-SKU-per-day arrays this page reads arrive as reductions / column packs (pnl_detail), or as
+// the rows themselves (static pnl-data*.json); these helpers give the identical values either way.
+import { shopifyNetScaleSums, amazonNetScaleSums, channelNetScaleSums, shopifyRatesBySku, eboRatesBySku, flipkartReturnsBySku, shopifyResolvedTrendRows, shopifyDailySkuRows, dailyPnLRows, adsDailyRows } from '../../api/_pnlAgg.js'
 
 // D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
 // no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
@@ -116,11 +119,12 @@ function netOf(subCatData, netScale = 1) {
 // Revenue mismatch this same fix resolved for Shopify). Replicates Sales tab's whole-range-GST-ratio
 // formula (gross/returnRev summed first, one GST ratio applied once) rather than netOf()'s
 // row-level-GST-ratio formula, which is exactly what this scale factor reconciles between.
-function resolvedNetScale(resolvedDailySKU, rawSubCatData, subChannelFilter) {
-  const rows = subChannelFilter ? (resolvedDailySKU || []).filter(x => x.subChannel === subChannelFilter) : (resolvedDailySKU || [])
-  if (!rows.length) return 1
-  const resolvedGross = rows.reduce((s, x) => s + (x.gross || 0), 0)
-  const resolvedReturnRev = rows.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
+// `sums` = the resolved rows' { n, gross: Σ(gross || 0), totalReturnRev: Σ(totalReturnRev || 0) }
+// (api/_pnlAgg.js netScaleSums, shipped as <channel>.pnlAgg or computed from the rows).
+function resolvedNetScale(sums, rawSubCatData) {
+  if (!sums.n) return 1
+  const resolvedGross = sums.gross
+  const resolvedReturnRev = sums.totalReturnRev
   const { net: rawNet, excRev: rawExcRev } = netOf(rawSubCatData)
   if (rawNet <= 0 || resolvedGross <= 0) return 1
   const gstRatio = 1 - (rawExcRev / resolvedGross)
@@ -399,24 +403,9 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // below from the same skuCostRows) for the rate lookup — "sku/slab wise rate" — rather than each
   // individual line's own per-order weight. On a mature day this reduces to ~the same number the
   // old line-item lookup gave (the resolved rate IS the live rate there); only immature days differ.
-  const shResolvedRatesBySku = useMemo(() => {
-    const rows = data?.shopify?.resolvedDailySKU
-    if (!rows?.length) return {}
-    const filtered = d2cSubCh === 'Mobility' ? rows.filter(r => r.subChannel === 'mobility')
-      : d2cSubCh === 'MyFrido' ? rows.filter(r => r.subChannel === 'myfrido')
-      : rows.filter(r => r.subChannel !== 'shopify international')
-    const bySku = {}
-    filtered.forEach(r => {
-      const e = bySku[r.sku] || (bySku[r.sku] = { units: 0, gross: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0 })
-      e.units += r.units || 0
-      e.gross += r.gross || 0
-      e.rtoUnits += r.components?.rto?.units || 0
-      e.cirUnits += r.components?.cir?.units || 0
-      e.cancelUnits += r.components?.cancel?.units || 0
-      e.exchUnits += r.components?.exchange?.units || 0
-    })
-    return bySku
-  }, [data, d2cSubCh])
+  // Per SKU: Σunits, Σgross and Σ rto / cir / cancel / exchange units of shopify.resolvedDailySKU for
+  // the selected sub-channel (api/_pnlAgg.js resolvedRatesBySku — shipped reduced, or from the rows).
+  const shResolvedRatesBySku = useMemo(() => shopifyRatesBySku(data?.shopify, d2cSubCh === 'Mobility' ? 'mobility' : d2cSubCh === 'MyFrido' ? 'myfrido' : 'notIntl'), [data, d2cSubCh])
 
   const shSkuCosts = useMemo(() => {
     const rows = data?.shopify?.skuCostRows
@@ -537,21 +526,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // EBO resolved per-SKU units/gross — same aggregation as shResolvedRatesBySku, sourced from
   // ebo.resolvedDailySKU (eboResolvedForMaps in api/bq.js, already built from the same
   // resolveDailySkuComponents() output as D2C's). EBO has no sub-channel split to filter by.
-  const eboResolvedRatesBySku = useMemo(() => {
-    const rows = data?.ebo?.resolvedDailySKU
-    if (!rows?.length) return {}
-    const bySku = {}
-    rows.forEach(r => {
-      const e = bySku[r.sku] || (bySku[r.sku] = { units: 0, gross: 0, rtoUnits: 0, cirUnits: 0, cancelUnits: 0, exchUnits: 0 })
-      e.units += r.units || 0
-      e.gross += r.gross || 0
-      e.rtoUnits += r.components?.rto?.units || 0
-      e.cirUnits += r.components?.cir?.units || 0
-      e.cancelUnits += r.components?.cancel?.units || 0
-      e.exchUnits += r.components?.exchange?.units || 0
-    })
-    return bySku
-  }, [data])
+  const eboResolvedRatesBySku = useMemo(() => eboRatesBySku(data?.ebo), [data])
 
   // EBO S&D: same resolved-rate courier formula as D2C (confirmed 2026-10-22 — extending the D2C
   // fix "for SnD.. we have to apply the logistics cost based on return type %ages.." to EBO), using
@@ -1058,9 +1033,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       // unresolved figure, producing a real mismatch vs the Sales tab ("the net revenue differs").
       // Replicates Sales tab's exact whole-range-GST-ratio formula (App.jsx: resolvedNetRev) rather
       // than netOf()'s row-level-GST-ratio formula, which is what this scale factor reconciles.
-      const resolvedRows = (sh.resolvedDailySKU || []).filter(x => subChKeyForSubCat ? x.subChannel === subChKeyForSubCat : x.subChannel !== 'shopify international')
-      const resolvedGross = resolvedRows.reduce((s, x) => s + (x.gross || 0), 0)
-      const resolvedReturnRev = resolvedRows.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
+      const { gross: resolvedGross, totalReturnRev: resolvedReturnRev } = shopifyNetScaleSums(sh, subChKeyForSubCat || 'notIntl')
       const excRevTarget = netOf(shSubCatData).excRev
       const gstRatio = resolvedGross > 0 ? 1 - (excRevTarget / resolvedGross) : 0
       const target = (resolvedGross - resolvedReturnRev) * (1 - gstRatio)
@@ -1119,7 +1092,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // Reconciles to the SAME resolved engine Sales tab uses (ebo.resolvedDailySKU), not the old
     // eboNetCalc.netRev (raw/live Order_Status revenue) — confirmed 2026-10-22, same fix as D2C's
     // shNetScale above. See resolvedNetScale()'s doc comment for why.
-    const eboNetScale = resolvedNetScale(ebo.resolvedDailySKU, eboSubCatData)
+    const eboNetScale = resolvedNetScale(channelNetScaleSums(ebo), eboSubCatData)
 
     // ── Amazon (SC + VC combined, filtered by amzChannelView) ──
     const amzSC = data.amzSC || {}
@@ -1177,9 +1150,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // returns-adjusted figure, so the trend chart's "Net Revenue" line must use the same
     // definition or it silently disagrees with the KPI card and its own tooltip for the same day.
     const amzDailyMap = {}
+    const amzSCDailyRows = dailyPnLRows(amzSC), amzVCDailyRows = dailyPnLRows(amzVCMatrix)
     const amzDailySourceRows = [
-      ...(amzChannelView !== 'vc' ? (amzSC.dailyPnLBySku || []) : []),
-      ...(amzChannelView !== 'sc' ? (amzVCMatrix.dailyPnLBySku || []) : []),
+      ...(amzChannelView !== 'vc' ? amzSCDailyRows : []),
+      ...(amzChannelView !== 'sc' ? amzVCDailyRows : []),
     ]
     amzDailySourceRows.forEach(x => {
       if (!amzDailyMap[x.date]) amzDailyMap[x.date] = { date: x.date, rev: 0, excRev: 0, units: 0 }
@@ -1201,8 +1175,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // whole-range total spread out) summed across every SubCategory, only ever shown on the
     // combined "All" view (amzChannelView === 'all'), matching showMarketing's own gating.
     const amzDailyPnL = (() => {
-      const scRows = amzChannelView !== 'vc' ? (amzSC.dailyPnLBySku || []) : []
-      const vcRows = amzChannelView !== 'sc' ? (amzVCMatrix.dailyPnLBySku || []) : []
+      const scRows = amzChannelView !== 'vc' ? amzSCDailyRows : []
+      const vcRows = amzChannelView !== 'sc' ? amzVCDailyRows : []
       const byDate = {}
       ;[...scRows, ...vcRows].forEach(x => {
         if (!byDate[x.date]) byDate[x.date] = { date: x.date, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, snd: 0, sndNetCovered: 0, anySnd: false, cogs: 0, netCovered: 0, anyCosted: false, cm1NetCovered: 0, cm2NetCovered: 0 }
@@ -1233,7 +1207,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       })
       const spendByDate = {}
       if (amzChannelView === 'all') {
-        ;(data.ads?.adsDailyByCategory || []).filter(x => x.platform === 'Amazon').forEach(x => {
+        adsDailyRows(data.ads).filter(x => x.platform === 'Amazon').forEach(x => {
           spendByDate[x.date] = (spendByDate[x.date] || 0) + (x.spend || 0)
         })
       }
@@ -1270,7 +1244,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // (shSkuWeightSlab, the whole-range average — a day-level weight slab doesn't exist, same
     // approximation shSkuCosts already makes for Fulfilment at the whole-range grain).
     const shDailySndBySku = (() => {
-      const rows = data?.shopify?.resolvedDailySKU
+      const rows = shopifyResolvedTrendRows(data?.shopify)
       if (!sndRates || !rows?.length) return {}
       const filtered = d2cSubCh === 'Mobility' ? rows.filter(r => r.subChannel === 'mobility')
         : d2cSubCh === 'MyFrido' ? rows.filter(r => r.subChannel === 'myfrido')
@@ -1310,7 +1284,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // and ASP-COGS fallback (estimateCogsPerUnit) as amzDailyPnL above, built from shDailySKU
     // (real per-day Net Revenue via netRevenueOf()) and shDailySndBySku (real per-day SnD above).
     const shDailyPnL = (() => {
-      const allRows = data?.shopify?.dailySKU || []
+      const allRows = shopifyDailySkuRows(data?.shopify)
       // Same d2cSubCh scoping as shSubCatData/shSkuData above — without this, the trend chart's
       // day-wise %-metrics were always computed from ALL sub-channels combined, identical on
       // every Overall/MyFrido/Mobility view regardless of the selected toggle.
@@ -1325,7 +1299,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const subChGrossForRatio = rows.reduce((s, x) => s + (x.rev || 0), 0)
       const cm2Ratio = d2cSubCh !== 'all' && shTotalRevForRatio > 0 ? subChGrossForRatio / shTotalRevForRatio : 1
       const spendByDate = {}
-      ;(data.ads?.adsDailyByCategory || []).filter(x => x.platform === 'Meta' || x.platform === 'Google').forEach(x => {
+      adsDailyRows(data.ads).filter(x => x.platform === 'Meta' || x.platform === 'Google').forEach(x => {
         spendByDate[x.date] = (spendByDate[x.date] || 0) + (x.spend || 0) * cm2Ratio
       })
       const byDate = {}
@@ -1416,11 +1390,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // fk.dailyPnLBySku (built alongside sndBySku in api/bq.js's flipkart block) carries the real
     // per-SKU totalReturnRev this grouping lacks — merge them so fkSkuData's rows aren't missing
     // returns the way fk.skuMatrix alone would leave them (same bug fkSubCatData had above).
-    const fkReturnRevBySku = {}, fkReturnedUnitsBySku = {}
-    ;(fk.dailyPnLBySku || []).forEach(x => {
-      fkReturnRevBySku[x.sku] = (fkReturnRevBySku[x.sku] || 0) + (x.totalReturnRev || 0)
-      fkReturnedUnitsBySku[x.sku] = (fkReturnedUnitsBySku[x.sku] || 0) + (x.returnedUnits || 0)
-    })
+    // (api/_pnlAgg.js fkReturnsBySku — shipped reduced, or summed from the rows)
+    const { returnRev: fkReturnRevBySku, returnedUnits: fkReturnedUnitsBySku } = flipkartReturnsBySku(fk)
 
     const fkSkuData = {}
     Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
@@ -1448,7 +1419,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     // in the KPI cards and Financial Table.
     const fkDailyPnL = (() => {
       const byDate = {}
-      ;(fk.dailyPnLBySku || []).forEach(x => {
+      dailyPnLRows(fk).forEach(x => {
         if (!byDate[x.date]) byDate[x.date] = { date: x.date, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, snd: 0, sndNetCovered: 0, anySnd: false, cogs: 0, netCovered: 0, anyCosted: false, cm1NetCovered: 0, cm2NetCovered: 0 }
         const d = byDate[x.date]
         d.gross += x.gross || 0
@@ -1469,7 +1440,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         if (rowCosted && rowSndCovered) { d.cm1NetCovered += x.net || 0; d.cm2NetCovered += x.net || 0 }
       })
       const spendByDate = {}
-      ;(data.ads?.adsDailyByCategory || []).filter(x => x.platform === 'Flipkart').forEach(x => {
+      adsDailyRows(data.ads).filter(x => x.platform === 'Flipkart').forEach(x => {
         spendByDate[x.date] = (spendByDate[x.date] || 0) + (x.spend || 0)
       })
       return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => {
@@ -1719,8 +1690,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       // SC+VC resolvedDailySKU per the active amzChannelView toggle, matching how amzSubCatData
       // itself is combined via pickAmz above.
       amazon: (() => {
-        const amzResolvedRows = (amzChannelView !== 'vc' ? (amzSC.resolvedDailySKU || []) : []).concat(amzChannelView !== 'sc' ? (data.amzVC?.resolvedDailySKU || []) : [])
-        const amzNetScale = resolvedNetScale(amzResolvedRows, amzSubCatData)
+        // SC rows, VC rows, or SC rows followed by VC rows (one sequence) per amzChannelView
+        const amzNetScale = resolvedNetScale(amazonNetScaleSums(data, amzChannelView), amzSubCatData)
         const n = netOf(amzSubCatData, amzNetScale)
         // prevGross/prevExcRev summed the same way as amzTotalGross above — SC-only/VC-only/
         // SC+VC per the active amzChannelView toggle. Vendor Central's previous period lives on
@@ -1733,13 +1704,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         const prevOrders = (amzChannelView !== 'vc' ? (amzSC.prevOrders || 0) : 0)
         return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, dailyPnL: amzDailyPnL, amzTotalGross, ...n, netScale: amzNetScale, prevGross, prevExcRev, prevOrders }
       })(),
-      flipkart: (() => { const fkNetScale = resolvedNetScale(fk.resolvedDailySKU, fkSubCatData); const n = netOf(fkSubCatData, fkNetScale); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], dailyPnL: fkDailyPnL, ...n, netScale: fkNetScale, prevGross: fk.prevRev || 0, prevExcRev: fk.prevExcRev || 0, prevReturnRev: fk.prevReturnRev || 0, prevOrders: fk.prevOrders || 0 } })(),
+      flipkart: (() => { const fkNetScale = resolvedNetScale(channelNetScaleSums(fk), fkSubCatData); const n = netOf(fkSubCatData, fkNetScale); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], dailyPnL: fkDailyPnL, ...n, netScale: fkNetScale, prevGross: fk.prevRev || 0, prevExcRev: fk.prevExcRev || 0, prevReturnRev: fk.prevReturnRev || 0, prevOrders: fk.prevOrders || 0 } })(),
       blinkit: (() => { const sc = qcSubCatOf(bl); const n = netOf(sc); return { subCatData: sc, skuData: bl.skuMatrix || {}, daily: bl.daily || [], ...n, prevGross: bl.prevRev || 0, prevExcRev: bl.prevExcRev || 0, prevOrders: bl.prevOrders || 0 } })(),
       instamart: (() => { const sc = qcSubCatOf(ins); const n = netOf(sc); return { subCatData: sc, skuData: ins.skuMatrix || {}, daily: ins.daily || [], ...n, prevGross: ins.prevRev || 0, prevExcRev: ins.prevExcRev || 0, prevOrders: ins.prevOrders || 0 } })(),
       zepto: (() => { const sc = qcSubCatOf(zp); const n = netOf(sc); return { subCatData: sc, skuData: zp.skuMatrix || {}, daily: zp.daily || [], ...n, prevGross: zp.prevRev || 0, prevExcRev: zp.prevExcRev || 0, prevOrders: zp.prevOrders || 0 } })(),
-      cred: (() => { const sc = simpleSubCatOf(cr.subCategories || []); const crNetScale = resolvedNetScale(cr.resolvedDailySKU, sc); const n = netOf(sc, crNetScale); return { subCatData: sc, skuData: cr.skuMatrix || {}, daily: cr.daily || [], ...n, netScale: crNetScale, prevGross: cr.prevRev || 0, prevExcRev: cr.prevExcRev || 0, prevOrders: cr.prevOrders || 0 } })(),
-      firstcry: (() => { const sc = simpleSubCatOf(fc.subCategories || []); const fcNetScale = resolvedNetScale(fc.resolvedDailySKU, sc); const n = netOf(sc, fcNetScale); return { subCatData: sc, skuData: fc.skuMatrix || {}, daily: fc.daily || [], ...n, netScale: fcNetScale, prevGross: fc.prevRev || 0, prevExcRev: fc.prevExcRev || 0, prevOrders: fc.prevOrders || 0 } })(),
-      myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const mnNetScale = resolvedNetScale(mn.resolvedDailySKU, sc); const n = netOf(sc, mnNetScale); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n, netScale: mnNetScale, prevGross: mn.prevRev || 0, prevExcRev: mn.prevExcRev || 0, prevOrders: mn.prevOrders || 0 } })(),
+      cred: (() => { const sc = simpleSubCatOf(cr.subCategories || []); const crNetScale = resolvedNetScale(channelNetScaleSums(cr), sc); const n = netOf(sc, crNetScale); return { subCatData: sc, skuData: cr.skuMatrix || {}, daily: cr.daily || [], ...n, netScale: crNetScale, prevGross: cr.prevRev || 0, prevExcRev: cr.prevExcRev || 0, prevOrders: cr.prevOrders || 0 } })(),
+      firstcry: (() => { const sc = simpleSubCatOf(fc.subCategories || []); const fcNetScale = resolvedNetScale(channelNetScaleSums(fc), sc); const n = netOf(sc, fcNetScale); return { subCatData: sc, skuData: fc.skuMatrix || {}, daily: fc.daily || [], ...n, netScale: fcNetScale, prevGross: fc.prevRev || 0, prevExcRev: fc.prevExcRev || 0, prevOrders: fc.prevOrders || 0 } })(),
+      myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const mnNetScale = resolvedNetScale(channelNetScaleSums(mn), sc); const n = netOf(sc, mnNetScale); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n, netScale: mnNetScale, prevGross: mn.prevRev || 0, prevExcRev: mn.prevExcRev || 0, prevOrders: mn.prevOrders || 0 } })(),
       international: (() => { const sc = simpleSubCatOf(intl.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: intl.skuMatrix || {}, daily: intl.daily || [], ...n, prevGross: intl.prevRev || 0, prevExcRev: intl.prevExcRev || 0, prevOrders: intl.prevOrders || 0 } })(),
       offline: (() => {
         const n = netOf(offSubCatData)

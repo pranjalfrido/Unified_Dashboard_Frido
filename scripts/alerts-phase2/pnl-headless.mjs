@@ -25,6 +25,7 @@ async function buildBundle() {
   rmSync(WORK, { recursive: true, force: true })
   mkdirSync(WORK, { recursive: true })
   cpSync(join(ROOT, 'src'), join(WORK, 'src'), { recursive: true })
+  cpSync(join(ROOT, 'api'), join(WORK, 'api'), { recursive: true }) // the page imports shared reducers from api/ (e.g. _pnlAgg.js)
   const pagePath = join(WORK, 'src', 'pnl', 'PnLPage.jsx')
   let page = readFileSync(pagePath, 'utf8')
   const m1 = 'onSummary({\n      gross: activeData.gross,', m2 = 'onSummary({\r\n      gross: activeData.gross,'
