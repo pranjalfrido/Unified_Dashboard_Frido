@@ -42,7 +42,7 @@ describe("underscores in names", () => {
 describe("access rules", () => {
   it("call cn_can_upload / cn_can_manage through a sub-select (once per query, not per row)", async () => {
     const { rows } = await db.query(`SELECT tablename, policyname, coalesce(qual, '') || ' ' || coalesce(with_check, '') AS expr
-      FROM pg_policies WHERE schemaname = 'public' AND tablename LIKE 'cn\_%'`);
+      FROM pg_policies WHERE schemaname = 'public' AND tablename ~ '^cn_'`);
     expect(rows.length).toBeGreaterThan(20);
     const perRow = rows.filter((r) => /cn_can_(upload|manage)\(\)/.test(r.expr) && !/SELECT/.test(r.expr));
     expect(perRow).toEqual([]);
