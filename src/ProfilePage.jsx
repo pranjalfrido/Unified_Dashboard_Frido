@@ -9,7 +9,6 @@ import ProfileMobile from './profile/ProfileMobile.jsx'
 import { useBreakpoint } from './responsive/useBreakpoint.js'
 import { useLivePresence, presenceOf } from './presence.js'
 import { LiveDot } from './responsive/LiveUsers.jsx'
-import MyFeedback from './feedback/MyFeedback.jsx'
 
 
 
@@ -591,7 +590,6 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
       </div>
 
       <MyProfile session={session} onProfileUpdated={onProfileUpdated} />
-      <div style={{ marginTop: 20 }}><MyFeedback /></div>
       {profile?.is_admin && <TeamMembers session={session} showToast={showToast} />}
 
       {toastEl}

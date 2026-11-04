@@ -5,6 +5,7 @@ import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fb, TYPES, TYPE_LABEL, STATUS_LABEL, when } from './feedbackApi.js'
 import { useFeedback } from './feedbackCtx.js'
 import { filterText } from './feedbackContext.js'
+import MyFeedback from './MyFeedback.jsx'
 import './feedback.css'
 
 function Detail({ id, token, onChanged, onBack, phone }) {
@@ -80,7 +81,7 @@ function Detail({ id, token, onChanged, onBack, phone }) {
   )
 }
 
-export default function FeedbackInbox() {
+function AllFeedback() {
   const { isAdmin, token, refresh } = useFeedback()
   const bp = useBreakpoint()
   const phone = bp.width <= 768 || bp.isPhoneLandscape
@@ -99,7 +100,6 @@ export default function FeedbackInbox() {
     return () => { off = true }
   }, [isAdmin, filters, token, reload])
 
-  if (!isAdmin) return null
   const set = k => e => setFilters(f => ({ ...f, [k]: e.target.value }))
   const changed = () => { setReload(n => n + 1); refresh() }
   const showList = !phone || !sel
@@ -144,6 +144,22 @@ export default function FeedbackInbox() {
             : <div className="fbx-detail"><div className="fbx-empty">Pick an item to read it, reply and change its status.</div></div>}
         </div>
       )}
+    </div>
+  )
+}
+
+// Inbox page: admins get two tabs, everyone else just their own feedback (status + the team's replies).
+export default function FeedbackInbox() {
+  const { isAdmin } = useFeedback()
+  const [tab, setTab] = useState('all')
+  if (!isAdmin) return <div className="fbx-single"><MyFeedback /></div>
+  return (
+    <div>
+      <div className="fbx-tabs" role="tablist" data-testid="fbx-tabs">
+        <button type="button" role="tab" aria-selected={tab === 'all'} className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')} data-testid="fbx-tab-all">All feedback</button>
+        <button type="button" role="tab" aria-selected={tab === 'mine'} className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')} data-testid="fbx-tab-mine">My feedback</button>
+      </div>
+      {tab === 'all' ? <AllFeedback /> : <div className="fbx-single"><MyFeedback /></div>}
     </div>
   )
 }

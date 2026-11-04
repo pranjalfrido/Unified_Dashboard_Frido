@@ -3621,7 +3621,7 @@ const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, invent
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const fbk = useFeedback()
   const can = id => {
-    if (id === 'feedback') return profile?.is_admin === true // admins only
+    if (id === 'feedback') return true // Inbox: everyone (admins get two tabs)
     if (!allowedTabs) return true
     if (id === 'sales') return hasSalesAccess(allowedTabs)
     if (id === 'ads') return hasAdsAccess(allowedTabs)
@@ -20441,7 +20441,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       return
     }
     const isPageAllowed = page === 'profile' ? true :
-      page === 'feedback' ? profile?.is_admin === true :
+      page === 'feedback' ? true :
       page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       // Shares Cost Analytics' permission: there is no separate allowedTabs entry for it,
       // so without this branch the generic allowedTabs.includes(page) test fails and a
@@ -21310,7 +21310,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} />
             </div>
           )}
-          {page === 'feedback' && profile?.is_admin === true && (
+          {page === 'feedback' && (
             <div className="page-scroll"><FeedbackInbox /></div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
