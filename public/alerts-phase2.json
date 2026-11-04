@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-04T05:07:35.898Z",
+ "generatedAt": "2026-11-04T06:08:00.514Z",
  "today": "2026-11-04",
  "windows": {
   "rev": {
@@ -43,8 +43,8 @@
    "label": "7 Oct–3 Nov"
   },
   "support": {
-   "day": "2026-11-02",
-   "prevDay": "2026-10-26",
+   "day": "2026-11-03",
+   "prevDay": "2026-10-27",
    "week": "2026-10-26"
   }
  },
@@ -1093,7 +1093,7 @@
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-04T04:20:30.207Z",
+  "asOf": "2026-11-04T05:17:36.173Z",
   "perShipment": 104.15515665912929,
   "perKg": 35.27792995904252,
   "perKgTrailing": 34.789143036075025,
@@ -1175,39 +1175,39 @@
  },
  "support": {
   "day": {
-   "key": "2026-11-02",
+   "key": "2026-11-03",
    "frt": [
     {
      "ch": "Chat",
-     "n": 801,
-     "avgSec": 1581.4282147315855
+     "n": 20,
+     "avgSec": 10321.75
     },
     {
      "ch": "Email",
-     "n": 101,
-     "avgSec": 3661.7227722772277
+     "n": 2,
+     "avgSec": 10083
     },
     {
      "ch": "Social media",
-     "n": 125,
-     "avgSec": 682.36
+     "n": 15,
+     "avgSec": 4276.2
     }
    ],
    "esc": {
-    "esc": 14,
-    "inter": 3836
+    "esc": 12,
+    "inter": 3837
    },
    "escPrev": {
-    "esc": 20,
-    "inter": 3799
+    "esc": 15,
+    "inter": 3645
    },
    "per": {
-    "inter": 3836,
-    "orders": 6937
+    "inter": 3837,
+    "orders": 7040
    },
    "perPrev": {
-    "inter": 3799,
-    "orders": 7358
+    "inter": 3645,
+    "orders": 7194
    },
    "pageRules": [
     {
