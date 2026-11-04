@@ -251,9 +251,11 @@ export default async function salesAllocationHandler(req, res) {
     // N is a request parameter (default 7) rather than two hardcoded windows, per roadmap 2.7 —
     // the frontend can request any window and get back a consistently-shaped result.
     function momentumFor(windowN) {
-      if (lookbackDates.length < windowN + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
-      const lastDate = lookbackDates[lookbackDates.length - 1]
-      const compareDate = lookbackDates[lookbackDates.length - 1 - windowN]
+      // Anchor on the last COMPLETE day (lastSalesDateConsidered = max - 1), not the partial newest day.
+      const dates = lastSalesDateConsidered ? lookbackDates.filter(d => d <= lastSalesDateConsidered) : lookbackDates
+      if (dates.length < windowN + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
+      const lastDate = dates[dates.length - 1]
+      const compareDate = dates[dates.length - 1 - windowN]
       const rows = []
       for (const [skuKey, perDate] of skuDailyMap) {
         const lastQty = perDate.get(lastDate) || 0

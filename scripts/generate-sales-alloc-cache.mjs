@@ -198,9 +198,12 @@ const lookbackDates = [...new Set(lookbackRows.map(r => r.order_date?.value || r
 
 // ── Momentum ─────────────────────────────────────────────────────────────────
 function momentumFor(N) {
-  if (lookbackDates.length < N + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
-  const lastDate = lookbackDates[lookbackDates.length - 1]
-  const compareDate = lookbackDates[lookbackDates.length - 1 - N]
+  // Anchor on the last COMPLETE day (lastSalesDateConsidered = max - 1), not the partial newest day,
+  // so "last day vs Nth-last day" never compares a full day with a half-landed one.
+  const dates = lastSalesDateConsidered ? lookbackDates.filter(d => d <= lastSalesDateConsidered) : lookbackDates
+  if (dates.length < N + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
+  const lastDate = dates[dates.length - 1]
+  const compareDate = dates[dates.length - 1 - N]
   const rows = []
   for (const [skuKey, perDate] of skuDailyMap) {
     const lastQty = perDate.get(lastDate) || 0
