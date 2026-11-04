@@ -1,27 +1,27 @@
 {
-  "generatedAt": "2026-11-03T23:08:01.078Z",
+  "generatedAt": "2026-11-04T00:08:08.138Z",
   "logistics": {
-    "windowStart": "2026-10-13",
-    "windowEnd": "2026-10-19",
-    "rangeLabel": "Orders 13–19 Oct",
-    "total": 51931,
-    "delivered": 47464,
-    "rto": 3975,
-    "deliveryPct": 91.4,
-    "rtoPct": 7.65,
-    "slaBreachPct": 10.38,
-    "slaBreachAvailable": true
-  },
-  "returns": {
     "windowStart": "2026-10-14",
     "windowEnd": "2026-10-20",
     "rangeLabel": "Orders 14–20 Oct",
-    "gross": 85075950.1799996,
-    "cancelPct": 5.14,
-    "rtoPct": 6.73,
-    "cirPct": 6.25,
-    "exchangePct": 5.9,
-    "totalReturnPct": 18.12
+    "total": 45217,
+    "delivered": 41353,
+    "rto": 3429,
+    "deliveryPct": 91.45,
+    "rtoPct": 7.58,
+    "slaBreachPct": 9.86,
+    "slaBreachAvailable": true
+  },
+  "returns": {
+    "windowStart": "2026-10-15",
+    "windowEnd": "2026-10-21",
+    "rangeLabel": "Orders 15–21 Oct",
+    "gross": 85194359.79999955,
+    "cancelPct": 5.03,
+    "rtoPct": 6.5,
+    "cirPct": 6.3,
+    "exchangePct": 5.96,
+    "totalReturnPct": 17.84
   },
   "zeroOrders": {
     "date": "2026-11-03",
@@ -54,12 +54,12 @@
     "zeroChannels": []
   },
   "d2cPnl": {
-    "windowStart": "2026-10-14",
-    "windowEnd": "2026-10-20",
-    "rangeLabel": "Orders 14–20 Oct",
-    "netRevenue": 62038444,
-    "cogsPct": 42.89,
-    "sndPct": 18.61,
-    "cm1Pct": 38.5
+    "windowStart": "2026-10-15",
+    "windowEnd": "2026-10-21",
+    "rangeLabel": "Orders 15–21 Oct",
+    "netRevenue": 62345422,
+    "cogsPct": 42.93,
+    "sndPct": 18.63,
+    "cm1Pct": 38.44
   }
 }
