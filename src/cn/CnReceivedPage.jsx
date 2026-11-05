@@ -1,196 +1,138 @@
 // Logistics → Cost Analytics → Overview → "CN Received": credit notes received from couriers,
-// transporters and 3PLs, against the invoice values uploaded with them. Totals only, read
-// through cn_received_summary(); the uploads themselves live in Documents → Logistics Credit
-// Notes. Expected CN stays in the data and the Excel export but is not shown here.
-import { useEffect, useMemo, useState } from "react";
+// transporters and 3PLs, against the invoice values uploaded with them. Totals only, read through
+// cn_received_summary(); the uploads themselves live in Documents → Logistics Credit Notes.
+// Built from the dashboard's own pieces (KPICard, Card, Dropdown, MonthRangePicker, the Cost
+// Analytics pill tabs, BarGradient, the .hb-track progress bar) and theme tokens only.
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronRight, Info, X } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Info } from "lucide-react";
 import { C } from "../utils.js";
-import { Card, KPICard } from "../components.jsx";
+import { Card, KPICard, Dropdown, BarGradient } from "../components.jsx";
 import { supabase } from "../supabase.js";
 import MonthRangePicker from "../responsive/MonthRangePicker.jsx";
-import { CATEGORIES, categoryLabel, applyFilters, summarize, hasActivity, monthName } from "./cnReceived.js";
-import { formatInr, formatInrFull, formatPct, receivedShareOfInvoice } from "./format.js";
+import {
+  CATEGORIES, categoryLabel, reasonLabel, SHIPMENT_VALUE_REASONS, applyFilters, summarize, hasActivity,
+  monthName, lastMonths, shareOf, buildExport,
+} from "./cnReceived.js";
+import { formatInr, formatInrFull, formatPct } from "./format.js";
 
-const NO_FILTERS = { months: [], category: "", partner: "" };
-const shareOf = (t) => receivedShareOfInvoice(t.received, t.invoice);
-
-// ── Small pieces ─────────────────────────────────────────────────────────────
-
-// A compact amount whose exact value shows on hover.
-function Amount({ v }) {
-  const full = formatInrFull(v);
-  return <span title={full === "—" ? undefined : full}>{formatInr(v)}</span>;
-}
-
-function Skeleton({ h, w = "100%", r = 10 }) {
-  return <div className="cnr-skel" style={{ height: h, width: w, borderRadius: r, background: C.hov }} />;
-}
-
-const btn = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "6px 11px", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 700, color: C.t2, cursor: "pointer" };
-const link = { border: "none", background: "none", padding: 0, color: C.acc, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "var(--font)" };
-
-// Tables: mint header, zebra rows, 44px rows, numbers right-aligned in tabular figures.
-const tableWrap = { border: `1px solid ${C.border}`, borderRadius: 10, overflow: "auto" };
-// Headers may wrap to two lines so all five columns fit when two tables sit side by side.
-const thBase = { position: "sticky", top: 0, zIndex: 1, background: C.acl, height: 44, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.25, verticalAlign: "middle", borderBottom: `1px solid ${C.border}` };
-const tdBase = { height: 44, padding: "0 10px", fontSize: 12.5, color: C.t1, whiteSpace: "nowrap" };
-const num = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
-const zebra = (i) => (i % 2 ? C.hov : C.card);
-
-function useSort(key = null, dir = "desc") {
-  const [sort, setSort] = useState(key ? { key, dir } : null);
-  const toggle = (k) => setSort((s) => (s?.key === k ? { key: k, dir: s.dir === "desc" ? "asc" : "desc" } : { key: k, dir: "desc" }));
-  const apply = (rows, get) => {
-    if (!sort) return rows;
-    const sign = sort.dir === "asc" ? 1 : -1;
-    return [...rows].sort((a, b) => {
-      const x = get(a, sort.key), y = get(b, sort.key);
-      if (typeof x === "string" || typeof y === "string") return sign * String(x ?? "").localeCompare(String(y ?? ""));
-      return sign * ((x ?? -Infinity) - (y ?? -Infinity));
-    });
-  };
-  return { sort, toggle, apply };
-}
-
-function SortTh({ label, k, s, align = "right" }) {
-  const on = s.sort?.key === k;
-  const Icon = !on ? ArrowUpDown : s.sort.dir === "asc" ? ArrowUp : ArrowDown;
-  return (
-    <th onClick={() => s.toggle(k)} aria-sort={on ? (s.sort.dir === "asc" ? "ascending" : "descending") : "none"}
-      style={{ ...thBase, textAlign: align, cursor: "pointer", userSelect: "none", ...(align === "right" ? { width: 104 } : {}) }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexDirection: align === "right" ? "row-reverse" : "row" }}>
-        {label}<Icon size={12} style={{ opacity: on ? 1 : 0.4 }} />
-      </span>
-    </th>
-  );
-}
-
-// Value columns shared by the three tables.
-const VALUE_COLS = [["Invoice value", "invoice"], ["Received CN", "received"], ["Received % of invoice", "share"]];
-const valueOf = (t, k) => (k === "share" ? shareOf(t) : k === "invoice" ? t.invoice : t.received);
-function ValueCells({ t, noInvoiceNote }) {
-  return (<>
-    <td style={{ ...tdBase, ...num }}>
-      {t.invoice == null && noInvoiceNote ? (
-        <span title={noInvoiceNote} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: C.t3 }}>
-          — <Info size={12} aria-label={noInvoiceNote} />
-        </span>
-      ) : <Amount v={t.invoice} />}
-    </td>
-    <td style={{ ...tdBase, ...num }}><Amount v={t.received} /></td>
-    <td style={{ ...tdBase, ...num }}>{formatPct(shareOf(t))}</td>
-  </>);
-}
-
-// Lost/Damage-type reasons are claimed against a shipment's value, not an invoice.
 const NO_INVOICE = "Shipment value, not invoice";
+const GREEN = () => C.green.tx; // success green: every Received CN amount
 
-// ── Trend: Received CN by month, and Received % of invoice beneath it ───────
-// Two charts on one shared month axis rather than one chart with two y-axes: each keeps a
-// single honest scale, and hovering either shows all four figures for that month.
+// The calendar month in India, "YYYY-MM": its bar is still filling, so it gets a lighter tint.
+const currentMonth = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
 
-function TrendTooltip({ active, payload }) {
+// ── Shared pieces ────────────────────────────────────────────────────────────
+
+// Compact amount; the exact en-IN value on hover.
+function Amount({ v, green }) {
+  const full = formatInrFull(v);
+  return <span title={full === "—" ? undefined : full} style={green && full !== "—" ? { color: GREEN() } : undefined}>{formatInr(v)}</span>;
+}
+
+// Secondary button, as Cost Analytics' "Allocation".
+const secondaryBtn = {
+  display: "inline-flex", alignItems: "center", gap: 5, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
+  padding: "5px 10px", cursor: "pointer", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 700, color: C.t2, whiteSpace: "nowrap",
+};
+const textBtn = { border: "none", background: "none", padding: 0, color: C.acc, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "var(--font)" };
+
+function Skeleton({ h, w = "100%" }) {
+  return <div className="cnr-skel" role="status" aria-label="Loading" style={{ height: h, width: w, borderRadius: C.r.lg, background: C.card }} />;
+}
+
+// Tables, in the shared DataTable's look: mint header, 1px dividers, right-aligned tabular numbers.
+const th = { position: "sticky", top: 0, zIndex: 1, background: C.acl, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: C.t2, padding: "7px 10px", borderBottom: `1.5px solid ${C.border}`, whiteSpace: "nowrap" };
+const td = { padding: "0 10px", height: 40, fontSize: 12, color: C.t1, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
+const num = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
+
+// ── Chart ────────────────────────────────────────────────────────────────────
+
+function ChartTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const row = (k, v) => (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-      <span style={{ color: C.t3 }}>{k}</span><span style={{ color: C.t1, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{v}</span>
+  const line = (k, v, green) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 14, fontSize: 11, color: C.t2, marginTop: 3 }}>
+      <span>{k}</span><span style={{ fontWeight: 700, color: green ? GREEN() : C.t1, fontVariantNumeric: "tabular-nums" }}>{v}</span>
     </div>
   );
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "8px 12px", fontSize: 11.5, boxShadow: C.sh2, minWidth: 210 }}>
-      <div style={{ fontWeight: 700, color: C.t1, marginBottom: 4 }}>{monthName(d.month)}</div>
-      {row("Received CN", formatInrFull(d.received))}
-      {row("Invoice value", formatInrFull(d.invoice))}
-      {row("Received % of invoice", formatPct(d.share))}
+    <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "9px 11px", boxShadow: "0 6px 20px rgba(0,0,0,.12)", minWidth: 200 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 2 }}>{monthName(d.month)}{d.partial ? " · month in progress" : ""}</div>
+      {line("Received CN", formatInrFull(d.received), true)}
+      {line("Invoice value", formatInrFull(d.invoice))}
+      {line("% of invoice", formatPct(d.share))}
     </div>
   );
 }
 
-function Trend({ months, selected, onPick }) {
-  const data = months.map((m) => ({ month: m.month, label: monthName(m.month), received: m.total.received, invoice: m.total.invoice,
-    share: shareOf(m.total), sharePct: shareOf(m.total) == null ? null : shareOf(m.total) * 100 }));
-  const sel = new Set(selected);
-  const axis = { fontSize: 11, fill: C.t3 };
+function MonthChart({ months, onPick }) {
+  const now = currentMonth();
+  const data = months.map((m) => ({ month: m.month, label: monthName(m.month), received: m.total.received, invoice: m.total.invoice, share: shareOf(m.total), partial: m.month === now }));
   return (
-    <Card title="Received CN by month" note={selected.length ? "selected months highlighted · click a bar to change" : "click a bar to filter to that month"} style={{ height: "auto", marginBottom: 14 }}>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} syncId="cnr" margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke={C.border} />
-          <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={{ stroke: C.border }} hide />
-          <YAxis tick={axis} tickLine={false} axisLine={false} width={74} tickFormatter={(v) => formatInr(v)} />
-          <Tooltip content={<TrendTooltip />} cursor={{ fill: C.hov }} />
-          <Bar dataKey="received" name="Received CN" radius={[4, 4, 0, 0]} maxBarSize={36} cursor="pointer"
-            onClick={(d) => onPick(d?.payload?.month ?? d?.month)}>
-            {data.map((d) => <Cell key={d.month} fill={C.acc} fillOpacity={!sel.size || sel.has(d.month) ? 1 : 0.3} />)}
+    <Card title="Received CN by month" note="click a bar to see that month" style={{ height: "auto", marginBottom: 14 }}>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+          <BarGradient id="gCnReceived" />
+          <CartesianGrid stroke={C.border} vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" minTickGap={14} />
+          <YAxis tick={{ fontSize: 11, fill: C.t3 }} axisLine={false} tickLine={false} width={70} tickFormatter={(v) => formatInr(v)} />
+          <Tooltip content={<ChartTip />} cursor={{ fill: C.hov }} />
+          <Bar dataKey="received" name="Received CN" radius={[4, 4, 0, 0]} maxBarSize={40} cursor="pointer" onClick={(d) => onPick(d?.payload?.month ?? d?.month)}>
+            {data.map((d) => (
+              <Cell key={d.month} fill="url(#gCnReceived)" fillOpacity={d.partial ? 0.4 : 1} />
+            ))}
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, margin: "8px 0 2px 2px" }}>Received % of invoice</div>
-      <ResponsiveContainer width="100%" height={120}>
-        <LineChart data={data} syncId="cnr" margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke={C.border} />
-          <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={{ stroke: C.border }} interval="preserveStartEnd" minTickGap={18} />
-          <YAxis tick={axis} tickLine={false} axisLine={false} width={74} tickFormatter={(v) => `${v}%`} />
-          <Tooltip content={<TrendTooltip />} cursor={{ stroke: C.border2 }} />
-          <Line dataKey="sharePct" name="Received % of invoice" stroke={C.acm} strokeWidth={2} connectNulls={false}
-            dot={{ r: 3, fill: C.acm, stroke: C.card, strokeWidth: 2 }} activeDot={{ r: 5, stroke: C.card, strokeWidth: 2 }} />
-        </LineChart>
       </ResponsiveContainer>
     </Card>
   );
 }
 
-// ── Tables ───────────────────────────────────────────────────────────────────
+// ── By reason ────────────────────────────────────────────────────────────────
 
-function CategoryTable({ view }) {
-  const s = useSort();
-  const [collapsed, setCollapsed] = useState(() => new Set());
-  const toggle = (k) => setCollapsed((c) => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  const get = (x, k) => (k === "name" ? x.label ?? x.reason : valueOf(x.total, k));
-  const cats = s.apply(view.categories.filter((c) => c.total.n > 0), get);
+function ReasonRow({ label, t, reason, bold, indent }) {
+  const shipmentOnly = SHIPMENT_VALUE_REASONS.has(reason);
   return (
-    <Card title="By category and reason" style={{ height: "auto" }}>
-      <div style={tableWrap}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
+    <tr style={bold ? { fontWeight: 700 } : undefined}>
+      <td style={{ ...td, paddingLeft: indent ? 24 : 10, color: bold ? C.t1 : C.t2 }}>{label}</td>
+      <td style={{ ...td, ...num }}><Amount v={t.received} green /></td>
+      <td style={{ ...td, ...num, color: C.t2 }}>
+        {shipmentOnly ? (
+          <span title={NO_INVOICE} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: C.t3 }}>— <Info size={12} aria-label={NO_INVOICE} /></span>
+        ) : formatPct(shareOf(t))}
+      </td>
+    </tr>
+  );
+}
+
+function ByReason({ view, grouped }) {
+  const byReceived = (a, b) => b.total.received - a.total.received;
+  const cats = view.categories.filter((c) => c.total.n > 0).sort(byReceived);
+  return (
+    <Card title="By reason" style={{ height: "auto" }}>
+      <div style={{ overflow: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>
-            <SortTh label="Category" k="name" s={s} align="left" />
-            <th style={{ ...thBase, textAlign: "left" }}>Reason</th>
-            {VALUE_COLS.map(([l, k]) => <SortTh key={k} label={l} k={k} s={s} />)}
+            <th style={{ ...th, textAlign: "left" }}>Reason</th>
+            <th style={{ ...th, textAlign: "right" }}>Received CN</th>
+            <th style={{ ...th, textAlign: "right" }}>% of invoice</th>
           </tr></thead>
           <tbody>
-            {(() => {
-              let i = 0;
-              return cats.map((c) => {
-                const open = !collapsed.has(c.key);
-                const reasons = s.apply(c.reasons.filter((x) => x.total.n > 0), get);
-                return [
-                  <tr key={c.key} style={{ background: zebra(i++), fontWeight: 700 }}>
-                    <td style={tdBase}>
-                      <button onClick={() => toggle(c.key)} aria-expanded={open} disabled={!reasons.length}
-                        style={{ border: "none", background: "none", padding: 0, cursor: reasons.length ? "pointer" : "default", display: "inline-flex", alignItems: "center", gap: 4, color: C.t1, font: "inherit", fontWeight: 700 }}>
-                        {reasons.length ? (open ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <span style={{ width: 14 }} />}
-                        {c.label}
-                      </button>
-                    </td>
-                    <td style={tdBase} />
-                    <ValueCells t={c.total} />
-                  </tr>,
-                  ...(open ? reasons.map((x) => (
-                    <tr key={`${c.key}|${x.reason}`} style={{ background: zebra(i++), color: C.t2 }}>
-                      <td style={tdBase} />
-                      <td style={{ ...tdBase, paddingLeft: 24, color: C.t2 }}>{x.reason}</td>
-                      <ValueCells t={x.total} noInvoiceNote={NO_INVOICE} />
-                    </tr>
-                  )) : []),
-                ];
-              });
-            })()}
-            <tr style={{ background: C.acl, fontWeight: 800 }}>
-              <td style={tdBase}>Total</td><td style={tdBase} />
-              <ValueCells t={view.total} />
+            {cats.flatMap((c) => {
+              const reasons = c.reasons.filter((x) => x.total.n > 0).sort(byReceived);
+              // FTL/PTL and 3PL have a single reason, their own name: one row says it all.
+              if (reasons.length === 1 && reasons[0].reason === c.key) return [<ReasonRow key={c.key} label={c.label} t={c.total} bold={grouped} />];
+              return [
+                ...(grouped ? [<ReasonRow key={c.key} label={c.label} t={c.total} bold />] : []),
+                ...reasons.map((x) => <ReasonRow key={`${c.key}|${x.reason}`} label={reasonLabel(x.reason)} t={x.total} reason={x.reason} indent={grouped} />),
+              ];
+            })}
+            <tr style={{ fontWeight: 800, background: C.acl }}>
+              <td style={{ ...td, borderBottom: "none" }}>Total</td>
+              <td style={{ ...td, ...num, borderBottom: "none" }}><Amount v={view.total.received} green /></td>
+              <td style={{ ...td, ...num, borderBottom: "none" }}>{formatPct(shareOf(view.total))}</td>
             </tr>
           </tbody>
         </table>
@@ -199,75 +141,71 @@ function CategoryTable({ view }) {
   );
 }
 
-function PartnerTable({ view }) {
-  const s = useSort("received", "desc");
-  const [showEmpty, setShowEmpty] = useState(false);
-  const get = (p, k) => (k === "partner" ? p.partner : k === "category" ? categoryLabel(p.category) : valueOf(p.total, k));
-  const all = s.apply(view.partners, get);
-  const active = all.filter((p) => hasActivity(p.total));
-  const empty = all.length - active.length;
-  const rows = showEmpty ? all : active;
+// ── Top partners ─────────────────────────────────────────────────────────────
+
+function TopPartners({ view, showCategory }) {
+  const [showZero, setShowZero] = useState(false);
+  const withCn = view.partners.filter((p) => p.total.received > 0);
+  const zero = view.partners.length - withCn.length;
+  const rows = showZero ? view.partners : withCn;
+  const total = view.total.received;
   return (
-    <Card title="By partner" style={{ height: "auto" }}>
-      <div style={{ ...tableWrap, maxHeight: 560 }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
-          <thead><tr>
-            <SortTh label="Category" k="category" s={s} align="left" />
-            <SortTh label="Partner" k="partner" s={s} align="left" />
-            {VALUE_COLS.map(([l, k]) => <SortTh key={k} label={l} k={k} s={s} />)}
-          </tr></thead>
-          <tbody>
-            {rows.map((p, i) => (
-              <tr key={`${p.category}|${p.partner}`} style={{ background: zebra(i) }}>
-                <td style={tdBase}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 999, padding: "2px 8px" }}>
-                    {categoryLabel(p.category)}
-                  </span>
-                </td>
-                <td style={tdBase}>{p.partner}</td>
-                <ValueCells t={p.total} />
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <Card title="Top partners" note="share of received CN" style={{ height: "auto" }}>
+      <div>
+        {rows.map((p) => (
+          <div key={`${p.category}|${p.partner}`} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12.5, color: C.t1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.partner}</span>
+              {showCategory && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, background: C.bg, borderRadius: 999, padding: "1px 7px", flexShrink: 0 }}>{categoryLabel(p.category)}</span>
+              )}
+              <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, ...num }}><Amount v={p.total.received} green /></span>
+            </div>
+            <div className="hb-track" style={{ marginTop: 6 }}>
+              <div className="hb-fill" style={{ width: `${total > 0 ? (p.total.received / total) * 100 : 0}%`, background: C.acc }} />
+            </div>
+          </div>
+        ))}
       </div>
-      {empty > 0 && (
-        <button onClick={() => setShowEmpty((v) => !v)} style={{ ...link, marginTop: 10 }}>
-          {showEmpty ? `Hide ${empty} partner${empty === 1 ? "" : "s"} with no CN` : `Show ${empty} partner${empty === 1 ? "" : "s"} with no CN`}
+      {zero > 0 && (
+        <button onClick={() => setShowZero((v) => !v)} style={{ ...textBtn, marginTop: 10 }}>
+          {showZero ? `Hide ${zero} partner${zero === 1 ? "" : "s"} with no CN` : `Show ${zero} partner${zero === 1 ? "" : "s"} with no CN`}
         </button>
       )}
     </Card>
   );
 }
 
-function MonthTable({ view }) {
-  const s = useSort("month", "desc");
+// ── By month ─────────────────────────────────────────────────────────────────
+
+function ByMonth({ view }) {
   const [all, setAll] = useState(false);
-  const get = (m, k) => (k === "month" ? m.month : valueOf(m.total, k));
-  const rows = s.apply(view.months.filter((m) => hasActivity(m.total)), get);
-  const shown = all ? rows : rows.slice(0, 12);
+  const rows = [...view.months].reverse().filter((m) => hasActivity(m.total)); // newest first
+  const shown = all ? rows : rows.slice(0, 6);
   return (
     <Card title="By month" note="invoice month" style={{ height: "auto", marginTop: 14 }}>
-      <div style={{ ...tableWrap, maxHeight: all ? 640 : undefined }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
+      <div style={{ overflow: "auto", maxHeight: all ? 520 : undefined }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>
-            <SortTh label="Month" k="month" s={s} align="left" />
-            {VALUE_COLS.map(([l, k]) => <SortTh key={k} label={l} k={k} s={s} />)}
+            <th style={{ ...th, textAlign: "left" }}>Month</th>
+            <th style={{ ...th, textAlign: "right" }}>Invoice value</th>
+            <th style={{ ...th, textAlign: "right" }}>Received CN</th>
+            <th style={{ ...th, textAlign: "right" }}>% of invoice</th>
           </tr></thead>
           <tbody>
-            {shown.map((m, i) => (
-              <tr key={m.month} style={{ background: zebra(i) }}>
-                <td style={tdBase}>{monthName(m.month)}</td>
-                <ValueCells t={m.total} />
+            {shown.map((m) => (
+              <tr key={m.month}>
+                <td style={td}>{monthName(m.month)}</td>
+                <td style={{ ...td, ...num }}><Amount v={m.total.invoice} /></td>
+                <td style={{ ...td, ...num }}><Amount v={m.total.received} green /></td>
+                <td style={{ ...td, ...num }}>{formatPct(shareOf(m.total))}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {rows.length > 12 && (
-        <button onClick={() => setAll((v) => !v)} style={{ ...link, marginTop: 10 }}>
-          {all ? "Show the latest 12 months" : `Show all ${rows.length} months`}
-        </button>
+      {rows.length > 6 && (
+        <button onClick={() => setAll((v) => !v)} style={{ ...textBtn, marginTop: 10 }}>{all ? "Show the latest 6 months" : "Show all months"}</button>
       )}
     </Card>
   );
@@ -275,25 +213,11 @@ function MonthTable({ view }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-function monthsChip(sel) {
-  const s = [...sel].sort();
-  if (s.length === 1) return monthName(s[0]);
-  return `${monthName(s[0])} – ${monthName(s[s.length - 1])}${s.length > 2 ? ` (${s.length} months)` : ""}`;
-}
-
-function Chip({ children, onRemove }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: C.t1, background: C.acl, border: `1px solid ${C.border}`, borderRadius: 999, padding: "3px 6px 3px 10px" }}>
-      {children}
-      <button onClick={onRemove} aria-label="Remove filter" style={{ border: "none", background: "none", cursor: "pointer", padding: 0, display: "inline-flex", color: C.t2 }}><X size={13} /></button>
-    </span>
-  );
-}
-
 export default function CnReceivedPage({ onBack, onOpenUploads }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState(NO_FILTERS);
+  // months: null until the data arrives, then defaults to the last 12 months with data.
+  const [filters, setFilters] = useState({ months: null, category: "", partner: "" });
 
   useEffect(() => {
     let live = true;
@@ -305,121 +229,97 @@ export default function CnReceivedPage({ onBack, onOpenUploads }) {
   }, []);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  const months = useMemo(() => [...new Set(rows.map((r) => r.month))].sort(), [rows]);
+  const allMonths = useMemo(() => [...new Set(rows.map((r) => r.month))].sort(), [rows]);
+  const defaultMonths = useMemo(() => lastMonths(allMonths, 12), [allMonths]);
+  const months = filters.months ?? defaultMonths;
   const partners = useMemo(() => [...new Set(rows.filter((r) => !filters.category || r.category === filters.category).map((r) => r.partner))].sort(), [rows, filters.category]);
-  const view = useMemo(() => summarize(applyFilters(rows, filters)), [rows, filters]);
-  // The trend follows the category and partner filters but always spans every month, so a
-  // clicked bar narrows the cards and tables without the chart collapsing to one bar.
-  const trend = useMemo(() => summarize(applyFilters(rows, { ...filters, months: [] })).months, [rows, filters]);
-  const set = (k, v) => setFilters((f) => ({ ...f, [k]: v, ...(k === "category" ? { partner: "" } : {}) }));
-  const pickMonth = (m) => m && set("months", filters.months.length === 1 && filters.months[0] === m ? [] : [m]);
-  const reset = () => setFilters(NO_FILTERS);
-  const filtered = filters.category || filters.partner || filters.months.length;
+  const view = useMemo(() => summarize(applyFilters(rows, { ...filters, months })), [rows, filters, months]);
+  const set = useCallback((k, v) => setFilters((f) => ({ ...f, [k]: v, ...(k === "category" ? { partner: "" } : {}) })), []);
+  const reset = () => setFilters({ months: null, category: "", partner: "" });
+  const changed = filters.category || filters.partner || filters.months !== null;
+  const pickMonth = (m) => m && set("months", months.length === 1 && months[0] === m ? null : [m]);
   const lastUpload = useMemo(() => {
     const t = Object.values(data?.updated ?? {}).sort().pop();
     return t ? new Date(t).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
   }, [data]);
-
-  // The export keeps Expected CN, which the page itself doesn't show.
-  const exportXlsx = () => {
-    const r2 = (v) => (v == null ? "" : Math.round(v * 100) / 100);
-    const head = (first) => [...first, "Invoice value", "Expected CN", "Received CN", "Received % of invoice"];
-    const vals = (t) => [r2(t.invoice), r2(t.expected), r2(t.received), shareOf(t) == null ? "" : Math.round(shareOf(t) * 1000) / 10];
-    const wb = XLSX.utils.book_new();
-    const cat = view.categories.filter((c) => c.total.n > 0).flatMap((c) => [[c.label, "", ...vals(c.total)], ...c.reasons.filter((x) => x.total.n > 0).map((x) => ["", x.reason, ...vals(x.total)])]);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head(["Category", "Reason"]), ...cat, ["Total", "", ...vals(view.total)]]), "By category");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head(["Month"]), ...[...view.months].reverse().map((m) => [monthName(m.month), ...vals(m.total)])]), "By month");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head(["Category", "Partner"]), ...view.partners.map((p) => [categoryLabel(p.category), p.partner, ...vals(p.total)])]), "By partner");
-    XLSX.writeFile(wb, `cn_received_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
-
   const loading = !data && !error;
+
   return (
-    <div className="page-scroll lc-page" style={{ padding: "14px 18px 40px" }}>
+    <div className="page-scroll lc-page" style={{ padding: "6px 24px 40px 14px" }}>
       <style>{`
-        @keyframes cnrPulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+        @keyframes cnrPulse { 0%, 100% { opacity: 1 } 50% { opacity: .5 } }
         .cnr-skel { animation: cnrPulse 1.2s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) { .cnr-skel { animation: none } }
         .cnr-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start }
         @media (max-width: 1199px) { .cnr-two { grid-template-columns: minmax(0, 1fr) } }
       `}</style>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-        <button onClick={onBack} style={btn}>← Cost Analytics</button>
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <div style={{ fontFamily: C.display, fontSize: 19, fontWeight: 600, color: C.t1, letterSpacing: "-.02em" }}>Credit Notes Received</div>
-          <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>
-            From Documents → Logistics Credit Notes · INR ex-GST{lastUpload ? ` · last upload ${lastUpload}` : ""}
-          </div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 0 12px" }}>
+        {onBack && <button onClick={onBack} style={secondaryBtn}>← Cost Analytics</button>}
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontFamily: C.display, fontSize: 19, fontWeight: 600, color: C.t1, letterSpacing: "-.02em" }}>Credit notes received</div>
+          <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>Logistics credit notes · INR ex-GST{lastUpload ? ` · last upload ${lastUpload}` : ""}</div>
         </div>
-        {onOpenUploads && <button onClick={onOpenUploads} style={btn}>Open uploads</button>}
-        <button onClick={exportXlsx} style={btn} disabled={!data}>Export Excel</button>
+        {onOpenUploads && <button onClick={onOpenUploads} style={secondaryBtn}>Uploads</button>}
+        <button onClick={() => XLSX.writeFile(buildExport(view), `cn_received_${new Date().toISOString().slice(0, 10)}.xlsx`)} style={secondaryBtn} disabled={!data}>Export</button>
       </div>
 
       {error && <Card style={{ height: "auto" }}><div style={{ padding: 24, textAlign: "center", color: C.red.tx, fontSize: 13 }}>Could not load credit notes: {error}</div></Card>}
 
       {!error && (<>
-        {/* Filter bar: one row, stays visible while the page scrolls. */}
-        <div style={{ position: "sticky", top: 0, zIndex: 5, background: C.bg, padding: "8px 0 10px", marginBottom: 6 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "inline-flex", background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 2 }}>
-              {[{ key: "", label: "All" }, ...CATEGORIES].map((c) => {
-                const on = filters.category === c.key;
-                return (
-                  <button key={c.key || "all"} onClick={() => set("category", c.key)} disabled={loading} aria-pressed={on}
-                    style={{ border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: on ? 700 : 500, padding: "6px 12px", borderRadius: 7, background: on ? C.acc : "transparent", color: on ? C.onAcc : C.t1 }}>
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-            <select value={filters.partner} onChange={(e) => set("partner", e.target.value)} disabled={loading} aria-label="Partner"
-              style={{ fontSize: 12, padding: "7px 10px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, color: C.t1, fontFamily: "var(--font)" }}>
-              <option value="">All partners</option>
-              {partners.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            {months.length > 0 && <MonthRangePicker months={months} value={filters.months} onApply={(v) => set("months", v)} title="Invoice months" />}
+        {/* Filter row: pills left, partner and months right; stays visible on scroll. */}
+        <div style={{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "6px 0 12px" }}>
+          <div style={{ display: "inline-flex", background: C.card, borderRadius: 9, padding: 3, gap: 2, boxShadow: C.sh1 }}>
+            {[{ key: "", label: "All" }, ...CATEGORIES].map((c) => {
+              const on = filters.category === c.key;
+              return (
+                <button key={c.key || "all"} onClick={() => set("category", c.key)} aria-pressed={on} disabled={loading}
+                  style={{ border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: on ? 700 : 500, padding: "6px 14px", borderRadius: 7, background: on ? C.acc : "transparent", color: on ? C.onAcc : C.t1, transition: "all .15s" }}>
+                  {c.label}
+                </button>
+              );
+            })}
           </div>
-          {filtered ? (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
-              {filters.category && <Chip onRemove={() => set("category", "")}>{categoryLabel(filters.category)}</Chip>}
-              {filters.partner && <Chip onRemove={() => set("partner", "")}>{filters.partner}</Chip>}
-              {filters.months.length > 0 && <Chip onRemove={() => set("months", [])}>{monthsChip(filters.months)}</Chip>}
-              <button onClick={reset} style={{ ...link, marginLeft: 4 }}>Reset</button>
-            </div>
-          ) : null}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {changed && <button onClick={reset} style={textBtn}>Reset</button>}
+            <Dropdown value={filters.partner} onChange={(v) => set("partner", v)}
+              options={[{ id: "", label: "All partners" }, ...partners.map((p) => ({ id: p, label: p }))]}
+              style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, minWidth: 150 }} />
+            {allMonths.length > 0 && <MonthRangePicker months={allMonths} value={months.length === allMonths.length ? [] : months} onApply={(v) => set("months", v)} title="Invoice months" />}
+          </div>
         </div>
 
-        {loading ? (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-              <Skeleton h={92} /><Skeleton h={92} /><Skeleton h={92} />
-            </div>
-            <Skeleton h={390} />
-            <div className="cnr-two" style={{ marginTop: 14 }}><Skeleton h={360} /><Skeleton h={360} /></div>
-            <div style={{ marginTop: 14 }}><Skeleton h={300} /></div>
-          </>
-        ) : view.total.n === 0 ? (
+        {loading ? (<>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
+            <Skeleton h={104} /><Skeleton h={104} /><Skeleton h={104} />
+          </div>
+          <Skeleton h={300} />
+          <div className="cnr-two" style={{ marginTop: 14 }}><Skeleton h={320} /><Skeleton h={320} /></div>
+          <div style={{ marginTop: 14 }}><Skeleton h={280} /></div>
+        </>) : view.total.n === 0 ? (
           <Card style={{ height: "auto" }}>
-            <div style={{ padding: "36px 16px", textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 10 }}>No credit notes for this selection</div>
-              <button onClick={reset} style={btn}>Reset filters</button>
+            <div style={{ padding: "40px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 12 }}>No credit notes for this selection</div>
+              <button onClick={reset} style={secondaryBtn}>Reset filters</button>
             </div>
           </Card>
         ) : (<>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-            <KPICard label="Received CN" value={<Amount v={view.total.received} />} sub={formatInrFull(view.total.received)} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 14 }}>
+            <KPICard label="Received CN" value={<Amount v={view.total.received} />} accent={GREEN()} sub={formatInrFull(view.total.received)}
+              style={{ border: `1.5px solid ${C.acc}` }} />
             <KPICard label="Invoice value" value={<Amount v={view.total.invoice} />} sub={formatInrFull(view.total.invoice)} />
             <KPICard label="Received % of invoice" value={formatPct(shareOf(view.total))} sub="received ÷ invoice value" />
           </div>
 
-          <Trend months={trend} selected={filters.months} onPick={pickMonth} />
+          <MonthChart months={view.months} onPick={pickMonth} />
 
           <div className="cnr-two">
-            <CategoryTable view={view} />
-            <PartnerTable view={view} />
+            <ByReason view={view} grouped={!filters.category} />
+            <TopPartners view={view} showCategory={!filters.category} />
           </div>
 
-          <MonthTable view={view} />
+          <ByMonth view={view} />
         </>)}
       </>)}
     </div>

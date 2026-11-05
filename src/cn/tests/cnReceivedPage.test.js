@@ -1,7 +1,8 @@
 // The CN Received page's number formatting and totals (src/cn/format.js, src/cn/cnReceived.js).
 import { describe, it, expect } from "vitest";
 import { formatInr, formatInrFull, formatPct, receivedShareOfInvoice } from "../format.js";
-import { summarize, applyFilters, hasActivity, categoryLabel } from "../cnReceived.js";
+import { summarize, applyFilters, hasActivity, categoryLabel, reasonLabel, lastMonths, shareOf, buildExport, SHIPMENT_VALUE_REASONS } from "../cnReceived.js";
+import * as XLSX from "xlsx";
 
 describe("formatInr (compact)", () => {
   it("uses Cr, L and K with two decimals, and plain rupees below a thousand", () => {
@@ -64,7 +65,8 @@ describe("page totals", () => {
     expect(b2c.total).toMatchObject({ invoice: 100000, received: 2300 });
     expect(b2c.reasons.find((r) => r.reason === "SLA Breach").total).toMatchObject({ n: 2, invoice: null, received: 300 });
     expect(s.months.map((m) => m.month)).toEqual(["2026-06", "2026-07", "2026-08"]);
-    expect(s.partners.map((p) => p.partner)).toEqual(["Bluedart", "Jopadevi", "KM Logistic"]);
+    // Highest received first, the "Top partners" order.
+    expect(s.partners.map((p) => p.partner)).toEqual(["Jopadevi", "Bluedart", "KM Logistic"]);
   });
 
   it("leaves the invoice value missing where only shipment-value reasons contributed", () => {
@@ -84,6 +86,34 @@ describe("page totals", () => {
     expect(applyFilters(rows, { months: ["2026-06", "2026-07"], category: "", partner: "" })).toHaveLength(2);
     expect(applyFilters(rows, { months: [], category: "FTL/PTL", partner: "" })).toHaveLength(2);
     expect(applyFilters(rows, { months: [], category: "", partner: "Bluedart" })).toHaveLength(2);
-    expect(categoryLabel("B2C")).toBe("B2C Couriers");
+    expect(categoryLabel("B2C")).toBe("B2C couriers");
+  });
+});
+
+describe("page helpers", () => {
+  it("defaults to the last 12 months that have data", () => {
+    const months = ["2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05"];
+    expect(lastMonths([...months].reverse())).toEqual(months.slice(2));
+    expect(lastMonths(["2026-01", "2026-02"])).toEqual(["2026-01", "2026-02"]);
+  });
+
+  it("shows reasons in sentence case and knows which are claimed against shipment value", () => {
+    expect(["Weight Dispute", "SLA Breach", "High Ageing", "Wrong Invoicing", "Lost/Damage"].map(reasonLabel))
+      .toEqual(["Weight dispute", "SLA breach", "High ageing", "Wrong invoicing", "Lost/Damage"]);
+    expect(SHIPMENT_VALUE_REASONS.has("Weight Dispute")).toBe(false);
+    expect(SHIPMENT_VALUE_REASONS.has("SLA Breach")).toBe(true);
+  });
+
+  it("works out % of invoice on a total, blank without an invoice", () => {
+    expect(shareOf({ received: 2000, invoice: 100000 })).toBeCloseTo(0.02);
+    expect(shareOf({ received: 300, invoice: null })).toBeNull();
+    expect(shareOf({ received: 300, invoice: 0 })).toBeNull();
+  });
+
+  it("exports Expected CN to Excel even though the page does not show it", () => {
+    const wb = buildExport(summarize([{ category: "B2C", reason: "Weight Dispute", partner: "Bluedart", month: "2026-08", n: 1, invoice: 100000, expected: 5000, received: 2000 }]));
+    expect(wb.SheetNames).toEqual(["By category", "By month", "By partner"]);
+    const head = XLSX.utils.sheet_to_json(wb.Sheets["By month"], { header: 1 })[0];
+    expect(head).toEqual(["Month", "Invoice value", "Expected CN", "Received CN", "Received % of invoice"]);
   });
 });
