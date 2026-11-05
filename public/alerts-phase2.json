@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-05T07:07:44.421Z",
+ "generatedAt": "2026-11-05T08:07:57.955Z",
  "today": "2026-11-05",
  "windows": {
   "rev": {
@@ -1094,7 +1094,7 @@
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-05T06:17:59.604Z",
+  "asOf": "2026-11-05T07:18:04.473Z",
   "perShipment": 104.15515665912929,
   "perKg": 35.27792995904252,
   "perKgTrailing": 34.789143036075025,
@@ -1130,8 +1130,8 @@
     {
      "courier": "Shadowfax",
      "shipped": 15514,
-     "invoiced": 291,
-     "coverage": 0.01875725151476086
+     "invoiced": 3791,
+     "coverage": 0.24435993296377465
     },
     {
      "courier": "SkyAir",
