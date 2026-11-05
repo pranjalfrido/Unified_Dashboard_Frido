@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-05T14:09:19.661Z",
+ "generatedAt": "2026-11-05T15:09:14.713Z",
  "today": "2026-11-05",
  "windows": {
   "rev": {
@@ -51,23 +51,23 @@
  "rev": {
   "channels": {
    "Overall": {
-    "cur": 165786623.89000005,
+    "cur": 165786623.89000002,
     "prev": 168993944.2900006
    },
    "Shopify": {
-    "cur": 81902262.3499996,
-    "prev": 83940431.54999937
+    "cur": 81902262.34999959,
+    "prev": 83940431.54999939
    },
    "Amazon": {
     "cur": 47663886.97,
-    "prev": 45934796.47000004
+    "prev": 45934796.47000005
    },
    "Flipkart": {
     "cur": 5013660.5,
-    "prev": 5276500.210000003
+    "prev": 5276500.210000002
    },
    "Blinkit": {
-    "cur": 4305744.459999992,
+    "cur": 4305744.4599999925,
     "prev": 5025313.729999991
    },
    "Zepto": {
@@ -91,12 +91,12 @@
     "prev": 11757.14
    },
    "EBO": {
-    "cur": 7673076.84,
+    "cur": 7673076.839999999,
     "prev": 9077126
    },
    "offline_sales": {
-    "cur": 15321214.220000003,
-    "prev": 13831240.830000002
+    "cur": 15321214.220000004,
+    "prev": 13831240.83
    }
   }
  },
@@ -111,7 +111,7 @@
     "spend": 17163958,
     "prevSpend": 20038732,
     "roas": 4.243698801290366,
-    "prevRoas": 3.7254967559822667
+    "prevRoas": 3.725496755982266
    },
    "Amazon": {
     "spend": 4026637,
@@ -158,19 +158,19 @@
   },
   "unattributed": {
    "spend": 22137571,
-   "unattributed": 8276300.068597003,
+   "unattributed": 8276300.068596998,
    "byPlatform": {
     "Meta": {
      "spend": 17078199,
-     "unattributed": 8083787.640024002
+     "unattributed": 8083787.640023997
     },
     "Google": {
      "spend": 85759,
-     "unattributed": 12324.488572999993
+     "unattributed": 12324.488572999986
     },
     "Amazon": {
      "spend": 4026637,
-     "unattributed": 98104.75000000001
+     "unattributed": 98104.75000000006
     },
     "Flipkart": {
      "spend": 543436,
@@ -182,7 +182,7 @@
     },
     "Zepto": {
      "spend": 67850,
-     "unattributed": 33401.00000000001
+     "unattributed": 33401
     },
     "Instamart": {
      "spend": 30029,
@@ -190,7 +190,7 @@
     },
     "Blinkit": {
      "spend": 102811,
-     "unattributed": 9217.799999999997
+     "unattributed": 9217.8
     }
    }
   }
@@ -198,15 +198,15 @@
  "returns": {
   "channels": {
    "Shopify": {
-    "gross": 84598391.53999926,
-    "ret": 15406139.200716116
+    "gross": 84598391.53999943,
+    "ret": 15408666.08713093
    },
    "Amazon": {
-    "gross": 48104171.799999714,
-    "ret": 5890168.2401282955
+    "gross": 48104171.7999999,
+    "ret": 5890168.240128304
    },
    "Flipkart": {
-    "gross": 5805185.6200000085,
+    "gross": 5805185.620000008,
     "ret": 415723.5136068268
    },
    "Myntra": {
@@ -214,15 +214,15 @@
     "ret": 443257.01404497586
    },
    "EBO": {
-    "gross": 8817332.66000001,
-    "ret": 678853.6512869255
+    "gross": 8817332.660000002,
+    "ret": 678853.6512869257
    },
    "CRED": {
-    "gross": 795446.0000000003,
+    "gross": 795446,
     "ret": 5514.852813852814
    },
    "Firstcry": {
-    "gross": 17332.83,
+    "gross": 17332.829999999998,
     "ret": 0
    }
   },
@@ -234,53 +234,53 @@
  "subcats": {
   "rows": [
    {
-    "category": "Orthotics",
-    "subCategory": "Orthotics Posture Corrector",
-    "pct": 18.289383967580292,
-    "avg4": 19.53291229328844,
-    "lost": 815082.9099999999
-   },
-   {
-    "category": "Orthotics",
-    "subCategory": "Orthotics Posture Corrector Pro",
-    "pct": 14.771269939651438,
-    "avg4": 17.622549640305685,
-    "lost": 563165.8999999999
-   },
-   {
-    "category": "Cushions",
-    "subCategory": "Ultimate Wedge Plus Cushion",
-    "pct": 13.858394462036927,
-    "avg4": 14.84942466904749,
-    "lost": 185720.14
-   },
-   {
     "category": "Footwear",
-    "subCategory": "Active Casual Sneakers - Women's",
-    "pct": 27.531751468249045,
-    "avg4": 33.132005762018025,
-    "lost": 346072.42
+    "subCategory": "Cloud Comfort Arch Support Slippers",
+    "pct": 12.579236711693511,
+    "avg4": 13.90944355908843,
+    "lost": 558302.6
+   },
+   {
+    "category": "Ergo Furniture",
+    "subCategory": "3D Posture Plus Ergonomic Chair",
+    "pct": 19.350424088136666,
+    "avg4": 17.744366248849907,
+    "lost": 276217.35
    },
    {
     "category": "Footwear",
     "subCategory": "Active Casual Sneakers - Men's",
     "pct": 23.729798741757346,
-    "avg4": 23.05288491349347,
+    "avg4": 23.052884913493475,
     "lost": 292053.33999999997
    },
    {
     "category": "Footwear",
+    "subCategory": "Active Casual Sneakers - Women's",
+    "pct": 27.531751468249038,
+    "avg4": 33.13200576201802,
+    "lost": 346072.42
+   },
+   {
+    "category": "Footwear",
     "subCategory": "Arch Comfort Slides",
-    "pct": 18.594142353264093,
+    "pct": 18.59414235326409,
     "avg4": 19.830697396932212,
-    "lost": 240736.10000000003
+    "lost": 240736.09999999998
+   },
+   {
+    "category": "Insoles",
+    "subCategory": "Arch Support Insoles",
+    "pct": 17.103254494618593,
+    "avg4": 14.99757492847393,
+    "lost": 142623.09000000003
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Arch Support Wedge Sandals",
-    "pct": 21.339491112363987,
-    "avg4": 27.330228933838498,
-    "lost": 101078.01
+    "pct": 21.33949111236399,
+    "avg4": 27.330228933838505,
+    "lost": 101078.01000000001
    },
    {
     "category": "Cushions",
@@ -299,16 +299,9 @@
    {
     "category": "Footwear",
     "subCategory": "Active Walking Shoes - Women's",
-    "pct": 27.973649730872317,
+    "pct": 27.973649730872324,
     "avg4": 30.32450290321065,
     "lost": 57508.99
-   },
-   {
-    "category": "Footwear",
-    "subCategory": "Cloud Comfort Arch Support Slippers",
-    "pct": 12.57923671169351,
-    "avg4": 13.909443559088428,
-    "lost": 558302.5999999999
    },
    {
     "category": "Footwear",
@@ -320,21 +313,21 @@
    {
     "category": "Footwear",
     "subCategory": "Men's Cloud Comfort Sandal",
-    "pct": 20.72848766991685,
-    "avg4": 22.58592445505122,
+    "pct": 20.72848766991684,
+    "avg4": 22.585924455051217,
     "lost": 166621.79
    },
    {
     "category": "Footwear",
     "subCategory": "Comfort Formal Shoes",
-    "pct": 28.188928198493045,
+    "pct": 28.188928198493052,
     "avg4": 26.771712164779558,
     "lost": 186995.84999999998
    },
    {
     "category": "Footwear",
     "subCategory": "ErgoSlyd Formal Shoes",
-    "pct": 24.153504459433435,
+    "pct": 24.15350445943343,
     "avg4": 27.267521986760606,
     "lost": 93666.30000000002
    },
@@ -357,14 +350,21 @@
     "subCategory": "ErgoLuxe Executive Chair",
     "pct": 14.206996555167326,
     "avg4": 14.056380128034043,
-    "lost": 530496.46
+    "lost": 530496.4600000001
    },
    {
     "category": "Orthotics",
     "subCategory": "Five Finger Neck Massager",
-    "pct": 26.539398771580615,
-    "avg4": 12.515277644179337,
+    "pct": 26.53939877158062,
+    "avg4": 12.515277644179335,
     "lost": 152114.33
+   },
+   {
+    "category": "Ergo Furniture",
+    "subCategory": "Ergoluxe Electric Standing Desk",
+    "pct": 45.564595904907385,
+    "avg4": 33.69425236652477,
+    "lost": 252322.68
    },
    {
     "category": "Personal Care",
@@ -377,7 +377,7 @@
     "category": "Orthotics",
     "subCategory": "Orthotics Knee Support Wrap",
     "pct": 17.410783954103586,
-    "avg4": 17.696416015969326,
+    "avg4": 17.696416015969323,
     "lost": 71871.26
    },
    {
@@ -390,65 +390,79 @@
    {
     "category": "Footwear",
     "subCategory": "Men's Comfort Dual Strap Sandals",
-    "pct": 22.065487256160637,
+    "pct": 22.065487256160633,
     "avg4": 21.964113203892634,
-    "lost": 813306.2100000002
+    "lost": 813306.2100000001
    },
    {
     "category": "Footwear",
     "subCategory": "Comfort Formal Shoes with Arch",
     "pct": 32.20244041658813,
-    "avg4": 23.157699036093682,
+    "avg4": 23.157699036093685,
     "lost": 158185.43000000002
    },
    {
     "category": "Footwear",
     "subCategory": "Men's Orthotics Dual Strap Sandals",
     "pct": 21.445609810959134,
-    "avg4": 23.365250077821837,
+    "avg4": 23.365250077821834,
     "lost": 94484.36
-   },
-   {
-    "category": "Pillows",
-    "subCategory": "Maternity Pillow",
-    "pct": 22.53850913540779,
-    "avg4": 30.37265977625893,
-    "lost": 56972.76
    },
    {
     "category": "Pillows",
     "subCategory": "Maternity Pillow - Bundle",
     "pct": 25.047410250174007,
-    "avg4": 20.07646945482372,
+    "avg4": 20.076469454823723,
     "lost": 88557
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Neck Contour Cervical Plus Pillow",
-    "pct": 17.53828867753831,
+    "pct": 17.538288677538308,
     "avg4": 19.139916541164084,
-    "lost": 79559.43000000001
+    "lost": 79559.43
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Heel Protector",
     "pct": 13.09459170724242,
-    "avg4": 10.60534611099537,
+    "avg4": 10.605346110995372,
     "lost": 541062.46
    },
    {
     "category": "Orthotics",
     "subCategory": "Active Knee Cap Support",
-    "pct": 14.935157895554877,
-    "avg4": 13.436349630405147,
-    "lost": 53811.119999999995
+    "pct": 14.935157895554878,
+    "avg4": 13.436349630405148,
+    "lost": 53811.12000000001
    },
    {
     "category": "Orthotics",
     "subCategory": "Lumbo Sacral Belt",
-    "pct": 20.969157930161796,
+    "pct": 20.96915793016179,
     "avg4": 18.594924759418,
     "lost": 292657.38
+   },
+   {
+    "category": "Orthotics",
+    "subCategory": "Orthotics Posture Corrector",
+    "pct": 18.289383967580292,
+    "avg4": 19.53291229328844,
+    "lost": 815082.9099999999
+   },
+   {
+    "category": "Orthotics",
+    "subCategory": "Orthotics Posture Corrector Seat",
+    "pct": 13.970398202813303,
+    "avg4": 17.425768347282936,
+    "lost": 121230.87000000001
+   },
+   {
+    "category": "Orthotics",
+    "subCategory": "Orthotics Posture Corrector Pro",
+    "pct": 14.771269939651438,
+    "avg4": 17.62254964030569,
+    "lost": 563165.8999999999
    },
    {
     "category": "Pillows",
@@ -460,7 +474,7 @@
    {
     "category": "Footwear",
     "subCategory": "Puneri Chappal - Men",
-    "pct": 12.035680981498263,
+    "pct": 12.035680981498265,
     "avg4": 25.666040943835444,
     "lost": 58565.2
    },
@@ -468,7 +482,7 @@
     "category": "Pillows",
     "subCategory": "Travel Neck Pillow",
     "pct": 11.788822607179164,
-    "avg4": 12.844508570312684,
+    "avg4": 12.84450857031268,
     "lost": 177429.13999999998
    },
    {
@@ -488,29 +502,29 @@
    {
     "category": "Cushions",
     "subCategory": "Premium Car Backrest Cushion",
-    "pct": 21.04502538133709,
+    "pct": 21.045025381337087,
     "avg4": 21.199358664297822,
-    "lost": 98057.77000000002
+    "lost": 98057.76999999999
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Car Neck Rest Pillow",
     "pct": 20.054825018695595,
     "avg4": 16.044536868094514,
-    "lost": 368685.29000000004
+    "lost": 368685.29
    },
    {
     "category": "Pillows",
     "subCategory": "Premium Car Neck Rest Pillow",
-    "pct": 20.978940372843947,
+    "pct": 20.97894037284394,
     "avg4": 20.13591327165408,
-    "lost": 113042.23000000001
+    "lost": 113042.22999999998
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Car Wedge Seat Cushion",
-    "pct": 20.299242926901382,
-    "avg4": 18.258631768686183,
+    "pct": 20.299242926901385,
+    "avg4": 18.25863176868618,
     "lost": 270693.36
    },
    {
@@ -525,35 +539,49 @@
     "subCategory": "Ultimate Cozy Pillow",
     "pct": 15.59668338124027,
     "avg4": 15.423661568942283,
-    "lost": 197042.66000000003
+    "lost": 197042.66
    },
    {
     "category": "Mattress Topper",
     "subCategory": "Ultimate Mattress Topper - Standard cover",
-    "pct": 17.369387755877078,
+    "pct": 17.369387755877074,
     "avg4": 18.304919229044234,
-    "lost": 420779.72
+    "lost": 420779.72000000003
+   },
+   {
+    "category": "Mattress Topper",
+    "subCategory": "Ultimate Mattress Topper - Cooling Cover",
+    "pct": 18.211823911666773,
+    "avg4": 20.570051187954746,
+    "lost": 121771.35
    },
    {
     "category": "Mattress Topper",
     "subCategory": "Ultimate Mattress Topper - Premium Cover",
-    "pct": 13.6608813213827,
+    "pct": 13.660881321382707,
     "avg4": 9.20052419812057,
-    "lost": 73959.95
+    "lost": 73959.95000000001
+   },
+   {
+    "category": "Cushions",
+    "subCategory": "Ultimate Wedge Plus Cushion",
+    "pct": 13.858394462036927,
+    "avg4": 14.849424669047487,
+    "lost": 185720.14
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Pro Seat Cushion",
     "pct": 20.526323728475813,
-    "avg4": 16.053842174067185,
+    "avg4": 16.053842174067178,
     "lost": 78789.84
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Arch Comfort Sandals",
-    "pct": 23.31948602417395,
+    "pct": 23.319486024173955,
     "avg4": 23.30759961870549,
-    "lost": 519142.67
+    "lost": 519142.67000000004
    },
    {
     "category": "Footwear",
@@ -565,37 +593,58 @@
    {
     "category": "Footwear",
     "subCategory": "Women's Cloud Comfort Back Strap Sandals",
-    "pct": 37.983368583306245,
+    "pct": 37.98336858330625,
     "avg4": 22.719369830093214,
-    "lost": 85556.93
+    "lost": 85556.93000000001
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Cloud Comfort Sandal - Toeless",
-    "pct": 24.97977949401668,
+    "pct": 24.979779494016686,
     "avg4": 25.379656058977268,
     "lost": 93063.41
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Ethnic Comfort Flat Sandal",
-    "pct": 15.714426614218851,
+    "pct": 15.714426614218855,
     "avg4": 19.473040435069535,
-    "lost": 126123.34999999999
+    "lost": 126123.35
+   },
+   {
+    "category": "Mobility",
+    "subCategory": "Foldable Electric Wheelchair",
+    "pct": 27.52546105147261,
+    "avg4": 19.52315217848799,
+    "lost": 109000
+   },
+   {
+    "category": "Pillows",
+    "subCategory": "Maternity Pillow Bundle Plus",
+    "pct": 15.507738075788277,
+    "avg4": 39.95015867480389,
+    "lost": 60368.56
    },
    {
     "category": "Ergo Furniture",
-    "subCategory": "3D Posture Plus Ergonomic Chair",
-    "pct": 19.350424088136666,
-    "avg4": 17.744366248849907,
-    "lost": 276217.35
+    "subCategory": "AeroMesh Ergo Chair",
+    "pct": 25.699474378920577,
+    "avg4": 17.604727626954922,
+    "lost": 63961.06
    },
    {
-    "category": "Insoles",
-    "subCategory": "Arch Support Insoles",
-    "pct": 17.10325449461859,
-    "avg4": 14.99757492847393,
-    "lost": 142623.08999999997
+    "category": "Mobility",
+    "subCategory": "Cruise Mobility Scooter",
+    "pct": 29.328592297958988,
+    "avg4": 24.669439569384842,
+    "lost": 104999
+   },
+   {
+    "category": "Mobility",
+    "subCategory": "Mobility Transfer Lift",
+    "pct": 13.269923188478144,
+    "avg4": 22.231063620518213,
+    "lost": 207346
    },
    {
     "category": "Mobility",
@@ -606,31 +655,10 @@
    },
    {
     "category": "Mobility",
-    "subCategory": "Mobility Transfer Lift",
-    "pct": 13.269923188478144,
-    "avg4": 22.231063620518213,
-    "lost": 207346
-   },
-   {
-    "category": "Pillows",
-    "subCategory": "Maternity Pillow Bundle Plus",
-    "pct": 15.507738075788277,
-    "avg4": 39.95015867480389,
-    "lost": 60368.56
-   },
-   {
-    "category": "Orthotics",
-    "subCategory": "Orthotics Posture Corrector Seat",
-    "pct": 13.970398202813303,
-    "avg4": 17.425768347282936,
-    "lost": 121230.87000000001
-   },
-   {
-    "category": "Ergo Furniture",
-    "subCategory": "AeroMesh Ergo Chair",
-    "pct": 25.699474378920574,
-    "avg4": 17.604727626954922,
-    "lost": 63961.06
+    "subCategory": "Smart Recliner Mattress",
+    "pct": 29.787550931392886,
+    "avg4": 17.08476866582752,
+    "lost": 56000
    },
    {
     "category": "Mobility",
@@ -640,70 +668,42 @@
     "lost": 239000
    },
    {
-    "category": "Mobility",
-    "subCategory": "Foldable Electric Wheelchair",
-    "pct": 27.52546105147261,
-    "avg4": 19.52315217848799,
-    "lost": 109000
-   },
-   {
-    "category": "Mattress Topper",
-    "subCategory": "Ultimate Mattress Topper - Cooling Cover",
-    "pct": 18.211823911666766,
-    "avg4": 20.570051187954746,
-    "lost": 121771.35
-   },
-   {
-    "category": "Mobility",
-    "subCategory": "Cruise Mobility Scooter",
-    "pct": 29.328592297958988,
-    "avg4": 24.669439569384842,
-    "lost": 104999
-   },
-   {
-    "category": "Ergo Furniture",
-    "subCategory": "Ergoluxe Electric Standing Desk",
-    "pct": 45.564595904907385,
-    "avg4": 33.69425236652477,
-    "lost": 252322.68
-   },
-   {
-    "category": "Mobility",
-    "subCategory": "Smart Recliner Mattress",
-    "pct": 29.787550931392886,
-    "avg4": 17.08476866582752,
-    "lost": 56000
+    "category": "Pillows",
+    "subCategory": "Maternity Pillow",
+    "pct": 22.53850913540779,
+    "avg4": 30.372659776258928,
+    "lost": 56972.76
    }
   ]
  },
  "pnl": {
   "tabs": {
    "shopify": {
-    "cm1Pct": 49.80002782689549,
-    "gmPct": 52.85263215949437,
-    "cogsPct": 47.14736784050562,
-    "sndPct": 3.052604332598856,
-    "net": 61531099.18331609,
+    "cm1Pct": 49.79982567050619,
+    "gmPct": 52.85254148694767,
+    "cogsPct": 47.14745851305233,
+    "sndPct": 3.052715816441485,
+    "net": 61528852.08059355,
     "gross": 84598391.53999999
    },
    "amazon": {
-    "cm1Pct": 23.6327877295122,
-    "gmPct": 53.345080533151744,
-    "cogsPct": 46.654919466848256,
-    "sndPct": 29.705768220025675,
-    "net": 37295475.596905574,
+    "cm1Pct": 23.63278763703594,
+    "gmPct": 53.34508047665535,
+    "cogsPct": 46.654919523344645,
+    "sndPct": 29.705768255997633,
+    "net": 37295474.71935167,
     "gross": 48104175
    },
    "flipkart": {
-    "cm1Pct": 28.734235705461685,
-    "gmPct": 54.61682824300706,
-    "cogsPct": 45.38317175699294,
+    "cm1Pct": 28.734235705461703,
+    "gmPct": 54.61682824300708,
+    "cogsPct": 45.38317175699292,
     "sndPct": 25.98630038522994,
-    "net": 4894053.504866965,
+    "net": 4894053.504866966,
     "gross": 5805184
    },
    "ebo": {
-    "cm1Pct": 47.70784531486625,
+    "cm1Pct": 47.70784531486623,
     "gmPct": 49.35901778991763,
     "cogsPct": 50.64098221008236,
     "sndPct": 1.6511724750513541,
@@ -1094,7 +1094,7 @@
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-05T13:19:11.337Z",
+  "asOf": "2026-11-05T14:20:46.931Z",
   "perShipment": 104.15515665912929,
   "perKg": 35.27792995904252,
   "perKgTrailing": 34.789143036075025,
