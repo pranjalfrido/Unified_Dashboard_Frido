@@ -5634,7 +5634,22 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // tiles read directly comparable this way instead of silently differing by the GST rate.
   const { blendedASP, totalReturnPct } = salesMetrics(data)
   const sh = data.shopify || {}
-  const [trendGroupBy, setTrendGroupBy] = useState('daily')
+  // Default trend-chart grouping by range length — KPI tiles above are unaffected, this only
+  // changes how many points the revenue trend chart plots (chart-only perf fix for long ranges,
+  // see fix/overview-ytd). >180 days defaults to Monthly, >90 days to Weekly, else Daily. The
+  // dropdown below still lets the user override this per the existing daily/weekly/monthly UI.
+  const rangeDays = filters?.start && filters?.end ? (Date.parse(filters.end) - Date.parse(filters.start)) / 86400000 : 0
+  const defaultGroupBy = rangeDays > 180 ? 'monthly' : rangeDays > 90 ? 'weekly' : 'daily'
+  const [trendGroupBy, setTrendGroupBy] = useState(defaultGroupBy)
+  const trendGroupByRangeRef = useRef(filters?.start + '|' + filters?.end)
+  useEffect(() => {
+    const key = filters?.start + '|' + filters?.end
+    if (trendGroupByRangeRef.current !== key) {
+      trendGroupByRangeRef.current = key
+      setTrendGroupBy(defaultGroupBy)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.start, filters?.end])
   const ads = data.ads || {}
 
   // ── Sales Summary waterfall (maturity-adjusted) ──
@@ -6064,7 +6079,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
+          <Card title={`Sales Trend${trendGroupBy !== 'daily' ? ` (${trendGroupBy === 'weekly' ? 'Weekly' : 'Monthly'})` : ''}`} style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
           }>
@@ -20672,7 +20687,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       loadDetails()
     } catch (e) {
       if (reqId === reqIdRef.current) {
-        setError(e.message)
+        // Real error always goes to the console for debugging (e.g. "Failed to fetch" from a
+        // Hobby-plan 60s function timeout on a long date range looks identical to any other
+        // network failure in the UI string, so the console is where this gets diagnosed).
+        console.error('[fetchData] /api/bq failed:', e)
+        const longRange = (Date.parse(end) - Date.parse(start)) / 86400000 > 90
+        setError(longRange
+          ? 'This range is taking longer than usual. Retry, or show the last 90 days instead.'
+          : e.message)
         // Clear stale data on failure — otherwise the dashboard keeps rendering the LAST
         // successful fetch's numbers under whatever filter is now selected (e.g. switching
         // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
@@ -21215,7 +21237,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
-            <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+              {(Date.parse(filters.end) - Date.parse(filters.start)) / 86400000 > 90 && (
+                <button onClick={() => {
+                  const end = filters.end
+                  const d = new Date(end); d.setDate(d.getDate() - 90)
+                  const start = d.toISOString().slice(0, 10)
+                  setFilters(f => ({ ...f, start, end }))
+                }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Show last 90 days</button>
+              )}
+            </div>
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
