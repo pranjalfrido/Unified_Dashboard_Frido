@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-05T03:08:32.533Z",
+ "generatedAt": "2026-11-05T04:07:40.563Z",
  "today": "2026-11-05",
  "windows": {
   "rev": {
@@ -978,20 +978,19 @@
   }
  },
  "oos": {
-  "asOf": "2026-11-04",
-  "skus": 64,
-  "loss": 3038507,
+  "asOf": "2026-11-05",
+  "skus": 58,
+  "loss": 3306019,
   "byCategory": {
-   "Personal Care": 571750,
-   "Orthotics": 443125,
-   "Mobility": 603410,
-   "Footwear": 1085068,
-   "Ergo Furniture": 210703,
-   "Pillows": 106292,
-   "Covers": 9045,
-   "Mattress Topper": 6198,
-   "Cushions": 1735,
-   "Spare Parts": 1181
+   "Personal Care": 612746,
+   "Orthotics": 568909,
+   "Mobility": 608701,
+   "Footwear": 1111653,
+   "Ergo Furniture": 277683,
+   "Pillows": 112483,
+   "Covers": 9470,
+   "Cushions": 2603,
+   "Spare Parts": 1771
   }
  },
  "logistics": {
@@ -1095,7 +1094,7 @@
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-05T02:19:02.639Z",
+  "asOf": "2026-11-05T03:19:19.503Z",
   "perShipment": 104.15515665912929,
   "perKg": 35.27792995904252,
   "perKgTrailing": 34.789143036075025,
