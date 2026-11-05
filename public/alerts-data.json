@@ -1,53 +1,53 @@
 {
-  "generatedAt": "2026-11-05T04:07:24.142Z",
+  "generatedAt": "2026-11-05T05:07:31.972Z",
   "logistics": {
     "windowStart": "2026-10-15",
     "windowEnd": "2026-10-21",
     "rangeLabel": "Orders 15–21 Oct",
     "total": 49656,
-    "delivered": 45501,
-    "rto": 3665,
-    "deliveryPct": 91.63,
-    "rtoPct": 7.38,
-    "slaBreachPct": 10.81,
+    "delivered": 45541,
+    "rto": 3716,
+    "deliveryPct": 91.71,
+    "rtoPct": 7.48,
+    "slaBreachPct": 10.86,
     "slaBreachAvailable": true
   },
   "returns": {
     "windowStart": "2026-10-16",
     "windowEnd": "2026-10-22",
     "rangeLabel": "Orders 16–22 Oct",
-    "gross": 84598391.53999947,
-    "cancelPct": 4.97,
-    "rtoPct": 6.57,
-    "cirPct": 6.43,
-    "exchangePct": 6.05,
-    "totalReturnPct": 17.98
+    "gross": 84598391.53999949,
+    "cancelPct": 4.98,
+    "rtoPct": 6.74,
+    "cirPct": 6.52,
+    "exchangePct": 6.11,
+    "totalReturnPct": 18.24
   },
   "zeroOrders": {
     "date": "2026-11-04",
     "ordersByChannel": {
       "Shopify": {
-        "date": "2026-11-04",
-        "orders": 706
+        "date": "2026-11-05",
+        "orders": 613
       },
       "Amazon": {
-        "date": "2026-11-04",
-        "orders": 267
+        "date": "2026-11-05",
+        "orders": 273
       },
       "Blinkit": {
-        "date": "2026-11-03",
-        "orders": 293
+        "date": "2026-11-04",
+        "orders": 331
       },
       "Zepto": {
-        "date": "2026-11-04",
-        "orders": 3
+        "date": "2026-11-05",
+        "orders": 1
       },
       "Instamart": {
         "date": "2026-11-03",
         "orders": 33
       },
       "Myntra": {
-        "date": "2026-11-02",
+        "date": "2026-11-03",
         "orders": 311
       }
     },
@@ -57,9 +57,9 @@
     "windowStart": "2026-10-16",
     "windowEnd": "2026-10-22",
     "rangeLabel": "Orders 16–22 Oct",
-    "netRevenue": 61826318,
+    "netRevenue": 61637631,
     "cogsPct": 42.9,
-    "sndPct": 18.75,
-    "cm1Pct": 38.35
+    "sndPct": 18.84,
+    "cm1Pct": 38.26
   }
 }
