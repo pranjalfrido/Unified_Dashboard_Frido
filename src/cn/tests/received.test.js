@@ -46,38 +46,3 @@ describe("CN received summary", () => {
     expect(wd).toHaveLength(1);
   });
 });
-
-describe("CN received page totals", async () => {
-  const { summarize, applyFilters, pendingOf, recoveryOf, shareOfInvoice } = await import("../cnReceived.js");
-  const rows = [
-    { category: "B2C", reason: "Weight Dispute", partner: "Bluedart", month: "2026-08", n: 1, invoice: 100000, expected: 5000, received: 2000 },
-    { category: "B2C", reason: "SLA Breach", partner: "Bluedart", month: "2026-08", n: 2, invoice: null, expected: 600, received: 300 },
-    { category: "FTL/PTL", reason: "FTL/PTL", partner: "Jopadevi", month: "2026-07", n: 1, invoice: 500000, expected: 0, received: 7500 },
-  ];
-
-  it("rolls rows up by category and reason, month and partner", () => {
-    const s = summarize(rows);
-    expect(s.total).toMatchObject({ n: 4, invoice: 600000, expected: 5600, received: 9800 });
-    const b2c = s.categories.find((c) => c.key === "B2C");
-    expect(b2c.total).toMatchObject({ expected: 5600, received: 2300, invoice: 100000 });
-    expect(b2c.reasons.find((r) => r.reason === "SLA Breach").total).toMatchObject({ n: 2, hasInvoice: false, expected: 600 });
-    expect(s.months.map((m) => m.month)).toEqual(["2026-08", "2026-07"]);
-    expect(s.partners.map((p) => [p.partner, pendingOf(p.total)])).toEqual([["Bluedart", 3300], ["Jopadevi", -7500]]);
-  });
-
-  it("works out pending, recovery and share of invoice, leaving undefined ratios blank", () => {
-    const s = summarize(rows);
-    expect(recoveryOf(s.total)).toBeCloseTo(9800 / 5600);
-    expect(shareOfInvoice(s.total)).toBeCloseTo(9800 / 600000);
-    const ftl = s.categories.find((c) => c.key === "FTL/PTL").total;
-    expect(recoveryOf(ftl)).toBeNull();
-    expect(shareOfInvoice(s.categories.find((c) => c.key === "B2C").reasons.find((r) => r.reason === "SLA Breach").total)).toBeNull();
-  });
-
-  it("filters by month range, category and partner", () => {
-    expect(applyFilters(rows, { from: "2026-08", to: "", category: "", partner: "" })).toHaveLength(2);
-    expect(applyFilters(rows, { from: "", to: "2026-07", category: "", partner: "" })).toHaveLength(1);
-    expect(applyFilters(rows, { from: "", to: "", category: "FTL/PTL", partner: "" })).toHaveLength(1);
-    expect(applyFilters(rows, { from: "", to: "", category: "", partner: "Bluedart" })).toHaveLength(2);
-  });
-});

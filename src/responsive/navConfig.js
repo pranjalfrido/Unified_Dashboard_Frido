@@ -15,9 +15,9 @@ export const NAV_PAGES = [
   { id: 'feedback', label: 'Feedback', group: 'workspace', desc: 'Reports and ideas from your team' },
   { id: 'cogs', label: 'COGS Ledger', group: 'tools', desc: 'Cost of goods by SKU and month' },
   { id: 'courier-allocation', label: 'Courier Allocation', group: 'tools', desc: 'Which courier ships where' },
-  { id: 'cn-received', label: 'CN Received', group: 'tools', desc: 'Credit notes expected and received' },
+  { id: 'cn-received', label: 'CN Received', group: 'tools', desc: 'Credit notes received' },
   { id: 'logistics-ledger', label: 'Logistics Bill Ledger', group: 'tools', desc: 'Freight and courier invoices' },
-  { id: 'logistics-cn', label: 'Logistics Credit Notes', group: 'tools', desc: 'Credit notes expected and received' },
+  { id: 'logistics-cn', label: 'Logistics Credit Notes', group: 'tools', desc: 'Credit notes received' },
   { id: 'purchase-ledger', label: 'Purchase Ledger', group: 'tools', desc: 'Domestic, import and packaging purchases' },
   { id: 'packaging-bom', label: 'Packaging BOM', group: 'tools', desc: 'Packaging per product' },
 ]

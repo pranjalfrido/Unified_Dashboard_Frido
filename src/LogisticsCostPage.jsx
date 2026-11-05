@@ -6936,7 +6936,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               {scope === 'all' && onOpenCreditNotes && (
                 <button
                   onClick={onOpenCreditNotes}
-                  title="Credit notes expected and received — by category, reason, month and partner"
+                  title="Credit notes received — by category, reason, month and partner"
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
                     background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
