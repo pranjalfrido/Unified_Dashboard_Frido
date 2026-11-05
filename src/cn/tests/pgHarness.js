@@ -15,7 +15,8 @@ export const USERS = {
   admin: "00000000-0000-0000-0000-00000000000a",
   uploader: "00000000-0000-0000-0000-00000000000b", // has 'documents'
   manager: "00000000-0000-0000-0000-00000000000c", // has 'documents' + 'documents:cn-manage'
-  outsider: "00000000-0000-0000-0000-00000000000d", // signed in, no documents access
+  outsider: "00000000-0000-0000-0000-00000000000d", // signed in, no documents access (has 'sales')
+  costViewer: "00000000-0000-0000-0000-00000000000e", // Cost Analytics only
 };
 
 const SUPABASE_STUBS = `
@@ -46,7 +47,8 @@ const SUPABASE_STUBS = `
   INSERT INTO public.user_permissions (user_id, tab) VALUES
     ('${USERS.uploader}', 'documents'),
     ('${USERS.manager}', 'documents'), ('${USERS.manager}', 'documents:cn-manage'),
-    ('${USERS.outsider}', 'sales');
+    ('${USERS.outsider}', 'sales'),
+    ('${USERS.costViewer}', 'logistics:cost:all');
 `;
 
 export async function freshDb() {
@@ -67,6 +69,7 @@ export async function engineDb() {
   await db.exec(sql("scripts/sql/cn/007_cn_fixes.sql"));
   await db.exec(sql("scripts/sql/cn/008_cn_more_accounts.sql"));
   await db.exec(sql("scripts/sql/cn/009_cn_lost_damage_by_month.sql"));
+  await db.exec(sql("scripts/sql/cn/010_cn_received_view.sql"));
   return db;
 }
 
