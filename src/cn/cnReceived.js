@@ -1,8 +1,9 @@
 // Totals for the "Credit notes received" page (Cost Analytics → Overview). The database returns
 // active CN totals per category × reason × partner × month (cn_received_summary,
 // scripts/sql/cn/010); everything here is plain arithmetic on those rows, so it is tested
-// without a browser. The page shows received CN against invoice value only; the Excel export
-// (buildExport) also carries the expected amount uploaded with each CN.
+// without a browser. The page is one summary across all three formats (B2C couriers, FTL/PTL,
+// 3PL) and shows received CN against invoice value only; the Excel export (buildExport) also
+// carries the expected amount uploaded with each CN.
 import * as XLSX from "xlsx";
 import { receivedShareOfInvoice } from "./format.js";
 
@@ -33,18 +34,21 @@ export const shareOf = (t) => receivedShareOfInvoice(t.received, t.invoice);
 // The last `n` months that have data, oldest first ("YYYY-MM").
 export const lastMonths = (months, n = 12) => [...months].sort().slice(-n);
 
-// filters: { months: ["YYYY-MM", …] ([] = all), category: "" | key, partner: "" | name }
-export function applyFilters(rows, f) {
-  const months = f.months?.length ? new Set(f.months) : null;
-  return rows.filter((r) => (!months || months.has(r.month))
-    && (!f.category || r.category === f.category) && (!f.partner || r.partner === f.partner));
+// The rows of the selected invoice months ("YYYY-MM"); an empty or missing list means all.
+export function inMonths(rows, months) {
+  const keep = months?.length ? new Set(months) : null;
+  return keep ? rows.filter((r) => keep.has(r.month)) : rows;
 }
 
+const byCatBlank = () => Object.fromEntries(CATEGORIES.map((c) => [c.key, blank()]));
+
+// One pass over the rows. Every month and every reason also keeps its split by format
+// (byCat), and every partner its split by reason, for the per-format views.
 export function summarize(rows) {
   const total = blank();
   const categories = CATEGORIES.map((c) => ({ ...c, total: blank(), reasons: c.reasons.map((reason) => ({ reason, total: blank() })) }));
   const byCat = Object.fromEntries(categories.map((c) => [c.key, c]));
-  const months = new Map(), partners = new Map();
+  const months = new Map(), partners = new Map(), reasons = new Map();
   for (const r of rows) {
     add(total, r);
     const c = byCat[r.category];
@@ -53,20 +57,47 @@ export function summarize(rows) {
       const line = c.reasons.find((x) => x.reason === r.reason);
       if (line) add(line.total, r);
     }
-    if (!months.has(r.month)) months.set(r.month, { month: r.month, total: blank() });
-    add(months.get(r.month).total, r);
+    if (!months.has(r.month)) months.set(r.month, { month: r.month, total: blank(), byCat: byCatBlank() });
+    const m = months.get(r.month);
+    add(m.total, r);
+    if (m.byCat[r.category]) add(m.byCat[r.category], r);
+    if (!reasons.has(r.reason)) reasons.set(r.reason, { reason: r.reason, total: blank(), byCat: byCatBlank() });
+    const rs = reasons.get(r.reason);
+    add(rs.total, r);
+    if (rs.byCat[r.category]) add(rs.byCat[r.category], r);
     const pk = `${r.category}|${r.partner}`;
-    if (!partners.has(pk)) partners.set(pk, { category: r.category, partner: r.partner, total: blank() });
-    add(partners.get(pk).total, r);
+    if (!partners.has(pk)) partners.set(pk, { category: r.category, partner: r.partner, total: blank(), reasons: {} });
+    const p = partners.get(pk);
+    add(p.total, r);
+    p.reasons[r.reason] = add(p.reasons[r.reason] ?? blank(), r);
   }
+  const byReceived = (a, b) => b.total.received - a.total.received;
   return {
     total,
     categories,
     months: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)), // oldest first
-    // Highest received first, the order of the "Top partners" list.
-    partners: [...partners.values()].sort((a, b) => b.total.received - a.total.received || a.partner.localeCompare(b.partner)),
+    // Highest received first: the order of "Top partners" and "Received by reason".
+    partners: [...partners.values()].sort((a, b) => byReceived(a, b) || a.partner.localeCompare(b.partner)),
+    reasons: [...reasons.values()].sort((a, b) => byReceived(a, b) || a.reason.localeCompare(b.reason)),
   };
 }
+
+// The partner of a format with the most received CN; null when none received anything.
+export function topPartner(view, categoryKey) {
+  const p = view.partners.find((x) => x.category === categoryKey);
+  return p && p.total.received > 0 ? p : null;
+}
+
+// The reason with the most received CN among { reason: total } entries. FTL/PTL and 3PL CNs carry
+// their format's own name as the reason, which says nothing, so those count as no reason (null).
+export function topReason(reasonTotals) {
+  let best = null;
+  for (const [reason, t] of Object.entries(reasonTotals)) {
+    if (t.received > 0 && !CATEGORIES.some((c) => c.key === reason) && (!best || t.received > best.received)) best = { reason, received: t.received };
+  }
+  return best?.reason ?? null;
+}
+export const categoryReasons = (c) => Object.fromEntries(c.reasons.map((x) => [x.reason, x.total]));
 
 // A month "has CN data" if any invoice value or any received amount is above zero.
 export const hasActivity = (t) => (t.invoice ?? 0) > 0 || t.received > 0;

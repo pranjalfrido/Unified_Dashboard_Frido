@@ -1,7 +1,7 @@
 // The CN Received page's number formatting and totals (src/cn/format.js, src/cn/cnReceived.js).
 import { describe, it, expect } from "vitest";
 import { formatInr, formatInrFull, formatPct, receivedShareOfInvoice } from "../format.js";
-import { summarize, applyFilters, hasActivity, categoryLabel, reasonLabel, lastMonths, shareOf, buildExport, SHIPMENT_VALUE_REASONS } from "../cnReceived.js";
+import { summarize, inMonths, hasActivity, categoryLabel, reasonLabel, lastMonths, shareOf, buildExport, SHIPMENT_VALUE_REASONS, topPartner, topReason, categoryReasons } from "../cnReceived.js";
 import * as XLSX from "xlsx";
 
 describe("formatInr (compact)", () => {
@@ -38,6 +38,14 @@ describe("received % of invoice", () => {
     expect(receivedShareOfInvoice(26085881, 351371959)).toBeCloseTo(0.07424, 4);
     expect(formatPct(receivedShareOfInvoice(26085881, 351371959))).toBe("7.4%");
     expect(formatPct(receivedShareOfInvoice(0, 1000))).toBe("0.0%");
+  });
+
+  it("uses two decimals below 0.1%, and never rounds a real CN down to zero", () => {
+    expect(formatPct(0.001)).toBe("0.1%");
+    expect(formatPct(0.00099)).toBe("0.10%");
+    expect(formatPct(0.0002)).toBe("0.02%");
+    expect(formatPct(receivedShareOfInvoice(7500, 500000000))).toBe("<0.01%");
+    expect(formatPct(-0.01)).toBe("—");
   });
 
   it("is blank, never Infinity or NaN, when the invoice value is 0 or missing", () => {
@@ -81,12 +89,61 @@ describe("page totals", () => {
     expect(s.months.filter((m) => !hasActivity(m.total)).map((m) => m.month)).toEqual(["2026-06"]);
   });
 
-  it("filters by selected months, category and partner", () => {
-    expect(applyFilters(rows, { months: ["2026-08"], category: "", partner: "" })).toHaveLength(2);
-    expect(applyFilters(rows, { months: ["2026-06", "2026-07"], category: "", partner: "" })).toHaveLength(2);
-    expect(applyFilters(rows, { months: [], category: "FTL/PTL", partner: "" })).toHaveLength(2);
-    expect(applyFilters(rows, { months: [], category: "", partner: "Bluedart" })).toHaveLength(2);
+  it("filters by the selected months; an empty list means all", () => {
+    expect(inMonths(rows, ["2026-08"])).toHaveLength(2);
+    expect(inMonths(rows, ["2026-06", "2026-07"])).toHaveLength(2);
+    expect(inMonths(rows, [])).toHaveLength(4);
+    expect(inMonths(rows, null)).toHaveLength(4);
     expect(categoryLabel("B2C")).toBe("B2C couriers");
+  });
+});
+
+describe("per-format aggregation", () => {
+  const rows = [
+    { category: "B2C", reason: "Weight Dispute", partner: "Bluedart", month: "2026-08", n: 3, invoice: 100000, expected: 5000, received: 2000 },
+    { category: "B2C", reason: "SLA Breach", partner: "Bluedart", month: "2026-08", n: 2, invoice: null, expected: 600, received: 3000 },
+    { category: "B2C", reason: "Weight Dispute", partner: "Swift", month: "2026-07", n: 1, invoice: 40000, expected: 900, received: 900 },
+    { category: "FTL/PTL", reason: "FTL/PTL", partner: "Jopadevi", month: "2026-08", n: 1, invoice: 500000, expected: 0, received: 7500 },
+    { category: "FTL/PTL", reason: "FTL/PTL", partner: "KM Logistic", month: "2026-07", n: 1, invoice: 20000, expected: 0, received: 0 },
+  ];
+  const s = summarize(rows);
+  const cat = (k) => s.categories.find((c) => c.key === k);
+
+  it("totals each format, and the formats add up to the all-formats total", () => {
+    expect(cat("B2C").total).toMatchObject({ n: 6, invoice: 140000, received: 5900 });
+    expect(cat("FTL/PTL").total).toMatchObject({ n: 2, invoice: 520000, received: 7500 });
+    expect(cat("3PL").total).toMatchObject({ n: 0, invoice: null, received: 0 });
+    const sum = (k) => s.categories.reduce((a, c) => a + (c.total[k] ?? 0), 0);
+    expect(sum("received")).toBe(s.total.received);
+    expect(sum("invoice")).toBe(s.total.invoice);
+    expect(shareOf(cat("3PL").total)).toBeNull();
+  });
+
+  it("splits every month by format, summing to the month total", () => {
+    const aug = s.months.find((m) => m.month === "2026-08");
+    expect(aug.byCat.B2C.received).toBe(5000);
+    expect(aug.byCat["FTL/PTL"].received).toBe(7500);
+    expect(aug.byCat["3PL"]).toMatchObject({ n: 0, received: 0 });
+    for (const m of s.months) expect(Object.values(m.byCat).reduce((a, t) => a + t.received, 0)).toBe(m.total.received);
+  });
+
+  it("combines reasons across formats, highest received first, keeping the split by format", () => {
+    expect(s.reasons.map((r) => r.reason)).toEqual(["FTL/PTL", "SLA Breach", "Weight Dispute"]);
+    const wd = s.reasons.find((r) => r.reason === "Weight Dispute");
+    expect(wd.total.received).toBe(2900);
+    expect(wd.byCat.B2C.received).toBe(2900);
+  });
+
+  it("finds each format's top partner and top reason", () => {
+    expect(topPartner(s, "B2C").partner).toBe("Bluedart");
+    expect(topPartner(s, "FTL/PTL").partner).toBe("Jopadevi");
+    expect(topPartner(s, "3PL")).toBeNull();
+    expect(topReason(categoryReasons(cat("B2C")))).toBe("SLA Breach");
+    // FTL/PTL CNs carry the format's own name as reason: no top reason to show.
+    expect(topReason(categoryReasons(cat("FTL/PTL")))).toBeNull();
+    const bluedart = s.partners.find((p) => p.partner === "Bluedart");
+    expect(topReason(bluedart.reasons)).toBe("SLA Breach");
+    expect(bluedart.reasons["Weight Dispute"].received).toBe(2000);
   });
 });
 

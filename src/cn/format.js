@@ -21,9 +21,13 @@ export function formatInrFull(v) {
   return `₹${Math.round(Number(v)).toLocaleString("en-IN")}`;
 }
 
-// A ratio (0.074) as "7.4%"; "—" when there is nothing to divide by.
+// A ratio (0.074) as "7.4%"; "—" when there is nothing to divide by. Below 0.1% two decimals
+// ("0.02%"), and "<0.01%" for a share too small even for that, so a real CN never reads as 0.
 export function formatPct(ratio) {
-  return ratio == null || !Number.isFinite(ratio) ? "—" : `${(ratio * 100).toFixed(1)}%`;
+  if (ratio == null || !Number.isFinite(ratio) || ratio < 0) return "—";
+  const pct = ratio * 100;
+  if (pct === 0 || pct >= 0.1) return `${pct.toFixed(1)}%`;
+  return pct < 0.005 ? "<0.01%" : `${pct.toFixed(2)}%`;
 }
 
 // Received CN as a share of invoice value. NULL when the invoice value is missing or 0, so the

@@ -21032,8 +21032,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               cn_received_summary(), which admits Cost Analytics users as well as Documents users. */}
           {page === 'cn-received' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <CnReceivedPage onBack={() => goTo('logistics-cost')}
-                onOpenUploads={!allowedTabs || allowedTabs.includes('documents') ? () => goTo('logistics-cn') : null} />
+              <CnReceivedPage onBack={() => goTo('logistics-cost')} />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
