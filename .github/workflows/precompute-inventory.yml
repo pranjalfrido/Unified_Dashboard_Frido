@@ -81,6 +81,7 @@ jobs:
       # "targets" block inside is refreshed weekly (carried forward otherwise). continue-on-error: a failure
       # here must not cost this run's inventory / P&L / ads refresh; the previous file stays in place.
       - name: Generate alerts Phase 2 cache (31 bell alerts, raw numbers)
+        if: steps.costgate.outputs.run == 'true'
         continue-on-error: true
         run: node scripts/generate-alerts-phase2.mjs
         env:
