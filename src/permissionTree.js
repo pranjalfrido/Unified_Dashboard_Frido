@@ -76,6 +76,7 @@ export const PERMISSION_TREE = [
         ],
       },
       { key: 'inventory:sales', label: 'Sales & Allocation' },
+      { key: 'inventory:inward', label: 'Inward' },
     ],
   },
   {
