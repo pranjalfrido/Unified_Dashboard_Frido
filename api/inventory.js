@@ -57,6 +57,9 @@ async function setInvCache(db, key, payload) {
   } catch (e) { console.warn('inv_cache write failed:', e.message) }
 }
 
+// Units per day rounded once (see scripts/generate-inv-cache.mjs): no per-SKU ceil that roll-ups then add up.
+const perDay = (qty, days) => Math.round(qty / days * 100) / 100
+
 export default async function inventoryHandler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -294,9 +297,9 @@ export default async function inventoryHandler(req, res) {
         // per-location averages — summing rounded values compounds ceil() error upward
         // (e.g. 7 locations each rounded up by <1 unit adds up to +7, not +1).
         const rawQty = avgSaleBySkuLoc.get(mapKey) || 0
-        const avgSale = Math.ceil(rawQty / daysInRange)
+        const avgSale = perDay(rawQty, daysInRange)
         const rawTotalQty = totalAvgSaleBySkuLoc.get(mapKey) || 0
-        const totalAvgSale = Math.ceil(rawTotalQty / daysInRange)
+        const totalAvgSale = perDay(rawTotalQty, daysInRange)
         const orderAllocation = (allocBySkuLoc.get(mapKey) || 0) / daysInRange
         const denominator = Math.ceil(Math.max(avgSale, orderAllocation))
         const doi = totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(totalInvt / denominator) : 0)
@@ -360,8 +363,8 @@ export default async function inventoryHandler(req, res) {
       }
 
       let rolled = [...rolledSkuMap.values()].map(s => {
-        const avgSale = Math.ceil(s.rawAvgSaleQty / daysInRange)
-        const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / daysInRange)
+        const avgSale = perDay(s.rawAvgSaleQty, daysInRange)
+        const totalAvgSale = perDay(s.rawTotalAvgSaleQty, daysInRange)
         const denominator = Math.ceil(Math.max(avgSale, s.orderAllocation))
         const doi = s.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(s.totalInvt / denominator) : 0)
         const isDead = s.totalInvt > 0 && !s.locations.some(l => l.stockStatus !== 'Dead / No Sale' && l.stockStatus !== 'Out of Stock') && s.locations.some(l => l.stockStatus === 'Dead / No Sale')
@@ -489,8 +492,8 @@ export default async function inventoryHandler(req, res) {
       // Exclude locations that have no Regular facility — e.g. DEL only has a Frido Store.
       return [...(locFacilityTypeMap.get(l.location)?.values() || [])].some(f => f.facilityType === 'Regular')
     }).map(l => {
-      const avgSale = Math.ceil(l.rawAvgSaleQty / daysInRange)
-      const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty / daysInRange)
+      const avgSale = perDay(l.rawAvgSaleQty, daysInRange)
+      const totalAvgSale = perDay(l.rawTotalAvgSaleQty, daysInRange)
       const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
       const doi = l.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(l.totalInvt / denominator) : 0)
       // Allocation % — actual order allocation to this facility ÷ regional demand across ALL

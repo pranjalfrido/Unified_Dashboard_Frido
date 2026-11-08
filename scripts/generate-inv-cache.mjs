@@ -135,6 +135,12 @@ for (const [, entry] of invBySkuFacility) {
 
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
 
+// Units per day, rounded ONCE to 2 decimals. It used to be Math.ceil() per SKU / location, and every roll-up (product,
+// category, pivot) summed those already-rounded numbers, adding up to +1 per SKU (a 15-size product with 9 sales a day
+// showed 24). DOI is unchanged: its denominator is still ceil(max(avgSale, orderAllocation)), and ceil(max(a,b)) =
+// max(ceil a, ceil b). The UI rounds for display (fmtInt / fmtNum).
+const perDay = (qty, days) => Math.round(qty / days * 100) / 100
+
 function computePayload(windowDays) {
   const startDate = new Date(end)
   startDate.setDate(startDate.getDate() - (windowDays - 1))
@@ -187,9 +193,9 @@ function computePayload(windowDays) {
     const sku = invEntry.sku || skuKey
     const locKey = `${skuKey}|${loc}`
     const rawQty = avgSaleBySkuLoc.get(locKey) || 0
-    const avgSale = Math.ceil(rawQty / windowDays)
+    const avgSale = perDay(rawQty, windowDays)
     const rawTotalQty = totalAvgSaleBySkuLoc.get(locKey) || 0
-    const totalAvgSale = Math.ceil(rawTotalQty / windowDays)
+    const totalAvgSale = perDay(rawTotalQty, windowDays)
     const orderAllocation = (allocBySkuLoc.get(locKey) || 0) / windowDays
     const denominator = Math.ceil(Math.max(avgSale, orderAllocation))
     const doi = totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(totalInvt / denominator) : 0)
@@ -304,33 +310,23 @@ function computePayload(windowDays) {
     acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.byFacility })
   }
 
-  // Populate avg sale for item-master-seeded SKUs that have sales but no inventory rows.
-  // skuLocRows only covers SKUs that appeared in invBySkuFacility (inventory-driven), so SKUs
-  // with sales but zero Live-facility inventory would otherwise show avgSale=0. Pull their
-  // sales figures directly from the location-level sale maps.
+  // A SKU's sales must be summed over EVERY location it sold in, not only the locations where it currently has an
+  // inventory row. skuLocRows is inventory-driven, so a SKU stocked only in PNQ used to count just the PNQ region's
+  // orders (e.g. 180 of 865 units in 7 days) and every other region's demand — usually the stock-out regions, i.e. the
+  // demand that matters most — silently vanished from Avg Sale, Total Avg Sale, DOI and the pivot. Totals are built
+  // once per SKU from the same location maps that already feed skuLocRows, so SKUs with inventory in all their
+  // sales regions get exactly the numbers they had before.
+  const sumBySku = m => { const out = new Map(); for (const [k, q] of m) { const sk = k.slice(0, k.lastIndexOf('|')); out.set(sk, (out.get(sk) || 0) + q) } return out }
+  const b2cBySku = sumBySku(avgSaleBySkuLoc), totalBySku = sumBySku(totalAvgSaleBySkuLoc), allocBySku = sumBySku(allocBySkuLoc)
   for (const [skuKey, acc] of rolledSkuMap) {
-    if (acc.rawAvgSaleQty > 0 || acc.rawTotalAvgSaleQty > 0) continue // already populated
-    // Sum across all locations this SKU has sales at
-    let rawAvgSaleQty = 0, rawTotalAvgSaleQty = 0, orderAllocation = 0
-    for (const [mapKey, qty] of avgSaleBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) rawAvgSaleQty += qty
-    }
-    for (const [mapKey, qty] of totalAvgSaleBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) rawTotalAvgSaleQty += qty
-    }
-    for (const [mapKey, qty] of allocBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) orderAllocation += qty
-    }
-    if (rawAvgSaleQty > 0 || rawTotalAvgSaleQty > 0 || orderAllocation > 0) {
-      acc.rawAvgSaleQty = rawAvgSaleQty
-      acc.rawTotalAvgSaleQty = rawTotalAvgSaleQty
-      acc.orderAllocation = orderAllocation / windowDays  // match the daily-rate unit used by skuLocRows
-    }
+    acc.rawAvgSaleQty = b2cBySku.get(skuKey) || 0
+    acc.rawTotalAvgSaleQty = totalBySku.get(skuKey) || 0
+    acc.orderAllocation = (allocBySku.get(skuKey) || 0) / windowDays // daily-rate unit, same as skuLocRows
   }
 
   let skus = [...rolledSkuMap.values()].map(s => {
-    const avgSale = Math.ceil(s.rawAvgSaleQty / windowDays)
-    const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / windowDays)
+    const avgSale = perDay(s.rawAvgSaleQty, windowDays)
+    const totalAvgSale = perDay(s.rawTotalAvgSaleQty, windowDays)
     const denominator = Math.ceil(Math.max(avgSale, s.orderAllocation))
     const doi = s.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(s.totalInvt / denominator) : 0)
     // SKU-wide dead check: no sale ANYWHERE in the trailing 90d and not a recent launch — same
@@ -419,8 +415,8 @@ function computePayload(windowDays) {
     const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
     return byFacilityType.some(f => f.facilityType === 'Regular')
   }).map(l => {
-    const avgSale = Math.ceil(l.rawAvgSaleQty/windowDays)
-    const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty/windowDays)
+    const avgSale = perDay(l.rawAvgSaleQty, windowDays)
+    const totalAvgSale = perDay(l.rawTotalAvgSaleQty, windowDays)
     const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
     const doi = l.totalInvt>0 && denominator===0 ? null : (denominator>0 ? Math.floor(l.totalInvt/denominator) : 0)
     const byFacilityType = [...(locFacilityTypeMap.get(l.location)?.values() || [])]
