@@ -158,7 +158,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp -r public /tmp/public_generated
+          rm -rf /tmp/public_generated && cp -r public /tmp/public_generated
           git fetch origin main
           git reset --hard origin/main
           cp /tmp/public_generated/*.json public/
