@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T19:09:04.062Z",
+  "generatedAt": "2026-11-12T20:09:21.292Z",
   "logistics": {
     "windowStart": "2026-10-22",
     "windowEnd": "2026-10-28",
@@ -53,13 +53,5 @@
     },
     "zeroChannels": []
   },
-  "d2cPnl": {
-    "windowStart": "2026-10-23",
-    "windowEnd": "2026-10-29",
-    "rangeLabel": "Orders 23–29 Oct",
-    "netRevenue": 61260145,
-    "cogsPct": 43.22,
-    "sndPct": 19.67,
-    "cm1Pct": 37.11
-  }
+  "d2cPnl": null
 }
