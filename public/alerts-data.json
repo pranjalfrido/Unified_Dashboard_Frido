@@ -1,57 +1,57 @@
 {
-  "generatedAt": "2026-11-12T04:09:16.354Z",
+  "generatedAt": "2026-11-12T05:09:12.573Z",
   "logistics": {
     "windowStart": "2026-10-22",
     "windowEnd": "2026-10-28",
     "rangeLabel": "Orders 22–28 Oct",
     "total": 62832,
-    "delivered": 57025,
-    "rto": 5165,
-    "deliveryPct": 90.76,
-    "rtoPct": 8.22,
-    "slaBreachPct": 19.47,
+    "delivered": 57039,
+    "rto": 5255,
+    "deliveryPct": 90.78,
+    "rtoPct": 8.36,
+    "slaBreachPct": 19.49,
     "slaBreachAvailable": true
   },
   "returns": {
     "windowStart": "2026-10-23",
     "windowEnd": "2026-10-29",
     "rangeLabel": "Orders 23–29 Oct",
-    "gross": 85184660.26999946,
-    "cancelPct": 4.82,
-    "rtoPct": 8.1,
-    "cirPct": 6.04,
-    "exchangePct": 6,
-    "totalReturnPct": 18.96
+    "gross": 85184660.2699995,
+    "cancelPct": 4.85,
+    "rtoPct": 8.41,
+    "cirPct": 6.09,
+    "exchangePct": 6.02,
+    "totalReturnPct": 19.36
   },
   "zeroOrders": {
     "date": "2026-11-11",
     "ordersByChannel": {
       "Shopify": {
-        "date": "2026-11-11",
-        "orders": 540
+        "date": "2026-11-12",
+        "orders": 345
       },
       "Amazon": {
-        "date": "2026-11-11",
-        "orders": 245
+        "date": "2026-11-12",
+        "orders": 229
       },
       "Flipkart": {
         "date": "2026-11-09",
-        "orders": 15
+        "orders": 332
       },
       "Blinkit": {
-        "date": "2026-11-10",
-        "orders": 283
+        "date": "2026-11-11",
+        "orders": 287
       },
       "Zepto": {
-        "date": "2026-11-11",
+        "date": "2026-11-12",
         "orders": 1
       },
       "Instamart": {
-        "date": "2026-11-10",
-        "orders": 56
+        "date": "2026-11-11",
+        "orders": 53
       },
       "Myntra": {
-        "date": "2026-11-09",
+        "date": "2026-11-10",
         "orders": 201
       }
     },
@@ -61,9 +61,9 @@
     "windowStart": "2026-10-23",
     "windowEnd": "2026-10-29",
     "rangeLabel": "Orders 23–29 Oct",
-    "netRevenue": 61552053,
+    "netRevenue": 61260145,
     "cogsPct": 43.22,
-    "sndPct": 19.55,
-    "cm1Pct": 37.24
+    "sndPct": 19.67,
+    "cm1Pct": 37.11
   }
 }
