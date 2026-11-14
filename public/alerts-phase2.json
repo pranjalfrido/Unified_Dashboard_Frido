@@ -1,153 +1,153 @@
 {
- "generatedAt": "2026-11-13T21:09:31.456Z",
- "today": "2026-11-14",
+ "generatedAt": "2026-11-14T21:09:22.085Z",
+ "today": "2026-11-15",
  "windows": {
   "rev": {
-   "start": "2026-11-04",
-   "end": "2026-11-10",
-   "label": "4 Nov–10 Nov",
+   "start": "2026-11-05",
+   "end": "2026-11-11",
+   "label": "5 Nov–11 Nov",
    "prev": {
-    "start": "2026-10-28",
-    "end": "2026-11-03",
-    "label": "28 Oct–3 Nov"
+    "start": "2026-10-29",
+    "end": "2026-11-04",
+    "label": "29 Oct–4 Nov"
    }
   },
   "returns": {
-   "start": "2026-10-25",
-   "end": "2026-10-31",
-   "label": "25 Oct–31 Oct"
+   "start": "2026-10-26",
+   "end": "2026-11-01",
+   "label": "26 Oct–1 Nov"
   },
   "subcats": {
-   "start": "2026-10-25",
-   "end": "2026-10-31",
-   "label": "25 Oct–31 Oct"
+   "start": "2026-10-26",
+   "end": "2026-11-01",
+   "label": "26 Oct–1 Nov"
   },
   "pnl": {
+   "start": "2026-10-26",
+   "end": "2026-11-01",
+   "label": "26 Oct–1 Nov"
+  },
+  "alloc": {
+   "start": "2026-11-08",
+   "end": "2026-11-14",
+   "label": "8 Nov–14 Nov"
+  },
+  "logistics": {
    "start": "2026-10-25",
    "end": "2026-10-31",
    "label": "25 Oct–31 Oct"
   },
-  "alloc": {
-   "start": "2026-11-07",
-   "end": "2026-11-13",
-   "label": "7 Nov–13 Nov"
-  },
-  "logistics": {
-   "start": "2026-10-24",
-   "end": "2026-10-30",
-   "label": "24 Oct–30 Oct"
-  },
   "customer": {
-   "start": "2026-10-17",
-   "end": "2026-11-13",
-   "label": "17 Oct–13 Nov"
+   "start": "2026-10-18",
+   "end": "2026-11-14",
+   "label": "18 Oct–14 Nov"
   },
   "support": {
-   "day": "2026-11-12",
-   "prevDay": "2026-11-05",
+   "day": "2026-11-13",
+   "prevDay": "2026-11-06",
    "week": "2026-11-02"
   }
  },
  "rev": {
   "channels": {
    "Overall": {
-    "cur": 132462985.3900001,
-    "prev": 163762673.20000017
+    "cur": 127971592.92999999,
+    "prev": 162241836.2500001
    },
    "Shopify": {
-    "cur": 72013947.09999943,
-    "prev": 79523799.96999958
+    "cur": 69214208.53999949,
+    "prev": 78881246.29999954
    },
    "Amazon": {
-    "cur": 39110250.97,
-    "prev": 47919489.12000004
+    "cur": 37745790.21,
+    "prev": 47544827.42000005
    },
    "Flipkart": {
-    "cur": 2693856.4500000007,
-    "prev": 4808176.490000001
+    "cur": 2886984.020000001,
+    "prev": 4092575.010000001
    },
    "Blinkit": {
-    "cur": 5167673.329999987,
-    "prev": 4640865.029999992
+    "cur": 5013567.659999988,
+    "prev": 4831072.709999991
    },
    "Zepto": {
-    "cur": 545368.3400000003,
-    "prev": 500286.88000000024
+    "cur": 540947.4100000003,
+    "prev": 520019.50000000023
    },
    "Instamart": {
-    "cur": 474114.91000000003,
-    "prev": 353793.97
+    "cur": 482123.57,
+    "prev": 390589.45999999996
    },
    "Myntra": {
-    "cur": 2489618,
-    "prev": 3309712
+    "cur": 2419688,
+    "prev": 3363820
    },
    "CRED": {
-    "cur": 550795,
-    "prev": 1986
+    "cur": 587500,
+    "prev": 1497
    },
    "Firstcry": {
-    "cur": 15553.81,
-    "prev": 19908.39
+    "cur": 14267.55,
+    "prev": 19662.19
    },
    "EBO": {
-    "cur": 8931789.920000002,
-    "prev": 8090942.85
+    "cur": 8518999.92,
+    "prev": 8661972.85
    },
    "offline_sales": {
-    "cur": 470017.39,
-    "prev": 14593544.500000006
+    "cur": 547516.51,
+    "prev": 13934385.810000004
    }
   }
  },
  "ads": {
   "window": {
-   "start": "2026-11-04",
-   "end": "2026-11-10",
-   "label": "4 Nov–10 Nov"
+   "start": "2026-11-05",
+   "end": "2026-11-11",
+   "label": "5 Nov–11 Nov"
   },
   "platforms": {
    "D2C": {
-    "spend": 16123891,
-    "prevSpend": 16496304,
-    "roas": 3.9642918678871037,
-    "prevRoas": 4.286542524313196
+    "spend": 15221262,
+    "prevSpend": 16584835,
+    "roas": 4.036828250508921,
+    "prevRoas": 4.228689215780428
    },
    "Amazon": {
-    "spend": 3222259,
-    "prevSpend": 3936134,
-    "roas": 10.699537436314088,
-    "prevRoas": 10.772952353756251
+    "spend": 3022739,
+    "prevSpend": 3918623,
+    "roas": 11.013388056329045,
+    "prevRoas": 10.734245228489701
    },
    "Blinkit": {
-    "spend": 154431,
-    "prevSpend": 117780,
-    "roas": 28.62677875556075,
-    "prevRoas": 33.77188257768721
+    "spend": 151826,
+    "prevSpend": 126389,
+    "roas": 28.245869021116295,
+    "prevRoas": 32.75636431967972
    },
    "Zepto": {
-    "spend": 62398,
-    "prevSpend": 68927,
-    "roas": 7.581435142151996,
-    "prevRoas": 6.304354461967011
+    "spend": 61983,
+    "prevSpend": 68258,
+    "roas": 7.582844812287243,
+    "prevRoas": 6.625921357203555
    },
    "Instamart": {
-    "spend": 31161,
-    "prevSpend": 30482,
-    "roas": 12.90156188825776,
-    "prevRoas": 9.857066465455022
+    "spend": 30951,
+    "prevSpend": 30961,
+    "roas": 13.208380343123002,
+    "prevRoas": 10.71172507347954
    },
    "Flipkart": {
-    "spend": 415057,
-    "prevSpend": 526842,
-    "roas": 5.847555299633546,
-    "prevRoas": 8.229589269648212
+    "spend": 399575,
+    "prevSpend": 516150,
+    "roas": 6.511119013952327,
+    "prevRoas": 7.145331938390008
    },
    "Myntra": {
-    "spend": 152949,
-    "prevSpend": 209220,
-    "roas": 14.522487888119569,
-    "prevRoas": 14.112111652805659
+    "spend": 146858,
+    "prevSpend": 217285,
+    "roas": 14.70888204932656,
+    "prevRoas": 13.80521895206756
    },
    "CRED": {
     "spend": 0,
@@ -157,40 +157,40 @@
    }
   },
   "unattributed": {
-   "spend": 20162146,
-   "unattributed": 6317946.090674993,
+   "spend": 19035194,
+   "unattributed": 5719635.433202992,
    "byPlatform": {
     "Meta": {
-     "spend": 15824612,
-     "unattributed": 6035102.080009989
+     "spend": 14959928,
+     "unattributed": 5448442.030010996
     },
     "Google": {
-     "spend": 299279,
-     "unattributed": 41141.36066499996
+     "spend": 261334,
+     "unattributed": 43406.21319199995
     },
     "Amazon": {
-     "spend": 3222259,
-     "unattributed": 139040.46
+     "spend": 3022739,
+     "unattributed": 127676.46000000004
     },
     "Flipkart": {
-     "spend": 415057,
-     "unattributed": 37052.39999999998
+     "spend": 399575,
+     "unattributed": 37019.81999999994
     },
     "Myntra": {
-     "spend": 152949,
-     "unattributed": 6620.990000000002
+     "spend": 146858,
+     "unattributed": 7140.5099999999975
     },
     "Zepto": {
-     "spend": 62398,
-     "unattributed": 30422.999999999996
+     "spend": 61983,
+     "unattributed": 30255.000000000004
     },
     "Instamart": {
-     "spend": 31161,
+     "spend": 30951,
      "unattributed": 0
     },
     "Blinkit": {
-     "spend": 154431,
-     "unattributed": 28565.79999999999
+     "spend": 151826,
+     "unattributed": 25695.399999999998
     }
    }
   }
@@ -198,36 +198,36 @@
  "returns": {
   "channels": {
    "Shopify": {
-    "gross": 83425840.59999965,
-    "ret": 16081036.08539734
+    "gross": 81901935.9699998,
+    "ret": 15813796.980713537
    },
    "Amazon": {
-    "gross": 47290956.23999987,
-    "ret": 7757626.057447911
+    "gross": 47653749.45999989,
+    "ret": 7851006.064883935
    },
    "Flipkart": {
-    "gross": 5218740.02999999,
-    "ret": 1409748.407224953
+    "gross": 5121023.209999994,
+    "ret": 1290779.674996968
    },
    "Myntra": {
-    "gross": 3312664,
-    "ret": 370736.90234682144
+    "gross": 3053637,
+    "ret": 346688.3878630503
    },
    "EBO": {
-    "gross": 7389855.8900000015,
-    "ret": 503759.9731178518
+    "gross": 7673076.84,
+    "ret": 382133.15087481163
    },
    "CRED": {
-    "gross": 41736,
-    "ret": 13.419732717373371
+    "gross": 9020,
+    "ret": 13.06128894122685
    },
    "Firstcry": {
-    "gross": 8576.609999999999,
+    "gross": 11575.429999999998,
     "ret": 0
    }
   },
   "offline": {
-   "rev": 15347826.100000005,
+   "rev": 15321214.220000003,
    "creditNotes": 215862.44
   }
  },
@@ -236,662 +236,652 @@
    {
     "category": "Orthotics",
     "subCategory": "Five Finger Neck Massager",
-    "pct": 28.96396758535758,
-    "avg4": 21.13972491510188,
-    "lost": 159203.77
+    "pct": 30.612486890137873,
+    "avg4": 20.94755578935182,
+    "lost": 131458.78
    },
    {
     "category": "Mobility",
     "subCategory": "Foldable Electric Wheelchair",
-    "pct": 11.538497041529357,
-    "avg4": 15.083409708191962,
+    "pct": 10.980998480229811,
+    "avg4": 16.312560005580202,
     "lost": 75000
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Wedge Plus Cushion",
-    "pct": 14.760172608382897,
-    "avg4": 15.885942443840213,
-    "lost": 201314.53
+    "pct": 15.587656619732062,
+    "avg4": 15.919976159196086,
+    "lost": 205176.28999999998
    },
    {
     "category": "Footwear",
     "subCategory": "Active Casual Sneakers - Men's",
-    "pct": 24.10082754460633,
-    "avg4": 23.97559395658271,
-    "lost": 173130.43000000002
+    "pct": 25.011796512463587,
+    "avg4": 24.62711866761406,
+    "lost": 150380.18
    },
    {
     "category": "Footwear",
     "subCategory": "Active Casual Sneakers - Women's",
-    "pct": 35.27186759829853,
-    "avg4": 32.11147600433096,
-    "lost": 274084.89
+    "pct": 34.98958019951458,
+    "avg4": 32.478417870938266,
+    "lost": 235747.65
    },
    {
     "category": "Footwear",
     "subCategory": "Arch Comfort Slides",
-    "pct": 22.79248693681736,
-    "avg4": 20.311193827256993,
-    "lost": 276084.38
+    "pct": 22.84814000029496,
+    "avg4": 20.81248142039657,
+    "lost": 284595.31
    },
    {
     "category": "Insoles",
     "subCategory": "Arch Support Insoles",
-    "pct": 16.247326614638894,
-    "avg4": 15.011116447600653,
-    "lost": 143435.83
+    "pct": 15.970482490178348,
+    "avg4": 15.046347819772963,
+    "lost": 140384.16
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Arch Support Wedge Sandals",
-    "pct": 25.250959231112475,
-    "avg4": 25.0186941370055,
-    "lost": 99213.15000000001
+    "pct": 25.71964627394677,
+    "avg4": 25.380629612572164,
+    "lost": 101180.34
    },
    {
     "category": "Cushions",
     "subCategory": "Adjustable Wedge Max Cushion",
-    "pct": 19.698652291929264,
-    "avg4": 17.1231170278975,
-    "lost": 561794.54
+    "pct": 20.664287905347553,
+    "avg4": 17.057885097043265,
+    "lost": 570693.88
    },
    {
     "category": "Footwear",
     "subCategory": "Active Walking Shoes - Women's",
-    "pct": 34.949438258926314,
-    "avg4": 27.752770603049548,
-    "lost": 61661.93000000001
+    "pct": 41.279315592958945,
+    "avg4": 26.90139904122251,
+    "lost": 59729.18000000001
    },
    {
     "category": "Pillows",
     "subCategory": "Cervical Butterfly Pillow",
     "pct": 16.934127878900025,
-    "avg4": 16.30904313006487,
+    "avg4": 17.67515241658522,
     "lost": 75052.07
    },
    {
     "category": "Footwear",
     "subCategory": "Cloud Comfort Arch Support Slippers",
-    "pct": 15.13887790107101,
-    "avg4": 13.59416122741995,
-    "lost": 568643.5099999999
+    "pct": 15.146412153484883,
+    "avg4": 13.573787773747323,
+    "lost": 558512.19
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Cloud Comfort Sandal",
-    "pct": 21.898299083356136,
-    "avg4": 22.312786647618537,
-    "lost": 197781.2
+    "pct": 22.87752407920118,
+    "avg4": 22.137057031780124,
+    "lost": 214700.05000000002
    },
    {
     "category": "Footwear",
     "subCategory": "Men's Cloud Comfort Sandal",
-    "pct": 26.940654652090284,
-    "avg4": 23.60173303103133,
-    "lost": 192889.78
+    "pct": 27.556375611182954,
+    "avg4": 24.05115162295192,
+    "lost": 196056.66
    },
    {
     "category": "Footwear",
     "subCategory": "Comfort Formal Shoes",
-    "pct": 30.845432003040894,
-    "avg4": 27.052408987928114,
-    "lost": 137676.26
+    "pct": 27.174087650227634,
+    "avg4": 29.268086670813027,
+    "lost": 121323.91
    },
    {
     "category": "Personal Care",
     "subCategory": "Cold & Hot Therapy Cap",
-    "pct": 16.204154163161338,
-    "avg4": 13.981333429531524,
-    "lost": 162983.74999999997
+    "pct": 16.44285902007245,
+    "avg4": 14.174188702848753,
+    "lost": 158728.78
    },
    {
     "category": "Personal Care",
     "subCategory": "Wallet",
-    "pct": 21.019362629462083,
-    "avg4": 23.103131244130473,
-    "lost": 216295.15
-   },
-   {
-    "category": "Cushions",
-    "subCategory": "Cloud Backrest Cushion",
-    "pct": 19.431508547923855,
-    "avg4": 16.98530675483232,
-    "lost": 56085.68
+    "pct": 19.886006246284595,
+    "avg4": 24.039807489389162,
+    "lost": 182958.84
    },
    {
     "category": "Ergo Furniture",
     "subCategory": "ErgoLuxe Executive Chair",
-    "pct": 8.146895882100146,
-    "avg4": 19.37163939746357,
-    "lost": 411946.70999999996
+    "pct": 9.285636071768439,
+    "avg4": 18.520506404791433,
+    "lost": 470228.35
    },
    {
     "category": "Footwear",
     "subCategory": "Foot Alignment Socks",
-    "pct": 11.585711584914415,
-    "avg4": 10.898196464200097,
-    "lost": 82405.78
+    "pct": 11.277758108597109,
+    "avg4": 10.9732575563141,
+    "lost": 86563.24999999999
    },
    {
     "category": "Personal Care",
     "subCategory": "Orthopaedic Heating Belt",
-    "pct": 12.279581971586087,
-    "avg4": 12.530998364570403,
-    "lost": 159944.49
+    "pct": 12.992333836119979,
+    "avg4": 12.41400140335905,
+    "lost": 182822.6
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Knee Support Wrap",
-    "pct": 19.256256723472795,
-    "avg4": 17.673751616597695,
-    "lost": 72635.48999999999
+    "pct": 21.023832098492694,
+    "avg4": 17.111050925400182,
+    "lost": 74076.15
    },
    {
     "category": "Footwear",
     "subCategory": "Men's Cloud Comfort Shoes - Lace Ups - Arch Footbed",
-    "pct": 41.055350389755176,
-    "avg4": 21.849687587368166,
-    "lost": 64021.270000000004
+    "pct": 36.33016758899662,
+    "avg4": 23.481389999898695,
+    "lost": 51847.16
    },
    {
     "category": "Footwear",
     "subCategory": "Men's Comfort Dual Strap Sandals",
-    "pct": 25.747226725521983,
-    "avg4": 22.577833102787974,
-    "lost": 809428.52
+    "pct": 25.168149088920718,
+    "avg4": 22.556775151082046,
+    "lost": 775348.96
    },
    {
     "category": "Footwear",
     "subCategory": "Comfort Formal Shoes with Arch",
-    "pct": 38.72448129319048,
-    "avg4": 23.418323838272322,
-    "lost": 137978.50999999998
+    "pct": 39.85468888683637,
+    "avg4": 23.504307831338732,
+    "lost": 133635.47
    },
    {
     "category": "Footwear",
     "subCategory": "Men's Orthotics Dual Strap Sandals",
-    "pct": 27.161707326730543,
-    "avg4": 23.464297910844238,
-    "lost": 229942.04000000004
+    "pct": 27.517431098261934,
+    "avg4": 24.07584425255281,
+    "lost": 216995.53
    },
    {
     "category": "Pillows",
     "subCategory": "Maternity Pillow - Bundle",
-    "pct": 29.21234759783728,
-    "avg4": 25.17149443540044,
-    "lost": 129540.01999999999
+    "pct": 28.90268165218657,
+    "avg4": 27.076030672910207,
+    "lost": 129558.47
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Neck Contour Cervical Plus Pillow",
-    "pct": 19.254821299450793,
-    "avg4": 17.59070832333219,
-    "lost": 79855.22
+    "pct": 19.438873802708045,
+    "avg4": 17.890181750804985,
+    "lost": 77856.07
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Heel Protector",
-    "pct": 14.306445759673489,
-    "avg4": 11.566513626641042,
-    "lost": 377620.53
+    "pct": 14.951234330233115,
+    "avg4": 11.65529669418531,
+    "lost": 353251.9
    },
    {
     "category": "Orthotics",
     "subCategory": "Active Knee Cap Support",
-    "pct": 15.821604912232962,
-    "avg4": 13.715166338838957,
-    "lost": 65375.42999999999
+    "pct": 16.82368212027785,
+    "avg4": 13.958040092362673,
+    "lost": 70637.51000000001
    },
    {
     "category": "Orthotics",
     "subCategory": "Lumbo Sacral Belt",
-    "pct": 18.975561532433726,
-    "avg4": 19.597810947495923,
-    "lost": 204707.27999999997
+    "pct": 19.347790106890137,
+    "avg4": 19.5365459518107,
+    "lost": 198225.99
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Posture Corrector",
-    "pct": 20.478717681140303,
-    "avg4": 19.841927881658226,
-    "lost": 1153699.08
+    "pct": 20.5559824263108,
+    "avg4": 19.879165866527575,
+    "lost": 1160467.1400000001
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Posture Corrector Seat",
-    "pct": 19.94487775659797,
-    "avg4": 16.098609043744865,
-    "lost": 126247.53
+    "pct": 21.44885167721705,
+    "avg4": 15.969873770956772,
+    "lost": 123227.4
    },
    {
     "category": "Orthotics",
     "subCategory": "Orthotics Posture Corrector Pro",
-    "pct": 17.258766304936575,
-    "avg4": 16.88877573953814,
-    "lost": 721262.58
+    "pct": 17.422107600070785,
+    "avg4": 16.818062501006985,
+    "lost": 726966.4299999999
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Deep Sleep Pillow",
-    "pct": 16.295672260769404,
-    "avg4": 19.95250439546559,
-    "lost": 234101.55
+    "pct": 17.20654158588461,
+    "avg4": 19.78898409231547,
+    "lost": 245442.05
    },
    {
     "category": "Footwear",
     "subCategory": "Puneri Chappal - Men",
-    "pct": 17.052702010915645,
-    "avg4": 17.576635815541184,
-    "lost": 107438.31
+    "pct": 13.857578309605623,
+    "avg4": 17.81267041016549,
+    "lost": 81218.32
    },
    {
     "category": "Ergo Furniture",
     "subCategory": "Portable Floor Chair",
-    "pct": 17.831289771309457,
-    "avg4": 18.111373513548696,
-    "lost": 151297.85
+    "pct": 17.07711799078469,
+    "avg4": 17.517917430078946,
+    "lost": 182921.16
    },
    {
     "category": "Pillows",
     "subCategory": "Travel Neck Pillow",
-    "pct": 13.289495742501325,
-    "avg4": 13.262737924517742,
-    "lost": 128326.47
+    "pct": 11.874440107047011,
+    "avg4": 13.531746399695459,
+    "lost": 113172.06000000001
    },
    {
     "category": "Pillows",
     "subCategory": "Travel Neck Pillow Without Case",
-    "pct": 17.491748535364255,
-    "avg4": 16.20740750660873,
-    "lost": 129077.31999999999
+    "pct": 17.056206104213036,
+    "avg4": 16.444405785830185,
+    "lost": 122561.72
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Car Backrest Cushion",
-    "pct": 23.442085339295605,
-    "avg4": 18.862555474120043,
-    "lost": 299242.31000000006
+    "pct": 22.595186942270946,
+    "avg4": 18.937794028392112,
+    "lost": 289056.06
    },
    {
     "category": "Cushions",
     "subCategory": "Premium Car Backrest Cushion",
-    "pct": 28.963216232947087,
-    "avg4": 21.944007674117607,
-    "lost": 130414.50999999998
+    "pct": 29.614906624849596,
+    "avg4": 21.78814673309804,
+    "lost": 138679.05
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Car Neck Rest Pillow",
-    "pct": 20.439418638222246,
-    "avg4": 17.80091288343503,
-    "lost": 308158.10000000003
+    "pct": 20.482138045162678,
+    "avg4": 17.862930745884082,
+    "lost": 307447.68000000005
    },
    {
     "category": "Pillows",
     "subCategory": "Premium Car Neck Rest Pillow",
-    "pct": 29.399968768823253,
-    "avg4": 20.956064672681983,
-    "lost": 147135.50999999998
+    "pct": 28.723097608738186,
+    "avg4": 20.960814908283428,
+    "lost": 148085.77
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Car Wedge Seat Cushion",
-    "pct": 23.7799519880864,
-    "avg4": 19.40263595899247,
-    "lost": 286058.30000000005
+    "pct": 22.997717653572312,
+    "avg4": 19.510319124802216,
+    "lost": 276673.35000000003
    },
    {
     "category": "Cushions",
     "subCategory": "Premium Car Wedge Seat Cushion",
-    "pct": 29.951582976491764,
-    "avg4": 22.685797109686003,
-    "lost": 132169.33
+    "pct": 30.13381758191428,
+    "avg4": 22.55108095735482,
+    "lost": 135532.57
+   },
+   {
+    "category": "Pillows",
+    "subCategory": "Ultimate Cozy Classic Pillow",
+    "pct": 28.86273693280567,
+    "avg4": 25.43263523526808,
+    "lost": 54117.600000000006
    },
    {
     "category": "Pillows",
     "subCategory": "Ultimate Cozy Pillow",
-    "pct": 17.387246663909153,
-    "avg4": 16.888451331993018,
-    "lost": 276096.72000000003
+    "pct": 17.251599743071086,
+    "avg4": 16.447531705923762,
+    "lost": 249058.47999999998
    },
    {
     "category": "Mattress Topper",
     "subCategory": "Ultimate Mattress Topper - Standard cover",
-    "pct": 20.10517002881782,
-    "avg4": 17.745479332199128,
-    "lost": 649257.0700000001
-   },
-   {
-    "category": "Mattress Topper",
-    "subCategory": "Ultimate Mattress Topper - Premium Cover",
-    "pct": 8.921940140535888,
-    "avg4": 11.170850451436634,
-    "lost": 51148.96
+    "pct": 19.174302768720032,
+    "avg4": 17.62645556411467,
+    "lost": 636768.26
    },
    {
     "category": "Cushions",
     "subCategory": "Ultimate Pro Seat Cushion",
-    "pct": 15.806005812718002,
-    "avg4": 17.792027345692503,
-    "lost": 52802.18000000001
+    "pct": 15.910400773712654,
+    "avg4": 17.328424802189662,
+    "lost": 50747.939999999995
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Arch Comfort Sandals",
-    "pct": 23.741023221908293,
-    "avg4": 23.090659751363,
-    "lost": 501388.11999999994
+    "pct": 24.67021761121297,
+    "avg4": 23.022629470118346,
+    "lost": 511800.26
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Cloud Comfort Sandal - Toeless",
-    "pct": 25.291962073616098,
-    "avg4": 23.990534462167833,
-    "lost": 107191.86
+    "pct": 26.002232393956525,
+    "avg4": 24.602654169530172,
+    "lost": 117376.1
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Ethnic Comfort Flat Sandal",
-    "pct": 16.50683688562747,
-    "avg4": 19.490385898470596,
-    "lost": 104860.85
+    "pct": 19.72424440041453,
+    "avg4": 19.518515273419492,
+    "lost": 114854.5
    },
    {
     "category": "Ergo Furniture",
     "subCategory": "AeroMesh Ergo Chair",
-    "pct": 14.938892499301348,
-    "avg4": 16.8363920181064,
-    "lost": 79248.92
+    "pct": 13.093243266893559,
+    "avg4": 16.497350009550793,
+    "lost": 63666.079999999994
    },
    {
     "category": "Mobility",
     "subCategory": "Anti-Slip Bath Mat",
-    "pct": 13.10208234753312,
-    "avg4": 10.151293100880444,
-    "lost": 57070.18
+    "pct": 10.961961744870042,
+    "avg4": 10.325154265818215,
+    "lost": 51308.34
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Arch Comfort Wedge Sandals - Buckle Strap",
-    "pct": 21.24429014157472,
-    "avg4": 27.86174193077948,
-    "lost": 108606.22
+    "pct": 20.00510478202177,
+    "avg4": 28.573725248363186,
+    "lost": 88237.84
    },
    {
     "category": "Footwear",
     "subCategory": "Women's Cloud Comfort Back Strap Sandals",
-    "pct": 19.735822518555633,
-    "avg4": 26.981422827220847,
-    "lost": 68222.14
+    "pct": 19.075031082702072,
+    "avg4": 27.074159416667452,
+    "lost": 66238.23999999999
    },
    {
     "category": "Ergo Furniture",
     "subCategory": "3D Posture Plus Ergonomic Chair",
-    "pct": 15.28624171725101,
-    "avg4": 22.625882883045932,
-    "lost": 199809.34999999998
+    "pct": 15.02214294098296,
+    "avg4": 21.373386650202157,
+    "lost": 201368.35
    },
    {
     "category": "Footwear",
     "subCategory": "Active Casual Sneakers - Leather - Men's",
-    "pct": 40.40147125439076,
-    "avg4": 38.5083593064704,
-    "lost": 53843.57
+    "pct": 45.24904629930197,
+    "avg4": 40.009910927896485,
+    "lost": 58141.21
    },
    {
     "category": "Footwear",
     "subCategory": "Active Walking Shoes - Men's",
-    "pct": 29.428390969766728,
-    "avg4": 35.280765787115044,
-    "lost": 76552.25
+    "pct": 28.006950728791075,
+    "avg4": 34.45309047673718,
+    "lost": 71055.25
    },
    {
     "category": "Mobility",
     "subCategory": "Prime Electric Wheelchair",
-    "pct": 20.738196380370812,
-    "avg4": 29.734000153475762,
-    "lost": 187465
+    "pct": 16.418960149761602,
+    "avg4": 31.731413718927108,
+    "lost": 127000
    },
    {
     "category": "Mobility",
     "subCategory": "Mobility Transfer Lift",
-    "pct": 12.50038680056697,
-    "avg4": 18.739556178223687,
+    "pct": 11.224834928011141,
+    "avg4": 18.19376041393358,
     "lost": 133996
    },
    {
     "category": "Pillows",
     "subCategory": "Maternity Pillow Bundle Plus",
-    "pct": 16.426676334871935,
-    "avg4": 31.71034862760633,
-    "lost": 54314.94
+    "pct": 18.848316740137978,
+    "avg4": 31.48225621326584,
+    "lost": 59883.66
+   },
+   {
+    "category": "Mobility",
+    "subCategory": "Smart Recliner Mattress",
+    "pct": 21.254693491780703,
+    "avg4": 17.25539056041157,
+    "lost": 59500
    },
    {
     "category": "Mattress Topper",
     "subCategory": "Ultimate Mattress Topper - Cooling Cover",
-    "pct": 17.293885867212722,
-    "avg4": 21.198584675967588,
-    "lost": 118959.23999999999
+    "pct": 17.148246523224365,
+    "avg4": 21.4150537306048,
+    "lost": 98433.07
    },
    {
     "category": "Ergo Furniture",
     "subCategory": "Vajra Gaming Chair",
-    "pct": 44.48863247572002,
-    "avg4": 13.307005935976933,
-    "lost": 242184.17
-   },
-   {
-    "category": "Mobility",
-    "subCategory": "Prime Plus Electric Wheelchair",
-    "pct": 41.99223823577091,
-    "avg4": 16.178731836246968,
-    "lost": 214999
+    "pct": 37.68806676337002,
+    "avg4": 21.402138486625518,
+    "lost": 182185.17
    },
    {
     "category": "Mobility",
     "subCategory": "Carbon Fiber Electric Wheelchair",
-    "pct": 32.210834553440705,
+    "pct": 31.83791606367583,
     "avg4": 17.736077481840194,
     "lost": 220000
+   },
+   {
+    "category": "Mobility",
+    "subCategory": "Prime Plus Electric Wheelchair",
+    "pct": 31.69021523524703,
+    "avg4": 17.5398352192545,
+    "lost": 135000
    }
   ]
  },
  "pnl": {
   "tabs": {
    "shopify": {
-    "cm1Pct": 49.39974408035428,
-    "gmPct": 52.475658889980345,
-    "cogsPct": 47.524341110019655,
-    "sndPct": 3.075914809625964,
-    "net": 59881798.747492805,
-    "gross": 83425840.6
+    "cm1Pct": 49.38648037183128,
+    "gmPct": 52.460074666566214,
+    "cogsPct": 47.53992533343379,
+    "sndPct": 3.073594294734915,
+    "net": 58774585.272507206,
+    "gross": 81901935.97000006
    },
    "amazon": {
-    "cm1Pct": 23.717998540204487,
-    "gmPct": 53.093814889705456,
-    "cogsPct": 46.906185110294544,
-    "sndPct": 29.37380299625905,
-    "net": 34956831.380669534,
-    "gross": 47290956
+    "cm1Pct": 23.95605699177184,
+    "gmPct": 53.14131915564582,
+    "cogsPct": 46.85868084435418,
+    "sndPct": 29.18266073807795,
+    "net": 35199113.15976887,
+    "gross": 47653750
    },
    "flipkart": {
-    "cm1Pct": 27.83813029253025,
-    "gmPct": 53.45107232142018,
-    "cogsPct": 46.54892767857983,
-    "sndPct": 25.652552517357364,
-    "net": 3439361.603523405,
-    "gross": 5218737
+    "cm1Pct": 27.8477683814543,
+    "gmPct": 53.601175672690516,
+    "cogsPct": 46.39882432730949,
+    "sndPct": 25.7690540707049,
+    "net": 3457959.0063035083,
+    "gross": 5121022
    },
    "ebo": {
-    "cm1Pct": 47.088852926703304,
-    "gmPct": 48.75876602477031,
-    "cogsPct": 51.24123397522968,
-    "sndPct": 1.6699130980670658,
-    "net": 6104375.210881572,
-    "gross": 7389855.890000001
+    "cm1Pct": 46.78542321543372,
+    "gmPct": 48.445628940178665,
+    "cogsPct": 51.554371059821335,
+    "sndPct": 1.6602057247449293,
+    "net": 6443942.2053184565,
+    "gross": 7673076.84
    },
    "offline": {
-    "cm1Pct": 48.02974424867486,
-    "gmPct": 51.1225485082526,
-    "cogsPct": 48.8774514917474,
-    "sndPct": 3.0928042595777914,
-    "net": 13276578.167991415,
-    "gross": 15347826.100000001
+    "cm1Pct": 48.050666860327226,
+    "gmPct": 51.13974539960504,
+    "cogsPct": 48.86025460039497,
+    "sndPct": 3.0890785392778923,
+    "net": 13254025.717991414,
+    "gross": 15321214.219999997
    },
    "blinkit": {
-    "cm1Pct": 10.795443050552722,
-    "gmPct": 53.330695761886396,
-    "cogsPct": 46.669304238113604,
-    "sndPct": 42.535252711333676,
-    "net": 3824224,
-    "gross": 4461848
+    "cm1Pct": 10.80394365723853,
+    "gmPct": 53.32239679785179,
+    "cogsPct": 46.67760320214821,
+    "sndPct": 42.51845314061326,
+    "net": 3689774,
+    "gross": 4305743
    },
    "zepto": {
-    "cm1Pct": 24.000716814281507,
-    "gmPct": 53.9322935847389,
-    "cogsPct": 46.06770641526111,
-    "sndPct": 29.931576770457387,
-    "net": 434462,
-    "gross": 500370
+    "cm1Pct": 23.905459750257975,
+    "gmPct": 53.89006249347818,
+    "cogsPct": 46.10993750652182,
+    "sndPct": 29.98460274322021,
+    "net": 431246,
+    "gross": 497121
    },
    "instamart": {
-    "cm1Pct": 23.314457009544896,
-    "gmPct": 52.95402872898849,
-    "cogsPct": 47.04597127101152,
-    "sndPct": 29.63957171944358,
-    "net": 286328,
-    "gross": 336768
+    "cm1Pct": 23.170046938804152,
+    "gmPct": 52.9548292943042,
+    "cogsPct": 47.0451707056958,
+    "sndPct": 29.784782355500038,
+    "net": 285050,
+    "gross": 335257
    },
    "cred": {
     "cm1Pct": null,
-    "gmPct": 54.479948480900156,
-    "cogsPct": 45.52005151909985,
+    "gmPct": 54.351320933404104,
+    "cogsPct": 45.6486790665959,
     "sndPct": null,
-    "net": 36665.206930782166,
-    "gross": 41736
+    "net": 7892.554719757043,
+    "gross": 9020
    },
    "firstcry": {
     "cm1Pct": null,
-    "gmPct": 54.2315901814301,
-    "cogsPct": 45.7684098185699,
+    "gmPct": 53.8666932350304,
+    "cogsPct": 46.13330676496961,
     "sndPct": null,
-    "net": 7496,
-    "gross": 8577
+    "net": 10037,
+    "gross": 11576
    },
    "myntra": {
     "cm1Pct": null,
-    "gmPct": 54.06806212262747,
-    "cogsPct": 45.93193787737253,
+    "gmPct": 54.009127511253986,
+    "cogsPct": 45.990872488746014,
     "sndPct": null,
-    "net": 2620792.90949142,
-    "gross": 3312664
+    "net": 2417203.3078747173,
+    "gross": 3053637
    }
   }
  },
  "alloc": {
   "warehouses": {
    "PNQ": {
-    "fillRate": 42.10822206605763,
-    "fillAvg4": 55.49241826914869,
+    "fillRate": 41.05134474327629,
+    "fillAvg4": 56.10457983165978,
     "allocationPct": 100,
-    "allocAvg4": 98.95593652512326
+    "allocAvg4": 99.98391381958571
    },
    "GGN": {
-    "fillRate": 31.780570027581977,
-    "fillAvg4": 41.38924930199816,
+    "fillRate": 29.070383718465127,
+    "fillAvg4": 39.633055933085956,
     "allocationPct": 100,
-    "allocAvg4": 98.35427770905565
+    "allocAvg4": 98.88348865951832
    },
    "BLR": {
-    "fillRate": 16.799905948742065,
-    "fillAvg4": 18.23392016682102,
-    "allocationPct": 39.73694931036489,
-    "allocAvg4": 34.16534609635272
+    "fillRate": 17.33010776336046,
+    "fillAvg4": 18.31759661825859,
+    "allocationPct": 38.021565869667135,
+    "allocAvg4": 34.32531185141319
    },
    "MUM": {
-    "fillRate": 61.54729109274564,
-    "fillAvg4": 57.685799541651356,
-    "allocationPct": 7.416998415336451,
-    "allocAvg4": 9.545783971046385
+    "fillRate": 61.992355470616346,
+    "fillAvg4": 57.56545835533828,
+    "allocationPct": 6.467862180132984,
+    "allocAvg4": 9.85862802518487
    },
    "KOL": {
-    "fillRate": 10.478061558611657,
-    "fillAvg4": 18.243816028109368,
+    "fillRate": 10.734059653509554,
+    "fillAvg4": 17.74917380326289,
     "allocationPct": 100,
     "allocAvg4": 100
    },
    "HYD": {
-    "fillRate": 8.803928446159242,
-    "fillAvg4": 13.129344977279997,
-    "allocationPct": 15.317464936274225,
-    "allocAvg4": 23.606906961812697
+    "fillRate": 9.235181644359464,
+    "fillAvg4": 12.899941513367994,
+    "allocationPct": 14.715189873417723,
+    "allocAvg4": 23.27435515083166
    },
    "CHN": {
-    "fillRate": 0.3188405797101449,
-    "fillAvg4": 0.1642333976552217,
-    "allocationPct": 0.279345865099226,
-    "allocAvg4": 0.3415203739152277
+    "fillRate": 0.31065548306927615,
+    "fillAvg4": 0.16808055686795986,
+    "allocationPct": 0.29887482419127986,
+    "allocAvg4": 0.34545085768071293
    }
   },
   "channels": {
    "SHOPIFY": {
     "alloc": {
      "PNQ": 100,
-     "GGN": 79.08715465679293,
-     "BLR": 52.71291208791209,
-     "MUM": 12.947454235529534,
+     "GGN": 74.66986794717887,
+     "BLR": 50.711596731245976,
+     "MUM": 11.126026531901454,
      "KOL": 100,
-     "HYD": 21.445741758241756,
-     "CHN": 0.2403846153846154
+     "HYD": 21.65090441649068,
+     "CHN": 0.2938205858047929
     },
     "fill": {
-     "PNQ": 57.42179717075114,
-     "GGN": 30.397708780837075,
-     "BLR": 21.693414499169894,
-     "MUM": 58.092144122858834,
-     "KOL": 8.626901521216974,
-     "HYD": 10.089485458612975,
-     "CHN": 0.08665511265164644
+     "PNQ": 56.87219010918433,
+     "GGN": 27.633388338833882,
+     "BLR": 19.926626761923153,
+     "MUM": 58.4439641864773,
+     "KOL": 9.282422646477945,
+     "HYD": 10.244020294757188,
+     "CHN": 0.0944733112895607
     }
    },
    "AMAZON FLEX": {
     "alloc": {
      "PNQ": 100,
      "GGN": 100,
-     "BLR": 11.220472440944881,
-     "MUM": 4.559915164369035,
-     "KOL": 52.23880597014925,
-     "HYD": 13.188976377952756,
-     "CHN": 1.968503937007874
+     "BLR": 12.262357414448669,
+     "MUM": 6.3229571984435795,
+     "KOL": 50,
+     "HYD": 14.543726235741444,
+     "CHN": 1.8060836501901139
     },
     "fill": {
-     "PNQ": 71.27799736495388,
-     "GGN": 49.766136576239475,
-     "BLR": 10.344827586206897,
-     "MUM": 50.54945054945055,
-     "KOL": 5.05050505050505,
-     "HYD": 13.043478260869565,
-     "CHN": 3.765690376569038
-    }
-   },
-   "SHOPIFY_MOBILITY": {
-    "alloc": {
-     "PNQ": 13.725490196078432
-    },
-    "fill": {
-     "PNQ": 100,
-     "GGN": 0,
-     "CHN": 0
+     "PNQ": 73.06273062730627,
+     "GGN": 52.1630615640599,
+     "BLR": 10,
+     "MUM": 54.67289719626168,
+     "KOL": 6.64451827242525,
+     "HYD": 15.089514066496163,
+     "CHN": 3.1620553359683794
     }
    },
    "B2B": {
     "alloc": {
-     "PNQ": 55.35268619466702,
+     "PNQ": 66.16040500932587,
      "GGN": 100
     },
     "fill": {
-     "PNQ": 2.968227424749164,
+     "PNQ": 1.5134370579915135,
      "GGN": 0,
      "BLR": 0,
      "MUM": 100,
@@ -900,35 +890,47 @@
      "CHN": 0
     }
    },
+   "SHOPIFY_MOBILITY": {
+    "alloc": {
+     "PNQ": 6.521739130434782,
+     "BLR": 2.898550724637681,
+     "MUM": 4.3478260869565215
+    },
+    "fill": {
+     "PNQ": 100,
+     "GGN": 0,
+     "CHN": 0
+    }
+   },
    "FLIPKART": {
     "alloc": {
      "PNQ": 100,
      "GGN": 100,
-     "BLR": 53.58361774744027,
+     "BLR": 54.37616387337057,
      "KOL": 100
     },
     "fill": {
-     "PNQ": 40.694006309148264,
-     "GGN": 68,
-     "BLR": 37.55102040816327,
-     "MUM": 40.98360655737705,
-     "KOL": 30.900243309002434,
+     "PNQ": 44.36860068259386,
+     "GGN": 65.34216335540839,
+     "BLR": 38.362068965517246,
+     "MUM": 41.52542372881356,
+     "KOL": 27.73333333333333,
      "HYD": 0,
      "CHN": 0
     }
    },
    "MYNTRA": {
     "alloc": {
-     "PNQ": 88.56088560885608,
+     "PNQ": 89.17910447761194,
      "GGN": 100,
-     "BLR": 19.940476190476193,
-     "MUM": 47.601476014760145
+     "BLR": 21.45015105740181,
+     "MUM": 48.134328358208954
     },
     "fill": {
      "PNQ": 45.320197044334975,
-     "GGN": 72.183908045977,
-     "BLR": 8.75,
-     "MUM": 33.82352941176471,
+     "GGN": 72.3744292237443,
+     "BLR": 8.588957055214724,
+     "MUM": 26.153846153846157,
      "KOL": 0,
      "HYD": 0,
      "CHN": 0
@@ -944,7 +946,9 @@
    },
    "AMAZON": {
     "alloc": {
-     "PNQ": 100
+     "PNQ": 100,
+     "GGN": 0.7936507936507936,
+     "BLR": 0.43859649122807015
     },
     "fill": {
      "PNQ": 100,
@@ -959,15 +963,15 @@
    "AMAZON_ETRADE": {
     "alloc": {
      "PNQ": 100,
-     "BLR": 44.15204678362573,
+     "BLR": 40.74074074074074,
      "KOL": 100
     },
     "fill": {
-     "PNQ": 98.73417721518987,
+     "PNQ": 100,
      "GGN": 0,
-     "BLR": 53.37078651685393,
-     "MUM": 91.83673469387756,
-     "KOL": 61.386138613861384,
+     "BLR": 48.125,
+     "MUM": 90.2439024390244,
+     "KOL": 61.72839506172839,
      "HYD": 0,
      "CHN": 0
     }
@@ -979,123 +983,124 @@
   }
  },
  "oos": {
-  "asOf": "2026-11-13",
-  "skus": 66,
-  "loss": 4650926,
+  "asOf": "2026-11-14",
+  "skus": 80,
+  "loss": 4962861,
   "byCategory": {
-   "Personal Care": 940974,
-   "Orthotics": 879569,
-   "Ergo Furniture": 761667,
-   "Mobility": 646669,
-   "Footwear": 1377614,
-   "Pillows": 23343,
-   "Covers": 10405,
-   "Cushions": 9492,
-   "Spare Parts": 1193
+   "Personal Care": 981941,
+   "Orthotics": 1047169,
+   "Ergo Furniture": 831580,
+   "Mobility": 664058,
+   "Footwear": 1321685,
+   "Mattress Topper": 64391,
+   "Pillows": 28621,
+   "Cushions": 10355,
+   "Covers": 11735,
+   "Spare Parts": 1326
   }
  },
  "logistics": {
   "forward": {
-   "total": 58587,
-   "rto": 5229,
-   "delivered": 52739,
-   "deliveredTotal": 52739,
-   "within3dPickup": 30754,
-   "within5dOrder": 37373
+   "total": 57682,
+   "rto": 5261,
+   "delivered": 51705,
+   "deliveredTotal": 51705,
+   "within3dPickup": 29698,
+   "within5dOrder": 36997
   },
   "cod": {
-   "total": 18572,
-   "rto": 4434,
-   "delivered": 13820
+   "total": 18321,
+   "rto": 4451,
+   "delivered": 13487
   },
   "prepaid": {
-   "total": 40015,
-   "rto": 795,
-   "delivered": 38919
+   "total": 39361,
+   "rto": 810,
+   "delivered": 38218
   },
   "couriers": [
    {
     "courier": "Bluedart",
-    "total": 36981,
-    "rtoPct": 9.610340445093426,
-    "delPct": 89.53516670722803,
+    "total": 36741,
+    "rtoPct": 9.820091995318583,
+    "delPct": 89.02860564491985,
     "n": 8,
-    "rtoMean": 8.411703166220247,
-    "rtoSd": 0.5142790657139545,
-    "delMean": 91.13570816208282,
-    "delSd": 0.7936140455093253
+    "rtoMean": 8.432774505734995,
+    "rtoSd": 0.4803614650775575,
+    "delMean": 91.12431637416233,
+    "delSd": 0.8390046078052754
    },
    {
     "courier": "ElasticRun",
-    "total": 5766,
-    "rtoPct": 5.463059313215401,
-    "delPct": 94.25945195976414,
+    "total": 5654,
+    "rtoPct": 5.606650159179342,
+    "delPct": 94.12805093738946,
     "n": 8,
-    "rtoMean": 5.398118026533729,
-    "rtoSd": 0.502786942915801,
-    "delMean": 93.84796804536415,
-    "delSd": 0.8634891320040933
+    "rtoMean": 5.394838352716592,
+    "rtoSd": 0.5395056282257977,
+    "delMean": 93.86581124719682,
+    "delSd": 0.9068257380361378
    },
    {
     "courier": "Delhivery NDD",
-    "total": 5537,
-    "rtoPct": 5.670940942748781,
-    "delPct": 93.89561134188189,
+    "total": 5357,
+    "rtoPct": 5.4321448571961914,
+    "delPct": 94.00784020907224,
     "n": 8,
-    "rtoMean": 4.99865153728972,
-    "rtoSd": 0.6370053981211743,
-    "delMean": 94.32752633255006,
-    "delSd": 0.8861524454072196
+    "rtoMean": 4.982483522941354,
+    "rtoSd": 0.5644340374779593,
+    "delMean": 94.32271429936861,
+    "delSd": 0.7392226298547221
    },
    {
     "courier": "Swift",
-    "total": 3462,
-    "rtoPct": 13.460427498555749,
-    "delPct": 83.62218370883883,
+    "total": 3306,
+    "rtoPct": 14.519056261343014,
+    "delPct": 82.90986085904416,
     "n": 8,
-    "rtoMean": 15.7015359424243,
-    "rtoSd": 1.9101265754988364,
-    "delMean": 82.63849953786347,
-    "delSd": 2.3256378847884167
+    "rtoMean": 15.682739067055092,
+    "rtoSd": 1.7273511163805544,
+    "delMean": 82.69685616573555,
+    "delSd": 1.9916074573861549
    },
    {
     "courier": "Delhivery",
-    "total": 3350,
-    "rtoPct": 10.686567164179104,
-    "delPct": 86.14925373134328,
+    "total": 3278,
+    "rtoPct": 10.951799877974375,
+    "delPct": 85.84502745576572,
     "n": 8,
-    "rtoMean": 10.407195686106618,
-    "rtoSd": 0.9878537331430699,
-    "delMean": 87.28392109062347,
-    "delSd": 0.7729411910494088
+    "rtoMean": 10.309611807100213,
+    "rtoSd": 0.9472025741513292,
+    "delMean": 87.32845404621399,
+    "delSd": 0.745561679182804
    },
    {
     "courier": "Shadowfax",
-    "total": 3035,
-    "rtoPct": 7.116968698517298,
-    "delPct": 91.82866556836903,
+    "total": 2863,
+    "rtoPct": 6.950750960530912,
+    "delPct": 91.96646873908487,
     "n": 8,
-    "rtoMean": 6.495814787526383,
-    "rtoSd": 0.6486652964444803,
-    "delMean": 93.03660086852635,
-    "delSd": 0.7703435073540453
+    "rtoMean": 6.558287271583147,
+    "rtoSd": 0.6211218392803707,
+    "delMean": 92.98774955075262,
+    "delSd": 0.7167878006182576
    },
    {
     "courier": "Safexpress",
-    "total": 456,
-    "rtoPct": 1.3157894736842104,
-    "delPct": 93.42105263157895,
-    "n": 6,
-    "rtoMean": 1.9529504811667424,
-    "rtoSd": 0.6841756585843646,
-    "delMean": 94.20152326441382,
-    "delSd": 1.3304924871050519
+    "total": 483,
+    "rtoPct": 1.4492753623188406,
+    "delPct": 92.96066252587993,
+    "n": 7,
+    "rtoMean": 2.0054810533260947,
+    "rtoSd": 0.9688528665805533,
+    "delMean": 93.94912719569142,
+    "delSd": 1.454315967254123
    }
   ]
  },
  "cost": {
   "month": "2026-09",
-  "asOf": "2026-11-13T20:13:21.077Z",
+  "asOf": "2026-11-14T20:12:41.169Z",
   "perShipment": 104.16186012429493,
   "perKg": 35.03345953564518,
   "perKgTrailing": 33.95752864979127,
@@ -1163,53 +1168,53 @@
  },
  "customer": {
   "cur": {
-   "ltvCac": 3.469133959983171,
-   "repPct": 38.44117734560138,
-   "repPrevPct": 37.47865075734478,
+   "ltvCac": 3.4852639423612715,
+   "repPct": 38.480090048362676,
+   "repPrevPct": 37.63929798357418,
    "discountGap": 4.899999999999999
   },
   "prevPeriod": {
-   "ltvCac": 3.4260664835614865,
-   "repPct": 37.47865075734478,
-   "repPrevPct": 35.846991404354554,
+   "ltvCac": 3.4184126344349752,
+   "repPct": 37.63929798357418,
+   "repPrevPct": 35.94316699656064,
    "discountGap": 4.899999999999999
   }
  },
  "support": {
   "day": {
-   "key": "2026-11-12",
+   "key": "2026-11-13",
    "frt": [
     {
      "ch": "Chat",
+     "n": 15,
+     "avgSec": 9418.666666666666
+    },
+    {
+     "ch": "Email",
      "n": 0,
      "avgSec": null
     },
     {
-     "ch": "Email",
-     "n": 1,
-     "avgSec": 1846
-    },
-    {
      "ch": "Social media",
-     "n": 14,
-     "avgSec": 1440.857142857143
+     "n": 9,
+     "avgSec": 13254.333333333334
     }
    ],
    "esc": {
-    "esc": 15,
-    "inter": 3767
+    "esc": 0,
+    "inter": 3420
    },
    "escPrev": {
-    "esc": 12,
-    "inter": 3713
+    "esc": 11,
+    "inter": 3288
    },
    "per": {
-    "inter": 3767,
-    "orders": 4331
+    "inter": 3420,
+    "orders": 4572
    },
    "perPrev": {
-    "inter": 3713,
-    "orders": 6591
+    "inter": 3288,
+    "orders": 5727
    },
    "pageRules": [
     {
