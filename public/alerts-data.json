@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-14T18:08:59.597Z",
+  "generatedAt": "2026-11-14T19:09:02.479Z",
   "logistics": {
     "windowStart": "2026-10-24",
     "windowEnd": "2026-10-30",
@@ -24,7 +24,7 @@
     "totalReturnPct": 19.09
   },
   "zeroOrders": {
-    "date": "2026-11-13",
+    "date": "2026-11-14",
     "ordersByChannel": {
       "Shopify": {
         "date": "2026-11-14",
@@ -34,10 +34,6 @@
         "date": "2026-11-14",
         "orders": 247
       },
-      "Flipkart": {
-        "date": "2026-11-11",
-        "orders": 284
-      },
       "Blinkit": {
         "date": "2026-11-13",
         "orders": 257
@@ -45,10 +41,6 @@
       "Zepto": {
         "date": "2026-11-13",
         "orders": 72
-      },
-      "Instamart": {
-        "date": "2026-11-11",
-        "orders": 53
       },
       "Myntra": {
         "date": "2026-11-12",
