@@ -1,7 +1,7 @@
 // The CN Received page's number formatting and totals (src/cn/format.js, src/cn/cnReceived.js).
 import { describe, it, expect } from "vitest";
 import { formatInr, formatInrFull, formatPct, receivedShareOfInvoice } from "../format.js";
-import { summarize, inMonths, hasActivity, categoryLabel, reasonLabel, lastMonths, shareOf, buildExport, SHIPMENT_VALUE_REASONS, topPartner, topReason, categoryReasons } from "../cnReceived.js";
+import { summarize, inMonths, hasActivity, categoryLabel, reasonLabel, lastMonths, shareOf, buildExport, SHIPMENT_VALUE_REASONS, topPartner, topReason, categoryReasons, rankPartners } from "../cnReceived.js";
 import * as XLSX from "xlsx";
 
 describe("formatInr (compact)", () => {
@@ -145,6 +145,17 @@ describe("per-format aggregation", () => {
     const bluedart = s.partners.find((p) => p.partner === "Bluedart");
     expect(topReason(bluedart.reasons)).toBe("SLA Breach");
     expect(bluedart.reasons["Weight Dispute"].received).toBe(2000);
+  });
+
+  it("ranks partners for the phone card by received, % of invoice or top reason, zero-CN partners apart", () => {
+    const names = (r) => r.withCn.map((p) => p.partner);
+    expect(names(rankPartners(s))).toEqual(["Jopadevi", "Bluedart", "Swift"]);
+    expect(rankPartners(s).none.map((p) => p.partner)).toEqual(["KM Logistic"]);
+    // % of invoice: Bluedart 5% · Swift 2.25% · Jopadevi 1.5%.
+    expect(names(rankPartners(s, "pct"))).toEqual(["Bluedart", "Swift", "Jopadevi"]);
+    const byReason = rankPartners(s, "reason");
+    expect(names(byReason)).toEqual(["Jopadevi", "Bluedart", "Swift"]);
+    expect(byReason.withCn[1]).toMatchObject({ reason: "SLA Breach", reasonReceived: 3000 });
   });
 });
 

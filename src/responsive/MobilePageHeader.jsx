@@ -13,6 +13,7 @@ import { useFeedback } from '../feedback/feedbackCtx.js'
 //          when `notifications` = { count, onOpen } is given; a red dot on ⋯ while count > 0.
 //          onBack: ‹ before the title (backLabel names where it goes, for screen readers).
 //          right: anything else a full-screen view needs at the end (e.g. "+ Add").
+//          stacked: the context sits under the title in small white (a drill-down's data caption).
 //          lead: an icon button before the title instead of ‹ back (Pulse: history); tag: a small chip
 //          after the title (Pulse: the conversation's category).
 //   row 2  chips: 36px row of 26px channel chips, selected = white fill + green text, scrolled into view.
@@ -23,7 +24,7 @@ import { useFeedback } from '../feedback/feedbackCtx.js'
 // Totals 48 / 84 / 116px (+30 for a second sub-tab row); dividers are inset shadows, so they add no height.
 const BackIcon = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
 
-export default function MobilePageHeader({ onBack, backLabel, lead, tag, title, sub, caption, date, filter, menu, notifications, right, chips, activeChip, onChip, subTabs, activeSub, onSub, subTabs2, activeSub2, onSub2, subTabs2Scroll = false, strip }) {
+export default function MobilePageHeader({ onBack, backLabel, lead, tag, title, sub, caption, stacked = false, date, filter, menu, notifications, right, chips, activeChip, onChip, subTabs, activeSub, onSub, subTabs2, activeSub2, onSub2, subTabs2Scroll = false, strip }) {
   const chipRow = useRef(null)
   // Keep the active chip in view (e.g. after opening a channel from a link).
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function MobilePageHeader({ onBack, backLabel, lead, tag, title, 
         <div className={`mph-r1${onBack || lead ? ' mph-has-back' : ''}`}>
           {onBack && <button type="button" className="mph-ib mph-back" onClick={onBack} aria-label={backLabel ? `Back to ${backLabel}` : 'Back'}>{BackIcon}</button>}
           {lead}
-          <div className="mph-title"><b>{title}</b>{tag && <i className="mph-tag">{tag}</i>}{context && <span>{context}</span>}</div>
+          <div className={`mph-title${stacked ? ' mph-stack' : ''}`}><b>{title}</b>{tag && <i className="mph-tag">{tag}</i>}{context && <span>{context}</span>}</div>
           <div className="mph-ctl">
             {date && <span className="mph-date">{date}</span>}
             {filter && <span className="mph-filter" data-ctl="filter">{filter}</span>}

@@ -3,7 +3,7 @@
 // uploaded with them. Totals only, read through cn_received_summary(); the uploads themselves live
 // in Documents → Logistics Credit Notes. Built from the dashboard's own pieces (KPICard, Card,
 // MonthRangePicker, chartLegendProps, the Cost Analytics tooltip) and theme tokens only.
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
@@ -11,9 +11,12 @@ import { C } from "../utils.js";
 import { Card, KPICard, chartLegendProps } from "../components.jsx";
 import { supabase } from "../supabase.js";
 import MonthRangePicker from "../responsive/MonthRangePicker.jsx";
+import { monthsLabel } from "../responsive/monthRange.js";
+import { useBreakpoint } from "../responsive/useBreakpoint.js";
+import CnReceivedMobile from "./CnReceivedMobile.jsx";
 import {
   categoryLabel, reasonLabel, SHIPMENT_VALUE_REASONS, inMonths, summarize, hasActivity,
-  monthName, lastMonths, shareOf, buildExport, topPartner, topReason, categoryReasons,
+  monthName, lastMonths, shareOf, buildExport, topPartner, topReason, categoryReasons, currentMonth,
 } from "./cnReceived.js";
 import { formatInr, formatInrFull, formatPct } from "./format.js";
 
@@ -32,9 +35,6 @@ const LEGEND_ORDER = [...FORMATS.map((f) => f.id), "pct"];
 const formatOf = (key) => FORMATS.find((f) => f.key === key);
 // The "% of invoice" line: the palette's first non-accent series hue, so it never reads as a format.
 const LINE = () => C.series[1];
-
-// The calendar month in India, "YYYY-MM": its bar is still filling, so it gets a lighter tint.
-const currentMonth = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
 
 // ── Shared pieces ────────────────────────────────────────────────────────────
 
@@ -392,7 +392,12 @@ function MonthTable({ view }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function CnReceivedPage({ onBack }) {
+// Phones (≤768px, as App's phone header) get CnReceivedMobile; the header there is App's
+// MobilePageHeader, fed through onMobileCtrl (range pill, caption, ⋯ Export / Open uploads).
+export default function CnReceivedPage({ onBack, onOpenUploads, onMobileCtrl }) {
+  const bp = useBreakpoint();
+  const phone = bp.width <= 768 || bp.isPhoneLandscape;
+  const [rangeOpen, setRangeOpen] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   // null until changed: the last 12 months with data. [] = every month.
@@ -418,6 +423,41 @@ export default function CnReceivedPage({ onBack }) {
   }, [data]);
   const loading = !data && !error;
   const catTotal = (key) => view.categories.find((c) => c.key === key).total;
+  const rangeValue = months.length === allMonths.length ? [] : months;
+  const exportXlsx = () => XLSX.writeFile(buildExport(view), `cn_received_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+  // Phone header, handed up as plain values only when its text changes; the actions read the
+  // latest closures through ctrlLive (as LogisticsCostPage does).
+  const ctrlKey = phone && onMobileCtrl ? JSON.stringify({
+    pill: allMonths.length ? monthsLabel(rangeValue, allMonths, { short: true }) : "",
+    caption: `All formats · INR ex-GST${lastUpload ? ` · updated ${lastUpload}` : ""}`,
+    ready: !!data, uploads: !!onOpenUploads,
+  }) : "";
+  const ctrlLive = useRef(null);
+  useEffect(() => { ctrlLive.current = { exportXlsx, onOpenUploads }; });
+  useEffect(() => {
+    if (!onMobileCtrl) return;
+    if (!ctrlKey) { onMobileCtrl(null); return; }
+    const v = JSON.parse(ctrlKey);
+    onMobileCtrl({
+      pill: v.pill, caption: v.caption, openRange: () => setRangeOpen(true),
+      menu: [
+        ...(v.ready ? [{ id: "export", label: "Export (Excel)", onSelect: () => ctrlLive.current.exportXlsx() }] : []),
+        ...(v.uploads ? [{ id: "uploads", label: "Open uploads", onSelect: () => ctrlLive.current.onOpenUploads() }] : []),
+      ],
+    });
+  }, [onMobileCtrl, ctrlKey]);
+  useEffect(() => () => onMobileCtrl?.(null), [onMobileCtrl]);
+
+  if (phone) {
+    return (
+      <>
+        <CnReceivedMobile view={view} loading={loading} error={error} monthsCount={months.length} onChangeRange={() => setRangeOpen(true)}
+          layout={bp.isPhoneLandscape ? "landscape" : "phone"} />
+        {allMonths.length > 0 && <MonthRangePicker variant="sheet" open={rangeOpen} onClose={() => setRangeOpen(false)} months={allMonths} value={rangeValue} onApply={setPicked} title="Invoice months" />}
+      </>
+    );
+  }
 
   return (
     <div className="page-scroll lc-page" style={{ padding: "6px 24px 40px 14px" }}>
@@ -441,8 +481,8 @@ export default function CnReceivedPage({ onBack }) {
           <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>All formats · INR ex-GST{lastUpload ? ` · last upload ${lastUpload}` : ""}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {allMonths.length > 0 && <MonthRangePicker months={allMonths} value={months.length === allMonths.length ? [] : months} onApply={setPicked} title="Invoice months" />}
-          <button onClick={() => XLSX.writeFile(buildExport(view), `cn_received_${new Date().toISOString().slice(0, 10)}.xlsx`)} style={secondaryBtn} disabled={!data}>Export</button>
+          {allMonths.length > 0 && <MonthRangePicker months={allMonths} value={rangeValue} onApply={setPicked} title="Invoice months" />}
+          <button onClick={exportXlsx} style={secondaryBtn} disabled={!data}>Export</button>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import CostOverviewMobile from './logistics/mobile/CostOverviewMobile.jsx'
 import CostB2CMobile from './logistics/mobile/CostB2CMobile.jsx'
 import CostFtlMobile from './logistics/mobile/CostFtlMobile.jsx'
 import Cost3plMobile from './logistics/mobile/Cost3plMobile.jsx'
+import { CnEntryCard } from './cn/CnReceivedMobile.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -6811,7 +6812,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     let mob = null
     if (scope === 'all' && overall) {
       mob = <CostOverviewMobile overall={overall} months={ovTrendWindow} trendWindow={ovTrendMonths} setTrendWindow={setOvTrendMonths}
-        b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout} />
+        b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout}
+        cnEntry={onOpenCreditNotes ? <CnEntryCard onOpen={onOpenCreditNotes} /> : null} />
     }
     if (scope === 'b2c' && agg && kpis) {
       mob = <CostB2CMobile kpis={kpis} agg={agg} mom={mom} heroDeltas={heroDeltas} reverseBurden={reverseBurden} trendRows={trendRows} trendWindow={trendWindow}

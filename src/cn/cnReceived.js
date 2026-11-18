@@ -102,6 +102,23 @@ export function topReason(reasonTotals) {
 }
 export const categoryReasons = (c) => Object.fromEntries(c.reasons.map((x) => [x.reason, x.total]));
 
+// Partners for the phone "Top partners" card, ranked by its chip: received, % of invoice, or the
+// amount of the partner's top reason. Partners with no CN in the range are kept apart, by name.
+export function rankPartners(view, by = "received") {
+  const rows = view.partners.map((p) => {
+    const reason = topReason(p.reasons);
+    return { ...p, reason, reasonReceived: reason ? p.reasons[reason].received : 0, pct: shareOf(p.total) };
+  });
+  const key = { received: (x) => x.total.received, pct: (x) => x.pct ?? -1, reason: (x) => x.reasonReceived }[by];
+  return {
+    withCn: rows.filter((x) => x.total.received > 0).sort((a, b) => key(b) - key(a) || a.partner.localeCompare(b.partner)),
+    none: rows.filter((x) => x.total.received === 0).sort((a, b) => a.partner.localeCompare(b.partner)),
+  };
+}
+
+// The calendar month in India, "YYYY-MM": its bar is still filling, so it gets a lighter tint.
+export const currentMonth = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+
 // A month "has CN data" if any invoice value or any received amount is above zero.
 export const hasActivity = (t) => (t.invoice ?? 0) > 0 || t.received > 0;
 

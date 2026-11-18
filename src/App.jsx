@@ -3631,7 +3631,7 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
   }
   const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
   // Sub-pages light up their parent; Logistics / Customer open the sub-page this user may see.
-  const active = page === 'logistics-cost' ? 'logistics' : page === 'customer-support' ? 'customer' : page
+  const active = page === 'logistics-cost' || page === 'cn-received' ? 'logistics' : page === 'customer-support' ? 'customer' : page
   const onSelect = id => {
     if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
     if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
@@ -4951,7 +4951,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin }) {
+function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
@@ -5122,6 +5122,14 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         chips, activeChip: tab,
         onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
         subTabs, activeSub, onSub })
+    }
+    if (page === 'cn-received') {
+      // CN received (a drill-down from Logistics → Cost): ‹ back, the invoice-month pill (its sheet lives
+      // in CnReceivedPage, reached through cnCtrl), the data caption under the title, Export / Open uploads in ⋯.
+      const c = cnCtrl
+      return H({ onBack: () => setPage('logistics-cost'), backLabel: 'Logistics cost', title: 'CN received', sub: c?.caption, stacked: true,
+        date: c?.pill && <HeaderMonthPill label={c.pill} onClick={c.openRange} />,
+        menu: { title: 'CN received', items: c?.menu || [] } })
     }
     // Every other screen (Documents, NavAI, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
@@ -20208,6 +20216,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
   const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
+  const [cnCtrl, setCnCtrl] = useState(null) // CN received → phone header (range pill, caption, "⋯")
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -20973,7 +20982,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
+        {<Topnav logCostCtrl={logCostCtrl} cnCtrl={cnCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
@@ -21032,7 +21041,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               cn_received_summary(), which admits Cost Analytics users as well as Documents users. */}
           {page === 'cn-received' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <CnReceivedPage onBack={() => goTo('logistics-cost')} />
+              <CnReceivedPage onBack={() => goTo('logistics-cost')} onMobileCtrl={setCnCtrl}
+                onOpenUploads={!allowedTabs || allowedTabs.includes('documents') ? () => goTo('logistics-cn') : undefined} />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
