@@ -9,13 +9,16 @@ import { receivedShareOfInvoice } from "./format.js";
 
 export const CATEGORIES = [
   { key: "B2C", label: "B2C couriers", reasons: ["Weight Dispute", "Lost/Damage", "SLA Breach", "High Ageing", "Wrong Invoicing"] },
-  { key: "FTL/PTL", label: "FTL/PTL", reasons: ["FTL/PTL"] },
-  { key: "3PL", label: "3PL", reasons: ["3PL"] },
+  { key: "FTL/PTL", label: "FTL/PTL", reasons: ["Wrong Billing"] },
+  { key: "3PL", label: "3PL", reasons: ["Wrong Billing"] },
 ];
+// FTL/PTL and 3PL uploads have no reason column; the database gives their format's name as the
+// reason, and those CNs are all billing corrections, so they are shown as "Wrong billing".
+const reasonOf = (r) => (CATEGORIES.some((c) => c.key === r.reason) ? "Wrong Billing" : r.reason);
 export const categoryLabel = (key) => CATEGORIES.find((c) => c.key === key)?.label ?? key;
 
 // Reasons as stored → sentence case for display.
-const REASON_LABELS = { "Weight Dispute": "Weight dispute", "SLA Breach": "SLA breach", "High Ageing": "High ageing", "Wrong Invoicing": "Wrong invoicing" };
+const REASON_LABELS = { "Weight Dispute": "Weight dispute", "SLA Breach": "SLA breach", "High Ageing": "High ageing", "Wrong Invoicing": "Wrong invoicing", "Wrong Billing": "Wrong billing" };
 export const reasonLabel = (r) => REASON_LABELS[r] ?? r;
 // Lost/Damage-type claims are against a shipment's value, not an invoice.
 export const SHIPMENT_VALUE_REASONS = new Set(["Lost/Damage", "SLA Breach", "High Ageing", "Wrong Invoicing"]);
@@ -49,7 +52,8 @@ export function summarize(rows) {
   const categories = CATEGORIES.map((c) => ({ ...c, total: blank(), reasons: c.reasons.map((reason) => ({ reason, total: blank() })) }));
   const byCat = Object.fromEntries(categories.map((c) => [c.key, c]));
   const months = new Map(), partners = new Map(), reasons = new Map();
-  for (const r of rows) {
+  for (const row of rows) {
+    const r = { ...row, reason: reasonOf(row) };
     add(total, r);
     const c = byCat[r.category];
     if (c) {
@@ -88,12 +92,11 @@ export function topPartner(view, categoryKey) {
   return p && p.total.received > 0 ? p : null;
 }
 
-// The reason with the most received CN among { reason: total } entries. FTL/PTL and 3PL CNs carry
-// their format's own name as the reason, which says nothing, so those count as no reason (null).
+// The reason with the most received CN among { reason: total } entries; null when none received anything.
 export function topReason(reasonTotals) {
   let best = null;
   for (const [reason, t] of Object.entries(reasonTotals)) {
-    if (t.received > 0 && !CATEGORIES.some((c) => c.key === reason) && (!best || t.received > best.received)) best = { reason, received: t.received };
+    if (t.received > 0 && (!best || t.received > best.received)) best = { reason, received: t.received };
   }
   return best?.reason ?? null;
 }

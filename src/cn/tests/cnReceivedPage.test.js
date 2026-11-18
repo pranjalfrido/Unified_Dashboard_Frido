@@ -128,7 +128,7 @@ describe("per-format aggregation", () => {
   });
 
   it("combines reasons across formats, highest received first, keeping the split by format", () => {
-    expect(s.reasons.map((r) => r.reason)).toEqual(["FTL/PTL", "SLA Breach", "Weight Dispute"]);
+    expect(s.reasons.map((r) => r.reason)).toEqual(["Wrong Billing", "SLA Breach", "Weight Dispute"]);
     const wd = s.reasons.find((r) => r.reason === "Weight Dispute");
     expect(wd.total.received).toBe(2900);
     expect(wd.byCat.B2C.received).toBe(2900);
@@ -139,8 +139,9 @@ describe("per-format aggregation", () => {
     expect(topPartner(s, "FTL/PTL").partner).toBe("Jopadevi");
     expect(topPartner(s, "3PL")).toBeNull();
     expect(topReason(categoryReasons(cat("B2C")))).toBe("SLA Breach");
-    // FTL/PTL CNs carry the format's own name as reason: no top reason to show.
-    expect(topReason(categoryReasons(cat("FTL/PTL")))).toBeNull();
+    // FTL/PTL and 3PL CNs have no reason of their own: they count as wrong billing.
+    expect(topReason(categoryReasons(cat("FTL/PTL")))).toBe("Wrong Billing");
+    expect(reasonLabel("Wrong Billing")).toBe("Wrong billing");
     const bluedart = s.partners.find((p) => p.partner === "Bluedart");
     expect(topReason(bluedart.reasons)).toBe("SLA Breach");
     expect(bluedart.reasons["Weight Dispute"].received).toBe(2000);
