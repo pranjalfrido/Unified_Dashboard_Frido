@@ -119,10 +119,12 @@ function Partners({ overall, b2cCards, b2bCards, fixedVeh, fixedVehMonths, tplPa
   )
 }
 
-export default function CostOverviewMobile({ overall, months, trendWindow, setTrendWindow, b2cCards, b2bCards, fixedVeh, fixedVehMonths, tplPartners, layout }) {
+// cnEntry: the "CN received →" card (CnEntryCard), between the master card and Partners.
+export default function CostOverviewMobile({ overall, months, trendWindow, setTrendWindow, b2cCards, b2bCards, fixedVeh, fixedVehMonths, tplPartners, layout, cnEntry = null }) {
   return (
     <>
       <CostMaster overall={overall} months={months} trendWindow={trendWindow} setTrendWindow={setTrendWindow} layout={layout} />
+      {cnEntry}
       <Partners overall={overall} b2cCards={b2cCards} b2bCards={b2bCards} fixedVeh={fixedVeh} fixedVehMonths={fixedVehMonths} tplPartners={tplPartners} />
     </>
   )

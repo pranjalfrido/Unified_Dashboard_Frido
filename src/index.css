@@ -1611,6 +1611,9 @@ svg text, svg tspan{
 .mph-title{ margin-right:auto; min-width:0; display:flex; align-items:baseline; gap:7px; white-space:nowrap; overflow:hidden }
 .mph-title b{ font-size:17px; font-weight:650; letter-spacing:-.015em; color:#fff; flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-family:var(--font) }
 .mph-title span{ font-size:13px; font-weight:500; color:#a9c9b6; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto } /* the context gives way first; the title keeps its width */
+.mph-title.mph-stack{ flex-direction:column; align-items:flex-start; gap:0 }
+.mph-title.mph-stack b{ line-height:21px }
+.mph-title.mph-stack span{ font-size:12px; line-height:15px; color:rgba(255,255,255,.75); max-width:100% }
 .mph-ctl{ display:flex; align-items:center; gap:0; flex:0 0 auto }
 .mph-filter, .mph-date{ display:contents }
 /* 44 × 44 tap target; the pressed tile is the 34 × 34 visual */

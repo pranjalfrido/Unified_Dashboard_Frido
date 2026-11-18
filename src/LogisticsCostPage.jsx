@@ -12,6 +12,7 @@ import CostB2CMobile from './logistics/mobile/CostB2CMobile.jsx'
 import CostFtlMobile from './logistics/mobile/CostFtlMobile.jsx'
 import Cost3plMobile from './logistics/mobile/Cost3plMobile.jsx'
 import { authFetch } from './authFetch.js'
+import { CnEntryCard } from './cn/CnReceivedMobile.jsx'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -1429,7 +1430,7 @@ const W = 104
 // Why the RTO column is not comparable with Forward/Reverse. Shown on hover.
 const RTO_NOTE = "Return-to-origin leg. Six couriers (Delhivery, Ekart, ElasticRun, Shadowfax, SkyAir, Swift) bundle the original forward leg into the RTO invoice, so that portion is subtracted here: this is the return's own incremental cost, not the full invoice. Bluedart and Urbanbolt bill the return separately, so theirs passes through as-is. Not comparable with Forward and Reverse, which are full per-leg costs."
 
-export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation, onMobileCtrl } = {}) {
+export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation, onOpenCreditNotes, onMobileCtrl } = {}) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
@@ -6812,7 +6813,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     let mob = null
     if (scope === 'all' && overall) {
       mob = <CostOverviewMobile overall={overall} months={ovTrendWindow} trendWindow={ovTrendMonths} setTrendWindow={setOvTrendMonths}
-        b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout} />
+        b2cCards={overviewB2cCards} b2bCards={overviewB2bCards} fixedVeh={fixedVeh} fixedVehMonths={b2b?.fixedVehMonths} tplPartners={tpl?.partners} layout={mobileLayout}
+        cnEntry={onOpenCreditNotes ? <CnEntryCard onOpen={onOpenCreditNotes} /> : null} />
     }
     if (scope === 'b2c' && agg && kpis) {
       mob = <CostB2CMobile kpis={kpis} agg={agg} mom={mom} heroDeltas={heroDeltas} reverseBurden={reverseBurden} trendRows={trendRows} trendWindow={trendWindow}
@@ -6930,6 +6932,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.t2 }}>
                   <span aria-hidden style={{ fontSize: 12 }}>⚖</span>
                   Allocation
+                </button>
+              )}
+              {/* Overview only: credit notes claimed from and credited by couriers,
+                  transporters and 3PLs, uploaded under Documents → Logistics Credit Notes. */}
+              {scope === 'all' && onOpenCreditNotes && (
+                <button
+                  onClick={onOpenCreditNotes}
+                  title="Credit notes received — all formats by month, reason and partner"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
+                    padding: '5px 10px', cursor: 'pointer', fontFamily: 'var(--font)',
+                    fontSize: 11.5, fontWeight: 700, color: C.t2, whiteSpace: 'nowrap',
+                    transition: 'border-color .15s, color .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.acm; e.currentTarget.style.color = C.t1 }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.t2 }}>
+                  <span aria-hidden style={{ fontSize: 12 }}>₹</span>
+                  CN Received
                 </button>
               )}
               {/* The chip IS the month slicer. Selecting nothing means "all months"
