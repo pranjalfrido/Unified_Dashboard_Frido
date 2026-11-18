@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { rangeTouchesImmatureWindow, PROVISIONAL_MATURITY_CUTOFF_DAYS, exportCSV } from '../utils.js'
+import { authFetch } from '../authFetch.js'
 
 // Shared by the D2C Return Analysis page (desktop and mobile) and the Sales → D2C mobile entry
 // card (docs/responsive/RETURN_ANALYSIS_PLAN.md). Display helpers only: every number still comes
@@ -39,7 +40,7 @@ export function useReturnAnalysis({ filters, subCatFirstOrderMap = NO_AGE_MAP, t
       if (reqId !== reqIdRef.current) return
       setLoading(true)
       setError(null)
-      fetch(`${API}/api/return-analysis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      authFetch(`${API}/api/return-analysis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
         .then(json => { if (reqId === reqIdRef.current) setData(json) })
         .catch(e => { if (reqId === reqIdRef.current) setError(e.message) })

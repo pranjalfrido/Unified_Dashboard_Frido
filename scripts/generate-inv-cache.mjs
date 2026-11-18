@@ -23,14 +23,15 @@ const STOCK_STATUS_VALUES = ['Critical', 'Low', 'Sufficient', 'Excess', 'Out of 
 
 const db = await pool.connect()
 
-// Avg sale window ends on the LATEST sales date in the data. Unicommerce sales already arrive with
-// a lag (Daton syncs in 12-hour blocks), so the latest date present is a complete-enough day -
-// dropping it as well (the old max - 1) threw away a real day of sales.
+// Avg sale window ends on the last COMPLETE day: max(order_date) - 1. The latest date in the data
+// is the current day's partial feed (the aggregated sales report now carries today's sales as they
+// land), so including it would drag avg sale / DOI down and show today as "Latest sales".
 const { rows: maxDateRows } = await db.query(`SELECT MAX(order_date) AS max_date FROM sales_window`)
 const rawMax = maxDateRows[0]?.max_date
 const rawMaxStr = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
-const end = rawMaxStr
-console.log(`Latest sales date in DB: ${rawMaxStr} → using end=${end}`)
+const endObj = new Date(rawMaxStr + 'T12:00:00Z'); endObj.setDate(endObj.getDate() - 1)
+const end = endObj.toISOString().slice(0, 10)
+console.log(`Latest sales date in DB: ${rawMaxStr} → using end=${end} (d-1)`)
 
 // Fetch all tables once — reused across all 3 window computations
 console.log('Fetching all tables from Supabase in parallel...')

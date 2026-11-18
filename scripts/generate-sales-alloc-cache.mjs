@@ -29,7 +29,7 @@ const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
 // Indian financial year (Apr 1 → Mar 31) — fixed start so Apr 1 is always included
 // regardless of when CI runs. Prior rolling 180-day window started Apr 3 by Sep 29.
-const end = new Date() // fetch up to today; the window ends on the latest sales date (lastSalesDateConsidered)
+const end = new Date() // fetch up to today; the window ends on the last complete day (lastSalesDateConsidered = max - 1)
 const endStr = end.toISOString().slice(0, 10)
 const fyYear = end.getUTCMonth() >= 3 ? end.getUTCFullYear() : end.getUTCFullYear() - 1
 const startD = new Date(Date.UTC(fyYear, 3, 1)) // Apr 1 of current FY
@@ -102,7 +102,7 @@ for (const row of invRows) {
   invBySku.set(key, (invBySku.get(key) || 0) + totalInventory)
 }
 
-// Determine latest sales date → lastSalesDateConsidered
+// Determine latest sales date → lastSalesDateConsidered (d-1)
 let maxSalesDate = null
 for (const row of salesRows) {
   if (isPseudoSku(row.final_sku)) continue
@@ -111,9 +111,11 @@ for (const row of salesRows) {
 }
 let lastSalesDateConsidered = null
 if (maxSalesDate) {
-  // The latest sales date itself - sales already arrive with a lag, so it is not dropped
+  // Subtract 1 day - the max date is today's partial feed, show the last complete day
   // (same rule as Inventory Health's avg sale window).
-  lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
+  const d = new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z')
+  d.setDate(d.getDate() - 1)
+  lastSalesDateConsidered = d.toISOString().slice(0, 10)
 }
 
 // No filters — all rows qualify (passesFilters always true when no filter is active)
@@ -196,9 +198,12 @@ const lookbackDates = [...new Set(lookbackRows.map(r => r.order_date?.value || r
 
 // ── Momentum ─────────────────────────────────────────────────────────────────
 function momentumFor(N) {
-  if (lookbackDates.length < N + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
-  const lastDate = lookbackDates[lookbackDates.length - 1]
-  const compareDate = lookbackDates[lookbackDates.length - 1 - N]
+  // Anchor on the last COMPLETE day (lastSalesDateConsidered = max - 1), not the partial newest day,
+  // so "last day vs Nth-last day" never compares a full day with a half-landed one.
+  const dates = lastSalesDateConsidered ? lookbackDates.filter(d => d <= lastSalesDateConsidered) : lookbackDates
+  if (dates.length < N + 1) return { risers: [], fallers: [], lastDate: null, compareDate: null }
+  const lastDate = dates[dates.length - 1]
+  const compareDate = dates[dates.length - 1 - N]
   const rows = []
   for (const [skuKey, perDate] of skuDailyMap) {
     const lastQty = perDate.get(lastDate) || 0
@@ -254,7 +259,7 @@ const moversLabelForLevel = {
 }
 
 function resolveCompareDates(mode) {
-  // Anchor on the latest sales date (lastSalesDateConsidered), not endStr (today may have no data yet)
+  // Use last complete day (maxSalesDate - 1) as anchor, not endStr (today may have no data yet)
   const lastCompleteDate = lastSalesDateConsidered || endStr
   const windowN = mode === 'day2' ? 1 : 6
   const compareD = new Date(lastCompleteDate); compareD.setDate(compareD.getDate() - windowN)

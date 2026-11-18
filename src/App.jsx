@@ -15,7 +15,8 @@ import { NAV_PAGES } from './responsive/navConfig.js'
 import { publishNavStat } from './responsive/navStats.js'
 import { geoMercator, geoPath } from 'd3-geo'
 import { feature as topojsonFeature } from 'topojson-client'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange} from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, computeCombinedAlerts, exportCSV, getDefaultDates, getMaturityAdjustedRange, rangeTouchesImmatureWindow, COURIER_COLORS, COURIER_LOGOS, daysInRange, loadAlertsCache} from './utils.js'
+import { loadAlertsPhase2, getAlertsPhase2, computePhase2Alerts } from './alerts/phase2Rules.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, Dropdown, SmallDropdown, returnBadge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap, chartLegendProps, BarGradient } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -49,6 +50,10 @@ import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import AppBanner from './responsive/AppBanner.jsx'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
+import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES, PHASE_COVERED_BY } from './bqPhaseMerge.js'
+import { resolvedAggOf, resolvedAggWhere, resolvedBySkuOf } from '../api/_resolvedAgg.js'
+import { DetailGate } from './DetailGate.jsx'
+import { DetailPhaseContext, useDetailReady } from './detailPhase.js'
 import ReturnEntryCard from './sales/ReturnEntryCard.jsx'
 import { rememberSalesSpot, peekSalesSpot, takeSalesSpot, useRaBasis } from './sales/returnAnalysisData.js'
 import { chg, mobileMatrix, matrixRows, geoRows, regionList, tierList, reasonList, eboStoreRows } from './sales/salesMobileData.js'
@@ -95,6 +100,7 @@ const INVENTORY_DATE_THEME = {
   t1: IC.t1, t2: IC.t2, t3: IC.t3,
 }
 import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
+import { authFetch } from './authFetch.js'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
@@ -507,9 +513,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           // Fetch main + COD + Prepaid CDN files in parallel — single loading bar
           const stPrefix = singleShipmentType ? `${singleShipmentType}-` : ''
           const [res, codRes, prepaidRes] = await Promise.all([
-            fetch(staticFile),
-            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
-            canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
+            authFetch(staticFile),
+            canPrefetchPayment ? authFetch(`/logistics-data-${stPrefix}cod.json`) : Promise.resolve(null),
+            canPrefetchPayment ? authFetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
           ])
           if (res.ok) {
             // Parse all 3 in parallel before touching state — single render, single loading bar
@@ -553,8 +559,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
         // await only main + prev
         const [r, rPrev] = await Promise.all([
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
+          authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+          authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
         ])
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
@@ -600,7 +606,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     const file = shipmentType
       ? `/logistics-data-${shipmentType}-${cPayment.toLowerCase()}.json`
       : `/logistics-data-${cPayment.toLowerCase()}.json`
-    fetch(file)
+    authFetch(file)
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
@@ -608,7 +614,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         // 3. Fallback: live BQ
         const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
         if (shipmentType) body.shipmentType = shipmentType
-        return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(r => r.ok ? r.json() : null)
           .then(json => { if (json) setCPaymentData(json) })
       })
@@ -836,7 +842,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
     try {
-      const r = await fetch(`${API}/api/returns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end }) })
+      const r = await authFetch(`${API}/api/returns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end }) })
       if (r.ok) setRetData(await r.json())
     } catch (e) { console.error('[returns]', e.message) }
   }, [filters.start, filters.end])
@@ -3617,7 +3623,7 @@ const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, invent
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const fbk = useFeedback()
   const can = id => {
-    if (id === 'feedback') return profile?.is_admin === true // admins only
+    if (id === 'feedback') return true // Inbox: everyone (admins get two tabs)
     if (!allowedTabs) return true
     if (id === 'sales') return hasSalesAccess(allowedTabs)
     if (id === 'ads') return hasAdsAccess(allowedTabs)
@@ -3690,7 +3696,9 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
+    // MTD = 1st → yesterday. On the 1st there is no completed day yet (start would be after end),
+    // so the preset is shown disabled instead of loading a reversed range (B6, MONTHLY_TREND_PLAN.md).
+    { label: 'MTD', off: today.getDate() === 1 ? 'No days yet' : null, fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'Last Quarter', fn: () => {
       // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
@@ -3721,7 +3729,7 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
+  const activePreset = PRESETS.find(p => { if (p.off) return false; const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
 
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
@@ -3958,9 +3966,9 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
               {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
                 const isActive = p.fn ? activePreset?.label === p.label : !activePreset
                 return (
-                  <button key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
-                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
-                    {p.label}
+                  <button key={p.label} disabled={!!p.off} title={p.off || undefined} onClick={() => { if (p.fn && !p.off) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn && !p.off ? 'pointer' : 'default', opacity: p.off ? 0.5 : 1, whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
+                    {p.off ? `${p.label} · ${p.off.toLowerCase()}` : p.label}
                   </button>
                 )
               })}
@@ -3977,11 +3985,11 @@ function DateRangePicker({ filters, setFilters, theme: themeProp = C, onRefresh,
             {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
               const isActive = p.fn ? activePreset?.label === p.label : !activePreset
               return (
-                <div key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
-                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bg }}
+                <div key={p.label} title={p.off || undefined} aria-disabled={p.off ? true : undefined} onClick={() => { if (p.fn && !p.off) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn && !p.off ? 'pointer' : 'default', opacity: p.off ? 0.5 : 1, whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
+                  onMouseEnter={e => { if (!isActive && !p.off) e.currentTarget.style.background = T.bg }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                  {p.label}
+                  {p.off ? `${p.label} · ${p.off.toLowerCase()}` : p.label}
                 </div>
               )
             })}
@@ -4951,7 +4959,7 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin }) {
+function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin, alertsComputedAt, onAlertNav, userId, targetAlerts, targetsAt }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
@@ -4982,7 +4990,7 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
     const H = props => (
       <div className="topnav m-header" data-page={page}>
         <MobilePageHeader notifications={notifications} {...props} menu={liveItem ? { title: 'More', ...props.menu, items: [...(props.menu?.items || []), liveItem] } : props.menu} />
-        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} />
+        <AlertsSheet open={alertsOpen} onClose={() => setAlertsOpen(false)} alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
         <LiveSheet isAdmin={isAdmin} open={liveOpen} onClose={() => setLiveOpen(false)} />
       </div>
     )
@@ -5183,7 +5191,7 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
       {/* Admins only: "● N live" next to the alerts / date controls. */}
       <LivePill isAdmin={isAdmin} />
       <FeedbackHeaderButtons />
-      {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
+      <AlertsBell alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
@@ -5217,25 +5225,83 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
 
 // Phones: the same alerts list as the bell's panel, in a bottom sheet. Opened from "Notifications (n)",
 // the first item of the header's ⋯ menu (HEADER_MOBILE_PROMPT.md §3).
-function AlertsSheet({ open, onClose, alerts }) {
+// Alerts Phase 1 (approved 2026-10-31): group critical -> warning -> info, newest-computed-at
+// shown once at top. 'red' = critical, 'amber' = warning, everything else ('green'/'blue') = info.
+const ALERT_SEVERITY_ORDER = { red: 0, amber: 1, green: 2, blue: 2 }
+function sortBySeverity(alerts) {
+  return [...alerts].sort((a, b) => (ALERT_SEVERITY_ORDER[a.type] ?? 2) - (ALERT_SEVERITY_ORDER[b.type] ?? 2))
+}
+// Read/unread fingerprinting: keyed by user id + {alertKey, severity+value-ish string} so a
+// worsened recurrence of the same alert type (e.g. RTO climbing from 9.6% to 11%) still reads as
+// new/unread, while re-showing the identical fired state on reopen does not. alertKey falls back
+// to title (pre-Phase-1 base alerts without a `key` field) so nothing throws if it's missing.
+function alertFingerprint(a) {
+  return `${a.key || a.title}::${a.type}::${a.body}`
+}
+function seenStorageKey(userId) { return `frido_alerts_seen_${userId || 'anon'}` }
+function loadSeenSet(userId) {
+  try { return new Set(JSON.parse(localStorage.getItem(seenStorageKey(userId)) || '[]')) } catch { return new Set() }
+}
+function saveSeenSet(userId, set) {
+  try { localStorage.setItem(seenStorageKey(userId), JSON.stringify([...set])) } catch {}
+}
+function fmtComputedAt(d) {
+  if (!d) return ''
+  try { return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+}
+
+// Alerts Phase 2: one list for the bell panel (laptop) and the notifications sheet (phone) — Critical, then
+// Warnings, then the separate "Targets missed" section (fixed business targets, refreshed weekly by the alerts
+// job, never counted in the badge).
+function AlertGroups({ alerts, targets, targetsAt, onPick }) {
+  const crit = alerts.filter(a => a.type === 'red'), warn = alerts.filter(a => a.type === 'amber'), info = alerts.filter(a => a.type !== 'red' && a.type !== 'amber')
+  const tgt = sortBySeverity(targets || [])
+  const Head = ({ id, children, sub }) => <div data-testid={id} style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t3, padding: '8px 2px 2px', flexShrink: 0 }}>{children}{sub && <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>{sub}</span>}</div>
+  const card = a => <div key={a.key || a.title} style={{ flexShrink: 0 }}><AlertCard type={a.type} title={a.title} body={a.body} onClick={a.nav && onPick ? () => onPick(a) : undefined} /></div>
+  let since = ''
+  try { if (targetsAt) since = `refreshed weekly · ${new Date(targetsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` } catch { /* ignore */ }
+  return (
+    <>
+      {crit.length > 0 && <Head id="alerts-section-critical">Critical</Head>}
+      {crit.map(card)}
+      {warn.length > 0 && <Head id="alerts-section-warning">Warnings</Head>}
+      {warn.map(card)}
+      {info.length > 0 && <Head id="alerts-section-updates">Updates</Head>}
+      {info.map(card)}
+      {alerts.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: C.green.tx, fontSize: 12, fontWeight: 600 }}>
+          <span style={{ fontSize: 13 }}>★</span> All systems normal: no alerts for the current period.
+        </div>
+      )}
+      {tgt.length > 0 && <Head id="alerts-section-targets" sub={since}>Targets missed</Head>}
+      {tgt.map(card)}
+    </>
+  )
+}
+
+function AlertsSheet({ open, onClose, alerts, targets = [], targetsAt, computedAt, userId, onNav }) {
   const fbk = useFeedback()
   useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
+  useEffect(() => {
+    if (!open || !alerts.length) return
+    const seen = loadSeenSet(userId)
+    alerts.forEach(a => seen.add(alertFingerprint(a)))
+    saveSeenSet(userId, seen)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- mark-seen only fires on open, not every alerts recompute
   return (
     <BottomSheet open={open} onClose={onClose} title={`Notifications (${alerts.length})`}>
+      {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 6px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px', color: C.m.up, fontSize: 13, fontWeight: 600 }}>
-            <span>★</span> All systems normal: no alerts for the current period.
-          </div>
-        )}
+        <AlertGroups alerts={alerts} targets={targets} targetsAt={targetsAt} onPick={a => { onNav?.(a.nav, a.title); onClose?.() }} />
       </div>
     </BottomSheet>
   )
 }
 
 // Bell icon + unread-style count badge (WhatsApp/notification-icon pattern) — click opens a
-// popover listing every alert. Lives in Topnav so it's visible on every page, not just Overview.
-function AlertsBell({ alerts }) {
+// popover listing every alert. Lives in Topnav so it's visible on every page (Phase 1, approved
+// 2026-10-31: removed the inventory/logistics page exclusion so the bell always renders).
+function AlertsBell({ alerts, targets = [], targetsAt, computedAt, userId, onNav }) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef(null)
   const popRef = useRef(null)
@@ -5248,6 +5314,17 @@ function AlertsBell({ alerts }) {
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [open])
+  // Opening the bell marks every currently-shown alert "seen" (localStorage, per-user). A
+  // worsened recurrence of the same alert type still gets a fresh fingerprint (body/severity
+  // change), so it counts as unread again even though its `key` is unchanged.
+  useEffect(() => {
+    if (!open || !alerts.length) return
+    const seen = loadSeenSet(userId)
+    alerts.forEach(a => seen.add(alertFingerprint(a)))
+    saveSeenSet(userId, seen)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- mark-seen only fires on open
+  const seenSet = useMemo(() => loadSeenSet(userId), [userId, open])
+  const unreadCount = alerts.filter(a => !seenSet.has(alertFingerprint(a))).length
   const critical = alerts.filter(a => a.type === 'red').length
   const fbk = useFeedback()
   useEffect(() => { if (!open) return; const t = setTimeout(fbk.ackNotices, 1500); return () => { clearTimeout(t); fbk.clearAcked() } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps -- acknowledge once per opening
@@ -5266,13 +5343,13 @@ function AlertsBell({ alerts }) {
       >
         <span className="bell-emoji">🔔</span>
         <svg className="bell-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-        {alerts.length > 0 && (
+        {unreadCount > 0 && (
           <span className="alerts-badge" data-level={critical > 0 ? 'red' : 'amber'} style={{
             position: 'absolute', top: -5, right: -5, minWidth: 16, height: 16, padding: '0 3px',
             borderRadius: 8, background: critical > 0 ? '#B91C1C' : '#D97706', color: '#fff',
             fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
             lineHeight: 1, fontFamily: 'var(--font)',
-          }}>{alerts.length > 99 ? '99+' : alerts.length}</span>
+          }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
       </button>
       {open && (
@@ -5283,11 +5360,8 @@ function AlertsBell({ alerts }) {
           boxShadow: '0 12px 32px -8px rgba(0,0,0,0.22)', padding: 8,
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-          {alerts.length > 0 ? alerts.map((a, i) => <AlertCard key={i} type={a.type} title={a.title} body={a.body} />) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: C.green.tx, fontSize: 12, fontWeight: 600 }}>
-              <span style={{ fontSize: 13 }}>★</span> All systems normal — no alerts for the current period.
-            </div>
-          )}
+          {computedAt && <div style={{ fontSize: 10.5, color: C.t3, padding: '0 2px 4px' }}>Computed at {fmtComputedAt(computedAt)}</div>}
+          <AlertGroups alerts={alerts} targets={targets} targetsAt={targetsAt} onPick={a => { onNav?.(a.nav, a.title); setOpen(false) }} />
         </div>
       )}
     </div>
@@ -5341,7 +5415,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [], mobile = false }) 
   const width = 300, height = 300
   useEffect(() => {
     let cancelled = false
-    fetch(INDIA_TOPOJSON).then(r => r.json()).then(topo => {
+    authFetch(INDIA_TOPOJSON).then(r => r.json()).then(topo => {
       if (cancelled) return
       const geojson = topojsonFeature(topo, topo.objects.states)
       const projection = geoMercator().fitSize([width, height], geojson)
@@ -5544,6 +5618,8 @@ const WideCard = ({ span = 12, children, style }) => (
 
 function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel, filters, salesAllocData, invSnapshotData, overviewCustData, prevLoaders, onOpenInventory }) {
   const [productSearch, setProductSearch] = useState('')
+  // Product Performance / Top States read the sales_detail group (staged /api/bq loading).
+  const overviewDetailReady = useDetailReady()
   // Layout per breakpoint (docs/responsive/RESPONSIVE_PLAN.md §2, Overview row). Layout only -
   // every value shown below is computed exactly as before.
   //   phone (portrait)    KPIs 2-up, scorecard 2-up, everything full width
@@ -5568,7 +5644,22 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   // tiles read directly comparable this way instead of silently differing by the GST rate.
   const { blendedASP, totalReturnPct } = salesMetrics(data)
   const sh = data.shopify || {}
-  const [trendGroupBy, setTrendGroupBy] = useState('daily')
+  // Default trend-chart grouping by range length — KPI tiles above are unaffected, this only
+  // changes how many points the revenue trend chart plots (chart-only perf fix for long ranges,
+  // see fix/overview-ytd). >180 days defaults to Monthly, >90 days to Weekly, else Daily. The
+  // dropdown below still lets the user override this per the existing daily/weekly/monthly UI.
+  const rangeDays = filters?.start && filters?.end ? (Date.parse(filters.end) - Date.parse(filters.start)) / 86400000 : 0
+  const defaultGroupBy = rangeDays > 180 ? 'monthly' : rangeDays > 90 ? 'weekly' : 'daily'
+  const [trendGroupBy, setTrendGroupBy] = useState(defaultGroupBy)
+  const trendGroupByRangeRef = useRef(filters?.start + '|' + filters?.end)
+  useEffect(() => {
+    const key = filters?.start + '|' + filters?.end
+    if (trendGroupByRangeRef.current !== key) {
+      trendGroupByRangeRef.current = key
+      setTrendGroupBy(defaultGroupBy)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.start, filters?.end])
   const ads = data.ads || {}
 
   // ── Sales Summary waterfall (maturity-adjusted) ──
@@ -5643,13 +5734,17 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
     const returnRev = filtered.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
     return returnRev / gross * 100
   }
-  const shopifyReturnPct = resolvedReturnPct(sh.resolvedDailySKU, x => x.subChannel !== 'shopify international')
-  const amzReturnPct = resolvedReturnPct((data.amzSC?.resolvedDailySKU || []).concat(data.amzVC?.resolvedDailySKU || []))
-  const fkReturnPct = resolvedReturnPct(data.flipkart?.resolvedDailySKU)
-  const myntraReturnPct = resolvedReturnPct(data.myntra?.resolvedDailySKU)
-  const eboReturnPct = resolvedReturnPct(data.ebo?.resolvedDailySKU)
-  const credReturnPct = resolvedReturnPct(data.cred?.resolvedDailySKU)
-  const firstcryReturnPct = resolvedReturnPct(data.firstcry?.resolvedDailySKU)
+  // Staged /api/bq loading: the rows arrive with sales_detail; until then the 'fast' phase's
+  // <channel>.resolvedAgg (api/_resolvedAgg.js) carries the same count / gross / return sums,
+  // accumulated in the same row order — the same Return % to the last digit.
+  const aggReturnPct = a => (!a || !a.n || a.gross <= 0) ? null : a.totalReturnRev / a.gross * 100
+  const shopifyReturnPct = sh.resolvedDailySKU?.length ? resolvedReturnPct(sh.resolvedDailySKU, x => x.subChannel !== 'shopify international') : aggReturnPct(sh.resolvedAgg?.notIntl)
+  const amzReturnPct = (data.amzSC?.resolvedDailySKU?.length || data.amzVC?.resolvedDailySKU?.length) ? resolvedReturnPct((data.amzSC?.resolvedDailySKU || []).concat(data.amzVC?.resolvedDailySKU || [])) : aggReturnPct(data.amzSC?.resolvedAgg?.plusVC)
+  const fkReturnPct = data.flipkart?.resolvedDailySKU?.length ? resolvedReturnPct(data.flipkart.resolvedDailySKU) : aggReturnPct(data.flipkart?.resolvedAgg)
+  const myntraReturnPct = data.myntra?.resolvedDailySKU?.length ? resolvedReturnPct(data.myntra.resolvedDailySKU) : aggReturnPct(data.myntra?.resolvedAgg)
+  const eboReturnPct = data.ebo?.resolvedDailySKU?.length ? resolvedReturnPct(data.ebo.resolvedDailySKU) : aggReturnPct(data.ebo?.resolvedAgg)
+  const credReturnPct = data.cred?.resolvedDailySKU?.length ? resolvedReturnPct(data.cred.resolvedDailySKU) : aggReturnPct(data.cred?.resolvedAgg)
+  const firstcryReturnPct = data.firstcry?.resolvedDailySKU?.length ? resolvedReturnPct(data.firstcry.resolvedDailySKU) : aggReturnPct(data.firstcry?.resolvedAgg)
   // Offline Sales genuinely counts as a return for the company — Credit Notes against Sales
   // (confirmed 2026-10-22: "that's actually considered return as a company"). Reads
   // chMap.offline_sales.rev/.returnRev (NOT offline.resolvedDailySKU, which is scoped to
@@ -5952,9 +6047,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
         {mobileSectionLabel('Where Revenue Came From')}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <ChannelScorecardMobile channels={scorecardChannels} cols={scorecardCols} dense={bp.width < 400} />
-          {topProductsBySubCat.length > 0 && renderProductListMobile()}
-          <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
-            map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
+          {/* Product Performance and Top States come from the sales_detail group (skuRows /
+              subCatMap / stateMap / cityRows) — a loader until it lands (src/DetailGate.jsx). */}
+          <DetailGate label="Loading product performance" height={180}>
+            {topProductsBySubCat.length > 0 && renderProductListMobile()}
+          </DetailGate>
+          <DetailGate label="Loading top states" height={180}>
+            <TopStatesMobile stateMap={stateMap} cityRows={data.cityRows || []} totalRev={totalRev} period={fmtDateRange(filters?.start, filters?.end)}
+              map={<IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} mobile />} />
+          </DetailGate>
         </div>
 
         {/* One title for this section: the card's own "Logistics & Ops" heading. */}
@@ -5988,7 +6089,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               daily/weekly/monthly grouping dropdown. Only Revenue + Net Revenue are plotted (both
               on the left ₹ axis) — this data source has no per-day return-rate series the way
               /api/return-analysis does, so no %-line is fabricated onto a right axis. */}
-          <Card title="Sales Trend" style={{ display: 'flex', flexDirection: 'column' }} action={
+          <Card title={`Sales Trend${trendGroupBy !== 'daily' ? ` (${trendGroupBy === 'weekly' ? 'Weekly' : 'Monthly'})` : ''}`} style={{ display: 'flex', flexDirection: 'column' }} action={
             <SmallDropdown value={trendGroupBy} onChange={setTrendGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
               triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
           }>
@@ -6100,7 +6201,15 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           </div>
         </WideCard>
 
-        {topProductsBySubCat.length > 0 && (() => {
+        {/* Product Performance + Top States: sales_detail fields (skuRows, subCatMap, stateMap,
+            cityRows) — a per-section loader / error until that group lands. */}
+        {!overviewDetailReady && (
+          <WideCard span={wide ? 8 : 12}>
+            {secHdr('Product Performance', 'By sub-category')}
+            <DetailGate label="Loading product performance" height={260} style={{ border: 'none', background: 'transparent', padding: 0 }} />
+          </WideCard>
+        )}
+        {overviewDetailReady && topProductsBySubCat.length > 0 && (() => {
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = (q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat).filter(g => g.subCategory !== 'Others' && g.category !== 'Others')
           return (
@@ -6178,7 +6287,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
 
         <WideCard span={wide ? 4 : 12} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
-          <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
+          <DetailGate label="Loading top states" height={260} style={{ border: 'none', background: 'transparent', padding: 0 }}>
+            <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
+          </DetailGate>
         </WideCard>
 
         {deckSectionLabel('Logistics & Ops Performance')}
@@ -7305,7 +7416,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     if (willOpen && channel && !fetchedDateMap && !dateMapLoading) {
       setDateMapLoading(true)
       try {
-        const res = await fetch(`${API}/api/cat-daily`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: rangeStart, end: rangeEnd, channel }) })
+        const res = await authFetch(`${API}/api/cat-daily`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: rangeStart, end: rangeEnd, channel }) })
         if (res.ok) { const json = await res.json(); setFetchedDateMap(json.subCatDateMap || {}) }
       } catch (_) {}
       finally { setDateMapLoading(false) }
@@ -8520,7 +8631,7 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'stretch' }}>
         <div style={{ height: 340 }}><ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} /></div>
-        <div style={{ height: 340 }}><CategoryRevenueCard
+        <div style={{ height: 340 }}><DetailGate label="Loading category revenue" height={340}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRowsRaw}
           skuMap={skuChannelMapBySku}
@@ -8530,17 +8641,17 @@ function AllTab({ data, rangeStart, rangeEnd, setPage, allowedTabs, onOpenChanne
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={340}
-        /></div>
-        <div style={{ height: 340 }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
+        /></DetailGate></div>
+        <div style={{ height: 340 }}><DetailGate label="Loading region & tier split" height={340}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></DetailGate></div>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} /></DetailGate>
       {(() => {
         const { enrichedStates, enrichedCities } = allGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport /></DetailGate>
           </div>
         )
       })()}
@@ -9112,6 +9223,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   const salesBp = useBreakpoint()
   const salesMobile = salesBp.width < 1024 || salesBp.isPhoneLandscape
   const isMob = useIsMobile()
+  const shDetailReady = useDetailReady()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
   // Channel='International' tab) — no region toggle, no filters.subChannel default needed.
@@ -9173,11 +9285,13 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // 2026-10-22) — resolvedDailySKU is resolved per (sku, sub_channel) composite key server-side
   // (see api/bq.js), so each sub-channel already carries its OWN rolling rate; this just narrows
   // the array to the rows that belong to it, same scoping discipline as netCalcSrc/shCh above.
-  const shResolved = isD2CSubChFiltered
-    ? (sh.resolvedDailySKU || []).filter(r => r.subChannel === filters.subChannel.toLowerCase())
-    : (sh.resolvedDailySKU || [])
-  const shResolvedGross = shResolved.reduce((s, r) => s + r.gross, 0)
-  const shResolvedReturnRev = shResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums over these rows (shResolved, below) — from sh.resolvedDailySKU when loaded (P&L's group),
+  // else the reductions /api/bq ships: sh.resolvedAgg ('fast') and, for a MyFrido / Mobility filter,
+  // sh.resolvedAggDetail.bySubChannel ('sales_detail'). Same accumulation order, identical values
+  // (api/_resolvedAgg.js).
+  const shAgg = isD2CSubChFiltered ? resolvedAggWhere(sh, r => r.subChannel === filters.subChannel.toLowerCase(), ['bySubChannel', filters.subChannel.toLowerCase()]) : resolvedAggOf(sh)
+  const shResolvedGross = shAgg.gross
+  const shResolvedReturnRev = shAgg.totalReturnRev
   const returnRevPct = shResolvedGross > 0 ? (shResolvedReturnRev / shResolvedGross * 100) : 0
   // Net Revenue (Exc GST) — Gross-after-resolved-returns above is still Inc GST, so apply the same
   // blended GST ratio netRevenueOf() uses elsewhere: Net Exc GST = (Gross - Returns) x
@@ -9259,7 +9373,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   const shCodCancelRev = netCalcSrc.codCancelRev || 0
   const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
   // RTO% — resolved engine (confirmed 2026-10-22), same shResolved array as Returns%/Net Revenue.
-  const shResolvedRtoRev = shResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
+  const shResolvedRtoRev = shAgg.rto
   const rtoPct = shResolvedGross > 0 ? shResolvedRtoRev / shResolvedGross * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
@@ -9369,9 +9483,9 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // CIR%/Cancellation%/Exchange% — resolved engine (confirmed 2026-10-22), same shResolved
   // array used for Returns%/Net Revenue/RTO% above, so every return-related number on this page
   // is derived from the SAME resolved per-component data, never a mix of resolved-here/live-there.
-  const shResolvedCirRevSum = shResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
-  const shResolvedCancelRev = shResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
-  const shResolvedExchangeRev = shResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
+  const shResolvedCirRevSum = shAgg.cir
+  const shResolvedCancelRev = shAgg.cancel
+  const shResolvedExchangeRev = shAgg.exchange
   const shCirPct = shResolvedGross > 0 ? shResolvedCirRevSum / shResolvedGross * 100 : 0
   const shResolvedCancelPct = shResolvedGross > 0 ? shResolvedCancelRev / shResolvedGross * 100 : 0
   const shExchPct = shResolvedGross > 0 ? shResolvedExchangeRev / shResolvedGross * 100 : 0
@@ -9384,16 +9498,8 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
   // substitution for the last 15 days. isD2CSubChFiltered no longer branches this — shResolved
   // already carries every D2C sub-channel (shDailySKU's own query excludes only Shopify
   // International/Retail Store, same scope this page always showed).
-  const shReturnTrendMap = useMemo(() => {
-    const byDate = {}
-    shResolved.forEach(r => {
-      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-      d.gross += r.gross
-      d.rtoRev += r.components?.rto?.rev || 0
-      d.cirRev += r.components?.cir?.rev || 0
-      d.cancelRev += r.components?.cancel?.rev || 0
-      d.exchRev += r.components?.exchange?.rev || 0
-    })
+  const shReturnTrendMap = (() => {
+    const byDate = shAgg.byDate // per-day sums of the (sub-channel) rows (api/_resolvedAgg.js)
     const m = {}
     Object.entries(byDate).forEach(([date, d]) => {
       if (!d.gross) return
@@ -9406,7 +9512,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
       }
     })
     return m
-  }, [shResolved])
+  })()
   const shMobKpis = [
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
@@ -9518,6 +9624,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()
     return { catData: (catData), subCatData: (subCatData), skuData: (skuData), catPrevMap: (sh.catPrevMap || {}), subCatPrevMap: (sh.subCatPrevMap || {}), skuPrevMap: (sh.skuPrevMap || {}), mobilityNetBySubCat: (reconciledMobilityNetBySubCat), netScale: (d2cMatrixNetScale) }
   }
+  // MyFrido / Mobility: the daily series, sparklines and "per day" tiles are rebuilt from
+  // sh.dailySKU, which arrives with the sales_detail group (staged /api/bq loading) — until then
+  // the whole sub-channel view is one loader rather than tiles computed from an empty series.
+  if (isD2CSubChFiltered && !shDetailReady) return <DetailGate label={`Loading ${filters.subChannel} daily data`} height={420} />
   // Mobile + tablet (< 1024px, phone landscape): the shared Sales mobile view, same values as the tiles below.
   if (salesMobile) {
     const cancelledOrders = orderStatusMap['Cancelled'] || 0
@@ -9760,7 +9870,7 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()}
         {isIntl
           ? <Card title="Category Revenue"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category data not available for International orders</div></Card>
-          : <CategoryRevenueCard
+          : <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={allSubCatRows}
               skuMap={(() => {
@@ -9787,17 +9897,17 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
               view={catRevView}
               setView={setCatRevView}
               height={320}
-            />}
+            /></DetailGate>}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} />}
+          : <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} /></DetailGate>}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
         const __mx = d2cMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · D2C India" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} mobilityNetBySubCat={__mx.mobilityNetBySubCat} showReturnPct={true} detailedReturns channel="shopify" netScale={__mx.netScale} /></DetailGate>
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -9873,10 +9983,10 @@ function ShopifyTab({ data, filters, setFilters, rangeStart, rangeEnd, onOpenRet
         })()}
       </div>}
       {!isIntl && <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" note={isD2CSubChFiltered ? 'All D2C · sub-channel breakdown unavailable' : undefined} rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
       </div>}
-      {!isD2CSubChFiltered && <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />}
+      {!isD2CSubChFiltered && <DetailGate label="Loading return reasons" height={220}><ShopifyReturnReasonsTable reasons={sh.returnReasons || []} /></DetailGate>}
     </div>
   )
 }
@@ -9917,14 +10027,15 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // (confirmed 2026-10-22), same engine as D2C: mature days use real per-day component revenue,
   // immature days (last 15) substitute this SKU's own rolling 30-day-window rate per component.
   // Replaces the old live-only ebo.netCalc-based figures and the "Provisional Return" sub-label.
-  const eboResolved = ebo.resolvedDailySKU || []
-  const eboResolvedGross = eboResolved.reduce((s, r) => s + r.gross, 0)
-  const eboResolvedRtoRev = eboResolved.reduce((s, r) => s + (r.components?.rto?.rev || 0), 0)
-  const eboResolvedReturnRev = eboResolved.reduce((s, r) => s + (r.components?.return?.rev || 0), 0)
-  const eboResolvedCirRev = eboResolved.reduce((s, r) => s + (r.components?.cir?.rev || 0), 0)
-  const eboResolvedCancelRev = eboResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
-  const eboResolvedExchangeRev = eboResolved.reduce((s, r) => s + (r.components?.exchange?.rev || 0), 0)
-  const eboResolvedTotalReturnRev = eboResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums over the rows when loaded, else the 'fast' phase's ebo.resolvedAgg (identical values).
+  const eboAgg = resolvedAggOf(ebo)
+  const eboResolvedGross = eboAgg.gross
+  const eboResolvedRtoRev = eboAgg.rto
+  const eboResolvedReturnRev = eboAgg.return
+  const eboResolvedCirRev = eboAgg.cir
+  const eboResolvedCancelRev = eboAgg.cancel
+  const eboResolvedExchangeRev = eboAgg.exchange
+  const eboResolvedTotalReturnRev = eboAgg.totalReturnRev
   const cancelRev = eboResolvedCancelRev
   const rtoRev = eboResolvedRtoRev
   const returnRev = eboResolvedReturnRev
@@ -10058,14 +10169,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // the old convention folded Return into "rto" display — resolved engine tracks it separately,
   // so it's added here and folded into rtoRev for the matrix's own RTO-combines-Return display
   // convention (matching the KPI card's rtoPct above).
-  const eboResolvedBySku = {}
-  eboResolved.forEach(r => {
-    const s = eboResolvedBySku[r.sku] || (eboResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-    s.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
-    s.cirRev += r.components?.cir?.rev || 0
-    s.cancelRev += r.components?.cancel?.rev || 0
-    s.exchRev += r.components?.exchange?.rev || 0
-  })
+  // Per-SKU sums from the rows when loaded, else sales_detail's ebo.resolvedAggDetail (identical
+  // values, api/_resolvedAgg.js). rtoRev folds in Return, as before (rtoRetRev).
+  const eboResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(ebo)).map(([sku, v]) => [sku, { rtoRev: v.rtoRetRev, cirRev: v.cirRev, cancelRev: v.cancelRev, exchRev: v.exchRev }]))
   const pick = (v, sku) => {
     const resolved = sku ? eboResolvedBySku[sku] : null
     return {
@@ -10115,19 +10221,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   // engine (confirmed 2026-10-22), built from eboResolved (ebo.resolvedDailySKU), same approach as
   // D2C's shReturnTrendMap, replacing the old live-only ebo.dailyReturnTrend.
   const eboReturnTrendMap = (() => {
-    const byDate = {}
-    eboResolved.forEach(r => {
-      const d = byDate[r.date] || (byDate[r.date] = { gross: 0, rtoRev: 0, cirRev: 0, cancelRev: 0, exchRev: 0 })
-      d.gross += r.gross
-      d.rtoRev += (r.components?.rto?.rev || 0) + (r.components?.return?.rev || 0)
-      d.cirRev += r.components?.cir?.rev || 0
-      d.cancelRev += r.components?.cancel?.rev || 0
-      d.exchRev += r.components?.exchange?.rev || 0
-    })
+    const byDate = eboAgg.byDate // per-day sums (rtoRetRev = RTO + Return, per row), api/_resolvedAgg.js
     const m = {}
     Object.entries(byDate).forEach(([date, d]) => {
       if (!d.gross) return
-      m[date] = { date, rtoPct: d.rtoRev / d.gross * 100, cirPct: d.cirRev / d.gross * 100, cancelPct: d.cancelRev / d.gross * 100, exchPct: d.exchRev / d.gross * 100 }
+      m[date] = { date, rtoPct: d.rtoRetRev / d.gross * 100, cirPct: d.cirRev / d.gross * 100, cancelPct: d.cancelRev / d.gross * 100, exchPct: d.exchRev / d.gross * 100 }
     })
     return m
   })()
@@ -10300,7 +10398,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             ))}
           </div>
         </div>
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRows}
           skuMap={skuMap}
@@ -10308,12 +10406,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           view={catRevView}
           setView={setCatRevView}
           height={320}
-        />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
+        /></DetailGate>
+        <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} /></DetailGate>
       </div>
       {(() => {
         const __mx = eboMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · EBO" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} showReturnPct={true} detailedReturns channel="ebo" netScale={__mx.netScale} /></DetailGate>
       })()}
       {/* Store-wise table */}
       {(() => {
@@ -10392,11 +10490,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       })()}
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
       </div>
       {/* Return reasons */}
-      <ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} />
+      <DetailGate label="Loading return reasons" height={220}><ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} /></DetailGate>
     </div>
   )
 }
@@ -10439,14 +10537,14 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
   // engine as D2C: mature days use real RTO+Return+CIR+Cancelled revenue, immature days (last 15)
   // substitute this SKU's own rolling 30-day-window rate per component. Replaces the old live-only
   // returnRate.pct and the "Provisional Return" sub-label entirely, per explicit instruction.
-  const amzSCResolved = amzSC.resolvedDailySKU || []
-  const amzSCResolvedGross = amzSCResolved.reduce((s, r) => s + r.gross, 0)
-  const amzSCResolvedReturnRev = amzSCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const amzSCAgg = resolvedAggOf(amzSC) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const amzSCResolvedGross = amzSCAgg.gross
+  const amzSCResolvedReturnRev = amzSCAgg.totalReturnRev
   const amzSCResolvedReturnPct = amzSCResolvedGross > 0 ? (amzSCResolvedReturnRev / amzSCResolvedGross * 100) : 0
   // Amazon Vendor Central's own resolved Return Revenue (single Return-status component).
-  const amzVCResolved = amzVC.resolvedDailySKU || []
-  const amzVCResolvedGross = amzVCResolved.reduce((s, r) => s + r.gross, 0)
-  const amzVCResolvedReturnRev = amzVCResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const amzVCAgg = resolvedAggOf(amzVC)
+  const amzVCResolvedGross = amzVCAgg.gross
+  const amzVCResolvedReturnRev = amzVCAgg.totalReturnRev
   // Combined SC+VC Returns % for the "All" toggle — both sides now resolved-engine-derived, so
   // the combined figure is never a mix of one resolved and one raw-live number.
   const amzCombinedReturnedRev = amzSCResolvedReturnRev + amzVCResolvedReturnRev
@@ -10618,19 +10716,9 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             // sums resolveDailySkuComponents' already-resolved per-SKU totals for each side
             // separately, so each side can still be toggled on/off (showSC/showVC) independently
             // while using the resolved (not raw-live) numbers.
-            const scResolvedBySku = {}
-            amzSCResolved.forEach(r => {
-              const s = scResolvedBySku[r.sku] || (scResolvedBySku[r.sku] = { rtoRev: 0, cirRev: 0, cancelRev: 0, returnRev: 0 })
-              s.rtoRev += r.components?.rto?.rev || 0
-              s.cirRev += r.components?.cir?.rev || 0
-              s.cancelRev += r.components?.cancel?.rev || 0
-              s.returnRev += r.components?.return?.rev || 0
-            })
-            const vcResolvedBySku = {}
-            amzVCResolved.forEach(r => {
-              const s = vcResolvedBySku[r.sku] || (vcResolvedBySku[r.sku] = { returnRev: 0 })
-              s.returnRev += r.components?.return?.rev || 0
-            })
+            // per-SKU sums: rows when loaded, else sales_detail's resolvedAggDetail (identical values)
+            const scResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(amzSC)).map(([sku, v]) => [sku, { rtoRev: v.rtoRev, cirRev: v.cirRev, cancelRev: v.cancelRev, returnRev: v.returnRev }]))
+            const vcResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(amzVC)).map(([sku, v]) => [sku, { returnRev: v.returnRev }]))
             const pickAmz = (scChData, vc, sku) => {
               const r = {}
               const scResolved = sku ? scResolvedBySku[sku] : null
@@ -11032,18 +11120,18 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
                 </Card>
                 {(() => {
                   const __mx = amzCategoryInputs()
-                  return <CategoryRevenueCard
+                  return <DetailGate label="Loading category revenue" height={325}><CategoryRevenueCard
                     catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                     height={325}
-                  />
+                  /></DetailGate>
                 })()}
                 {/* boxHeight, not boxheight — JSX props are case-sensitive, so the lowercase
                     spelling was silently ignored and this donut fell back to its natural
                     height instead of matching the 325px trend card beside it. */}
                 {channelView === 'sc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} />
+                  ? <DetailGate label="Loading region & tier split" height={325}><GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={325} /></DetailGate>
                   : (() => {
                       const { rows, maxRev, chNote } = amzAccountInputs()
                       return (
@@ -11074,7 +11162,7 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
           })()}
           {(() => {
             const __mx = amzMatrixInputs()
-            return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} />
+            return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="amazon" netScale={__mx.netScale} /></DetailGate>
           })()}
           {(() => {
             const { enrichedStates, enrichedCities } = amzGeoInputs()
@@ -11086,8 +11174,8 @@ function AmazonTab({ data, channelView, setChannelView, rangeStart, rangeEnd }) 
             )
             return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
-                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" note="Seller Central only" />
-                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" note="Seller Central only" />
+                <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" note="Seller Central only" /></DetailGate>
+                <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" note="Seller Central only" /></DetailGate>
               </div>
             )
           })()}
@@ -11121,14 +11209,15 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   // Revenue/Orders correctly narrowed to the selected category — a real scope mismatch between the
   // numerator/denominator of the GST ratio and totalReturnRev below). fkDailySKUComponents now
   // carries category/subcategory (api/bq.js), passed through resolveDailySkuComponents.
-  const fkResolvedAll = fk.resolvedDailySKU || []
-  const fkResolved = selectedSubCat
-    ? fkResolvedAll.filter(r => r.category === selectedCat && r.subCategory === selectedSubCat)
-    : selectedCat
-    ? fkResolvedAll.filter(r => r.category === selectedCat)
-    : fkResolvedAll
-  const fkResolvedGross = fkResolved.reduce((s, r) => s + r.gross, 0)
-  const fkResolvedReturnRev = fkResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  // Sums / per-day return revenue from the rows when loaded (or filtered), else the 'fast' phase's
+  // fk.resolvedAgg — same accumulation order, identical values (api/_resolvedAgg.js).
+  const fkFilterGroup = selectedSubCat ? ['bySubCat', `${selectedCat}::${selectedSubCat}`] : selectedCat ? ['byCat', selectedCat] : null
+  const fkAgg = fkFilterGroup
+    ? resolvedAggWhere(fk, selectedSubCat ? (r => r.category === selectedCat && r.subCategory === selectedSubCat) : (r => r.category === selectedCat), fkFilterGroup, { bySku: true })
+    : resolvedAggOf(fk)
+  const fkSkuSums = fkFilterGroup ? (fkAgg.bySku || {}) : resolvedBySkuOf(fk)
+  const fkResolvedGross = fkAgg.gross
+  const fkResolvedReturnRev = fkAgg.totalReturnRev
   const fkResolvedReturnPct = fkResolvedGross > 0 ? (fkResolvedReturnRev / fkResolvedGross * 100) : 0
 
   // When cat/subcat selected, derive totals+daily from dailyCat (FBF+Non-FBF combined — no split)
@@ -11191,7 +11280,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
   // estimated-days backfill (for the 1-3 day reporting lag, a separate concern from the rolling-
   // 30-day Return% substitution) completely untouched.
   const fkResolvedByDate = {}
-  fkResolved.forEach(r => { fkResolvedByDate[r.date] = (fkResolvedByDate[r.date] || 0) + r.totalReturnRev })
+  Object.entries(fkAgg.byDate).forEach(([date, d]) => { fkResolvedByDate[date] = d.totalReturnRev })
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
     if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returns: 0, returnRev: 0, estimated: x.estimated || false }
@@ -11250,8 +11339,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         // Resolved per-SKU Return Revenue (NEW, additive, 2026-10-22) — fk.skuMatrix carried no
         // returnRev at all (SKU rows always showed "—" for Return%); this adds it from the
         // resolved engine, same as D2C/Amazon.
-        const fkResolvedBySku = {}
-        fkResolved.forEach(r => { fkResolvedBySku[r.sku] = (fkResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+        const fkResolvedBySku = Object.fromEntries(Object.entries(fkSkuSums).map(([sku, v]) => [sku, v.totalReturnRev]))
         const catAggMatrix = {}
         ;(fk.categories || []).forEach(x => {
           if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
@@ -11543,16 +11631,16 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
             </Card>
             {(() => {
               const __mx = fkCategoryInputs()
-              return <CategoryRevenueCard
+              return <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
                 catRows={__mx.catRows} subCatRows={__mx.subCatRows} skuMap={__mx.skuMap} totalRev={__mx.totalRev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
                 height={320}
-              />
+              /></DetailGate>
             })()}
             {(() => {
               const __mx = fkRegionInputs()
-              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} />
+              return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={[]} boxHeight={320} /></DetailGate>
             })()}
           </div>
         )
@@ -11561,7 +11649,7 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
       {/* Category Revenue Matrix */}
       {(() => {
         const __mx = fkMatrixInputs()
-        return <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} />
+        return <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={__mx.catData} subCatData={__mx.subCatData} skuData={__mx.skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={__mx.catPrevMap} subCatPrevMap={__mx.subCatPrevMap} skuPrevMap={__mx.skuPrevMap} simpleReturns showReturnPct channel="flipkart" netScale={__mx.netScale} /></DetailGate>
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -11569,8 +11657,8 @@ function FlipkartTab({ data, rangeStart, rangeEnd }) {
         const { enrichedStates, enrichedCities } = fkGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" /></DetailGate>
           </div>
         )
       })()}
@@ -11754,6 +11842,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   // Ads Phase 2: watchlist rule filtering the By product table; the last-6-months data (session-cached)
   const [adsFlagRule, setAdsFlagRule] = useState(null)
   const [adsMargins, setAdsMargins] = useState(null) // { key: tab|range, margins } from the hidden P&L probe
+  // Staged /api/bq loading: the daily-by-channel revenue, watchlist and category / product spend
+  // read the ads_detail group (or the ads-data.json cache); the hidden P&L probe below reads
+  // pnl_margin (or pnl_detail, when P&L already loaded it) — each waits for its own group
+  // (src/DetailGate.jsx).
+  const adsDetailReady = useDetailReady('ads_detail')
+  const adsPnlReady = useDetailReady('pnl_margin')
   const adsMonthly = useAdsMonthly(selPlatform !== 'CRED')
   const adsBp = useBreakpoint()
   const adsMobileLayout = adsBp.width < 1024 || adsBp.isPhoneLandscape
@@ -12139,7 +12233,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
     })()
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
-        {adsPnlTab && data && (
+        {adsPnlTab && data && adsPnlReady && (
           <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
             offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
             onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
@@ -12669,15 +12763,17 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
 
         {/* Category table + Product table (with Category column) — same component for every
             sub-tab (All + each platform), reconciled to that tab's own KPI Total Spend. */}
-        {adsPnlTab && data && (
+        {adsPnlTab && data && adsPnlReady && (
           <PnLPage data={data} filters={filters} activeTab={adsPnlTab} setActiveTab={() => {}} amzChannelView="all" setAmzChannelView={() => {}}
             offlineSub="all" setOfflineSub={() => {}} d2cSubCh="all" setD2cSubCh={() => {}} summaryOnly withMargins
             onSummary={sm => setAdsMargins({ key: adsProbeKey, margins: sm.margins })} />
         )}
-        {!isMob && selPlatform !== 'CRED' && (
+        {!isMob && selPlatform !== 'CRED' && !adsDetailReady && <DetailGate phase="ads_detail" label="Loading daily spend, watchlist & pacing" height={320} />}
+        {!isMob && selPlatform !== 'CRED' && adsDetailReady && (
           <AdsLaptopSections watch={adsWatch} activeRule={adsFlagRule} onRule={setAdsFlagRule} channel={ADS_PLATFORMS.find(p => p.id === (selPlatform || 'All'))?.label || 'Overall'}
             dayRows={adsDayRows} series={adsSeries} fmt={fmt} pendingNote={adsPendingNote} monthly={adsMonthly} pacing={adsPacing} shareRows={adsShareRows} />
         )}
+        <DetailGate phase="ads_detail" label="Loading category & product spend" height={320}>
         {(() => {
           const detail = !selPlatform ? allSpendDetail : isD2C ? (spendDetailByPlatform.D2C || allSpendDetail) : (spendDetailByPlatform[selPlatform] || allSpendDetail)
           // D3: the labelled CRED / estimate rows (adsExtraRows above)
@@ -12980,6 +13076,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
             </div>
           )
         })()}
+        </DetailGate>
 
       </div>}
     </div>
@@ -13578,7 +13675,7 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={bl.skuMatrix || {}}
@@ -13588,23 +13685,23 @@ function BlinkitTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = blRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
       {/* Category Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns channel="blinkit" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns channel="blinkit" /></DetailGate>
 
       {/* Cities + States */}
       {(() => {
         const { enrichedStates, enrichedCities } = blGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -13780,7 +13877,7 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={ins.skuMatrix || {}}
@@ -13790,21 +13887,21 @@ function InstaTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = insRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns channel="instamart" /></DetailGate>
 
       {(() => {
         const { enrichedStates, enrichedCities } = insGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -13980,7 +14077,7 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
-        <CategoryRevenueCard
+        <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
           skuMap={zp.skuMatrix || {}}
@@ -13990,21 +14087,21 @@ function ZeptoTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={320}
-        />
+        /></DetailGate>
         {(() => {
           const __mx = zpRegionInputs()
-          return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+          return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
         })()}
       </div>
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns channel="zepto" /></DetailGate>
 
       {(() => {
         const { enrichedStates, enrichedCities } = zpGeoInputs()
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
+            <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} /></DetailGate>
           </div>
         )
       })()}
@@ -14023,16 +14120,16 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22). CRED has only a
   // Return status (confirmed live), so this is a single-component resolution: mature days use real
   // Return revenue, immature days (last 15) substitute this SKU's own rolling 30-day-window rate.
-  const crResolved = cr.resolvedDailySKU || []
-  const crResolvedGross = crResolved.reduce((s, r) => s + r.gross, 0)
-  const totalReturnRev = crResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const crAgg = resolvedAggOf(cr) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const crResolvedGross = crAgg.gross
+  const totalReturnRev = crAgg.totalReturnRev
   const returnPct = crResolvedGross > 0 ? (totalReturnRev / crResolvedGross * 100) : 0
   const crGstRatio = crResolvedGross > 0 ? (crResolvedGross - (t.excRev || 0)) / crResolvedGross : 0
   const netRev = Math.max(crResolvedGross - totalReturnRev, 0) * (1 - crGstRatio)
   const gstCollected = (crResolvedGross - totalReturnRev) - netRev
   // CRED also has a real Cancelled status (confirmed live 2026-10-22, corrected from an earlier
   // assumption it only had Return) — tracked as its own resolved component.
-  const cancelRev = crResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelRev = crAgg.cancel
   const cancelPct = crResolvedGross > 0 ? (cancelRev / crResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
@@ -14073,8 +14170,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
   // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
   // 2026-10-22), replacing the previous "CRED has no breakdown, always 0" state. simpleReturns
   // still applies (one combined Return+Cancelled figure, no RTO/CIR for this channel).
-  const crResolvedBySku = {}
-  crResolved.forEach(r => { crResolvedBySku[r.sku] = (crResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+  const crResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(cr)).map(([sku, v]) => [sku, v.totalReturnRev]))
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -14306,7 +14402,7 @@ function CredTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={subCatRows}
               skuMap={cr.skuMatrix || {}}
@@ -14316,19 +14412,19 @@ function CredTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} />
+            /></DetailGate>
+            <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} /></DetailGate>
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={crSkuMatrixResolved} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={cr.skuPrevMap || {}} simpleReturns showReturnPct channel="cred" netScale={crMatrixNetScale} /></DetailGate>
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -14345,14 +14441,14 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
   // Returns %/Net Revenue — resolved per-component engine (confirmed 2026-10-22), same engine as
   // CRED: Return and Cancelled both tracked, mature days use real revenue, immature days (last 15)
   // substitute this SKU's own rolling 30-day-window rate per component.
-  const fcResolved = fc.resolvedDailySKU || []
-  const fcResolvedGross = fcResolved.reduce((s, r) => s + r.gross, 0)
-  const totalReturnRev = fcResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const fcAgg = resolvedAggOf(fc) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const fcResolvedGross = fcAgg.gross
+  const totalReturnRev = fcAgg.totalReturnRev
   const returnPct = fcResolvedGross > 0 ? (totalReturnRev / fcResolvedGross * 100) : 0
   const fcGstRatio = fcResolvedGross > 0 ? (fcResolvedGross - (t.excRev || 0)) / fcResolvedGross : 0
   const netRev = Math.max(fcResolvedGross - totalReturnRev, 0) * (1 - fcGstRatio)
   const gstCollected = (fcResolvedGross - totalReturnRev) - netRev
-  const cancelRev = fcResolved.reduce((s, r) => s + (r.components?.cancel?.rev || 0), 0)
+  const cancelRev = fcAgg.cancel
   const cancelPct = fcResolvedGross > 0 ? (cancelRev / fcResolvedGross * 100) : 0
   const orders = t.orders || 0
   const units = t.units || 0
@@ -14392,8 +14488,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
 
   // Category matrix data — returnRev now populated from the resolved engine (NEW, additive,
   // 2026-10-22), replacing the previous "Firstcry has no breakdown, always 0" state.
-  const fcResolvedBySku = {}
-  fcResolved.forEach(r => { fcResolvedBySku[r.sku] = (fcResolvedBySku[r.sku] || 0) + r.totalReturnRev })
+  const fcResolvedBySku = Object.fromEntries(Object.entries(resolvedBySkuOf(fc)).map(([sku, v]) => [sku, v.totalReturnRev]))
   const catMatrixData = {}
   allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
   const subCatMatrixData = {}
@@ -14617,7 +14712,7 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={subCatRows}
               skuMap={fc.skuMatrix || {}}
@@ -14627,17 +14722,17 @@ function FirstcryTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} />
+            /></DetailGate>
+            <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} /></DetailGate>
           </div>
         )
       })()}
 
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={fcSkuMatrixResolved} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={fc.skuPrevMap || {}} simpleReturns showReturnPct channel="firstcry" netScale={fcMatrixNetScale} /></DetailGate>
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -14662,9 +14757,9 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
   // D2C/Amazon/Flipkart: mature days use real RTO+Return+CIR+Cancelled revenue, immature days
   // (last 15) substitute this SKU's own rolling 30-day-window rate per component. Replaces the
   // old live-only totals.returnRev-based figures and the "Provisional Return" sub-label entirely.
-  const mnResolved = mn.resolvedDailySKU || []
-  const mnResolvedGross = mnResolved.reduce((s, r) => s + r.gross, 0)
-  const mnReturnRev = mnResolved.reduce((s, r) => s + r.totalReturnRev, 0)
+  const mnAgg = resolvedAggOf(mn) // rows when loaded, else the 'fast' phase's reduction (identical)
+  const mnResolvedGross = mnAgg.gross
+  const mnReturnRev = mnAgg.totalReturnRev
   const mnReturnPct = mnResolvedGross > 0 ? (mnReturnRev / mnResolvedGross * 100) : 0
   const mnGstRatio = mnResolvedGross > 0 ? (mnResolvedGross - (totals.excRev || 0)) / mnResolvedGross : 0
   const netRev = Math.max(mnResolvedGross - mnReturnRev, 0) * (1 - mnGstRatio)
@@ -14935,7 +15030,7 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={320}><CategoryRevenueCard
               catRows={catRowsForCatSubCat}
               subCatRows={subCatRowsForCatSubCat}
               skuMap={mn.skuMatrix || {}}
@@ -14945,22 +15040,22 @@ function MyntraTab({ data, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
-            />
+            /></DetailGate>
             {(() => {
               const __mx = mnRegionInputs()
-              return <GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} />
+              return <DetailGate label="Loading region & tier split" height={320}><GeoToggleDonutCard regionRows={__mx.regionRows} tierRows={__mx.tierRows} boxHeight={320} /></DetailGate>
             })()}
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={mnSkuMatrixResolved} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} skuPrevMap={mn.skuPrevMap || {}} simpleReturns showReturnPct channel="myntra" netScale={mnMatrixNetScale} /></DetailGate>
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={mnEnrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
-        <ShopifyGeoRichTable title="Top Cities" rows={mnEnrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={mnEnrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={mnEnrichedCities} firstKey="city" firstLabel="City" rtoLabel="Return %" /></DetailGate>
       </div>
     </div>
   )
@@ -15353,7 +15448,7 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
                 </div>
               )}
             </Card>
-            <CategoryRevenueCard
+            <DetailGate label="Loading category revenue" height={325}><CategoryRevenueCard
               catRows={catRows}
               subCatRows={allSubCatRows}
               skuMap={skuMatrixData}
@@ -15363,21 +15458,21 @@ function OfflineTab({ data, sub, setSub, rangeStart, rangeEnd }) {
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
               height={325}
-            />
+            /></DetailGate>
             {/* boxHeight, not boxheight — the lowercase spelling is silently dropped, which
                 left this donut shorter than the 325px trend card in the same row. */}
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} />
+            <DetailGate label="Loading region & tier split" height={325}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={325} /></DetailGate>
           </div>
         )
       })()}
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch — offline distribution has no such concept, Credit Notes are tracked separately at the KPI level) */}
-      <FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
+      <DetailGate label="Loading category matrix" height={220}><FlatCategoryProductMatrix rangeStart={rangeStart} rangeEnd={rangeEnd} catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${subLabel}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns /></DetailGate>
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={true} showASP={false} />
-        <ShopifyGeoRichTable title="Top Cities" rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={true} showASP={false} />
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={true} showASP={false} /></DetailGate>
+        <DetailGate label="Loading top states & cities" height={360}><ShopifyGeoRichTable title="Top Cities" rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={true} showASP={false} /></DetailGate>
       </div>
     </div>
   )
@@ -15644,6 +15739,8 @@ function FilterIconPopover({ children, activeCount }) {
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {}, setPage, onMenu }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
+  // Exports read the sales_detail group of /api/bq (staged loading) — disabled until it has loaded.
+  const salesDetailReady = useDetailReady()
   const filteredData = data
 
   // Return Analysis opened from Sales → D2C (the phone entry card or "⋯"): remember the D2C sub-tab
@@ -16562,12 +16659,13 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       : activeTab === 'amazon' ? std.filter(([key]) => !(key === 'states' && channelView === 'vc'))
       : handlers[activeTab] ? std : []
     const run = activeTab === 'shopify' ? handleD2CExport : activeTab === 'all' ? handleAllExport : handlers[activeTab]
-    const items = opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) }))
+    // Exports read the sales_detail group: offered once it has loaded (staged /api/bq loading).
+    const items = salesDetailReady ? opts.map(([key, label]) => ({ id: `export-${key}`, label, group: 'Export (CSV)', strong: key === 'all', onSelect: () => run(key) })) : []
     if (activeTab === 'shopify' && shopifyView === 'returns') items.unshift({ id: 'back', label: '← Back to D2C overview', onSelect: () => setShopifyView('overview') }, ...(raMenu || []))
     if (activeTab === 'shopify' && shopifyView !== 'returns') items.unshift({ id: 'returns', label: 'Return analysis', group: 'View', onSelect: openReturns })
     onMenu(items)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu])
+  }, [onMenu, activeTab, channelView, shopifyView, data, filters, raMenu, salesDetailReady])
   useEffect(() => () => onMenu?.([]), [onMenu])
 
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
@@ -16607,7 +16705,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'shopify' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setD2cExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {d2cExportOpen && (
@@ -16628,7 +16726,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'amazon' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setAmzExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {amzExportOpen && (
@@ -16649,7 +16747,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'flipkart' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setFkExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {fkExportOpen && (
@@ -16670,7 +16768,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'blinkit' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setBlExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {blExportOpen && (
@@ -16691,7 +16789,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'instamart' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setInsExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {insExportOpen && (
@@ -16712,7 +16810,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'zepto' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setZtExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {ztExportOpen && (
@@ -16733,7 +16831,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'cred' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setCrExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {crExportOpen && (
@@ -16754,7 +16852,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'firstcry' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setFcExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {fcExportOpen && (
@@ -16775,7 +16873,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'myntra' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setMnExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {mnExportOpen && (
@@ -16796,7 +16894,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'offline' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setOffExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {offExportOpen && (
@@ -16817,7 +16915,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'all' && (
               <div style={{ position: 'relative' }}>
-                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button disabled={!salesDetailReady} title={salesDetailReady ? undefined : 'Available once the detail data has loaded'} onClick={() => setAllExportOpen(o => !o)} style={{ opacity: salesDetailReady ? 1 : 0.5,  fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                 </button>
                 {allExportOpen && (
@@ -17278,7 +17376,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
     prevCustFetchKey.current = custFetchKey
     setLoading(true)
     setCustError(null)
-    fetch(`${API}/api/customer`, {
+    authFetch(`${API}/api/customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start: filters.start, end: filters.end }),
@@ -20174,6 +20272,9 @@ function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.include
 // The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect
 // has always applied (productAge → subCategory, D2C sub-channels sharing the ShopifyIndia request, …).
 // Shared with the mobile Overview's previous-period loader so both send the same request shape.
+// Client-side /api/bq response cache size (entries = one request × one phase).
+const BQ_CLIENT_CACHE_MAX = 16
+
 function buildBqExtra(f, subCatFirstOrderMap) {
   const { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = f
   const extra = {}
@@ -20217,6 +20318,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
   const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
   const [cnCtrl, setCnCtrl] = useState(null) // CN received → phone header (range pill, caption, "⋯")
+  // Alerts Phase 1: title of the bell alert that navigated here, for the "From alert ✕" chip.
+  // Cleared on dismiss or on the next unrelated navigation (any goTo not coming from navAlert).
+  const [fromAlert, setFromAlert] = useState(null)
   const [theme, setThemeState] = useState(readStoredTheme)
   const setTheme = useCallback(id => {
     const applied = applyTheme(id)
@@ -20258,7 +20362,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [invPreset, setInvPreset] = useState(null)
   const invPresetSeq = useRef(0)
   const openInventoryHealth = preset => { invPresetSeq.current += 1; setInvPreset({ ...preset, nonce: invPresetSeq.current }); goTo('inventory', 'health') }
-  const goTo = (page, sub, sub2) => {
+  const goTo = (page, sub, sub2, _fromAlertNav) => {
+    if (!_fromAlertNav) setFromAlert(null)
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
     else if (page === 'cn-received') path = '/logistics/cn_received'
@@ -20271,6 +20376,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     else path = `/${page}`
     navigate(path)
   }
+
+  // Alerts Phase 1 click-nav: each alert carries { page, sub } (approved 2026-10-31) — restoring
+  // underlying filters (e.g. a specific channel's date range) isn't in scope for Phase 1, just
+  // landing on the right page + channel tab via the existing goTo router. `fromAlert` tracks the
+  // title of the alert that triggered the nav so the destination page can show a "From alert ✕"
+  // chip; dismissing it only clears the chip itself (there's no applied filter to clear, since
+  // filter-restoration isn't in scope for Phase 1 — see comment above).
+  const navAlert = (nav, title) => { if (nav?.page) { goTo(nav.page, nav.sub, nav.sub2, true); setFromAlert(title || null) } }
 
   const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
   const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
@@ -20363,7 +20476,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       return
     }
     const isPageAllowed = page === 'profile' ? true :
-      page === 'feedback' ? profile?.is_admin === true :
+      page === 'feedback' ? true :
       page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       // Shares Cost Analytics' permission: there is no separate allowedTabs entry for it,
       // so without this branch the generic allowedTabs.includes(page) test fails and a
@@ -20403,6 +20516,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // just re-fetched here for Overview's own summary tiles.
   const [salesAllocData, setSalesAllocData] = useState(null)
   const [invSnapshotData, setInvSnapshotData] = useState(null)
+  // Fixed-window alerts (#3/#4/#6/#11) read public/alerts-data.json, produced hourly by
+  // scripts/generate-alerts-cache.mjs — never the viewer's own selected date range. Fetched once on
+  // mount; _alertsTick just forces computeCombinedAlerts' useMemo to re-run once it resolves.
+  const [_alertsTick, _setAlertsTick] = useState(0)
+  useEffect(() => { Promise.all([loadAlertsCache(), loadAlertsPhase2()]).finally(() => _setAlertsTick(t => t + 1)) }, [])
   const [overviewCustData, setOverviewCustData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
   const [adsCachedChMap, setAdsCachedChMap] = useState(null)
@@ -20418,27 +20536,104 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const reqIdRef = useRef(0)
   const activeTabRef = useRef(activeTab)
   activeTabRef.current = activeTab
-  // Client-side cache: key → response data. Cleared when dates change.
+  // ── /api/bq staged loading (src/bqPhaseMerge.js, api/_bqPhases.js) ──
+  // A page first gets phase 'fast' (KPIs, chMap, trends, channel totals — rendered immediately),
+  // then the detail group(s) it needs (PAGE_DETAIL_PHASES) in the background, merged into the same
+  // `rawRows` object every page already reads. Sections built from a detail group show a
+  // <DetailGate> skeleton until it lands, or an inline error + Retry if it fails.
+  //
+  // Client-side response cache: one entry per (request, phase). The key is
+  //   JSON.stringify({ start, end, ...every filter sent to /api/bq, channel, phase })
+  // so a response is only ever reused for the exact same range + filters + channel + phase.
+  // phase 'full' marks a complete pre-computed payload (public/pnl-data*.json). Bounded, oldest
+  // dropped first — detail responses for long ranges are large.
   const clientCacheRef = useRef(new Map())
+  const cacheGet = k => {
+    const m = clientCacheRef.current
+    if (!m.has(k)) return undefined
+    const v = m.get(k); m.delete(k); m.set(k, v)
+    return v
+  }
+  const cacheSet = (k, v) => {
+    const m = clientCacheRef.current
+    m.delete(k); m.set(k, v)
+    while (m.size > BQ_CLIENT_CACHE_MAX) m.delete(m.keys().next().value)
+  }
+  const pageRef = useRef(page)
+  pageRef.current = page
+  // Which request (key without phase) `rawRows` currently holds — a detail response is merged only
+  // into the data of the request it belongs to, never into another range's / filter's data.
+  const rawKeyRef = useRef(null)
+  const [rawKey, setRawKey] = useState(null)
+  // Which phases are merged into the current rawRows ('full' = a complete static payload). This, not
+  // the bounded cache, is what the per-section loaders read — an evicted cache entry can never leave
+  // a section stuck on its loader when the data is already on screen.
+  const [rawPhases, setRawPhases] = useState([])
+  const setRawFor = (reqKey, next, phases = []) => { rawKeyRef.current = reqKey; setRawKey(reqKey); setRawPhases(phases); setRawRows(next) }
+  const lastReqRef = useRef(null)
+  // Detail requests in flight / failed, by phase cache key: { status: 'loading' | 'error', error }.
+  const [phaseStatus, setPhaseStatus] = useState({})
+  const detailInflightRef = useRef(new Set())
+  // Bumped by a forced refresh so a detail response requested before it is never merged after it.
+  const forceGenRef = useRef(new Map())
+
+  const fetchDetailPhase = useCallback(async (req, phase) => {
+    const k = req.keyFor(phase)
+    const merge = part => {
+      if (rawKeyRef.current !== req.reqKey) return
+      setRawRows(prev => (prev && rawKeyRef.current === req.reqKey ? mergePhase(prev, part) : prev))
+      setRawPhases(prev => (rawKeyRef.current === req.reqKey && !prev.includes(phase) ? [...prev, phase] : prev))
+    }
+    const cached = cacheGet(k)
+    if (cached) { merge(cached); return }
+    if (detailInflightRef.current.has(k)) return
+    detailInflightRef.current.add(k)
+    const gen = forceGenRef.current.get(req.reqKey) || 0
+    setPhaseStatus(s => ({ ...s, [k]: { status: 'loading' } }))
+    try {
+      const body = { start: req.start, end: req.end, ...req.extraFilters, ...(req.ch ? { channel: req.ch } : {}), phase }
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!res.ok) throw new Error(`API error ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      const json = await res.json()
+      if ((forceGenRef.current.get(req.reqKey) || 0) !== gen) return
+      cacheSet(k, json)
+      merge(json)
+      setPhaseStatus(s => { const n = { ...s }; delete n[k]; return n })
+    } catch (e) {
+      setPhaseStatus(s => ({ ...s, [k]: { status: 'error', error: e.message } }))
+    } finally {
+      detailInflightRef.current.delete(k)
+    }
+  }, [API])
 
   const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false, force = false) => {
     const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
-    const cacheKey = JSON.stringify({ start, end, ...extraFilters, channel: ch })
-
-    // Client-side cache hit: skip the fetch entirely. Checked for every call, not
-    // just keepPrev ones - the cache key already identifies the response exactly, so
-    // re-requesting it would return the same rows after a visible delay.
-    if (!force && clientCacheRef.current.has(cacheKey)) {
-      const cached = clientCacheRef.current.get(cacheKey)
-      setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
-        return cached
-      })
-      setFetchPending(false)
-      return
-    }
-
+    const keyFor = phase => JSON.stringify({ start, end, ...extraFilters, channel: ch, phase })
+    const reqKey = keyFor(null)
+    const req = { start, end, extraFilters, ch, keyFor, reqKey }
+    lastReqRef.current = req
+    const details = PAGE_DETAIL_PHASES[pageRef.current] || []
     const reqId = ++reqIdRef.current
+    if (force) {
+      for (const p of ['full', 'fast', ...DETAIL_PHASES]) clientCacheRef.current.delete(keyFor(p))
+      forceGenRef.current.set(reqKey, (forceGenRef.current.get(reqKey) || 0) + 1)
+      setPhaseStatus(s => Object.fromEntries(Object.entries(s).filter(([k]) => !DETAIL_PHASES.some(p => k === keyFor(p)))))
+    }
+    // keepPrev (no current callers): overlay the new response on the previous one, as before.
+    const show = (next, phases) => setRawFor(reqKey, keepPrev ? (prev => (prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...next } : next)) : next, phases)
+    // fast + every detail group already cached for this exact request (and which ones those were)
+    const cachedDetails = () => DETAIL_PHASES.filter(p => clientCacheRef.current.has(keyFor(p)))
+    const assemble = fast => cachedDetails().reduce((d, p) => mergePhase(d, clientCacheRef.current.get(keyFor(p))), fast)
+    const isCached = p => clientCacheRef.current.has(keyFor(p)) || (PHASE_COVERED_BY[p] && clientCacheRef.current.has(keyFor(PHASE_COVERED_BY[p])))
+    const loadDetails = () => details.forEach(p => { if (!isCached(p)) fetchDetailPhase(req, p) })
+
+    // Client-side cache hit: skip the fetch entirely. Checked for every call - the key identifies
+    // the response exactly, so re-requesting it would return the same rows after a visible delay.
+    const fullCached = !force && cacheGet(keyFor('full'))
+    if (fullCached) { show(fullCached, ['full']); setLoading(false); setFetchPending(false); return }
+    const fastCached = !force && cacheGet(keyFor('fast'))
+    if (fastCached) { show(assemble(fastCached), ['fast', ...cachedDetails()]); setLoading(false); setFetchPending(false); loadDetails(); return }
+
     if (!keepPrev) setLoading(true)
     setError(null)
 
@@ -20447,6 +20642,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // pre-computed daily by GitHub Actions so these date ranges never hit BigQuery.
     // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
     // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
+    // These are complete (unphased) payloads, cached as phase 'full': every section is ready.
     const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
     const effectiveSubCh = extraFilters.subChannel
     const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
@@ -20458,15 +20654,15 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           // API (VITE_API_URL) sent this request to the wrong host in local dev (API server runs
           // on a different port than the static file host), 404-ing every page load — harmless in
           // production only because Vercel happens to serve both from the same domain there.
-          const r = await fetch('/pnl-data.json')
+          const r = await authFetch('/pnl-data.json')
           if (r.ok) pnlCacheRef.current = await r.json()
         }
         const c = pnlCacheRef.current
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) setSubCatFirstOrderMap(c.subCatFirstOrderMap)
-          clientCacheRef.current.set(cacheKey, c)
-          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...c } : c)
+          cacheSet(keyFor('full'), c)
+          show(c, ['full'])
           setLoading(false); setFetchPending(false)
           return
         }
@@ -20475,51 +20671,80 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       try {
         if (!pnlCacheRef.lastMonth) {
           // Same fix as pnl-data.json above — relative path, not API-prefixed.
-          const r = await fetch('/pnl-data-lastmonth.json')
+          const r = await authFetch('/pnl-data-lastmonth.json')
           if (r.ok) pnlCacheRef.lastMonth = await r.json()
         }
         const lm = pnlCacheRef.lastMonth
         if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (lm.subCatFirstOrderMap && Object.keys(lm.subCatFirstOrderMap).length) setSubCatFirstOrderMap(lm.subCatFirstOrderMap)
-          clientCacheRef.current.set(cacheKey, lm)
-          setRawRows(prev => keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev, ...lm } : lm)
+          cacheSet(keyFor('full'), lm)
+          show(lm, ['full'])
           setLoading(false); setFetchPending(false)
           return
         }
       } catch (_) {}
     }
 
-    const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }
+    const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}), phase: 'fast' }
+    const fastGen = forceGenRef.current.get(reqKey) || 0
 
     try {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
-      if (reqId !== reqIdRef.current) return // stale response, ignore
       const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
+      // Cached under its own key even if superseded (e.g. a page switch re-issued fetchData while
+      // this was in flight) — it is still the exact response for this key, unless a forced refresh
+      // of the same key happened meanwhile.
+      if ((forceGenRef.current.get(reqKey) || 0) === fastGen) cacheSet(keyFor('fast'), next)
+      if (reqId !== reqIdRef.current) return // stale response, ignore
       if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
         setSubCatFirstOrderMap(json.subCatFirstOrderMap)
       }
-      setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
-        return next
-      })
-      clientCacheRef.current.set(cacheKey, next)
-
+      show(assemble(next), ['fast', ...cachedDetails()])
+      // Fast is on screen: now the detail group(s) this page needs, in parallel with each other.
+      loadDetails()
     } catch (e) {
       if (reqId === reqIdRef.current) {
-        setError(e.message)
+        // Real error always goes to the console for debugging (e.g. "Failed to fetch" from a
+        // Hobby-plan 60s function timeout on a long date range looks identical to any other
+        // network failure in the UI string, so the console is where this gets diagnosed).
+        console.error('[fetchData] /api/bq failed:', e)
+        const longRange = (Date.parse(end) - Date.parse(start)) / 86400000 > 90
+        setError(longRange
+          ? 'This range is taking longer than usual. Retry, or show the last 90 days instead.'
+          : e.message)
         // Clear stale data on failure — otherwise the dashboard keeps rendering the LAST
         // successful fetch's numbers under whatever filter is now selected (e.g. switching
         // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
         // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
         // that the switch never actually completed) — confirmed 2026-08-19.
-        setRawRows(null)
+        setRawFor(null, null)
       }
     }
     finally { if (reqId === reqIdRef.current) { setLoading(false); setFetchPending(false) } }
-  }, [API])
+  }, [API, fetchDetailPhase])
+
+  // Detail-group status of the open page, for <DetailGate> (src/DetailGate.jsx): the page's main
+  // group's { status, error, retry }, plus byPhase for every group the page loads. null = all in.
+  const pageDetailPhases = PAGE_DETAIL_PHASES[page] || []
+  const detailCtx = (() => {
+    const req = lastReqRef.current
+    if (!pageDetailPhases.length || !req || !rawKey) return null
+    const READY_ST = { status: 'ready', error: null, retry: null }
+    const statusOf = p => {
+      if (req.reqKey !== rawKey) return { status: 'loading', error: null, retry: null }
+      if (rawPhases.includes('full') || rawPhases.includes(p) || (PHASE_COVERED_BY[p] && rawPhases.includes(PHASE_COVERED_BY[p]))) return READY_ST
+      // the Ads static cache (ads-data.json) carries the Ads detail itself
+      if (p === 'ads_detail' && page === 'ads' && adsCache) return READY_ST
+      const st = phaseStatus[req.keyFor(p)]
+      if (st?.status === 'error') return { status: 'error', error: st.error, retry: () => fetchDetailPhase(req, p) }
+      return { status: 'loading', error: null, retry: null }
+    }
+    const byPhase = Object.fromEntries(pageDetailPhases.map(p => [p, statusOf(p)]))
+    return { ...byPhase[pageDetailPhases[0]], byPhase }
+  })()
 
   const debounceRef = useRef(null)
   const prevDateRef = useRef({ start: null, end: null })
@@ -20534,7 +20759,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFetchPending(true)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
-    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawFor(null, null) }
     // Debounce only when the date changed (user may still be typing in date picker).
     // For all other filter changes (tab clicks, category, subChannel, etc.) fire immediately.
     const debounceMs = dateChanged ? 600 : 0
@@ -20569,7 +20794,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Fall back to live BQ only if date range doesn't match.
         const tryStatic = async () => {
           try {
-            const res = await fetch('/logistics-data.json', { cache: 'no-cache' })
+            const res = await authFetch('/logistics-data.json', { cache: 'no-cache' })
             if (!res.ok) return false
             const json = await res.json()
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
@@ -20583,7 +20808,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         }
         tryStatic().then(hit => {
           if (!hit) {
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
+            authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
               .then(r => r.ok ? r.json() : null)
               .then(j => { if (j) setLogisticsData(j) })
               .catch(() => {})
@@ -20595,9 +20820,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // filter changes on other tabs don't waste BQ quota on /api/customer.
       if (page === 'overview') {
         Promise.all([
-          fetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch('/sales-alloc-data.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch('/inv-data-7d.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          authFetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]).then(([salesAlloc, invSnapshot, custData]) => {
           if (salesAlloc) setSalesAllocData(salesAlloc)
           if (invSnapshot) setInvSnapshotData(invSnapshot)
@@ -20612,7 +20837,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Each one repeats a request the page already makes, for another date range, and returns the
   // response without touching any page state. Same endpoints, same bodies, same static-cache
   // shortcuts, same server-side byte limits - only the dates differ.
-  const loadSalesPeriod = useCallback(async (start, end) => {
+  // `details`: the /api/bq detail groups the caller reads on top of 'fast' (src/bqPhaseMerge.js) —
+  // none for the mobile Overview's ▲/▼ (KPIs + daily trend), ['pnl_detail'] for P&L's previous
+  // period. Requested in parallel and merged the same way as the page's own data.
+  const loadSalesPeriod = useCallback(async (start, end, details = []) => {
     const extra = buildBqExtra(filtersRef.current, subCatFirstOrderMap)
     // fetchData's static-cache rule: unfiltered requests whose dates match a pre-computed window
     // are served from public/pnl-data*.json instead of BigQuery.
@@ -20622,19 +20850,24 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (c && c.mtdStart === start && c.mtdEnd === end) return c
       }
     }
-    const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra }) })
-    if (!res.ok) throw new Error(`API error ${res.status}`)
-    const json = await res.json()
+    const post = async phase => {
+      const res = await authFetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra, phase }) })
+      if (!res.ok) throw new Error(`API error ${res.status}`)
+      return res.json()
+    }
+    const [json, ...parts] = await Promise.all(['fast', ...details].map(post))
     // Same response handling as the page's own `data`.
-    return json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+    const base = json.source === 'postgres-aggregated' || json.totalRev !== undefined ? json : processData(json.rows || [])
+    return parts.reduce((d, p) => mergePhase(d, p), base)
   }, [API, subCatFirstOrderMap])
+  const loadPnlPeriod = useCallback((start, end) => loadSalesPeriod(start, end, ['pnl_detail']), [loadSalesPeriod])
   const loadLogisticsPeriod = useCallback(async (start, end) => {
-    const res = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    const res = await authFetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
     if (!res.ok) throw new Error(`API error ${res.status}`)
     return res.json()
   }, [API])
   const loadCustomerPeriod = useCallback(async (start, end) => {
-    const res = await fetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+    const res = await authFetch(`${API}/api/customer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
     if (!res.ok) throw new Error(`API error ${res.status}`)
     return res.json()
   }, [API])
@@ -20649,10 +20882,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const gen = ++adsLoadGenRef.current
     const load = async () => {
       try {
-        // Only use cache when the selected range overlaps the rolling window.
-        // If end < rollingStart the entire range predates the cache — skip it so
-        // the live BQ result (data) is used instead of empty sliced arrays.
-        const cacheCovers = (json) => end >= json.rollingStart && end <= json.rollingEnd
+        // Only use the cache when it holds the WHOLE selected range; otherwise the live BQ result
+        // (data) is used. Checking only the end let a range that starts before rollingStart be
+        // sliced, silently dropping its first days (B5 in MONTHLY_TREND_PLAN.md: Aug 2026 lost
+        // 1 Aug, ₹28.0 L of ad spend, when the window started 2 Aug).
+        const cacheCovers = (json) => start >= json.rollingStart && end <= json.rollingEnd
         if (adsCacheRef.current && cacheCovers(adsCacheRef.current)) {
           if (gen !== adsLoadGenRef.current) return
           injectAdsFromCache(adsCacheRef.current, start, end)
@@ -20669,7 +20903,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // Same fix as pnl-data.json/pnl-data-lastmonth.json — relative path, not API-prefixed.
         // This is a static file in public/, served by the frontend's own origin, never the API
         // server; prefixing it with API (VITE_API_URL) 404'd every page load in local dev.
-        const res = await fetch('/ads-data.json')
+        const res = await authFetch('/ads-data.json')
         if (!res.ok) return
         const json = await res.json()
         if (gen !== adsLoadGenRef.current) return
@@ -20946,7 +21180,28 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Combines Sales/Ads alerts with Logistics/Ops + Inventory rules — computed once at this level
   // (not inside OverviewPage) so the Topnav alerts bell and the Overview popover always show the
   // exact same list, never two independently-computed copies that could drift.
-  const combinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts), [data, logisticsData, invSnapshotData, alerts])
+  const rawCombinedAlerts = useMemo(() => computeCombinedAlerts(data, logisticsData, invSnapshotData, alerts, profile), [data, logisticsData, invSnapshotData, alerts, profile, _alertsTick])
+  // Access control: filter the raw alert list down to what this user can actually see. An alert's
+  // requiredPermission can be a single permission key, an array (sales:<channel> per fired
+  // channel — any one grants visibility), or 'admin' (profile.is_admin, not a permission-tree key).
+  // computedAt is captured once per recompute so the panel can show "as of HH:MM" and so the
+  // unread-fingerprint logic below has a stable snapshot time.
+  const alertsComputedAt = useMemo(() => new Date(), [rawCombinedAlerts])
+  // Alerts Phase 2: per-channel atoms are filtered to what this user may see BEFORE they are grouped
+  // (src/alerts/phase2Rules.js), so "Return % high: Amazon, Flipkart" never names a channel they can't open.
+  // Spikes join the bell list; fixed-target misses go to the bell's separate "Targets missed" section.
+  const phase2 = useMemo(() => computePhase2Alerts(getAlertsPhase2(), { can: k => hasPermission(allowedTabs, k), isAdmin: !!profile?.is_admin }), [allowedTabs, profile, _alertsTick])
+  const targetAlerts = phase2.targets
+  const targetsAt = getAlertsPhase2()?.targetsComputedAt || null
+  const combinedAlerts = useMemo(() => {
+    return [...rawCombinedAlerts.filter(a => {
+      const req = a.requiredPermission
+      if (!req) return true
+      if (req === 'admin') return !!profile?.is_admin
+      if (Array.isArray(req)) return req.some(k => hasPermission(allowedTabs, k))
+      return hasPermission(allowedTabs, req)
+    }), ...phase2.spikes]
+  }, [rawCombinedAlerts, allowedTabs, profile, phase2])
 
   // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
   const fbk = useFeedback()
@@ -20982,13 +21237,37 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} cnCtrl={cnCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} />}
+        {<Topnav logCostCtrl={logCostCtrl} cnCtrl={cnCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} alertsComputedAt={alertsComputedAt} onAlertNav={navAlert} userId={session?.user?.id} targetAlerts={targetAlerts} targetsAt={targetsAt} />}
+        {fromAlert && (
+          <div className="from-alert-chip" style={{
+            display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px 0', padding: '5px 10px',
+            borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, width: 'fit-content',
+            fontSize: 12, color: C.t2,
+          }}>
+            <span>From alert: <strong>{fromAlert}</strong></span>
+            <button
+              onClick={() => setFromAlert(null)}
+              aria-label="Dismiss"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.t3, fontSize: 13, lineHeight: 1, padding: 0 }}
+            >✕</button>
+          </div>
+        )}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
         <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
-            <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              <button onClick={() => fetchData(filters.start, filters.end, {}, false, true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
+              {(Date.parse(filters.end) - Date.parse(filters.start)) / 86400000 > 90 && (
+                <button onClick={() => {
+                  const end = filters.end
+                  const d = new Date(end); d.setDate(d.getDate() - 90)
+                  const start = d.toISOString().slice(0, 10)
+                  setFilters(f => ({ ...f, start, end }))
+                }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Show last 90 days</button>
+              )}
+            </div>
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -21004,16 +21283,19 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               </div>
             </div>
           )}
+          {/* Detail-group status for this page's <DetailGate> sections (staged /api/bq loading). */}
+          <DetailPhaseContext.Provider value={detailCtx}>
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} combinedAlerts={combinedAlerts} logisticsData={logisticsData} logisticsRangeLabel={logisticsRangeLabel} filters={filters} salesAllocData={salesAllocData} invSnapshotData={invSnapshotData} overviewCustData={overviewCustData} prevLoaders={prevLoaders} onOpenInventory={openInventoryHealth} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} setPage={setPage} onMenu={setSalesMenu} />}
-          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadSalesPeriod} />}
+          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} loadPeriod={loadPnlPeriod} />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <AdsTab data={adsCache ? { ...(data || {}), cred: (credIsCurrent ? data.cred : null) ?? (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: { ...adsCache, byAdType: data?.ads?.byAdType || [], nCusts: data?.ads?.nCusts, repeatCusts: data?.ads?.repeatCusts } } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
           )}
+          </DetailPhaseContext.Provider>
           {page === 'intelligence' && (
             <div className="page-scroll">
               <IntelPage data={data} />
@@ -21095,7 +21377,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} theme={theme} setTheme={setTheme} />
             </div>
           )}
-          {page === 'feedback' && profile?.is_admin === true && (
+          {page === 'feedback' && (
             <div className="page-scroll"><FeedbackInbox /></div>
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (

@@ -52,5 +52,8 @@ docs/responsive/**/*.png
 # Parity-verification snapshots (scripts/parity-snapshot.mjs output) — regenerate on demand.
 parity/
 
+# alerts phase 2 headless P\&L scratch
+.alerts-p2-tmp/
+
 # Feedback feature: local-mode store (FEEDBACK_LOCAL=1) — test data and screenshots, never commit.
 .feedback-local/

@@ -2,6 +2,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures,
 import { buildRollingRateMap, resolveDailySkuComponents, CHANNEL_COMPONENTS } from './_returnComponents.js'
 import { getPool } from './_db.js'
 import { getStoreIdMap, getStoreCosts, getCostForMonth, storeNameFor } from './_store_pnl.js'
+import { getPhaseDef, pickPhaseFields } from './_bqPhases.js'
 import { loadSndRateSlabs, rateForWeight, loadFkSndRatecard, resolveFkRate } from './_sndRates.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -108,60 +109,15 @@ const FK_LATEST_TTL = 60 * 60 * 1000
 // CM1 already uses, instead of showing only the matched-settlement slice — a cached pre-gross-up
 // response would otherwise keep showing understated figures for any month below ~100% coverage.
 
-// Queries that touch per-channel detail (states/cities/SKUs/category matrix/settlement).
-// These are SLOW (~20-30s for full month ranges) — split into phase=slow so the fast
-// KPIs/daily chart return in ~8-10s first.
-const SLOW_QUERY_KEYS = new Set([
-  'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
-  'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
-  'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature','shComponentRateMature','amzSCReturnRateMature','amzSCComponentRateMature','fkReturnRateMature','fkComponentRateMature','fkDailySKUComponents','mnReturnRateMature','mnComponentRateMature','mnDailySKUComponents','offlineCreditNoteRateMature','offComponentRateMature','offDailySKUComponents','eboReturnRateMature','eboComponentRateMature','eboDailySKUComponents','crComponentRateMature','crDailySKUComponents','fcComponentRateMature','fcDailySKUComponents','shStateComponentRateMature','shDailyStateComponents','shCityComponentRateMature','shDailyCityComponents','amzVCComponentRateMature','amzVCDailySKUComponents','amzSCStateComponentRateMature','amzSCDailyStateComponents','amzSCCityComponentRateMature','amzSCDailyCityComponents','fkStateComponentRateMature','fkDailyStateComponents','fkCityComponentRateMature','fkDailyCityComponents2','mnStateComponentRateMature','mnDailyStateComponents','mnCityComponentRateMature','mnDailyCityComponents','eboStateComponentRateMature','eboDailyStateComponents','eboCityComponentRateMature','eboDailyCityComponents','overallReturnRateMature','allTabReturnRateMature',
-  'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
-  'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
-  'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
-  'amzSCCatChannelPrev','amzSCSubCatChannelPrev','amzSCSKUChannelPrev',
-  'amzSCRollingRate','amzSCRollingNetRevenue','amzSCDailyNetBySKU',
-  'amzSCDailySettlement','amzSCMFNOrderWeights','amzSCLineItemWeights',
-  'amzSCRegion','amzSCTier','amzSCFulfillment','amzSCStatus',
-  'amzVCCat','amzVCSubCat','amzVCSKU','amzVCDailySKU','amzVCDailyCat',
-  'amzVCCatPrev','amzVCSubCatPrev','amzVCSKUPrev',
-  'fkCategories','fkSubCategory','fkSKUs','fkSKUMatrix','fkDailyCat',
-  'fkStates','fkStatesPrev','fkCities','fkCitiesPrev',
-  'fkRegions','fkReturnRate','fkStatus','fkCatPrev','fkSubCatPrev','fkSKUPrev',
-  'blCategories','blSubCategories','blStates','blStatesPrev','blSKUs','blSKUMatrix',
-  'blCities','blCitiesPrev','blSKUPrev',
-  'inCategories','inSubCategories','inStates','inStatesPrev','inSKUs','inSKUMatrix',
-  'inCities','inCitiesPrev','inSKUPrev',
-  'zpCategories','zpSubCategories','zpStates','zpStatesPrev','zpSKUs','zpSKUMatrix',
-  'zpCities','zpCitiesPrev','zpSKUPrev',
-  'crCategories','crSubCategories','crSKUs','crSKUMatrix','crStates','crStatesPrev',
-  'crCatPrev','crSubCatPrev','crCities','crCitiesPrev','crRegion','crTier','crStatus',
-  'fcCategories','fcSubCategories','fcSKUs','fcSKUMatrix','fcStates','fcStatesPrev',
-  'fcCatPrev','fcSubCatPrev','fcCities','fcCitiesPrev','fcRegion','fcTier','fcStatus',
-  'mnCategories','mnSubCategories','mnSKUs','mnSKUMatrix','mnStates','mnStatesPrev',
-  'mnCatPrev','mnSubCatPrev','mnCities','mnCitiesPrev',
-  'intlCategories','intlSubCategories','intlSKUMatrix','intlCatPrev','intlSubCatPrev',
-  'eboCategory','eboCategoryPrev','eboSubCategory','eboSubCategoryPrev','eboSKU',
-  'eboState','eboStatePrev','eboCity','eboCityPrev','eboRegion','eboTier',
-  'offlineCategory','offlineSubCategory','offlineSKU',
-  'offlineState','offlineCity','offlineRegion','offlineTier',
-  'offCatPrev','offSubCatPrev','offStatesPrev','offCitiesPrev',
-  'salesCategoryOrders','salesCategoryOrdersFk',
-  'adsCategoryBreakdown','adsZeroOrder','adsDailyByCategory','salesDailyByCategory',
-  'channelDailyExcRev',
-  // Per-channel prev-period totals — only needed when viewing individual channel tabs
-  'prevShopify','prevShopifyDaily','prevShNetCalc','prevShopifyIntlTotals',
-  'prevAmzSC',
-  'prevFk','prevBl',
-  'prevCr','prevFc',
-  'prevMn',
-  'prevEbo','prevEboNetCalc',
-  'prevIntl','prevIntlNetCalc',
-  'prevOffline','prevOfflineDaily',
-  'prevDailyByChannel','prevAdsTotals',
-])
+// Which queries each staged-loading phase runs and which response fields it returns live in
+// api/_bqPhases.js (generated from measured query→field dependencies — this replaces the old
+// hand-kept SLOW_QUERY_KEYS / SLOW_PAYLOAD_KEYS / CHANNEL_SLOW_FIELDS lists, which had drifted:
+// the old 'fast' phase returned chMap / netRevenueCalc / returnRev / *.resolvedDailySKU computed
+// WITHOUT the resolved-engine queries they need, and 'slow' alone crashed on chMap['Shopify']).
 
-const CACHE_VERSION = 13
+// v14: staged phases (fast/sales_detail/pnl_detail/ads_detail) + shopify.dailySkuCostRows removed
+// v15: pnl_detail ships pnlAgg / pnlTrend instead of the per-SKU-per-day rows; new pnl_margin phase
+const CACHE_VERSION = 15
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase: phase || null })
@@ -744,41 +700,9 @@ export default async function handler(req, res) {
       SUM(gross_inc_gst) AS gross_inc_gst
     FROM lined
     GROUP BY sku, category, sub_channel, order_status, weight_slab`,
-    // Same (sku, order_status, weight_slab) cost-line grain as shSkuCosts above, with OrderDate
-    // added to the GROUP BY — real day-wise weight-slab SnD, same standard as Amazon VC's
-    // dailyPnLBySku (fresh per-day computation, not a whole-range rate applied across days).
-    // Feeds PnLPage.jsx's shDailyPnL construction for the D2C trend chart's day-wise SnD%/CM1%.
-    shDailySkuCosts: `WITH q AS (${base}),
-    lined AS (
-      SELECT
-        CAST(OrderDate AS STRING) AS date,
-        MasterSKU AS sku,
-        SubChannel AS sub_channel,
-        COALESCE(Order_Status, 'Delivered') AS order_status,
-        ItemQty AS qty,
-        SellingPrice_Inc_GST AS gross_inc_gst,
-        CASE
-          WHEN Weight_gms IS NULL THEN NULL
-          WHEN (Weight_gms * ItemQty) <= 500 THEN 500
-          ELSE CAST(CEIL((Weight_gms * ItemQty) / 1000.0) * 1000 AS INT64)
-        END AS weight_slab
-      FROM q
-      WHERE Channel = 'Shopify'
-        AND SubChannel NOT IN ('Shopify International', 'Retail Store')
-        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
-    )
-    SELECT
-      date,
-      sku,
-      sub_channel,
-      order_status,
-      weight_slab,
-      COUNT(*) AS line_count,
-      SUM(qty) AS total_qty,
-      SUM(gross_inc_gst) AS gross_inc_gst
-    FROM lined
-    GROUP BY date, sku, sub_channel, order_status, weight_slab
-    ORDER BY date`,
+    // shDailySkuCosts removed 2026-10-30 (staged loading): it fed only shopify.dailySkuCostRows, which
+    // nothing in src/ ever read (grep -rn dailySkuCostRows src/ → 0 matches), and was the single most
+    // expensive query in this file (YTD: 302k rows / ~50MB / ~15s).
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     // Day-wise, State-wise component revenue + rolling-window rate, same resolved-rate engine as
     // the SKU-grain queries above (confirmed 2026-10-22) — Top States' Return% was still using the
@@ -1739,12 +1663,14 @@ export default async function handler(req, res) {
     // BigQuery's per-user
     // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
     // silently keep showing stale data from the last successful fetch).
-    // Phase filtering: fast phase skips slow detail queries, slow phase skips fast queries
-    const filteredQueries = phase === 'fast'
-      ? Object.fromEntries(Object.entries(queries).filter(([k]) => !SLOW_QUERY_KEYS.has(k)))
-      : phase === 'slow'
-        ? Object.fromEntries(Object.entries(queries).filter(([k]) => SLOW_QUERY_KEYS.has(k)))
-        : queries
+    // Staged loading (api/_bqPhases.js): a recognised `phase` runs only the queries its response
+    // fields were measured to depend on; no phase (or an unrecognised one) runs every query and
+    // returns the full response exactly as before. byChannel/byDate are part of every phase's list —
+    // chMap/netRevenueCalc/dailyArr are built from them unconditionally further down.
+    const phaseDef = getPhaseDef(phase)
+    const filteredQueries = phaseDef
+      ? Object.fromEntries(Object.entries(queries).filter(([k]) => phaseDef.queries.has(k)))
+      : queries
 
     // Store P&L reference data lives in Supabase, not BigQuery — fetched alongside the BQ run
     // rather than blocking on it first. Defensive fallback to empty maps on failure (Supabase
@@ -3056,18 +2982,6 @@ export default async function handler(req, res) {
         // figure above, which is a courier-billing SHIPMENT weight (real weight × units in that
         // order), not a per-unit value.
         skuWeightGm: Object.fromEntries((r.shSKUWeight || []).map(x => [x.sku, parseFloat(x.weight_gms) || null])),
-        // Same shape as skuCostRows above, plus `date` — day-wise weight-slab cost lines for the
-        // PnL trend chart's real per-day SnD computation (see shDailySkuCosts query above).
-        dailySkuCostRows: (r.shDailySkuCosts || []).map(x => ({
-          date: x.date,
-          sku: x.sku,
-          subChannel: (x.sub_channel || '').toLowerCase(),
-          orderStatus: x.order_status || 'Delivered',
-          weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
-          lineCount: parseInt(x.line_count) || 0,
-          totalQty: parseInt(x.total_qty) || 0,
-          grossIncGst: parseFloat(x.gross_inc_gst) || 0,
-        })),
         // Category/Product/SKU rev breakdown split by SubChannel (MyFrido/Mobility/Shopify
         // International/...) — feeds the PnL tab's D2C All/MyFrido/Mobility toggle.
         skuMapBySubChannel: (() => { const m = {}; (r.shSKU || []).forEach(x => { const subCh = x.SubChannel||'Unknown', cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[subCh]) m[subCh] = {}; if (!m[subCh][cat]) m[subCh][cat] = {}; if (!m[subCh][cat][sc]) m[subCh][cat][sc] = {}; m[subCh][cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
@@ -5041,181 +4955,18 @@ export default async function handler(req, res) {
     // Sub-category first order date map — loaded from static file (no BQ query)
     payload.subCatFirstOrderMap = loadSubCatFirstOrder()
 
-    // Phase-specific response: only return the relevant subset of payload keys so the
-    // frontend can merge fast+slow without the slow phase overwriting fast KPIs with zeros.
-    if (phase === 'fast') {
-      // Fast phase: KPIs, daily chart, chMap, prev comparison, top-line per-channel totals/daily.
-      // Exclude all slow-computed fields (catMap, stateMap, cityRows, per-channel detail, pnlSalesRows, etc.)
-      const SLOW_PAYLOAD_KEYS = new Set([
-        'catMap','subCatMap','catPrevMap','subCatPrevMap',
-        'stateMap','statePrevMap','stateTotal','cityRows','cityPrevMap','cityTotal',
-        'regionRows','tierRows','catChannelMap','subCatChannelMap',
-        'buckets','bucketRev','skuRows','pnlSalesRows','pnlAdSpendMap','pnlRawAdSpend',
-      ])
-      const fastPayload = Object.fromEntries(
-        Object.entries(payload).filter(([k]) => !SLOW_PAYLOAD_KEYS.has(k))
-      )
-      // Provide empty-but-non-null defaults for slow maps/arrays so components don't crash
-      // calling Object.entries()/Object.keys() before the slow phase arrives.
-      fastPayload.catMap = fastPayload.catMap ?? {}
-      fastPayload.subCatMap = fastPayload.subCatMap ?? {}
-      fastPayload.catPrevMap = fastPayload.catPrevMap ?? {}
-      fastPayload.subCatPrevMap = fastPayload.subCatPrevMap ?? {}
-      fastPayload.stateMap = fastPayload.stateMap ?? {}
-      fastPayload.statePrevMap = fastPayload.statePrevMap ?? {}
-      fastPayload.stateTotal = fastPayload.stateTotal ?? 0
-      fastPayload.cityRows = fastPayload.cityRows ?? []
-      fastPayload.cityPrevMap = fastPayload.cityPrevMap ?? {}
-      fastPayload.cityTotal = fastPayload.cityTotal ?? 0
-      fastPayload.regionRows = fastPayload.regionRows ?? []
-      fastPayload.tierRows = fastPayload.tierRows ?? []
-      fastPayload.catChannelMap = fastPayload.catChannelMap ?? {}
-      fastPayload.subCatChannelMap = fastPayload.subCatChannelMap ?? {}
-      fastPayload.buckets = fastPayload.buckets ?? []
-      fastPayload.bucketRev = fastPayload.bucketRev ?? 0
-      fastPayload.skuRows = fastPayload.skuRows ?? []
-      fastPayload.pnlSalesRows = fastPayload.pnlSalesRows ?? []
-      fastPayload.pnlAdSpendMap = fastPayload.pnlAdSpendMap ?? {}
-      fastPayload.pnlRawAdSpend = fastPayload.pnlRawAdSpend ?? 0
-      // Per-channel prev-period defaults (now slow) — components use ?.[0] or || fallback
-      fastPayload.prevShopify = fastPayload.prevShopify ?? []
-      fastPayload.prevShopifyDaily = fastPayload.prevShopifyDaily ?? []
-      fastPayload.prevShopifyCancel = fastPayload.prevShopifyCancel ?? []
-      fastPayload.prevShNetCalc = fastPayload.prevShNetCalc ?? []
-      fastPayload.prevShopifyIntlTotals = fastPayload.prevShopifyIntlTotals ?? []
-      fastPayload.prevAmzSC = fastPayload.prevAmzSC ?? []
-      fastPayload.prevAmzVC = fastPayload.prevAmzVC ?? []
-      fastPayload.prevFk = fastPayload.prevFk ?? []
-      fastPayload.prevBl = fastPayload.prevBl ?? []
-      fastPayload.prevIn = fastPayload.prevIn ?? []
-      fastPayload.prevZp = fastPayload.prevZp ?? []
-      fastPayload.prevCr = fastPayload.prevCr ?? []
-      fastPayload.prevCrNetCalc = fastPayload.prevCrNetCalc ?? []
-      fastPayload.prevFc = fastPayload.prevFc ?? []
-      fastPayload.prevFcNetCalc = fastPayload.prevFcNetCalc ?? []
-      fastPayload.prevMn = fastPayload.prevMn ?? []
-      fastPayload.prevMnNetCalc = fastPayload.prevMnNetCalc ?? []
-      fastPayload.prevEbo = fastPayload.prevEbo ?? []
-      fastPayload.prevEboNetCalc = fastPayload.prevEboNetCalc ?? []
-      fastPayload.prevIntl = fastPayload.prevIntl ?? []
-      fastPayload.prevIntlNetCalc = fastPayload.prevIntlNetCalc ?? []
-      fastPayload.prevOffline = fastPayload.prevOffline ?? []
-      fastPayload.prevOfflineDaily = fastPayload.prevOfflineDaily ?? []
-      fastPayload.prevDailyByChannel = fastPayload.prevDailyByChannel ?? []
-      fastPayload.prevAdsTotals = fastPayload.prevAdsTotals ?? []
-      // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
-      const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
-        'dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap',
-        'cityRows','cityPrevMap','cityTotal','returnReasons',
-        'catChannel','subCatChannel','skuChannel','sndBySku','dailyPnLBySku','dailyCat',
-        'catChannelPrev','subCatChannelPrev','skuChannelPrev','returnCat','returnSubCat','returnSKU',
-        'states','statesPrev','cities','citiesPrev','statesPrevMap','citiesPrevMap',
-        'categories','categoriesPrev','subCategories','subCategoriesPrev',
-        'skuMatrix','skuMatrixPrev','regions','tiers','status','region','tier',
-        'catPrev','subCatPrev','skuPrev','category','subCategory','sku',
-        'spendDetail','allSpendDetail','spendDetailByPlatform',
-        'additionalSpend','additionalSpendByProduct',
-      ]
-      for (const ch of ['shopify','flipkart','blinkit','instamart','zepto','cred','firstcry','myntra','amzSC','amzVCMatrix','amzVC','amzIntl','ebo','offline','international','ads']) {
-        if (fastPayload[ch]) {
-          fastPayload[ch] = Object.fromEntries(
-            Object.entries(fastPayload[ch]).filter(([k]) => !CHANNEL_SLOW_FIELDS.includes(k))
-          )
-        }
-      }
-      setInCache(cacheKey, fastPayload)
+    // Staged loading: a recognised phase returns only its own response fields (see api/_bqPhases.js).
+    // 'fast' also carries an empty placeholder ([] / {} / 0 / null) for every field it doesn't own, so
+    // the page can render (and show per-section loaders) without any component reading undefined;
+    // detail phases carry only their own fields, and the frontend merges them into the fast object
+    // two levels deep (top-level key, or channelObject.field) — fast + every detail group rebuilds
+    // the full response.
+    if (phaseDef) {
+      const phasePayload = pickPhaseFields(payload, phaseDef)
+      setInCache(cacheKey, phasePayload)
       res.setHeader('X-Cache', 'MISS')
       timer.finish(res)
-      return res.json(fastPayload)
-    }
-
-    if (phase === 'slow') {
-      // Slow phase: return only slow-computed fields. Per-channel objects are returned as
-      // _slow_<channel> keys (not overwriting the main channel object) so the frontend can
-      // deep-merge them without clobbering fast-phase totals/daily/netCalc fields.
-      // The slow fields within each channel are ONLY those derived from SLOW_QUERY_KEYS queries.
-      const chSlow = (ch, fields) => {
-        if (!payload[ch]) return undefined
-        const obj = {}
-        for (const f of fields) if (payload[ch][f] !== undefined) obj[f] = payload[ch][f]
-        return Object.keys(obj).length ? obj : undefined
-      }
-      const slowPayload = {
-        catMap: payload.catMap,
-        subCatMap: payload.subCatMap,
-        catPrevMap: payload.catPrevMap,
-        subCatPrevMap: payload.subCatPrevMap,
-        stateMap: payload.stateMap,
-        statePrevMap: payload.statePrevMap,
-        stateTotal: payload.stateTotal,
-        cityRows: payload.cityRows,
-        cityPrevMap: payload.cityPrevMap,
-        cityTotal: payload.cityTotal,
-        regionRows: payload.regionRows,
-        tierRows: payload.tierRows,
-        catChannelMap: payload.catChannelMap,
-        subCatChannelMap: payload.subCatChannelMap,
-        buckets: payload.buckets,
-        bucketRev: payload.bucketRev,
-        skuRows: payload.skuRows,
-        pnlSalesRows: payload.pnlSalesRows,
-        pnlAdSpendMap: payload.pnlAdSpendMap,
-        pnlRawAdSpend: payload.pnlRawAdSpend,
-        masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightGm','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
-        _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
-        _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_zepto: chSlow('zepto', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
-        _slow_cred: chSlow('cred', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
-        _slow_firstcry: chSlow('firstcry', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
-        _slow_myntra: chSlow('myntra', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev']),
-        // returnCat/returnSubCat/returnSKU/orderStatusDebug removed 2026-10-19 — those amzSC
-        // payload fields no longer exist (their source queries were confirmed dead and removed);
-        // chSlow already skips any field name that isn't present, so this was harmless dead
-        // weight even before removal, but cleaned up for clarity alongside everything else.
-        _slow_amzSC: chSlow('amzSC', ['states','statesPrev','cities','citiesPrev','skus','catChannel','subCatChannel','skuChannel','catChannelPrev','subCatChannelPrev','skuChannelPrev','sndBySku','dailyPnLBySku','dailyCat','region','tier','fulfillment','status']),
-        _slow_amzVCMatrix: payload.amzVCMatrix,
-        _slow_amzVC: chSlow('amzVC', ['cat','subCat','sku','catPrev','subCatPrev','skuPrev','dailyCat','dailySKU']),
-        // _slow_amzIntl removed 2026-10-19 — the amzIntl payload block it referenced no longer
-        // exists (confirmed dead, removed above).
-        _slow_international: chSlow('international', ['categories','subCategories','skuMatrix','catPrev','subCatPrev']),
-        _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
-        _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
-        _slow_ads: chSlow('ads', ['spendDetail','allSpendDetail','spendDetailByPlatform','additionalSpend','additionalSpendByProduct','zeroOrder','dailyByCategory']),
-        // Per-channel prev-period totals (moved to slow so fast phase has fewer BQ scans)
-        prevShopify: payload.prevShopify,
-        prevShopifyDaily: payload.prevShopifyDaily,
-        prevShopifyCancel: payload.prevShopifyCancel,
-        prevShNetCalc: payload.prevShNetCalc,
-        prevShopifyIntlTotals: payload.prevShopifyIntlTotals,
-        prevAmzSC: payload.prevAmzSC,
-        prevAmzVC: payload.prevAmzVC,
-        prevFk: payload.prevFk,
-        prevBl: payload.prevBl,
-        prevIn: payload.prevIn,
-        prevZp: payload.prevZp,
-        prevCr: payload.prevCr,
-        prevCrNetCalc: payload.prevCrNetCalc,
-        prevFc: payload.prevFc,
-        prevFcNetCalc: payload.prevFcNetCalc,
-        prevMn: payload.prevMn,
-        prevMnNetCalc: payload.prevMnNetCalc,
-        prevEbo: payload.prevEbo,
-        prevEboNetCalc: payload.prevEboNetCalc,
-        prevIntl: payload.prevIntl,
-        prevIntlNetCalc: payload.prevIntlNetCalc,
-        prevOffline: payload.prevOffline,
-        prevOfflineDaily: payload.prevOfflineDaily,
-        prevDailyByChannel: payload.prevDailyByChannel,
-        prevAdsTotals: payload.prevAdsTotals,
-      }
-      // Remove undefined values
-      for (const k of Object.keys(slowPayload)) if (slowPayload[k] === undefined) delete slowPayload[k]
-      setInCache(cacheKey, slowPayload)
-      res.setHeader('X-Cache', 'MISS')
-      timer.finish(res)
-      return res.json(slowPayload)
+      return res.json(phasePayload)
     }
 
     setInCache(cacheKey, payload)

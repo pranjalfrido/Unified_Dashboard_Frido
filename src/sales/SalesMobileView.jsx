@@ -10,6 +10,8 @@ import FullScreenList from '../responsive/FullScreenList.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import { groupSumTrend } from '../responsive/trend.js'
 import { SALES_MOBILE, PRODUCT_SORTS } from './mobileChannelConfig.js'
+import { DetailGate } from '../DetailGate.jsx'
+import { useDetailReady } from '../detailPhase.js'
 
 // Sales tab below 1024px (docs/responsive/SALES_MOBILE_REDESIGN_PROMPT.md). Display only: every
 // value comes in from the channel tab, which computes it exactly as its desktop view does; this
@@ -247,8 +249,14 @@ function ReasonsCard({ reasons, sub }) {
 }
 
 // ── View ────────────────────────────────────────────────────────────
+// Mobile sections whose data comes from /api/bq's sales_detail group (label shown while loading).
+const DETAIL_SECTIONS = { categories: 'Loading categories', reasons: 'Loading return reasons', regionTier: 'Loading regions & tiers', geo: 'Loading top states & cities' }
+
 export default function SalesMobileView({ channel, metrics, trendRows, start, end, data = {}, onOpenChannel, footer = null }) {
   const bp = useBreakpoint()
+  // Category / reasons / region-tier / geography cards are built from the sales_detail group of
+  // /api/bq (staged loading) — a loader card until it lands, an inline error + Retry if it failed.
+  const detailReady = useDetailReady()
   const cfg = SALES_MOBILE[channel]
   if (!cfg) return null
   if (cfg.placeholder) {
@@ -279,7 +287,7 @@ export default function SalesMobileView({ channel, metrics, trendRows, start, en
     <div className="sales-mobile ov-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
       <MasterTrendCard key={channel} metrics={tiles} rawRows={trendRows || []} groupTrend={groupSumTrend} start={start} end={end} layout={layout}
         note={data.note ? <InfoStrip text={data.note} detail={data.noteDetail} /> : null} />
-      {cfg.sections.map(s => sec[s]?.()).filter(Boolean)}
+      {cfg.sections.map(s => (!detailReady && DETAIL_SECTIONS[s] ? <DetailGate key={s} label={DETAIL_SECTIONS[s]} height={160} /> : sec[s]?.())).filter(Boolean)}
       {footer}
     </div>
   )

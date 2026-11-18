@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Plus, Trash2, Save, RefreshCw, Search, FileSpreadsheet, Upload, Download, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabase.js";
 import { C as BASE_C } from "./utils.js";
+import { authFetch } from './authFetch.js';
 
 // A plain <select> is unusable once the option list runs into the hundreds (323 products here) —
 // no way to jump to an item by typing more than one matching letter at a time in most browsers.
@@ -121,7 +122,7 @@ export default function PackagingBomPage({ onBack }) {
         // rename in the Sheet be picked up automatically (confirmed 2026-10-12): packaging_bom is
         // keyed on the stable Product_Code, never on this text, so grouping Product_Codes by their
         // live Sub_category here is what "follows" a rename instead of getting orphaned by it.
-        fetch(`${API}/api/packaging-products?detail=1`).then(r => r.json()),
+        authFetch(`${API}/api/packaging-products?detail=1`).then(r => r.json()),
         supabase.from("packaging_sku_master").select("packaging_sku, packaging_type, packaging_name, cost_per_unit, vendor, is_active, linked_product, vol_weight_gm").order("packaging_type"),
         // packaging_sku_master_extra: SKUs added inline via the uploader for something not yet in
         // the Sheet (confirmed 2026-10-12) — merged into the same list below, flagged as such.
