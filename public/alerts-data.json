@@ -1,53 +1,57 @@
 {
-  "generatedAt": "2026-11-19T04:09:04.602Z",
+  "generatedAt": "2026-11-19T05:09:01.575Z",
   "logistics": {
     "windowStart": "2026-10-29",
     "windowEnd": "2026-11-04",
     "rangeLabel": "Orders 29–4 Nov",
     "total": 52346,
-    "delivered": 46484,
-    "rto": 4962,
-    "deliveryPct": 88.8,
-    "rtoPct": 9.48,
-    "slaBreachPct": 19.86,
+    "delivered": 46523,
+    "rto": 5087,
+    "deliveryPct": 88.88,
+    "rtoPct": 9.72,
+    "slaBreachPct": 19.92,
     "slaBreachAvailable": true
   },
   "returns": {
     "windowStart": "2026-10-30",
     "windowEnd": "2026-11-05",
     "rangeLabel": "Orders 30–5 Nov",
-    "gross": 77225548.02999963,
+    "gross": 77225548.02999966,
     "cancelPct": 4.49,
-    "rtoPct": 8.04,
-    "cirPct": 5.69,
-    "exchangePct": 6.06,
-    "totalReturnPct": 18.22
+    "rtoPct": 8.41,
+    "cirPct": 5.72,
+    "exchangePct": 6.11,
+    "totalReturnPct": 18.62
   },
   "zeroOrders": {
     "date": "2026-11-18",
     "ordersByChannel": {
       "Shopify": {
-        "date": "2026-11-18",
-        "orders": 449
+        "date": "2026-11-19",
+        "orders": 461
       },
       "Amazon": {
-        "date": "2026-11-18",
-        "orders": 213
+        "date": "2026-11-19",
+        "orders": 231
+      },
+      "Flipkart": {
+        "date": "2026-11-16",
+        "orders": 329
       },
       "Blinkit": {
-        "date": "2026-11-17",
-        "orders": 249
+        "date": "2026-11-18",
+        "orders": 264
       },
       "Zepto": {
         "date": "2026-11-18",
-        "orders": 2
+        "orders": 52
       },
       "Instamart": {
-        "date": "2026-11-16",
-        "orders": 33
+        "date": "2026-11-18",
+        "orders": 41
       },
       "Myntra": {
-        "date": "2026-11-16",
+        "date": "2026-11-17",
         "orders": 243
       }
     },
@@ -57,9 +61,9 @@
     "windowStart": "2026-10-30",
     "windowEnd": "2026-11-05",
     "rangeLabel": "Orders 30–5 Nov",
-    "netRevenue": 56258384,
+    "netRevenue": 55990101,
     "cogsPct": 42.06,
-    "sndPct": 20.8,
-    "cm1Pct": 37.15
+    "sndPct": 20.95,
+    "cm1Pct": 36.99
   }
 }
