@@ -8,17 +8,23 @@
 // checked here on the server, not only by hiding the tab. Same lookup pattern as api/pulse.js.
 //
 // Body: { start, end, warehouse[], sourceType[], vendor[], category[], subCategory[], sku }
-//       or { mode: 'sku', sku: '<Product_Code>', start, end } for one SKU's drill-down.
+//       or { mode: 'sku'|'vendor'|'subcat', sku|vendor|subCategory: '<value>' } for that
+//       SKU's/vendor's/sub-category's last 10 distinct GRN days (full history, not range-bound);
+//       or { mode: 'dq_export', kind: 'sku'|'vendor', start, end } — admins only — every raw GRN
+//       line (not aggregated) for SKUs/vendors unresolved in that date range, for the Data quality
+//       panel's export.
 // One BigQuery round (GRN lines, sales, SKU master, SKU mapping [+ data quality for admins]) per
 // date range, cached 15 min; filters are applied in JS on the cached rows, so changing a filter
-// never re-queries BigQuery. ₹ value = units × COGS, read in-process through api/cogs-monthly.js.
+// never re-queries BigQuery. The page's own GRN-level COGS tiering was found unreliable and was
+// removed — `skuMonthly`/`prevSkuMonthly` below instead feed the client-side "Inward value ₹" tile
+// (useInwardCogsValue), which reads product_cogs_monthly through /api/cogs-monthly, same as P&L.
 import { createClient } from '@supabase/supabase-js'
 import { getBQ, requestTimer } from './_bq.js'
-import { buildFacilityMaps, buildSkuMap, normSku } from './_inventory_shared.js'
-import cogsMonthlyHandler from './cogs-monthly.js'
+import { buildFacilityMaps } from './_inventory_shared.js'
 import {
-  INWARD_PERMISSION, GRN_SQL, DQ_SQL, SALES_SQL, SKU_GRN_SQL, SKU_SALES_SQL, MASTER_SQL, SKUMAP_SQL,
-  periods, monthOf, isIsoDate, normaliseFilters, nonSaleChannels, buildInwardPayload, buildSkuDetail, GRN_FLOOR,
+  INWARD_PERMISSION, GRN_SQL, DQ_SQL, DQ_UNMAPPED_SKU_DETAIL_SQL, DQ_UNMAPPED_VENDOR_DETAIL_SQL, SALES_SQL,
+  SKU_GRN_SQL, VENDOR_GRN_SQL, SUBCAT_GRN_SQL, MASTER_SQL, SKUMAP_SQL, FIRST_SKU_SQL, LAST_SKU_SQL, EXCLUDED_PKG_SQL,
+  periods, isIsoDate, normaliseFilters, nonSaleChannels, buildInwardPayload, buildLastGrnDays, buildVendorSkusSupplied, GRN_FLOOR,
 } from './_inward_core.js'
 
 const DATA_TTL_MS = 15 * 60 * 1000
@@ -71,19 +77,6 @@ export async function authorizeInward(req, client) {
   return result
 }
 
-// ── COGS through the existing /api/cogs-monthly handler (in-process, same pool + query) ──
-function callHandler(handler, body) {
-  return new Promise((resolve, reject) => {
-    let code = 200
-    const res = {
-      setHeader() {}, status(c) { code = c; return res },
-      json(b) { if (code >= 400) reject(new Error(b?.error || `cogs-monthly ${code}`)); else resolve(b) },
-      end() { resolve(null) },
-    }
-    Promise.resolve(handler({ method: 'POST', body }, res)).catch(reject)
-  })
-}
-
 // ── BigQuery helpers ─────────────────────────────────────────────────────────────────
 async function q(bq, timer, key, query, params, types) {
   const t0 = Date.now()
@@ -103,17 +96,23 @@ async function loadRange(range, isAdmin, timer) {
     const { channelToDescription } = buildFacilityMaps()
     const span = { qStart: range.prevStart, qEnd: range.end }
     const excl = nonSaleChannels(channelToDescription)
-    const cogsP = callHandler(cogsMonthlyHandler, { startMonth: monthOf(range.prevStart), endMonth: monthOf(range.end) })
-      .then(r => ({ rows: r?.rows || [] }), e => ({ rows: [], error: e.message }))
-    const [grnRows, salesRows, masterRows, skuMapRows, dqRows, cogs] = await Promise.all([
+    const [grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, dqRows, excludedPkgRows] = await Promise.all([
       q(bq, timer, 'grn', GRN_SQL, span),
       q(bq, timer, 'sales', SALES_SQL, { ...span, excl }, { excl: ['STRING'] }),
       q(bq, timer, 'master', MASTER_SQL),
       q(bq, timer, 'skumap', SKUMAP_SQL),
+      // Scans the FULL history (GRN_FLOOR → range.end), independent of range.start, so "New SKU"
+      // always means "never received before" — not "not received in the selected range's prior days".
+      q(bq, timer, 'first_sku', FIRST_SKU_SQL, { qEnd: range.end }),
+      // Same full-history scan, but for the Product master table's Last inward date/qty/vendor —
+      // so a SKU with no GRN in the selected range still shows its true last-ever inward.
+      q(bq, timer, 'last_sku', LAST_SKU_SQL, { qEnd: range.end }),
       isAdmin ? q(bq, timer, 'dq', DQ_SQL, { qStart: range.start, qEnd: range.end }) : Promise.resolve(null),
-      cogsP,
+      // "Finished goods only · X units … not shown" note (small addition) — units excluded as raw
+      // material/packaging in the CURRENT period only (not prevStart → end like `span`).
+      q(bq, timer, 'excluded_pkg', EXCLUDED_PKG_SQL, { qStart: range.start, qEnd: range.end }),
     ])
-    const data = { grnRows, salesRows, masterRows, skuMapRows, dqRows, cogsRows: cogs.rows, cogsError: cogs.error }
+    const data = { grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, dqRows, excludedPkgUnits: Number(excludedPkgRows?.[0]?.units) || 0 }
     dataCache.set(key, data, DATA_TTL_MS)
     return data
   })()
@@ -121,24 +120,53 @@ async function loadRange(range, isAdmin, timer) {
   try { return await p } finally { inflight.delete(key) }
 }
 
-async function skuDetail(body, timer) {
-  const sku = String(body.sku || '').trim()
-  if (!sku) return { status: 400, error: 'sku required' }
-  const start = body.start, end = body.end
+// Last 10 distinct GRN days for one SKU or one vendor — the full history (GRN_FLOOR → today), not
+// bound by the page's selected date range, so a SKU/vendor with no recent activity still shows its
+// true last 10 days rather than an empty table just because the page filter is on a narrow range.
+async function lastGrnDays(body, timer) {
+  const mode = body.mode
   const bq = getBQ()
-  const { channelToDescription } = buildFacilityMaps()
-  const excl = nonSaleChannels(channelToDescription)
-  // Every raw sales key that resolves to this SKU: itself + productids mapped to it.
-  const skuMapRows = await q(bq, timer, 'skumap', SKUMAP_SQL)
-  const target = normSku(sku)
-  const keys = new Set([target])
-  for (const [pid, master] of buildSkuMap(skuMapRows)) if (master === target) keys.add(pid)
+  const today = new Date().toISOString().slice(0, 10)
+  const span = { qStart: GRN_FLOOR, qEnd: today }
+  if (mode === 'sku') {
+    const sku = String(body.sku || '').trim()
+    if (!sku) return { status: 400, error: 'sku required' }
+    const grnRows = await q(bq, timer, 'sku_grn', SKU_GRN_SQL, { ...span, sku })
+    return { ok: true, data: buildLastGrnDays({ grnRows }) }
+  }
+  if (mode === 'subcat') {
+    const subCategory = String(body.subCategory || '').trim()
+    if (!subCategory) return { status: 400, error: 'subCategory required' }
+    const grnRows = await q(bq, timer, 'subcat_grn', SUBCAT_GRN_SQL, { ...span, subCategory })
+    return { ok: true, data: buildLastGrnDays({ grnRows }) }
+  }
+  const vendor = String(body.vendor || '').trim()
+  if (!vendor) return { status: 400, error: 'vendor required' }
+  const grnRows = await q(bq, timer, 'vendor_grn', VENDOR_GRN_SQL, { ...span, vendor })
+  const out = buildLastGrnDays({ grnRows })
+  // "SKUs supplied" addition: only for the vendor drill-down, only when the page's own selected
+  // range is passed through — SKU/sub-category units IN that range (not full history, unlike the
+  // last-10-GRN-days table above), reusing the same grnRows already fetched for this vendor.
+  if (isIsoDate(body.start) && isIsoDate(body.end)) {
+    out.skusSupplied = buildVendorSkusSupplied({ grnRows, start: body.start, end: body.end })
+  }
+  return { ok: true, data: out }
+}
+
+// Full GRN-level export (every raw line, not aggregated) for admins: SKUs or vendors unresolved
+// in the given date range. Loaded lazily, only when an admin clicks the export — never part of
+// the normal page payload.
+async function dqExport(body, timer) {
+  const { start, end, kind } = body
+  if (!isIsoDate(start) || !isIsoDate(end) || start > end) return { status: 400, error: 'start and end (YYYY-MM-DD, start ≤ end) required' }
+  const bq = getBQ()
   const span = { qStart: start, qEnd: end }
-  const [grnRows, salesRows] = await Promise.all([
-    q(bq, timer, 'sku_grn', SKU_GRN_SQL, { ...span, sku }),
-    q(bq, timer, 'sku_sales', SKU_SALES_SQL, { ...span, excl, keys: [...keys] }, { excl: ['STRING'], keys: ['STRING'] }),
-  ])
-  return { ok: true, data: buildSkuDetail({ grnRows, salesRows, start, end }) }
+  if (kind === 'vendor') {
+    const rows = await q(bq, timer, 'dq_vendor_detail', DQ_UNMAPPED_VENDOR_DETAIL_SQL, span)
+    return { ok: true, data: { rows } }
+  }
+  const rows = await q(bq, timer, 'dq_sku_detail', DQ_UNMAPPED_SKU_DETAIL_SQL, span)
+  return { ok: true, data: { rows } }
 }
 
 export default async function inwardHandler(req, res) {
@@ -153,20 +181,25 @@ export default async function inwardHandler(req, res) {
   if (!auth.ok) { timer.finish(res); return res.status(auth.status).json({ error: auth.error }) }
 
   const body = req.body || {}
-  const { start, end } = body
-  if (!isIsoDate(start) || !isIsoDate(end) || start > end) return res.status(400).json({ error: 'start and end (YYYY-MM-DD, start ≤ end) required' })
-  const range = periods(start < GRN_FLOOR ? GRN_FLOOR : start, end)
-  if (range.days > MAX_RANGE_DAYS) return res.status(400).json({ error: `Pick a range of at most ${MAX_RANGE_DAYS} days` })
 
   try {
-    if (body.mode === 'sku') {
-      const today = new Date().toISOString().slice(0, 10)
-      const r = await skuDetail({ ...body, start: range.start, end: today > end ? today : end }, timer)
+    if (body.mode === 'sku' || body.mode === 'vendor' || body.mode === 'subcat') {
+      const r = await lastGrnDays(body, timer)
       timer.finish(res)
       return r.ok ? res.json(r.data) : res.status(r.status).json({ error: r.error })
     }
+    if (body.mode === 'dq_export') {
+      if (!auth.isAdmin) { timer.finish(res); return res.status(403).json({ error: 'Admins only.' }) }
+      const r = await dqExport(body, timer)
+      timer.finish(res)
+      return r.ok ? res.json(r.data) : res.status(r.status).json({ error: r.error })
+    }
+    const { start, end } = body
+    if (!isIsoDate(start) || !isIsoDate(end) || start > end) return res.status(400).json({ error: 'start and end (YYYY-MM-DD, start ≤ end) required' })
+    const range = periods(start < GRN_FLOOR ? GRN_FLOOR : start, end)
+    if (range.days > MAX_RANGE_DAYS) return res.status(400).json({ error: `Pick a range of at most ${MAX_RANGE_DAYS} days` })
     const data = await loadRange(range, auth.isAdmin, timer)
-    const payload = buildInwardPayload({ ...data, range, filters: normaliseFilters(body), isAdmin: auth.isAdmin })
+    const payload = buildInwardPayload({ ...data, range, filters: normaliseFilters(body), isAdmin: auth.isAdmin, excludedPkgUnits: data.excludedPkgUnits })
     timer.finish(res)
     return res.json(payload)
   } catch (e) {

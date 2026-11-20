@@ -6,20 +6,20 @@
 //   desktop ≥ 1280: 6 KPI tiles in a row, trend + source mix side by side
 // Data: POST /api/inward (one call per filter change, cached server-side) + Inventory Health's own
 // feed for current stock / Avg Sale / DOI (passed in as invData), so those match Health exactly.
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { IC, SearchableMultiSelect } from './theme.jsx'
-import { C, fmt, fmtBig } from '../utils.js'
-import { usePhone, inwardFilterCount, useSkuDetail } from './useInward.js'
-import KpiTileM from '../responsive/KpiTile.jsx'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { IC, SearchableMultiSelect, ExportButton } from './theme.jsx'
+import { C, fmtBig, fmt } from '../utils.js'
+import { usePhone, inwardFilterCount, useLastGrnDays, useDqExport, useInwardCogsValue } from './useInward.js'
 import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import FilterPicker from '../responsive/FilterPicker.jsx'
 import FullScreenTable from '../responsive/FullScreenTable.jsx'
+import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import {
-  SOURCE_TYPES, SOURCE_COLORS, autoGrain, rollup, fmtBucket, fmtDay, fmtDayYear, fmtRange, pctChange,
-  stockIndex, attachStock, warehouseStock, estimateStock, toTsv, toCsv, fmtUnits, fmtRatio, fmtPct,
+  SOURCE_TYPES, SOURCE_COLORS, autoGrain, rollup, fmtBucket, fmtDayYear, fmtRange, pctChange,
+  stockIndex, attachStock, toTsv, toCsv, fmtUnits, fmtRatio, fmtPct,
 } from './inwardUtils.js'
 
 const M = C.m
@@ -27,21 +27,47 @@ const MAX_ROWS = 10
 const PHONE_COLS = 4
 
 // ── Small building blocks ───────────────────────────────────────────────────────────────
-function Card({ title, sub, action, children, isPhone, id, style }) {
+// Desktop chrome matches Inventory Health's GlassCard exactly (border, radius 16, 18px/20px
+// padding, card-hoverable, 13.5px title) so Inward's cards read as the same design system.
+function Card({ title, sub, subTitle, action, children, isPhone, id, style, inlineHeader }) {
   return (
-    <section id={id} style={{
+    <section id={id} className={isPhone ? undefined : 'card-hoverable'} style={{
       background: isPhone ? M.card : IC.surface, border: isPhone ? 'none' : `1px solid ${IC.border}`,
       borderRadius: isPhone ? M.radius.card : 16, boxShadow: isPhone ? M.cardShadow : 'none',
-      padding: isPhone ? '14px 14px 12px' : '16px 18px', minWidth: 0, boxSizing: 'border-box', ...style,
+      padding: isPhone ? '14px 14px 12px' : '18px 20px', minWidth: 0, boxSizing: 'border-box',
+      display: 'flex', flexDirection: 'column', height: '100%', ...style,
     }}>
       {(title || action) && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: isPhone ? M.type.cardTitle : 14, fontWeight: 700, color: isPhone ? M.ink : IC.t1, letterSpacing: '-.01em' }}>{title}</div>
-            {sub && <div style={{ fontSize: 12, color: isPhone ? M.muted : IC.t3, marginTop: 2 }}>{sub}</div>}
+        isPhone ? (
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: M.type.cardTitle, fontWeight: 700, color: M.ink, letterSpacing: '-.01em' }}>{title}</span>
+              {sub && <span style={{ display: 'block', fontSize: 12, color: M.muted, marginTop: 2 }}>{sub}</span>}
+            </div>
+            {action}
           </div>
-          {action}
-        </div>
+        ) : inlineHeader ? (
+          // Desktop, full-width card: title+sub and the action (search/export) share one row —
+          // there's room, unlike the paired side-by-side cards below which stack to keep height equal.
+          <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, overflow: 'hidden' }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: IC.t1, letterSpacing: '-.01em', flexShrink: 0 }}>{title}</span>
+              {sub && <span title={subTitle} style={{ fontSize: 11.5, color: IC.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>}
+            </div>
+            {action && <div style={{ display: 'flex', flexShrink: 0 }}>{action}</div>}
+          </div>
+        ) : (
+          // Desktop: title+sub on their own row, action on the row below — so two cards side by
+          // side (e.g. Vendor performance / SKU detail) keep the same header height and their
+          // tables start at the same y, regardless of how long either card's title/sub/action is.
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, overflow: 'hidden' }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: IC.t1, letterSpacing: '-.01em', flexShrink: 0 }}>{title}</span>
+              {sub && <span title={subTitle} style={{ fontSize: 11.5, color: IC.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>}
+            </div>
+            {action && <div style={{ display: 'flex', marginTop: 10 }}>{action}</div>}
+          </div>
+        )
       )}
       {children}
     </section>
@@ -81,13 +107,23 @@ function downloadCsv(filename, text) {
 // Phone: the 4 columns named in `phoneKeys` + "View full table ⤢" (full screen, first column fixed,
 // sideways scroll — the NavAI / Pulse table pattern, built on responsive/FullScreenTable).
 //   columns: [{ key, label, num, text(r) → string, render?(r) → node, csv?(r), sort?(r) }]
-function InwardTable({ columns, rows, isPhone, filename, title, defaultSort, sortable = true, onRowClick, phoneKeys, search, searchPlaceholder, rowStyle, emptyText = 'No rows for these filters', fullNote }) {
+// fixedHeight: instead of "10 rows then Show all", the table body scrolls inside a constant-height
+// container (the whole card stops growing with row count) and every row is always in the DOM —
+// the user scrolls to see the rest. totalRow(rows) → a row object of the same shape as `rows`,
+// rendered pinned below the header as a non-sortable summary ("Total" line); only meaningful
+// together with fixedHeight (a short, un-scrolled table doesn't need one).
+// externalSearch: when set (a string, possibly ''), the table's own search box + Copy/CSV row is
+// suppressed — the caller (InwardPage) renders search + ExportButton itself in the Card header's
+// top-right, matching Inventory Health's table convention, and filters by this value instead of an
+// internal q state. `search` (the predicate) is still required to actually filter rows.
+function InwardTable({ columns, rows, isPhone, filename, title, defaultSort, sortable = true, onRowClick, phoneKeys, search, searchPlaceholder, rowStyle, emptyText = 'No rows for these filters', fullNote, fixedHeight, totalRow, externalSearch, hideExport }) {
   const [sort, setSort] = useState(defaultSort || null)
   const [all, setAll] = useState(false)
   const [full, setFull] = useState(false)
   const [q, setQ] = useState('')
   const [copied, setCopied] = useState(false)
-  const filtered = useMemo(() => (search && q.trim() ? rows.filter(r => search(r, q.trim().toLowerCase())) : rows), [rows, q, search])
+  const effectiveQ = externalSearch != null ? externalSearch : q
+  const filtered = useMemo(() => (search && effectiveQ.trim() ? rows.filter(r => search(r, effectiveQ.trim().toLowerCase())) : rows), [rows, effectiveQ, search])
   const sorted = useMemo(() => {
     if (!sortable || !sort) return filtered
     const col = columns.find(c => c.key === sort.key)
@@ -101,48 +137,59 @@ function InwardTable({ columns, rows, isPhone, filename, title, defaultSort, sor
       return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * dir
     })
   }, [filtered, sort, sortable, columns])
-  const shown = all ? sorted : sorted.slice(0, MAX_ROWS)
+  const shown = fixedHeight || all ? sorted : sorted.slice(0, MAX_ROWS)
+  const total = useMemo(() => (totalRow ? totalRow(filtered) : null), [totalRow, filtered])
   const cols = isPhone && phoneKeys ? phoneKeys.slice(0, PHONE_COLS).map(k => columns.find(c => c.key === k)).filter(Boolean) : columns
   const textOf = (c, r) => (c.text ? c.text(r) : r[c.key] == null ? '' : String(r[c.key]))
   const csvCols = columns.map(c => ({ label: c.label, csv: r => (c.csv ? c.csv(r) : textOf(c, r)) }))
   const onSort = k => { if (!sortable) return; setSort(s => (s?.key === k ? { key: k, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key: k, dir: columns.find(c => c.key === k)?.num ? 'desc' : 'asc' })) }
   const copy = () => copyText(toTsv(csvCols, sorted)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })
   const ink = isPhone ? M.ink : IC.t1, muted = isPhone ? M.muted : IC.t3, line = isPhone ? M.line : IC.border
-  const th = c => ({ textAlign: c.num ? 'right' : 'left', fontSize: 12, fontWeight: 600, color: sort?.key === c.key ? ink : muted, padding: isPhone ? '8px 6px' : '7px 10px',
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${line}`, cursor: sortable ? 'pointer' : 'default', userSelect: 'none', background: isPhone ? M.soft : IC.page })
-  const td = c => ({ textAlign: c.num ? 'right' : 'left', fontSize: 12.5, color: c.num ? ink : (isPhone ? M.ink : IC.t2), padding: isPhone ? '0 6px' : '7px 10px', height: isPhone ? 44 : undefined,
-    whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', borderBottom: `1px solid ${line}`, maxWidth: c.maxWidth || (isPhone ? 140 : 280), overflow: 'hidden', textOverflow: 'ellipsis' })
+  const th = c => ({ textAlign: c.num ? 'right' : 'left', fontSize: isPhone ? 12 : 10.5, fontWeight: 700, color: sort?.key === c.key ? ink : muted,
+    textTransform: isPhone ? 'none' : 'uppercase', letterSpacing: isPhone ? 'normal' : '.05em', padding: isPhone ? '8px 6px' : '6px 8px',
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${line}`, cursor: sortable ? 'pointer' : 'default', userSelect: 'none', background: isPhone ? M.soft : IC.surface })
+  const td = c => ({ textAlign: c.num ? 'right' : 'left', fontSize: 12.5, color: c.num ? ink : (isPhone ? M.ink : IC.t2), padding: isPhone ? '0 6px' : '7px 10px', height: isPhone ? 44 : 34,
+    whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', maxWidth: c.maxWidth || (isPhone ? 140 : 280), overflow: 'hidden', textOverflow: 'ellipsis' })
+  const tdTotal = c => ({ ...td(c), fontWeight: 700, color: ink, borderTop: `1px solid ${line}`, background: isPhone ? M.soft : IC.surface,
+    ...(fixedHeight ? { position: 'sticky', bottom: 0, zIndex: 1 } : {}) })
   return (
     <div style={{ minWidth: 0 }}>
-      {search && (
+      {search && externalSearch == null && (
         <input value={q} onChange={e => setQ(e.target.value)} placeholder={searchPlaceholder || 'Search…'} aria-label={searchPlaceholder || 'Search table'}
           style={{ width: isPhone ? '100%' : 260, boxSizing: 'border-box', marginBottom: 10, minHeight: isPhone ? 44 : 32, fontSize: isPhone ? 16 : 12.5, padding: '0 12px', borderRadius: 9,
             border: `1px solid ${q ? IC.accBorder : (isPhone ? M.line : IC.border2)}`, background: isPhone ? '#fff' : IC.surface, color: ink, fontFamily: 'var(--font)', outline: 'none' }} />
       )}
-      <div style={{ overflowX: isPhone ? 'hidden' : 'auto', minWidth: 0 }}>
+      <div style={{ overflowX: isPhone ? 'hidden' : 'auto', overflowY: fixedHeight ? 'auto' : undefined, maxHeight: fixedHeight || undefined, minWidth: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: isPhone ? 'fixed' : 'auto' }}>
           <thead><tr>{cols.map((c, i) => (
-            <th key={c.key} style={{ ...th(c), ...(isPhone && i === 0 ? { width: '36%' } : {}) }} onClick={() => onSort(c.key)} aria-sort={sort?.key === c.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+            <th key={c.key} style={{ ...th(c), ...(fixedHeight ? { position: 'sticky', top: 0, zIndex: 1 } : {}), ...(isPhone && i === 0 ? { width: '36%' } : {}) }} onClick={() => onSort(c.key)} aria-sort={sort?.key === c.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
               {c.label}{sort?.key === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
             </th>))}</tr></thead>
           <tbody>
             {shown.map((r, i) => (
               <tr key={r._key || i} onClick={onRowClick ? () => onRowClick(r) : undefined}
-                style={{ cursor: onRowClick ? 'pointer' : 'default', ...(rowStyle ? rowStyle(r) : {}) }}>
+                style={{ cursor: onRowClick ? 'pointer' : 'default', borderBottom: `1px solid ${line}`, ...(rowStyle ? rowStyle(r) : {}) }}>
                 {cols.map(c => <td key={c.key} style={td(c)} title={textOf(c, r)}>{c.render ? c.render(r) : textOf(c, r)}</td>)}
               </tr>
             ))}
             {!shown.length && <tr><td colSpan={cols.length} style={{ padding: 16, fontSize: 12.5, color: muted, textAlign: 'center' }}>{emptyText}</td></tr>}
           </tbody>
+          {total && (
+            <tfoot><tr>{cols.map(c => <td key={c.key} style={tdTotal(c)}>{c.render ? c.render(total) : textOf(c, total)}</td>)}</tr></tfoot>
+          )}
         </table>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-        {sorted.length > MAX_ROWS && <button type="button" style={btnStyle(isPhone)} onClick={() => setAll(a => !a)}>{all ? 'Show fewer' : `Show all ${sorted.length}`}</button>}
-        {isPhone && phoneKeys && columns.length > PHONE_COLS && <button type="button" style={btnStyle(isPhone)} onClick={() => setFull(true)}>View full table ⤢</button>}
-        <span style={{ flex: 1 }} />
-        <button type="button" style={btnStyle(isPhone)} onClick={copy} aria-live="polite">{copied ? 'Copied ✓' : 'Copy'}</button>
-        <button type="button" style={btnStyle(isPhone)} onClick={() => downloadCsv(filename, toCsv(csvCols, sorted))}>CSV</button>
-      </div>
+      {!hideExport && (!fixedHeight || (isPhone && phoneKeys && columns.length > PHONE_COLS) || externalSearch == null) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+          {!fixedHeight && sorted.length > MAX_ROWS && <button type="button" style={btnStyle(isPhone)} onClick={() => setAll(a => !a)}>{all ? 'Show fewer' : `Show all ${sorted.length}`}</button>}
+          {isPhone && phoneKeys && columns.length > PHONE_COLS && <button type="button" style={btnStyle(isPhone)} onClick={() => setFull(true)}>View full table ⤢</button>}
+          <span style={{ flex: 1 }} />
+          {(externalSearch == null || isPhone) && <>
+            <button type="button" style={btnStyle(isPhone)} onClick={copy} aria-live="polite">{copied ? 'Copied ✓' : 'Copy'}</button>
+            <button type="button" style={btnStyle(isPhone)} onClick={() => downloadCsv(filename, toCsv(csvCols, sorted))}>CSV</button>
+          </>}
+        </div>
+      )}
       {isPhone && (
         <FullScreenTable open={full} onClose={() => setFull(false)} title={title} note={fullNote} head={columns[0].label}
           cols={columns.slice(1).map(c => c.label)} firstWidth={130}
@@ -152,35 +199,54 @@ function InwardTable({ columns, rows, isPhone, filename, title, defaultSort, sor
   )
 }
 
-// ── KPI tile (desktop / laptop) ────────────────────────────────────────────────────────────
-function KpiDesk({ label, value, delta, sub, title }) {
+// ── KPI tile (desktop / laptop) — same visual language as Inventory Health's KpiTile, plus a
+// ▲/▼ delta badge under the value (Health's own tiles have no period-over-period comparison).
+function KpiDesk({ label, value, delta, sub, title, neutral, lowerIsBetter }) {
   return (
-    <div title={title} style={{ background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 14, padding: '12px 14px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-        <span style={{ fontSize: 22, fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
-        <DeltaBadge delta={delta} neutral size={12} />
+    <div title={title} className="card-hoverable" style={{
+      background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 16, padding: '12px 16px',
+      minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5,
+    }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: IC.t3, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+        <DeltaBadge delta={delta} neutral={neutral} lowerIsBetter={lowerIsBetter} size={12} />
       </div>
-      <span style={{ fontSize: 12, color: IC.t3, minHeight: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub || ' '}</span>
+      <span style={{ fontSize: 11.5, color: IC.t3, minHeight: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub || ' '}</span>
     </div>
   )
 }
 
-function TrendTip({ active, payload, label, grain }) {
+function TrendTip({ active, payload, label, grain, typesInTrend }) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload || {}
+  const ratio = row.sales > 0 ? row.total / row.sales : null
   return (
-    <div style={{ background: '#fff', border: `1px solid ${IC.border2}`, borderRadius: 10, padding: '8px 12px', fontSize: 12, boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 170 }}>
+    <div style={{ background: '#fff', border: `1px solid ${IC.border2}`, borderRadius: 10, padding: '8px 12px', fontSize: 12, boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 210 }}>
       <div style={{ fontWeight: 700, color: IC.t1, marginBottom: 4 }}>{fmtBucket(label, grain)}</div>
-      {payload.filter(p => p.value).map(p => (
-        <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 6, color: IC.t2, lineHeight: 1.6 }}>
-          <span style={{ width: 8, height: p.dataKey === 'sales' ? 2 : 8, borderRadius: 2, background: p.dataKey === 'sales' ? IC.t1 : p.fill }} />
-          <span>{p.dataKey === 'sales' ? 'Sales units' : p.dataKey}</span>
-          <span style={{ marginLeft: 'auto', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtUnits(p.value)}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: IC.t2, lineHeight: 1.7 }}>
+        <span style={{ width: 14, height: 2, background: IC.t1, flexShrink: 0 }} /><span>Total inward</span>
+        <span style={{ marginLeft: 'auto', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtUnits(row.total)}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: IC.t2, lineHeight: 1.7 }}>
+        <span style={{ width: 14, height: 2, background: IC.accBorder, flexShrink: 0 }} /><span>Total sales</span>
+        <span style={{ marginLeft: 'auto', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtUnits(row.sales)}</span>
+      </div>
+      {ratio != null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: IC.t2, lineHeight: 1.7 }}>
+          <span style={{ width: 14, height: 0, borderTop: `2px dashed ${IC.t3}`, flexShrink: 0 }} /><span>Inward ÷ sales</span>
+          <span style={{ marginLeft: 'auto', fontWeight: 700, color: ratio > 1 ? IC.negative : IC.t1, fontVariantNumeric: 'tabular-nums' }}>{ratio.toFixed(2)}×</span>
         </div>
-      ))}
-      <div style={{ borderTop: `1px solid ${IC.border}`, marginTop: 4, paddingTop: 4, display: 'flex', color: IC.t2 }}>
-        <span>Inward total</span><span style={{ marginLeft: 'auto', fontWeight: 700, color: IC.t1 }}>{fmtUnits(row.total)}</span>
+      )}
+      <div style={{ borderTop: `1px solid ${IC.border}`, marginTop: 4, paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ fontSize: 11, color: IC.t3, marginBottom: 1 }}>Inward by source</div>
+        {(typesInTrend || []).filter(t => row[t]).map(t => (
+          <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, color: IC.t2 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: SOURCE_COLORS[t] || '#6f7d75', flexShrink: 0 }} />
+            <span>{t}</span>
+            <span style={{ marginLeft: 'auto', fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums' }}>{fmtUnits(row[t])}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -249,8 +315,8 @@ function InwardFilterSheet({ open, onClose, opts, filters, setFilters }) {
   )
 }
 
-// ── Desktop filter row ──────────────────────────────────────────────────────────────────
-function DesktopFilters({ opts, filters, setFilters }) {
+// ── Desktop filter panel body (shared by the popover below) ─────────────────────────────
+function DesktopFilterFields({ opts, filters, setFilters }) {
   const [sku, setSku] = useState(filters.sku || '')
   // A chip removal / Clear all changes filters.sku from outside: follow it (adjusting during render).
   const [seenSku, setSeenSku] = useState(filters.sku || '')
@@ -263,16 +329,43 @@ function DesktopFilters({ opts, filters, setFilters }) {
   const subOpts = (opts.subCategories || []).filter(s => !(filters.category?.length) || filters.category.includes(s.category)).map(s => s.subCategory)
   const set = k => v => setFilters(f => ({ ...f, [k]: v, ...(k === 'category' ? { subCategory: [] } : {}) }))
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-      <SearchableMultiSelect label="Warehouse" options={opts.warehouses || []} selected={filters.warehouse || []} onChange={set('warehouse')} width={150} />
-      <SearchableMultiSelect label="Source type" options={opts.sourceTypes || []} selected={filters.sourceType || []} onChange={set('sourceType')} width={150} />
-      <SearchableMultiSelect label="Vendor" options={(opts.vendors || []).map(v => v.vendor)} selected={filters.vendor || []} onChange={set('vendor')} width={170} />
-      <SearchableMultiSelect label="Category" options={opts.categories || []} selected={filters.category || []} onChange={set('category')} width={160} />
-      <SearchableMultiSelect label="Sub-category" options={[...new Set(subOpts)]} selected={filters.subCategory || []} onChange={set('subCategory')} width={180} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 230 }}>
       <input value={sku} onChange={e => setSku(e.target.value)} placeholder="Search SKU…" aria-label="SKU search"
-        style={{ height: 34, width: 170, boxSizing: 'border-box', borderRadius: 8, border: `1px solid ${sku ? IC.accBorder : IC.border2}`, padding: '0 10px', fontSize: 12.5, color: IC.t1, background: IC.surface, fontFamily: 'var(--font)', outline: 'none' }} />
+        style={{ height: 34, width: '100%', boxSizing: 'border-box', borderRadius: 8, border: `1px solid ${sku ? IC.accBorder : IC.border2}`, padding: '0 10px', fontSize: 12.5, color: IC.t1, background: IC.surface, fontFamily: 'var(--font)', outline: 'none' }} />
+      <SearchableMultiSelect label="Warehouse" options={opts.warehouses || []} selected={filters.warehouse || []} onChange={set('warehouse')} width="100%" />
+      <SearchableMultiSelect label="Source type" options={opts.sourceTypes || []} selected={filters.sourceType || []} onChange={set('sourceType')} width="100%" />
+      <SearchableMultiSelect label="Vendor" options={(opts.vendors || []).map(v => v.vendor)} selected={filters.vendor || []} onChange={set('vendor')} width="100%" />
+      <SearchableMultiSelect label="Category" options={opts.categories || []} selected={filters.category || []} onChange={set('category')} width="100%" />
+      <SearchableMultiSelect label="Sub-category" options={[...new Set(subOpts)]} selected={filters.subCategory || []} onChange={set('subCategory')} width="100%" />
       {inwardFilterCount(filters) > 0 && (
-        <button type="button" onClick={() => setFilters({})} style={{ ...btnStyle(false), height: 34, color: IC.negative }}>Clear all</button>
+        <button type="button" onClick={() => setFilters({})} style={{ ...btnStyle(false), height: 34, color: IC.negative, width: '100%' }}>Clear all</button>
+      )}
+    </div>
+  )
+}
+
+// ── Single "Filters" button → popover panel (same pattern as Inventory Health) ───────────
+function FiltersButton({ opts, filters, setFilters }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-smsel-panel]')) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const activeCount = inwardFilterCount(filters)
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? IC.accBorder : IC.border2}`, background: activeCount > 0 ? IC.accDim : IC.surface, color: IC.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+        Filters
+        {activeCount > 0 && <span style={{ background: IC.accBorder, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{activeCount}</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.18)', padding: 12, maxHeight: '70vh', overflowY: 'auto' }}>
+          <DesktopFilterFields opts={opts} filters={filters} setFilters={setFilters} />
+        </div>
       )}
     </div>
   )
@@ -301,87 +394,72 @@ function FilterChips({ filters, setFilters, isPhone }) {
 }
 
 // ── SKU drill-down ──────────────────────────────────────────────────────────────────────────
-function SkuDrill({ row, start, end, isPhone, onClose }) {
-  const { data, loading, error } = useSkuDetail(row?.sku, start, end)
-  const series = useMemo(() => (data ? estimateStock(data.daily, row?.stock ?? null) : []), [data, row])
+// Drill-down for a SKU or vendor row: its last 10 distinct GRN days (full history, not bound by
+// the page's date filter), each with that day's total units and GRN count. Same shape for both —
+// mode: 'sku' (id = SKU code) or 'vendor' (id = unified vendor name).
+function LastGrnDrill({ mode, id, subtitle, isPhone, onClose, range }) {
+  const { data, loading, error } = useLastGrnDays(mode, id, range)
   useEffect(() => {
     if (isPhone) return
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isPhone, onClose])
-  const h = isPhone ? 190 : 220
-  const tick = { fontSize: 12, fill: IC.t3 }
-  const eventCols = [
+  // Vendor drill-downs are already filtered to one vendor (shown via `subtitle` already); for SKU/
+  // sub-category drill-downs, roll up vendors across all returned days into one deduplicated,
+  // highest-units-first list, shown once in the header next to the sub-category — not per row.
+  const vendorsLine = useMemo(() => {
+    if (mode === 'vendor' || !data?.rows?.length) return null
+    const totals = new Map()
+    for (const r of data.rows) for (const v of r.vendors || []) totals.set(v.vendor, (totals.get(v.vendor) || 0) + v.units)
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([vendor]) => vendor).join(', ')
+  }, [mode, data])
+  const dayCols = [
     { key: 'date', label: 'Date', text: r => fmtDayYear(r.date), csv: r => r.date, sort: r => r.date },
-    { key: 'vendor', label: 'Vendor', text: r => r.vendor, maxWidth: 220 },
     { key: 'units', label: 'Units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
-    { key: 'warehouse', label: 'Warehouse', text: r => r.warehouse },
-    { key: 'sourceType', label: 'Source', text: r => r.sourceType },
-    { key: 'grnCode', label: 'GRN', text: r => r.grnCode },
+    { key: 'grnCount', label: 'GRNs', num: true, text: r => fmtUnits(r.grnCount), csv: r => r.grnCount },
+  ]
+  // Vendor bottom sheet addition: "SKUs supplied" — SKU · sub-category · units in the page's
+  // selected range (not full history, unlike the last-10-GRN-days table above), top 10 + "Show all".
+  const skuSuppliedCols = [
+    { key: 'sku', label: 'SKU', text: r => r.sku },
+    { key: 'subCategory', label: 'Sub-category', text: r => r.subCategory, maxWidth: 200 },
+    { key: 'units', label: 'Units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
   ]
   const body = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 12.5, color: IC.t2 }}>
-        <span>Current stock <b style={{ color: IC.t1 }}>{row.stock == null ? '—' : fmtUnits(row.stock)}</b></span>
-        <span>Avg sale <b style={{ color: IC.t1 }}>{row.avgSale == null ? '—' : `${fmtUnits(row.avgSale)}/day`}</b></span>
-        <span>DOI <b style={{ color: IC.t1 }}>{row.doi == null ? '—' : `${row.doi} d`}</b></span>
-        <span>Inward in range <b style={{ color: IC.t1 }}>{fmtUnits(row.units)}</b></span>
-      </div>
-      {loading && <div style={{ height: h * 2, borderRadius: 12, background: IC.page }} aria-busy="true" />}
+      {loading && <div style={{ height: 240, borderRadius: 12, background: IC.page }} aria-busy="true" />}
       {error && <div style={{ fontSize: 12.5, color: IC.negative }}>⚠ {error}</div>}
       {data && (
-        <>
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: IC.t1 }}>Estimated stock and inward</div>
-            <div style={{ fontSize: 12, color: IC.t3, marginBottom: 6 }}>Estimated: today's stock − inward since that day + sales since that day{row.stock == null ? ' (no current stock in Inventory Health, so no estimate)' : ''}</div>
-            <div style={{ height: h }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={series} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={IC.border} vertical={false} />
-                  <XAxis dataKey="date" tick={tick} tickFormatter={fmtDay} minTickGap={24} />
-                  <YAxis tick={tick} tickFormatter={fmtBig} width={44} />
-                  <Tooltip formatter={(v, n) => [fmtUnits(v), n === 'estStock' ? 'Estimated stock' : 'Inward units']} labelFormatter={fmtDayYear} contentStyle={{ fontSize: 12, borderRadius: 10 }} />
-                  <Bar dataKey="inward" fill={SOURCE_COLORS.Domestic} maxBarSize={10} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                  <Line dataKey="estStock" stroke={IC.t1} strokeWidth={2} dot={false} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <Legend isPhone={isPhone} items={[{ label: 'Estimated stock (end of day)', color: IC.t1, line: true }, { label: 'Inward units', color: SOURCE_COLORS.Domestic }]} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: IC.t1, marginBottom: 6 }}>Daily sales units</div>
-            <div style={{ height: isPhone ? 150 : 170 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={series} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={IC.border} vertical={false} />
-                  <XAxis dataKey="date" tick={tick} tickFormatter={fmtDay} minTickGap={24} />
-                  <YAxis tick={tick} tickFormatter={fmtBig} width={44} />
-                  <Tooltip formatter={v => [fmtUnits(v), 'Sales units']} labelFormatter={fmtDayYear} contentStyle={{ fontSize: 12, borderRadius: 10 }} />
-                  <Bar dataKey="sales" fill="#7b847f" maxBarSize={10} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: IC.t1, marginBottom: 6 }}>Inward events ({data.events.length})</div>
-            <InwardTable columns={eventCols} rows={data.events.map((e, i) => ({ ...e, _key: `${e.grnCode}-${i}` }))} isPhone={isPhone} title={`${row.sku} · inward events`}
-              filename={`inward_events_${row.sku}.csv`} defaultSort={{ key: 'date', dir: 'desc' }} phoneKeys={['date', 'vendor', 'units', 'warehouse']} />
-          </div>
-        </>
+        data.rows.length
+          ? <InwardTable columns={dayCols} rows={data.rows.map((r, i) => ({ ...r, _key: `${r.date}-${i}` }))} isPhone={isPhone}
+              title={`${id} · last ${data.rows.length} GRN days`} filename={`inward_last10_${id}.csv`} defaultSort={{ key: 'date', dir: 'desc' }}
+              sortable={false} phoneKeys={['date', 'units', 'grnCount']} emptyText="No GRN days found." hideExport />
+          : <div style={{ fontSize: 12.5, color: IC.t3 }}>No GRN days found (since Apr-25).</div>
+      )}
+      {mode === 'vendor' && data?.skusSupplied && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: isPhone ? M.ink : IC.t1, marginBottom: 6 }}>SKUs supplied{range ? ` · ${fmtRange(range.start, range.end)}` : ''}</div>
+          {data.skusSupplied.length
+            ? <InwardTable columns={skuSuppliedCols} rows={data.skusSupplied.map((r, i) => ({ ...r, _key: `${r.sku}-${i}` }))} isPhone={isPhone}
+                title={`${id} · SKUs supplied`} filename={`inward_skus_supplied_${id}.csv`} defaultSort={{ key: 'units', dir: 'desc' }}
+                phoneKeys={['sku', 'subCategory', 'units']} emptyText="No SKUs in this range." hideExport />
+            : <div style={{ fontSize: 12.5, color: IC.t3 }}>No SKUs in this range.</div>}
+        </div>
       )}
     </div>
   )
-  const title = `${row.sku} · ${row.subCategory || ''}`
-  if (isPhone) return <BottomSheet open onClose={onClose} title={title} subtitle={`${fmtDay(start)} → today · estimated stock`}>{body}</BottomSheet>
+  const title = `${id} · last ${data?.rows?.length || 10} GRN days`
+  const fullSubtitle = [subtitle, vendorsLine].filter(Boolean).join(' · ')
+  if (isPhone) return <BottomSheet open onClose={onClose} title={title} subtitle={fullSubtitle}>{body}</BottomSheet>
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)' }} />
-      <div role="dialog" aria-modal="true" aria-label={title} style={{ position: 'relative', width: 'min(960px, 94vw)', maxHeight: '90vh', overflowY: 'auto', background: IC.surface, borderRadius: 16, padding: '18px 20px', boxShadow: '0 12px 40px rgba(0,0,0,.25)', boxSizing: 'border-box' }}>
+      <div role="dialog" aria-modal="true" aria-label={title} style={{ position: 'relative', width: 'min(520px, 94vw)', maxHeight: '90vh', overflowY: 'auto', background: IC.surface, borderRadius: 16, padding: '18px 20px', boxShadow: '0 12px 40px rgba(0,0,0,.25)', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: IC.t1 }}>{title}</div>
-            <div style={{ fontSize: 12, color: IC.t3 }}>{fmtDay(start)} → today · {row.category}</div>
+            {fullSubtitle && <div style={{ fontSize: 12, color: IC.t3 }}>{fullSubtitle}</div>}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: 9, border: 'none', background: IC.page, fontSize: 18, cursor: 'pointer', color: IC.t1 }}>×</button>
         </div>
@@ -392,28 +470,91 @@ function SkuDrill({ row, start, end, isPhone, onClose }) {
   )
 }
 
+// ── Phone master card (INWARD_MOBILE_PROMPT.md §2): same pattern as Sales & Allocation's phone
+// "Revenue" master card (MasterTrendCard) — light-green gradient card, big Inward units value,
+// area chart with sales as a dashed overlay, legend, then 6 tappable tiles (2×3). Assumption (noted
+// in the report): MasterTrendCard's built-in `prevPoint` mechanism (normally "previous period,
+// dashed") is reused here to draw the SALES series dashed alongside Inward units (solid) instead —
+// the mockup wants both series on screen together regardless of which tile is selected, which the
+// component doesn't otherwise support; Inward's own tile keeps its real ▲/▼ vs previous period via
+// `delta`, unaffected by this reuse of `prevPoint` for the chart only.
+function PhoneMasterCard({ k, delta, trend, grain, meta, layout }) {
+  const salesPoint = r => r.sales
+  const metrics = [
+    {
+      key: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), sub: `Avg ${fmtUnits(k.cur.units / (meta.days || 1))}/day · ${fmtUnits(k.cur.grns)} GRNs`,
+      delta: delta('units'), deltaNeutral: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits,
+      def: '3rd-party (Domestic/Import) + Inhouse units received in GRNs (pack-adjusted). Chart: solid = inward, dashed = sales.',
+    },
+    { key: 'grns', label: 'GRNs', value: fmtUnits(k.cur.grns), delta: delta('grns'), deltaNeutral: true, sub: 'distinct GRN codes', point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct GRN codes in the period.' },
+    { key: 'skus', label: 'SKUs received', value: fmtUnits(k.cur.skus), sub: `${fmtUnits(k.cur.newSkus)} new`, deltasHidden: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct SKUs received; "new" = never received before (since Apr-25).' },
+    { key: 'vendors', label: 'Active vendors', value: fmtUnits(k.cur.vendors), delta: delta('vendors'), deltaNeutral: true, sub: 'with ≥1 GRN', point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Vendors (unified name) with at least one GRN.' },
+    {
+      key: 'ratio', label: 'Inward ÷ sales', value: fmtRatio(k.cur.ratio), status: k.cur.ratio > 1 ? 'warn' : undefined,
+      sub: k.cur.ratio > 1 ? 'stock building' : `sales ${fmtUnits(k.cur.salesUnits)} units`, deltasHidden: true,
+      point: r => (r.sales > 0 ? r.total / r.sales : null), fmtPoint: fmtRatio, def: 'Inward units ÷ sales units, same period. Above 1 (amber) = stock building.',
+    },
+    { key: 'rejectionPct', label: 'Rejection %', value: fmtPct(k.cur.rejectionPct), delta: delta('rejectionPct'), lowerIsBetter: true, sub: `${fmtUnits(k.cur.rejected)} units`, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Rejected units ÷ (received + rejected), 3rd-party + Inhouse only.' },
+  ]
+  return (
+    <MasterTrendCard metrics={metrics} rawRows={trend} groupTrend={rows => rows} start={meta.start} end={meta.end} layout={layout} granularity={grain} />
+  )
+}
+
 // ── The page ──────────────────────────────────────────────────────────────────────────────
 export default function InwardPage({ data, loading, error, status, invData, invLoading, filters, setFilters, sidebarTop, sheetOpen, setSheetOpen }) {
   const { isPhone, width } = usePhone()
   const [grainSel, setGrainSel] = useState('auto')
   const [drill, setDrill] = useState(null)
-  const [openCats, setOpenCats] = useState(() => new Set())
   const [dqOpen, setDqOpen] = useState(false)
+  const { fetchRows: fetchDqRows, loading: dqExportLoading } = useDqExport()
+  const [vendorSearch, setVendorSearch] = useState('')
+  const [skuSearchQ, setSkuSearchQ] = useState('')
+  const [skuView, setSkuView] = useState('sku') // 'sku' | 'subcat' — SKU detail table's roll-up toggle
+  const [masterSearch, setMasterSearch] = useState('')
 
   const meta = data?.meta
   const opts = data?.filterOptions || {}
   const k = data?.kpis
+  // "Inward value ₹" tile (small addition): units × COGS/unit via product_cogs_monthly, same rate
+  // card the P&L page uses. No ASP fallback (an inward line has no selling price) — a SKU with no
+  // real monthly rate and no sub-category average is counted in skusWithoutCogs, never estimated.
+  const cogsRange = meta ? { start: meta.start, end: meta.end, prevStart: meta.prevStart } : null
+  const cogsValue = useInwardCogsValue(data?.skuMonthly, cogsRange, data?.prevSkuMonthly)
   const idx = useMemo(() => stockIndex(invData), [invData])
   const skuRows = useMemo(() => attachStock(data?.skus, idx), [data?.skus, idx])
-  const whStock = useMemo(() => warehouseStock(invData, filters), [invData, filters])
+  // Sub-category roll-up of skuRows: units/GRNs summed, stock/avg sale summed, DOI recomputed from
+  // the summed stock ÷ summed avg sale (not an average of per-SKU DOIs — DOI isn't additive, but a
+  // ratio of two summed, additive quantities is a meaningful "blended" DOI for the group).
+  const subCatRows = useMemo(() => {
+    const m = new Map()
+    for (const s of skuRows) {
+      const key = s.subCategory || 'Uncategorized'
+      if (!m.has(key)) m.set(key, { subCategory: key, category: s.category, units: 0, grns: 0, stock: 0, avgSale: 0, hasStock: false, skuCount: 0, lastInward: null })
+      const g = m.get(key)
+      g.units += s.units; g.grns += s.grns; g.skuCount += 1
+      if (s.stock != null) { g.stock += s.stock; g.hasStock = true }
+      if (s.avgSale != null) g.avgSale += s.avgSale
+      if (!g.lastInward || (s.lastInward && s.lastInward > g.lastInward)) g.lastInward = s.lastInward
+    }
+    return [...m.values()].map(g => ({
+      ...g, _key: g.subCategory, sku: g.subCategory,
+      stock: g.hasStock ? g.stock : null, avgSale: g.hasStock ? g.avgSale : null,
+      doi: g.hasStock && g.avgSale > 0 ? Math.floor(g.stock / g.avgSale) : null,
+    })).sort((a, b) => b.units - a.units)
+  }, [skuRows])
+  // Product master: every SKU in the SKU master (data.masterSkus, built server-side independent of
+  // the selected date range), with the same current stock / Avg sale / DOI attached from Inventory
+  // Health's feed as skuRows above — so a SKU with zero GRNs in the selected range still shows up
+  // with its true last-ever inward date/qty/vendor(s), not just rows that had activity in range.
+  const productMasterRows = useMemo(() => attachStock(data?.masterSkus, idx), [data?.masterSkus, idx])
   const grain = grainSel === 'auto' ? autoGrain(meta?.days || 0) : grainSel
-  const trend = useMemo(() => rollup(data?.daily || [], grain), [data?.daily, grain])
+  const trend = useMemo(() => rollup(data?.daily || [], grain).map(r => ({ ...r, ratio: r.sales > 0 ? r.total / r.sales : null })), [data?.daily, grain])
   const typesInTrend = useMemo(() => (opts.sourceTypes || SOURCE_TYPES).filter(t => (data?.daily || []).some(d => d[t])), [opts.sourceTypes, data?.daily])
   const toggleSource = t => setFilters(f => { const cur = f.sourceType || []; return { ...f, sourceType: cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t] } })
 
   const ink = isPhone ? M.ink : IC.t1, muted = isPhone ? M.muted : IC.t3
   const gap = isPhone ? 12 : 16
-  const kpiCols = isPhone ? 2 : width >= 1280 ? 6 : 3
   const sideBySide = !isPhone && width >= 1280
 
   if (status === 403 && !data) {
@@ -425,16 +566,25 @@ export default function InwardPage({ data, loading, error, status, invData, invL
   }
 
   const rangeLine = meta ? `${fmtRange(meta.start, meta.end)} · ▲/▼ vs ${fmtRange(meta.prevStart, meta.prevEnd)}` : ''
-  const fmtVal = v => (v ? fmt(v) : '₹0')
   const delta = key => pctChange(k?.cur?.[key], k?.prev?.[key])
+  const cogsDelta = cogsValue.value != null && cogsValue.prevValue != null && cogsValue.prevValue > 0 ? ((cogsValue.value - cogsValue.prevValue) / cogsValue.prevValue) * 100 : null
   const kpiList = k ? [
-    { id: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), delta: delta('units'), sub: `${fmtUnits(k.cur.rejected)} rejected`, def: 'Units received in GRNs (pack-adjusted), SKUs in the SKU master only.' },
-    { id: 'value', label: 'Inward value', value: fmtVal(k.cur.value), delta: delta('value'), sub: k.cur.uncostedUnits ? `${fmtUnits(k.cur.uncostedUnits)} units without COGS` : 'at COGS', def: 'Units × COGS per unit for the GRN month (same COGS table and rule as P&L).' },
+    { id: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), delta: delta('units'), sub: `${fmtUnits(k.cur.rejected)} rejected`, def: '3rd-party (Domestic/Import) + Inhouse units received in GRNs (pack-adjusted), SKUs in the SKU master only. Internal transfers are excluded.' },
+    {
+      id: 'cogsValue', label: 'Inward value', short: 'Inward ₹', value: cogsValue.loading ? '…' : cogsValue.value == null ? '—' : fmt(cogsValue.value),
+      delta: cogsValue.loading ? null : cogsDelta,
+      sub: cogsValue.loading ? 'Loading COGS…' : cogsValue.skusWithoutCogs ? `${fmtUnits(cogsValue.skusWithoutCogs)} SKUs without COGS` : 'All SKUs have a COGS rate',
+      def: 'Inward units × COGS/unit for that month, from product_cogs_monthly (the same monthly rate card the P&L page uses). No ASP fallback: a SKU with no real monthly rate or sub-category average is excluded from this total and counted as "without COGS".',
+    },
     { id: 'grns', label: 'GRNs', value: fmtUnits(k.cur.grns), delta: delta('grns'), sub: 'distinct GRN codes', def: 'Distinct GRN codes in the period.' },
     { id: 'skus', label: 'SKUs received', short: 'SKUs', value: fmtUnits(k.cur.skus), delta: delta('skus'), sub: 'distinct SKUs', def: 'Distinct SKUs received.' },
     { id: 'vendors', label: 'Active vendors', short: 'Vendors', value: fmtUnits(k.cur.vendors), delta: delta('vendors'), sub: 'with at least 1 GRN', def: 'Vendors (unified name) with at least one GRN.' },
-    { id: 'ratio', label: 'Inward ÷ sales', short: 'In ÷ sales', value: fmtRatio(k.cur.ratio), delta: delta('ratio'), sub: `sales ${fmtUnits(k.cur.salesUnits)} units`, def: 'Inward units ÷ sales units in the same period. Above 1 = stock building.' },
+    { id: 'ratio', label: 'Inward ÷ sales', short: 'In ÷ sales', value: fmtRatio(k.cur.ratio), delta: delta('ratio'), sub: `sales ${fmtUnits(k.cur.salesUnits)} units`, def: 'Inward units (3rd-party + Inhouse) ÷ sales units (B2C+B2B+PO) in the same period. Above 1 = stock building.', neutral: true },
+    { id: 'rejectionPct', label: 'Rejection %', value: fmtPct(k.cur.rejectionPct), delta: delta('rejectionPct'), sub: `${fmtUnits(k.cur.rejected)} units rejected`, def: 'Rejected units ÷ (received + rejected) in the period, 3rd-party + Inhouse only.', lowerIsBetter: true },
+    { id: 'newSkus', label: 'New SKUs', value: fmtUnits(k.cur.newSkus), sub: 'never received before', def: 'SKUs whose first-ever inward GRN (since Apr-25) falls inside the selected date range — not just "not received last period". Dynamic to any range picked.', neutral: true },
   ] : []
+  // Always one row: as many columns as tiles, so adding/removing a KPI never wraps the row.
+  const kpiCols = kpiList.length || 1
 
   // ── Tables ──
   const vendorCols = [
@@ -442,100 +592,166 @@ export default function InwardPage({ data, loading, error, status, invData, invL
     { key: 'sourceType', label: 'Source', text: r => r.sourceType },
     { key: 'grns', label: 'GRNs', num: true, text: r => fmtUnits(r.grns), csv: r => r.grns },
     { key: 'units', label: 'Units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
-    { key: 'value', label: '₹ value', num: true, text: r => fmtVal(r.value), csv: r => Math.round(r.value) },
     { key: 'skus', label: 'SKUs', num: true, text: r => fmtUnits(r.skus), csv: r => r.skus },
     { key: 'lastGrn', label: 'Last GRN', text: r => fmtDayYear(r.lastGrn), csv: r => r.lastGrn, sort: r => r.lastGrn },
-    { key: 'avgDaysBetween', label: 'Avg days between', num: true, text: r => (r.avgDaysBetween == null ? '—' : r.avgDaysBetween.toFixed(1)), csv: r => r.avgDaysBetween ?? '' },
-    { key: 'rejectionPct', label: 'Rejection %', num: true, text: r => fmtPct(r.rejectionPct), csv: r => r.rejectionPct.toFixed(2) },
-    { key: 'leadTimeDays', label: 'Lead time (d)', num: true, text: r => (r.leadTimeDays == null ? '—' : r.leadTimeDays.toFixed(1)), csv: r => r.leadTimeDays ?? '' },
   ]
-  const whRows = (data?.warehouses || []).map(w => { const s = whStock.get(w.location); return { ...w, _key: w.location, stock: s ? s.stock : null, doi: s ? s.doi : null, avgSale: s ? s.avgSale : null } })
-  const whCols = [
-    { key: 'location', label: 'Warehouse', text: r => r.location },
-    { key: 'units', label: 'Inward units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
-    { key: 'value', label: 'Inward ₹', num: true, text: r => fmtVal(r.value), csv: r => Math.round(r.value) },
-    { key: 'salesUnits', label: 'Sales units', num: true, text: r => fmtUnits(r.salesUnits), csv: r => r.salesUnits },
-    { key: 'ratio', label: 'Inward ÷ sales', num: true, text: r => fmtRatio(r.ratio), csv: r => (r.ratio == null ? '' : r.ratio.toFixed(3)) },
-    { key: 'stock', label: 'Current stock', num: true, text: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)), csv: r => r.stock ?? '' },
-    { key: 'avgSale', label: 'Avg sale /day', num: true, text: r => (r.avgSale == null ? '—' : fmtUnits(r.avgSale)), csv: r => r.avgSale ?? '' },
-    { key: 'doi', label: 'DOI', num: true, text: r => (r.doi == null ? '—' : `${r.doi} d`), csv: r => r.doi ?? '' },
-  ]
-  const catRows = []
-  for (const c of data?.categories || []) {
-    catRows.push({ ...c, _key: `c:${c.category}`, level: 0, label: c.category })
-    if (openCats.has(c.category)) for (const s of c.subs) catRows.push({ ...s, category: c.category, _key: `s:${c.category}|${s.subCategory}`, level: 1, label: s.subCategory })
+  // GRNs/units sum across vendors; SKUs is a distinct count so a plain sum would double-count
+  // SKUs shared by several vendors — shown as "—" instead of a misleading number.
+  const vendorTotalRow = rs => {
+    const grns = rs.reduce((a, r) => a + r.grns, 0), units = rs.reduce((a, r) => a + r.units, 0)
+    return { _key: 'total', vendor: `Total (${rs.length} vendors)`, sourceType: '', grns, units, skus: null, lastGrn: null }
   }
-  const allCatRows = (data?.categories || []).flatMap(c => [{ ...c, label: c.category, level: 0 }, ...c.subs.map(s => ({ ...s, category: c.category, label: s.subCategory, level: 1 }))])
-  const catCols = [
-    { key: 'label', label: 'Category / sub-category', text: r => r.label, csv: r => (r.level ? `${r.category} > ${r.label}` : r.label), maxWidth: 300,
-      render: r => (r.level ? <span style={{ paddingLeft: 16, color: muted }}>{r.label}</span> : <span style={{ fontWeight: 700, color: ink }}>{openCats.has(r.category) ? '▾' : '▸'} {r.label}</span>) },
-    { key: 'units', label: 'Inward units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
-    { key: 'value', label: 'Inward ₹', num: true, text: r => fmtVal(r.value), csv: r => Math.round(r.value) },
-    { key: 'salesUnits', label: 'Sales units', num: true, text: r => fmtUnits(r.salesUnits), csv: r => r.salesUnits },
-    { key: 'ratio', label: 'Inward ÷ sales', num: true, text: r => fmtRatio(r.ratio), csv: r => (r.ratio == null ? '' : r.ratio.toFixed(3)) },
-  ]
   const skuCols = [
     { key: 'sku', label: 'SKU', text: r => r.sku },
     { key: 'subCategory', label: 'Sub-category', text: r => r.subCategory, maxWidth: 220 },
     { key: 'units', label: 'Inward units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
-    { key: 'value', label: '₹ value', num: true, text: r => fmtVal(r.value), csv: r => Math.round(r.value) },
-    { key: 'grns', label: 'GRNs', num: true, text: r => fmtUnits(r.grns), csv: r => r.grns },
     { key: 'stock', label: 'Current stock', num: true, text: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)), csv: r => r.stock ?? '' },
     { key: 'avgSale', label: 'Avg sale /day', num: true, text: r => (r.avgSale == null ? '—' : fmtUnits(r.avgSale)), csv: r => r.avgSale ?? '' },
     { key: 'doi', label: 'DOI', num: true, text: r => (r.doi == null ? '—' : `${r.doi} d`), csv: r => r.doi ?? '' },
     { key: 'lastInward', label: 'Last inward', text: r => fmtDayYear(r.lastInward), csv: r => r.lastInward, sort: r => r.lastInward },
   ]
+  // Units sum across SKUs; stock/avg sale/DOI are per-SKU snapshot figures, not meaningful
+  // summed (DOI especially — it isn't additive), so they're left blank on the total row.
+  const skuTotalRow = rs => ({
+    _key: 'total', sku: `Total (${rs.length} SKUs)`, subCategory: '',
+    units: rs.reduce((a, r) => a + r.units, 0),
+    stock: null, avgSale: null, doi: null, lastInward: null,
+  })
+  const subCatCols = [
+    { key: 'sku', label: 'Sub-category', text: r => r.subCategory, maxWidth: 220 },
+    { key: 'skuCount', label: 'SKUs', num: true, text: r => fmtUnits(r.skuCount), csv: r => r.skuCount },
+    { key: 'units', label: 'Inward units', num: true, text: r => fmtUnits(r.units), csv: r => r.units },
+    { key: 'stock', label: 'Current stock', num: true, text: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)), csv: r => r.stock ?? '' },
+    { key: 'avgSale', label: 'Avg sale /day', num: true, text: r => (r.avgSale == null ? '—' : fmtUnits(r.avgSale)), csv: r => r.avgSale ?? '' },
+    { key: 'doi', label: 'DOI', num: true, text: r => (r.doi == null ? '—' : `${r.doi} d`), csv: r => r.doi ?? '' },
+    { key: 'lastInward', label: 'Last inward', text: r => fmtDayYear(r.lastInward), csv: r => r.lastInward, sort: r => r.lastInward },
+  ]
+  // Same convention as the SKU view's total row: units sum, stock-related columns blank
+  // (a grand total across every sub-category's already-blended DOI isn't a meaningful number).
+  const subCatTotalRow = rs => ({
+    _key: 'total', sku: `Total (${rs.length} sub-categories)`, skuCount: rs.reduce((a, r) => a + r.skuCount, 0),
+    units: rs.reduce((a, r) => a + r.units, 0),
+    stock: null, avgSale: null, doi: null, lastInward: null,
+  })
+
+  // Product master: every SKU, independent of the selected date range — "Last inward" columns are
+  // true all-time (not bound by the range), "Inward qty (range)" is the one column that does reflect
+  // the currently selected dates, so a SKU with 0 there but a real last-inward date is correctly a
+  // "not inwarded in this window" case rather than "never inwarded at all".
+  const masterCols = [
+    { key: 'sku', label: 'SKU', text: r => r.sku, maxWidth: 130 },
+    { key: 'category', label: 'Category', text: r => r.category, maxWidth: 140 },
+    { key: 'subCategory', label: 'Sub-category', text: r => r.subCategory, maxWidth: 220 },
+    { key: 'stock', label: 'Current stock', num: true, text: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)), csv: r => r.stock ?? '' },
+    { key: 'avgSale', label: 'Avg sale /day', num: true, text: r => (r.avgSale == null ? '—' : fmtUnits(r.avgSale)), csv: r => r.avgSale ?? '' },
+    { key: 'doi', label: 'DOI', num: true, text: r => (r.doi == null ? '—' : `${r.doi} d`), csv: r => r.doi ?? '', maxWidth: 100 },
+    { key: 'lastInward', label: 'Last inward', text: r => fmtDayYear(r.lastInward), csv: r => r.lastInward, sort: r => r.lastInward },
+    { key: 'lastInwardQty', label: 'Last inward qty', num: true, text: r => (r.lastInwardQty == null ? '—' : fmtUnits(r.lastInwardQty)), csv: r => r.lastInwardQty ?? '' },
+    { key: 'lastInwardVendors', label: 'Last inward vendor(s)', text: r => (r.lastInwardVendors || []).join(', ') || '—', csv: r => (r.lastInwardVendors || []).join('; '), maxWidth: 240 },
+    { key: 'rangeQty', label: 'Inward qty (range)', num: true, text: r => fmtUnits(r.rangeQty), csv: r => r.rangeQty },
+  ]
+  const masterSearchFn = (r, q) => r.sku.toLowerCase().includes(q) || String(r.subCategory || '').toLowerCase().includes(q) || String(r.category || '').toLowerCase().includes(q)
 
   const loadingFirst = !data && !error
   const skel = hgt => <div aria-busy="true" style={{ height: hgt, borderRadius: isPhone ? M.radius.card : 16, background: isPhone ? '#ebe8e1' : IC.surface, opacity: 0.7, pointerEvents: 'none' }} />
+
+  // Full GRN-level export (every raw line, not aggregated) for the Data quality panel — fetched on
+  // click, not held in page state, since it can be thousands of rows across the whole selected range.
+  const dqSkuExportCols = [
+    { label: 'GRN date', key: 'grnDate' }, { label: 'GRN code', key: 'grnCode' }, { label: 'GRN SKU code', key: 'itemSkuCode' },
+    { label: 'Final SKU code', key: 'finalSkuCode' }, { label: 'Reason', key: 'reason' }, { label: 'Facility', key: 'facility' },
+    { label: 'Vendor name', key: 'vendorName' }, { label: 'Vendor code', key: 'vendorCode' }, { label: 'GRN invoice no', key: 'grnInvoiceNo' },
+    { label: 'GRN invoice date', key: 'grnInvoiceDate' }, { label: 'PO code', key: 'poCode' }, { label: 'PO date', key: 'poDate' },
+    { label: 'Qty received', key: 'quantityReceived' }, { label: 'Qty rejected', key: 'quantityRejected' }, { label: 'Pack qty', key: 'packQty' },
+    { label: 'Units (pack-adjusted)', key: 'units' }, { label: 'Rejection reason', key: 'rejectionReason' }, { label: 'GRN item status', key: 'grnItemStatus' },
+  ]
+  const dqVendorExportCols = [
+    { label: 'GRN date', key: 'grnDate' }, { label: 'GRN code', key: 'grnCode' }, { label: 'GRN SKU code', key: 'itemSkuCode' },
+    { label: 'Resolved SKU', key: 'resolvedSku' }, { label: 'Facility', key: 'facility' }, { label: 'Vendor name', key: 'vendorName' },
+    { label: 'Vendor code', key: 'vendorCode' }, { label: 'GRN invoice no', key: 'grnInvoiceNo' }, { label: 'GRN invoice date', key: 'grnInvoiceDate' },
+    { label: 'PO code', key: 'poCode' }, { label: 'PO date', key: 'poDate' }, { label: 'Qty received', key: 'quantityReceived' },
+    { label: 'Qty rejected', key: 'quantityRejected' }, { label: 'Pack qty', key: 'packQty' }, { label: 'Units (pack-adjusted)', key: 'units' },
+    { label: 'Rejection reason', key: 'rejectionReason' }, { label: 'GRN item status', key: 'grnItemStatus' },
+  ]
+  const exportDq = async kind => {
+    if (!meta) return
+    const rows = await fetchDqRows(kind, meta.start, meta.end).catch(() => null)
+    if (!rows) return
+    const cols = kind === 'vendor' ? dqVendorExportCols : dqSkuExportCols
+    downloadCsv(`inward_dq_${kind}_grn_detail_${meta.start}_${meta.end}.csv`, toCsv(cols.map(c => ({ label: c.label, csv: r => r[c.key] ?? '' })), rows))
+  }
 
   return (
     // The page is its own (full-area) scroll container, like the other Inventory sub-pages.
     <div className="inward-page" style={{ background: isPhone ? M.bg : IC.page, flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: isPhone ? '12px 16px 96px' : width >= 1280 ? '18px 24px 40px' : '16px 20px 40px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap }}>
       {!isPhone && sidebarTop && <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>{sidebarTop}</div>}
       {/* Title, date range and Refresh live in the app's top bar (desktop) / green header (phone). */}
-      <div style={{ fontSize: 12, color: muted }}>{rangeLine}{loading && data ? ' · updating…' : ''}</div>
-      {!isPhone && <DesktopFilters opts={opts} filters={filters} setFilters={setFilters} />}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12, color: muted }}>{rangeLine}{loading && data ? ' · updating…' : ''}</div>
+        {!isPhone && <FiltersButton opts={opts} filters={filters} setFilters={setFilters} />}
+      </div>
       <FilterChips filters={filters} setFilters={setFilters} isPhone={isPhone} />
       {isPhone && sheetOpen && <InwardFilterSheet open onClose={() => setSheetOpen(false)} opts={opts} filters={filters} setFilters={setFilters} />}
 
       {error && !data && <div role="alert" style={{ padding: '12px 14px', borderRadius: 12, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12.5 }}>⚠ {error}</div>}
       {error && data && <div role="alert" style={{ fontSize: 12, color: C.red.tx }}>⚠ Couldn't refresh: {error} (showing the last result)</div>}
 
-      {/* 1. KPI tiles */}
-      {loadingFirst ? skel(isPhone ? 196 : 96) : k && (
+      {/* 1. KPI tiles (desktop/laptop) OR 1+2. Phone master card (INWARD_MOBILE_PROMPT.md §2):
+          Inward units hero + area chart (inward solid, sales dashed) + 6 tappable tiles, in one
+          green-gradient card — replaces the separate KPI grid + Trend card on phone only. */}
+      {loadingFirst ? skel(isPhone ? 300 : 96) : k && isPhone ? (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: isPhone ? 8 : 12 }}>
-            {kpiList.map(t => isPhone
-              ? <KpiTileM key={t.id} label={t.short || t.label} value={t.value} delta={t.delta} deltaNeutral def={`${t.def}${t.sub ? ` (${t.sub})` : ''}`} />
-              : <KpiDesk key={t.id} label={t.label} value={t.value} delta={t.delta} sub={t.sub} title={t.def} />)}
+          <PhoneMasterCard k={k} delta={delta} trend={trend} grain={grain} meta={meta} layout={width >= 768 ? 'tablet' : 'phone'} />
+          <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
+            Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
+          </div>
+          {meta && (
+            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+              Finished goods only · {fmtUnits(meta.excludedPkgUnits || 0)} units of raw material / packaging not shown
+            </div>
+          )}
+        </div>
+      ) : k && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 10, alignItems: 'stretch' }}>
+            {kpiList.map(t => <KpiDesk key={t.id} label={t.label} value={t.value} delta={t.delta} sub={t.sub} title={t.def} neutral={t.neutral} lowerIsBetter={t.lowerIsBetter} />)}
           </div>
           <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>
             Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
           </div>
+          {meta && (
+            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+              Finished goods only · {fmtUnits(meta.excludedPkgUnits || 0)} units of raw material / packaging not shown
+            </div>
+          )}
         </div>
       )}
 
-      {/* 2. Trend + 3. Source mix */}
-      {loadingFirst ? skel(isPhone ? 300 : 340) : data && (
-        <div style={{ display: 'grid', gridTemplateColumns: sideBySide ? 'minmax(0, 1.65fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap }}>
-          <Card isPhone={isPhone} title="Inward trend" sub={`Units by source type, with the sales line · ${grain}`}
-            action={<Seg isPhone={isPhone} label="Trend grain" value={grainSel} onChange={setGrainSel}
-              options={[{ value: 'auto', label: 'Auto' }, { value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />}>
-            <div style={{ height: isPhone ? 220 : 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={IC.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: IC.t3 }} tickFormatter={d => fmtBucket(d, grain)} minTickGap={isPhone ? 18 : 28} />
-                  <YAxis tick={{ fontSize: 12, fill: IC.t3 }} tickFormatter={fmtBig} width={44} />
-                  <Tooltip content={<TrendTip grain={grain} />} cursor={{ fill: 'rgba(31,90,61,.06)' }} />
-                  {typesInTrend.map(t => <Bar key={t} dataKey={t} stackId="in" fill={SOURCE_COLORS[t] || '#6f7d75'} stroke="#fff" strokeWidth={1} maxBarSize={isPhone ? 18 : 28} isAnimationActive={false} />)}
-                  <Line dataKey="sales" stroke={IC.t1} strokeWidth={2} dot={false} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <Legend isPhone={isPhone} items={[...typesInTrend.map(t => ({ label: t, color: SOURCE_COLORS[t] || '#6f7d75' })), { label: 'Sales units', color: IC.t1, line: true }]} />
-          </Card>
+      {/* 2. Trend (desktop/laptop only — phone's trend is inside the master card above) + 3. Source mix */}
+      {loadingFirst ? skel(isPhone ? 220 : 340) : data && (
+        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : sideBySide ? 'minmax(0, 1.65fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap, alignItems: 'stretch' }}>
+          {!isPhone && (
+            <Card isPhone={isPhone} inlineHeader title="Inward trend" sub={`Total inward vs. sales, with the inward ÷ sales ratio · ${grain}`}
+              action={<Seg isPhone={isPhone} label="Trend grain" value={grainSel} onChange={setGrainSel}
+                options={[{ value: 'auto', label: 'Auto' }, { value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />}>
+              <div style={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trend} margin={{ top: 10, right: 36, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={IC.border} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: IC.t3 }} tickFormatter={d => fmtBucket(d, grain)} minTickGap={28} axisLine={{ stroke: IC.border }} tickLine={false} />
+                    <YAxis yAxisId="units" tick={{ fontSize: 12, fill: IC.t3 }} tickFormatter={fmtBig} width={46} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="ratio" orientation="right" tick={{ fontSize: 12, fill: IC.t3 }} tickFormatter={v => `${v}×`} width={34} axisLine={false} tickLine={false} />
+                    <Tooltip content={<TrendTip grain={grain} typesInTrend={typesInTrend} />} cursor={{ stroke: IC.border2, strokeDasharray: '3 3' }} />
+                    <Line yAxisId="units" dataKey="total" name="Total inward" stroke={IC.t1} strokeWidth={2.25} dot={false} activeDot={{ r: 4, fill: IC.t1, stroke: '#fff', strokeWidth: 1.5 }} isAnimationActive={false} />
+                    <Line yAxisId="units" dataKey="sales" name="Total sales" stroke={IC.accBorder} strokeWidth={2.25} dot={false} activeDot={{ r: 4, fill: IC.accBorder, stroke: '#fff', strokeWidth: 1.5 }} isAnimationActive={false} />
+                    <Line yAxisId="ratio" dataKey="ratio" name="Inward ÷ sales" stroke={IC.t3} strokeWidth={1.5} strokeDasharray="4 3" dot={false}
+                      activeDot={{ r: 3.5, fill: IC.t3, stroke: '#fff', strokeWidth: 1.5 }} isAnimationActive={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <Legend isPhone={isPhone} items={[{ label: 'Total inward', color: IC.t1, line: true }, { label: 'Total sales', color: IC.accBorder, line: true }, { label: 'Inward ÷ sales', color: IC.t3, line: true }]} />
+            </Card>
+          )}
 
           <Card isPhone={isPhone} title="Source mix" sub="Tap a source to filter the page">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -552,10 +768,10 @@ export default function InwardPage({ data, loading, error, status, invData, invL
                       <span style={{ width: 46, textAlign: 'right', fontSize: 12, color: muted, fontVariantNumeric: 'tabular-nums' }}>{fmtPct(s.share * 100, 0)}</span>
                     </div>
                     <div style={{ height: 5, borderRadius: 3, background: isPhone ? M.soft : IC.page, margin: '6px 0 4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.max(0, Math.min(100, s.share * 100))}%`, height: '100%', background: SOURCE_COLORS[s.sourceType] || '#6f7d75', borderRadius: 3 }} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, s.share * 100))}%`, height: '100%', background: IC.accBorder, borderRadius: 3 }} />
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px', fontSize: 12, color: muted }}>
-                      <span>{fmtVal(s.value)}</span><span>{fmtUnits(s.grns)} GRNs</span><span>avg {fmtUnits(s.avgGrnSize)} units/GRN</span>
+                      <span>{fmtUnits(s.grns)} GRNs</span><span>avg {fmtUnits(s.avgGrnSize)} units/GRN</span>
                     </div>
                   </button>
                 )
@@ -565,47 +781,94 @@ export default function InwardPage({ data, loading, error, status, invData, invL
         </div>
       )}
 
-      {/* 4. Vendor performance */}
+      {/* 4. Vendor performance + 5. SKU detail — one row, side by side on wide desktop (matching
+          the trend/source-mix row above), stacked below that width. */}
       {data && (
-        <Card isPhone={isPhone} title="Vendor performance" sub={`${data.vendors.length} vendors · lead time = PO date → GRN received, avg per GRN`}>
-          <InwardTable columns={vendorCols} rows={data.vendors.map(v => ({ ...v, _key: v.vendor }))} isPhone={isPhone} title="Vendor performance" filename={`inward_vendors_${meta.start}_${meta.end}.csv`}
-            defaultSort={{ key: 'units', dir: 'desc' }} phoneKeys={['vendor', 'units', 'value', 'rejectionPct']} />
-        </Card>
+        <div style={{ display: 'grid', gridTemplateColumns: sideBySide ? 'minmax(0, 1fr) minmax(0, 1.2fr)' : 'minmax(0, 1fr)', gap, alignItems: 'stretch' }}>
+          <Card isPhone={isPhone} inlineHeader title="Vendor performance" sub={`${data.vendors.length} vendors · scroll for all`}
+            action={!isPhone && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
+                <input type="text" value={vendorSearch} onChange={e => setVendorSearch(e.target.value)} placeholder="Search vendor…"
+                  style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 170, boxSizing: 'border-box' }} />
+                <ExportButton filename={`inward_vendors_${meta.start}_${meta.end}.csv`} rows={data.vendors}
+                  columns={[{ label: 'Vendor', key: 'vendor' }, { label: 'Source', key: 'sourceType' }, { label: 'GRNs', key: 'grns' }, { label: 'Units', key: 'units' },
+                    { label: 'SKUs', key: 'skus' }, { label: 'Last GRN', key: 'lastGrn' }]} />
+              </div>
+            )}>
+            <InwardTable columns={vendorCols} rows={data.vendors.map(v => ({ ...v, _key: v.vendor }))} isPhone={isPhone} title="Vendor performance" filename={`inward_vendors_${meta.start}_${meta.end}.csv`}
+              defaultSort={{ key: 'units', dir: 'desc' }} phoneKeys={['vendor', 'units', 'skus', 'lastGrn']}
+              fixedHeight={isPhone ? 360 : 440} totalRow={vendorTotalRow} onRowClick={r => setDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType })}
+              search={(r, q) => r.vendor.toLowerCase().includes(q)} searchPlaceholder="Search vendor…" externalSearch={isPhone ? null : vendorSearch} />
+          </Card>
+
+          <Card isPhone={isPhone} inlineHeader
+            title="SKU detail"
+            sub={skuView === 'sku' ? `${skuRows.length} SKUs · tap a row for its last 10 GRN days` : `${subCatRows.length} sub-categories · tap a row for its last 10 GRN days`}
+            subTitle={skuView === 'subcat' ? 'Units summed, DOI recomputed from summed stock ÷ summed avg sale.' : undefined}
+            action={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
+                <Seg isPhone={isPhone} label="SKU detail view" value={skuView} onChange={setSkuView}
+                  options={[{ value: 'sku', label: 'By SKU' }, { value: 'subcat', label: 'By sub-category' }]} />
+                {!isPhone && (
+                  <>
+                    <input type="text" value={skuSearchQ} onChange={e => setSkuSearchQ(e.target.value)} placeholder={skuView === 'sku' ? 'Search SKU or sub-category…' : 'Search sub-category…'}
+                      style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 190, boxSizing: 'border-box' }} />
+                    {skuView === 'sku' ? (
+                      <ExportButton filename={`inward_skus_${meta.start}_${meta.end}.csv`} rows={skuRows}
+                        columns={[{ label: 'SKU', key: 'sku' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Inward units', key: 'units' },
+                          { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
+                    ) : (
+                      <ExportButton filename={`inward_subcategories_${meta.start}_${meta.end}.csv`} rows={subCatRows}
+                        columns={[{ label: 'Sub-category', key: 'subCategory' }, { label: 'SKUs', key: 'skuCount' }, { label: 'Inward units', key: 'units' },
+                          { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
+                    )}
+                  </>
+                )}
+              </div>
+            }>
+            {skuView === 'sku' ? (
+              <InwardTable columns={skuCols} rows={skuRows.map(s => ({ ...s, _key: s.skuKey }))} isPhone={isPhone} title="SKU detail" filename={`inward_skus_${meta.start}_${meta.end}.csv`}
+                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={isPhone ? null : skuSearchQ}
+                onRowClick={r => setDrill({ mode: 'sku', id: r.sku, subtitle: r.subCategory })}
+                search={(r, q) => r.sku.toLowerCase().includes(q) || String(r.subCategory || '').toLowerCase().includes(q)} searchPlaceholder="Search SKU or sub-category"
+                fixedHeight={isPhone ? 360 : 440} totalRow={skuTotalRow} />
+            ) : (
+              <InwardTable columns={subCatCols} rows={subCatRows} isPhone={isPhone} title="Sub-category detail" filename={`inward_subcategories_${meta.start}_${meta.end}.csv`}
+                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={isPhone ? null : skuSearchQ}
+                onRowClick={r => setDrill({ mode: 'subcat', id: r.subCategory, subtitle: r.category })}
+                search={(r, q) => r.subCategory.toLowerCase().includes(q)} searchPlaceholder="Search sub-category"
+                fixedHeight={isPhone ? 360 : 440} totalRow={subCatTotalRow} />
+            )}
+          </Card>
+        </div>
       )}
 
-      {/* 5. Warehouse view */}
+      {/* Product master — every SKU, searchable, independent of the selected date range (so a SKU
+          with zero inward in the current window is still found, with its true last-ever inward). */}
       {data && (
-        <Card isPhone={isPhone} title="Warehouse view" sub="Inward vs that warehouse's sales, same period · stock, Avg sale and DOI as on Inventory Health (last 7 days)">
-          <InwardTable columns={whCols} rows={whRows} isPhone={isPhone} title="Warehouse view" filename={`inward_warehouses_${meta.start}_${meta.end}.csv`}
-            phoneKeys={['location', 'units', 'salesUnits', 'doi']} />
-        </Card>
-      )}
-
-      {/* 6. Category / sub-category */}
-      {data && (
-        <Card isPhone={isPhone} title="Category breakdown" sub="Tap a category to open its sub-categories">
-          <InwardTable columns={catCols} rows={catRows} isPhone={isPhone} title="Category breakdown" filename={`inward_categories_${meta.start}_${meta.end}.csv`}
-            sortable={false} phoneKeys={['label', 'units', 'salesUnits', 'ratio']} fullNote="Categories (open ones show their sub-categories underneath)"
-            onRowClick={r => { if (r.level) return; setOpenCats(s => { const n = new Set(s); if (n.has(r.category)) n.delete(r.category); else n.add(r.category); return n }) }}
-            rowStyle={r => (r.level ? { background: isPhone ? '#faf9f6' : IC.hoverBg } : {})} />
-          <button type="button" style={{ ...btnStyle(isPhone), border: 'none', background: 'none', padding: 0, color: IC.acc, marginTop: 4 }}
-            onClick={() => downloadCsv(`inward_categories_all_${meta.start}_${meta.end}.csv`, toCsv(catCols.map(c => ({ label: c.label, csv: c.csv || c.text })), allCatRows))}>CSV with every sub-category</button>
-        </Card>
-      )}
-
-      {/* 7. SKU detail */}
-      {data && (
-        <Card isPhone={isPhone} title="SKU detail" sub={`${skuRows.length} SKUs received · tap a row for the inward timeline`}>
-          <InwardTable columns={skuCols} rows={skuRows.map(s => ({ ...s, _key: s.skuKey }))} isPhone={isPhone} title="SKU detail" filename={`inward_skus_${meta.start}_${meta.end}.csv`}
-            defaultSort={{ key: 'units', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} onRowClick={setDrill}
-            search={(r, q) => r.sku.toLowerCase().includes(q) || String(r.subCategory || '').toLowerCase().includes(q)} searchPlaceholder="Search SKU or sub-category" />
+        <Card isPhone={isPhone} inlineHeader title="Product master" sub={`${productMasterRows.length} SKUs · search any SKU, even ones not inwarded in the selected range`}
+          action={!isPhone && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
+              <input type="text" value={masterSearch} onChange={e => setMasterSearch(e.target.value)} placeholder="Search SKU, category, sub-category…"
+                style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 220, boxSizing: 'border-box' }} />
+              <ExportButton filename={`inward_product_master.csv`} rows={productMasterRows}
+                columns={[{ label: 'SKU', key: 'sku' }, { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' },
+                  { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' },
+                  { label: 'Last inward', key: 'lastInward' }, { label: 'Last inward qty', key: 'lastInwardQty' },
+                  { label: 'Last inward vendor(s)', key: 'lastInwardVendors' }, { label: 'Inward qty (range)', key: 'rangeQty' }]} />
+            </div>
+          )}>
+          <InwardTable columns={masterCols} rows={productMasterRows.map(r => ({ ...r, _key: r.skuKey }))} isPhone={isPhone} title="Product master" filename="inward_product_master.csv"
+            defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'lastInward', 'lastInwardQty', 'rangeQty']} externalSearch={isPhone ? null : masterSearch}
+            search={masterSearchFn} searchPlaceholder="Search SKU, category, sub-category…"
+            fixedHeight={isPhone ? 360 : 440} />
         </Card>
       )}
 
       {/* Later: "not-required inward" flag table (inward for SKUs that already had enough cover).
           Deliberately not built yet — the spec parks it; it slots in here, after SKU detail. */}
 
-      {/* 8. Data quality — admins only (the API sends it only to admins), collapsed by default */}
+      {/* 6. Data quality — admins only (the API sends it only to admins), collapsed by default */}
       {data?.dataQuality && (
         <Card isPhone={isPhone} title="Data quality" sub="Admins only · rows excluded from or flagged on this page, for the selected range"
           action={<button type="button" style={btnStyle(isPhone)} aria-expanded={dqOpen} onClick={() => setDqOpen(o => !o)}>{dqOpen ? 'Hide' : 'Show'}</button>}>
@@ -617,20 +880,26 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           {dqOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 14 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: ink, marginBottom: 6 }}>GRN SKUs not in the SKU master</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>GRN SKUs not in the SKU master</div>
+                  <button type="button" style={btnStyle(isPhone)} disabled={dqExportLoading} onClick={() => exportDq('sku')}>{dqExportLoading ? 'Exporting…' : 'Export full GRN detail (CSV)'}</button>
+                </div>
                 <InwardTable isPhone={isPhone} title="SKUs not in SKU master" filename={`inward_dq_skus_${meta.start}_${meta.end}.csv`} defaultSort={{ key: 'units', dir: 'desc' }}
                   rows={data.dataQuality.unmappedSku.rows.map((r, i) => ({ ...r, _key: `${r.itemSkuCode}-${i}` }))} phoneKeys={['itemSkuCode', 'units', 'lines', 'reason']}
                   columns={[{ key: 'itemSkuCode', label: 'GRN SKU code', text: r => r.itemSkuCode }, { key: 'finalSku', label: 'Final SKU', text: r => r.finalSku }, { key: 'reason', label: 'Reason', text: r => r.reason, maxWidth: 260 },
                     { key: 'lines', label: 'Lines', num: true, text: r => fmtUnits(r.lines), csv: r => r.lines }, { key: 'units', label: 'Units', num: true, text: r => fmtUnits(r.units), csv: r => r.units }, { key: 'lastDate', label: 'Last GRN', text: r => fmtDayYear(r.lastDate), csv: r => r.lastDate, sort: r => r.lastDate }]} />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: ink, marginBottom: 6 }}>Vendors not in vendor mapping</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>Vendors not in vendor mapping</div>
+                  <button type="button" style={btnStyle(isPhone)} disabled={dqExportLoading} onClick={() => exportDq('vendor')}>{dqExportLoading ? 'Exporting…' : 'Export full GRN detail (CSV)'}</button>
+                </div>
                 <InwardTable isPhone={isPhone} title="Vendors not in vendor mapping" filename={`inward_dq_vendors_${meta.start}_${meta.end}.csv`} defaultSort={{ key: 'units', dir: 'desc' }}
                   rows={data.dataQuality.unmappedVendor.rows.map(r => ({ ...r, _key: r.vendorName }))} phoneKeys={['vendorName', 'units', 'lines', 'lastDate']}
                   columns={[{ key: 'vendorName', label: 'Vendor name', text: r => r.vendorName, maxWidth: 300 }, { key: 'lines', label: 'Lines', num: true, text: r => fmtUnits(r.lines), csv: r => r.lines },
                     { key: 'units', label: 'Units', num: true, text: r => fmtUnits(r.units), csv: r => r.units }, { key: 'lastDate', label: 'Last GRN', text: r => fmtDayYear(r.lastDate), csv: r => r.lastDate, sort: r => r.lastDate }]} />
               </div>
-              <div>
+              <div style={{ paddingBottom: 4 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: ink, marginBottom: 6 }}>Zero or negative quantities</div>
                 <InwardTable isPhone={isPhone} title="Zero or negative quantities" filename={`inward_dq_qty_${meta.start}_${meta.end}.csv`} defaultSort={{ key: 'lastDate', dir: 'desc' }}
                   rows={data.dataQuality.badQty.rows.map((r, i) => ({ ...r, _key: `${r.grnCode}-${r.itemSkuCode}-${i}` }))} phoneKeys={['grnCode', 'itemSkuCode', 'quantityReceived', 'lastDate']}
@@ -642,12 +911,12 @@ export default function InwardPage({ data, loading, error, status, invData, invL
         </Card>
       )}
 
-      {data && <div style={{ fontSize: 12, color: muted }}>
+      {data && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>
         Source: Unicommerce GRNs (refined), SKUs resolved through the SKU master · last GRN {fmtDayYear(meta.lastGrnDate)} · last sale {fmtDayYear(meta.lastSalesDate)}
         {invData?.asOf ? ` · stock as of ${new Date(invData.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}` : ''}
       </div>}
 
-      {drill && <SkuDrill row={drill} start={meta?.start} end={meta?.end} isPhone={isPhone} onClose={() => setDrill(null)} />}
+      {drill && <LastGrnDrill mode={drill.mode} id={drill.id} subtitle={drill.subtitle} isPhone={isPhone} onClose={() => setDrill(null)} range={meta} />}
     </div>
   )
 }

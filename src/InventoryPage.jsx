@@ -511,7 +511,10 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
-      <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} showInward={hasInward} />
+      {/* Inward's own page is reachable only by already hovering/clicking the Inventory tab icon
+          (desktop nav) or its mobile sub-tab, so repeating the Health/Sales/Inward switcher at
+          the top of the Inward page itself is redundant chrome — skip it there. */}
+      {tab !== 'inward' && <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} showInward={hasInward} />}
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           {!isMobile && (

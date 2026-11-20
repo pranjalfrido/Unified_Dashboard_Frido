@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inward Mobile Mockup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#e9e6df;color:#1c2420;padding:28px 16px 40px}
+h1{font-size:20px;text-align:center}
+.cap{font-size:13px;color:#6f7873;text-align:center;margin:6px 0 22px}
+.row{display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.lbl{font-size:12px;font-weight:700;color:#6f7873;text-align:center;margin-bottom:8px;letter-spacing:.04em}
+.phone{width:375px;height:780px;border-radius:44px;background:#0f1512;padding:10px;box-shadow:0 24px 50px -20px rgba(0,0,0,.45)}
+.scr{width:100%;height:100%;border-radius:36px;overflow:hidden;background:#f4f2ed;position:relative;display:flex;flex-direction:column}
+.hd{background:linear-gradient(160deg,#1a4d34,#1f5a3d 55%,#266b49);color:#fff;padding:14px 16px 12px;flex:0 0 auto}
+.sb{display:flex;justify-content:space-between;font-size:12px;font-weight:600;opacity:.9;margin-bottom:10px}
+.tt{display:flex;align-items:center;justify-content:space-between}
+.tt b{font-size:20px;font-weight:700}
+.tt small{display:block;font-size:12px;color:#cfe3d6;font-weight:500}
+.pill{white-space:nowrap;font-size:12.5px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:6px 11px;display:inline-flex;gap:6px;align-items:center}
+.chips{display:flex;gap:8px;margin-top:12px;overflow:hidden}
+.chip{font-size:12.5px;font-weight:600;border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.12);white-space:nowrap}
+.chip.on{background:#fff;color:#1f5a3d}
+.body{flex:1;overflow:hidden;padding:12px 12px 0;display:flex;flex-direction:column;gap:10px}
+.card{background:#fff;border:1px solid #e6e2d8;border-radius:18px;padding:14px}
+.k{font-size:11px;font-weight:700;letter-spacing:.06em;color:#6f7873;text-transform:uppercase}
+.big{font-size:30px;font-weight:800;letter-spacing:-.5px;margin-top:4px}
+.dn{font-size:13px;font-weight:700;color:#6f7873}
+.sub{font-size:12px;color:#6f7873;margin-top:2px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+.mini{background:#f7f5f0;border-radius:12px;padding:9px 10px}
+.mini .v{font-size:16px;font-weight:800;margin-top:2px}
+.mini .s{font-size:11px;color:#6f7873}
+.ct{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ct b{font-size:15px}
+.seg{display:flex;background:#f1eee7;border-radius:10px;padding:3px}
+.seg span{font-size:12px;font-weight:600;color:#6f7873;padding:5px 9px;border-radius:8px}
+.seg span.on{background:#fff;color:#1f5a3d;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.leg{display:flex;gap:12px;font-size:11.5px;color:#4e5a54;margin-top:6px}
+.leg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.src{display:flex;flex-direction:column;gap:9px}
+.sr .t{display:flex;justify-content:space-between;font-size:13px}
+.sr .t b{font-weight:700}
+.bar{height:6px;border-radius:3px;background:#efece5;margin-top:5px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px}
+.sr .m{font-size:11.5px;color:#6f7873;margin-top:3px}
+.li{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid #efece5;min-height:48px}
+.li:first-of-type{border-top:none}
+.li .n{font-size:13.5px;font-weight:600}
+.li .m{font-size:11.5px;color:#6f7873;margin-top:2px}
+.li .r{text-align:right}
+.li .r b{font-size:14px;font-variant-numeric:tabular-nums}
+.tag{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 6px;margin-left:6px}
+.dom{background:#e3efe8;color:#1f5a3d}.imp{background:#e3ecf6;color:#2c5a86}.inh{background:#fbeedd;color:#9a5a12}.unm{background:#eee;color:#555}
+.doi{font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px}
+.ok{background:#e3efe8;color:#1f5a3d}.lo{background:#fde4e1;color:#a5321f}.hi{background:#fbeedd;color:#9a5a12}
+.more{display:block;text-align:center;font-size:13px;font-weight:700;color:#1f5a3d;padding:10px 0 2px;border-top:1px solid #efece5;margin-top:4px}
+.srch{display:flex;align-items:center;gap:8px;background:#f7f5f0;border:1px solid #e6e2d8;border-radius:12px;padding:10px 12px;font-size:13px;color:#8a938e;margin-bottom:6px}
+.acc{display:flex;justify-content:space-between;align-items:center}
+.acc b{font-size:14px}
+.cnt{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.cnt div{background:#fbf3ea;border-radius:10px;padding:8px}
+.cnt b{display:block;font-size:15px}
+.cnt span{font-size:10.5px;color:#7a5a3a}
+.bb{flex:0 0 auto;height:62px;background:#fbfaf7;border-top:1px solid #e6e2d8;display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+.bb span{display:grid;place-items:center;color:#8a938e}
+.bb span.on i{color:#1f5a3d;background:#edf6f0;border-radius:12px;width:40px;height:32px;display:grid;place-items:center}
+.bb svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dim{position:absolute;inset:0;background:rgba(15,25,20,.45)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:24px 24px 0 0;padding:10px 16px 18px}
+.grab{width:40px;height:5px;border-radius:3px;background:#d8d4ca;margin:0 auto 12px}
+.sh{display:flex;justify-content:space-between;align-items:flex-start}
+.sh b{font-size:16px}
+.x{width:36px;height:36px;border-radius:12px;background:#f1eee7;display:grid;place-items:center;font-size:16px}
+.tb{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+.tb th{font-size:10.5px;letter-spacing:.06em;color:#6f7873;text-align:left;padding:8px 6px;background:#f6f4ef;font-weight:700}
+.tb td{padding:10px 6px;border-top:1px solid #efece5;font-variant-numeric:tabular-nums}
+.tb .r{text-align:right}
+.stat{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.stat div{background:#f7f5f0;border-radius:10px;padding:7px 8px}
+.stat b{display:block;font-size:14px}
+.stat span{font-size:10.5px;color:#6f7873}
+.fl{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.fl .k{margin-bottom:6px}
+.fch{display:flex;flex-wrap:wrap;gap:7px}
+.fch span{font-size:12.5px;font-weight:600;border:1px solid #e0dbcf;border-radius:999px;padding:7px 11px;color:#3b4641}
+.fch span.on{background:#1f5a3d;color:#fff;border-color:#1f5a3d}
+.btns{display:flex;gap:10px;margin-top:16px}
+.btns div{flex:1;text-align:center;padding:13px;border-radius:14px;font-weight:700;font-size:14px}
+.notes{max-width:1220px;margin:26px auto 0;background:#fff;border-radius:16px;padding:18px 20px;font-size:13.5px;line-height:1.55;color:#33403a}
+.notes b{color:#1c2420}
+</style></head><body>
+<h1>Inventory → Inward · mobile (375) · matches Sales &amp; Allocation style</h1>
+<p class="cap">Same data and logic as the laptop page. Only layout changes.</p>
+<div class="row" id="row"></div>
+<div class="notes"><b>Order on phone:</b> Inventory header with sub-tabs (Inward active) → master card (Inward units + chart + 6 tiles; tap a tile to chart it) → Source mix → Top vendors (5, "View all") → SKU detail (5, By SKU / By sub-category, "View all") → Product master (search entry) → Data quality (admins, collapsed). Tapping a vendor or SKU opens the "last 10 GRN days" bottom sheet. Filters open from the filter icon as a bottom sheet.</div>
+<script>
+const NAV=['<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>','<path d="M5 20V11M12 20V5M19 20v-6"/>','<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>','<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/>','<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/>','<circle cx="10.5" cy="10.5" r="6.8"/><path d="M15.5 15.5 20.5 20.5"/><path fill="currentColor" d="M10.5 6.9C11.4 9.6 11.4 9.6 14.1 10.5C11.4 11.4 11.4 11.4 10.5 14.1C9.6 11.4 9.6 11.4 6.9 10.5C9.6 9.6 9.6 9.6 10.5 6.9z"/>'];
+const bar=()=>`<div class="bb">${NAV.map((n,i)=>`<span class="${i===3?'on':''}"><i><svg viewBox="0 0 24 24">${n}</svg></i></span>`).join('')}</div>`;
+const head=()=>`<div class="hd" style="padding-bottom:0"><div class="sb"><span>9:41</span><span>5G ▮▮▮ 84%</span></div>
+<div class="tt"><b>Inventory</b>
+<div style="display:flex;gap:10px;align-items:center"><span class="pill" style="font-weight:700">1–20 Nov <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg></span>
+<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+<span style="position:relative;font-weight:800;letter-spacing:1px">···<i style="position:absolute;top:-4px;right:-5px;width:7px;height:7px;border-radius:50%;background:#e8604c"></i></span></div></div>
+<div style="display:flex;justify-content:space-between;margin-top:14px;font-size:13px;font-weight:600;color:#bcd3c5">
+<span style="padding:0 2px 10px">Inventory Health</span><span style="padding:0 2px 10px">Sales &amp; Allocation</span><span style="padding:0 2px 8px;color:#fff;border-bottom:3px solid #fff">Inward</span></div></div>`;
+const tile=(k,v,s,on)=>`<div style="background:#fff;border:1px solid ${on?'#cfd8d2':'#ece8df'};border-radius:12px;padding:9px 11px;${on?'box-shadow:0 1px 3px rgba(0,0,0,.08)':''}"><div class="k" style="font-size:10.5px">${k}</div><div style="font-size:16px;font-weight:800;margin-top:3px">${v}</div>${s?`<div style="font-size:10.5px;color:#6f7873;margin-top:1px">${s}</div>`:''}</div>`;
+const master=`<div class="card" style="background:linear-gradient(180deg,#e3eee7 0%,#f4f7f3 55%,#f7f8f5 100%);border-color:#dfe8e1;padding:14px 14px 12px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="k" style="display:flex;align-items:center;gap:6px">Inward units <span style="display:inline-grid;place-items:center;width:16px;height:16px;border:1.5px solid #8a938e;border-radius:50%;font-size:9px;font-style:italic">i</span></span><span style="color:#8a938e;font-weight:800">···</span></div>
+<div class="big" style="font-size:28px">3,89,146</div>
+<div class="sub">Avg 19.5K/day · 526 GRNs · <span style="color:#6f7873;font-weight:700">▼ 22.5%</span> vs 12–31 Oct</div>
+<svg viewBox="0 0 320 110" style="width:calc(100% + 28px);margin:8px -14px 0;height:108px;display:block" preserveAspectRatio="none">
+<defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f5a3d" stop-opacity=".18"/><stop offset="1" stop-color="#1f5a3d" stop-opacity="0"/></linearGradient></defs>
+<path d="M0 66 L17 34 L34 60 L51 66 L68 56 L85 58 L102 68 L119 104 L136 42 L153 104 L170 68 L187 84 L204 54 L221 50 L238 92 L255 78 L272 22 L289 76 L306 82 L320 100 L320 110 L0 110Z" fill="url(#ga)"/>
+<path d="M0 66 L17 34 L34 60 L51 66 L68 56 L85 58 L102 68 L119 104 L136 42 L153 104 L170 68 L187 84 L204 54 L221 50 L238 92 L255 78 L272 22 L289 76 L306 82 L320 100" fill="none" stroke="#1f4a35" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M0 76 L34 72 L68 74 L102 80 L136 82 L170 76 L204 84 L238 84 L272 62 L306 86 L320 92" fill="none" stroke="#6f8f7d" stroke-width="1.6" stroke-dasharray="4 3"/>
+</svg>
+<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#6f7873;margin:4px 0 10px"><span><i style="display:inline-block;width:9px;height:9px;background:#1f4a35;border-radius:2px;margin-right:5px"></i>Inward <i style="display:inline-block;width:12px;border-top:2px dashed #6f8f7d;margin:0 5px 3px 10px"></i>Sales</span><span>Daily · auto</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+${tile('Inward units','3,89,146','▼ 22.5%',1)}${tile('GRNs','526','▼ 15.4%')}${tile('SKUs received','1,024','172 new')}${tile('Active vendors','62','▲ 10.7%')}${tile('Inward ÷ sales <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#d9a23a;margin-left:3px"></span>','1.57×','stock building')}${tile('Rejection','0.0%','95 units')}
+</div></div>`;
+const kpi=master;const trend='';
+const src=`<div class="card"><div class="ct"><b>Source mix</b><span class="sub" style="margin:0">tap to filter</span></div><div class="src">
+${[['Domestic','2,06,760','53%','386 GRNs · avg 536/GRN','#1f5a3d',53],['Import','81,785','21%','8 GRNs · avg 10,223/GRN','#2c5a86',21],['Inhouse','52,452','13%','142 GRNs · avg 369/GRN','#c07a1e',13],['Unmapped','48,149','12%','5 GRNs · avg 9,630/GRN','#8a938e',12]].map(s=>`<div class="sr"><div class="t"><b>${s[0]}</b><span><b>${s[1]}</b> · ${s[2]}</span></div><div class="bar"><i style="width:${s[5]}%;background:${s[4]}"></i></div><div class="m">${s[3]}</div></div>`).join('')}
+</div></div>`;
+const vendors=`<div class="card"><div class="ct"><b>Top vendors</b><span class="sub" style="margin:0">62 · by units</span></div>
+${[['Saishlok Enterprises','unm','Unmapped','11,149','1 GRN · 2 SKUs · 14 Nov'],['Jiangsu Vbosi Sports Tech.','imp','Import','10,100','1 GRN · 9 SKUs · 12 Nov'],['Ankur Foot Tech','dom','Domestic','8,232','20 GRNs · 17 SKUs · 19 Nov'],['S.P. International','dom','Domestic','8,019','7 GRNs · 7 SKUs · 17 Nov']].map(v=>`<div class="li"><div><div class="n">${v[0]}<span class="tag ${v[1]}">${v[2]}</span></div><div class="m">${v[4]}</div></div><div class="r"><b>${v[3]}</b><div class="m">units</div></div></div>`).join('')}
+<span class="more">View all 62 vendors →</span></div>`;
+const skus=`<div class="card"><div class="ct"><b>SKU detail</b><div class="seg"><span class="on">By SKU</span><span>Sub-cat</span></div></div>
+<div class="srch">⌕ Search SKU or sub-category</div>
+${[['FR-OPPC-L1','Orthotics Posture Corrector Pro','7,966','6,904','18 d','ok','19 Nov'],['FR-OPPC-M1','Orthotics Posture Corrector Pro','5,040','3,076','10 d','lo','19 Nov'],['FR-UCNP-B1','Ultimate Car Neck Rest Pillow','9,547','16,611','40 d','ok','18 Nov'],['FR-OPC-L1','Orthotics Posture Corrector','14,990','31,511','232 d','hi','19 Nov']].map(s=>`<div class="li"><div><div class="n">${s[0]}</div><div class="m">${s[1]}</div><div class="m">Stock ${s[3]} · <span class="doi ${s[5]}">DOI ${s[4]}</span> · ${s[6]}</div></div><div class="r"><b>${s[2]}</b><div class="m">inward</div></div></div>`).join('')}
+<span class="more">View all 1,024 SKUs →</span></div>`;
+const pm=`<div class="card"><div class="ct"><b>Product master</b><span class="sub" style="margin:0">4,303 SKUs</span></div>
+<div class="srch" style="margin:0">⌕ Search any SKU, even if not inwarded</div></div>`;
+const dq=`<div class="card" style="border-color:#f1dcc2;background:#fffaf4"><div class="acc"><b>⚠ Data quality <span class="sub" style="display:inline">· admins</span></b><span style="font-size:13px;font-weight:700;color:#9a5a12">Show ▾</span></div>
+<div class="cnt"><div><b>335</b><span>SKUs not in master · 3.58 L units</span></div><div><b>2</b><span>vendors unmapped · 48,149 units</span></div><div><b>0</b><span>zero / negative lines</span></div></div></div>`;
+const phones=[
+ ['1 · TOP OF PAGE', head(0)+`<div class="body">${master}</div>`+bar()],
+ ['2 · SCROLLED: MIX, VENDORS, SKUs', head(0)+`<div class="body" style="margin-top:-6px">${src}${vendors}</div>`+bar()],
+ ['3 · FURTHER DOWN', head(0)+`<div class="body">${skus}${pm}${dq}</div>`+bar()],
+ ['4 · TAP A SKU → LAST 10 GRN DAYS', head(0)+`<div class="body">${kpi}</div>`+bar()+`<div class="dim"></div><div class="sheet"><div class="grab"></div>
+ <div class="sh"><div><b>FR-UCNP-B1 · last 10 GRN days</b><div class="sub">Ultimate Car Neck Rest Pillow · Frido Production Unit</div></div><span class="x">✕</span></div>
+ <div class="stat"><div><b>16,611</b><span>stock</span></div><div><b>228</b><span>avg sale/day</span></div><div><b>40 d</b><span>DOI</span></div><div><b>9,547</b><span>inward (range)</span></div></div>
+ <table class="tb"><tr><th>DATE</th><th class="r">UNITS</th><th class="r">GRNS</th></tr>
+ ${[['18 Nov 26','1,072',2],['16 Nov 26','1,775',3],['9 Nov 26','2,700',2],['6 Nov 26','1,000',1],['5 Nov 26','800',1],['4 Nov 26','950',1],['3 Nov 26','1,250',1]].map(r=>`<tr><td>${r[0]}</td><td class="r">${r[1]}</td><td class="r">${r[2]}</td></tr>`).join('')}
+ </table></div>`],
+ ['5 · FILTERS SHEET', head(0)+`<div class="body">${kpi}</div>`+bar()+`<div class="dim"></div><div class="sheet"><div class="grab"></div>
+ <div class="sh"><b>Filters</b><span class="x">✕</span></div><div class="fl">
+ <div><div class="k">Warehouse</div><div class="fch"><span class="on">All</span><span>PNQ</span><span>GGN</span><span>BLR</span><span>MUM</span><span>KOL</span><span>HYD</span><span>CHN</span></div></div>
+ <div><div class="k">Source</div><div class="fch"><span class="on">All</span><span>Domestic</span><span>Import</span><span>Inhouse</span><span>Unmapped</span></div></div>
+ <div><div class="k">Category</div><div class="fch"><span class="on">All</span><span>Orthotics</span><span>Pillows</span><span>Cushions</span><span>Footwear</span><span>+ 6</span></div></div>
+ <div><div class="k">Vendor</div><div class="srch" style="margin:0">⌕ Search vendor</div></div></div>
+ <div class="btns"><div style="background:#f1eee7">Clear</div><div style="background:#1f5a3d;color:#fff">Show results</div></div></div>`]
+];
+document.getElementById('row').innerHTML=phones.map(p=>`<div><div class="lbl">${p[0]}</div><div class="phone"><div class="scr">${p[1]}</div></div></div>`).join('');
+</script></body></html>

@@ -5,9 +5,12 @@
 // SKU from the Inward API matches Inventory Health's `skuKey`.
 export const normKey = s => (s == null ? '' : String(s).trim().toUpperCase()).replace(/[\s_]+/g, '')
 
-export const SOURCE_TYPES = ['Domestic', 'Import', 'Inhouse', 'Internal']
+// 'Internal' (intra-company transfer, not a real inward receipt) is excluded from this page
+// entirely, at the API/SQL layer (api/_inward_core.js) — never shown here, in any filter, chart,
+// or table. Only 3rd-party (Domestic/Import) and Inhouse inward are in scope.
+export const SOURCE_TYPES = ['Domestic', 'Import', 'Inhouse']
 // Fixed categorical order (IC.categorical / dataviz validated set); Unmapped = neutral grey.
-export const SOURCE_COLORS = { Domestic: '#3987e5', Import: '#199e70', Inhouse: '#c98500', Internal: '#008300', Unmapped: '#6f7d75' }
+export const SOURCE_COLORS = { Domestic: '#3987e5', Import: '#199e70', Inhouse: '#c98500', Unmapped: '#6f7d75' }
 
 const pad = n => String(n).padStart(2, '0')
 const localIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
