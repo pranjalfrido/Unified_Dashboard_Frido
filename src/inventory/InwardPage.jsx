@@ -16,6 +16,7 @@ import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import FilterPicker from '../responsive/FilterPicker.jsx'
 import FullScreenTable from '../responsive/FullScreenTable.jsx'
+import FullScreenList from '../responsive/FullScreenList.jsx'
 import MasterTrendCard from '../responsive/MasterTrendCard.jsx'
 import {
   SOURCE_TYPES, SOURCE_COLORS, autoGrain, rollup, fmtBucket, fmtDayYear, fmtRange, pctChange,
@@ -265,6 +266,148 @@ function Legend({ items, isPhone }) {
   )
 }
 
+// ── Phone card-list rows (item 4): Top vendors / SKU detail / Product master replace the squeezed,
+// inner-scroll table on phone with flat `.li`-style rows (inward_mobile_mockup.html), top 5 + a
+// "View all N →" link that opens the shared FullScreenList (search + sort + Total row). No table,
+// no nested scroll container anywhere on the base phone card — only the full-screen view scrolls.
+// Source tag colours: reused verbatim from the mockup's .dom/.imp/.inh/.unm CSS classes.
+const SOURCE_TAG_STYLE = {
+  Domestic: { bg: '#e3efe8', fg: '#1f5a3d' },
+  Import: { bg: '#e3ecf6', fg: '#2c5a86' },
+  Inhouse: { bg: '#fbeedd', fg: '#9a5a12' },
+  Unmapped: { bg: '#eee', fg: '#555' },
+}
+function SourceTag({ sourceType }) {
+  const s = SOURCE_TAG_STYLE[sourceType] || SOURCE_TAG_STYLE.Unmapped
+  return <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: '2px 6px', marginLeft: 6, background: s.bg, color: s.fg, whiteSpace: 'nowrap' }}>{sourceType}</span>
+}
+// DOI colour bands — same thresholds as Inventory Health / _inventory_shared.js's DOI_BANDS
+// (critical ≤2d, low ≤15d, sufficient ≤45d, else excess), reused rather than reinvented.
+function doiChipColor(doi) {
+  if (doi == null) return { bg: '#eee', fg: '#555' }
+  if (doi <= 2) return { bg: '#fde4e1', fg: '#a5321f' }       // Critical (mockup's .lo tone — too little cover)
+  if (doi <= 15) return { bg: '#fde4e1', fg: '#a5321f' }      // Low
+  if (doi <= 45) return { bg: '#e3efe8', fg: '#1f5a3d' }      // Sufficient (mockup's .ok tone)
+  return { bg: '#fbeedd', fg: '#9a5a12' }                     // Excess (mockup's .hi tone — too much cover)
+}
+function DoiChip({ doi }) {
+  const c = doiChipColor(doi)
+  return <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: '2px 6px', background: c.bg, color: c.fg }}>DOI {doi == null ? '—' : `${doi}d`}</span>
+}
+// One `.li` row: name (wraps, never truncates) + right-aligned number, tap → the shared drill-in.
+function PhoneLiRow({ name, tag, meta: metaLine, right, rightSub, onClick, first }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%',
+      padding: '10px 0', minHeight: 48, border: 'none', borderTop: first ? 'none' : `1px solid ${M.line}`,
+      background: 'none', textAlign: 'left', fontFamily: 'var(--font)', cursor: 'pointer',
+    }}>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: M.ink, overflowWrap: 'anywhere' }}>{name}{tag}</span>
+        {metaLine && <span style={{ display: 'block', fontSize: 11.5, color: M.muted, marginTop: 2 }}>{metaLine}</span>}
+      </span>
+      <span style={{ textAlign: 'right', flexShrink: 0 }}>
+        <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: M.ink, fontVariantNumeric: 'tabular-nums' }}>{right}</span>
+        {rightSub && <span style={{ display: 'block', fontSize: 11, color: M.muted, marginTop: 1 }}>{rightSub}</span>}
+      </span>
+    </button>
+  )
+}
+function ViewAllLink({ n, noun, onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'block', width: '100%', textAlign: 'center', fontSize: 13, fontWeight: 700, color: M.green,
+      padding: '10px 0 2px', border: 'none', borderTop: `1px solid ${M.line}`, marginTop: 4, background: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
+    }}>View all {fmtUnits(n)} {noun} →</button>
+  )
+}
+
+// Top vendors phone card: top 5 by units + "View all" full-screen list. Tapping any row (base card
+// or full-screen) opens the shared LastGrnDrill — same drill-in as desktop's table rows.
+function VendorPhoneCard({ vendors, onDrill }) {
+  const top5 = useMemo(() => [...vendors].sort((a, b) => b.units - a.units).slice(0, 5), [vendors])
+  const [full, setFull] = useState(false)
+  const name = v => v.vendor
+  const sorts = [
+    { key: 'units', label: 'Units', value: v => v.units, format: v => fmtUnits(v.units) },
+    { key: 'grns', label: 'GRNs', value: v => v.grns, format: v => fmtUnits(v.grns) },
+    { key: 'lastGrn', label: 'Last GRN', value: v => v.lastGrn || '', format: v => fmtDayYear(v.lastGrn) },
+  ]
+  return (
+    <Card isPhone title="Top vendors" sub={`${vendors.length} · by units`}>
+      {top5.map((v, i) => (
+        <PhoneLiRow key={v.vendor} first={i === 0} onClick={() => onDrill({ mode: 'vendor', id: v.vendor, subtitle: v.sourceType })}
+          name={v.vendor} tag={<SourceTag sourceType={v.sourceType} />}
+          meta={`${fmtUnits(v.grns)} GRN${v.grns === 1 ? '' : 's'} · ${fmtUnits(v.skus)} SKU${v.skus === 1 ? '' : 's'} · ${fmtDayYear(v.lastGrn)}`}
+          right={fmtUnits(v.units)} rightSub="units" />
+      ))}
+      {vendors.length > 5 && <ViewAllLink n={vendors.length} noun="vendors" onClick={() => setFull(true)} />}
+      <FullScreenList open={full} onClose={() => setFull(false)} title="Top vendors" noun="vendors" items={vendors} sorts={sorts} initialSort="units"
+        name={name} sub={v => `${fmtUnits(v.grns)} GRNs · ${fmtUnits(v.skus)} SKUs · ${fmtDayYear(v.lastGrn)}`} secondary={() => null}
+        searchText={name} badge={v => <SourceTag sourceType={v.sourceType} />}
+        onSelect={v => { setFull(false); onDrill({ mode: 'vendor', id: v.vendor, subtitle: v.sourceType }) }} />
+    </Card>
+  )
+}
+
+// SKU detail phone card: top 5 by units (By SKU / By sub-category toggle carries into the
+// full-screen view), each row SKU + sub-category + stock/DOI/last-inward, tap → drill-in.
+function SkuPhoneCard({ skuRows, subCatRows, skuView, setSkuView, invLoading, onDrill }) {
+  const isSku = skuView === 'sku'
+  const rows = isSku ? skuRows : subCatRows
+  const top5 = useMemo(() => [...rows].sort((a, b) => b.units - a.units).slice(0, 5), [rows])
+  const [full, setFull] = useState(false)
+  const name = r => (isSku ? r.sku : r.subCategory)
+  const sorts = [
+    { key: 'units', label: 'Units', value: r => r.units, format: r => fmtUnits(r.units) },
+    { key: 'stock', label: 'Stock', value: r => r.stock ?? -1, format: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)) },
+    { key: 'doi', label: 'DOI', value: r => r.doi ?? -1, format: r => (r.doi == null ? '—' : `${r.doi}d`) },
+  ]
+  const metaOf = r => `Stock ${r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)} · last inward ${fmtDayYear(r.lastInward)}`
+  return (
+    <Card isPhone title="SKU detail"
+      action={<Seg isPhone label="SKU detail view" value={skuView} onChange={setSkuView} options={[{ value: 'sku', label: 'By SKU' }, { value: 'subcat', label: 'Sub-cat' }]} />}>
+      {top5.map((r, i) => (
+        <PhoneLiRow key={isSku ? r.skuKey : r.subCategory} first={i === 0}
+          onClick={() => onDrill(isSku ? { mode: 'sku', id: r.sku, subtitle: r.subCategory } : { mode: 'subcat', id: r.subCategory, subtitle: r.category })}
+          name={isSku ? r.sku : r.subCategory}
+          meta={<>{isSku && <span style={{ display: 'block' }}>{r.subCategory}</span>}<span style={{ display: 'block', marginTop: 1 }}>{metaOf(r)} · <DoiChip doi={r.doi} /></span></>}
+          right={fmtUnits(r.units)} rightSub="inward" />
+      ))}
+      {rows.length > 5 && <ViewAllLink n={rows.length} noun={isSku ? 'SKUs' : 'sub-categories'} onClick={() => setFull(true)} />}
+      <FullScreenList open={full} onClose={() => setFull(false)} title="SKU detail" noun={isSku ? 'SKUs' : 'sub-categories'} items={rows} sorts={sorts} initialSort="units"
+        name={name} sub={r => metaOf(r)} secondary={() => null} searchText={r => `${name(r)} ${r.subCategory || ''}`}
+        onSelect={r => { setFull(false); onDrill(isSku ? { mode: 'sku', id: r.sku, subtitle: r.subCategory } : { mode: 'subcat', id: r.subCategory, subtitle: r.category }) }} />
+    </Card>
+  )
+}
+
+// Product master phone card: search box only (no base row list) — typing/tapping opens a full-screen
+// search view (same card-row style). Items come from the full master list; FullScreenList's own
+// built-in search box drives it, so this card's search field just opens the view already focused.
+function ProductMasterPhoneCard({ rows, invLoading, onDrill }) {
+  const [full, setFull] = useState(false)
+  const name = r => r.sku
+  const sorts = [
+    { key: 'lastInward', label: 'Last inward', value: r => r.lastInward || '', format: r => fmtDayYear(r.lastInward) },
+    { key: 'rangeQty', label: 'Inward (range)', value: r => r.rangeQty, format: r => fmtUnits(r.rangeQty) },
+    { key: 'stock', label: 'Stock', value: r => r.stock ?? -1, format: r => (r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)) },
+  ]
+  return (
+    <Card isPhone title="Product master" sub={`${fmtUnits(rows.length)} SKUs`}>
+      <button type="button" onClick={() => setFull(true)} style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: M.soft, border: `1px solid ${M.line}`, borderRadius: 12,
+        padding: '10px 12px', fontSize: 13, color: M.muted, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left',
+      }}>⌕ Search any SKU, even if not inwarded</button>
+      <FullScreenList open={full} onClose={() => setFull(false)} title="Product master" noun="SKUs" items={rows} sorts={sorts} initialSort="lastInward"
+        name={name} sub={r => `${r.subCategory || r.category || ''}`}
+        secondary={r => `Stock ${r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)} · ${r.doi == null ? 'DOI —' : `DOI ${r.doi}d`}`}
+        searchText={r => `${r.sku} ${r.category || ''} ${r.subCategory || ''}`}
+        onSelect={r => { setFull(false); onDrill({ mode: 'sku', id: r.sku, subtitle: r.subCategory }) }} />
+    </Card>
+  )
+}
+
 // ── Phone filter sheet: SKU search + one row per filter (level 2 = shared FilterPicker) ──
 function InwardFilterSheet({ open, onClose, opts, filters, setFilters }) {
   // Mounted only while open (see the page), so the search box starts from the applied value each time.
@@ -478,13 +621,20 @@ function LastGrnDrill({ mode, id, subtitle, isPhone, onClose, range }) {
 // the mockup wants both series on screen together regardless of which tile is selected, which the
 // component doesn't otherwise support; Inward's own tile keeps its real ▲/▼ vs previous period via
 // `delta`, unaffected by this reuse of `prevPoint` for the chart only.
-function PhoneMasterCard({ k, delta, trend, grain, meta, layout }) {
+function PhoneMasterCard({ k, delta, trend, grain, meta, layout, cogsValue, cogsDelta }) {
   const salesPoint = r => r.sales
   const metrics = [
     {
       key: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), sub: `Avg ${fmtUnits(k.cur.units / (meta.days || 1))}/day · ${fmtUnits(k.cur.grns)} GRNs`,
       delta: delta('units'), deltaNeutral: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits,
       def: '3rd-party (Domestic/Import) + Inhouse units received in GRNs (pack-adjusted). Chart: solid = inward, dashed = sales.',
+    },
+    {
+      key: 'cogsValue', label: 'Inward value', tileLabel: 'Inward ₹', value: cogsValue.loading ? '…' : cogsValue.value == null ? '—' : fmt(cogsValue.value),
+      delta: cogsValue.loading ? null : cogsDelta, deltaLoading: cogsValue.loading,
+      sub: cogsValue.loading ? 'Loading COGS…' : cogsValue.skusWithoutCogs ? `${fmtUnits(cogsValue.skusWithoutCogs)} SKUs without COGS` : 'All SKUs have a COGS rate',
+      deltasHidden: false, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits,
+      def: 'Inward units × COGS/unit for that month, from product_cogs_monthly (the same monthly rate card the P&L page uses). No ASP fallback: a SKU with no real monthly rate or sub-category average is excluded from this total and counted as "without COGS".',
     },
     { key: 'grns', label: 'GRNs', value: fmtUnits(k.cur.grns), delta: delta('grns'), deltaNeutral: true, sub: 'distinct GRN codes', point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct GRN codes in the period.' },
     { key: 'skus', label: 'SKUs received', value: fmtUnits(k.cur.skus), sub: `${fmtUnits(k.cur.newSkus)} new`, deltasHidden: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct SKUs received; "new" = never received before (since Apr-25).' },
@@ -585,6 +735,16 @@ export default function InwardPage({ data, loading, error, status, invData, invL
   ] : []
   // Always one row: as many columns as tiles, so adding/removing a KPI never wraps the row.
   const kpiCols = kpiList.length || 1
+
+  // Finished-goods note: must use the SAME excluded-units figure as the Data quality panel for the
+  // selected range. Data quality's "SKUs not in master" count (dataQuality.unmappedSku.units) is GRN
+  // lines that fail to resolve to the SKU master (raw-material/packaging codes chief among them) —
+  // a different, larger number than meta.excludedPkgUnits (only the lines whose code literally
+  // contains "PKG", already dropped before resolution even runs). Admins see dataQuality, so for them
+  // the note uses that same figure the Data quality panel shows; non-admins (no dataQuality in the
+  // payload) keep the PKG-only figure as the best available approximation.
+  const finishedGoodsUnits = data?.dataQuality ? data.dataQuality.unmappedSku.units : (meta?.excludedPkgUnits || 0)
+  const finishedGoodsNote = `Finished goods only · ${fmtUnits(finishedGoodsUnits)} units of raw material / packaging / unresolved SKUs not shown`
 
   // ── Tables ──
   const vendorCols = [
@@ -701,15 +861,11 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           green-gradient card — replaces the separate KPI grid + Trend card on phone only. */}
       {loadingFirst ? skel(isPhone ? 300 : 96) : k && isPhone ? (
         <div>
-          <PhoneMasterCard k={k} delta={delta} trend={trend} grain={grain} meta={meta} layout={width >= 768 ? 'tablet' : 'phone'} />
+          <PhoneMasterCard k={k} delta={delta} trend={trend} grain={grain} meta={meta} layout={width >= 768 ? 'tablet' : 'phone'} cogsValue={cogsValue} cogsDelta={cogsDelta} />
           <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
             Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
           </div>
-          {meta && (
-            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
-              Finished goods only · {fmtUnits(meta.excludedPkgUnits || 0)} units of raw material / packaging not shown
-            </div>
-          )}
+          {meta && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{finishedGoodsNote}</div>}
         </div>
       ) : k && (
         <div>
@@ -719,11 +875,7 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>
             Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
           </div>
-          {meta && (
-            <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
-              Finished goods only · {fmtUnits(meta.excludedPkgUnits || 0)} units of raw material / packaging not shown
-            </div>
-          )}
+          {meta && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{finishedGoodsNote}</div>}
         </div>
       )}
 
@@ -782,11 +934,18 @@ export default function InwardPage({ data, loading, error, status, invData, invL
       )}
 
       {/* 4. Vendor performance + 5. SKU detail — one row, side by side on wide desktop (matching
-          the trend/source-mix row above), stacked below that width. */}
-      {data && (
+          the trend/source-mix row above), stacked below that width. Phone: card lists (item 4),
+          not these squeezed tables — see VendorPhoneCard / SkuPhoneCard below. */}
+      {data && isPhone && (
+        <>
+          <VendorPhoneCard vendors={data.vendors} onDrill={setDrill} />
+          <SkuPhoneCard skuRows={skuRows} subCatRows={subCatRows} skuView={skuView} setSkuView={setSkuView} invLoading={invLoading} onDrill={setDrill} />
+        </>
+      )}
+      {data && !isPhone && (
         <div style={{ display: 'grid', gridTemplateColumns: sideBySide ? 'minmax(0, 1fr) minmax(0, 1.2fr)' : 'minmax(0, 1fr)', gap, alignItems: 'stretch' }}>
-          <Card isPhone={isPhone} inlineHeader title="Vendor performance" sub={`${data.vendors.length} vendors · scroll for all`}
-            action={!isPhone && (
+          <Card isPhone={false} inlineHeader title="Vendor performance" sub={`${data.vendors.length} vendors · scroll for all`}
+            action={(
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
                 <input type="text" value={vendorSearch} onChange={e => setVendorSearch(e.target.value)} placeholder="Search vendor…"
                   style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 170, boxSizing: 'border-box' }} />
@@ -795,59 +954,57 @@ export default function InwardPage({ data, loading, error, status, invData, invL
                     { label: 'SKUs', key: 'skus' }, { label: 'Last GRN', key: 'lastGrn' }]} />
               </div>
             )}>
-            <InwardTable columns={vendorCols} rows={data.vendors.map(v => ({ ...v, _key: v.vendor }))} isPhone={isPhone} title="Vendor performance" filename={`inward_vendors_${meta.start}_${meta.end}.csv`}
+            <InwardTable columns={vendorCols} rows={data.vendors.map(v => ({ ...v, _key: v.vendor }))} isPhone={false} title="Vendor performance" filename={`inward_vendors_${meta.start}_${meta.end}.csv`}
               defaultSort={{ key: 'units', dir: 'desc' }} phoneKeys={['vendor', 'units', 'skus', 'lastGrn']}
-              fixedHeight={isPhone ? 360 : 440} totalRow={vendorTotalRow} onRowClick={r => setDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType })}
-              search={(r, q) => r.vendor.toLowerCase().includes(q)} searchPlaceholder="Search vendor…" externalSearch={isPhone ? null : vendorSearch} />
+              fixedHeight={440} totalRow={vendorTotalRow} onRowClick={r => setDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType })}
+              search={(r, q) => r.vendor.toLowerCase().includes(q)} searchPlaceholder="Search vendor…" externalSearch={vendorSearch} />
           </Card>
 
-          <Card isPhone={isPhone} inlineHeader
+          <Card isPhone={false} inlineHeader
             title="SKU detail"
             sub={skuView === 'sku' ? `${skuRows.length} SKUs · tap a row for its last 10 GRN days` : `${subCatRows.length} sub-categories · tap a row for its last 10 GRN days`}
             subTitle={skuView === 'subcat' ? 'Units summed, DOI recomputed from summed stock ÷ summed avg sale.' : undefined}
             action={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
-                <Seg isPhone={isPhone} label="SKU detail view" value={skuView} onChange={setSkuView}
+                <Seg isPhone={false} label="SKU detail view" value={skuView} onChange={setSkuView}
                   options={[{ value: 'sku', label: 'By SKU' }, { value: 'subcat', label: 'By sub-category' }]} />
-                {!isPhone && (
-                  <>
-                    <input type="text" value={skuSearchQ} onChange={e => setSkuSearchQ(e.target.value)} placeholder={skuView === 'sku' ? 'Search SKU or sub-category…' : 'Search sub-category…'}
-                      style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 190, boxSizing: 'border-box' }} />
-                    {skuView === 'sku' ? (
-                      <ExportButton filename={`inward_skus_${meta.start}_${meta.end}.csv`} rows={skuRows}
-                        columns={[{ label: 'SKU', key: 'sku' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Inward units', key: 'units' },
-                          { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
-                    ) : (
-                      <ExportButton filename={`inward_subcategories_${meta.start}_${meta.end}.csv`} rows={subCatRows}
-                        columns={[{ label: 'Sub-category', key: 'subCategory' }, { label: 'SKUs', key: 'skuCount' }, { label: 'Inward units', key: 'units' },
-                          { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
-                    )}
-                  </>
+                <input type="text" value={skuSearchQ} onChange={e => setSkuSearchQ(e.target.value)} placeholder={skuView === 'sku' ? 'Search SKU or sub-category…' : 'Search sub-category…'}
+                  style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 190, boxSizing: 'border-box' }} />
+                {skuView === 'sku' ? (
+                  <ExportButton filename={`inward_skus_${meta.start}_${meta.end}.csv`} rows={skuRows}
+                    columns={[{ label: 'SKU', key: 'sku' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Inward units', key: 'units' },
+                      { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
+                ) : (
+                  <ExportButton filename={`inward_subcategories_${meta.start}_${meta.end}.csv`} rows={subCatRows}
+                    columns={[{ label: 'Sub-category', key: 'subCategory' }, { label: 'SKUs', key: 'skuCount' }, { label: 'Inward units', key: 'units' },
+                      { label: 'Current stock', key: 'stock' }, { label: 'Avg sale /day', key: 'avgSale' }, { label: 'DOI', key: 'doi' }, { label: 'Last inward', key: 'lastInward' }]} />
                 )}
               </div>
             }>
             {skuView === 'sku' ? (
-              <InwardTable columns={skuCols} rows={skuRows.map(s => ({ ...s, _key: s.skuKey }))} isPhone={isPhone} title="SKU detail" filename={`inward_skus_${meta.start}_${meta.end}.csv`}
-                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={isPhone ? null : skuSearchQ}
+              <InwardTable columns={skuCols} rows={skuRows.map(s => ({ ...s, _key: s.skuKey }))} isPhone={false} title="SKU detail" filename={`inward_skus_${meta.start}_${meta.end}.csv`}
+                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={skuSearchQ}
                 onRowClick={r => setDrill({ mode: 'sku', id: r.sku, subtitle: r.subCategory })}
                 search={(r, q) => r.sku.toLowerCase().includes(q) || String(r.subCategory || '').toLowerCase().includes(q)} searchPlaceholder="Search SKU or sub-category"
-                fixedHeight={isPhone ? 360 : 440} totalRow={skuTotalRow} />
+                fixedHeight={440} totalRow={skuTotalRow} />
             ) : (
-              <InwardTable columns={subCatCols} rows={subCatRows} isPhone={isPhone} title="Sub-category detail" filename={`inward_subcategories_${meta.start}_${meta.end}.csv`}
-                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={isPhone ? null : skuSearchQ}
+              <InwardTable columns={subCatCols} rows={subCatRows} isPhone={false} title="Sub-category detail" filename={`inward_subcategories_${meta.start}_${meta.end}.csv`}
+                defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'units', 'stock', 'doi']} externalSearch={skuSearchQ}
                 onRowClick={r => setDrill({ mode: 'subcat', id: r.subCategory, subtitle: r.category })}
                 search={(r, q) => r.subCategory.toLowerCase().includes(q)} searchPlaceholder="Search sub-category"
-                fixedHeight={isPhone ? 360 : 440} totalRow={subCatTotalRow} />
+                fixedHeight={440} totalRow={subCatTotalRow} />
             )}
           </Card>
         </div>
       )}
 
       {/* Product master — every SKU, searchable, independent of the selected date range (so a SKU
-          with zero inward in the current window is still found, with its true last-ever inward). */}
-      {data && (
-        <Card isPhone={isPhone} inlineHeader title="Product master" sub={`${productMasterRows.length} SKUs · search any SKU, even ones not inwarded in the selected range`}
-          action={!isPhone && (
+          with zero inward in the current window is still found, with its true last-ever inward).
+          Phone: search-only entry card → full-screen results (item 4); desktop stays the table. */}
+      {data && isPhone && <ProductMasterPhoneCard rows={productMasterRows} invLoading={invLoading} onDrill={setDrill} />}
+      {data && !isPhone && (
+        <Card isPhone={false} inlineHeader title="Product master" sub={`${productMasterRows.length} SKUs · search any SKU, even ones not inwarded in the selected range`}
+          action={(
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
               <input type="text" value={masterSearch} onChange={e => setMasterSearch(e.target.value)} placeholder="Search SKU, category, sub-category…"
                 style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 220, boxSizing: 'border-box' }} />
@@ -858,10 +1015,10 @@ export default function InwardPage({ data, loading, error, status, invData, invL
                   { label: 'Last inward vendor(s)', key: 'lastInwardVendors' }, { label: 'Inward qty (range)', key: 'rangeQty' }]} />
             </div>
           )}>
-          <InwardTable columns={masterCols} rows={productMasterRows.map(r => ({ ...r, _key: r.skuKey }))} isPhone={isPhone} title="Product master" filename="inward_product_master.csv"
-            defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'lastInward', 'lastInwardQty', 'rangeQty']} externalSearch={isPhone ? null : masterSearch}
+          <InwardTable columns={masterCols} rows={productMasterRows.map(r => ({ ...r, _key: r.skuKey }))} isPhone={false} title="Product master" filename="inward_product_master.csv"
+            defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'lastInward', 'lastInwardQty', 'rangeQty']} externalSearch={masterSearch}
             search={masterSearchFn} searchPlaceholder="Search SKU, category, sub-category…"
-            fixedHeight={isPhone ? 360 : 440} />
+            fixedHeight={440} />
         </Card>
       )}
 
