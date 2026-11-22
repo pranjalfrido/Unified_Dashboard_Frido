@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DotsNine, MagnifyingGlass, Check, ChatCircleDots } from '@phosphor-icons/react'
-import { useTour } from '../tour/TourContext.js'
 import { C } from '../utils.js'
 import { THEMES, ENABLED_THEMES } from '../theme.js'
 import BottomSheet from './BottomSheet.jsx'
@@ -22,25 +21,6 @@ import { useNavStats } from './navStats.js'
 const M = C.m
 const Z_BAR = 450
 const GROUPS = [['main', 'Main'], ['analytics', 'Analytics'], ['workspace', 'Workspace'], ['tools', 'Tools']]
-
-function MobileTourButton({ close }) {
-  const { replayMain } = useTour()
-  return (
-    <button
-      type="button"
-      onClick={() => { close(); replayMain() }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        width: '100%', minHeight: 44, padding: '4px 2px',
-        border: 'none', background: 'transparent', textAlign: 'left',
-        fontFamily: 'var(--font)', fontSize: 13, color: M.muted, cursor: 'pointer',
-        marginTop: 2,
-      }}
-    >
-      Take the tour again
-    </button>
-  )
-}
 
 function DockSlot({ on, onClick, Icon, label }) {
   const [tip, setTip] = useState(false)
@@ -119,14 +99,12 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
   })
 
   const bar = (
-    <nav className="mnav bottom-nav" aria-label="Main" data-tour="m-dock"
+    <nav className="mnav bottom-nav" aria-label="Main"
       style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: Z_BAR, height: 'calc(var(--bot) + var(--safe-bottom))', padding: '0 var(--safe-right) var(--safe-bottom) var(--safe-left)',
         background: M.nav.bg, boxShadow: M.nav.shadow }}>
       <div style={{ display: 'flex', alignItems: 'stretch', height: 'var(--bot)' }}>
         {shownDock.map(p => <DockSlot key={p.id} label={p.label} Icon={p.Icon} on={p.id === active} onClick={() => onSelect(p.id)} />)}
-        <div data-tour="m-launcher">
-          <DockSlot label={launcherPage ? `${launcherPage.label} (All pages)` : 'All pages'} Icon={launcherPage ? launcherPage.Icon : DotsNine} on={!!launcherPage} onClick={() => setOpen(true)} />
-        </div>
+        <DockSlot label={launcherPage ? `${launcherPage.label} (All pages)` : 'All pages'} Icon={launcherPage ? launcherPage.Icon : DotsNine} on={!!launcherPage} onClick={() => setOpen(true)} />
       </div>
     </nav>
   )
@@ -138,7 +116,7 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
         subtitle={mode === 'edit' ? `Pick ${DOCK_MIN}–${DOCK_MAX} pages · All pages stays last · ${draftIds.length} picked` : undefined}>
         <div className="mnav-sheet">
           {mode === 'pages' && <>
-            <button type="button" onClick={() => { close(); onProfile() }} className="mnav-row" data-tour="m-profile"
+            <button type="button" onClick={() => { close(); onProfile() }} className="mnav-row"
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 52, padding: '4px 2px', border: 'none', background: 'transparent', textAlign: 'left', fontFamily: 'var(--font)', color: M.ink, cursor: 'pointer' }}>
               <span aria-hidden="true" style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', overflow: 'hidden', background: 'rgba(31,90,61,.12)', color: M.green, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 700 }}>
                 {profile?.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (profile?.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()}
@@ -149,7 +127,6 @@ export default function MobileBottomNav({ pages, active, onSelect, userId, profi
               </span>
               <span aria-hidden="true" style={{ color: M.muted, fontSize: 16 }}>›</span>
             </button>
-            <MobileTourButton close={close} />
             <label style={{ position: 'relative', display: 'block', marginTop: 8 }}>
               <span aria-hidden="true" style={{ position: 'absolute', left: 12, top: 13, color: M.muted, display: 'flex' }}><MagnifyingGlass size={18} /></span>
               <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search pages… try 'rto' or 'roas'" aria-label="Search pages"
