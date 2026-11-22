@@ -3386,25 +3386,6 @@ function ThemePicker({ theme, setTheme }) {
   )
 }
 
-function SidebarTourButton() {
-  const { replayMain } = useTour()
-  return (
-    <button
-      onClick={replayMain}
-      title="Take the tour again"
-      style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--t3)', fontSize: 11, fontFamily: 'var(--font)',
-        padding: '4px 6px', borderRadius: 6, opacity: 0.7,
-        transition: 'opacity .15s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.opacity = 1}
-      onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
-    >
-      Tour
-    </button>
-  )
-}
 
 function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme, setTheme }) {
   const [invHover, setInvHover] = useState(false)
@@ -3636,7 +3617,6 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
           }
           <span className="sb-label">{profile?.name?.split(' ')[0] || 'Profile'}</span>
         </div>
-        <SidebarTourButton />
       </div>
     </nav>
   )
