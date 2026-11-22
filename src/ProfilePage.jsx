@@ -552,6 +552,7 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
 
   async function handleSignOut() {
     await supabase.from('login_activity').insert({ user_id: session.user.id, action: 'logout' })
+    await supabase.from('user_profiles').update({ active_session_id: null }).eq('user_id', session.user.id)
     await supabase.auth.signOut()
     onSignOut()
   }

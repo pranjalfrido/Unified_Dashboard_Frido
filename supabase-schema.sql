@@ -207,6 +207,15 @@ CREATE TABLE IF NOT EXISTS public.packaging_sku_master_extra (
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 
+-- 9. Single-session enforcement — only one active login per user at a time.
+--    When a user logs in from a new device/browser, the previous session is invalidated.
+--    Run this once in Supabase SQL Editor if the column does not already exist.
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS active_session_id TEXT;
+
+DROP POLICY IF EXISTS "Users can update own session id" ON public.user_profiles;
+CREATE POLICY "Users can update own session id" ON public.user_profiles
+  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 ALTER TABLE public.packaging_sku_master_extra ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Authenticated users can read packaging sku master extra" ON public.packaging_sku_master_extra;
 CREATE POLICY "Authenticated users can read packaging sku master extra" ON public.packaging_sku_master_extra

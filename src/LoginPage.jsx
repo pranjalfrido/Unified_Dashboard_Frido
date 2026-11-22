@@ -84,7 +84,7 @@ function ForgotPassword({ prefillEmail, onBack }) {
 // Phones: when a field gets focus (keyboard opening), bring the Sign in button into view.
 const keepSignInVisible = () => { if (window.innerWidth < 1024) setTimeout(() => document.querySelector('.btn-signin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 350) }
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, kickedOut }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -126,6 +126,11 @@ export default function LoginPage({ onLogin }) {
 
     // Log login activity
     await supabase.from('login_activity').insert({ user_id: data.user.id, action: 'login' })
+
+    // Single-session enforcement: stamp this session as the only valid one.
+    // Any other device already logged in as this user will be kicked out on their next check.
+    const sessionId = data.session.access_token.slice(-16)
+    await supabase.from('user_profiles').update({ active_session_id: sessionId }).eq('user_id', data.user.id)
 
     setLoading(false)
     onLogin(data.session)
@@ -229,6 +234,13 @@ export default function LoginPage({ onLogin }) {
               <div className="eyebrow">Welcome back</div>
               <h2>Sign in to Navigator</h2>
               <p className="sub">Enter your credentials to access the dashboard.</p>
+
+              {kickedOut && (
+                <div className="alert-error err-top" role="alert" style={{ background: '#FFF5E6', borderColor: '#F5A623', color: '#7A4F00' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  You were signed out because your account was opened on another device.
+                </div>
+              )}
 
               {globalErr && (
                 <div className="alert-error err-top" role="alert">

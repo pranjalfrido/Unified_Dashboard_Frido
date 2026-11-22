@@ -3651,7 +3651,10 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
   }
   // Same calls as Profile → Sign out.
   const signOut = async () => {
-    if (userId) await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+    if (userId) {
+      await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+      await supabase.from('user_profiles').update({ active_session_id: null }).eq('user_id', userId)
+    }
     await supabase.auth.signOut()
     onSignOut?.()
   }
@@ -20052,8 +20055,29 @@ function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
+  const [kickedOut, setKickedOut] = useState(false) // true when booted due to login on another device
   const navigate = useNavigate()
   const location = useLocation()
+
+  const SESSION_MAX_MS = 48 * 60 * 60 * 1000 // 48 hours from login
+  const loginAtKey = uid => `frido.loginAt.${uid}`
+
+  async function forceSignOut() {
+    await supabase.auth.signOut()
+    setSession(null)
+  }
+
+  async function clearSessionId(uid) {
+    if (!uid) return
+    await supabase.from('user_profiles').update({ active_session_id: null }).eq('user_id', uid)
+  }
+
+  function isSessionExpired(s) {
+    if (!s?.user?.id) return false
+    const stored = localStorage.getItem(loginAtKey(s.user.id))
+    if (!stored) return false
+    return Date.now() - Number(stored) > SESSION_MAX_MS
+  }
 
   useEffect(() => {
     if (window.location.hash.includes('type=recovery')) {
@@ -20063,15 +20087,29 @@ function AppInner() {
     // Localhost test mode only (VITE_FEEDBACK_LOCAL=1): open as a made-up test person, no Supabase.
     const ls = import.meta.env.DEV ? localSession() : null // dev server only: the test login is not in production builds
     if (ls) { setSession(ls); return }
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => { if (!window._suppressAuth) setSession(s || null) })
+    supabase.auth.getSession().then(({ data }) => {
+      const s = data.session || null
+      if (s && isSessionExpired(s)) { forceSignOut(); return }
+      setSession(s)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (!window._suppressAuth) {
+        if (s && isSessionExpired(s)) { forceSignOut(); return }
+        setSession(s || null)
+      }
+    })
     return () => subscription.unsubscribe()
   }, [])
 
   const [profileError, setProfileError] = useState(false)
 
-  // Signed out: drop the saved profile copies so they never outlive the session on a shared device.
-  useEffect(() => { if (session === null) clearProfileCache() }, [session])
+  // Signed out: drop the saved profile copies and login timestamp so they never outlive the session on a shared device.
+  useEffect(() => {
+    if (session === null) {
+      clearProfileCache()
+      Object.keys(localStorage).filter(k => k.startsWith('frido.loginAt.')).forEach(k => localStorage.removeItem(k))
+    }
+  }, [session])
 
   useEffect(() => {
     if (!session || session === 'recovery') return
@@ -20096,6 +20134,15 @@ function AppInner() {
     }
     const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('profile fetch timeout')), ms))])
     const apply = ({ profile, tabs }) => {
+      // Single-session check: if another device logged in after us, our session fingerprint
+      // won't match what's stored — sign out and tell the user why.
+      if (profile?.active_session_id && session?.access_token) {
+        const myId = session.access_token.slice(-16)
+        if (profile.active_session_id !== myId) {
+          supabase.auth.signOut().then(() => { setKickedOut(true); setSession(null) })
+          return
+        }
+      }
       setProfile(profile)
       // Tabs failing while the profile succeeded keeps the saved tabs rather than locking the user out.
       const t = tabs || (cached && cached.tabs) || []
@@ -20157,11 +20204,11 @@ function AppInner() {
       navigate('/overview', { replace: true })
       return null
     }
-    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage kickedOut={kickedOut} onLogin={s => { setKickedOut(false); localStorage.setItem(loginAtKey(s.user.id), Date.now()); setSession(s); navigate('/overview', { replace: true }) }} />
   }
 
   if (!session && import.meta.env.DEV && LOCAL_MODE) return <LocalPicker />
-  if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+  if (!session) return <LoginPage kickedOut={kickedOut} onLogin={s => { setKickedOut(false); localStorage.setItem(loginAtKey(s.user.id), Date.now()); setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
   // hanging on LoadingScreen forever with no indication anything is wrong.
