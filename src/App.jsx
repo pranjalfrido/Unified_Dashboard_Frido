@@ -1,4 +1,6 @@
 ﻿import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, Component } from 'react'
+import { TourProvider } from './tour/TourProvider.jsx'
+import { useTour } from './tour/TourContext.js'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -3384,6 +3386,26 @@ function ThemePicker({ theme, setTheme }) {
   )
 }
 
+function SidebarTourButton() {
+  const { replayMain } = useTour()
+  return (
+    <button
+      onClick={replayMain}
+      title="Take the tour again"
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: 'var(--t3)', fontSize: 11, fontFamily: 'var(--font)',
+        padding: '4px 6px', borderRadius: 6, opacity: 0.7,
+        transition: 'opacity .15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+      onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+    >
+      Tour
+    </button>
+  )
+}
+
 function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme, setTheme }) {
   const [invHover, setInvHover] = useState(false)
   const [logHover, setLogHover] = useState(false)
@@ -3422,7 +3444,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
   ]
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" data-tour="sidebar">
       {/* Logo doubles as a Home/Overview shortcut — standard pattern (click the brand mark to
           return to the main dashboard), gated by the same overview-permission check used for the
           Overview nav item itself, so a user without Overview access can't jump there via the logo.
@@ -3452,6 +3474,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
             <Fragment key="inventory">
             <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
               className={`sb-item${page === 'inventory' ? ' active' : ''}`}
+              data-tour="nav-inventory"
               style={{ position: 'relative' }}
               onMouseEnter={e => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHoverTop(e.currentTarget.getBoundingClientRect().top); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
@@ -3504,6 +3527,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
             <Fragment key="logistics">
             <div onClick={() => setPage(defaultLogPage)}
               className={`sb-item${logActive ? ' active' : ''}`}
+              data-tour="nav-logistics"
               style={{ position: 'relative' }}
               onMouseEnter={e => { if (showPopup) { clearTimeout(logHoverTimerRef.current); setLogHoverTop(e.currentTarget.getBoundingClientRect().top); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
@@ -3553,6 +3577,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
             <Fragment key="customer">
             <div onClick={() => setPage(defaultCusPage)}
               className={`sb-item${cusActive ? ' active' : ''}`}
+              data-tour="nav-customer"
               style={{ position: 'relative' }}
               onMouseEnter={e => { if (showPopup) { clearTimeout(cusHoverTimerRef.current); setCusHoverTop(e.currentTarget.getBoundingClientRect().top); setCusHover(true) } }}
               onMouseLeave={() => { cusHoverTimerRef.current = setTimeout(() => setCusHover(false), 200) }}>
@@ -3589,7 +3614,8 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
         return (
           <Fragment key={item.id}>
             <div onClick={() => setPage(item.id)}
-              className={`sb-item${page === item.id ? ' active' : ''}`}>
+              className={`sb-item${page === item.id ? ' active' : ''}`}
+              data-tour={`nav-${item.id}`}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
             </div>
@@ -3602,6 +3628,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
         <FeedbackSidebarItems page={page} setPage={setPage} />
         <div className="theme-picker-slot" style={{ display: 'contents' }}><ThemePicker theme={theme} setTheme={setTheme} /></div>
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
+          data-tour="nav-profile"
           style={{ position: 'relative' }}>
           {profile?.avatar_url
             ? <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
@@ -3609,6 +3636,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
           }
           <span className="sb-label">{profile?.name?.split(' ')[0] || 'Profile'}</span>
         </div>
+        <SidebarTourButton />
       </div>
     </nav>
   )
@@ -5153,7 +5181,7 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
       date: hasDate && datePill(filters, setFilters, onRefresh, loading) })
   }
   return (
-    <div className="topnav" data-page={page}>
+    <div className="topnav" data-page={page} data-tour="topnav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
         {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads' || page === 'pnl') && (
           <>
@@ -5196,7 +5224,7 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
       <FeedbackHeaderButtons />
       <AlertsBell alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
-        <div className="tnav-right">
+        <div className="tnav-right" data-tour="date-range">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
               onRefresh={page === 'logistics' && logisticsFilterUI?.onRefresh ? logisticsFilterUI.onRefresh : onRefresh}
@@ -21280,7 +21308,18 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     setAdsCache(prev => prev ? { ...prev, additionalSpend: liveAdditionalSpend, additionalSpendByProduct: liveAdditionalSpendByProduct } : prev)
   }, [data?.ads?.additionalSpend])
 
+  const isMobileTour = useIsMobile()
+
   return (
+    <TourProvider
+      userId={session?.user?.id}
+      profile={profile}
+      allowedTabs={allowedTabs}
+      page={page}
+      setPage={setPage}
+      layout={isMobileTour ? 'mobile' : 'desktop'}
+      ready={!!profile}
+    >
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
@@ -21437,6 +21476,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       </div>
       <BottomNav page={page} setPage={setPage} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} userId={session?.user?.id} theme={theme} setTheme={setTheme} onSignOut={onSignOut} />
     </div>
+    </TourProvider>
   )
 }
 
