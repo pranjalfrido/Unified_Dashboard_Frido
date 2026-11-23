@@ -20145,13 +20145,8 @@ function AppInner() {
     const apply = ({ profile, tabs }) => {
       // Single-session check: if another device logged in after us, our session fingerprint
       // won't match what's stored — sign out and tell the user why.
-      if (profile?.active_session_id && session?.access_token) {
-        const myId = session.access_token.slice(-16)
-        if (profile.active_session_id !== myId) {
-          supabase.auth.signOut().then(() => { setKickedOut(true); setSession(null) })
-          return
-        }
-      }
+      // Single-session check disabled — access tokens rotate on every refresh,
+      // so the fingerprint approach causes false kick-outs for all users.
       setProfile(profile)
       // Tabs failing while the profile succeeded keeps the saved tabs rather than locking the user out.
       const t = tabs || (cached && cached.tabs) || []
