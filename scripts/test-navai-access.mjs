@@ -115,5 +115,13 @@ check('inward: wrong secret is refused', bad.ok === true, false)
   globalThis.__fakeFetch = undefined
 }
 
+// Permission key for custom SQL: a grantable chip under NavAI in Team members
+{
+  const { PERMISSION_TREE, getAllLeafKeys } = await import(new URL('../src/permissionTree.js', import.meta.url))
+  const ask = PERMISSION_TREE.find(n => n.key === 'ask')
+  const sql = ask?.children?.find(c => c.key === 'ask:sql')
+  check("permission tree: 'ask:sql' sits under NavAI with the agreed label", sql?.label === 'NavAI: custom analysis' && getAllLeafKeys(ask).includes('ask') && getAllLeafKeys(ask).includes('ask:sql'), true)
+}
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed')
 process.exit(failed ? 1 : 0)

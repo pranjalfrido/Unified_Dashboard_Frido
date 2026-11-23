@@ -30,7 +30,7 @@ Calls hit `/api/inward`, `/api/inward-data`, `/logistics-data-forward.json`, `/l
 
 **Connector (`feature/pulse-tools`)**
 - Sends `x-navai-secret` (from env `NAVAI_API_SECRET`) on every dashboard call, including the P&L tool's page fetches.
-- `lib/pageAccess.js`: every data tool checks the asking user's tabs. `dashboard_api` per endpoint (and the Ads / P&L parts of `bq`), the `pnl` tool per channel tab, the OOS tool, and **custom SQL is admins only** (decision: SQL cannot be tied to one page; set `NAVAI_SQL_NON_ADMIN=allow` on the service to loosen it). A `/chat` call without `access` gets no pages (fail closed). `financial-mis` and the live `logistics-cost` endpoint are removed from NavAI.
+- `lib/pageAccess.js`: every data tool checks the asking user's tabs. `dashboard_api` per endpoint (and the Ads / P&L parts of `bq`), the `pnl` tool per channel tab, the OOS tool, and **custom SQL needs its own grant** (decision: SQL cannot be tied to one page): the new permission `ask:sql`, label "NavAI: custom analysis", shown as a chip under NavAI in Team members, or being an admin; others get "Custom analysis isn't enabled for your account; ask an admin". A `/chat` call without `access` gets no pages (fail closed). `financial-mis` and the live `logistics-cost` endpoint are removed from NavAI.
 - `scripts/pulse-ask.mjs` can send an access object (`PULSE_ASK_ACCESS`) so you can test as admin or as a limited user.
 
 ## 3. Tests
@@ -41,7 +41,7 @@ Calls hit `/api/inward`, `/api/inward-data`, `/logistics-data-forward.json`, `/l
 | (b) | No login and no secret: `/api/bq`, `inward`, `inventory`, `logistics`, `customer`, `return-analysis`, `feedback` and the `.json` files return 401 | pass |
 | (c) | The secret opens exactly the 13 allowlisted endpoints (POST) and the `.json` files (GET) | pass |
 | (d) | The secret is refused on feedback, presence, admin, packaging-products, cogs-context, logistics-cost, every non-allowlisted route in `api/`, an unknown route, GET/PUT/PATCH/DELETE/HEAD on `bq`, PUT/PATCH/DELETE on feedback, non-GET on `.json`; wrong/truncated/empty secret refused; the secret is not accepted as a Bearer token or as the cron header; auth-admin and pulse handlers refuse it | pass |
-| (e) | `api/pulse.js` forwards the database's tabs and ignores a forged `access` in the request; in the connector, for **each** of the 27 NavAI endpoints: no tabs = refused, only that page's tab = allowed, only another page's tab = refused, admin = allowed; custom SQL refused for non-admins | pass |
+| (e) | `api/pulse.js` forwards the database's tabs and ignores a forged `access` in the request; in the connector, for **each** of the 27 NavAI endpoints: no tabs = refused, only that page's tab = allowed, only another page's tab = refused, admin = allowed; custom SQL refused for a non-admin with only `ask` (or `ask` + page tabs), allowed with `ask` + `ask:sql` and for admins | pass |
 
 Run: `node scripts/test-navai-access.mjs` in the dashboard (93 checks) and `node scripts/test-page-access.mjs` in `frido-data-connector` (125 checks). Both generate throwaway secrets in memory and print none.
 Limit: (a) proves the middleware logic with a local key; I did not log in to the live site (no token available to me).
@@ -104,7 +104,7 @@ The live site cannot be called without a login, so both sides run on the same pa
 
 ## 7. Safe choices I made without asking
 
-- Custom SQL for non-admins is refused (can be loosened with `NAVAI_SQL_NON_ADMIN=allow`).
+- Custom SQL: admins, or members granted `ask:sql` (NavAI owners grant it, same rule as `ask`).
 - `logistics-cost` (live) is not reachable by NavAI; it uses the file.
 - A `/chat` call without access info is denied. Direct MCP callers (no `access`) keep their role-based access as before.
 - Local only, not committed: `vite.local.config.js`, the `node_modules` links, `_cmp/`, `dev.log` (all in the worktrees' `.git/info/exclude`).

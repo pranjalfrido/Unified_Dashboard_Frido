@@ -91,7 +91,13 @@ export const PERMISSION_TREE = [
       { key: 'documents:cn-manage', label: 'Credit notes: manage (masters, edits, rollback)' },
     ],
   },
-  { key: 'ask', label: 'NavAI', children: [] },
+  {
+    key: 'ask', label: 'NavAI', isGroup: true, children: [
+      { key: 'ask',     label: 'NavAI' },
+      // Only meaningful together with 'ask': lets NavAI run custom queries (SQL) beyond the pages the person can open.
+      { key: 'ask:sql', label: 'NavAI: custom analysis' },
+    ],
+  },
 ]
 
 export function hasPermission(allowedTabs, key) {
