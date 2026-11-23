@@ -20231,7 +20231,7 @@ function AppInner() {
         style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
         Retry
       </button>
-      <button onClick={() => supabase.auth.signOut().then(() => setSession(null))}
+      <button onClick={() => supabase.auth.signOut().then(() => { setSession(null); setProfileError(false); navigate('/login', { replace: true }) })}
         style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#888' }}>
         Sign out
       </button>
