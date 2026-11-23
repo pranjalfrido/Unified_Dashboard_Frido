@@ -154,7 +154,7 @@ function computePayload(windowDays) {
     const { key } = resolveMasterSkuKey(row.final_sku, skuMap)
     if (!key) continue
     const qty = Number(row.qty || 0)
-    const isB2C = isB2CChannel(row.channel, channelToDescription)
+    const isB2C = norm(row.channel) === 'SHOPIFY'
     const countsTowardTotal = isTotalAvgSaleChannel(row.channel, channelToDescription)
     const nearestWH = stateToNearestWH.get(norm(row.state))
     if (nearestWH) {
