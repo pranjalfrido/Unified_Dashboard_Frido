@@ -18,7 +18,9 @@ for (const q of questions) {
     const r = await fetch(`${base}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key },
-      body: JSON.stringify({ messages: [{ role: 'user', content: q }] }),
+      // PULSE_ASK_ACCESS = JSON like {"isAdmin":true,"tabs":[]} or {"isAdmin":false,"tabs":["inventory:inward"]}: the page access api/pulse.js would send for that user.
+      // Without it the connector refuses every data tool (fail closed).
+      body: JSON.stringify({ messages: [{ role: 'user', content: q }], access: process.env.PULSE_ASK_ACCESS ? JSON.parse(process.env.PULSE_ASK_ACCESS) : undefined }),
       signal: AbortSignal.timeout(290000),
     });
     status = r.status;
