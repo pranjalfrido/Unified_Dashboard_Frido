@@ -29,11 +29,13 @@ import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
+import CnModulePage from './cn/CnModulePage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
 import CustomerSupportPage, { ExportMenu as CsExportMenu } from './CustomerSupportPage.jsx'
 import PurchaseLedgerPage from './PurchaseLedgerPage.jsx'
 import PackagingBomPage from './PackagingBomPage.jsx'
 import CourierAllocationPage from './CourierAllocationPage.jsx'
+import CnReceivedPage from './cn/CnReceivedPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
@@ -3496,9 +3498,9 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
             ...(hasCost ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
           ]
           const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
-          // courier-allocation included so the Logistics group stays expanded and highlighted
-          // while the simulator is open — it is reached from Cost Analytics, not the sidebar.
-          const logActive = page === 'logistics' || page === 'logistics-cost' || page === 'courier-allocation'
+          // courier-allocation and cn-received included so the Logistics group stays expanded and
+          // highlighted while they are open — both are reached from Cost Analytics, not the sidebar.
+          const logActive = page === 'logistics' || page === 'logistics-cost' || page === 'courier-allocation' || page === 'cn-received'
           const showPopup = hasBoth || (hasCost && logSubTabs.length > 0)
           return (
             <Fragment key="logistics">
@@ -3619,7 +3621,7 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
 // "All pages") and a launcher with every other page. Only pages this user may open are passed in,
 // with the same rules as the Sidebar (main pages) and as the pages themselves (tools).
 const NAV_ICONS = { overview: SquaresFour, sales: ChartBar, pnl: TrendUp, inventory: Cube, logistics: Truck, customer: Users, ads: PlayCircle, documents: FileText, ask: NavAIIcon, feedback: Tray,
-  cogs: Coins, 'courier-allocation': Path, 'logistics-ledger': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
+  cogs: Coins, 'courier-allocation': Path, 'cn-received': Receipt, 'logistics-ledger': Receipt, 'logistics-cn': Receipt, 'purchase-ledger': ShoppingCart, 'packaging-bom': Package }
 function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, theme, setTheme, onSignOut }) {
   const fbk = useFeedback()
   const can = id => {
@@ -3631,13 +3633,13 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     if (id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
     if (id === 'inventory') return hasInventoryAccess(allowedTabs)
     if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
-    if (id === 'courier-allocation') return hasCostAccess(allowedTabs)
-    if (['cogs', 'logistics-ledger', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
+    if (id === 'courier-allocation' || id === 'cn-received') return hasCostAccess(allowedTabs)
+    if (['cogs', 'logistics-ledger', 'logistics-cn', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
     return allowedTabs.includes(id)
   }
   const pages = NAV_PAGES.filter(p => can(p.id)).map(p => ({ ...p, Icon: NAV_ICONS[p.id] }))
   // Sub-pages light up their parent; Logistics / Customer open the sub-page this user may see.
-  const active = page === 'logistics-cost' ? 'logistics' : page === 'customer-support' ? 'customer' : page
+  const active = page === 'logistics-cost' || page === 'cn-received' ? 'logistics' : page === 'customer-support' ? 'customer' : page
   const onSelect = id => {
     if (id === 'logistics' && allowedTabs && !allowedTabs.includes('logistics')) return setPage('logistics-cost')
     if (id === 'customer' && allowedTabs && !allowedTabs.includes('customer')) return setPage('customer-support')
@@ -3652,7 +3654,10 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
   }
   // Same calls as Profile → Sign out.
   const signOut = async () => {
-    if (userId) await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+    if (userId) {
+      await supabase.from('login_activity').insert({ user_id: userId, action: 'logout' })
+      await supabase.from('user_profiles').update({ active_session_id: null }).eq('user_id', userId)
+    }
     await supabase.auth.signOut()
     onSignOut?.()
   }
@@ -4960,13 +4965,13 @@ function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineS
   )
 }
 
-function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin, alertsComputedAt, onAlertNav, userId, targetAlerts, targetsAt }) {
+function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView, subCatFirstOrderMap, logisticsFilterUI, page, setPage, customerTab, setCustomerTab, onCustRefresh, csRange, setCsRange, csExport, onCsRefresh, invTab, setInvTab, combinedAlerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh, isAdmin, alertsComputedAt, onAlertNav, userId, targetAlerts, targetsAt }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
   // Live users (admins only): "Live users (N)" in the phone ⋯ menu opens this sheet.
   const [liveOpen, setLiveOpen] = useState(false)
   const liveCount = useLiveCount(isAdmin)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', feedback: 'Feedback' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', 'cn-received': 'CN Received', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', 'logistics-cn': 'Logistics Credit Notes', feedback: 'Feedback' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation', inward: 'Inward' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
@@ -5143,9 +5148,17 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         onChip: id => { if (id === tab) return; setSalesActiveTab(id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) },
         subTabs, activeSub, onSub })
     }
+    if (page === 'cn-received') {
+      // CN received (a drill-down from Logistics → Cost): ‹ back, the invoice-month pill (its sheet lives
+      // in CnReceivedPage, reached through cnCtrl), the data caption under the title, Export / Open uploads in ⋯.
+      const c = cnCtrl
+      return H({ onBack: () => setPage('logistics-cost'), backLabel: 'Logistics cost', title: 'CN received', sub: c?.caption, stacked: true,
+        date: c?.pill && <HeaderMonthPill label={c.pill} onClick={c.openRange} />,
+        menu: { title: 'CN received', items: c?.menu || [] } })
+    }
     // Every other screen (Documents, NavAI, the internal tools …): the same header,
     // ‹ back for the tools opened from another page, a date pill where the page has a date range.
-    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost' }[page]
+    const back = { cogs: 'documents', 'logistics-ledger': 'documents', 'logistics-cn': 'documents', 'purchase-ledger': 'documents', 'packaging-bom': 'documents', 'courier-allocation': 'logistics-cost', 'cn-received': 'logistics-cost' }[page]
     const backLabels = { documents: 'Documents', 'logistics-cost': 'Logistics cost', sales: 'Sales' }
     const phoneTitles = { ...titles, ask: 'NavAI', 'purchase-ledger': 'Purchase Ledger', 'packaging-bom': 'Packaging BOM' }
     const hasDate = ['intelligence'].includes(page)
@@ -5196,7 +5209,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
       <LivePill isAdmin={isAdmin} />
       <FeedbackHeaderButtons />
       <AlertsBell alerts={combinedAlerts} targets={targetAlerts} targetsAt={targetsAt} computedAt={alertsComputedAt} userId={userId} onNav={onAlertNav} />
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM: the 12 months up to the end date (the start date is not used)' : undefined}>
             <DateRangePicker filters={filters} setFilters={setFilters}
@@ -20056,8 +20069,29 @@ function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
+  const [kickedOut, setKickedOut] = useState(false) // true when booted due to login on another device
   const navigate = useNavigate()
   const location = useLocation()
+
+  const SESSION_MAX_MS = 48 * 60 * 60 * 1000 // 48 hours from login
+  const loginAtKey = uid => `frido.loginAt.${uid}`
+
+  async function forceSignOut() {
+    await supabase.auth.signOut()
+    setSession(null)
+  }
+
+  async function clearSessionId(uid) {
+    if (!uid) return
+    await supabase.from('user_profiles').update({ active_session_id: null }).eq('user_id', uid)
+  }
+
+  function isSessionExpired(s) {
+    if (!s?.user?.id) return false
+    const stored = localStorage.getItem(loginAtKey(s.user.id))
+    if (!stored) return false
+    return Date.now() - Number(stored) > SESSION_MAX_MS
+  }
 
   useEffect(() => {
     if (window.location.hash.includes('type=recovery')) {
@@ -20067,15 +20101,29 @@ function AppInner() {
     // Localhost test mode only (VITE_FEEDBACK_LOCAL=1): open as a made-up test person, no Supabase.
     const ls = import.meta.env.DEV ? localSession() : null // dev server only: the test login is not in production builds
     if (ls) { setSession(ls); return }
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => { if (!window._suppressAuth) setSession(s || null) })
+    supabase.auth.getSession().then(({ data }) => {
+      const s = data.session || null
+      if (s && isSessionExpired(s)) { forceSignOut(); return }
+      setSession(s)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (!window._suppressAuth) {
+        if (s && isSessionExpired(s)) { forceSignOut(); return }
+        setSession(s || null)
+      }
+    })
     return () => subscription.unsubscribe()
   }, [])
 
   const [profileError, setProfileError] = useState(false)
 
-  // Signed out: drop the saved profile copies so they never outlive the session on a shared device.
-  useEffect(() => { if (session === null) clearProfileCache() }, [session])
+  // Signed out: drop the saved profile copies and login timestamp so they never outlive the session on a shared device.
+  useEffect(() => {
+    if (session === null) {
+      clearProfileCache()
+      Object.keys(localStorage).filter(k => k.startsWith('frido.loginAt.')).forEach(k => localStorage.removeItem(k))
+    }
+  }, [session])
 
   useEffect(() => {
     if (!session || session === 'recovery') return
@@ -20095,11 +20143,24 @@ function AppInner() {
         supabase.from('user_profiles').select('*').eq('user_id', uid).single().then(r => r, e => ({ error: e })),
         supabase.from('user_permissions').select('tab').eq('user_id', uid).then(r => r, e => ({ error: e })),
       ])
+      // 401 / PGRST301 means the JWT is invalid or expired — force sign-out immediately
+      const errStatus = pr.error?.status || pr.error?.code || ''
+      const errMsg = pr.error?.message || ''
+      if (errStatus === 401 || String(errStatus).includes('401') || String(errMsg).includes('JWT') || String(errMsg).includes('PGRST301')) {
+        supabase.auth.signOut()
+        setSession(null)
+        setProfileError(false)
+        return
+      }
       if (pr.error || !pr.data) throw pr.error || new Error('no profile row')
       return { profile: pr.data, tabs: perm.error || !perm.data ? null : perm.data.map(r => r.tab) }
     }
     const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('profile fetch timeout')), ms))])
     const apply = ({ profile, tabs }) => {
+      // Single-session check: if another device logged in after us, our session fingerprint
+      // won't match what's stored — sign out and tell the user why.
+      // Single-session check disabled — access tokens rotate on every refresh,
+      // so the fingerprint approach causes false kick-outs for all users.
       setProfile(profile)
       // Tabs failing while the profile succeeded keeps the saved tabs rather than locking the user out.
       const t = tabs || (cached && cached.tabs) || []
@@ -20116,6 +20177,13 @@ function AppInner() {
       }
       if (cancelled) return
       console.error('profile fetch error:', lastErr)
+      // If unauthorized after all retries, session is dead — go to login immediately
+      if (String(lastErr?.status).includes('401') || String(lastErr?.message).includes('JWT') || String(lastErr).includes('unauthorized')) {
+        supabase.auth.signOut()
+        setSession(null)
+        setProfileError(false)
+        return
+      }
       if (!cached) { setProfileError(true); return }
       // Open with the saved copy, then keep retrying quietly until the live profile arrives.
       setProfile(cached.profile)
@@ -20161,11 +20229,11 @@ function AppInner() {
       navigate('/overview', { replace: true })
       return null
     }
-    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+    return import.meta.env.DEV && LOCAL_MODE ? <LocalPicker /> : <LoginPage kickedOut={kickedOut} onLogin={s => { setKickedOut(false); localStorage.setItem(loginAtKey(s.user.id), Date.now()); setSession(s); navigate('/overview', { replace: true }) }} />
   }
 
   if (!session && import.meta.env.DEV && LOCAL_MODE) return <LocalPicker />
-  if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+  if (!session) return <LoginPage kickedOut={kickedOut} onLogin={s => { setKickedOut(false); localStorage.setItem(loginAtKey(s.user.id), Date.now()); setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Profile fetch failed or timed out (e.g. a Supabase outage) — show a retry screen instead of
   // hanging on LoadingScreen forever with no indication anything is wrong.
@@ -20176,6 +20244,10 @@ function AppInner() {
       <button onClick={() => { setProfile(null); setProfileError(false); setSession(s => ({ ...s })) }}
         style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
         Retry
+      </button>
+      <button onClick={() => supabase.auth.signOut().then(() => { setSession(null); setProfileError(false); navigate('/login', { replace: true }) })}
+        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#888' }}>
+        Sign out
       </button>
     </div>
   )
@@ -20212,6 +20284,12 @@ function DocumentsPage({ setPage }) {
       title: 'Logistics Bill Ledger',
       description: 'Track B2B freight & B2C courier invoices line by line.',
       icon: '🚚',
+    },
+    {
+      id: 'logistics-cn',
+      title: 'Logistics Credit Notes',
+      description: 'Upload credit notes expected and received from couriers, transporters & 3PLs.',
+      icon: '🧮',
     },
     {
       id: 'purchase-ledger',
@@ -20323,6 +20401,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // first paint, so this only mirrors it into React state for the picker.
   const [logisticsFilterUI, setLogisticsFilterUI] = useState(null)
   const [logCostCtrl, setLogCostCtrl] = useState(null) // Cost page → phone header (sub-tabs, month pill, sheets, "⋯")
+  const [cnCtrl, setCnCtrl] = useState(null) // CN received → phone header (range pill, caption, "⋯")
   // Alerts Phase 1: title of the bell alert that navigated here, for the "From alert ✕" chip.
   // Cleared on dismiss or on the next unrelated navigation (any goTo not coming from navAlert).
   const [fromAlert, setFromAlert] = useState(null)
@@ -20350,6 +20429,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const seg2 = parts[2] || null
     // Map URL segments to internal page IDs
     if (seg0 === 'logistics' && seg1 === 'courier_allocation') return { page: 'courier-allocation', sub: null, sub2: null }
+    if (seg0 === 'logistics' && seg1 === 'cn_received') return { page: 'cn-received', sub: null, sub2: null }
     if (seg0 === 'logistics' && seg1 === 'cost_analytics') return { page: 'logistics-cost', sub: null, sub2: null }
     if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null } // legacy redirect
     if (seg0 === 'logistics') return { page: 'logistics', sub: null, sub2: null }
@@ -20370,6 +20450,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!_fromAlertNav) setFromAlert(null)
     let path
     if (page === 'courier-allocation') path = '/logistics/courier_allocation'
+    else if (page === 'cn-received') path = '/logistics/cn_received'
     else if (page === 'logistics-cost') path = '/logistics/cost_analytics'
     else if (page === 'logistics') path = '/logistics/performance_analytics'
     else if (page === 'inventory') path = `/inventory/${sub === 'health' ? 'inventory_health' : sub === 'sales' ? 'sales_allocation' : (sub || 'inventory_health')}`
@@ -20485,13 +20566,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // so without this branch the generic allowedTabs.includes(page) test fails and a
       // user with cost access is bounced straight back to their default page.
       page === 'courier-allocation' ? hasCostAccess(allowedTabs) :
+      page === 'cn-received' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'customer-support' ? (!allowedTabs || allowedTabs.includes('customer:support')) :
       page === 'inventory' ? hasInventoryAccess(allowedTabs) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
-      (page === 'cogs' || page === 'logistics-ledger' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
+      (page === 'cogs' || page === 'logistics-ledger' || page === 'logistics-cn' || page === 'purchase-ledger' || page === 'packaging-bom') ? (!allowedTabs || allowedTabs.includes('documents')) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       setPage(getDefaultPage())
@@ -21208,7 +21290,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Feedback: what the person is looking at (read when the form opens) and how an admin re-opens it.
   const fbk = useFeedback()
   useEffect(() => {
-    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
+    const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', 'cn-received': 'CN received', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'logistics-cn': 'Logistics credit notes', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
     const channel = page === 'sales' ? (TABS.find(t => t.id === activeTab)?.label || activeTab)
       : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : invTab === 'inward' ? 'Inward' : 'Inventory Health') : ''
     const extra = {}
@@ -21239,7 +21321,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} theme={theme} setTheme={setTheme} />
       <div className="app-main">
-        {<Topnav logCostCtrl={logCostCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} alertsComputedAt={alertsComputedAt} onAlertNav={navAlert} userId={session?.user?.id} targetAlerts={targetAlerts} targetsAt={targetsAt} />}
+        {<Topnav logCostCtrl={logCostCtrl} cnCtrl={cnCtrl} allowedTabs={allowedTabs} salesMenu={salesMenu} goToSalesSub={goToSalesSub} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} logisticsFilterUI={logisticsFilterUI} page={page} setPage={setPage} customerTab={customerTab} setCustomerTab={setCustomerTab} onCustRefresh={() => setCustRefresh(t => t + 1)} csRange={csRange} setCsRange={setCsRange} csExport={csExport} onCsRefresh={() => setCsRefresh(t => t + 1)} invTab={invTab} setInvTab={setInvTab} combinedAlerts={[...fbk.notices.map(n => ({ type: n.status === 'done' ? 'green' : 'blue', title: n.status === 'done' ? 'Your feedback was fixed' : "Your feedback: won't do", body: n.admin_reply })), ...combinedAlerts]} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e, false, true) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} isAdmin={!!profile?.is_admin} alertsComputedAt={alertsComputedAt} onAlertNav={navAlert} userId={session?.user?.id} targetAlerts={targetAlerts} targetsAt={targetsAt} />}
         {fromAlert && (
           <div className="from-alert-chip" style={{
             display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px 0', padding: '5px 10px',
@@ -21255,7 +21337,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
@@ -21273,7 +21355,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
+          {!data && !loading && !fetchPending && !error && page !== 'logistics' && page !== 'customer-support' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'logistics-cost' && page !== 'profile' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'ads' && page !== 'packaging-bom' && page !== 'ask' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -21311,7 +21393,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsCostPage onMobileCtrl={setLogCostCtrl} externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs}
-                onOpenAllocation={() => goTo('courier-allocation')} />
+                onOpenAllocation={() => goTo('courier-allocation')} onOpenCreditNotes={() => goTo('cn-received')} />
             </div>
           )}
           {/* Gated behind the same permission as Cost Analytics: it is built from the same
@@ -21319,6 +21401,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'courier-allocation' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <CourierAllocationPage onBack={() => goTo('logistics-cost')} />
+            </div>
+          )}
+          {/* Credit notes received, opened from Cost Analytics → Overview. Totals only, through
+              cn_received_summary(), which admits Cost Analytics users as well as Documents users. */}
+          {page === 'cn-received' && hasCostAccess(allowedTabs) && (
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <CnReceivedPage onBack={() => goTo('logistics-cost')} onMobileCtrl={setCnCtrl}
+                onOpenUploads={!allowedTabs || allowedTabs.includes('documents') ? () => goTo('logistics-cn') : undefined} />
             </div>
           )}
           {page === 'inventory' && hasInventoryAccess(allowedTabs) && (
@@ -21349,6 +21439,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics-ledger' && (
             <div className="page-scroll">
               <LogisticsLedgerPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'logistics-cn' && (
+            <div className="page-scroll">
+              <CnModulePage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'purchase-ledger' && (

@@ -15,7 +15,7 @@ let _cache = null
 let _promise = null
 export function loadAlertsPhase2() {
   if (_promise) return _promise
-  _promise = fetch('/alerts-phase2.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).then(j => { _cache = j; return j }).catch(() => { _cache = null; return null })
+  _promise = import('../authFetch.js').then(m => m.authFetch('/alerts-phase2.json', { cache: 'no-cache' })).then(r => r.ok ? r.json() : null).then(j => { _cache = j; return j }).catch(() => { _cache = null; return null })
   return _promise
 }
 export const getAlertsPhase2 = () => _cache

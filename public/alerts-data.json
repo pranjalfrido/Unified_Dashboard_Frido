@@ -1,65 +1,69 @@
 {
-  "generatedAt": "2026-11-06T04:33:17.911Z",
+  "generatedAt": "2026-11-23T10:09:12.200Z",
   "logistics": {
-    "windowStart": "2026-10-16",
-    "windowEnd": "2026-10-22",
-    "rangeLabel": "Orders 16–22 Oct",
-    "total": 52327,
-    "delivered": 47980,
-    "rto": 3873,
-    "deliveryPct": 91.69,
-    "rtoPct": 7.4,
-    "slaBreachPct": 11.72,
+    "windowStart": "2026-11-02",
+    "windowEnd": "2026-11-08",
+    "rangeLabel": "Orders 2–8 Nov",
+    "total": 46272,
+    "delivered": 40922,
+    "rto": 4674,
+    "deliveryPct": 88.44,
+    "rtoPct": 10.1,
+    "slaBreachPct": 18.3,
     "slaBreachAvailable": true
   },
   "returns": {
-    "windowStart": "2026-10-17",
-    "windowEnd": "2026-10-23",
-    "rangeLabel": "Orders 17–23 Oct",
-    "gross": 84048452.01999944,
-    "cancelPct": 5,
-    "rtoPct": 6.52,
-    "cirPct": 6.68,
-    "exchangePct": 6.09,
-    "totalReturnPct": 18.2
+    "windowStart": "2026-11-03",
+    "windowEnd": "2026-11-09",
+    "rangeLabel": "Orders 3–9 Nov",
+    "gross": 73117045.20999959,
+    "cancelPct": 4.46,
+    "rtoPct": 8.13,
+    "cirPct": 5.55,
+    "exchangePct": 6.01,
+    "totalReturnPct": 18.14
   },
   "zeroOrders": {
-    "date": "2026-11-05",
+    "date": "2026-11-22",
     "ordersByChannel": {
       "Shopify": {
-        "date": "2026-11-05",
-        "orders": 613
+        "date": "2026-11-23",
+        "orders": 433
       },
       "Amazon": {
-        "date": "2026-11-05",
-        "orders": 273
+        "date": "2026-11-23",
+        "orders": 207
+      },
+      "Flipkart": {
+        "date": "2026-11-20",
+        "orders": 394
       },
       "Blinkit": {
-        "date": "2026-11-04",
-        "orders": 331
+        "date": "2026-11-22",
+        "orders": 290
       },
       "Zepto": {
-        "date": "2026-11-05",
+        "date": "2026-11-23",
         "orders": 1
       },
       "Instamart": {
-        "date": "2026-11-03",
-        "orders": 33
+        "date": "2026-11-22",
+        "orders": 48
       },
       "Myntra": {
-        "date": "2026-11-03",
-        "orders": 311
+        "date": "2026-11-21",
+        "orders": 234
       }
     },
     "zeroChannels": []
   },
   "d2cPnl": {
-    "windowStart": "2026-10-17",
-    "windowEnd": "2026-10-23",
-    "rangeLabel": "Orders 17–23 Oct",
-    "netRevenue": 61311000,
-    "cogsPct": 43.03,
-    "sndPct": 18.86,
-    "cm1Pct": 38.12
+    "windowStart": "2026-11-03",
+    "windowEnd": "2026-11-09",
+    "rangeLabel": "Orders 3–9 Nov",
+    "netRevenue": 53262907,
+    "cogsPct": 47.26,
+    "sndPct": 21.42,
+    "cm1Pct": 31.32
   }
 }

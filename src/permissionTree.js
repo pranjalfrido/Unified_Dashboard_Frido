@@ -85,7 +85,12 @@ export const PERMISSION_TREE = [
       { key: 'customer:support', label: 'Customer Support' },
     ],
   },
-  { key: 'documents', label: 'Documents', children: [] },
+  {
+    key: 'documents', label: 'Documents', isGroup: true, children: [
+      { key: 'documents',           label: 'Ledgers & uploads' },
+      { key: 'documents:cn-manage', label: 'Credit notes: manage (masters, edits, rollback)' },
+    ],
+  },
   { key: 'ask', label: 'NavAI', children: [] },
 ]
 

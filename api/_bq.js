@@ -75,7 +75,7 @@ function sanitizeTimingName(name) {
 // (confirmed 2026-08-19: real 500s in production, which made the frontend silently keep showing
 // stale data — see App.jsx's fetchData). runQueriesLimited caps how many queries are in flight at
 // once and retries a rate-limited query with backoff instead of failing the whole request.
-const QUERY_CONCURRENCY = 12
+const QUERY_CONCURRENCY = 20
 const MAX_RETRIES = 4
 async function runQueryWithRetry(bqClient, sql, key, timer) {
   const t0 = Date.now()
