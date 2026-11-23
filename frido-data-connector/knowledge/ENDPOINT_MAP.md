@@ -63,7 +63,7 @@ Caveats: Sep claimable figures are not meaningful (rate card not applied to Sep 
 | Tab | Source | Notes |
 |---|---|---|
 | Inventory Health | file `inv-data-7d` (also `15d`, `30d`; the avg-sale toggle just selects the file) | Hourly cron. Page falls back to POST `/api/inventory` `{start,end,avgSaleWindowDays,…}` if the file is older than 2 h. |
-| Sales & Allocation | file `sales-alloc-data` or POST `/api/sales-allocation` `{start,end,category,subCategory,sku,channel,salesType,facility,region,…}` | |
+| Sales & Allocation | file `sales-alloc-data` or POST `/api/sales-allocation` `{start,end,category,subCategory,sku,channel,salesType,facility,region,…}` | Momentum and avg sale are anchored on the **last complete day** (latest sales date minus 1), since 4 Nov. |
 | Inward | POST `/api/inward` only (new page, see Group 3b) | The old `inward-data` file and legacy GRN report are gone. |
 | OOS loss | use the `oos_loss` tool | |
 
