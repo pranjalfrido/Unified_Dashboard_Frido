@@ -20,9 +20,11 @@ const OPEN_API = new Set(['/api/auth-admin', '/api/pulse'])
 
 // NavAI's read-only service secret (header x-navai-secret). It is NOT the cron secret and it opens only the
 // data-reading endpoints below plus the public/*.json files, never feedback, presence, admin or auth-admin.
+// api/logistics-cost is deliberately NOT here: its POST body can file/update claims and invalidate caches, and middleware
+// can't see the body. NavAI reads that page from the logistics-cost-data.json file instead.
 // Who may see which page is enforced by the connector from the asking user's own permissions (api/pulse.js).
 const NAVAI_READ_API = new Set([
-  'bq', 'logistics', 'logistics-cost', 'inventory', 'inventory-oos', 'sales-allocation', 'return-analysis', 'returns',
+  'bq', 'logistics', 'inventory', 'inventory-oos', 'sales-allocation', 'return-analysis', 'returns',
   'customer', 'customer-support', 'cogs-monthly', 'cat-daily', 'courier-allocation', 'inward',
 ])
 const NAVAI_SECRET = process.env.NAVAI_API_SECRET || ''
