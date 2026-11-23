@@ -20130,10 +20130,13 @@ function AppInner() {
         supabase.from('user_permissions').select('tab').eq('user_id', uid).then(r => r, e => ({ error: e })),
       ])
       // 401 / PGRST301 means the JWT is invalid or expired — force sign-out immediately
-      const errCode = pr.error?.code || pr.error?.status || pr.error?.message || ''
-      if (String(errCode).includes('401') || String(errCode).includes('PGRST301') || pr.error?.message?.toLowerCase().includes('jwt')) {
-        supabase.auth.signOut().then(() => setSession(null))
-        throw new Error('unauthorized')
+      const errStatus = pr.error?.status || pr.error?.code || ''
+      const errMsg = pr.error?.message || ''
+      if (errStatus === 401 || String(errStatus).includes('401') || String(errMsg).includes('JWT') || String(errMsg).includes('PGRST301')) {
+        supabase.auth.signOut()
+        setSession(null)
+        setProfileError(false)
+        return
       }
       if (pr.error || !pr.data) throw pr.error || new Error('no profile row')
       return { profile: pr.data, tabs: perm.error || !perm.data ? null : perm.data.map(r => r.tab) }
@@ -20165,9 +20168,11 @@ function AppInner() {
       }
       if (cancelled) return
       console.error('profile fetch error:', lastErr)
-      // If Supabase says unauthorized, the session is dead — sign out and go to login
-      if (lastErr?.status === 401 || lastErr?.message?.includes('401') || String(lastErr).includes('401')) {
-        supabase.auth.signOut().then(() => setSession(null))
+      // If unauthorized after all retries, session is dead — go to login immediately
+      if (String(lastErr?.status).includes('401') || String(lastErr?.message).includes('JWT') || String(lastErr).includes('unauthorized')) {
+        supabase.auth.signOut()
+        setSession(null)
+        setProfileError(false)
         return
       }
       if (!cached) { setProfileError(true); return }
