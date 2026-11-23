@@ -13,7 +13,11 @@ const rows = [
   ['pnl:amazon user asks D2C P&L', checkPnl(u(false, ['pnl:amazon']), 'shopify').ok, false],
   ['pnl:amazon user asks Amazon P&L', checkPnl(u(false, ['pnl:amazon']), 'amazon').ok, true],
   ['OOS without inventory tab', checkOos(u(false, ['inventory:sales'])).ok, false],
-  ['raw SQL non-admin', checkRawSql(u(false, ['sales:all'])).ok, false],
+  ['raw SQL: non-admin with only ask', checkRawSql(u(false, ['ask'])).ok, false],
+  ['raw SQL: non-admin with ask + sales tabs, no ask:sql', checkRawSql(u(false, ['ask', 'sales:all'])).ok, false],
+  ['raw SQL: non-admin with ask + ask:sql', checkRawSql(u(false, ['ask', 'ask:sql'])).ok, true],
+  ['raw SQL: refusal text is the polite message', /Custom analysis isn't enabled for your account; ask an admin/.test(checkRawSql(u(false, ['ask'])).text), true],
+  ['ask:sql does not open any page', checkEndpoint(u(false, ['ask', 'ask:sql']), 'bq', {}).ok, false],
   ['raw SQL admin', checkRawSql(u(true, [])).ok, true],
   ['MCP user (no access prop) raw SQL', checkRawSql({}).ok, true],
 ]

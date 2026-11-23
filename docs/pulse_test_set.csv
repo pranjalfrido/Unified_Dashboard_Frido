@@ -86,4 +86,5 @@ id,area,question,dashboard_page_and_filters,expected_answer,notes
 85,Inward,Does inward include packaging and raw material receipts?,Inventory > Inward > note,No: finished goods only; raw material / packaging codes not in the SKU master are excluded,meta.excludedPkgUnits
 86,Inward,What is the DOI of W1 and how is it calculated?,Inventory > Health & Overview > W1,"Inventory Health DOI = floor(stock / ceil(max(avg sale, order allocation))) with the 7-day avg sale. fill from live page",Not an Inward field
 87,Access,(User with only the Inventory > Inward tab) What was D2C P&L last month?,—,Refused: no access to the D2C P&L tab; suggests asking an admin,pageAccess.js
-88,Access,(Non-admin user) Run a custom query on sales by pincode,—,Refused: custom queries are admins only,pageAccess.js
+88,Access,(Non-admin user with NavAI but not 'custom analysis') Run a custom query on sales by pincode,—,Refused: Custom analysis isn't enabled for your account; ask an admin,pageAccess.js checkRawSql (ask:sql)
+89,Access,(Non-admin user with NavAI + custom analysis) Run a custom query on sales by pincode,—,"Allowed; labelled 'Custom analysis, not from the dashboard:'",ask:sql granted

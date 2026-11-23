@@ -55,9 +55,9 @@ export function checkOos(user) {
   return anyOf(user.access, ['inventory']) ? { ok: true } : refuse('Inventory → Health & Overview');
 }
 
-// Free SQL (BigQuery / Supabase) can read any table, so it can't be tied to one page: admins only, unless the service
-// sets NAVAI_SQL_NON_ADMIN=allow (a deliberate loosening, to be decided by the owner).
+// Free SQL (BigQuery / Supabase) can read any table, so it can't be tied to one page. It needs its own grant: the
+// 'ask:sql' tab ("NavAI: custom analysis", given in Team members next to NavAI), or being an admin.
 export function checkRawSql(user) {
-  if (!hasAccess(user) || user.access.isAdmin || process.env.NAVAI_SQL_NON_ADMIN === 'allow') return { ok: true };
-  return { ok: false, denied: true, text: "Custom queries are limited to admins. Ask about a specific dashboard page you have access to, or ask an admin." };
+  if (!hasAccess(user) || user.access.isAdmin || user.access.tabs.includes('ask:sql')) return { ok: true };
+  return { ok: false, denied: true, text: "Custom analysis isn't enabled for your account; ask an admin. I can still answer from the dashboard pages you have access to." };
 }
