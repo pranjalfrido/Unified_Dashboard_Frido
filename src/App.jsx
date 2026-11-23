@@ -3413,7 +3413,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
     if (i.id === 'ads') return hasAdsAccess(allowedTabs)
 if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
     if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
-    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
+    if (i.id === 'inventory') return hasInventoryAccess(allowedTabs)
     if (i.id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
     return allowedTabs.includes(i.id)
   }) : allItems
@@ -3442,12 +3442,14 @@ if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
         if (item.id === 'inventory') {
           const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
           const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
-          const hasBothInv = hasHealth && hasSales
+          const hasInward = hasInwardAccess(allowedTabs)
           const subTabs = [
             ...(hasHealth ? [{ id: 'health', label: 'Health & Overview' }] : []),
             ...(hasSales ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
+            ...(hasInward ? [{ id: 'inward', label: 'Inward' }] : []),
           ]
-          const defaultInvTab = hasHealth ? 'health' : 'sales'
+          const hasBothInv = subTabs.length > 1
+          const defaultInvTab = hasHealth ? 'health' : hasSales ? 'sales' : 'inward'
           return (
             <Fragment key="inventory">
             <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
@@ -3629,7 +3631,7 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     if (id === 'ads') return hasAdsAccess(allowedTabs)
     if (id === 'pnl') return hasPnlAccess(allowedTabs)
     if (id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
-    if (id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')
+    if (id === 'inventory') return hasInventoryAccess(allowedTabs)
     if (id === 'customer') return allowedTabs.includes('customer') || allowedTabs.includes('customer:support')
     if (id === 'courier-allocation' || id === 'cn-received') return hasCostAccess(allowedTabs)
     if (['cogs', 'logistics-ledger', 'logistics-cn', 'purchase-ledger', 'packaging-bom'].includes(id)) return allowedTabs.includes('documents')
@@ -3645,7 +3647,8 @@ function BottomNav({ page, setPage, setInvTab, allowedTabs, profile, userId, the
     // the same as the desktop sidebar; it used to reopen whichever sub-tab was last used.
     if (id === 'inventory') {
       const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
-      if (setInvTab) return setInvTab(hasHealth ? 'health' : 'sales') // navigates to inventory + that sub-tab
+      const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+      if (setInvTab) return setInvTab(hasHealth ? 'health' : hasSales ? 'sales' : 'inward') // navigates to inventory + that sub-tab
     }
     setPage(id)
   }
@@ -4969,7 +4972,7 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
   const [liveOpen, setLiveOpen] = useState(false)
   const liveCount = useLiveCount(isAdmin)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', 'courier-allocation': 'Courier Allocation', 'cn-received': 'CN Received', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', 'customer-support': 'Customer Support', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger', 'logistics-cn': 'Logistics Credit Notes', feedback: 'Feedback' }
-  const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
+  const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation', inward: 'Inward' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
@@ -5001,10 +5004,21 @@ function Topnav({ logCostCtrl, cnCtrl, allowedTabs, salesMenu, goToSalesSub, sho
       // INVENTORY_MOBILE_REDESIGN_PROMPT.md §1: sub-tabs in the header, no date picker on Health (a
       // snapshot), the Sales & Allocation range as a pill, filters in a sheet, exports in "⋯".
       const ctrl = inventoryDateControl
-      const tab = invTab === 'sales' ? 'sales' : 'health'
       const hasHealth = !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')
       const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
-      const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)
+      const hasInward = hasInwardAccess(allowedTabs)
+      const subTabs = [hasHealth && { id: 'health', label: 'Inventory Health' }, hasSales && { id: 'sales', label: 'Sales & Allocation' }, hasInward && { id: 'inward', label: 'Inward' }].filter(Boolean)
+      if (invTab === 'inward') {
+        // Inventory → Inward: date pill (1st of month → today by default), filter icon opening the
+        // Inward filter sheet (its chips live in the page body), no "⋯" exports (each table has Copy / CSV).
+        const iw = ctrl?.invInward
+        return H({ title: 'Inventory',
+          date: ctrl?.filters && datePill(ctrl.filters, ctrl.setFilters, ctrl.onRefresh, ctrl.loading),
+          filter: iw?.openFilters && <HeaderFilterIcon count={iw.filterCount} onClick={iw.openFilters} label="Inward filters" />,
+          menu: { items: ctrl?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: ctrl.onRefresh }] : [], title: 'Inventory · Inward', note: iw?.note || 'GRNs from Unicommerce · stock as on Inventory Health' },
+          subTabs: subTabs.length > 1 ? subTabs : null, activeSub: 'inward', onSub: setInvTab })
+      }
+      const tab = invTab === 'sales' ? 'sales' : 'health'
       // Data source / last update live in the "⋯" sheet (note), not under the title.
       return H({ title: 'Inventory',
         date: tab === 'sales' && ctrl?.filters && datePill(ctrl.filters, ctrl.setFilters, ctrl.onRefresh),
@@ -20251,7 +20265,7 @@ function AppInner() {
   const hasPulse = PULSE_WHITELIST.includes(userEmail) || (allowedTabs || []).includes('ask');
   // Admins get null (all tabs) but pulse is added/removed based on whitelist
   const effectiveTabs = isAdmin
-    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','customer','customer:support','documents'])
+    ? (hasPulse ? null : ['overview','sales','sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline','ads','ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred','pnl','pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline','logistics','logistics:cost','logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b','logistics:cost:tpl','inventory','inventory:detail','inventory:sales','inventory:inward','customer','customer:support','documents'])
     : allowedTabs
 
   return <FeedbackProvider session={session} profile={profile}><Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} /></FeedbackProvider>
@@ -20316,11 +20330,11 @@ const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sale
 const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
 const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
 const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
-const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'customer', 'customer:support', 'documents']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:detail', 'inventory:sales', 'inventory:inward', 'customer', 'customer:support', 'documents']
 const permKeyToPage = {
   'logistics': 'logistics',
   'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
-  'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory',
+  'inventory': 'inventory', 'inventory:detail': 'inventory', 'inventory:sales': 'inventory', 'inventory:inward': 'inventory',
   'customer:support': 'customer-support',
   ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
   ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
@@ -20330,6 +20344,14 @@ function hasSalesAccess(allowedTabs) { return !allowedTabs || SALES_KEYS.some(k 
 function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => allowedTabs.includes(k)) }
 function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
+// Inventory → Inward: shown by default to anyone who already has Inventory access (Health/Detail or
+// Sales & Allocation), same as those two sub-tabs — not a separately-gated grant. 'inventory:inward'
+// still exists so access can be explicitly revoked/granted on its own when needed. Admins see it by
+// default either way. api/inward.js re-checks on the server.
+function hasInwardAccess(allowedTabs) {
+  return !allowedTabs || allowedTabs.includes('inventory:inward') || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:sales')
+}
+function hasInventoryAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:inward') }
 
 // The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect
 // has always applied (productAge → subCategory, D2C sub-channels sharing the ShopifyIndia request, …).
@@ -20547,7 +20569,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'cn-received' ? hasCostAccess(allowedTabs) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'customer-support' ? (!allowedTabs || allowedTabs.includes('customer:support')) :
-      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) :
+      page === 'inventory' ? hasInventoryAccess(allowedTabs) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
       page === 'ads' ? hasAdsAccess(allowedTabs) :
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
@@ -21270,7 +21292,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   useEffect(() => {
     const labels = { overview: 'Overview', sales: 'Sales', pnl: 'P&L', ads: 'Ads', logistics: 'Logistics', 'logistics-cost': 'Logistics cost', 'courier-allocation': 'Courier allocation', 'cn-received': 'CN received', inventory: 'Inventory', customer: 'Customer', 'customer-support': 'Customer support', documents: 'Documents', ask: 'NavAI', profile: 'Profile', cogs: 'COGS ledger', 'logistics-ledger': 'Logistics bill ledger', 'logistics-cn': 'Logistics credit notes', 'purchase-ledger': 'Purchase ledger', 'packaging-bom': 'Packaging BOM', feedback: 'Feedback' }
     const channel = page === 'sales' ? (TABS.find(t => t.id === activeTab)?.label || activeTab)
-      : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : 'Inventory Health') : ''
+      : page === 'pnl' ? pnlActiveTab : page === 'ads' ? (adsSelPlatform || 'All') : page === 'inventory' ? (invTab === 'sales' ? 'Sales & Allocation' : invTab === 'inward' ? 'Inward' : 'Inventory Health') : ''
     const extra = {}
     for (const [k, v] of Object.entries(filters)) { if (k === 'start' || k === 'end') continue; if (Array.isArray(v) ? v.length : v) extra[k] = v }
     fbk.publishView({ page: labels[page] || page, path: location.pathname, channel, subChannel: filters.subChannel || (page === 'sales' && salesSub2 !== 'overall' ? salesSub2 : ''), start: filters.start, end: filters.end, dateRange: `${filters.start} to ${filters.end}`, filters: extra })
@@ -21389,7 +21411,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
                 onOpenUploads={!allowedTabs || allowedTabs.includes('documents') ? () => goTo('logistics-cn') : undefined} />
             </div>
           )}
-          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail')) && (
+          {page === 'inventory' && hasInventoryAccess(allowedTabs) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} allowedTabs={allowedTabs} preset={invPreset} />
             </div>

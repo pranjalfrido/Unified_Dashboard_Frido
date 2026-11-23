@@ -1,0 +1,309 @@
+{
+  "at": "2026-11-07T21:30:47.262Z",
+  "base": "http://127.0.0.1:5199",
+  "runs": [
+    {
+      "engine": "chromium",
+      "viewport": "phone-375",
+      "kpiMs": 2164,
+      "loadMs": 2240,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [],
+        "smallTextCount": 0,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 44,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 35,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 32,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 4,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    },
+    {
+      "engine": "chromium",
+      "viewport": "laptop-1280",
+      "kpiMs": 8221,
+      "loadMs": 9051,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [
+          "SPAN 10px \"▾\""
+        ],
+        "smallTextCount": 5,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 31,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 28,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 31,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 4,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    },
+    {
+      "engine": "chromium",
+      "viewport": "desktop-1536",
+      "kpiMs": 7902,
+      "loadMs": 8773,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [
+          "SPAN 10px \"▾\""
+        ],
+        "smallTextCount": 5,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 27,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 33,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 21,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 4,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    },
+    {
+      "engine": "webkit",
+      "viewport": "phone-375",
+      "kpiMs": 2122,
+      "loadMs": 2264,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [],
+        "smallTextCount": 0,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 22,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 80,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 102,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 3,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    },
+    {
+      "engine": "webkit",
+      "viewport": "laptop-1280",
+      "kpiMs": 5232,
+      "loadMs": 6137,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [
+          "SPAN 10px \"▾\""
+        ],
+        "smallTextCount": 5,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 27,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 26,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 28,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 3,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    },
+    {
+      "engine": "webkit",
+      "viewport": "desktop-1536",
+      "kpiMs": 5270,
+      "loadMs": 5390,
+      "checks": {
+        "docOverflow": false,
+        "clipped": [],
+        "clippedCount": 0,
+        "smallText": [
+          "SPAN 10px \"▾\""
+        ],
+        "smallTextCount": 5,
+        "smallTargets": [],
+        "smallTargetCount": 0
+      },
+      "errors": [],
+      "timings": [
+        {
+          "mode": "page",
+          "ms": 20,
+          "bytes": 48546
+        },
+        {
+          "mode": "page",
+          "ms": 35,
+          "bytes": 22619
+        },
+        {
+          "mode": "page",
+          "ms": 36,
+          "bytes": 48546
+        },
+        {
+          "mode": "sku",
+          "ms": 3,
+          "bytes": 571
+        }
+      ],
+      "sourceFilterChangedNumbers": true,
+      "drilldownOk": true
+    }
+  ],
+  "parity": {
+    "inward": [
+      {
+        "sku": "FR-OPC-M1",
+        "stock": "18,672",
+        "avgSale": "886",
+        "doi": "20d"
+      },
+      {
+        "sku": "FR-IMP-EHP1",
+        "stock": "2,144",
+        "avgSale": "123",
+        "doi": "13d"
+      },
+      {
+        "sku": "FR-OPPC-L1",
+        "stock": "3,256",
+        "avgSale": "316",
+        "doi": "9d"
+      }
+    ],
+    "healthPage": [
+      {
+        "sku": "FR-OPC-M1",
+        "stock": "18,672",
+        "avgSale": "886",
+        "doi": "20d"
+      },
+      {
+        "sku": "FR-IMP-EHP1",
+        "stock": "2,144",
+        "avgSale": "123",
+        "doi": "13d"
+      },
+      {
+        "sku": "FR-OPPC-L1",
+        "stock": "3,256",
+        "avgSale": "316",
+        "doi": "9d"
+      }
+    ],
+    "match": true
+  },
+  "permission": {
+    "phone-375": {
+      "inwardTabVisibleOnHealth": false,
+      "directUrlShowsNoAccess": true,
+      "inwardDataShown": false
+    },
+    "laptop-1280": {
+      "inwardTabVisibleOnHealth": false,
+      "directUrlShowsNoAccess": true,
+      "inwardDataShown": false
+    }
+  }
+}

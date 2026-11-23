@@ -91,6 +91,9 @@ pool.on('error', (err) => console.error('[pool] idle client error:', err.message
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
+// Serves shared JS files under api/ (e.g. _resolvedAgg.js, _pnlAgg.js) that the frontend imports
+// directly as modules — vercel dev does this automatically; plain Express needs it explicit.
+app.use('/api', express.static(join(__dirname, 'api')))
 
 // ── Create tables if not exist ────────────────────────────────
 async function initDB() {

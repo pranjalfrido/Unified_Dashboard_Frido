@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useIsMobile, useBreakpoint } from './responsive/useBreakpoint.js'
 import { createPortal } from 'react-dom'
-import { IC, getDefaultDates, DateRangeControl, PillToggle } from './inventory/theme.jsx'
+import { IC, getDefaultDates, PillToggle } from './inventory/theme.jsx'
 import LoadingOverlay from './LoadingOverlay.jsx'
 import InventoryHealthPage from './inventory/InventoryHealthPage.jsx'
 import { HealthFilterSidebar } from './inventory/InventoryHealthPage.jsx'
 import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
+import { useInwardData, inwardFilterCount } from './inventory/useInward.js'
+import { thisMonthRange, fmtUnits, fmtRange } from './inventory/inwardUtils.js'
 import InvTabletBar from './inventory/mobile/InvTabletBar.jsx'
 import { authFetch } from './authFetch.js'
 
@@ -77,21 +79,21 @@ function MobileTab({ icon, label, active, onClick }) {
 // FilterSidebar instead of as a second horizontal bar above the page, so the Inventory tab
 // matches Logistics's layout convention: one top bar (title + date), everything else lives
 // in the left column.
-function SubTabSwitcher({ tab, setTab, isMobile }) {
+function SubTabSwitcher({ tab, setTab, isMobile, showInward }) {
   if (isMobile) {
     return (
       <div style={{ display: 'flex', gap: 4, background: IC.page, borderRadius: 12, padding: 4, marginBottom: 14 }}>
         <MobileTab icon="📦" label="Health" active={tab === 'health'} onClick={() => setTab('health')} />
         <MobileTab icon="📊" label="Sales & Alloc" active={tab === 'sales'} onClick={() => setTab('sales')} />
-        {/* <MobileTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
+        {showInward && <MobileTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} />}
       </div>
     )
   }
   return (
-    <div style={{ display: 'inline-flex', gap: 2, background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 3, marginBottom: 12 }}>
+    <div style={{ display: 'inline-flex', gap: 2, background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 3, marginBottom: tab === 'inward' ? 0 : 12 }}>
       <IconTab icon="📦" label="Inventory Health" active={tab === 'health'} onClick={() => setTab('health')} />
       <IconTab icon="📊" label="Sales & Allocation" active={tab === 'sales'} onClick={() => setTab('sales')} />
-      {/* <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
+      {showInward && <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} />}
     </div>
   )
 }
@@ -393,7 +395,17 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     return () => clearTimeout(timer)
   }, [preset?.nonce, preset?.scrollTo])
   const [salesFilters, setSalesFilters] = useState({})
+  // Inward (inventory:inward): its own date range (default 1st of this month → today), filters and
+  // phone filter sheet; the API re-checks the permission on the server.
+  const hasInward = !allowedTabs || allowedTabs.includes('inventory:inward')
   const [inwardFilters, setInwardFilters] = useState({})
+  const [inwardDates, setInwardDates] = useState(() => thisMonthRange())
+  const [inwardSheetOpen, setInwardSheetOpen] = useState(false)
+  // A member who may only see Inward lands on /inventory (default sub-tab "health"): send them to Inward.
+  useEffect(() => {
+    if (!allowedTabs || tab !== 'health' || !hasInward) return
+    if (!allowedTabs.includes('inventory') && !allowedTabs.includes('inventory:detail') && !allowedTabs.includes('inventory:sales')) setTab('inward')
+  }, [allowedTabs, tab, hasInward, setTab])
   const [facilityView, setFacilityView] = useState('regular')
 
   const csv = arr => (arr && arr.length ? arr.join(',') : undefined)
@@ -405,23 +417,19 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     matrixChannel: csv(salesFilters.matrixChannel),
     drasticChannel: csv(salesFilters.drasticChannel),
   }
-  const inwardFilterBody = {
-    category: csv(inwardFilters.category), subCategory: csv(inwardFilters.subCategory), sku: csv(inwardFilters.sku),
-    facility: csv(inwardFilters.facility), vendor: csv(inwardFilters.vendor),
-    includeUnmapped: inwardFilters.includeUnmapped || false,
-  }
-
   // Only the active tab's endpoint fetches from BigQuery — previously all 3 fired on every
   // page load regardless of which tab was visible, tripling query volume unnecessarily.
   // Sales & Allocation is the one exception: it must always be enabled even on other tabs
   // because Health's date-sync effect below needs its (possibly auto-corrected)
   // dateFilters to exist before Health can sync to them.
-  const inv = useStaticInv(tab === 'health', healthFilters.avgSaleWindowDays || 7)
+  // Inward reuses Inventory Health's own feed (always the 7-day Avg Sale window, Health's default)
+  // for current stock / Avg Sale / DOI, so those numbers are identical to the Health page.
+  const inv = useStaticInv(tab === 'health' || (tab === 'inward' && hasInward), tab === 'inward' ? 7 : (healthFilters.avgSaleWindowDays || 7))
   // The pre-built inv-data-*.json files call it lastSalesDateConsidered; the live /api/inventory
   // fallback (used when those files are missing or over 2 h old) calls it lastSalesDate.
   const invLastSales = inv.data?.lastSalesDateConsidered || inv.data?.lastSalesDate || null
   const sales = useStatic('/sales-alloc-data.json', '/api/sales-allocation', salesFilterBody, true)
-  const inward = useStatic('/inward-data.json', '/api/inward', inwardFilterBody, tab === 'inward')
+  const inward = useInwardData(tab === 'inward' && hasInward, inwardDates, inwardFilters)
   const active = tab === 'health' ? inv : tab === 'sales' ? sales : inward
 
   // Inventory Health's Warehouse Health cards (Avg Sale / Allocation %) previously always
@@ -470,9 +478,27 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       ) : null,
       invFilterPanel: tab === 'health'
         ? (invData ? <HealthFilterSidebar data={invData} filters={healthFilters} setFilters={setHealthFilters} open popover /> : null)
-        : (sales.data ? <SalesFilterSidebar data={sales.data} filters={salesFilters} setFilters={setSalesFilters} open popover /> : null),
+        : tab === 'sales' ? (sales.data ? <SalesFilterSidebar data={sales.data} filters={salesFilters} setFilters={setSalesFilters} open popover /> : null)
+        : null,
     }
-    if (tab === 'sales') {
+    if (tab === 'inward') {
+      // Inward: the date range sits in the top bar (desktop) / header date pill (phone), like Sales;
+      // the phone header's filter icon opens the Inward filter sheet. The "stock building" / finished-
+      // goods note moves into the "⋯" sheet on phone (matching Health/Sales), instead of always-visible
+      // text under the KPI tiles.
+      const iwMeta = inward.data?.meta
+      const iwFinishedGoodsUnits = inward.data?.dataQuality ? inward.data.dataQuality.unmappedSku.units : (iwMeta?.excludedPkgUnits || 0)
+      const invInwardNote = iwMeta
+        ? `${fmtRange(iwMeta.start, iwMeta.end)} · ▲/▼ vs ${fmtRange(iwMeta.prevStart, iwMeta.prevEnd)}. Inward ÷ sales above 1 = stock building.${(iwMeta.notes || []).map(n => ` ${n}`).join('')} Finished goods only · ${fmtUnits(iwFinishedGoodsUnits)} units of raw material / packaging / unresolved SKUs not shown`
+        : null
+      onTopbarDateControl({
+        ...extra,
+        invMenu: [],
+        invFilterCount: inwardFilterCount(inwardFilters),
+        filters: inwardDates, setFilters: setInwardDates, onRefresh: inward.refresh, loading: inward.loading,
+        invInward: { filterCount: inwardFilterCount(inwardFilters), openFilters: () => setInwardSheetOpen(true), hasAccess: hasInward, note: invInwardNote },
+      })
+    } else if (tab === 'sales') {
       onTopbarDateControl({
         filters: sales.dateFilters, setFilters: sales.setDateFilters,
         onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
@@ -484,7 +510,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, healthMenu, salesMenu, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, invLastSales, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
+  }, [tab, healthMenu, salesMenu, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, invLastSales, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered, inwardDates, inwardFilters, inward.loading, hasInward])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -492,7 +518,10 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
-      <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} />
+      {/* Inward's own page is reachable only by already hovering/clicking the Inventory tab icon
+          (desktop nav) or its mobile sub-tab, so repeating the Health/Sales/Inward switcher at
+          the top of the Inward page itself is redundant chrome — skip it there. */}
+      {tab !== 'inward' && <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} showInward={hasInward} />}
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           {!isMobile && (
@@ -528,12 +557,6 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           )}
         </div>
       )}
-      {/* tab === 'inward' && (
-        <div style={{ marginBottom: 10 }}>
-          <DateRangeControl filters={active.dateFilters} setFilters={active.setDateFilters}
-            onRefresh={() => active.fetchData({ ...active.dateFilters, ...inwardFilterBody })} />
-        </div>
-      ) */}
     </div>
   )
 
@@ -690,9 +713,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       </div>
 
       {/* Tablets: the phone header's controls (sub-tabs, filters, "⋯") as a row above the content. */}
-      {invMobile && bp.width > 768 && !bp.isPhoneLandscape && (
+      {invMobile && bp.width > 768 && !bp.isPhoneLandscape && tab !== 'inward' && (
         <InvTabletBar tab={tab === 'sales' ? 'sales' : 'health'} setTab={setTab}
-          tabs={[(!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')) && { id: 'health', label: 'Inventory Health' }, (!allowedTabs || allowedTabs.includes('inventory:sales')) && { id: 'sales', label: 'Sales & Allocation' }].filter(Boolean)}
+          tabs={[(!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail')) && { id: 'health', label: 'Inventory Health' }, (!allowedTabs || allowedTabs.includes('inventory:sales')) && { id: 'sales', label: 'Sales & Allocation' }, hasInward && { id: 'inward', label: 'Inward' }].filter(Boolean)}
           ctrl={{
             invHealthFilters: healthFilters, setInvHealthFilters: setHealthFilters, invHealthOpts: inv.data?.filterOptions || null,
             invHealthAsOf: inv.data?.asOf || null, invHealthLastSales: invLastSales,
@@ -702,8 +725,8 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       )}
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <LoadingOverlay loading={active.loading} label="Loading inventory" />
-        {active.error && !active.data && (
+        <LoadingOverlay loading={tab === 'inward' ? (inward.loading && !inward.data) : active.loading} label={tab === 'inward' ? 'Loading inward' : 'Loading inventory'} />
+        {tab !== 'inward' && active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
           </div>
@@ -711,7 +734,11 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
         <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} facilityView={invMobile ? 'regular' : facilityView} setFacilityView={setFacilityView} asOf={inv.data?.asOf || null} lastSalesDate={invLastSales} allowedTabs={allowedTabs} invMobile={invMobile} onMenu={setHealthMenu} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} asOf={sales.data?.asOf || null} lastSalesDate={sales.data?.lastSalesDateConsidered || null} invMobile={invMobile} onMenu={setSalesMenu} /></div>
-        {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
+        {tab === 'inward' && (hasInward
+          ? <InwardPage data={inward.data} loading={inward.loading} error={inward.error} status={inward.status}
+              invData={inv.data} invLoading={inv.loading} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop}
+              sheetOpen={inwardSheetOpen} setSheetOpen={setInwardSheetOpen} />
+          : <div style={{ padding: 24, fontSize: 13, color: IC.t3 }}>You don't have access to Inventory → Inward.</div>)}
       </div>
     </div>
   )

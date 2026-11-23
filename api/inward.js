@@ -1,422 +1,214 @@
-﻿import { getBQ, requestTimer } from './_bq.js'
+﻿/* global process */
+// Inventory → Inward (POST /api/inward). Rewritten 2026-11-08 for the new Inward page — the old
+// version read the legacy stg_unicommerce_grn_report table. Data rules: api/_inward_core.js and
+// docs/INWARD_DATA_NOTES.md.
+//
+// Access: the caller's Supabase session (Authorization: Bearer <token>, sent by authFetch) must
+// belong to an active admin, or to a member granted 'inventory:inward' in user_permissions —
+// checked here on the server, not only by hiding the tab. Same lookup pattern as api/pulse.js.
+//
+// Body: { start, end, warehouse[], sourceType[], vendor[], category[], subCategory[], sku }
+//       or { mode: 'sku'|'vendor'|'subcat', sku|vendor|subCategory: '<value>' } for that
+//       SKU's/vendor's/sub-category's last 10 distinct GRN days (full history, not range-bound);
+//       or { mode: 'dq_export', kind: 'sku'|'vendor', start, end } — admins only — every raw GRN
+//       line (not aggregated) for SKUs/vendors unresolved in that date range, for the Data quality
+//       panel's export.
+// One BigQuery round (GRN lines, sales, SKU master, SKU mapping [+ data quality for admins]) per
+// date range, cached 15 min; filters are applied in JS on the cached rows, so changing a filter
+// never re-queries BigQuery. The page's own GRN-level COGS tiering was found unreliable and was
+// removed — `skuMonthly`/`prevSkuMonthly` below instead feed the client-side "Inward value ₹" tile
+// (useInwardCogsValue), which reads product_cogs_monthly through /api/cogs-monthly, same as P&L.
+import { createClient } from '@supabase/supabase-js'
+import { getBQ, requestTimer } from './_bq.js'
+import { buildFacilityMaps } from './_inventory_shared.js'
 import {
-  buildFacilityMaps, norm, normSku, cleanLabel,
-  parsePackQty, isRawSkuText, isPseudoSku, computeRowInventory,
-  buildSkuMap, resolveMasterSkuKey, sortByLocationOrder,
-  isB2CChannel, isTotalAvgSaleChannel, stockStatus,
-} from './_inventory_shared.js'
+  INWARD_PERMISSION, GRN_SQL, DQ_SQL, DQ_UNMAPPED_SKU_DETAIL_SQL, DQ_UNMAPPED_VENDOR_DETAIL_SQL, SALES_SQL,
+  SKU_GRN_SQL, VENDOR_GRN_SQL, SUBCAT_GRN_SQL, MASTER_SQL, SKUMAP_SQL, FIRST_SKU_SQL, LAST_SKU_SQL, VENDOR_MASTER_SQL, EXCLUDED_PKG_SQL,
+  periods, isIsoDate, normaliseFilters, nonSaleChannels, buildInwardPayload, buildLastGrnDays, buildVendorSkusSupplied, GRN_FLOOR,
+} from './_inward_core.js'
 
-// Avg Sale for the inward-vs-demand comparison uses a fixed trailing 7-day window,
-// anchored to the latest date that actually has sales data (excluding it as possibly
-// partial) â€” same rule as Inventory Health's Avg Sale, kept independent of the GRN
-// date range since "how fast is this selling right now" shouldn't shift with whatever
-// inward period is being viewed.
-const AVG_SALE_WINDOW_DAYS = 7
+const DATA_TTL_MS = 15 * 60 * 1000
+const AUTH_TTL_MS = 60 * 1000
+const MAX_RANGE_DAYS = 800
 
-function matchesMulti(value, filterCsv) {
-  if (!filterCsv) return true
-  const vals = filterCsv.split(',').map(v => v.trim()).filter(Boolean)
-  return vals.length === 0 || vals.includes(value)
+// ── Small TTL caches (per warm instance) ─────────────────────────────────────────────
+function ttlCache(max) {
+  const m = new Map()
+  return {
+    get(k) { const e = m.get(k); if (!e) return undefined; if (e.exp < Date.now()) { m.delete(k); return undefined } return e.v },
+    set(k, v, ttl) { if (m.size >= max) m.delete(m.keys().next().value); m.set(k, { v, exp: Date.now() + ttl }) },
+  }
 }
-function splitCsv(v) {
-  return v ? v.split(',').map(x => x.trim()).filter(Boolean) : null
+const dataCache = ttlCache(24)    // raw rows per date range (+ admin flag)
+const inflight = new Map()        // same key requested twice at once → one BigQuery round
+const authCache = ttlCache(500)   // token → auth result
+
+// ── Server-side permission check ─────────────────────────────────────────────────────
+function getAdminClient() {
+  const url = process.env.SUPABASE_PROJECT_URL
+  const key = process.env.SUPABASE_SECRET_KEY
+  if (!url || !key) throw new Error('Missing SUPABASE_PROJECT_URL or SUPABASE_SECRET_KEY')
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
-function weekKey(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00Z')
-  const day = (d.getUTCDay() + 6) % 7
-  d.setUTCDate(d.getUTCDate() - day)
-  return d.toISOString().slice(0, 10)
+
+export async function authorizeInward(req, client) {
+  const h = req.headers?.authorization || req.headers?.Authorization || ''
+  const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim()
+  if (!token) return { status: 401, error: 'Not logged in.' }
+  const cached = authCache.get(token)
+  if (cached) return cached
+  let admin
+  try { admin = client || getAdminClient() } catch { return { status: 503, error: 'Auth service unavailable.' } }
+  const { data: userData, error: userErr } = await admin.auth.getUser(token)
+  if (userErr || !userData?.user) return { status: 401, error: 'Session expired. Please log in again.' }
+  const userId = userData.user.id
+  const { data: profile, error: profileErr } = await admin.from('user_profiles').select('is_admin, is_active').eq('user_id', userId).maybeSingle()
+  if (profileErr) return { status: 503, error: 'Auth service unavailable.' }
+  if (!profile?.is_active) return { status: 403, error: 'Your account has been deactivated. Contact your admin.' }
+  let result
+  if (profile.is_admin) {
+    result = { ok: true, isAdmin: true, userId }
+  } else {
+    // Inward is available to anyone who already has Inventory access (Health/Detail or Sales &
+    // Allocation), not only a separate 'inventory:inward' grant — matches the sidebar's hasInwardAccess.
+    const { data: grants, error: grantErr } = await admin.from('user_permissions').select('tab').eq('user_id', userId).in('tab', [INWARD_PERMISSION, 'inventory', 'inventory:detail', 'inventory:sales'])
+    if (grantErr) return { status: 503, error: 'Auth service unavailable.' }
+    result = grants?.length ? { ok: true, isAdmin: false, userId } : { status: 403, error: "You don't have access to Inventory → Inward." }
+  }
+  authCache.set(token, result, AUTH_TTL_MS)
+  return result
 }
-function monthKey(dateStr) { return dateStr.slice(0, 7) }
+
+// ── BigQuery helpers ─────────────────────────────────────────────────────────────────
+async function q(bq, timer, key, query, params, types) {
+  const t0 = Date.now()
+  const [rows] = await bq.query({ query, params, types, maximumBytesBilled: '20000000000' })
+  timer.queryTimings.push({ key, ms: Date.now() - t0 })
+  return rows
+}
+
+async function loadRange(range, isAdmin, timer) {
+  const key = `${range.prevStart}|${range.end}|${isAdmin ? 'a' : 'm'}`
+  const hit = dataCache.get(key)
+  if (hit) { timer.markCacheHit(key); return hit }
+  if (inflight.has(key)) return inflight.get(key)
+  timer.markCacheMiss(key)
+  const p = (async () => {
+    const bq = getBQ()
+    const { channelToDescription } = buildFacilityMaps()
+    const span = { qStart: range.prevStart, qEnd: range.end }
+    const excl = nonSaleChannels(channelToDescription)
+    const [grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, vendorMasterRows, dqRows, excludedPkgRows] = await Promise.all([
+      q(bq, timer, 'grn', GRN_SQL, span),
+      q(bq, timer, 'sales', SALES_SQL, { ...span, excl }, { excl: ['STRING'] }),
+      q(bq, timer, 'master', MASTER_SQL),
+      q(bq, timer, 'skumap', SKUMAP_SQL),
+      // Scans the FULL history (GRN_FLOOR → range.end), independent of range.start, so "New SKU"
+      // always means "never received before" — not "not received in the selected range's prior days".
+      q(bq, timer, 'first_sku', FIRST_SKU_SQL, { qEnd: range.end }),
+      // Same full-history scan, but for the Product master table's Last inward date/qty/vendor —
+      // so a SKU with no GRN in the selected range still shows its true last-ever inward.
+      q(bq, timer, 'last_sku', LAST_SKU_SQL, { qEnd: range.end }),
+      // Vendor master: every vendor ever used, full history, for lifetime totals + last GRN date.
+      q(bq, timer, 'vendor_master', VENDOR_MASTER_SQL, { qEnd: range.end }),
+      isAdmin ? q(bq, timer, 'dq', DQ_SQL, { qStart: range.start, qEnd: range.end }) : Promise.resolve(null),
+      // "Finished goods only · X units … not shown" note (small addition) — units excluded as raw
+      // material/packaging in the CURRENT period only (not prevStart → end like `span`).
+      q(bq, timer, 'excluded_pkg', EXCLUDED_PKG_SQL, { qStart: range.start, qEnd: range.end }),
+    ])
+    const data = { grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, vendorMasterRows, dqRows, excludedPkgUnits: Number(excludedPkgRows?.[0]?.units) || 0 }
+    dataCache.set(key, data, DATA_TTL_MS)
+    return data
+  })()
+  inflight.set(key, p)
+  try { return await p } finally { inflight.delete(key) }
+}
+
+// Last 10 distinct GRN days for one SKU or one vendor — the full history (GRN_FLOOR → today), not
+// bound by the page's selected date range, so a SKU/vendor with no recent activity still shows its
+// true last 10 days rather than an empty table just because the page filter is on a narrow range.
+async function lastGrnDays(body, timer) {
+  const mode = body.mode
+  const bq = getBQ()
+  const today = new Date().toISOString().slice(0, 10)
+  const span = { qStart: GRN_FLOOR, qEnd: today }
+  if (mode === 'sku') {
+    const sku = String(body.sku || '').trim()
+    if (!sku) return { status: 400, error: 'sku required' }
+    const grnRows = await q(bq, timer, 'sku_grn', SKU_GRN_SQL, { ...span, sku })
+    return { ok: true, data: buildLastGrnDays({ grnRows }) }
+  }
+  if (mode === 'subcat') {
+    const subCategory = String(body.subCategory || '').trim()
+    if (!subCategory) return { status: 400, error: 'subCategory required' }
+    const grnRows = await q(bq, timer, 'subcat_grn', SUBCAT_GRN_SQL, { ...span, subCategory })
+    return { ok: true, data: buildLastGrnDays({ grnRows }) }
+  }
+  const vendor = String(body.vendor || '').trim()
+  if (!vendor) return { status: 400, error: 'vendor required' }
+  const grnRows = await q(bq, timer, 'vendor_grn', VENDOR_GRN_SQL, { ...span, vendor })
+  const out = buildLastGrnDays({ grnRows })
+  // "SKUs supplied" addition: only for the vendor drill-down, only when the page's own selected
+  // range is passed through — SKU/sub-category units IN that range (not full history, unlike the
+  // last-10-GRN-days table above), reusing the same grnRows already fetched for this vendor.
+  if (isIsoDate(body.start) && isIsoDate(body.end)) {
+    out.skusSupplied = buildVendorSkusSupplied({ grnRows, start: body.start, end: body.end })
+  }
+  return { ok: true, data: out }
+}
+
+// Full GRN-level export (every raw line, not aggregated) for admins: SKUs or vendors unresolved
+// in the given date range. Loaded lazily, only when an admin clicks the export — never part of
+// the normal page payload.
+async function dqExport(body, timer) {
+  const { start, end, kind } = body
+  if (!isIsoDate(start) || !isIsoDate(end) || start > end) return { status: 400, error: 'start and end (YYYY-MM-DD, start ≤ end) required' }
+  const bq = getBQ()
+  const span = { qStart: start, qEnd: end }
+  if (kind === 'vendor') {
+    const rows = await q(bq, timer, 'dq_vendor_detail', DQ_UNMAPPED_VENDOR_DETAIL_SQL, span)
+    return { ok: true, data: { rows } }
+  }
+  const rows = await q(bq, timer, 'dq_sku_detail', DQ_UNMAPPED_SKU_DETAIL_SQL, span)
+  return { ok: true, data: { rows } }
+}
 
 export default async function inwardHandler(req, res) {
   const timer = requestTimer('inward')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, subCategory, facility, vendor, sku, includeUnmapped } = req.body
-  if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
+  const auth = await authorizeInward(req)
+  if (!auth.ok) { timer.finish(res); return res.status(auth.status).json({ error: auth.error }) }
+
+  const body = req.body || {}
 
   try {
-    const bq = getBQ()
-    const { facilityToLocation, facilityToStatus, channelToDescription } = buildFacilityMaps()
-    const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
-
-    // Sales/inventory freshness (Avg Sale, DOI) is anchored to "now" (today), not the GRN
-    // date range â€” "how fast is this SKU selling right now" and "how much stock exists
-    // right now" are both present-tense questions regardless of which past inward period
-    // is being viewed. "Total Sold Qty" (the inward-vs-demand KPI below) is different â€” it
-    // deliberately uses the SAME start/end as the GRN filter. One sales query covers both:
-    // fetch the union of the trailing Avg Sale window and the GRN period.
-    const today = new Date()
-    const todayStr = today.toISOString().slice(0, 10)
-    const avgSaleFetchStart = new Date(today); avgSaleFetchStart.setDate(avgSaleFetchStart.getDate() - (AVG_SALE_WINDOW_DAYS + 5))
-    const salesFetchStartStr = avgSaleFetchStart < new Date(start) ? avgSaleFetchStart.toISOString().slice(0, 10) : start
-    const salesFetchEndStr = todayStr > end ? todayStr : end
-
-    const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
-      bq.query({
-        query: `SELECT
-                  GRN_Code AS grnCode, GRN_Date AS grnDate, Item_SkuCode AS itemSkuCode,
-                  Facility, Category AS rawCategory, Vendor_Name AS vendorName, Vendor_Code AS vendorCode,
-                  PO_Code AS poCode, PO_Date AS poDate,
-                  Quantity_Received AS qtyReceived, Quantity_Rejected AS qtyRejected,
-                  Rejection_Reason AS rejectionReason, Grn_item_Status AS grnStatus,
-                  GRN_Received_Timestamp AS grnReceivedTs, QC_Completed_On AS qcCompletedOn
-                FROM \`frido-429506.production.stg_unicommerce_grn_report\`
-                WHERE DATE(GRN_Date) BETWEEN '${start}' AND '${end}'`,
-        maximumBytesBilled: '5000000000',
-      }),
-      bq.query({
-        query: `SELECT Product_Code, Category_Name, Sub_category, Type
-                FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\``,
-        maximumBytesBilled: '1000000000',
-      }),
-      bq.query({
-        query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
-                FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
-                WHERE TRIM(masterskucode) NOT IN ('', 'not found')`,
-        maximumBytesBilled: '1000000000',
-      }),
-      // Current total inventory per SKU â€” dedupe to latest per (ItemSkuCode, Facility),
-      // same logic as api/inventory.js.
-      bq.query({
-        query: `WITH deduplicated_inventory AS (
-                  SELECT *,
-                    ROW_NUMBER() OVER (
-                      PARTITION BY ItemSkuCode, Facility
-                      ORDER BY Updated DESC, _daton_batch_runtime DESC
-                    ) AS rn
-                  FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
-                )
-                SELECT
-                  ItemSkuCode, Facility,
-                  SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
-                  SAFE_CAST(InventoryBlocked_st AS FLOAT64) AS InventoryBlocked
-                FROM deduplicated_inventory
-                WHERE rn = 1`,
-        maximumBytesBilled: '5000000000',
-      }),
-      // Covers both the trailing Avg Sale window (for DOI) and the GRN period (for the
-      // Total Sold Qty / Inward Coverage Ratio KPIs) in one fetch.
-      bq.query({
-        query: `SELECT final_sku, state, channel, order_date, SUM(total_quantity) AS qty
-                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
-                WHERE order_date BETWEEN '${salesFetchStartStr}' AND '${salesFetchEndStr}'
-                GROUP BY final_sku, state, channel, order_date`,
-        maximumBytesBilled: '5000000000',
-      }),
-    ])
-
-    const skuMap = buildSkuMap(skuMappingRows)
-
-    // Coupon/gift-card/service codes (COUP*, *DFA*) are not physical stock â€” excluded from
-    // every sales-derived number below (Avg Sale, Total Sold Qty, per-SKU Sold Qty).
-    const cleanSalesRows = salesRows.filter(row => !isPseudoSku(row.final_sku))
-
-    // â”€â”€ Item master lookup, keyed by normalized SKU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const itemMaster = new Map()
-    for (const r of itemMasterRows) {
-      if (!r.Product_Code) continue
-      if (norm(r.Type) === 'BUNDLE') continue
-      if (norm(r.Category_Name) === 'COMBO') continue
-      itemMaster.set(normSku(r.Product_Code), {
-        category: cleanLabel(r.Category_Name) || 'Uncategorized',
-        subCategory: cleanLabel(r.Sub_category) || 'Uncategorized',
-      })
+    if (body.mode === 'sku' || body.mode === 'vendor' || body.mode === 'subcat') {
+      const r = await lastGrnDays(body, timer)
+      timer.finish(res)
+      return r.ok ? res.json(r.data) : res.status(r.status).json({ error: r.error })
     }
-
-    // â”€â”€ Current total inventory per SKU â€” "how much stock exists right now" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const invBySku = new Map()
-    for (const row of invRows) {
-      if (isPseudoSku(row.ItemSkuCode)) continue
-      if (facilityToStatus.get(row.Facility) !== 'Live') continue
-      const { key } = resolveMasterSkuKey(row.ItemSkuCode, skuMap)
-      if (!key) continue
-      const { totalInventory } = computeRowInventory(row)
-      invBySku.set(key, (invBySku.get(key) || 0) + totalInventory)
+    if (body.mode === 'dq_export') {
+      if (!auth.isAdmin) { timer.finish(res); return res.status(403).json({ error: 'Admins only.' }) }
+      const r = await dqExport(body, timer)
+      timer.finish(res)
+      return r.ok ? res.json(r.data) : res.status(r.status).json({ error: r.error })
     }
-
-    // â”€â”€ Trailing Avg Sale (B2C, anchored to latest available sales date) per SKU â”€â”€â”€â”€â”€â”€
-    // Same anchoring rule as Inventory Health: exclude the latest date present (it may be
-    // a partial day) and average over the AVG_SALE_WINDOW_DAYS full days before it.
-    let maxSalesDate = null
-    for (const row of cleanSalesRows) {
-      const d = row.order_date?.value || row.order_date
-      if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
-    }
-    let salesWindowEnd = todayStr, salesWindowStart = todayStr
-    if (maxSalesDate) {
-      const anchorEnd = new Date(maxSalesDate); anchorEnd.setDate(anchorEnd.getDate() - 1)
-      const anchorStart = new Date(anchorEnd); anchorStart.setDate(anchorStart.getDate() - (AVG_SALE_WINDOW_DAYS - 1))
-      salesWindowEnd = anchorEnd.toISOString().slice(0, 10)
-      salesWindowStart = anchorStart.toISOString().slice(0, 10)
-    }
-    const avgSaleQtyBySku = new Map()
-    for (const row of cleanSalesRows) {
-      const d = row.order_date?.value || row.order_date
-      if (!d || d < salesWindowStart || d > salesWindowEnd) continue
-      if (!isB2CChannel(row.channel, channelToDescription)) continue
-      const { key } = resolveMasterSkuKey(row.final_sku, skuMap)
-      if (!key) continue
-      avgSaleQtyBySku.set(key, (avgSaleQtyBySku.get(key) || 0) + Number(row.qty || 0))
-    }
-    const avgSaleBySku = new Map()
-    for (const [key, qty] of avgSaleQtyBySku) avgSaleBySku.set(key, Math.ceil(qty / AVG_SALE_WINDOW_DAYS))
-
-    // â”€â”€ Total Sold Qty for the SAME start/end as the GRN filter â€” the "did what came in
-    // this period cover what sold this period" comparison. B2C+B2B+Purchase Order, same
-    // channel scope as the "Total Avg Sale" KPI elsewhere, restricted to finished-goods
-    // SKUs (a real item-master match) so it's comparable to the inward total below. â”€â”€
-    let totalSoldQty = 0
-    for (const row of cleanSalesRows) {
-      const d = row.order_date?.value || row.order_date
-      if (!d || d < start || d > end) continue
-      if (!isTotalAvgSaleChannel(row.channel, channelToDescription)) continue
-      const { key } = resolveMasterSkuKey(row.final_sku, skuMap)
-      if (!key || !itemMaster.has(key)) continue
-      totalSoldQty += Number(row.qty || 0)
-    }
-
-    // â”€â”€ Resolve each GRN line to a master SKU + pack-qty-scaled received/rejected qty â”€â”€
-    // Mirrors computeRowInventory's raw-material handling in _inventory_shared.js: a SKU
-    // code like "FR-XYZ_RAW_PO25" is raw material received in packs of 25 â€” the true unit
-    // count is Quantity Received Ã— packQty, not the raw GRN line quantity.
-    const rows = []
-    for (const r of grnRows) {
-      if (isPseudoSku(r.itemSkuCode)) continue
-      const facilityStatus = facilityToStatus.get(r.Facility)
-      if (facilityStatus !== 'Live') continue
-      const { key, finalSku } = resolveMasterSkuKey(r.itemSkuCode, skuMap)
-      if (!key) continue
-      const master = itemMaster.get(key)
-      const packQty = parsePackQty(r.itemSkuCode)
-      const isRaw = isRawSkuText(r.itemSkuCode)
-      const qtyReceived = Number(r.qtyReceived || 0) * (isRaw ? packQty : 1)
-      const qtyRejected = Number(r.qtyRejected || 0) * (isRaw ? packQty : 1)
-      const location = facilityToLocation.get(r.Facility) || 'Unmapped'
-      const grnDate = r.grnDate?.value || r.grnDate
-      const date = grnDate ? String(grnDate).slice(0, 10) : null
-      const receivedTs = r.grnReceivedTs?.value || r.grnReceivedTs
-      const qcTs = r.qcCompletedOn?.value || r.qcCompletedOn
-      const leadTimeHours = receivedTs && qcTs
-        ? (new Date(qcTs) - new Date(receivedTs)) / 3600000
-        : null
-
-      // GRN lines with no item-master match are real inward activity (packaging, raw
-      // material, or SKUs simply missing from the master) â€” kept as a normal "Unmapped"
-      // category/sub-category rather than dropped, so nothing is silently excluded. The
-      // category filter defaults to hiding "Unmapped" (see filterOptions.categories /
-      // defaultCategoryExclusions below) but it stays fully visible and countable when a
-      // user explicitly selects it.
-      rows.push({
-        grnCode: r.grnCode, date, sku: finalSku, skuKey: key,
-        category: master?.category || 'Unmapped',
-        subCategory: master?.subCategory || 'Unmapped',
-        matched: !!master,
-        facility: r.Facility, location,
-        vendorName: cleanLabel(r.vendorName) || 'Unknown', vendorCode: r.vendorCode,
-        poCode: r.poCode, qtyReceived, qtyRejected,
-        rejectionReason: r.rejectionReason || null,
-        grnStatus: r.grnStatus, leadTimeHours,
-      })
-    }
-
-    // â”€â”€ Apply filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // "Unmapped" is excluded from category results unless the caller explicitly asks for
-    // it â€” either by name in the `category` filter, or via includeUnmapped=true (used by
-    // the sidebar's "show unmapped" toggle, which lists it outside the normal multiselect).
-    const facilityFilterVals = splitCsv(facility)
-    const categoryFilterVals = splitCsv(category)
-    const wantsUnmapped = includeUnmapped === true || includeUnmapped === 'true' || (categoryFilterVals && categoryFilterVals.includes('Unmapped'))
-    const filtered = rows.filter(r => {
-      if (r.category === 'Unmapped' && !wantsUnmapped) return false
-      if (category && !matchesMulti(r.category, category)) return false
-      if (subCategory && !matchesMulti(r.subCategory, subCategory)) return false
-      if (facilityFilterVals && !facilityFilterVals.includes(r.facility)) return false
-      if (vendor && !matchesMulti(r.vendorName, vendor)) return false
-      if (sku && !matchesMulti(r.sku, sku)) return false
-      return true
-    })
-
-    // Everything downstream (KPIs, trend, breakdowns, SKU table) runs over one consistent
-    // row set â€” "Unmapped" behaves like any other category rather than a separate stream.
-    const finishedGoods = filtered
-
-    // â”€â”€ Per-SKU Sold Qty for the SAME start/end as the GRN filter â€” one entry per SKU so
-    // it can sit next to Received in the SKU table (see soldQtyBySku below). â”€â”€
-    const soldQtyBySku = new Map()
-    for (const row of cleanSalesRows) {
-      const d = row.order_date?.value || row.order_date
-      if (!d || d < start || d > end) continue
-      if (!isTotalAvgSaleChannel(row.channel, channelToDescription)) continue
-      const { key } = resolveMasterSkuKey(row.final_sku, skuMap)
-      if (!key) continue
-      soldQtyBySku.set(key, (soldQtyBySku.get(key) || 0) + Number(row.qty || 0))
-    }
-
-    // â”€â”€ SKU-level inward table â€” the detailed line-item view, one row per SKU (for this
-    // filtered period), with current inventory + trailing Avg Sale/DOI attached so it
-    // reads as "is what's coming in matched by what's actually selling," not just a raw
-    // received-quantity count. â”€â”€
-    const skuMap2 = new Map()
-    for (const r of finishedGoods) {
-      if (!skuMap2.has(r.skuKey)) {
-        skuMap2.set(r.skuKey, {
-          sku: r.sku, category: r.category, subCategory: r.subCategory,
-          qtyReceived: 0, qtyRejected: 0,
-        })
-      }
-      const s = skuMap2.get(r.skuKey)
-      s.qtyReceived += r.qtyReceived
-      s.qtyRejected += r.qtyRejected
-    }
-    const skuTable = [...skuMap2.entries()].map(([key, s]) => {
-      const totalInvt = Math.round(invBySku.get(key) || 0)
-      const avgSale = avgSaleBySku.get(key) || 0
-      const doi = avgSale > 0 ? Math.floor(totalInvt / avgSale) : (totalInvt > 0 ? null : 0)
-      const status = doi == null ? stockStatus(0, avgSale, totalInvt, {}) : stockStatus(doi, avgSale, totalInvt, {})
-      return {
-        sku: s.sku, category: s.category, subCategory: s.subCategory,
-        qtyReceived: Math.round(s.qtyReceived), qtyRejected: Math.round(s.qtyRejected),
-        soldQty: Math.round(soldQtyBySku.get(key) || 0),
-        totalInvt, avgSale, doi, stockStatus: status,
-      }
-    }).sort((a, b) => b.qtyReceived - a.qtyReceived)
-
-    // â”€â”€ KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const totalReceived = finishedGoods.reduce((s, r) => s + r.qtyReceived, 0)
-    const totalRejected = finishedGoods.reduce((s, r) => s + r.qtyRejected, 0)
-    const rejectionPct = (totalReceived + totalRejected) > 0 ? (totalRejected / (totalReceived + totalRejected)) * 100 : 0
-    const distinctGrns = new Set(finishedGoods.map(r => r.grnCode)).size
-    const distinctPOs = new Set(finishedGoods.map(r => r.poCode).filter(Boolean)).size
-    const leadTimes = finishedGoods.map(r => r.leadTimeHours).filter(v => v != null && v >= 0)
-    const avgLeadTimeHours = leadTimes.length > 0 ? leadTimes.reduce((s, v) => s + v, 0) / leadTimes.length : null
-    const distinctVendors = new Set(finishedGoods.map(r => r.vendorName)).size
-    const distinctSkus = new Set(finishedGoods.map(r => r.skuKey)).size
-    // Inward Coverage Ratio = units received Ã· units sold, same period â€” >1 means more
-    // came in than went out (building up stock), <1 means selling faster than restocking.
-    const inwardCoverageRatio = totalSoldQty > 0 ? totalReceived / totalSoldQty : null
-
-    // â”€â”€ Daily/weekly/monthly trend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const dailyMap = new Map()
-    for (const r of finishedGoods) {
-      if (!r.date) continue
-      if (!dailyMap.has(r.date)) dailyMap.set(r.date, { date: r.date, qtyReceived: 0, qtyRejected: 0 })
-      const d = dailyMap.get(r.date)
-      d.qtyReceived += r.qtyReceived
-      d.qtyRejected += r.qtyRejected
-    }
-    const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
-    function rollup(keyFn) {
-      const m = new Map()
-      for (const d of daily) {
-        const k = keyFn(d.date)
-        if (!m.has(k)) m.set(k, { date: k, qtyReceived: 0, qtyRejected: 0 })
-        const acc = m.get(k)
-        acc.qtyReceived += d.qtyReceived
-        acc.qtyRejected += d.qtyRejected
-      }
-      return [...m.values()].sort((a, b) => a.date.localeCompare(b.date))
-    }
-    const weekly = rollup(weekKey)
-    const monthly = rollup(monthKey)
-
-    // â”€â”€ Category / Sub-category breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const catMap = new Map()
-    const subCatMap = new Map()
-    for (const r of finishedGoods) {
-      if (!catMap.has(r.category)) catMap.set(r.category, { category: r.category, qtyReceived: 0, qtyRejected: 0 })
-      const c = catMap.get(r.category)
-      c.qtyReceived += r.qtyReceived
-      c.qtyRejected += r.qtyRejected
-
-      const subKey = `${r.category}|${r.subCategory}`
-      if (!subCatMap.has(subKey)) subCatMap.set(subKey, { category: r.category, subCategory: r.subCategory, qtyReceived: 0, qtyRejected: 0 })
-      const sc = subCatMap.get(subKey)
-      sc.qtyReceived += r.qtyReceived
-      sc.qtyRejected += r.qtyRejected
-    }
-    const categoryBreakdown = [...catMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived)
-    const subCategoryBreakdown = [...subCatMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived)
-
-    // â”€â”€ Vendor performance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const vendorMap = new Map()
-    for (const r of finishedGoods) {
-      if (!vendorMap.has(r.vendorName)) vendorMap.set(r.vendorName, { vendor: r.vendorName, qtyReceived: 0, qtyRejected: 0, grns: new Set() })
-      const v = vendorMap.get(r.vendorName)
-      v.qtyReceived += r.qtyReceived
-      v.qtyRejected += r.qtyRejected
-      v.grns.add(r.grnCode)
-    }
-    const vendorPerformance = [...vendorMap.values()].map(v => ({
-      vendor: v.vendor, qtyReceived: v.qtyReceived, qtyRejected: v.qtyRejected,
-      rejectionPct: (v.qtyReceived + v.qtyRejected) > 0 ? (v.qtyRejected / (v.qtyReceived + v.qtyRejected)) * 100 : 0,
-      grnCount: v.grns.size,
-    })).sort((a, b) => b.qtyReceived - a.qtyReceived)
-
-    // â”€â”€ Facility-wise inward (location-ordered) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const facilityMap = new Map()
-    for (const r of finishedGoods) {
-      if (!facilityMap.has(r.location)) facilityMap.set(r.location, { location: r.location, qtyReceived: 0, qtyRejected: 0 })
-      const f = facilityMap.get(r.location)
-      f.qtyReceived += r.qtyReceived
-      f.qtyRejected += r.qtyRejected
-    }
-    const facilityBreakdown = sortByLocationOrder([...facilityMap.values()].filter(f => f.location !== 'Unmapped'), f => f.location)
-
-    // â”€â”€ Rejection reasons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const reasonMap = new Map()
-    for (const r of finishedGoods) {
-      if (!r.rejectionReason || r.qtyRejected <= 0) continue
-      const reason = r.rejectionReason
-      reasonMap.set(reason, (reasonMap.get(reason) || 0) + r.qtyRejected)
-    }
-    const rejectionReasons = [...reasonMap.entries()].map(([reason, qty]) => ({ reason, qty })).sort((a, b) => b.qty - a.qty)
-
-    // â”€â”€ Filter option lists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Categories are listed from the FULL row set (before the "hide Unmapped by default"
-    // filter above) so "Unmapped" always appears as a selectable option â€” otherwise a
-    // default-excluded category could never be discovered/selected in the first place.
-    const liveFacilities = [...facilityToStatus.entries()].filter(([, status]) => status === 'Live').map(([f]) => f)
-    const filterOptions = {
-      categories: [...new Set(rows.map(r => r.category))].sort((a, b) => (a === 'Unmapped') - (b === 'Unmapped') || a.localeCompare(b)),
-      subCategories: [...new Set(finishedGoods.map(r => r.subCategory))].sort(),
-      facilities: liveFacilities.filter(f => finishedGoods.some(r => r.facility === f)).sort(),
-      vendors: [...new Set(finishedGoods.map(r => r.vendorName))].sort(),
-      skus: [...new Set(finishedGoods.map(r => r.sku))].sort(),
-    }
-
+    const { start, end } = body
+    if (!isIsoDate(start) || !isIsoDate(end) || start > end) return res.status(400).json({ error: 'start and end (YYYY-MM-DD, start ≤ end) required' })
+    const range = periods(start < GRN_FLOOR ? GRN_FLOOR : start, end)
+    if (range.days > MAX_RANGE_DAYS) return res.status(400).json({ error: `Pick a range of at most ${MAX_RANGE_DAYS} days` })
+    const data = await loadRange(range, auth.isAdmin, timer)
+    const payload = buildInwardPayload({ ...data, range, filters: normaliseFilters(body), isAdmin: auth.isAdmin, excludedPkgUnits: data.excludedPkgUnits })
     timer.finish(res)
-    res.json({
-      dateRange: { start, end, days: daysInRange },
-      avgSaleWindow: { start: salesWindowStart, end: salesWindowEnd },
-      filterOptions,
-      summary: {
-        totalReceived: Math.round(totalReceived),
-        totalSoldQty: Math.round(totalSoldQty),
-        inwardCoverageRatio,
-        totalRejected: Math.round(totalRejected),
-        rejectionPct,
-        distinctGrns,
-        distinctPOs,
-        distinctVendors,
-        distinctSkus,
-        avgLeadTimeHours,
-      },
-      daily, weekly, monthly,
-      categoryBreakdown, subCategoryBreakdown,
-      vendorPerformance,
-      facilityBreakdown,
-      rejectionReasons,
-      skuTable,
-    })
+    return res.json(payload)
   } catch (e) {
     console.error('[inward]', e.message)
     timer.finish(res)
-    res.status(500).json({ error: e.message })
+    return res.status(500).json({ error: e.message })
   }
 }
