@@ -295,11 +295,11 @@ function DoiChip({ doi }) {
   return <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: '2px 6px', background: c.bg, color: c.fg }}>DOI {doi == null ? '—' : `${doi}d`}</span>
 }
 // One `.li` row: name (wraps, never truncates) + right-aligned number, tap → the shared drill-in.
-function PhoneLiRow({ name, tag, meta: metaLine, right, rightSub, onClick, first }) {
+function PhoneLiRow({ name, tag, meta: metaLine, right, rightSub, onClick, first, compact }) {
   return (
     <button type="button" onClick={onClick} style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%',
-      padding: '16px 0', minHeight: 44, border: 'none', borderTop: first ? 'none' : `1px solid ${M.line}`,
+      padding: compact ? '10px 0' : '16px 0', minHeight: 44, border: 'none', borderTop: first ? 'none' : `1px solid ${M.line}`,
       background: 'none', textAlign: 'left', fontFamily: 'var(--font)', cursor: 'pointer',
     }}>
       <span style={{ minWidth: 0 }}>
@@ -385,8 +385,30 @@ function SkuPhoneCard({ skuRows, subCatRows, skuView, setSkuView, invLoading, on
 // Product master phone card: search box only (no base row list) — typing/tapping opens a full-screen
 // search view (same card-row style). Items come from the full master list; FullScreenList's own
 // built-in search box drives it, so this card's search field just opens the view already focused.
+// Detail sheet shared by Product master's row tap: 2-column stat tiles (same convention as
+// MobileRankedList's built-in details sheet) + a "View last 10 GRN days" link that opens the
+// existing LastGrnDrill ON TOP of this sheet (and of the still-open full-screen list underneath —
+// nothing closes until the viewer backs out, matching the Sales & Allocation product-sheet pattern).
+function MasterDetailTile({ label, value }) {
+  return (
+    <div style={{ background: M.soft, borderRadius: M.radius.tile, padding: '10px 12px', minWidth: 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', color: M.muted }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: M.ink, marginTop: 3, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{value}</div>
+    </div>
+  )
+}
+function ViewGrnDaysLink({ onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      marginTop: 12, width: '100%', minHeight: 44, borderRadius: 12, border: `1px solid ${M.line}`, background: '#fff',
+      color: M.green, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
+    }}>View last 10 GRN days →</button>
+  )
+}
+
 function ProductMasterPhoneCard({ rows, invLoading, onDrill }) {
   const [full, setFull] = useState(false)
+  const [selected, setSelected] = useState(null)
   const name = r => r.sku
   const sorts = [
     { key: 'lastInward', label: 'Last inward', value: r => r.lastInward || '', format: r => fmtDayYear(r.lastInward) },
@@ -403,7 +425,22 @@ function ProductMasterPhoneCard({ rows, invLoading, onDrill }) {
         name={name} sub={r => `${r.subCategory || r.category || ''}`}
         secondary={r => `Stock ${r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)} · ${r.doi == null ? 'DOI —' : `DOI ${r.doi}d`}`}
         searchText={r => `${r.sku} ${r.category || ''} ${r.subCategory || ''}`}
-        onSelect={r => { setFull(false); onDrill({ mode: 'sku', id: r.sku, subtitle: r.subCategory }) }} />
+        onSelect={setSelected} />
+      <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.sku || ''}
+        subtitle={selected ? [selected.subCategory || selected.category, selected.lastInwardVendors?.length ? `Last from ${selected.lastInwardVendors[0]}` : null].filter(Boolean).join(' · ') : ''}>
+        {selected && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+              <MasterDetailTile label="Current stock" value={selected.stock == null ? (invLoading ? '…' : '—') : fmtUnits(selected.stock)} />
+              <MasterDetailTile label="DOI" value={selected.doi == null ? '—' : `${selected.doi} d`} />
+              <MasterDetailTile label="Last inward" value={fmtDayYear(selected.lastInward)} />
+              <MasterDetailTile label="Last inward qty" value={selected.lastInwardQty == null ? '—' : fmtUnits(selected.lastInwardQty)} />
+              <MasterDetailTile label="Inward (range)" value={fmtUnits(selected.rangeQty)} />
+            </div>
+            <ViewGrnDaysLink onClick={() => onDrill({ mode: 'sku', id: selected.sku, subtitle: selected.subCategory })} />
+          </div>
+        )}
+      </BottomSheet>
     </Card>
   )
 }
@@ -416,6 +453,8 @@ function ProductMasterPhoneCard({ rows, invLoading, onDrill }) {
 // master list's lifetime, sub-category-level equivalent).
 function VendorMasterPhoneCard({ rows, onDrill }) {
   const [full, setFull] = useState(false)
+  const [selected, setSelected] = useState(null)
+  const [product, setProduct] = useState(null) // the tapped sub-category, within `selected` — one level deeper
   const name = r => r.vendor
   const sorts = [
     { key: 'lastGrn', label: 'Last GRN', value: r => r.lastGrn || '', format: r => fmtDayYear(r.lastGrn) },
@@ -431,7 +470,40 @@ function VendorMasterPhoneCard({ rows, onDrill }) {
       <FullScreenList open={full} onClose={() => setFull(false)} title="Vendor master" noun="vendors" items={rows} sorts={sorts} initialSort="lastGrn"
         name={name} sub={r => `${r.sourceType} · Lifetime ${fmtUnits(r.lifetimeGrns)} GRNs · ${fmtUnits(r.lifetimeUnits)} units · ${fmtUnits(r.skuCount)} SKUs`}
         searchText={r => `${r.vendor} ${r.sourceType || ''}`} rowLayout="line"
-        onSelect={r => { setFull(false); onDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType }) }} />
+        onSelect={setSelected} />
+      <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.vendor || ''} subtitle={selected?.sourceType || ''}>
+        {selected && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+              <MasterDetailTile label="Last GRN" value={fmtDayYear(selected.lastGrn)} />
+              <MasterDetailTile label="Units (range)" value={fmtUnits(selected.rangeUnits)} />
+              <MasterDetailTile label="Lifetime GRNs" value={fmtUnits(selected.lifetimeGrns)} />
+              <MasterDetailTile label="Lifetime units" value={fmtUnits(selected.lifetimeUnits)} />
+              <MasterDetailTile label="SKUs supplied" value={fmtUnits(selected.skuCount)} />
+            </div>
+            {!!(selected.productsSupplied || []).length && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: M.muted, marginBottom: 2 }}>Products supplied</div>
+                {selected.productsSupplied.map((p, i) => (
+                  <PhoneLiRow key={p.subCategory} first={i === 0} compact name={p.subCategory}
+                    onClick={() => setProduct(p)} right={fmtUnits(p.units)} rightSub="units" />
+                ))}
+              </div>
+            )}
+            <ViewGrnDaysLink onClick={() => onDrill({ mode: 'vendor', id: selected.vendor, subtitle: selected.sourceType })} />
+          </div>
+        )}
+      </BottomSheet>
+      {/* One level deeper: tapping a product (sub-category) above opens this vendor's SKU-wise
+          lifetime inward units within that sub-category — stacks on top of the vendor sheet, which
+          stays open underneath (same "nothing closes until the viewer backs out" convention). */}
+      <BottomSheet open={!!product} onClose={() => setProduct(null)} title={product?.subCategory || ''} subtitle={selected ? `${selected.vendor} · lifetime` : ''}>
+        {product && (
+          !product.skus?.length
+            ? <div style={{ fontSize: 12.5, color: M.muted }}>No SKU breakdown available.</div>
+            : product.skus.map((s, i) => <PhoneLiRow key={s.sku} first={i === 0} compact name={s.sku} right={fmtUnits(s.units)} rightSub="units" />)
+        )}
+      </BottomSheet>
     </Card>
   )
 }

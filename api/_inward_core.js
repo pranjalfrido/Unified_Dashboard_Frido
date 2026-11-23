@@ -640,16 +640,23 @@ export function buildVendorMaster({ vendorMasterRows, start, end }) {
     if (!byVendor.has(vendor)) {
       byVendor.set(vendor, {
         vendor, sourceType: r.t || UNMAPPED_SOURCE, lastGrn: d, lifetimeUnits: 0, lifetimeGrns: new Set(),
-        skus: new Set(), subCategories: new Map(), rangeUnits: 0,
+        skus: new Set(), subCategories: new Map(), subCategorySkus: new Map(), rangeUnits: 0,
       })
     }
     const a = byVendor.get(vendor)
     if (d > a.lastGrn) a.lastGrn = d
     a.lifetimeUnits += q
     a.lifetimeGrns.add(r.g)
-    if (r.s) a.skus.add(r.s)
     const sub = cleanLabel(r.sc) || 'Uncategorized'
     a.subCategories.set(sub, (a.subCategories.get(sub) || 0) + q)
+    if (r.s) {
+      a.skus.add(r.s)
+      // SKU-wise breakdown within this sub-category (lifetime units), for the "tap a product →
+      // SKU-wise inward qty" drill-in one level under the vendor detail sheet's products list.
+      if (!a.subCategorySkus.has(sub)) a.subCategorySkus.set(sub, new Map())
+      const skuMap = a.subCategorySkus.get(sub)
+      skuMap.set(r.s, (skuMap.get(r.s) || 0) + q)
+    }
     if (d >= start && d <= end) a.rangeUnits += q
   }
   return [...byVendor.values()].map(a => ({
@@ -657,8 +664,13 @@ export function buildVendorMaster({ vendorMasterRows, start, end }) {
     lifetimeUnits: round(a.lifetimeUnits), lifetimeGrns: a.lifetimeGrns.size, skuCount: a.skus.size,
     rangeUnits: round(a.rangeUnits),
     // Sub-categories ("products supplied"), highest-units first — same display convention as a
-    // vendor drill-down's SKUs-supplied list, but lifetime and rolled up to sub-category.
-    productsSupplied: [...a.subCategories.entries()].sort((x, y) => y[1] - x[1]).map(([subCategory, units]) => ({ subCategory, units: round(units) })),
+    // vendor drill-down's SKUs-supplied list, but lifetime and rolled up to sub-category. Each
+    // carries its own SKU-wise breakdown (skus: [{ sku, units }], highest first) for the next
+    // drill-in level.
+    productsSupplied: [...a.subCategories.entries()].sort((x, y) => y[1] - x[1]).map(([subCategory, units]) => ({
+      subCategory, units: round(units),
+      skus: [...(a.subCategorySkus.get(subCategory)?.entries() || [])].sort((x, y) => y[1] - x[1]).map(([sku, skuUnits]) => ({ sku, units: round(skuUnits) })),
+    })),
   })).sort((a, b) => (b.lastGrn || '').localeCompare(a.lastGrn || ''))
 }
 
