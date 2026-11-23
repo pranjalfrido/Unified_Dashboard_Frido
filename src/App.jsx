@@ -20159,6 +20159,11 @@ function AppInner() {
       }
       if (cancelled) return
       console.error('profile fetch error:', lastErr)
+      // If Supabase says unauthorized, the session is dead — sign out and go to login
+      if (lastErr?.status === 401 || lastErr?.message?.includes('401') || String(lastErr).includes('401')) {
+        supabase.auth.signOut().then(() => setSession(null))
+        return
+      }
       if (!cached) { setProfileError(true); return }
       // Open with the saved copy, then keep retrying quietly until the live profile arrives.
       setProfile(cached.profile)
