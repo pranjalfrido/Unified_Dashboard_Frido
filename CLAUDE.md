@@ -61,3 +61,6 @@ Deployed on Vercel Hobby plan. `vercel.json` sets `maxDuration: 300` for all `ap
 - Logistics slicer filters for **courier, shipmentType, sddNdd, category** trigger a BQ re-fetch (accurate KPIs). Filters for **zone, payment, state, city** are applied client-side from cached response data.
 - Inventory Health fetches `public/inv-data.json` from Vercel CDN (~100-200ms). A GitHub Actions cron (`.github/workflows/precompute-inventory.yml`) runs hourly: syncs BQ→Supabase via `export_to_supabase.mjs`, then runs `scripts/generate-inv-cache.mjs` to regenerate `public/inv-data.json` and commits it. All slicer filters (category, location, stock status, etc.) are applied client-side — no re-fetch on filter change.
 - GST rate lookups must use `GST_Tax_Type_Code` from the item master, not other GST columns.
+
+### NavAI sync rule
+Whenever a page, an `api/*.js` endpoint, or any metric logic (avg sale, DOI, OOS loss, COGS, returns, cancellations, logistics, ads/CAC, customers) is added or changed, list what NavAI must update: `knowledge/ENDPOINT_MAP.md`, `PULSE_PLAYBOOK.md` / `PULSE_METRICS.md` wording, any logic copied into the connector (P&L tool, OOS SQL), `repo-scope.json`, and test questions. Then remind Suraj that NavAI needs a canary redeploy.
