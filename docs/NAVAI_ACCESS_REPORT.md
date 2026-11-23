@@ -41,7 +41,7 @@ Calls hit `/api/inward`, `/api/inward-data`, `/logistics-data-forward.json`, `/l
 | (b) | No login and no secret: `/api/bq`, `inward`, `inventory`, `logistics`, `customer`, `return-analysis`, `feedback` and the `.json` files return 401 | pass |
 | (c) | The secret opens exactly the 13 allowlisted endpoints (POST) and the `.json` files (GET) | pass |
 | (d) | The secret is refused on feedback, presence, admin, packaging-products, cogs-context, logistics-cost, every non-allowlisted route in `api/`, an unknown route, GET/PUT/PATCH/DELETE/HEAD on `bq`, PUT/PATCH/DELETE on feedback, non-GET on `.json`; wrong/truncated/empty secret refused; the secret is not accepted as a Bearer token or as the cron header; auth-admin and pulse handlers refuse it | pass |
-| (e) | `api/pulse.js` forwards the database's tabs and ignores a forged `access` in the request; in the connector, for **each** of the 25 NavAI endpoints: no tabs = refused, only that page's tab = allowed, only another page's tab = refused, admin = allowed; custom SQL refused for non-admins | pass |
+| (e) | `api/pulse.js` forwards the database's tabs and ignores a forged `access` in the request; in the connector, for **each** of the 27 NavAI endpoints: no tabs = refused, only that page's tab = allowed, only another page's tab = refused, admin = allowed; custom SQL refused for non-admins | pass |
 
 Run: `node scripts/test-navai-access.mjs` in the dashboard (93 checks) and `node scripts/test-page-access.mjs` in `frido-data-connector` (125 checks). Both generate throwaway secrets in memory and print none.
 Limit: (a) proves the middleware logic with a local key; I did not log in to the live site (no token available to me).

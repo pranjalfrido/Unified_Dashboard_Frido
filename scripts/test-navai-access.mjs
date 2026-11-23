@@ -1,12 +1,35 @@
 // Proves NavAI's read-only secret (x-navai-secret) opens ONLY the read endpoints and the public data .json files, and is
 // refused on everything that writes or administers, and on every method except POST (api) / GET (.json).
-//   node scripts/test-navai-access.mjs        (generates a throwaway secret in memory; prints no secret)
-import { randomBytes } from 'crypto'
+//   node scripts/test-navai-access.mjs        (generates throwaway secrets/keys in memory; prints none)
+// Sections: (a) a normal login still opens every page and API, (b) no login + no secret = 401, (c) the secret opens the
+// allowlist only, (d) the secret is refused on every write/admin route and method, (e) the asking user's page access is
+// read from the database by api/pulse.js and forwarded (the connector's own tab checks are in
+// frido-data-connector/scripts/test-page-access.mjs).
+import { randomBytes, generateKeyPairSync, createSign } from 'crypto'
 import { readdirSync } from 'fs'
 
 const secret = randomBytes(24).toString('hex')
 process.env.NAVAI_API_SECRET = secret
 process.env.SUPABASE_PROJECT_URL = 'https://example.invalid'
+process.env.SUPABASE_SECRET_KEY = randomBytes(16).toString('hex') // dummy, for the pulse.js section only
+// A throwaway login: an ES256 key pair, its public half served as the project's JWKS (fetch is stubbed), and a token
+// signed with the private half. This is the same check a real Supabase session goes through in middleware.js.
+const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'ES256', use: 'sig' }
+const b64 = o => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url')
+const signJwt = (claims, key = privateKey) => {
+  const head = b64({ alg: 'ES256', typ: 'JWT', kid: 'test-key' }), body = b64(claims)
+  const sig = createSign('SHA256').update(`${head}.${body}`).sign({ key, dsaEncoding: 'ieee-p1363' }).toString('base64url')
+  return `${head}.${body}.${sig}`
+}
+const claims = { iss: 'https://example.invalid/auth/v1', aud: 'authenticated', role: 'authenticated', sub: 'user-1', email: 'u@example.test', exp: Math.floor(Date.now() / 1000) + 600 }
+const fetchLog = []
+const realFetch = globalThis.fetch
+globalThis.fetch = async (url, o) => {
+  const u = String(url); fetchLog.push({ url: u, o })
+  if (u.endsWith('/auth/v1/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 })
+  return (globalThis.__fakeFetch ? globalThis.__fakeFetch(u, o) : realFetch(url, o))
+}
 const mw = (await import(new URL('../middleware.js', import.meta.url))).default
 
 const call = async (method, path, headers = { 'x-navai-secret': secret }) => {
@@ -15,6 +38,17 @@ const call = async (method, path, headers = { 'x-navai-secret': secret }) => {
 }
 let failed = 0
 const check = (name, got, want) => { const ok = got === want; if (!ok) failed++; console.log(ok ? 'OK  ' : 'FAIL', name, '->', got) }
+
+
+// (a) a normal login still works on every page and API (every api route + the data files), (b) nothing = 401
+const login = { authorization: `Bearer ${signJwt(claims)}` }
+const allRoutes = readdirSync(new URL('../api', import.meta.url)).filter(f => f.endsWith('.js') && !f.startsWith('_')).map(f => f.slice(0, -3))
+for (const e of allRoutes) check(`(a) POST /api/${e} with a valid login passes`, await call('POST', `/api/${e}`, login), 'pass')
+for (const f of ['inv-data-7d', 'pnl-data', 'ads-data', 'inward-data', 'logistics-cost-data', 'cogs-data']) check(`(a) GET /${f}.json with a valid login passes`, await call('GET', `/${f}.json`, login), 'pass')
+check('(a) an expired login is refused', await call('POST', '/api/bq', { authorization: `Bearer ${signJwt({ ...claims, exp: Math.floor(Date.now() / 1000) - 5 })}` }), 401)
+check('(a) a login signed by another key is refused', await call('POST', '/api/bq', { authorization: `Bearer ${signJwt(claims, generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey)}` }), 401)
+for (const e of ['bq', 'inward', 'inventory', 'logistics', 'customer', 'return-analysis', 'feedback']) check(`(b) POST /api/${e} with no login and no secret is 401`, await call('POST', `/api/${e}`, {}), 401)
+for (const f of ['inv-data-7d', 'ads-data']) check(`(b) GET /${f}.json with no login and no secret is 401`, await call('GET', `/${f}.json`, {}), 401)
 
 // 1. allowed: the read endpoints (POST) and the public data files (GET)
 const READ = ['bq', 'logistics', 'inventory', 'inventory-oos', 'sales-allocation', 'return-analysis', 'returns', 'customer', 'customer-support', 'cogs-monthly', 'cat-daily', 'courier-allocation', 'inward']
@@ -56,6 +90,30 @@ const ok = await authorizeInward({ headers: { 'x-navai-secret': secret } })
 check('inward: secret is accepted as a non-admin reader', ok.ok === true && ok.isAdmin === false, true)
 const bad = await authorizeInward({ headers: { 'x-navai-secret': secret.slice(0, -1) + 'z' } }, { auth: { getUser: async () => ({ data: null, error: new Error('x') }) } })
 check('inward: wrong secret is refused', bad.ok === true, false)
+
+// (e) /api/pulse reads the asking user's tabs from the database (never from the request) and forwards them to the connector
+{
+  process.env.CONNECTOR_URL = 'https://connector.invalid'; process.env.CONNECTOR_API_KEY = randomBytes(16).toString('hex')
+  let forwarded = null
+  const reply = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } })
+  let profile = { is_active: true, is_admin: false }, tabs = [{ tab: 'ask' }, { tab: 'inventory:inward' }]
+  globalThis.__fakeFetch = async (u, o) => {
+    if (u.includes('/auth/v1/user')) return reply({ id: 'user-1', email: 'someone@example.test', aud: 'authenticated' })
+    if (u.includes('/rest/v1/user_profiles')) return reply(profile)
+    if (u.includes('/rest/v1/user_permissions')) return reply(tabs)
+    if (u.startsWith('https://connector.invalid/chat')) { forwarded = JSON.parse(o.body); return reply({ reply: 'ok' }) }
+    return reply({}, 404)
+  }
+  const pulse = (await import(new URL('../api/pulse.js', import.meta.url))).default
+  const run = async body => { const r = { code: 200, setHeader() {}, status(c) { r.code = c; return r }, json() { return r }, end() { return r } }; forwarded = null; await pulse({ method: 'POST', headers: {}, body }, r); return r.code }
+  const msg = [{ role: 'user', content: 'hi' }]
+  const code = await run({ messages: msg, callerToken: 'x', access: { isAdmin: true, tabs: ['everything'] } }) // a forged access in the body
+  check('(e) pulse forwards the database tabs, not the request body ones', code === 200 && JSON.stringify(forwarded?.access) === JSON.stringify({ isAdmin: false, tabs: ['ask', 'inventory:inward'] }), true)
+  profile = { is_active: true, is_admin: true }
+  await run({ messages: msg, callerToken: 'x' })
+  check('(e) an admin is forwarded as admin', forwarded?.access?.isAdmin === true, true)
+  globalThis.__fakeFetch = undefined
+}
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed')
 process.exit(failed ? 1 : 0)
