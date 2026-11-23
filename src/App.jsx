@@ -20129,6 +20129,12 @@ function AppInner() {
         supabase.from('user_profiles').select('*').eq('user_id', uid).single().then(r => r, e => ({ error: e })),
         supabase.from('user_permissions').select('tab').eq('user_id', uid).then(r => r, e => ({ error: e })),
       ])
+      // 401 / PGRST301 means the JWT is invalid or expired — force sign-out immediately
+      const errCode = pr.error?.code || pr.error?.status || pr.error?.message || ''
+      if (String(errCode).includes('401') || String(errCode).includes('PGRST301') || pr.error?.message?.toLowerCase().includes('jwt')) {
+        supabase.auth.signOut().then(() => setSession(null))
+        throw new Error('unauthorized')
+      }
       if (pr.error || !pr.data) throw pr.error || new Error('no profile row')
       return { profile: pr.data, tabs: perm.error || !perm.data ? null : perm.data.map(r => r.tab) }
     }
@@ -20224,6 +20230,10 @@ function AppInner() {
       <button onClick={() => { setProfile(null); setProfileError(false); setSession(s => ({ ...s })) }}
         style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
         Retry
+      </button>
+      <button onClick={() => supabase.auth.signOut().then(() => setSession(null))}
+        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#888' }}>
+        Sign out
       </button>
     </div>
   )
