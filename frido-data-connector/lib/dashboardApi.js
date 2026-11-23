@@ -5,6 +5,9 @@
 import { formatValueByName, formatTsv, indianInt } from './format.js';
 
 const DASH = process.env.DASHBOARD_URL || 'https://frido-navigator.vercel.app';
+// The dashboard's login wall (middleware.js) lets NavAI read the data endpoints with its own read-only secret in
+// x-navai-secret. Set NAVAI_API_SECRET on the service from Secret Manager (never in the image or the repo).
+export const dashAuth = () => (process.env.NAVAI_API_SECRET ? { 'x-navai-secret': process.env.NAVAI_API_SECRET } : {});
 const TTL_MS = 30 * 60 * 1000;
 const MAX_ENTRIES = 4;   // the sales payloads are 60-70 MB
 const cache = new Map(); // key -> { at, data }
@@ -13,7 +16,6 @@ const cache = new Map(); // key -> { at, data }
 export const ENDPOINTS = {
   'bq': 'Sales / Ads / P&L inputs (all channels)',
   'logistics': 'Logistics → Performance',
-  'logistics-cost': 'Logistics → Cost (courier invoices, zone, weight, B2B, 3PL)',
   'inventory': 'Inventory Health (live fallback)',
   'inventory-oos': 'Inventory → Out-of-stock loss',
   'sales-allocation': 'Inventory → Sales allocation',
@@ -22,7 +24,6 @@ export const ENDPOINTS = {
   'returns': 'Returns summary',
   'customer': 'Customers',
   'customer-support': 'Customers → Support',
-  'financial-mis': 'Sales → Financial MIS',
   'cogs-monthly': 'COGS per SKU per month (P&L)',
   'cat-daily': 'Category by day (Sales)',
   'courier-allocation': 'Logistics → Courier allocation',
@@ -59,9 +60,9 @@ async function fetchEndpoint(endpoint, params) {
   if (hit && Date.now() - hit.at < TTL_MS) return { data: hit.data, cached: true };
   let r;
   if (STATIC_FILES.has(endpoint)) {
-    r = await fetch(`${DASH}/${endpoint}.json`, { signal: AbortSignal.timeout(150000) });
+    r = await fetch(`${DASH}/${endpoint}.json`, { headers: dashAuth(), signal: AbortSignal.timeout(150000) });
   } else {
-    r = await fetch(`${DASH}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params || {}), signal: AbortSignal.timeout(170000) });
+    r = await fetch(`${DASH}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...dashAuth() }, body: JSON.stringify(params || {}), signal: AbortSignal.timeout(170000) });
   }
   if (!r.ok) throw new Error(`/api/${endpoint} returned ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const data = await r.json();

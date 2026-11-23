@@ -2,7 +2,7 @@
 
 Use the `dashboard_api` tool. `endpoint` = the name below, `params` = the request body the page sends, `paths` = dot-paths into the response ("a.b", "rows.*.sku"; `*` walks every element), `groupBy`/`sum`/`sortBy`/`limit`/`where` aggregate array rows. `describe:true` shows the response structure. Static files (inv-data-7d, logistics-data-forward, logistics-cost-data, pnl-data-lastmonth, sales-alloc-data, inward-data, ads-data …) take no params. The first call for given params can take up to ~90 s (then cached 30 min).
 Dates are IST. Money fields come back already formatted (₹ Cr/L) with the raw value; copy the formatted value.
-**Known broken/unavailable (say so, do not invent):** `/api/logistics` errors in production (Clickpost column `zone_by_frido` missing) → Logistics → Performance numbers come from the `logistics-data-*` files; `/api/logistics-cost` times out → use `logistics-cost-data`; `/api/financial-mis` is not deployed; the Inward file/endpoint shows 0 for every received/rejected quantity (only GRN counts, vendors and lead time are meaningful); Customer Support has no ticket-status split.
+**Known broken/unavailable (say so, do not invent):** `/api/logistics` fails only in a daily window (about 09:00-10:25 IST, when a legacy scheduled query rewrites the Clickpost table and the column `zone_by_frido` goes missing); outside that window it works, inside it use the `logistics-data-*` files → Logistics → Performance numbers come from the `logistics-data-*` files; `/api/logistics-cost` times out → use `logistics-cost-data`; `/api/financial-mis` is not deployed; Customer Support has no ticket-status split. `/api/financial-mis` and the Financial MIS tab were removed from the dashboard (30 Oct), do not use them. **Access:** the dashboard sits behind a login wall; NavAI reads the data endpoints and `.json` files with its own read-only secret, and every tool answers only from pages the asking person can open (their tabs come from api/pulse.js). A refusal message means "ask your admin for access"; never work around it with custom SQL. **Inward** is only the new Inward page's `/api/inward` (Group 3b); the old `inward-data` file is gone.
 If a figure is marked **browser-computed**, compute it from the response fields with the formula given. Own SQL is only for questions no endpoint answers (label it `Custom analysis, not from the dashboard:`).
 
 ## Group 1 — Logistics → Performance
@@ -33,7 +33,7 @@ Browser-computed here: Delivery %, RTO %, Z-RTO %, FASR (`delivered_1attempt` ÷
 
 ## Group 2 — Logistics → Cost
 
-**Use the static file `logistics-cost-data` (what the page loads first; Jan–Sep 2026, all months in one file).** The live `/api/logistics-cost` times out (500 after ~150 s) — do not call it. The file's top-level aggregates (`totals`, `byZone`, `byCourier`, `byMode`, `slabCosts`) are ALL-TIME; **for a month always read the flat rows and filter by month with `where`**. All costs are ex-GST ₹; weights kg. Per-shipment and per-kg figures are computed in the browser = `cost ÷ n` and `cost ÷ wt` (do the same from the summed rows).
+**Month totals (fixed 26 Oct):** with the page on "All" months, FTL/PTL (`b2bMonths`) and 3PL (`tplMonths`, `tplWhMonths`) totals are the sum over **all** months; sum the rows yourself and never read one month's row as the total. **Use the static file `logistics-cost-data` (what the page loads first; Jan–Sep 2026, all months in one file).** The live `/api/logistics-cost` times out (500 after ~150 s) — do not call it. The file's top-level aggregates (`totals`, `byZone`, `byCourier`, `byMode`, `slabCosts`) are ALL-TIME; **for a month always read the flat rows and filter by month with `where`**. All costs are ex-GST ₹; weights kg. Per-shipment and per-kg figures are computed in the browser = `cost ÷ n` and `cost ÷ wt` (do the same from the summed rows).
 Row sources (check with `describe:true`):
 - `cube` rows `{courier_name, zone, mode, month, payment, acct, is_overbilled, slab, band, n, cost, wt, decl_wt, value, surcharge, over_n}` — B2C by month. Use `paths:['cube']`, `where:{month:'2026-09'}`, `groupBy:<zone|courier_name|mode|payment|slab|band>`, `sum:['n','cost','wt','value','surcharge']`.
 - `b2bMonths` `{key,trips,cost}` (FTL/PTL by month), `b2bVehicles` `{month_year,vehicle,transporter,freight_type,trips,billed}`, `b2bTransMonths` `{month,transporter,vehicle,freight_type,trips,billed}`.
@@ -58,29 +58,53 @@ Row sources (check with `describe:true`):
 Caveats: Sep claimable figures are not meaningful (rate card not applied to Sep invoices; claims register empty); origin/destination-city cost has no per-city rows in the file (only the API with filters, which times out) — say it is not available.
 
 
-## Group 3 — Inventory tab (verified against inv-data-7d.json, snapshot 29 Oct 04:34 IST)
+## Group 3 — Inventory tab (example values are from the 29 Oct file snapshot; formulas updated 23 Nov 2026)
 
 | Tab | Source | Notes |
 |---|---|---|
 | Inventory Health | file `inv-data-7d` (also `15d`, `30d`; the avg-sale toggle just selects the file) | Hourly cron. Page falls back to POST `/api/inventory` `{start,end,avgSaleWindowDays,…}` if the file is older than 2 h. |
 | Sales & Allocation | file `sales-alloc-data` or POST `/api/sales-allocation` `{start,end,category,subCategory,sku,channel,salesType,facility,region,…}` | |
-| Inward | file `inward-data` or POST `/api/inward` | Quantities are 0 (see above). |
+| Inward | POST `/api/inward` only (new page, see Group 3b) | The old `inward-data` file and legacy GRN report are gone. |
 | OOS loss | use the `oos_loss` tool | |
 
 | Question | How |
 |---|---|
 | **Total inventory (Regular view = what the page tile shows)** | `inv-data-7d` with `regular:true` → TOTAL 8,49,795 at that snapshot (PNQ 4,32,025; GGN 2,37,552; KOL 53,547; MUM 49,323; HYD 45,077; BLR 31,179; CHN 1,092). Do NOT use `summary.totalInvt` (all facility types, 8,70,247). Also path `facilityTypeSummary` (groupBy `facilityType`, sum `totalInvt`). |
 | **Stock of one SKU per warehouse** | `inv-data-7d` with `regular:{sku:'FR-OPC-M1'}` → PNQ 9,059; KOL 2,870; BLR 912; MUM 402; GGN 23 (total 13,266). |
-| Avg sale | `summary.avgSaleB2C` (B2C/day, the "Avg Sale (B2C)" tile), `summary.totalAvgSale` (all sales types). Window = the file (7/15/30). |
+| Avg sale | `summary.avgSaleB2C` (B2C/day, the "Avg Sale (B2C)" tile), `summary.totalAvgSale` (all sales types). Window = the file (7/15/30) and **ends on the last complete day (latest sales date minus 1)**, not the partial current day. **B2C = every Frido-fulfilled B2C channel** (Shopify, CRED, Amazon, Flipkart, Myntra, Blinkit, Zepto, Instamart: all channels mapped to B2C Order, not Shopify only). Since 23 Nov a SKU's company-wide avg sale counts **all** B2C orders for that SKU whichever warehouse shipped them (before, only warehouses holding stock were counted, so multi-warehouse SKUs such as W1 / Neck WoC / Lumbo read lower than the Sales tab DRR). The live fallback `/api/inventory` still uses the old per-warehouse sum, so the static `inv-data-*` files are the reference. Avg sale per SKU is still rounded up (ceil) in the files until the rounding fix is merged, so small SKUs can read slightly high. |
 | DOI | `summary.doi` (company-wide, all facility types). SKU: `skus` rows `{sku,doi,stockStatus,avgSale,…}`. Server formula: doi = floor(totalInvt / ceil(max(avgSale, orderAllocation))). |
 | Critical / Low / … SKUs | path `skus` with `where:{stockStatus:'Critical'}`, `sortBy:'doi'`, `desc:false`, `limit`. Counts: `statusBreakdown` rows `{status,count}`. Bands: ≤2 Critical, ≤15 Low, ≤45 Sufficient, else Excess; Out of Stock / No Demand / Dead (No Sale) are separate. **Note: SKU `totalInvt`/`doi` here are company-wide (all facility types).** |
 | Lead-time risk | path `leadTimeRisk` (top 20: sku, leadTime, doi, stockStatus, avgSale). |
 | Slow moving / dead stock | `slowMoving`, `deadStock` (sub-category roll-ups); SKU dead = `skus` `where:{isDead:true}`; counts `summary.deadStockCount`, `summary.deadStockUnits`. |
 | Stock by location (all types) | path `locations` (location,totalInvt,rtdInvt,rawInvt,rawBlockedInvt,avgSale,doi,stockStatus). Regular only → `regular:true`. |
 | Sales by warehouse | `sales-alloc-data` path `facilityAllocation` (location,qty,qtyPerDay,rev,sharePct); fill rate `fillRateByWarehouse` (fraction 0–1). Products `productSales`, categories `categorySales`. |
-| Inward by vendor / facility / week | `inward-data` `vendorPerformance`, `facilityBreakdown`, `weekly`, `summary` (GRN counts only meaningful). |
+| Inward by vendor / facility / week / SKU | `/api/inward`, see Group 3b. |
 
 **Browser-computed (InventoryHealthPage.jsx):** Regular KPI tiles = Σ over `skus[].facilities[]` where facilityType = Regular (equals `facilityTypeSummary` Regular with no slicers; `regular:true` reproduces it); warehouse cards use Regular stock but company-wide avgSale/DOI; detail table footer `doi = floor(totalInvt / ceil(max(sumAvgSale, sumOrderAllocation)))`.
+
+## Group 3b — Inventory → Inward (`inward`, POST `/api/inward`, new page, merged 23 Nov 2026)
+
+**Body** `{start,end, warehouse[], sourceType[], vendor[], category[], subCategory[], sku}`; all filters optional and applied on cached rows. Drill-downs: `{mode:'sku'|'vendor'|'subcat', sku|vendor|subCategory}` = that SKU / vendor / sub-category's **last 10 distinct GRN days** (full history, not range-bound; vendor mode with `start,end` also returns `skusSupplied` for the range). Range max 800 days; data starts 2025-04-01. The Data quality panel and `dq_export` are admin-only and not available to NavAI.
+
+**Scope, say this whenever you quote a total: finished goods only.** GRN lines whose code is raw material / packaging (PKG codes) or is not in the SKU master are **dropped from every number** (they appear only in the admin Data quality panel); `meta.excludedPkgUnits` = units dropped as packaging in the range. Internal (intra-company transfer) GRNs, the Vadgaon traceability facility and "WRONG" invoices are excluded. Source: `production.unicommerce_grn_refined`; `_RAW_PO<n>` codes multiply units by the pack quantity n.
+
+| Question | Path / how |
+|---|---|
+| **Inward units, GRNs, SKUs, vendors** | `kpis.cur.units`, `.grns`, `.skus`, `.vendors`; previous equal period (same number of days ending the day before `start`) in `kpis.prev.*`. |
+| **Rejected units / rejection %** | `kpis.cur.rejected`, `kpis.cur.rejectionPct` = rejected / (received + rejected) x 100. |
+| **Inward / sales** | `kpis.cur.ratio` = inward units / sales units in the same period (`kpis.cur.salesUnits`); above 1 stock is building, below 1 draining; `null` with no sales. |
+| **New SKUs** | `kpis.cur.newSkus` = SKUs whose first-ever inward date (full history) is inside the range. |
+| **Source type split** (Domestic / Import / Inhouse / Unmapped) | `sourceMix` rows `{sourceType, units, grns, avgGrnSize, share}`. "Unmapped" = vendor name missing from vendor_mapping (still counted so totals reconcile). |
+| **Inward value in rupees** | **Browser-computed, not in the response.** = sum over `skuMonthly` rows (`{sku, month, units}`) of units x that SKU's COGS for that month. Rate from `POST /api/cogs-monthly {skus, startMonth, endMonth}` (`product_cogs_monthly`: the SKU's real row, else the sub-category average; **no ASP fallback**); SKUs with no COGS are skipped and counted as "without COGS". The previous period uses `prevSkuMonthly`. Label it "inward value at COGS". |
+| **By vendor** | `vendors` rows (`vendor, sourceType, grns, units, skus`); every vendor ever used, lifetime totals and last GRN date, in `vendorMaster`. |
+| **By SKU / sub-category** | `skus` rows (`sku, name, category, subCategory, units, rejected, grns, lastInward, salesUnits`); every SKU in the master with its last-ever inward date, quantity and vendors in `masterSkus`. |
+| **By warehouse** | use the `warehouse` filter (locations in `filterOptions.warehouses`). |
+| **Daily trend** | `daily` rows `{date, total, sales, ...per source type}`. |
+| **Last 10 GRN days of a SKU / vendor / sub-category** | the `mode` calls above. |
+| **Days of inventory (DOI) of a SKU** | Not an Inward field: use Inventory Health (`inv-data-7d`), DOI = floor(stock / ceil(max(avg sale, order allocation))) with the **7-day** B2C avg sale. |
+| **Latest inward / sales date** | `meta.lastGrnDate`, `meta.lastSalesDate`. |
+
+Quote `meta.notes` when present (for example "Sales are not filtered by vendor or source type"). Received and rejected quantities now work; the old "shows 0" problem belonged to the retired legacy GRN report.
 
 ## Group 5 — P&L (other channels), Ads, Customers, Support (Sep 2026 values)
 
@@ -93,14 +117,14 @@ Caveats: Sep claimable figures are not meaningful (rate card not applied to Sep 
 | Total ad spend | sum of `ads.totals.*.spend` (`sum:['spend']`) | ₹9.42 Cr (94,211,354). `customer.kpis.totalSpend` ₹7.76 Cr is D2C Meta+Google+additional only. |
 | By campaign / category / SKU / ad type | `ads.campaigns`, `ads.byCategory`, `ads.bySku`, `ads.byAdType` | |
 | Prior period | `ads.prevTotals.<Platform>` | |
-**Browser-computed ROAS = total-sales ROAS:** channel `chMap.<Channel>.excRev` ÷ that channel's ad spend (Amazon 125,384,787 ÷ 11,390,327 = 11.01×; D2C = chMap.Shopify.excRev ÷ (Meta+Google) = 3.59×; Flipkart 4.72×). `ads.totals.*.roas` is the platform-reported ROAS (Amazon 7.31) — different; say which one. CTR = clicks ÷ impressions; CPC = spend ÷ clicks. ACoS/TACoS: not tracked.
+**Ads category / product tables:** spend not linked to a product (`target_type = 'all'` or no product name) is one **"Unattributed" category row** (spend only, no revenue), so no category's ROAS carries it; product and category ROAS are attributed-only; totals still include it. **Browser-computed ROAS = total-sales ROAS:** channel `chMap.<Channel>.excRev` ÷ that channel's ad spend (Amazon 125,384,787 ÷ 11,390,327 = 11.01×; D2C = chMap.Shopify.excRev ÷ (Meta+Google) = 3.59×; Flipkart 4.72×). `ads.totals.*.roas` is the platform-reported ROAS (Amazon 7.31) — different; say which one. CTR = clicks ÷ impressions; CPC = spend ÷ clicks. ACoS/TACoS: not tracked.
 
 **Customers** (`customer {start,end}`; server-computed `kpis`, previous period in `prevKpis`):
 | Metric | Path | Sep 2026 |
 |---|---|---|
 | New / returning / total customers | `kpis.newCustomers` / `returningCustomers` / `totalCustomers` | 1,06,224 / 48,585 / 1,54,809 |
 | Repeat rate | `kpis.repeatRate` (fraction) | 31.4% |
-| CAC | `kpis.cac` = (Meta+Google+additional spend) ÷ new customers | ₹731 |
+| CAC | `kpis.cac` = (Meta+Google+additional spend) / new customers. **This is the one CAC definition** (Customer page, Overview); the previous period now includes its own additional spend, so the up/down arrows compare like with like. | ₹731 |
 | LTV (12-month revenue/customer) | `kpis.ltv12` | ₹2,291 |
 | LTV:CAC | `kpis.ltvCac` (revenue-based, no margin) | 3.1× |
 | Orders / AOV | `kpis.totalOrders` / `kpis.aov` | 1,69,857 / ₹1,850 |
@@ -110,7 +134,7 @@ Cohort retention is browser-computed (cohort customers at index N ÷ index 0); m
 
 ## Group 4 — Sales / Returns / Overview (`bq`, `return-analysis`, `returns`, `cat-daily`)
 
-**`bq` params** `{start,end}` required. Optional comma-separated filters: `category`, `subCategory`, `sku`, `subChannel` (`ShopifyIndia` = all D2C India (page default), `MyFrido`, `Mobility`, `International`, or a raw SubChannel such as `Amazon Seller Central`), `channelGroup` (`d2c`,`ebo`,`marketplace`,`quick_commerce`,`offline`,`international`), `paymentType` (`Prepaid`,`COD`,`PPCOD`), `voucher`, `region`, `tier`, `state`, `city`, `country`. `channel` is ignored. **`phase:'fast'`** returns a ~2 MB payload in ~11 s with totals, `chMap`, `subChannelMap`, `netRevenueCalc`, `dailyArr`, `ads` — but NO `catMap`, `stateMap`, `skuRows`, `cityRows`, `pnlSalesRows` or `shopify.resolvedDailySKU`. Omit `phase` for category/state/SKU questions (≈60 MB, slow, then cached). Never use `phase:'slow'`.
+**`bq` response shape (staged loading, 3 Nov):** the page asks `bq` with a `phase` (`fast`, `sales_detail`, `pnl_detail`, `pnl_margin`, `ads_detail`) and gets only that part. **Without `phase` NavAI gets the full response, rows included** (large at long ranges, so always use `paths`). In the `pnl_detail` phase the P&L row arrays are replaced by `pnlAgg` / `pnlTrend` (same numbers, packed). **`bq` params** `{start,end}` required. Optional comma-separated filters: `category`, `subCategory`, `sku`, `subChannel` (`ShopifyIndia` = all D2C India (page default), `MyFrido`, `Mobility`, `International`, or a raw SubChannel such as `Amazon Seller Central`), `channelGroup` (`d2c`,`ebo`,`marketplace`,`quick_commerce`,`offline`,`international`), `paymentType` (`Prepaid`,`COD`,`PPCOD`), `voucher`, `region`, `tier`, `state`, `city`, `country`. `channel` is ignored. **`phase:'fast'`** returns a ~2 MB payload in ~11 s with totals, `chMap`, `subChannelMap`, `netRevenueCalc`, `dailyArr`, `ads` — but NO `catMap`, `stateMap`, `skuRows`, `cityRows`, `pnlSalesRows` or `shopify.resolvedDailySKU`. Omit `phase` for category/state/SKU questions (≈60 MB, slow, then cached). Never use `phase:'slow'`.
 `chMap` keys: Shopify (= D2C), Amazon, EBO, offline_sales, Blinkit, Flipkart, Myntra, CRED, Instamart, Zepto, Firstcry, International; each `{rev (gross inc GST), excRev, netRev, orders, qty}`. Maps are keyed objects: use `chMap.*.netRev` style paths.
 
 | Question | Paths | Verified |
@@ -132,7 +156,7 @@ Cohort retention is browser-computed (cohort customers at index N ÷ index 0); m
 2. **Overview Returns % tile** = (`cancellRev` + `rtoRevDirect` + `returnRev` + `cirRev`) ÷ `totalRev` × 100 (Sep 17.40%; exchange 3.74% separate). Not the same as D2C's 19.04%.
 3. Overview AOV = `blendedAOV` (₹1,995 Sep); Overview ASP = `totalRev` ÷ (`aspQty` || `totalQty`).
 4. Overview net-revenue ▲/▼ = `netRevenueCalc` vs the previous-period call's `netRevenueCalc`; channel scorecard share = `rev/totalRev`, delta vs `prevChMap.<ch>.rev`; top products = `skuRows` summed by sku.
-**Return Analysis (`return-analysis` {start,end,category?,subCategory?,subChannel?,paymentType?}) — D2C only, no browser math:** `kpis.returnPct` (actual statuses; Sep 19.04), `kpis.cancelPct/rtoPct/cirPct/exchangePct` (4.72 / 8.42 / 5.91 / 6.63), `dailyTrend`, `categoryTable`, `topProducts`, `paymentTypeTable`, `monthlyTable` (last 12 months), `returnReasons`, `exchangeReasons`. The Sales tile (provisional) and Return Analysis (actual) match for mature months and diverge for the latest 15 days.
+**Cancellations are counted once per order** in Return Analysis > Cancellation, Days Since Order (fixed 26 Oct; an order with several cancelled lines no longer counts several times). Cancellation % elsewhere is revenue-based (see PULSE_METRICS). **Return Analysis (`return-analysis` {start,end,category?,subCategory?,subChannel?,paymentType?}) — D2C only, no browser math:** `kpis.returnPct` (actual statuses; Sep 19.04), `kpis.cancelPct/rtoPct/cirPct/exchangePct` (4.72 / 8.42 / 5.91 / 6.63), `dailyTrend`, `categoryTable`, `topProducts`, `paymentTypeTable`, `monthlyTable` (last 12 months), `returnReasons`, `exchangeReasons`. The Sales tile (provisional) and Return Analysis (actual) match for mature months and diverge for the latest 15 days.
 **Returns portal (`returns` {start,end}, Clickpost):** `kpis.{total_requests,total_returns,total_exchanges,pickup_success,refund_processed,total_refunded,prepaid_count,cod_count}`, `byReason`, `byProduct`, `byDay`, `byCourier`, `byState`. Sep: 30,704 requests, 10,850 returns, 19,854 exchanges.
 **`cat-daily` {start,end,channel}** (channel required: shopify, ebo, amazon, amazon_vc, flipkart, blinkit, instamart, zepto, cred, firstcry, myntra, offline): nested map `subCatDateMap.<Cat>.<Sub>.<date>.{rev,excRev,units,cancelRev,rtoRev,cirRev,exchRev}`.
 **Financial MIS:** `/api/financial-mis` is NOT deployed (404) — say it is not available.

@@ -13,11 +13,12 @@ import { isAllowed, blockReason } from './lib/safety.js';
 import { log } from './lib/logger.js';
 import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
+import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkRawSql } from './lib/pageAccess.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
 import { formatTsv, unformattedNumbers } from './lib/format.js';
 import { runOosPage } from './lib/oosPage.js';
-import { runPnlTool } from './lib/pnlTool.js';
+import { runPnlTool, TABS as PNL_TAB } from './lib/pnlTool.js';
 import { runDashboardApi, ENDPOINTS as DASH_ENDPOINTS } from './lib/dashboardApi.js';
 import { isBillingError, alertBilling, UNAVAILABLE_MESSAGE } from './lib/billingAlert.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
@@ -52,6 +53,8 @@ ${KNOWLEDGE}`;
 // layer (not a query error); /chat counts these and tells the model not to retry.
 async function executeTool(user, command, target, seen) {
   const start = Date.now();
+  const sqlOk = checkRawSql(user);
+  if (!sqlOk.ok) return sqlOk;
   // Force IST in any SQL the model wrote (CURRENT_DATE() -> CURRENT_DATE('Asia/Kolkata')).
   if (target === 'bigquery' || target === 'supabase') command = normalizeSql(command, target);
 
@@ -107,6 +110,8 @@ async function executeOos(user, args, seen) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
   if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkOos(user);
+  if (!page.ok) return page;
   try {
     const { text } = await runOosPage({ limit: args?.limit, sku: args?.sku });
     const [head, ...rest] = text.split('\n');
@@ -130,6 +135,8 @@ async function executePnl(user, args, seen) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
   if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkPnl(user, PNL_TAB[String(args?.channel || '').trim().toLowerCase()] || 'all');
+  if (!page.ok) return page;
   try {
     const { text } = await runPnlTool(args, seen);
     log({ user: user.email, role: user.role, target: 'pnl', command: JSON.stringify(args || {}), allowed: true, resultSize: text.length, duration: Date.now() - start });
@@ -145,6 +152,8 @@ async function executeDashboardApi(user, args, seen) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
   if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkEndpoint(user, String(args?.endpoint || '').replace(/^\/?api\//, '').replace(/\.json$/, ''), args);
+  if (!page.ok) return page;
   try {
     const { text } = await runDashboardApi(args, seen);
     log({ user: user.email, role: user.role, target: 'dashboard_api', command: JSON.stringify({ endpoint: args?.endpoint, params: args?.params, paths: args?.paths }).slice(0, 500), allowed: true, resultSize: text.length, duration: Date.now() - start });
@@ -287,7 +296,8 @@ const httpServer = http.createServer(async (req, res) => {
       return;
     }
 
-    const user = authResult.user;
+    // The asking person's page access comes from api/pulse.js; without it (a direct call) NavAI gets no pages.
+    const user = { ...authResult.user, access: normaliseAccess(body?.access) };
     // dangerouslyAllowBrowser: this is a server; the SDK check only trips while the P&L tool's headless DOM globals exist.
     const anthropic = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
@@ -322,7 +332,7 @@ const httpServer = http.createServer(async (req, res) => {
       input_schema: {
         type: 'object',
         properties: {
-          endpoint: { type: 'string', description: 'bq, logistics, logistics-cost, inventory, inventory-oos, sales-allocation, inward, return-analysis, returns, customer, customer-support, financial-mis, cogs-monthly, cat-daily, courier-allocation, inv-data-7d, logistics-data-forward, logistics-cost-data, pnl-data-lastmonth, sales-alloc-data, inward-data, ads-data' },
+          endpoint: { type: 'string', description: 'bq, logistics, inventory, inventory-oos, sales-allocation, inward, return-analysis, returns, customer, customer-support, cogs-monthly, cat-daily, courier-allocation, inv-data-7d, logistics-data-forward, logistics-cost-data, pnl-data-lastmonth, sales-alloc-data, inward-data, ads-data' },
           params: { type: 'object', description: 'Request body the page sends, e.g. {"start":"2026-09-01","end":"2026-09-30"}' },
           paths: { type: 'array', items: { type: 'string' }, description: 'Dot-paths into the response to return (max 8)' },
           describe: { type: 'boolean', description: 'Return the response structure instead of values' },

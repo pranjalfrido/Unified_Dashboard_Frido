@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { getBQ } from './bigquery.js';
+import { dashAuth } from './dashboardApi.js';
 
 const DASH = process.env.DASHBOARD_URL || 'https://frido-navigator.vercel.app';
 const CACHE_MS = 30 * 60 * 1000;
@@ -34,7 +35,7 @@ function setupDom() {
   def('ResizeObserver', RO); w.ResizeObserver = RO;
   def('IntersectionObserver', RO); w.IntersectionObserver = RO;
   // The page fetches relative URLs (/api/cogs-monthly, /snd-rates.json); point them at the dashboard.
-  globalThis.fetch = (url, opts) => realFetch(typeof url === 'string' && url.startsWith('/') ? DASH + url : url, opts);
+  globalThis.fetch = (url, opts) => (typeof url === 'string' && url.startsWith('/') ? realFetch(DASH + url, { ...opts, headers: { ...dashAuth(), ...(opts && opts.headers) } }) : realFetch(url, opts));
   w.fetch = globalThis.fetch;
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   domReady = true;
@@ -51,7 +52,7 @@ async function loadPayload(start, end) {
   const key = `${start}|${end}`;
   const hit = payloadCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
-  const r = await fetch(`${DASH}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }), signal: AbortSignal.timeout(170000) });
+  const r = await fetch(`${DASH}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...dashAuth() }, body: JSON.stringify({ start, end }), signal: AbortSignal.timeout(170000) });
   if (!r.ok) throw new Error(`dashboard /api/bq returned ${r.status}`);
   const data = await r.json();
   payloadCache.set(key, { at: Date.now(), data });

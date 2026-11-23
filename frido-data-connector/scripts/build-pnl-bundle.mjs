@@ -17,7 +17,7 @@ const work = path.join(here, '..', '.pnl-src');
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
 const workPosix = work.split(path.sep).join('/');
-execSync(`git archive ${ref} src | tar --force-local -x -C "${workPosix}"`, { cwd: repo, stdio: 'inherit', shell: 'bash' });
+execSync(`git archive ${ref} src api/_pnlAgg.js api/_resolvedAgg.js | tar --force-local -x -C "${workPosix}"`, { cwd: repo, stdio: 'inherit', shell: 'bash' });
 
 // the one patch: expose kpiSummary (CM1 %, COGS %, marketing % …) through the page's own onSummary callback
 const pagePath = path.join(work, 'src', 'pnl', 'PnLPage.jsx');

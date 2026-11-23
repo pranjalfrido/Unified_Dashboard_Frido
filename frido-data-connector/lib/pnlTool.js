@@ -7,7 +7,7 @@ import { formatRupees, indianInt } from './format.js';
 import { istDates } from './dates.js';
 
 // Channel name -> P&L tab id. Overall P&L is deliberately not available.
-const TABS = {
+export const TABS = {
   d2c: 'shopify', shopify: 'shopify', amazon: 'amazon', flipkart: 'flipkart', ebo: 'ebo', retail: 'ebo',
   offline: 'offline', 'offline sales': 'offline', blinkit: 'blinkit', zepto: 'zepto', instamart: 'instamart',
   cred: 'cred', firstcry: 'firstcry', myntra: 'myntra',
