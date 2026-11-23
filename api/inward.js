@@ -51,7 +51,20 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// NavAI (the connector) reads this endpoint with its own read-only secret; middleware.js already checked the
+// secret and the path. It gets the same view as a non-admin member (no Data quality / dq_export); the connector
+// itself decides, from the asking user's permissions, whether that user may see Inward at all.
+function isNavai(req) {
+  const secret = process.env.NAVAI_API_SECRET || ''
+  const sent = String(req.headers?.['x-navai-secret'] || '')
+  if (secret.length < 32 || sent.length !== secret.length) return false
+  let diff = 0
+  for (let i = 0; i < sent.length; i++) diff |= sent.charCodeAt(i) ^ secret.charCodeAt(i)
+  return diff === 0
+}
+
 export async function authorizeInward(req, client) {
+  if (isNavai(req)) return { ok: true, isAdmin: false, userId: 'navai' }
   const h = req.headers?.authorization || req.headers?.Authorization || ''
   const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim()
   if (!token) return { status: 401, error: 'Not logged in.' }
