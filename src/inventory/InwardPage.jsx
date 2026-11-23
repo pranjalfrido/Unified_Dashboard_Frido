@@ -10,8 +10,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { IC, SearchableMultiSelect, ExportButton } from './theme.jsx'
-import { C, fmtBig, fmt } from '../utils.js'
-import { usePhone, inwardFilterCount, useLastGrnDays, useDqExport, useInwardCogsValue } from './useInward.js'
+import { C, fmtBig } from '../utils.js'
+import { usePhone, inwardFilterCount, useLastGrnDays, useDqExport } from './useInward.js'
 import DeltaBadge from '../responsive/DeltaBadge.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
 import FilterPicker from '../responsive/FilterPicker.jsx'
@@ -80,7 +80,7 @@ function Seg({ options, value, onChange, isPhone, label }) {
     <div role="group" aria-label={label} style={{ display: 'inline-flex', background: isPhone ? M.soft : IC.page, borderRadius: 10, padding: 2, gap: 2, maxWidth: '100%' }}>
       {options.map(o => (
         <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}
-          style={{ minHeight: isPhone ? 44 : 30, padding: isPhone ? '0 9px' : '0 10px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
+          style={{ minHeight: isPhone ? 30 : 30, padding: isPhone ? '0 9px' : '0 10px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
             background: value === o.value ? (isPhone ? '#fff' : IC.surface) : 'transparent', color: value === o.value ? IC.t1 : IC.t3,
             boxShadow: value === o.value ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>{o.label}</button>
       ))}
@@ -299,7 +299,7 @@ function PhoneLiRow({ name, tag, meta: metaLine, right, rightSub, onClick, first
   return (
     <button type="button" onClick={onClick} style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%',
-      padding: '10px 0', minHeight: 48, border: 'none', borderTop: first ? 'none' : `1px solid ${M.line}`,
+      padding: '16px 0', minHeight: 44, border: 'none', borderTop: first ? 'none' : `1px solid ${M.line}`,
       background: 'none', textAlign: 'left', fontFamily: 'var(--font)', cursor: 'pointer',
     }}>
       <span style={{ minWidth: 0 }}>
@@ -371,8 +371,8 @@ function SkuPhoneCard({ skuRows, subCatRows, skuView, setSkuView, invLoading, on
         <PhoneLiRow key={isSku ? r.skuKey : r.subCategory} first={i === 0}
           onClick={() => onDrill(isSku ? { mode: 'sku', id: r.sku, subtitle: r.subCategory } : { mode: 'subcat', id: r.subCategory, subtitle: r.category })}
           name={isSku ? r.sku : r.subCategory}
-          meta={<>{isSku && <span style={{ display: 'block' }}>{r.subCategory}</span>}<span style={{ display: 'block', marginTop: 1 }}>{metaOf(r)} · <DoiChip doi={r.doi} /></span></>}
-          right={fmtUnits(r.units)} rightSub="inward" />
+          meta={<>{isSku && <span style={{ display: 'block' }}>{r.subCategory}</span>}<span style={{ display: 'block', marginTop: 1 }}>{metaOf(r)}</span></>}
+          right={fmtUnits(r.units)} rightSub={<>inward Qty<span style={{ display: 'block', marginTop: 1 }}><DoiChip doi={r.doi} /></span></>} />
       ))}
       {rows.length > 5 && <ViewAllLink n={rows.length} noun={isSku ? 'SKUs' : 'sub-categories'} onClick={() => setFull(true)} />}
       <FullScreenList open={full} onClose={() => setFull(false)} title="SKU detail" noun={isSku ? 'SKUs' : 'sub-categories'} items={rows} sorts={sorts} initialSort="units"
@@ -404,6 +404,34 @@ function ProductMasterPhoneCard({ rows, invLoading, onDrill }) {
         secondary={r => `Stock ${r.stock == null ? (invLoading ? '…' : '—') : fmtUnits(r.stock)} · ${r.doi == null ? 'DOI —' : `DOI ${r.doi}d`}`}
         searchText={r => `${r.sku} ${r.category || ''} ${r.subCategory || ''}`}
         onSelect={r => { setFull(false); onDrill({ mode: 'sku', id: r.sku, subtitle: r.subCategory }) }} />
+    </Card>
+  )
+}
+
+// Vendor master phone card: every vendor ever used (3rd-party + Inhouse, Internal excluded), from
+// GRN_FLOOR — independent of the selected range (a vendor with no GRN in the current window still
+// shows up, with its true lifetime totals and last-ever GRN date). Same search-only entry → full-
+// screen pattern as Product master. "Products supplied" = sub-categories, lifetime, highest-units
+// first (the vendor drill-down's own "SKUs supplied" list is range-bound and SKU-level; this is the
+// master list's lifetime, sub-category-level equivalent).
+function VendorMasterPhoneCard({ rows, onDrill }) {
+  const [full, setFull] = useState(false)
+  const name = r => r.vendor
+  const sorts = [
+    { key: 'lastGrn', label: 'Last GRN', value: r => r.lastGrn || '', format: r => fmtDayYear(r.lastGrn) },
+    { key: 'rangeUnits', label: 'Units (range)', value: r => r.rangeUnits, format: r => fmtUnits(r.rangeUnits) },
+    { key: 'lifetimeUnits', label: 'Lifetime units', value: r => r.lifetimeUnits, format: r => fmtUnits(r.lifetimeUnits) },
+  ]
+  return (
+    <Card isPhone title="Vendor master" sub={`${fmtUnits(rows.length)} vendors · since Apr-25`}>
+      <button type="button" onClick={() => setFull(true)} style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: M.soft, border: `1px solid ${M.line}`, borderRadius: 12,
+        padding: '10px 12px', fontSize: 13, color: M.muted, fontFamily: 'var(--font)', cursor: 'pointer', textAlign: 'left',
+      }}>⌕ Search any vendor, even if not inwarded in this range</button>
+      <FullScreenList open={full} onClose={() => setFull(false)} title="Vendor master" noun="vendors" items={rows} sorts={sorts} initialSort="lastGrn"
+        name={name} sub={r => `${r.sourceType} · Lifetime ${fmtUnits(r.lifetimeGrns)} GRNs · ${fmtUnits(r.lifetimeUnits)} units · ${fmtUnits(r.skuCount)} SKUs`}
+        searchText={r => `${r.vendor} ${r.sourceType || ''}`} rowLayout="line"
+        onSelect={r => { setFull(false); onDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType }) }} />
     </Card>
   )
 }
@@ -514,6 +542,31 @@ function FiltersButton({ opts, filters, setFilters }) {
   )
 }
 
+// Small "i" circle → popover with the ratio/finished-goods notes (desktop only; phone keeps the
+// always-visible lines under the master card, matching the mockup's inline ⓘ convention there).
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Inward notes"
+        style={{ display: 'inline-grid', placeItems: 'center', width: 20, height: 20, borderRadius: '50%', border: `1px solid ${IC.border2}`, background: open ? IC.accDim : IC.surface, color: IC.t3, fontSize: 11, fontStyle: 'italic', fontWeight: 700, fontFamily: 'var(--font)', cursor: 'pointer', padding: 0 }}>
+        i
+      </button>
+      {open && (
+        <div role="dialog" style={{ position: 'absolute', top: '125%', right: 0, zIndex: 200, width: 280, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.18)', padding: '10px 12px', fontSize: 12, color: IC.t2, lineHeight: 1.5 }}>
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Removable "Filtered:" chips (both layouts).
 function FilterChips({ filters, setFilters, isPhone }) {
   const items = []
@@ -583,11 +636,21 @@ function LastGrnDrill({ mode, id, subtitle, isPhone, onClose, range }) {
       {mode === 'vendor' && data?.skusSupplied && (
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: isPhone ? M.ink : IC.t1, marginBottom: 6 }}>SKUs supplied{range ? ` · ${fmtRange(range.start, range.end)}` : ''}</div>
-          {data.skusSupplied.length
-            ? <InwardTable columns={skuSuppliedCols} rows={data.skusSupplied.map((r, i) => ({ ...r, _key: `${r.sku}-${i}` }))} isPhone={isPhone}
-                title={`${id} · SKUs supplied`} filename={`inward_skus_supplied_${id}.csv`} defaultSort={{ key: 'units', dir: 'desc' }}
-                phoneKeys={['sku', 'subCategory', 'units']} emptyText="No SKUs in this range." hideExport />
-            : <div style={{ fontSize: 12.5, color: IC.t3 }}>No SKUs in this range.</div>}
+          {!data.skusSupplied.length ? (
+            <div style={{ fontSize: 12.5, color: IC.t3 }}>No SKUs in this range.</div>
+          ) : isPhone ? (
+            // Flat card-rows instead of a cramped 3-column table — sub-category names are long
+            // ("Orthotics Heel Protector") and were getting cut off with "…" in a fixed-width cell.
+            <div>
+              {data.skusSupplied.map((r, i) => (
+                <PhoneLiRow key={`${r.sku}-${i}`} first={i === 0} name={r.sku}
+                  meta={r.subCategory} right={fmtUnits(r.units)} rightSub="units" />
+              ))}
+            </div>
+          ) : (
+            <InwardTable columns={skuSuppliedCols} rows={data.skusSupplied.map((r, i) => ({ ...r, _key: `${r.sku}-${i}` }))} isPhone={false}
+              title={`${id} · SKUs supplied`} filename={`inward_skus_supplied_${id}.csv`} defaultSort={{ key: 'units', dir: 'desc' }} hideExport />
+          )}
         </div>
       )}
     </div>
@@ -621,20 +684,13 @@ function LastGrnDrill({ mode, id, subtitle, isPhone, onClose, range }) {
 // the mockup wants both series on screen together regardless of which tile is selected, which the
 // component doesn't otherwise support; Inward's own tile keeps its real ▲/▼ vs previous period via
 // `delta`, unaffected by this reuse of `prevPoint` for the chart only.
-function PhoneMasterCard({ k, delta, trend, grain, meta, layout, cogsValue, cogsDelta }) {
+function PhoneMasterCard({ k, delta, trend, grain, meta, layout }) {
   const salesPoint = r => r.sales
   const metrics = [
     {
       key: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), sub: `Avg ${fmtUnits(k.cur.units / (meta.days || 1))}/day · ${fmtUnits(k.cur.grns)} GRNs`,
       delta: delta('units'), deltaNeutral: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits,
       def: '3rd-party (Domestic/Import) + Inhouse units received in GRNs (pack-adjusted). Chart: solid = inward, dashed = sales.',
-    },
-    {
-      key: 'cogsValue', label: 'Inward value', tileLabel: 'Inward ₹', value: cogsValue.loading ? '…' : cogsValue.value == null ? '—' : fmt(cogsValue.value),
-      delta: cogsValue.loading ? null : cogsDelta, deltaLoading: cogsValue.loading,
-      sub: cogsValue.loading ? 'Loading COGS…' : cogsValue.skusWithoutCogs ? `${fmtUnits(cogsValue.skusWithoutCogs)} SKUs without COGS` : 'All SKUs have a COGS rate',
-      deltasHidden: false, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits,
-      def: 'Inward units × COGS/unit for that month, from product_cogs_monthly (the same monthly rate card the P&L page uses). No ASP fallback: a SKU with no real monthly rate or sub-category average is excluded from this total and counted as "without COGS".',
     },
     { key: 'grns', label: 'GRNs', value: fmtUnits(k.cur.grns), delta: delta('grns'), deltaNeutral: true, sub: 'distinct GRN codes', point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct GRN codes in the period.' },
     { key: 'skus', label: 'SKUs received', value: fmtUnits(k.cur.skus), sub: `${fmtUnits(k.cur.newSkus)} new`, deltasHidden: true, point: r => r.total, prevPoint: salesPoint, fmtPoint: fmtUnits, def: 'Distinct SKUs received; "new" = never received before (since Apr-25).' },
@@ -662,15 +718,11 @@ export default function InwardPage({ data, loading, error, status, invData, invL
   const [skuSearchQ, setSkuSearchQ] = useState('')
   const [skuView, setSkuView] = useState('sku') // 'sku' | 'subcat' — SKU detail table's roll-up toggle
   const [masterSearch, setMasterSearch] = useState('')
+  const [vendorMasterSearch, setVendorMasterSearch] = useState('')
 
   const meta = data?.meta
   const opts = data?.filterOptions || {}
   const k = data?.kpis
-  // "Inward value ₹" tile (small addition): units × COGS/unit via product_cogs_monthly, same rate
-  // card the P&L page uses. No ASP fallback (an inward line has no selling price) — a SKU with no
-  // real monthly rate and no sub-category average is counted in skusWithoutCogs, never estimated.
-  const cogsRange = meta ? { start: meta.start, end: meta.end, prevStart: meta.prevStart } : null
-  const cogsValue = useInwardCogsValue(data?.skuMonthly, cogsRange, data?.prevSkuMonthly)
   const idx = useMemo(() => stockIndex(invData), [invData])
   const skuRows = useMemo(() => attachStock(data?.skus, idx), [data?.skus, idx])
   // Sub-category roll-up of skuRows: units/GRNs summed, stock/avg sale summed, DOI recomputed from
@@ -717,15 +769,8 @@ export default function InwardPage({ data, loading, error, status, invData, invL
 
   const rangeLine = meta ? `${fmtRange(meta.start, meta.end)} · ▲/▼ vs ${fmtRange(meta.prevStart, meta.prevEnd)}` : ''
   const delta = key => pctChange(k?.cur?.[key], k?.prev?.[key])
-  const cogsDelta = cogsValue.value != null && cogsValue.prevValue != null && cogsValue.prevValue > 0 ? ((cogsValue.value - cogsValue.prevValue) / cogsValue.prevValue) * 100 : null
   const kpiList = k ? [
     { id: 'units', label: 'Inward units', value: fmtUnits(k.cur.units), delta: delta('units'), sub: `${fmtUnits(k.cur.rejected)} rejected`, def: '3rd-party (Domestic/Import) + Inhouse units received in GRNs (pack-adjusted), SKUs in the SKU master only. Internal transfers are excluded.' },
-    {
-      id: 'cogsValue', label: 'Inward value', short: 'Inward ₹', value: cogsValue.loading ? '…' : cogsValue.value == null ? '—' : fmt(cogsValue.value),
-      delta: cogsValue.loading ? null : cogsDelta,
-      sub: cogsValue.loading ? 'Loading COGS…' : cogsValue.skusWithoutCogs ? `${fmtUnits(cogsValue.skusWithoutCogs)} SKUs without COGS` : 'All SKUs have a COGS rate',
-      def: 'Inward units × COGS/unit for that month, from product_cogs_monthly (the same monthly rate card the P&L page uses). No ASP fallback: a SKU with no real monthly rate or sub-category average is excluded from this total and counted as "without COGS".',
-    },
     { id: 'grns', label: 'GRNs', value: fmtUnits(k.cur.grns), delta: delta('grns'), sub: 'distinct GRN codes', def: 'Distinct GRN codes in the period.' },
     { id: 'skus', label: 'SKUs received', short: 'SKUs', value: fmtUnits(k.cur.skus), delta: delta('skus'), sub: 'distinct SKUs', def: 'Distinct SKUs received.' },
     { id: 'vendors', label: 'Active vendors', short: 'Vendors', value: fmtUnits(k.cur.vendors), delta: delta('vendors'), sub: 'with at least 1 GRN', def: 'Vendors (unified name) with at least one GRN.' },
@@ -812,6 +857,20 @@ export default function InwardPage({ data, loading, error, status, invData, invL
   ]
   const masterSearchFn = (r, q) => r.sku.toLowerCase().includes(q) || String(r.subCategory || '').toLowerCase().includes(q) || String(r.category || '').toLowerCase().includes(q)
 
+  // Vendor master: every vendor ever used (lifetime), independent of the date range except the
+  // "Units (range)" column — same convention as Product master above.
+  const vendorMasterCols = [
+    { key: 'vendor', label: 'Vendor', text: r => r.vendor, maxWidth: 260 },
+    { key: 'sourceType', label: 'Source', text: r => r.sourceType },
+    { key: 'lastGrn', label: 'Last GRN', text: r => fmtDayYear(r.lastGrn), csv: r => r.lastGrn, sort: r => r.lastGrn },
+    { key: 'rangeUnits', label: 'Units (range)', num: true, text: r => fmtUnits(r.rangeUnits), csv: r => r.rangeUnits },
+    { key: 'lifetimeGrns', label: 'Lifetime GRNs', num: true, text: r => fmtUnits(r.lifetimeGrns), csv: r => r.lifetimeGrns },
+    { key: 'lifetimeUnits', label: 'Lifetime units', num: true, text: r => fmtUnits(r.lifetimeUnits), csv: r => r.lifetimeUnits },
+    { key: 'skuCount', label: 'SKUs supplied', num: true, text: r => fmtUnits(r.skuCount), csv: r => r.skuCount },
+    { key: 'productsSupplied', label: 'Products supplied', text: r => (r.productsSupplied || []).map(p => p.subCategory).join(', ') || '—', csv: r => (r.productsSupplied || []).map(p => p.subCategory).join('; '), maxWidth: 320 },
+  ]
+  const vendorMasterSearchFn = (r, q) => r.vendor.toLowerCase().includes(q) || String(r.sourceType || '').toLowerCase().includes(q)
+
   const loadingFirst = !data && !error
   const skel = hgt => <div aria-busy="true" style={{ height: hgt, borderRadius: isPhone ? M.radius.card : 16, background: isPhone ? '#ebe8e1' : IC.surface, opacity: 0.7, pointerEvents: 'none' }} />
 
@@ -843,11 +902,17 @@ export default function InwardPage({ data, loading, error, status, invData, invL
 
   return (
     // The page is its own (full-area) scroll container, like the other Inventory sub-pages.
-    <div className="inward-page" style={{ background: isPhone ? M.bg : IC.page, flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: isPhone ? '12px 16px 96px' : width >= 1280 ? '18px 24px 40px' : '16px 20px 40px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap }}>
+    // Inward has no sidebarTop filler row (Health/Sales show "Updated ... / Latest sales ..." there),
+    // so matching Health's 16px top padding left a visibly bigger empty gap above the first row here
+    // than on Health — tightened to line up with how Health actually looks, not just its padding value.
+    <div className="inward-page" style={{ background: isPhone ? M.bg : IC.page, flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: isPhone ? '12px 16px 96px' : width >= 1280 ? '0px 24px 40px' : '0px 20px 40px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: isPhone ? gap : 18 }}>
       {!isPhone && sidebarTop && <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>{sidebarTop}</div>}
       {/* Title, date range and Refresh live in the app's top bar (desktop) / green header (phone). */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12, color: muted }}>{rangeLine}{loading && data ? ' · updating…' : ''}</div>
+        {!isPhone && <div style={{ fontSize: 12, color: muted }}>{rangeLine}{loading && data ? ' · updating…' : ''}</div>}
+        {!isPhone && meta && (
+          <InfoTip text={`Inward ÷ sales above 1 = stock building.${(meta?.notes || []).map(n => ` ${n}`).join('')} ${finishedGoodsNote}`} />
+        )}
         {!isPhone && <FiltersButton opts={opts} filters={filters} setFilters={setFilters} />}
       </div>
       <FilterChips filters={filters} setFilters={setFilters} isPhone={isPhone} />
@@ -861,21 +926,13 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           green-gradient card — replaces the separate KPI grid + Trend card on phone only. */}
       {loadingFirst ? skel(isPhone ? 300 : 96) : k && isPhone ? (
         <div>
-          <PhoneMasterCard k={k} delta={delta} trend={trend} grain={grain} meta={meta} layout={width >= 768 ? 'tablet' : 'phone'} cogsValue={cogsValue} cogsDelta={cogsDelta} />
-          <div style={{ fontSize: 12, color: muted, marginTop: 8 }}>
-            Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
-          </div>
-          {meta && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{finishedGoodsNote}</div>}
+          <PhoneMasterCard k={k} delta={delta} trend={trend} grain={grain} meta={meta} layout={width >= 768 ? 'tablet' : 'phone'} />
         </div>
       ) : k && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 10, alignItems: 'stretch' }}>
             {kpiList.map(t => <KpiDesk key={t.id} label={t.label} value={t.value} delta={t.delta} sub={t.sub} title={t.def} neutral={t.neutral} lowerIsBetter={t.lowerIsBetter} />)}
           </div>
-          <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>
-            Inward ÷ sales above 1 = stock building.{(meta?.notes || []).map(n => ` ${n}`).join('')}
-          </div>
-          {meta && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{finishedGoodsNote}</div>}
         </div>
       )}
 
@@ -1002,6 +1059,7 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           with zero inward in the current window is still found, with its true last-ever inward).
           Phone: search-only entry card → full-screen results (item 4); desktop stays the table. */}
       {data && isPhone && <ProductMasterPhoneCard rows={productMasterRows} invLoading={invLoading} onDrill={setDrill} />}
+      {data && isPhone && <VendorMasterPhoneCard rows={data.vendorMaster || []} onDrill={setDrill} />}
       {data && !isPhone && (
         <Card isPhone={false} inlineHeader title="Product master" sub={`${productMasterRows.length} SKUs · search any SKU, even ones not inwarded in the selected range`}
           action={(
@@ -1018,6 +1076,29 @@ export default function InwardPage({ data, loading, error, status, invData, invL
           <InwardTable columns={masterCols} rows={productMasterRows.map(r => ({ ...r, _key: r.skuKey }))} isPhone={false} title="Product master" filename="inward_product_master.csv"
             defaultSort={{ key: 'avgSale', dir: 'desc' }} phoneKeys={['sku', 'lastInward', 'lastInwardQty', 'rangeQty']} externalSearch={masterSearch}
             search={masterSearchFn} searchPlaceholder="Search SKU, category, sub-category…"
+            fixedHeight={440} />
+        </Card>
+      )}
+
+      {/* Vendor master — every vendor ever used (3rd-party + Inhouse, Internal excluded), since
+          Apr-25, independent of the selected date range except "Units (range)". Same convention as
+          Product master above: phone gets the search-only card, desktop keeps the full table. */}
+      {data && !isPhone && (
+        <Card isPhone={false} inlineHeader title="Vendor master" sub={`${(data.vendorMaster || []).length} vendors · since Apr-25 · search any vendor, even ones not inwarded in the selected range`}
+          action={(
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, marginLeft: 'auto', justifyContent: 'flex-end' }}>
+              <input type="text" value={vendorMasterSearch} onChange={e => setVendorMasterSearch(e.target.value)} placeholder="Search vendor, source type…"
+                style={{ height: '100%', fontSize: 11.5, padding: '0 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border2}`, width: 220, boxSizing: 'border-box' }} />
+              <ExportButton filename={`inward_vendor_master.csv`} rows={data.vendorMaster || []}
+                columns={[{ label: 'Vendor', key: 'vendor' }, { label: 'Source', key: 'sourceType' }, { label: 'Last GRN', key: 'lastGrn' },
+                  { label: 'Units (range)', key: 'rangeUnits' }, { label: 'Lifetime GRNs', key: 'lifetimeGrns' }, { label: 'Lifetime units', key: 'lifetimeUnits' },
+                  { label: 'SKUs supplied', key: 'skuCount' }, { label: 'Products supplied', get: r => (r.productsSupplied || []).map(p => p.subCategory).join('; ') }]} />
+            </div>
+          )}>
+          <InwardTable columns={vendorMasterCols} rows={(data.vendorMaster || []).map(r => ({ ...r, _key: r.vendor }))} isPhone={false} title="Vendor master" filename="inward_vendor_master.csv"
+            defaultSort={{ key: 'lastGrn', dir: 'desc' }} phoneKeys={['vendor', 'lastGrn', 'rangeUnits', 'lifetimeUnits']} externalSearch={vendorMasterSearch}
+            search={vendorMasterSearchFn} searchPlaceholder="Search vendor, source type…"
+            onRowClick={r => setDrill({ mode: 'vendor', id: r.vendor, subtitle: r.sourceType })}
             fixedHeight={440} />
         </Card>
       )}

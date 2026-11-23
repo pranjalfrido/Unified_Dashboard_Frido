@@ -5010,7 +5010,7 @@ function Topnav({ logCostCtrl, allowedTabs, salesMenu, goToSalesSub, shopifyView
         return H({ title: 'Inventory',
           date: ctrl?.filters && datePill(ctrl.filters, ctrl.setFilters, ctrl.onRefresh, ctrl.loading),
           filter: iw?.openFilters && <HeaderFilterIcon count={iw.filterCount} onClick={iw.openFilters} label="Inward filters" />,
-          menu: { items: ctrl?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: ctrl.onRefresh }] : [], title: 'Inventory · Inward', note: 'GRNs from Unicommerce · stock as on Inventory Health' },
+          menu: { items: ctrl?.onRefresh ? [{ id: 'refresh', label: 'Refresh data', onSelect: ctrl.onRefresh }] : [], title: 'Inventory · Inward', note: iw?.note || 'GRNs from Unicommerce · stock as on Inventory Health' },
           subTabs: subTabs.length > 1 ? subTabs : null, activeSub: 'inward', onSub: setInvTab })
       }
       const tab = invTab === 'sales' ? 'sales' : 'health'
@@ -20266,8 +20266,13 @@ function hasSalesAccess(allowedTabs) { return !allowedTabs || SALES_KEYS.some(k 
 function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => allowedTabs.includes(k)) }
 function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
-// Inventory → Inward (inventory:inward). Admins see it by default; api/inward.js re-checks on the server.
-function hasInwardAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('inventory:inward') }
+// Inventory → Inward: shown by default to anyone who already has Inventory access (Health/Detail or
+// Sales & Allocation), same as those two sub-tabs — not a separately-gated grant. 'inventory:inward'
+// still exists so access can be explicitly revoked/granted on its own when needed. Admins see it by
+// default either way. api/inward.js re-checks on the server.
+function hasInwardAccess(allowedTabs) {
+  return !allowedTabs || allowedTabs.includes('inventory:inward') || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:sales')
+}
 function hasInventoryAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:inward') }
 
 // The /api/bq filter body for the current filters - the exact rules the Dashboard's fetch effect

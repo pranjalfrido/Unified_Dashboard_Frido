@@ -23,7 +23,7 @@ import { getBQ, requestTimer } from './_bq.js'
 import { buildFacilityMaps } from './_inventory_shared.js'
 import {
   INWARD_PERMISSION, GRN_SQL, DQ_SQL, DQ_UNMAPPED_SKU_DETAIL_SQL, DQ_UNMAPPED_VENDOR_DETAIL_SQL, SALES_SQL,
-  SKU_GRN_SQL, VENDOR_GRN_SQL, SUBCAT_GRN_SQL, MASTER_SQL, SKUMAP_SQL, FIRST_SKU_SQL, LAST_SKU_SQL, EXCLUDED_PKG_SQL,
+  SKU_GRN_SQL, VENDOR_GRN_SQL, SUBCAT_GRN_SQL, MASTER_SQL, SKUMAP_SQL, FIRST_SKU_SQL, LAST_SKU_SQL, VENDOR_MASTER_SQL, EXCLUDED_PKG_SQL,
   periods, isIsoDate, normaliseFilters, nonSaleChannels, buildInwardPayload, buildLastGrnDays, buildVendorSkusSupplied, GRN_FLOOR,
 } from './_inward_core.js'
 
@@ -69,9 +69,11 @@ export async function authorizeInward(req, client) {
   if (profile.is_admin) {
     result = { ok: true, isAdmin: true, userId }
   } else {
-    const { data: grant, error: grantErr } = await admin.from('user_permissions').select('tab').eq('user_id', userId).eq('tab', INWARD_PERMISSION).limit(1)
+    // Inward is available to anyone who already has Inventory access (Health/Detail or Sales &
+    // Allocation), not only a separate 'inventory:inward' grant — matches the sidebar's hasInwardAccess.
+    const { data: grants, error: grantErr } = await admin.from('user_permissions').select('tab').eq('user_id', userId).in('tab', [INWARD_PERMISSION, 'inventory', 'inventory:detail', 'inventory:sales'])
     if (grantErr) return { status: 503, error: 'Auth service unavailable.' }
-    result = grant?.length ? { ok: true, isAdmin: false, userId } : { status: 403, error: "You don't have access to Inventory → Inward." }
+    result = grants?.length ? { ok: true, isAdmin: false, userId } : { status: 403, error: "You don't have access to Inventory → Inward." }
   }
   authCache.set(token, result, AUTH_TTL_MS)
   return result
@@ -96,7 +98,7 @@ async function loadRange(range, isAdmin, timer) {
     const { channelToDescription } = buildFacilityMaps()
     const span = { qStart: range.prevStart, qEnd: range.end }
     const excl = nonSaleChannels(channelToDescription)
-    const [grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, dqRows, excludedPkgRows] = await Promise.all([
+    const [grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, vendorMasterRows, dqRows, excludedPkgRows] = await Promise.all([
       q(bq, timer, 'grn', GRN_SQL, span),
       q(bq, timer, 'sales', SALES_SQL, { ...span, excl }, { excl: ['STRING'] }),
       q(bq, timer, 'master', MASTER_SQL),
@@ -107,12 +109,14 @@ async function loadRange(range, isAdmin, timer) {
       // Same full-history scan, but for the Product master table's Last inward date/qty/vendor —
       // so a SKU with no GRN in the selected range still shows its true last-ever inward.
       q(bq, timer, 'last_sku', LAST_SKU_SQL, { qEnd: range.end }),
+      // Vendor master: every vendor ever used, full history, for lifetime totals + last GRN date.
+      q(bq, timer, 'vendor_master', VENDOR_MASTER_SQL, { qEnd: range.end }),
       isAdmin ? q(bq, timer, 'dq', DQ_SQL, { qStart: range.start, qEnd: range.end }) : Promise.resolve(null),
       // "Finished goods only · X units … not shown" note (small addition) — units excluded as raw
       // material/packaging in the CURRENT period only (not prevStart → end like `span`).
       q(bq, timer, 'excluded_pkg', EXCLUDED_PKG_SQL, { qStart: range.start, qEnd: range.end }),
     ])
-    const data = { grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, dqRows, excludedPkgUnits: Number(excludedPkgRows?.[0]?.units) || 0 }
+    const data = { grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, vendorMasterRows, dqRows, excludedPkgUnits: Number(excludedPkgRows?.[0]?.units) || 0 }
     dataCache.set(key, data, DATA_TTL_MS)
     return data
   })()

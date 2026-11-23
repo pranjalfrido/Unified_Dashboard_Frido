@@ -18,18 +18,16 @@ export default function KpiTile({ label, value, valueColor, loading = false, del
   const body = (
     <>
       {/* Label gets its own full-width line so it never truncates (e.g. "INWARD UNITS", "ACTIVE
-          VENDORS", "REJECTION %"); the ▲/▼ delta moves to its own line below the value instead of
-          sharing the label's line, where it used to steal width and force an ellipsis. */}
+          VENDORS", "REJECTION %"). Value and ▲/▼ delta share the line below it, delta right-aligned
+          (Sales mobile's own KPI tile convention) — value truncates first if space is tight. */}
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
         <span style={{ fontSize: M.type.label, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{label}</span>
         {dot && <span aria-label={`status ${status}`} style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />}
       </span>
-      <span style={{ display: 'block', marginTop: 3, fontSize: M.type.tileValue, fontWeight: 700, color: valueColor || M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
-      {!deltaHidden && (
-        <span style={{ display: 'block', marginTop: 2 }}>
-          <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} pts={deltaPts} neutral={deltaNeutral} size={11.5} />
-        </span>
-      )}
+      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, marginTop: 3, minWidth: 0 }}>
+        <span style={{ fontSize: M.type.tileValue, fontWeight: 700, color: valueColor || M.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums', minWidth: 0 }}>{loading ? <Skeleton width="55%" height={15} /> : value}</span>
+        {!deltaHidden && <DeltaBadge delta={delta} loading={deltaLoading} hidden={deltaHidden} lowerIsBetter={lowerIsBetter} pts={deltaPts} neutral={deltaNeutral} size={11.5} />}
+      </span>
     </>
   )
   const style = {

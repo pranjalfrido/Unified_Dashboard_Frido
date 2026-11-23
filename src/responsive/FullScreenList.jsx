@@ -14,7 +14,7 @@ import { rankItems, barMax, barPctOf } from './rankSort.js'
 //   flipOnRetap / initialDir, scopeFor / initialScopeAll, rowLayout: as in MobileRankedList (opt-in)
 const PAGE = 20
 
-export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout }) {
+export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout, autoFocusSearch = false }) {
   const M = C.m
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState(initialSort || sorts[0].key)
@@ -73,6 +73,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
       <MobilePageHeader onBack={onClose} title={title} sub={`${list.length} ${noun}`} />
       <div style={{ background: '#fff', padding: '10px 14px 10px', borderBottom: `1px solid ${M.line}` }}>
         <input type="search" value={q} onChange={e => reset(setQ)(e.target.value)} placeholder={`Search ${noun}…`} aria-label={`Search ${noun}`}
+          autoFocus={autoFocusSearch && open}
           style={{ width: '100%', marginTop: 0, fontSize: 16, padding: '10px 12px', borderRadius: 12, border: `1px solid ${M.line}`, background: M.soft, color: M.ink, outline: 'none', fontFamily: 'var(--font)' }} />
         <div role="group" aria-label="Sort by" style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 8, scrollbarWidth: 'none' }}>
           {sorts.map(s => chip(s.key === sortKey, s.label, reset(() => pickSort(s.key))))}

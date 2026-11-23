@@ -262,6 +262,31 @@ GROUP BY r.sku, ld.last_grn_date, r.vendor`
 export const MASTER_SQL = `SELECT TRIM(Product_Code) AS code, TRIM(Category_Name) AS category, TRIM(Sub_category) AS sub_category, TRIM(Name) AS name, TRIM(Type) AS type
 FROM ${TBL.master} WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != ''`
 
+// Vendor master: every 3rd-party/Inhouse vendor ever used (from GRN_FLOOR, Internal excluded — same
+// rule as everywhere else on this page), full history through @qEnd — independent of the page's
+// selected range, so a vendor with no GRN in the selected window still appears with its true
+// lifetime totals and last-ever GRN date. Mirrors LAST_SKU_SQL's shape, but per vendor: one row per
+// (vendor, GRN date, SKU, sub-category) — SKU/sub-category breakdown is rolled up in JS, since a
+// GROUP BY here would need every grain at once anyway.
+export const VENDOR_MASTER_SQL = `
+WITH ${GRN_FILTERED_CTES.replace("AND grn_date BETWEEN CAST(@qStart AS DATE) AND CAST(@qEnd AS DATE)", 'AND grn_date <= CAST(@qEnd AS DATE)')},
+res AS (
+  SELECT f.grn_date, f.GRNCode AS grn_code,
+    COALESCE(v.unified_vendor_name, f.VendorName) AS vendor,
+    COALESCE(v.vendor_type, '${UNMAPPED_SOURCE}') AS source_type,
+    m.product_code AS sku, m.sub_category,
+    SAFE_CAST(f.QuantityReceived AS FLOAT64) * f.pack_qty AS qty
+  FROM flt f
+  JOIN skumap s ON s.productid = TRIM(f.final_sku_code)
+  JOIN master m ON m.product_code = s.masterskucode
+  LEFT JOIN vmap v ON v.vendor_name = f.VendorName
+  WHERE COALESCE(v.vendor_type, '${UNMAPPED_SOURCE}') != 'Internal'
+)
+SELECT vendor AS v, source_type AS t, CAST(grn_date AS STRING) AS d, grn_code AS g, sku AS s, sub_category AS sc,
+  SUM(IFNULL(qty, 0)) AS q
+FROM res
+GROUP BY v, t, d, g, s, sc`
+
 // Units excluded as raw material / packaging (the PKG-code filter in GRN_FILTERED_CTES), for the
 // phone + laptop "Finished goods only · X units … not shown" note. Small addition only — surfaces
 // an existing exclusion, doesn't change what's excluded. Same date-floor/facility/invoice filters
@@ -338,7 +363,7 @@ const val = x => (x && typeof x === 'object' && 'value' in x ? x.value : x)
 //   lastSkuRows  LAST_SKU_SQL rows (latest-ever inward date/qty/vendor per SKU, GRN_FLOOR → end) —
 //                drives the Product master table's Last inward columns; optional (defaults to none)
 //   refRows      optional facility/channel reference rows (defaults to api/data snapshots)
-export function buildInwardPayload({ grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, dqRows, refRows, range, filters, isAdmin, excludedPkgUnits }) {
+export function buildInwardPayload({ grnRows, salesRows, masterRows, skuMapRows, firstSkuRows, lastSkuRows, vendorMasterRows, dqRows, refRows, range, filters, isAdmin, excludedPkgUnits }) {
   const { start, end, prevStart, prevEnd, days } = range
   const { facilityToLocation } = buildFacilityMaps(refRows)
   const locOf = f => facilityToLocation.get(f) || cleanLabel(f) || 'Unknown'
@@ -559,13 +584,16 @@ export function buildInwardPayload({ grnRows, salesRows, masterRows, skuMapRows,
   const notes = []
   if (F.vendor.length || F.sourceType.length) notes.push('Sales are not filtered by vendor or source type (a sale has neither).')
 
+  // ── Vendor master (every vendor ever used, not just ones with a GRN in range) ──
+  const vendorMaster = buildVendorMaster({ vendorMasterRows, start, end })
+
   return {
     meta: {
       start, end, prevStart, prevEnd, days, isAdmin: !!isAdmin,
       lastGrnDate, lastSalesDate, generatedAt: new Date().toISOString(), notes,
       excludedPkgUnits: excludedPkgUnits != null ? round(excludedPkgUnits) : 0,
     },
-    filterOptions, kpis, daily, sourceMix, vendors, skus, skuMonthly, prevSkuMonthly, masterSkus, dataQuality,
+    filterOptions, kpis, daily, sourceMix, vendors, skus, skuMonthly, prevSkuMonthly, masterSkus, vendorMaster, dataQuality,
   }
 }
 
@@ -596,6 +624,42 @@ export function buildLastGrnDays({ grnRows, days = 10 }) {
       vendors: [...r.vendors.entries()].sort((a, b) => b[1] - a[1]).map(([vendor, units]) => ({ vendor, units: round(units) })),
     }))
   return { rows, lastGrnDate: rows[0]?.date || null }
+}
+
+// Vendor master (every vendor ever used, excluding Internal, from GRN_FLOOR): last-ever GRN date,
+// lifetime GRNs/units, distinct SKUs/sub-categories (shown as "products supplied"), and units in
+// the page's currently selected range — independent of the page's slicer filters, same convention
+// as the Product master table. vendorMasterRows: VENDOR_MASTER_SQL rows, full history.
+export function buildVendorMaster({ vendorMasterRows, start, end }) {
+  const byVendor = new Map()
+  for (const r of vendorMasterRows || []) {
+    const vendor = cleanLabel(val(r.v)) || 'Unknown'
+    const d = String(val(r.d) || '').slice(0, 10)
+    if (!d) continue
+    const q = Number(r.q) || 0
+    if (!byVendor.has(vendor)) {
+      byVendor.set(vendor, {
+        vendor, sourceType: r.t || UNMAPPED_SOURCE, lastGrn: d, lifetimeUnits: 0, lifetimeGrns: new Set(),
+        skus: new Set(), subCategories: new Map(), rangeUnits: 0,
+      })
+    }
+    const a = byVendor.get(vendor)
+    if (d > a.lastGrn) a.lastGrn = d
+    a.lifetimeUnits += q
+    a.lifetimeGrns.add(r.g)
+    if (r.s) a.skus.add(r.s)
+    const sub = cleanLabel(r.sc) || 'Uncategorized'
+    a.subCategories.set(sub, (a.subCategories.get(sub) || 0) + q)
+    if (d >= start && d <= end) a.rangeUnits += q
+  }
+  return [...byVendor.values()].map(a => ({
+    vendor: a.vendor, sourceType: a.sourceType, lastGrn: a.lastGrn,
+    lifetimeUnits: round(a.lifetimeUnits), lifetimeGrns: a.lifetimeGrns.size, skuCount: a.skus.size,
+    rangeUnits: round(a.rangeUnits),
+    // Sub-categories ("products supplied"), highest-units first — same display convention as a
+    // vendor drill-down's SKUs-supplied list, but lifetime and rolled up to sub-category.
+    productsSupplied: [...a.subCategories.entries()].sort((x, y) => y[1] - x[1]).map(([subCategory, units]) => ({ subCategory, units: round(units) })),
+  })).sort((a, b) => (b.lastGrn || '').localeCompare(a.lastGrn || ''))
 }
 
 // Vendor drill-down's "SKUs supplied" addition: SKU · sub-category · units, for one vendor, in the

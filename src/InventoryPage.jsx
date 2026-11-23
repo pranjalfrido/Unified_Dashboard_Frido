@@ -9,7 +9,7 @@ import { SalesFilterSidebar } from './inventory/SalesAllocationPage.jsx'
 import SalesAllocationPage from './inventory/SalesAllocationPage.jsx'
 import InwardPage from './inventory/InwardPage.jsx'
 import { useInwardData, inwardFilterCount } from './inventory/useInward.js'
-import { thisMonthRange } from './inventory/inwardUtils.js'
+import { thisMonthRange, fmtUnits, fmtRange } from './inventory/inwardUtils.js'
 import InvTabletBar from './inventory/mobile/InvTabletBar.jsx'
 import { authFetch } from './authFetch.js'
 
@@ -483,13 +483,20 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     }
     if (tab === 'inward') {
       // Inward: the date range sits in the top bar (desktop) / header date pill (phone), like Sales;
-      // the phone header's filter icon opens the Inward filter sheet.
+      // the phone header's filter icon opens the Inward filter sheet. The "stock building" / finished-
+      // goods note moves into the "⋯" sheet on phone (matching Health/Sales), instead of always-visible
+      // text under the KPI tiles.
+      const iwMeta = inward.data?.meta
+      const iwFinishedGoodsUnits = inward.data?.dataQuality ? inward.data.dataQuality.unmappedSku.units : (iwMeta?.excludedPkgUnits || 0)
+      const invInwardNote = iwMeta
+        ? `${fmtRange(iwMeta.start, iwMeta.end)} · ▲/▼ vs ${fmtRange(iwMeta.prevStart, iwMeta.prevEnd)}. Inward ÷ sales above 1 = stock building.${(iwMeta.notes || []).map(n => ` ${n}`).join('')} Finished goods only · ${fmtUnits(iwFinishedGoodsUnits)} units of raw material / packaging / unresolved SKUs not shown`
+        : null
       onTopbarDateControl({
         ...extra,
         invMenu: [],
         invFilterCount: inwardFilterCount(inwardFilters),
         filters: inwardDates, setFilters: setInwardDates, onRefresh: inward.refresh, loading: inward.loading,
-        invInward: { filterCount: inwardFilterCount(inwardFilters), openFilters: () => setInwardSheetOpen(true), hasAccess: hasInward },
+        invInward: { filterCount: inwardFilterCount(inwardFilters), openFilters: () => setInwardSheetOpen(true), hasAccess: hasInward, note: invInwardNote },
       })
     } else if (tab === 'sales') {
       onTopbarDateControl({
