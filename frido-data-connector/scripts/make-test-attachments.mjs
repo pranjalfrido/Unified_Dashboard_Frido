@@ -16,7 +16,7 @@ save('orders.json', [{ type: 'text', name: 'orders.csv', media_type: 'text/plain
 
 // a minimal one-page PDF with text lines
 const lines = ['Courier invoice INV-TEST-001', 'Courier: Bluedart', 'Shipments: 3', 'Total payable: Rs 12,345'];
-const stream = 'BT /F1 14 Tf 50 750 Td 18 TL ' + lines.map(l => `(${l.replace(/[()\]/g, '')}) Tj T*`).join(' ') + ' ET';
+const stream = 'BT /F1 14 Tf 50 750 Td 18 TL ' + lines.map(l => `(${l.replace(/[()\\]/g, '')}) Tj T*`).join(' ') + ' ET';
 const objs = [
   '<< /Type /Catalog /Pages 2 0 R >>',
   '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
