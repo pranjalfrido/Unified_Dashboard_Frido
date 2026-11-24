@@ -55,6 +55,13 @@ export function checkOos(user) {
   return anyOf(user.access, ['inventory']) ? { ok: true } : refuse('Inventory → Health & Overview');
 }
 
+// CN Received tool: Logistics -> Cost Analytics -> Overview -> "CN Received" (route cn-received). The page opens for anyone with a
+// Cost Analytics permission (App.jsx hasCostAccess: 'logistics:cost' or any 'logistics:cost:*'), and for admins.
+export function checkCn(user) {
+  if (!hasAccess(user)) return { ok: true };
+  return anyOf(user.access, ['logistics:cost:*']) ? { ok: true } : refuse('Logistics → Cost Analytics → CN Received');
+}
+
 // Free SQL (BigQuery / Supabase) can read any table, so it can't be tied to one page. It needs its own grant: the
 // 'ask:sql' tab ("NavAI: custom analysis", given in Team members next to NavAI), or being an admin.
 export function checkRawSql(user) {

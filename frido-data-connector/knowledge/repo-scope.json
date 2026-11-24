@@ -21,6 +21,9 @@
     "api/logistics-cost.js",
     "api/sales-allocation.js",
     "api/courier-allocation.js",
+    "src/cn/cnReceived.js",
+    "src/cn/CnReceivedPage.jsx",
+    "scripts/sql/cn/010_cn_received_view.sql",
     "src/utils.js",
     "api/data/*",
     "CLAUDE.md"

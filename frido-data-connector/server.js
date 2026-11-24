@@ -14,12 +14,13 @@ import { log } from './lib/logger.js';
 import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
 import { buildContent, checkAttachments, describeAttachments, FILE_SAFETY_PROMPT } from './lib/attachments.js';
-import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkRawSql } from './lib/pageAccess.js';
+import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql } from './lib/pageAccess.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
 import { formatTsv, unformattedNumbers } from './lib/format.js';
 import { runOosPage } from './lib/oosPage.js';
 import { runPnlTool, TABS as PNL_TAB } from './lib/pnlTool.js';
+import { runCnTool } from './lib/cnTool.js';
 import { runDashboardApi, ENDPOINTS as DASH_ENDPOINTS } from './lib/dashboardApi.js';
 import { isBillingError, alertBilling, UNAVAILABLE_MESSAGE } from './lib/billingAlert.js';
 import { normalizeSql, datesBlock } from './lib/dates.js';
@@ -133,6 +134,23 @@ async function executeOos(user, args, seen) {
   }
 }
 
+// Logistics -> Cost Analytics -> CN Received: totals of credit notes received vs invoice value (lib/cnTool.js). Read-only.
+async function executeCn(user, args, seen) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkCn(user);
+  if (!page.ok) return page;
+  try {
+    const { text } = await runCnTool(args, seen);
+    log({ user: user.email, role: user.role, target: 'cn_received', command: JSON.stringify(args || {}), allowed: true, resultSize: text.length, duration: Date.now() - start });
+    return { ok: true, text, skus: new Map(), sql: 'cn_received (Logistics > Cost Analytics > CN Received page logic)' };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'cn_received', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `CN Received query failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
 // P&L per channel and month, as the P&L page computes it (TEMPORARY COPY of the page logic, see lib/pnlTool.js).
 async function executePnl(user, args, seen) {
   const start = Date.now();
@@ -171,6 +189,8 @@ const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by ca
 
 const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
 
+const CN_TOOL_DESCRIPTION = 'Credit notes (CN) received from couriers, FTL/PTL transporters and 3PL partners, exactly as the dashboard page Logistics > Cost Analytics > Overview > "CN Received" shows them: CN count, invoice value, received CN and received % of invoice, by format (B2C couriers, FTL/PTL, 3PL), by reason (weight dispute, lost/damage, SLA breach, high ageing, wrong invoicing, wrong billing), by partner and by invoice month. Use for ANY question about credit notes, CN received, CN vs invoice, weight-dispute or lost/damage CNs. Arguments: month "YYYY-MM" (one invoice month) OR from/to "YYYY-MM"; omit for all months. TOTALS ONLY: the page has no list of individual open/pending CNs and no ageing, so say that and do not invent them.';
+
 const OOS_TOOL_DESCRIPTION = 'Out-of-stock SKUs and OOS loss exactly as the dashboard\'s Inventory Health > OOS loss page shows them (same SQL and maths). Use for ANY question about OOS / out-of-stock SKUs, loss of sales, days out of stock. Optional: limit (top N by loss, default 10) and sku (one SKU).';
 
 function createMcpServer(user) {
@@ -194,6 +214,16 @@ function createMcpServer(user) {
     },
     async ({ command, target }) => {
       const result = await executeTool(user, command, target);
+      return { content: [{ type: 'text', text: result.text }] };
+    }
+  );
+
+  server.tool(
+    'cn_received',
+    CN_TOOL_DESCRIPTION,
+    { month: z.string().optional(), from: z.string().optional(), to: z.string().optional() },
+    async args => {
+      const result = await executeCn(user, args, new Set());
       return { content: [{ type: 'text', text: result.text }] };
     }
   );
@@ -357,6 +387,17 @@ const httpServer = http.createServer(async (req, res) => {
         required: ['endpoint'],
       },
     }, {
+      name: 'cn_received',
+      description: CN_TOOL_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          month: { type: 'string', description: 'One invoice month as YYYY-MM, e.g. 2026-10' },
+          from: { type: 'string', description: 'First invoice month YYYY-MM (with to)' },
+          to: { type: 'string', description: 'Last invoice month YYYY-MM' },
+        },
+      },
+    }, {
       name: 'pnl',
       description: PNL_TOOL_DESCRIPTION,
       input_schema: {
@@ -407,7 +448,7 @@ const httpServer = http.createServer(async (req, res) => {
 
         for (const block of response.content) {
           if (block.type === 'text') finalText = block.text;
-          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'pnl' ? 'pnl' : block.name === 'dashboard_api' ? 'dashboard_api' : usedSql);
+          if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'cn_received' ? 'cn_received' : block.name === 'pnl' ? 'pnl' : block.name === 'dashboard_api' ? 'dashboard_api' : usedSql);
         }
 
         if (response.stop_reason !== 'tool_use') break;
@@ -419,6 +460,8 @@ const httpServer = http.createServer(async (req, res) => {
           const { command, target } = block.input;
           const result = block.name === 'oos_loss'
             ? await executeOos(user, block.input, seenFormatted)
+            : block.name === 'cn_received'
+              ? await executeCn(user, block.input, seenFormatted)
             : block.name === 'pnl'
               ? await executePnl(user, block.input, seenFormatted)
               : block.name === 'dashboard_api'

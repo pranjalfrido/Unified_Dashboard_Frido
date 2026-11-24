@@ -22,6 +22,23 @@ function getPool() {
   return _pool;
 }
 
+// Same read-only transaction as runSupabase, but returns the rows themselves (for tools that aggregate in code).
+export async function queryRows(sql) {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query('SET statement_timeout = 30000');
+    const { rows } = await client.query(sql);
+    await client.query('COMMIT');
+    return rows;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function runSupabase(sql) {
   const pool = getPool();
   const client = await pool.connect();

@@ -1,5 +1,5 @@
 // Per-user page access checks for NavAI tools (lib/pageAccess.js). Run: node scripts/test-page-access.mjs
-import { checkEndpoint, checkPnl, checkOos, checkRawSql, normaliseAccess } from '../lib/pageAccess.js'
+import { checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql, normaliseAccess } from '../lib/pageAccess.js'
 const u = (isAdmin, tabs) => ({ access: normaliseAccess({ isAdmin, tabs }) })
 const rows = [
   ['no access object (direct call) -> denied everywhere', checkEndpoint({ access: normaliseAccess(undefined) }, 'bq', {}).ok, false],
@@ -12,6 +12,13 @@ const rows = [
   ['unknown endpoint, non-admin', checkEndpoint(u(false, ['overview']), 'financial-mis').ok, false],
   ['pnl:amazon user asks D2C P&L', checkPnl(u(false, ['pnl:amazon']), 'shopify').ok, false],
   ['pnl:amazon user asks Amazon P&L', checkPnl(u(false, ['pnl:amazon']), 'amazon').ok, true],
+  ['CN Received: user with only logistics (Performance)', checkCn(u(false, ['ask', 'logistics'])).ok, false],
+  ['CN Received: user with only documents', checkCn(u(false, ['ask', 'documents'])).ok, false],
+  ['CN Received: logistics:cost:b2c opens it', checkCn(u(false, ['ask', 'logistics:cost:b2c'])).ok, true],
+  ['CN Received: logistics:cost opens it', checkCn(u(false, ['ask', 'logistics:cost'])).ok, true],
+  ['CN Received: admin', checkCn(u(true, ['ask'])).ok, true],
+  ['CN Received: refusal text is the standard one', /ask your admin/i.test(checkCn(u(false, ['ask'])).text), true],
+  ['CN Received: an MCP caller (no access field) is authorised by its role', checkCn({ email: 'x', access: undefined }).ok, true],
   ['OOS without inventory tab', checkOos(u(false, ['inventory:sales'])).ok, false],
   ['raw SQL: non-admin with only ask', checkRawSql(u(false, ['ask'])).ok, false],
   ['raw SQL: non-admin with ask + sales tabs, no ask:sql', checkRawSql(u(false, ['ask', 'sales:all'])).ok, false],

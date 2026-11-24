@@ -58,6 +58,26 @@ Row sources (check with `describe:true`):
 Caveats: Sep claimable figures are not meaningful (rate card not applied to Sep invoices; claims register empty); origin/destination-city cost has no per-city rows in the file (only the API with filters, which times out) — say it is not available.
 
 
+## Group 2b — Logistics → Cost Analytics → "CN Received" (the `cn_received` tool, merged 18 Nov 2026)
+
+The **CN Received** button (top right of Cost Analytics → Overview) opens `/logistics/cn_received`. It has **no `/api` endpoint and no data file**: the browser calls the read-only Supabase function `cn_received_summary()` and adds up its rows (`src/cn/cnReceived.js`). Use the **`cn_received` tool**, which runs the same query (SELECT only, read-only transaction, active rows only) and the same arithmetic. It cannot write: uploads and approvals live on the separate Documents → Logistics credit notes pages (`logistics-cn`), which NavAI does not touch.
+
+**Who may ask:** anyone who can open the page, i.e. admins and users with a Cost Analytics permission (`logistics:cost` or any `logistics:cost:*`). Others are refused ("ask your admin for access"); do not work around it with custom SQL.
+
+**What the page shows (totals only):** CN count, invoice value, **received CN**, **received % of invoice**, by format (B2C couriers, FTL/PTL, 3PL), by reason (weight dispute, lost/damage, SLA breach, high ageing, wrong invoicing, wrong billing = all FTL/PTL and 3PL CNs), by partner (top partners by received CN) and by invoice month. The invoice month is the month on the CN row, not the date it was received. Invoice value is blank for lost/damage, SLA breach, high ageing and wrong invoicing (claims against a shipment value), so their "% of invoice" is "—". `expected_cn` (the amount uploaded as expected) is only in the page's Excel export; the tool returns it as `expected_cn` and a derived `expected_minus_received` — label that as "from the page's export, not shown on screen".
+
+**Not on this page (say so, never invent):** individual credit notes, which are still open or pending, ageing of credit notes, per-CN lists. Questions like "top 5 open CNs" or "ageing of pending CNs" get that answer plus what the page does show (by partner / by reason).
+
+**Months:** data runs through the latest uploaded invoice month (Sep 2026 on 24 Nov 2026; Oct 2026 not uploaded yet). If "last month" has no rows, say so and offer the latest month the tool lists.
+
+| Question | Tool call | Check value (24 Nov 2026) |
+|---|---|---|
+| CN count and ₹ received for a month | `cn_received {month:"2026-09"}` TOTAL | Sep 2026: 311 CNs, received ₹5.13 L (raw 512664); invoice value "—" (all B2C claims) |
+| Received vs invoice (CN vs claimed) | `cn_received {}` BY FORMAT | all months: B2C ₹2.92 Cr of ₹30.82 Cr invoice (9.5%); FTL/PTL ₹7,500 of ₹4.32 Cr (0.0%); 3PL ₹2.31 L of ₹77.81 L (3.0%); total ₹2.94 Cr of ₹35.92 Cr (8.2%) |
+| Top partners by received CN | BY PARTNER | all months: Swift ₹1.71 Cr, Bluedart ₹1.08 Cr, Ekart ₹6.35 L, Delhivery ₹3.97 L, Hexalog ₹1.75 L |
+| Received by reason | BY REASON | Sep 2026: High ageing ₹2.48 L (153), Lost/Damage ₹1.70 L (147), Wrong invoicing ₹93,837 (3), SLA breach ₹532 (8) |
+| Expected vs received by courier (not on screen) | BY PARTNER `expected_minus_received` | all months: Bluedart ₹68.08 L, Swift ₹20.05 L, Ekart ₹23.44 L, Shadowfax ₹17.69 L |
+
 ## Group 3 — Inventory tab (example values are from the 29 Oct file snapshot; formulas updated 23 Nov 2026)
 
 | Tab | Source | Notes |
