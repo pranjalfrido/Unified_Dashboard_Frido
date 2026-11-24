@@ -15,6 +15,15 @@ let PnLPage = null;
 let domReady = false;
 
 const realFetch = globalThis.fetch.bind(globalThis);
+
+// The page's authFetch passes `headers` as a Headers object. Spreading one gives {} and silently dropped Content-Type, so
+// /api/cogs-monthly got no body and answered 400; the page treats that as "no COGS rows" and falls back to its estimate
+// (found 2026-11-24: D2C Oct COGS 47.3% on the canary vs 41.9% on the page). Merge through Headers instead.
+export function mergeHeaders(h) {
+  const out = new Headers(h || {});
+  for (const [k, v] of Object.entries(dashAuth())) out.set(k, v);
+  return out;
+}
 const installed = [];   // DOM globals we added, removed again after every run (the Anthropic SDK refuses to start when window exists)
 let chain = Promise.resolve();   // one headless render at a time
 
@@ -35,7 +44,7 @@ function setupDom() {
   def('ResizeObserver', RO); w.ResizeObserver = RO;
   def('IntersectionObserver', RO); w.IntersectionObserver = RO;
   // The page fetches relative URLs (/api/cogs-monthly, /snd-rates.json); point them at the dashboard.
-  globalThis.fetch = (url, opts) => (typeof url === 'string' && url.startsWith('/') ? realFetch(DASH + url, { ...opts, headers: { ...dashAuth(), ...(opts && opts.headers) } }) : realFetch(url, opts));
+  globalThis.fetch = (url, opts) => (typeof url === 'string' && url.startsWith('/') ? realFetch(DASH + url, { ...opts, headers: mergeHeaders(opts && opts.headers) }) : realFetch(url, opts));
   w.fetch = globalThis.fetch;
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   domReady = true;
