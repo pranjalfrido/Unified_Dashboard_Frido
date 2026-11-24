@@ -5,6 +5,7 @@ import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton, PillToggle, exportCsv,
 } from './theme.jsx'
 import OosLossView from './OosLossView.jsx'
+import InventoryCostTable from './InventoryCostTable.jsx'
 
 // CSV columns, shared by the desktop Export buttons and the mobile "⋯" menu.
 const DETAIL_EXPORT_COLS = [
@@ -1456,6 +1457,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
   // Export rows flatten each sub-category's collapsed `skus[]` array to one row per SKU —
   // the on-screen table stays collapsed-by-default, but the CSV needs the SKU-level detail.
+  // SKU code sets behind the two cards, used by the Inventory Cost Detail filter.
+  const slowSkuSet = useMemo(() => new Set(filteredSlowMoving.flatMap(sc => sc.skus.map(s => s.sku))), [filteredSlowMoving])
+  const deadSkuSet = useMemo(() => new Set(filteredDeadStock.flatMap(sc => sc.skus.map(s => s.sku))), [filteredDeadStock])
   const slowMovingExportRows = useMemo(() => {
     return filteredSlowMoving.flatMap(sc => sc.skus.map(s => ({
       category: sc.category, subCategory: sc.subCategory, sku: s.sku,
@@ -1801,6 +1805,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
       </div>
+
+      {/* Bottom of the page: same SKUs as Inventory Detail (slicers + search applied), valued at COGS.
+          COGS-based valuation: admins, plus members granted 'inventory:cost' (Profile > permissions). */}
+      {(allowedTabs == null || allowedTabs.includes('inventory:cost')) && <div className="inv-detail-desktop-only" style={{ paddingBottom: 20 }}><InventoryCostTable skus={detailSkus} isAdmin={allowedTabs == null} slowSkus={slowSkuSet} deadSkus={deadSkuSet} /></div>}
       </>}
 
 </> : (
