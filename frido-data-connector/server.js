@@ -13,6 +13,7 @@ import { isAllowed, blockReason } from './lib/safety.js';
 import { log } from './lib/logger.js';
 import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
+import { buildContent, checkAttachments, describeAttachments, FILE_SAFETY_PROMPT } from './lib/attachments.js';
 import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkRawSql } from './lib/pageAccess.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
@@ -45,7 +46,9 @@ The assistant's name is NavAI. Refer to yourself only as NavAI, never as Pulse o
 
 You have access to the run_command tool which connects to Frido's live business data. NEVER answer business questions from memory — always use run_command to query live data first.
 
-${KNOWLEDGE}`;
+${KNOWLEDGE}
+
+${FILE_SAFETY_PROMPT}`;
 }
 
 // Single tool executor — used by both MCP and /chat.
@@ -298,10 +301,20 @@ const httpServer = http.createServer(async (req, res) => {
 
     // The asking person's page access comes from api/pulse.js; without it (a direct call) NavAI gets no pages.
     const user = { ...authResult.user, access: normaliseAccess(body?.access) };
+
+    // Files attached to the question (second check; api/pulse.js already did the first). Needs 'ask:files' (admins have it).
+    const filesOk = checkAttachments(messages, user);
+    if (!filesOk.ok) {
+      res.writeHead(filesOk.status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: filesOk.error }));
+      return;
+    }
+    const attached = describeAttachments(messages);
+    if (attached.length) log({ user: user.email, role: user.role, target: 'chat_files', allowed: true, files: attached }); // name, type, size only
     // dangerouslyAllowBrowser: this is a server; the SDK check only trips while the P&L tool's headless DOM globals exist.
     const anthropic = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
-    const lastUserMsg = messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '';
+    const lastUserMsg = String(messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '');
     const isComplex = /compar|breakdown|analys|trend|p&l|profit|loss|why|explain|forecast|correlat|multi|across|vs\b|versus|deep|inventor|planning|plan|oos|out.of.stock|lead.time|reorder|avg.daily|average.daily|stuck|stock.out|stockout/i.test(lastUserMsg);
     const model = isComplex ? 'claude-opus-4-7' : 'claude-sonnet-4-6';
 
@@ -360,7 +373,7 @@ const httpServer = http.createServer(async (req, res) => {
     }];
 
     try {
-      let loopMessages = messages.map(m => ({ role: m.role, content: m.content ?? m.text }));
+      let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
       let finalText = '';
       let usedSql = null;
       let iterations = 0;

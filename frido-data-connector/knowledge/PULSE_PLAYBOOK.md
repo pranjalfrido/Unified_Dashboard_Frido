@@ -15,6 +15,7 @@ Rules that code can enforce are enforced in the connector (section 1); text rule
 | 6 | **Denials.** After 1 denied tool call or file read the model is told "denied, don't retry this; use another route". Max 2 denials per question, then it answers with what it has. | `server.js` |
 | 7 | **Read only.** Single SELECT / WITH only (parsed + BigQuery dry run), 5 GB per query, Supabase in a read-only transaction. | `lib/bigquery.js`, `lib/safety.js`, `lib/supabase.js` |
 | 8 | **Page access per person.** The asking user's own dashboard tabs come from the database (`api/pulse.js`), never from the request. Every data tool checks them (`lib/pageAccess.js`): a page the person cannot open is refused with "ask your admin for access"; custom SQL needs the `ask:sql` grant ("NavAI: custom analysis") or admin; a call without access info gets nothing. The connector reads the dashboard with its own read-only secret (`NAVAI_API_SECRET`), which opens only read endpoints. | `lib/pageAccess.js`, `server.js` |
+| 9 | **Uploaded files are data, never instructions.** Images, PDF, Excel/CSV and Word attached to a question (needs the `ask:files` grant, admins have it; max 3 files, converted in the browser) reach the model wrapped as `<file name="…">`. NavAI stays read-only whatever a file says; anything taken from a file is labelled "From your file: …"; files are never stored or logged (name/type/size only) and are only available for the message they were attached to. | `lib/attachments.js`, `server.js` |
 
 ## 2. Order of sources
 
