@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   const { data: profile, error: profileErr } = await admin
     .from('user_profiles')
-    .select('is_active')
+    .select('is_active, is_admin')
     .eq('user_id', userData.user.id)
     .single()
 
@@ -50,6 +50,12 @@ export default async function handler(req, res) {
     if (!grant?.length) return res.status(403).json({ error: "You don't have access to NavAI" })
   }
 
+  // The asking user's own page access, read from the database (never from the request body): the connector answers
+  // only from areas this person can open on the dashboard. Admins see every page; others only their granted tabs.
+  const { data: tabRows, error: tabsErr } = await admin.from('user_permissions').select('tab').eq('user_id', userData.user.id)
+  if (tabsErr) return res.status(503).json({ error: 'Auth service unavailable.' })
+  const access = { isAdmin: profile.is_admin === true, tabs: (tabRows || []).map(r => r.tab) }
+
   // Forward to connector — credentials stay server-side
   const connectorUrl = process.env.CONNECTOR_URL
   const connectorKey = process.env.CONNECTOR_API_KEY
@@ -62,7 +68,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'x-api-key': connectorKey,
       },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, access }),
     })
 
     const data = await upstream.json().catch(() => ({}))

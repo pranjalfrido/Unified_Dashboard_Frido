@@ -18,6 +18,22 @@ export const config = { matcher: ['/api/:path*', '/(.*\\.json)'] }
 
 const OPEN_API = new Set(['/api/auth-admin', '/api/pulse'])
 
+// NavAI's read-only service secret (header x-navai-secret). It is NOT the cron secret and it opens only the
+// data-reading endpoints below plus the public/*.json files, never feedback, presence, admin or auth-admin.
+// api/logistics-cost is deliberately NOT here: its POST body can file/update claims and invalidate caches, and middleware
+// can't see the body. NavAI reads that page from the logistics-cost-data.json file instead.
+// Who may see which page is enforced by the connector from the asking user's own permissions (api/pulse.js).
+const NAVAI_READ_API = new Set([
+  'bq', 'logistics', 'inventory', 'inventory-oos', 'sales-allocation', 'return-analysis', 'returns',
+  'customer', 'customer-support', 'cogs-monthly', 'cat-daily', 'courier-allocation', 'inward',
+])
+const NAVAI_SECRET = process.env.NAVAI_API_SECRET || ''
+
+export function navaiMayRead(pathname, method) {
+  if (pathname.startsWith('/api/')) return method === 'POST' && NAVAI_READ_API.has(pathname.slice(5).replace(/\/+$/, ''))
+  return method === 'GET' && pathname.endsWith('.json')
+}
+
 const SUPABASE_URL = (process.env.SUPABASE_PROJECT_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
 const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
 const ISSUER = `${SUPABASE_URL}/auth/v1`
@@ -121,6 +137,8 @@ export default async function middleware(request) {
   const auth = request.headers.get('authorization') || ''
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
   if (CRON_SECRET.length >= 16 && (sameSecret(request.headers.get('x-cron-secret') || '', CRON_SECRET) || sameSecret(bearer, CRON_SECRET))) return
+
+  if (NAVAI_SECRET.length >= 32 && navaiMayRead(pathname, request.method) && sameSecret(request.headers.get('x-navai-secret') || '', NAVAI_SECRET)) return
 
   if (await validToken(bearer)) return
   return deny()
