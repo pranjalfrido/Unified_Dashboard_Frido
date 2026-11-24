@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { IC, fmtDays, GlassCard, StatusChip, ExportButton, exportCsv, SearchableMultiSelect } from './theme.jsx'
+import { authFetch } from '../authFetch.js'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -22,7 +23,7 @@ function loadLatestCogs() {
   if (!cogsPromise) {
     const now = new Date()
     const body = JSON.stringify({ startMonth: monthStart(new Date(now.getFullYear(), now.getMonth() - 6, 1)), endMonth: monthStart(now) })
-    cogsPromise = fetch(`${API}/api/cogs-monthly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+    cogsPromise = authFetch(`${API}/api/cogs-monthly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
       .then(r => { if (!r.ok) throw new Error(`cogs-monthly ${r.status}`); return r.json() })
       .then(({ rows }) => {
         // latest month with a positive cost, per SKU and per sub-category
