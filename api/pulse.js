@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { validateMessages } from './_pulseFiles.js'
 
 function getAdminClient() {
   const url = process.env.SUPABASE_PROJECT_URL
@@ -56,6 +57,11 @@ export default async function handler(req, res) {
   if (tabsErr) return res.status(503).json({ error: 'Auth service unavailable.' })
   const access = { isAdmin: profile.is_admin === true, tabs: (tabRows || []).map(r => r.tab) }
 
+  // Files attached to the question (images, PDF, Excel/CSV and Word converted to text): re-checked here, never trusted from
+  // the browser. Needs the 'ask:files' tab (admins have it). Nothing about a file is logged or stored.
+  const checked = validateMessages(messages, access)
+  if (!checked.ok) return res.status(checked.status).json({ error: checked.error })
+
   // Forward to connector — credentials stay server-side
   const connectorUrl = process.env.CONNECTOR_URL
   const connectorKey = process.env.CONNECTOR_API_KEY
@@ -68,7 +74,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'x-api-key': connectorKey,
       },
-      body: JSON.stringify({ messages, access }),
+      body: JSON.stringify({ messages: checked.messages, access }),
     })
 
     const data = await upstream.json().catch(() => ({}))

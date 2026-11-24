@@ -42,7 +42,7 @@ function saveConversations(userId, convs) {
 }
 
 // areas: which quick-question areas the user can open (from the same access data as the sidebar).
-export default function AskFridoPage({ userProfile, session, areas }) {
+export default function AskFridoPage({ userProfile, session, areas, canFiles = false }) {
   const userId = session?.user?.id;
   const [conversations, setConversations] = useState(() => loadConversations(userId));
   const [activeId, setActiveId] = useState(null);
@@ -78,7 +78,8 @@ export default function AskFridoPage({ userProfile, session, areas }) {
     setConversations(prev => prev.some(c => c.id === conv.id) ? prev : [...prev.slice(0, index), conv, ...prev.slice(index)]);
   }
 
-  async function handleSend(text) {
+  // extra = { attachments, chips } from the composer when files were attached (contents are used for this request only).
+  async function handleSend(text, extra) {
     if (sending) return;
 
     // Auto-create a conversation if none is active
@@ -93,7 +94,7 @@ export default function AskFridoPage({ userProfile, session, areas }) {
     // Capture history BEFORE updating state (setConversations is async)
     const currentConv = conversations.find(c => c.id === currentId);
     const history = (currentConv?.messages || []).filter(m => !m.thinking && m.text);
-    const messagesForApi = [...history, { role: 'user', text }];
+    const messagesForApi = [...history, { role: 'user', text, ...(extra?.attachments ? { attachments: extra.attachments } : {}) }];
 
     // Add user message + thinking bubble
     setConversations(prev => prev.map(c => {
@@ -105,7 +106,7 @@ export default function AskFridoPage({ userProfile, session, areas }) {
         ts: Date.now(),
         messages: [
           ...c.messages,
-          { id: 'm' + Date.now(), role: 'user', text },
+          { id: 'm' + Date.now(), role: 'user', text, ...(extra?.chips?.length ? { files: extra.chips } : {}) },
           { id: 'thinking-' + Date.now(), role: 'assistant', thinking: true },
         ],
       };
@@ -141,7 +142,7 @@ export default function AskFridoPage({ userProfile, session, areas }) {
   if (phone) {
     return (
       <PulseMobile conversations={conversations} activeId={activeId} active={active} sending={sending}
-        userProfile={userProfile} areas={areas}
+        userProfile={userProfile} areas={areas} canFiles={canFiles}
         onSelect={handleSelect} onNew={handleNew} onDelete={handleDelete} onRestore={handleRestore} onSend={handleSend} onClarifyChoice={handleClarifyChoice} />
     );
   }
@@ -169,7 +170,7 @@ export default function AskFridoPage({ userProfile, session, areas }) {
           onClarifyChoice={handleClarifyChoice}
           isAdmin={userProfile?.isAdmin === true}
         />
-        <ChatComposer onSend={handleSend} disabled={sending} />
+        <ChatComposer onSend={handleSend} disabled={sending} canFiles={canFiles} />
       </div>
     </div>
   );

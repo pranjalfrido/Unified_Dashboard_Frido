@@ -96,6 +96,8 @@ export const PERMISSION_TREE = [
       { key: 'ask',     label: 'NavAI' },
       // Only meaningful together with 'ask': lets NavAI run custom queries (SQL) beyond the pages the person can open.
       { key: 'ask:sql', label: 'NavAI: custom analysis' },
+      // Only meaningful together with 'ask': lets the person attach files (images, PDF, Excel/CSV, Word) to a question.
+      { key: 'ask:files', label: 'NavAI: file upload' },
     ],
   },
 ]

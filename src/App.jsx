@@ -21466,6 +21466,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'ask' && (!allowedTabs || allowedTabs.includes('ask')) && (
             <AskFridoPage key={session?.user?.id} userProfile={{ name: profile?.full_name || session?.user?.email, role: profile?.role || 'Analyst', isAdmin: profile?.is_admin === true }} session={session}
+              canFiles={profile?.is_admin === true || (allowedTabs || []).includes('ask:files')}
               areas={{ sales: hasSalesAccess(allowedTabs), returns: hasSalesAccess(allowedTabs), logistics: !allowedTabs || allowedTabs.includes('logistics'),
                 inventory: !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail'),
                 planning: !allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:detail') || allowedTabs.includes('inventory:sales') }} />
