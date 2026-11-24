@@ -103,7 +103,10 @@ function AssistantMessage({ msg, question, isAdmin }) {
 function UserMessage({ msg }) {
   return (
     <div className="af-msg af-msg-user">
-      <div className="af-user-bubble">{msg.text}</div>
+      <div className="af-user-bubble">
+        {msg.text}
+        {msg.files?.length ? <div className="nx-sent">{msg.files.map((f, i) => <span key={i}>📎 {f.name}</span>)}</div> : null}
+      </div>
     </div>
   );
 }

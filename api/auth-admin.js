@@ -64,8 +64,9 @@ export default async function handler(req, res) {
     if (error) throw new Error(error.message)
     const had = (rows || []).map(r => r.tab)
     let want = [...new Set((Array.isArray(tabs) ? tabs : []).filter(t => typeof t === 'string' && t))]
-    // NavAI chat ('ask') and NavAI custom analysis ('ask:sql') are both granted only by the NavAI owners.
-    if (!canPulse) want = [...want.filter(t => t !== 'ask' && t !== 'ask:sql'), ...had.filter(t => t === 'ask' || t === 'ask:sql')]
+    // NavAI chat ('ask'), custom analysis ('ask:sql') and file upload ('ask:files') are granted only by the NavAI owners.
+    const NAVAI_KEYS = ['ask', 'ask:sql', 'ask:files']
+    if (!canPulse) want = [...want.filter(t => !NAVAI_KEYS.includes(t)), ...had.filter(t => NAVAI_KEYS.includes(t))]
     const add = want.filter(t => !had.includes(t))
     const drop = had.filter(t => !want.includes(t))
     if (add.length) {

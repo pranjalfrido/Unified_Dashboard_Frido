@@ -27,5 +27,7 @@ export function localSession() {
 export const isLocalSession = s => LOCAL_MODE && String(s?.access_token || '').startsWith('local:')
 export function localProfileFor(session) {
   const p = LOCAL_PEOPLE[String(session.access_token).replace('local:', '')]
-  return { profile: { ...p, is_active: true, avatar_url: null, invited_at: null, last_login_at: null }, tabs: LOCAL_TABS }
+  // rohan = a member who was granted NavAI file upload ('ask:files'); asha has NavAI but not file upload; admin has everything.
+  const key = String(session.access_token).replace('local:', '')
+  return { profile: { ...p, is_active: true, avatar_url: null, invited_at: null, last_login_at: null }, tabs: key === 'rohan' ? [...LOCAL_TABS, 'ask:files'] : LOCAL_TABS }
 }

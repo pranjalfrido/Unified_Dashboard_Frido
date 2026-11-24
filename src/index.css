@@ -1794,3 +1794,42 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .pm-toast{ position:fixed; left:12px; right:12px; bottom:calc(var(--bot) + var(--safe-bottom) + 70px); z-index:600; display:flex; align-items:center; justify-content:space-between; gap:12px; background:#1c2420; color:#fff; border-radius:12px; padding:4px 6px 4px 14px; min-height:44px; font-size:13.5px; font-family:var(--font); box-shadow:0 8px 20px rgba(0,0,0,.25) }
 .pm-toast button{ min-height:40px; padding:0 10px; border:none; background:none; color:#9fe0b9; font-size:13.5px; font-weight:700; cursor:pointer; font-family:var(--font); -webkit-tap-highlight-color:transparent }
 @media (prefers-reduced-motion: reduce){ .pm-hin{ transition:none } }
+
+/* NavAI composer: voice (mic), files (paperclip) and file chips */
+.nx-composer { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 8px 8px 14px; }
+.nx-composer.nx-over { border-color: var(--acc); background: var(--card); box-shadow: 0 0 0 3px rgba(31,90,61,.15); }
+.nx-row { display: flex; align-items: flex-end; gap: 6px; }
+.nx-voice { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+.nx-icon-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: var(--t2, #5b6560); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
+.nx-icon-btn:hover:not(:disabled) { background: rgba(0,0,0,.06); }
+.nx-icon-btn:disabled { opacity: .4; cursor: default; }
+.nx-mic.on { background: #d93025; color: #fff; animation: nxpulse 1.3s ease-in-out infinite; }
+.nx-mic.on:hover:not(:disabled) { background: #d93025; }
+@keyframes nxpulse { 50% { box-shadow: 0 0 0 5px rgba(217,48,37,.2); } }
+.nx-listening { position: absolute; right: 0; bottom: 38px; background: #d93025; color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
+.nx-caret { width: 14px; height: 32px; margin-left: -4px; border: none; background: transparent; color: var(--t3, #8a948f); cursor: pointer; padding: 0; display: grid; place-items: center; }
+.nx-menu { position: absolute; right: 0; bottom: 40px; z-index: 30; min-width: 170px; background: #fff; border: 1px solid #e1ded5; border-radius: 10px; box-shadow: 0 8px 24px -8px rgba(0,0,0,.25); padding: 4px; display: flex; flex-direction: column; }
+.nx-menu button { text-align: left; border: none; background: none; padding: 9px 10px; border-radius: 8px; font-size: 13px; color: #1c2420; cursor: pointer; font-family: var(--font); }
+.nx-menu button.sel { background: rgba(31,90,61,.1); color: #1f5a3d; font-weight: 600; }
+.nx-menu small { color: #8a948f; margin-left: 6px; font-weight: 400; }
+.nx-voice-err { position: absolute; right: 0; bottom: 40px; width: max-content; max-width: 230px; background: #fbeeec; border: 1px solid #f1d3ce; color: #8c2a1f; font-size: 12px; padding: 5px 9px; border-radius: 8px; z-index: 30; }
+.nx-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.nx-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 30px; padding: 3px 4px 3px 8px; border-radius: 9px; background: rgba(31,90,61,.08); border: 1px solid rgba(31,90,61,.2); color: #1c2420; font-size: 12px; }
+.nx-chip.busy { opacity: .7; }
+.nx-chip-name { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nx-chip small { color: #6b756f; flex: 0 0 auto; }
+.nx-chip button { width: 20px; height: 20px; border-radius: 6px; border: none; background: rgba(0,0,0,.07); color: #444; display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; }
+.nx-thumb { width: 24px; height: 24px; border-radius: 5px; object-fit: cover; flex: 0 0 auto; }
+.nx-err { margin: 6px 0 0; font-size: 12.5px; color: #8c2a1f; background: #fbeeec; border: 1px solid #f1d3ce; border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+.nx-sent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 12px; opacity: .85; }
+.nx-sent span { background: rgba(255,255,255,.18); border-radius: 7px; padding: 2px 7px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* phone: icons sit in the pill next to Send, chips above it, nothing overflows at 375 */
+.pm-cmp .nx-chips { margin: 0 2px 6px; }
+.pm-box .nx-icon-btn { width: 34px; height: 34px; margin: 4px 0; border-radius: 10px; }
+.pm-box .nx-caret { height: 34px; margin-left: -6px; }
+.pm-box .nx-voice { margin-right: -2px; }
+.pm-cmp .nx-err { margin: 6px 2px 0; }
+.pm-me .nx-sent span { background: rgba(255,255,255,.2); }
+.nx-chip.err { background: #fbeeec; border-color: #f1d3ce; flex-wrap: wrap; }
+.nx-chip-error { color: #8c2a1f !important; flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; padding: 0 2px 2px; }
+.nx-chip-state { color: #1f5a3d !important; font-weight: 600; }

@@ -120,6 +120,8 @@ check('inward: wrong secret is refused', bad.ok === true, false)
   const { PERMISSION_TREE, getAllLeafKeys } = await import(new URL('../src/permissionTree.js', import.meta.url))
   const ask = PERMISSION_TREE.find(n => n.key === 'ask')
   const sql = ask?.children?.find(c => c.key === 'ask:sql')
+  const files = ask?.children?.find(c => c.key === 'ask:files')
+  check("permission tree: 'ask:files' sits under NavAI with the agreed label", files?.label === 'NavAI: file upload' && getAllLeafKeys(ask).includes('ask:files'), true)
   check("permission tree: 'ask:sql' sits under NavAI with the agreed label", sql?.label === 'NavAI: custom analysis' && getAllLeafKeys(ask).includes('ask') && getAllLeafKeys(ask).includes('ask:sql'), true)
 }
 

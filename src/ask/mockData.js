@@ -10,6 +10,8 @@ export const CATEGORY_COLORS = {
 };
 
 export async function sendMessage(conversationMessages, callerToken) {
+  // Only the message being sent carries file contents (m.attachments, in memory for this request). Saved chats keep
+  // just the file names (m.files), so a follow-up needs the file attached again.
   const res = await fetch('/api/pulse', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -20,6 +22,7 @@ export async function sendMessage(conversationMessages, callerToken) {
         .map(m => ({
           role: m.role,
           content: m.text,
+          ...(m.attachments?.length ? { attachments: m.attachments } : {}),
         })),
     }),
   });

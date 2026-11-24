@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ClockCounterClockwise, ArrowUp, CaretRight, MagnifyingGlass, Plus, Code, CheckCircle, ThumbsDown } from '@phosphor-icons/react'
 import NavAIIcon from './NavAIIcon.jsx'
@@ -9,6 +9,8 @@ import BottomSheet from '../responsive/BottomSheet.jsx'
 import { renderMarkdown, splitAnswer } from './markdown.js'
 import { chatTime, displayTitle, groupByDate, QUICK_QUESTIONS } from './pulseShared.js'
 import PulseTable from './PulseTable.jsx'
+import { VoiceButton, AttachButton, AttachChips } from './ComposerExtras.jsx'
+import { useAttachments } from './useAttachments.js'
 
 // NavAI on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html). Layout only:
 // AskFridoPage owns the conversations and passes the same handlers the laptop view uses.
@@ -142,9 +144,10 @@ function FirstView({ name, areas, recent, onAsk, onFill, onOpen }) {
   )
 }
 
-function Composer({ onSend, disabled, onFocusChange, apiRef }) {
+function Composer({ onSend, disabled, onFocusChange, apiRef, canFiles }) {
   const ref = useRef(null)
   const [val, setVal] = useState('')
+  const files = useAttachments(canFiles)
   const grow = () => {
     const el = ref.current
     if (!el) return
@@ -164,21 +167,35 @@ function Composer({ onSend, disabled, onFocusChange, apiRef }) {
     }
   })
   const submit = () => {
-    const text = val.trim()
-    if (!text || disabled) return
+    if (disabled || !files.sendable) return // nothing is sent while a file is still being prepared or failed
+    let text = val.trim()
+    if (!text && files.items.length) text = 'Please analyse the attached file' + (files.items.length > 1 ? 's.' : '.')
+    if (!text) return
+    const bytes = files.payload(text.length)
+    if (!bytes.complete) { files.setError('A file is not ready. Remove it or try again.'); return } // never send without an attached file
+    if (bytes.tooBig) { files.setError(bytes.tooBig); return }
     setVal('')
     requestAnimationFrame(grow)
-    onSend(text)
+    onSend(text, bytes.data.length ? { attachments: bytes.data, chips: bytes.names } : undefined)
+    files.clear()
   }
+  // Voice writes into the box only; the person edits it and taps Send.
+  const getVal = useCallback(() => val, [val])
+  const setFromVoice = useCallback(t => { setVal(t); requestAnimationFrame(grow) }, [])
+  const canSend = !disabled && files.sendable && (val.trim() || files.items.length)
   return (
     <div className="pm-cmp">
+      <AttachChips items={files.items} onRemove={files.remove} compact />
       <div className="pm-box">
         <textarea ref={ref} rows={1} value={val} placeholder="Ask a question…" aria-label="Ask a question" disabled={disabled}
           onChange={e => { setVal(e.target.value); grow() }} onFocus={() => onFocusChange(true)} onBlur={() => onFocusChange(false)} />
-        <button type="button" className="pm-send" aria-label="Send" disabled={disabled || !val.trim()} onMouseDown={e => e.preventDefault()} onClick={submit}>
+        {canFiles && <AttachButton onFiles={files.add} disabled={disabled} />}
+        <VoiceButton getValue={getVal} setValue={setFromVoice} disabled={disabled} />
+        <button type="button" className="pm-send" aria-label="Send" disabled={!canSend} onMouseDown={e => e.preventDefault()} onClick={submit}>
           <ArrowUp size={16} weight="bold" />
         </button>
       </div>
+      {files.error && <div className="nx-err" role="alert">{files.error}</div>}
       <div className="pm-disc">NavAI can make mistakes. Verify key numbers.</div>
     </div>
   )
@@ -298,7 +315,7 @@ function UndoToast({ toast, onUndo, onDone }) {
   )
 }
 
-export default function PulseMobile({ conversations, activeId, active, sending, userProfile, areas, onSelect, onNew, onDelete, onRestore, onSend, onClarifyChoice }) {
+export default function PulseMobile({ conversations, activeId, active, sending, userProfile, areas, canFiles, onSelect, onNew, onDelete, onRestore, onSend, onClarifyChoice }) {
   const [histOpen, setHistOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [focused, setFocused] = useState(false)
@@ -376,7 +393,7 @@ export default function PulseMobile({ conversations, activeId, active, sending, 
         {inChat ? (
           <div className="pm-thread-inner">
             {messages.map((m, idx) => {
-              if (m.role === 'user') return <div key={m.id} className="pm-me">{m.text}</div>
+              if (m.role === 'user') return <div key={m.id} className="pm-me">{m.text}{m.files?.length ? <div className="nx-sent">{m.files.map((f, i) => <span key={i}>📎 {f.name}</span>)}</div> : null}</div>
               if (m.clarify) return <Clarify key={m.id} msg={m} onChoice={onClarifyChoice} />
               const q = [...messages.slice(0, idx)].reverse().find(x => x.role === 'user')?.text || ''
               return <Answer key={m.id} msg={m} question={q} isAdmin={userProfile?.isAdmin === true} />
@@ -386,7 +403,7 @@ export default function PulseMobile({ conversations, activeId, active, sending, 
           <FirstView name={userProfile?.name} areas={areas} recent={recent} onAsk={onSend} onFill={t => composer.current?.fill(t)} onOpen={onSelect} />
         )}
       </div>
-      <Composer onSend={onSend} disabled={sending} onFocusChange={setFocused} apiRef={composer} />
+      <Composer onSend={onSend} disabled={sending} onFocusChange={setFocused} apiRef={composer} canFiles={canFiles} />
       <ChatsSheet open={histOpen} onClose={() => setHistOpen(false)} conversations={conversations} activeId={activeId}
         onOpen={onSelect} onDelete={del} />
       <UndoToast toast={toast} onUndo={undo} onDone={hideToast} />
