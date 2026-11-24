@@ -78,6 +78,7 @@ const STATUS_ORDER = ['Excess', 'Sufficient', 'Low', 'Critical', 'Out of Stock',
 // slowSkus / deadSkus: Sets of SKU codes from the page's own Slow Moving / Dead Stock sub-category
 // lists, so this filter agrees with those two cards.
 export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = false, slowSkus, deadSkus }) {
+  const [search, setSearch] = useState('')
   const [view, setView] = useState([])   // selected categories; empty = all SKUs
   const [cogs, setCogs] = useState(null)
   const [err, setErr] = useState(null)
@@ -99,7 +100,9 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
       v === 'Slow Moving' ? slowSkus?.has(s.sku)
       : v === 'Dead Stock' ? deadSkus?.has(s.sku)
       : s.stockStatus === v)
-    return (skus || []).filter(keep).map(s => {
+    const q = search.trim().toLowerCase()
+    const match = s => !q || s.sku.toLowerCase().includes(q) || (s.category || '').toLowerCase().includes(q) || (s.subCategory || '').toLowerCase().includes(q)
+    return (skus || []).filter(s => keep(s) && match(s)).map(s => {
       const own = cogs.latest[s.sku]
       const avg = cogs.subAvg[s.subCategory]
       const unit = own ? own.cogs : avg != null ? avg : null
@@ -110,7 +113,7 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
         totalCost: unit != null ? unit * (s.totalInvt || 0) : null,
       }
     })
-  }, [skus, cogs, view, slowSkus, deadSkus])
+  }, [skus, cogs, view, search, slowSkus, deadSkus])
 
   const sorted = useMemo(() => {
     const { key, dir } = sort, m = dir === 'asc' ? 1 : -1
@@ -157,6 +160,8 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
       note={note}
       action={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input placeholder="Search SKU…" value={search} onChange={e => { setSearch(e.target.value); setShown(SHOW_STEP) }}
+          style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 200, maxWidth: '100%', boxSizing: 'border-box' }} />
         <SearchableMultiSelect label="Category" options={viewOptions} selected={view}
           onChange={v => { setView(v); setShown(SHOW_STEP) }} width={122} height={30} />
         {isAdmin && cogs && (
