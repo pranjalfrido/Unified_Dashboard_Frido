@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Code } from '@phosphor-icons/react';
 import NavAIIcon from './NavAIIcon.jsx';
 import { ThumbsDown } from '@phosphor-icons/react';
@@ -6,6 +6,8 @@ import { useFeedback } from '../feedback/feedbackCtx.js';
 import { ranQuery } from './ranQuery.js';
 import { SUGGESTIONS } from './pulseShared.js';
 import { renderMarkdown } from './markdown.js';
+import { answerBlocks } from './answerTables.js';
+import ExcelButton from './ExcelButton.jsx';
 
 function ThinkingDots() {
   return (
@@ -33,6 +35,26 @@ function AssistantTable({ table }) {
   );
 }
 
+// The answer as blocks: text is rendered exactly as before; each table gets its "Excel" button, and an answer with
+// several tables gets "Download all".
+function AnswerBody({ text }) {
+  const blocks = useMemo(() => answerBlocks(text), [text]);
+  const tables = blocks.filter(b => b.type === 'table');
+  return (
+    <div className="af-answer">
+      {blocks.map((b, i) => b.type === 'table' ? (
+        <div key={i} className="nx-tblock">
+          <div dangerouslySetInnerHTML={{ __html: renderMarkdown(b.raw) }} />
+          <div className="nx-tbar"><ExcelButton tables={[b]} /></div>
+        </div>
+      ) : (
+        <div key={i} dangerouslySetInnerHTML={{ __html: renderMarkdown(b.raw ?? b.text) }} />
+      ))}
+      {tables.length > 1 && <div className="nx-tbar nx-tbar-all"><ExcelButton tables={tables} all /></div>}
+    </div>
+  );
+}
+
 function AssistantMessage({ msg, question, isAdmin }) {
   const [sqlOpen, setSqlOpen] = useState(false);
   const fbk = useFeedback();
@@ -52,10 +74,7 @@ function AssistantMessage({ msg, question, isAdmin }) {
         ) : (
           <>
             {msg.text && (
-              <div
-                className="af-answer"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
-              />
+              <AnswerBody text={msg.text} />
             )}
             <AssistantTable table={msg.table} />
             {msg.assumptions && (

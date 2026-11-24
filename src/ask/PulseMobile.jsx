@@ -6,9 +6,11 @@ import { useFeedback } from '../feedback/feedbackCtx.js'
 import { ranQuery } from './ranQuery.js'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import BottomSheet from '../responsive/BottomSheet.jsx'
-import { renderMarkdown, splitAnswer } from './markdown.js'
+import { renderMarkdown } from './markdown.js'
 import { chatTime, displayTitle, groupByDate, QUICK_QUESTIONS } from './pulseShared.js'
 import PulseTable from './PulseTable.jsx'
+import ExcelButton from './ExcelButton.jsx'
+import { answerBlocks } from './answerTables.js'
 import { VoiceButton, AttachButton, AttachChips } from './ComposerExtras.jsx'
 import { useAttachments } from './useAttachments.js'
 
@@ -65,7 +67,8 @@ function Answer({ msg, question, isAdmin }) {
   const [sqlOpen, setSqlOpen] = useState(false)
   const fbk = useFeedback()
   const showSql = isAdmin && ranQuery(msg.sql) // admins only, and only when a query really ran
-  const blocks = useMemo(() => (msg.text ? splitAnswer(msg.text) : []), [msg.text])
+  const blocks = useMemo(() => (msg.text ? answerBlocks(msg.text) : []), [msg.text])
+  const tables = useMemo(() => blocks.filter(b => b.type === 'table'), [blocks])
   if (msg.thinking) return <div className="pm-ai"><Who /><div className="af-thinking"><span /><span /><span /></div></div>
   if (isError(msg)) return <div className="pm-ai"><Who /><div className="pm-err" role="alert">{msg.text}</div></div>
   return (
@@ -73,9 +76,10 @@ function Answer({ msg, question, isAdmin }) {
       <Who model={isAdmin ? msg.model : undefined} />
       {blocks.length > 0 && (
         <div className="af-answer pm-answer">
-          {blocks.map((b, i) => b.type === 'table' ? <PulseTable key={i} headers={b.headers} rows={b.rows} />
+          {blocks.map((b, i) => b.type === 'table' ? <PulseTable key={i} headers={b.headers} rows={b.rows} title={b.title} />
             : b.type === 'src' ? <div key={i} className="pm-src">{b.text}</div>
             : <div key={i} dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text) }} />)}
+          {tables.length > 1 && <div className="pm-tbar nx-xl-all-bar"><ExcelButton tables={tables} all /></div>}
         </div>
       )}
       {msg.assumptions && <div className="af-assumptions">Assumptions: {msg.assumptions}</div>}

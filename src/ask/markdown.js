@@ -81,6 +81,7 @@ export function splitAnswer(text) {
     const line = lines[i];
     if (line.includes('|') && lines[i + 1] && /^[\s|:-]+$/.test(lines[i + 1])) {
       flush();
+      const start = i;
       const headers = cells(line);
       const rows = [];
       i += 2;
@@ -90,11 +91,11 @@ export function splitAnswer(text) {
         i++;
       }
       i--;
-      blocks.push({ type: 'table', headers, rows });
+      blocks.push({ type: 'table', headers, rows, raw: lines.slice(start, i + 1).join('\n') });
       continue;
     }
     const src = line.trim().replace(/^[*_]+|[*_]+$/g, '');
-    if (/^source\s*:/i.test(src)) { flush(); blocks.push({ type: 'src', text: src }); continue; }
+    if (/^source\s*:/i.test(src)) { flush(); blocks.push({ type: 'src', text: src, raw: line }); continue; }
     md.push(line);
   }
   flush();

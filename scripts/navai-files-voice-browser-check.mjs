@@ -6,7 +6,7 @@
 // /api/pulse is answered by the test itself, which records what the browser sent. The microphone is a stand-in object that
 // follows the Web Speech API (the real browser engine cannot be driven by a test); "unsupported browser" is tested by removing it.
 import { chromium, webkit } from 'playwright'
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import zlib from 'zlib'
@@ -56,6 +56,12 @@ const F = {
   big: { name: 'huge.csv', mimeType: 'text/csv', buffer: Buffer.alloc(11 * 1024 * 1024, 'a,b\n') },
 }
 
+// ── answers with tables (for the Excel download check) ──
+const TWO_TABLES = `Here is October for D2C.\n\n**D2C returns, October:**\n| Metric | Value | vs Sep |\n|---|---|---|\n| Orders | 2,28,008 | ▲ 4.2% |\n| Gross revenue | ₹33.90 Cr | ▼ 1.3% |\n| Cancellation % | 5.1% | ▲ 0.2% |\n| Total | — | |\n\n### RTO by courier\n| Courier | RTO shipments | RTO % |\n|---|---|---|\n| Bluedart | 12,608 | 8.7% |\n| Delhivery | 3,001 | 9.4% |\n\nSource: Return Analysis`
+const ONE_TABLE = `**Top SKUs:**\n| SKU | Units |\n|---|---|\n| W1 | 1,200 |\n| W2 | 900 |`
+const LONG_TABLE = `**Fourteen rows:**\n| Day | Units | Share |\n|---|---|---|\n${Array.from({ length: 14 }, (_, i) => `| Day ${i + 1} | ${(i + 1) * 100} | ${i + 1}.5% |`).join('\n')}`
+const ANSWERS = [[/two tables/, TWO_TABLES], [/one table/, ONE_TABLE], [/long table/, LONG_TABLE]]
+
 // ── the stand-in microphone ──
 const SPEECH = `
 class FakeRec { constructor() { window.__rec = this; this.lang = 'en-US' } start() { window.__starts = (window.__starts || []).concat(this.lang) } stop() { setTimeout(() => this.onend && this.onend(), 0) } abort() { this.stop() } }
@@ -82,7 +88,7 @@ async function session(vp, as, init) {
   const sent = []
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
-  await page.route('**/api/pulse', async route => { try { sent.push(JSON.parse(route.request().postData() || '{}')) } catch { sent.push({}) } await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'Mock answer', model: 'test' }) }) })
+  await page.route('**/api/pulse', async route => { try { sent.push(JSON.parse(route.request().postData() || '{}')) } catch { sent.push({}) } const q = sent.at(-1)?.messages?.at(-1)?.content || ''; const hit = ANSWERS.find(([re]) => re.test(q)); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: hit ? hit[1] : 'Mock answer', model: 'test' }) }) })
   await page.goto(`${BASE}/?as=${as}`)
   await page.waitForTimeout(3000)
   if (vp.phone) { await page.getByRole('button', { name: /All pages/i }).click(); await page.waitForTimeout(700); await page.getByRole('button', { name: /NavAI/i }).last().click() }
@@ -174,6 +180,54 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
     const native = await page.evaluate(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition))
     const shown = (await page.locator('.nx-voice').count()) > 0
     ok(`${tag} real ${vp.engine.name()}: mic shown exactly when the engine supports speech (supports=${native})`, native === shown)
+    await browser.close()
+  }
+
+  // ── Excel download under answer tables ──
+  {
+    const { browser, page, sent } = await session(vp, 'admin', null)
+    const ask = async text => { const n = sent.length; await box(vp, page).fill(text); await page.evaluate(ph => document.querySelector(ph ? '.pm-send' : '.af-composer-send').click(), vp.phone); await waitSent(page, sent, n); await page.waitForTimeout(500) }
+    const requests = []
+    page.on('request', r => requests.push(r.url()))
+    await ask('two tables please')
+    const per = page.getByTestId('nx-xl'), all = page.getByTestId('nx-xl-all')
+    ok(`${tag} Excel: a button under each of the 2 tables and one "Download all"`, (await per.count()) === 2 && (await all.count()) === 1)
+    ok(`${tag} Excel: tables still render (header, rows)`, (await page.locator('table').count()) >= 2)
+    await per.first().scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${OUT}/${tag}-excel-buttons.png` })
+    ok(`${tag} Excel: buttons fit the screen (no overflow)`, await noOverflow(page))
+    const storeSnap = () => page.evaluate(() => JSON.stringify([localStorage, sessionStorage].map(s => Object.keys(s).sort().map(k => [k, s.getItem(k).length]))))
+    const storeBefore = await storeSnap()
+    requests.length = 0
+    const [d1] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), per.first().click()])
+    const f1 = `${OUT}/${tag}-one-table.xlsx`
+    await d1.saveAs(f1)
+    const wb1 = XLSX.read(readFileSync(f1))
+    ok(`${tag} Excel: one table downloads as .xlsx named after the table`, /^NavAI-D2C-returns-October-\d{4}-\d{2}-\d{2}\.xlsx$/.test(d1.suggestedFilename()) && wb1.SheetNames.length === 1 && wb1.SheetNames[0] === 'D2C returns, October', `${d1.suggestedFilename()} / ${wb1.SheetNames}`)
+    const ws1 = wb1.Sheets[wb1.SheetNames[0]]
+    ok(`${tag} Excel: numbers are numbers (228008, 33.9 as Rs Cr, 5.1% as 0.051), text stays text`, ws1.B2.t === 'n' && ws1.B2.v === 228008 && ws1.B3.t === 'n' && ws1.B3.v === 33.9 && ws1.B4.t === 'n' && Math.abs(ws1.B4.v - 0.051) < 1e-9 && ws1.A2.t === 's')
+    ok(`${tag} Excel: shown as in the answer (₹33.90 Cr, 5.1%, ▼ 1.3%)`, /₹33\.90 Cr/.test(XLSX.utils.format_cell(ws1.B3)) && XLSX.utils.format_cell(ws1.B4) === '5.1%' && /▼ 1\.3%/.test(XLSX.utils.format_cell(ws1.C3)))
+    const z1 = await JSZip.loadAsync(readFileSync(f1))
+    const st = await z1.file('xl/styles.xml').async('string')
+    ok(`${tag} Excel: header row is bold`, /<b\/>/.test(st) && /<c r="A1" s="[1-9]/.test(await z1.file('xl/worksheets/sheet1.xml').async('string')))
+    ok(`${tag} Excel: no server call and nothing stored (no /api request, storage unchanged)`, !requests.some(u => /\/api\//.test(u)) && storeBefore === await storeSnap(), requests.filter(u => /\/api\//.test(u)).join(' '))
+    const [d2] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), all.click()])
+    const f2 = `${OUT}/${tag}-all-tables.xlsx`
+    await d2.saveAs(f2)
+    const wb2 = XLSX.read(readFileSync(f2))
+    ok(`${tag} Excel: "Download all" = one sheet per table (named after each title)`, wb2.SheetNames.length === 2 && wb2.SheetNames[1] === 'RTO by courier' && /^NavAI-answer-/.test(d2.suggestedFilename()), `${d2.suggestedFilename()} / ${wb2.SheetNames}`)
+    ok(`${tag} Excel: second sheet numbers are numeric (12,608 -> 12608; 9.4% -> 0.094)`, wb2.Sheets['RTO by courier'].B2.v === 12608 && Math.abs(wb2.Sheets['RTO by courier'].C3.v - 0.094) < 1e-9)
+    await ask('one table please')
+    ok(`${tag} Excel: a one-table answer has an Excel button (and the earlier answer keeps its own)`, (await per.count()) === 3 && (await all.count()) === 1)
+    await ask('long table please')
+    const [d3] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), per.last().click()])
+    const f3 = `${OUT}/${tag}-long-table.xlsx`
+    await d3.saveAs(f3)
+    const wb3 = XLSX.read(readFileSync(f3))
+    const rowsOut = XLSX.utils.sheet_to_json(wb3.Sheets[wb3.SheetNames[0]], { header: 1 })
+    ok(`${tag} Excel: a long table downloads all 14 rows even when the screen shows 10`, rowsOut.length === 15, `${rowsOut.length - 1} rows`)
+    ok(`${tag} Excel: sheet from a long table is named after its title`, wb3.SheetNames[0] === 'Fourteen rows')
+    await page.screenshot({ path: `${OUT}/${tag}-excel-after.png` })
     await browser.close()
   }
 

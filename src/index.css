@@ -1833,3 +1833,14 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .nx-chip.err { background: #fbeeec; border-color: #f1d3ce; flex-wrap: wrap; }
 .nx-chip-error { color: #8c2a1f !important; flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; padding: 0 2px 2px; }
 .nx-chip-state { color: #1f5a3d !important; font-weight: 600; }
+/* NavAI answer tables: Excel download */
+.nx-xl { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(31,90,61,.3); background: rgba(31,90,61,.06); color: #1f5a3d; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
+.nx-xl:hover:not(:disabled) { background: rgba(31,90,61,.14); }
+.nx-xl:disabled { opacity: .6; cursor: default; }
+.nx-xl-err { margin-left: 8px; font-size: 12px; color: #8c2a1f; }
+.nx-tbar { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.nx-tbar-all { margin-top: 2px; }
+.pm-tbar .nx-xl { min-height: 40px; border: none; background: none; padding: 0 4px; font-size: 13px; margin-left: 8px; }
+.pm-tbar .nx-xl:hover:not(:disabled) { background: none; }
+.nx-xl-all-bar { margin: 6px 0 2px; }
+.nx-xl-all-bar .nx-xl { border: 1px solid rgba(31,90,61,.3); background: rgba(31,90,61,.06); padding: 0 12px; min-height: 40px; margin-left: 0; border-radius: 10px; }

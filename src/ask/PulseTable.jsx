@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ArrowsOut, Copy, Check } from '@phosphor-icons/react'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import { inlineFormat } from './markdown.js'
+import ExcelButton from './ExcelButton.jsx'
 
 // A table in a Pulse answer on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md §5, mockups/pulse_fix_mockup.html):
 //   fits the width: at most 4 columns; more → "View full table ⤢" opens a full-screen table that scrolls
@@ -96,7 +97,7 @@ function FullTable({ headers, rows, cols, numCols, onClose }) {
   )
 }
 
-export default function PulseTable({ headers, rows }) {
+export default function PulseTable({ headers, rows, title }) {
   const [all, setAll] = useState(false)
   const [full, setFull] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -133,6 +134,7 @@ export default function PulseTable({ headers, rows }) {
         <button type="button" className="pm-copy" onClick={copy} aria-live="polite">
           {copied ? <Check size={13} weight="bold" aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}{copied ? 'Copied' : 'Copy'}
         </button>
+        <ExcelButton tables={[{ title, headers, rows }]} />
       </div>
       {full && <FullTable headers={headers} rows={rows} cols={ncol} numCols={numCols} onClose={() => setFull(false)} />}
     </div>
