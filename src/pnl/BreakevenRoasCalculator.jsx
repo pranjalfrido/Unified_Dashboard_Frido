@@ -300,6 +300,13 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     }
   }
 
+  const mrp = useMemo(() => {
+    if (listingPrice === '' || listingPrice == null) return null
+    const raw = listingPrice * 1.8
+    const rounded = Math.round(raw / 100) * 100
+    return rounded - 1
+  }, [listingPrice])
+
   const sellingPrice = useMemo(() => {
     if (listingPrice === '' || discountPct === '') return 0
     return listingPrice * (1 - discountPct / 100)
@@ -362,7 +369,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     setSavedScenarios(prev => [...prev, {
       id: `${Date.now()}-${prev.length}`,
       productName: productName || 'Your product',
-      listingPrice, discountPct, sellingPrice,
+      mrp, listingPrice, discountPct, sellingPrice, _gstPct: gstPct,
       cogs: waterfall.cogs, weightGm,
       logistics: waterfall.logistics, fulfilment: waterfall.fulfilment, paymentGw: waterfall.paymentGw, softwareFee: waterfall.softwareFee,
       snd: waterfall.snd, netRev, gm: waterfall.gm, cm1: waterfall.cm1,
@@ -519,6 +526,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                   // Phone (PNL_REVIEW_FIXES.md §4): the four summary values as 2 × 2 chips
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
                     {[
+                      ['MRP', mrp != null ? `₹${mrp.toLocaleString('en-IN')}` : '—'],
                       ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—'],
                       ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—'],
                       ['GST', `${gstPct}%`],
@@ -533,6 +541,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                 ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 14, rowGap: 6, paddingTop: 8 }}>
                   {[
+                    ['MRP', mrp != null ? `₹${mrp.toLocaleString('en-IN')}` : '—', false],
                     ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
                     ['COGS', cogs !== '' ? `₹${Math.round(cogs).toLocaleString('en-IN')}` : '—', false],
                     ['GST', `${gstPct}%`, false],
@@ -626,71 +635,109 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   )
 }
 
-// Appended-to table of every scenario the user has Saved in this session — built specifically so
-// several products checked one after another land in ONE table a founder can screenshot/forward,
-// instead of a separate screen per product. Reset (also available at the top of the page) clears
-// this table AND the live form together, since a half-cleared state (new form, old saved rows or
-// vice versa) would be confusing to share from.
+// Column-per-product comparison table — each saved scenario is a column, each row is a line item.
+// Grouped into sections (Pricing, Unit Economics per unit, ROAS) with a dark section header row
+// matching the reference image style. Highlighted rows (GM, CM1, ROAS) get a bolder treatment.
 function SavedScenariosTable({ scenarios, onRemove, onReset }) {
-  const cols = [
-    { key: 'productName', label: 'Product' },
-    { key: 'listingPrice', label: 'Listing', fmt: v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—' },
-    { key: 'netRev', label: 'Net Rev.', fmt: v => fmt(v) },
-    { key: 'cogs', label: 'COGS', fmt: v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—' },
-    { key: 'gmPct', label: 'GM %', fmt: v => v != null ? `${v.toFixed(1)}%` : '—' },
-    { key: 'sndPct', label: 'S&D %', fmt: v => v != null ? `${v.toFixed(1)}%` : '—' },
-    { key: 'cm1Pct', label: 'CM1 %', fmt: v => v != null ? `${v.toFixed(1)}%` : '—', highlight: true },
-    // Return% = RTO% + Cancellation% + CIR% — the same three components perUnitWaterfall's own
-    // revenueLossPct sums (Exchange deliberately excluded there too, since an exchanged unit's
-    // revenue/COGS isn't actually lost — see pnlUtils.js) — a single blended "how much of this
-    // product comes back/never ships" number, the real-world number a founder actually asks for.
-    { key: 'returnPct', label: 'Return %', fmt: v => v != null ? `${v.toFixed(1)}%` : '—' },
-    { key: 'breakevenRoas', label: 'Breakeven ROAS', fmt: v => v != null ? `${v.toFixed(2)}x` : '—', highlight: true },
-    { key: 'breakevenRoas15', label: 'CM2 @ 15%', fmt: v => v != null ? `${v.toFixed(2)}x` : '—', highlight: true },
+  const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
+  const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
+  const roas = v => v != null ? `${v.toFixed(2)}x` : '—'
+  const kFmt = v => {
+    if (v == null) return '—'
+    const abs = Math.abs(v)
+    if (abs >= 1000) return `${v < 0 ? '−' : ''}₹${(abs / 1000).toFixed(2)}K`
+    return `${v < 0 ? '−' : ''}₹${Math.round(abs).toLocaleString('en-IN')}`
+  }
+
+  const ROWS = [
+    { section: 'PRICING' },
+    { key: 'mrp', label: 'MRP', fmt: rupee },
+    { key: 'listingPrice', label: 'Listing price', fmt: rupee, bold: true },
+    { key: '_discountOnMrp', label: 'Discount on MRP', fmt: pct1 },
+    { key: 'cogs', label: 'COGS per unit', fmt: rupee },
+    { key: '_gstPct', label: 'GST', fmt: v => v != null ? `${v}%` : '—' },
+    { key: 'returnPct', label: 'Return %', fmt: pct1 },
+    { section: 'UNIT ECONOMICS (PER UNIT)' },
+    { key: 'sellingPrice', label: 'Selling price  inc. GST, after discount', fmt: kFmt },
+    { key: 'netRev', label: 'Net revenue  ex. GST, after returns', fmt: kFmt, bold: true },
+    { key: '_cogsWithPct', label: 'COGS  ₹ · % of net revenue', fmt: (v, s) => s ? `${kFmt(s.cogs)}  ${pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)}` : '—' },
+    { key: 'gm', label: 'Gross margin (GM)  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.gm)}  ${pct1(s.gmPct)}` : '—', bold: true, highlight: true },
+    { key: 'snd', label: 'S&D  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.snd)}  ${pct1(s.sndPct)}` : '—' },
+    { key: 'cm1', label: 'Contribution margin 1 (CM1)  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.cm1)}  ${pct1(s.cm1Pct)}` : '—', bold: true, highlight: true },
+    { section: 'ROAS' },
+    { key: 'breakevenRoas', label: 'Breakeven ROAS', fmt: roas, highlight: true },
+    { key: 'breakevenRoas15', label: 'ROAS for 15% CM2', fmt: roas, highlight: true },
   ]
+
+  const enriched = scenarios.map(s => ({
+    ...s,
+    _discountOnMrp: s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null,
+  }))
+
+  const thBase = { padding: '10px 14px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', textAlign: 'center', border: `1px solid rgba(255,255,255,0.12)` }
+  const tdBase = { padding: '9px 14px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+
   return (
-    <Card style={{ gap: 14, padding: 18 }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <SectionLabel>Saved Scenarios ({scenarios.length})</SectionLabel>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>Listing prices set for ~55% gross margin</div>
+        </div>
         <button onClick={onReset}
-          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer' }}>
+          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           ↺ Reset
         </button>
       </div>
+
       <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${C.border}` }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
           <thead>
-            <tr style={{ background: C.bg }}>
-              {cols.map(c => (
-                <th key={c.key} style={{ textAlign: c.key === 'productName' ? 'left' : 'right', padding: '9px 12px', fontWeight: 700, color: C.t2, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>
+            <tr>
+              <th style={{ ...thBase, textAlign: 'left', minWidth: 190 }}>Line item</th>
+              {enriched.map((s, i) => (
+                <th key={s.id} style={{ ...thBase, minWidth: 148 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <span>{s.productName}</span>
+                    <button onClick={() => onRemove(s.id)} title="Remove"
+                      style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 12, lineHeight: 1, flexShrink: 0 }}>×</button>
+                  </div>
+                </th>
               ))}
-              <th style={{ background: C.bg, borderBottom: `1px solid ${C.border}`, width: 36 }} />
             </tr>
           </thead>
           <tbody>
-            {scenarios.map((s, i) => (
-              <tr key={s.id} style={{ background: i % 2 === 1 ? C.bg : '#fff' }}>
-                {cols.map(c => (
-                  <td key={c.key} style={{
-                    padding: '10px 12px', textAlign: c.key === 'productName' ? 'left' : 'right',
-                    fontWeight: c.key === 'productName' || c.highlight ? 700 : 500,
-                    color: c.highlight ? C.acd : C.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                    borderTop: i === 0 ? 'none' : `1px solid ${C.border}`,
-                  }}>
-                    {c.fmt ? c.fmt(s[c.key]) : s[c.key]}
-                  </td>
-                ))}
-                <td style={{ padding: '10px 12px', textAlign: 'right', borderTop: i === 0 ? 'none' : `1px solid ${C.border}` }}>
-                  <button onClick={() => onRemove(s.id)} title="Remove this row"
-                    style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>
-                    ×
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {ROWS.map((row, ri) => {
+              if (row.section) {
+                return (
+                  <tr key={row.section}>
+                    <td colSpan={enriched.length + 1} style={{ padding: '7px 14px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.5, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                      {row.section}
+                    </td>
+                  </tr>
+                )
+              }
+              const rowBg = row.highlight ? '#f0faf1' : ri % 2 === 0 ? '#fff' : C.bg
+              return (
+                <tr key={row.key} style={{ background: rowBg }}>
+                  <td style={{ ...tdBase, color: C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg, paddingLeft: 14 }}>{row.label}</td>
+                  {enriched.map(s => {
+                    const raw = s[row.key]
+                    const display = row.fmt ? row.fmt(raw, s) : (raw ?? '—')
+                    const isNeg = typeof raw === 'number' && raw < 0
+                    return (
+                      <td key={s.id} style={{ ...tdBase, textAlign: 'center', fontWeight: row.bold ? 800 : 600, color: row.highlight ? C.acd : isNeg ? C.red.tx : C.t1, background: rowBg }}>
+                        {display}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
-    </Card>
+      <div style={{ fontSize: 11, color: C.t3 }}>₹ values in K are rounded. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
+    </div>
   )
 }
