@@ -554,7 +554,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                         </span>
                       )}
                       <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        <span style={{ fontSize: isHero ? 17 : 14, fontWeight: isHero ? 800 : 700, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+                        <span style={{ fontSize: 17, fontWeight: 800, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
                         <span style={{ fontSize: 12, fontWeight: 500, color: C.t3 }}>{label}</span>
                       </span>
                     </Fragment>
