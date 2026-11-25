@@ -516,7 +516,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '1 1 380px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 480px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
@@ -539,7 +539,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                     ))}
                   </div>
                 ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 14, rowGap: 6, paddingTop: 8 }}>
+                <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'baseline', columnGap: 10, paddingTop: 8, overflowX: 'auto' }}>
                   {[
                     ['MRP', mrp != null ? `₹${mrp.toLocaleString('en-IN')}` : '—', false],
                     ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
@@ -549,13 +549,13 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                   ].map(([label, value, isHero], i) => (
                     <Fragment key={label}>
                       {i > 0 && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', height: '1em' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', height: '1em', flexShrink: 0 }}>
                           <span style={{ width: 2, height: 16, background: '#d8dce1', borderRadius: 1, display: 'inline-block' }} />
                         </span>
                       )}
-                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: isHero ? 18 : 15, fontWeight: isHero ? 800 : 700, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: C.t3 }}>{label}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        <span style={{ fontSize: isHero ? 17 : 14, fontWeight: isHero ? 800 : 700, color: C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: C.t3 }}>{label}</span>
                       </span>
                     </Fragment>
                   ))}
