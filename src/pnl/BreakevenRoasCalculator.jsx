@@ -635,109 +635,99 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   )
 }
 
-// Column-per-product comparison table — each saved scenario is a column, each row is a line item.
-// Grouped into sections (Pricing, Unit Economics per unit, ROAS) with a dark section header row
-// matching the reference image style. Highlighted rows (GM, CM1, ROAS) get a bolder treatment.
-function SavedScenariosTable({ scenarios, onRemove, onReset }) {
-  const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
-  const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
-  const roas = v => v != null ? `${v.toFixed(2)}x` : '—'
+// One card per saved scenario — headline ROAS numbers big, unit economics as compact stat rows,
+// pricing pills at the top. Scroll horizontally when many scenarios are saved.
+function ScenarioCard({ s, onRemove }) {
   const kFmt = v => {
     if (v == null) return '—'
     const abs = Math.abs(v)
     if (abs >= 1000) return `${v < 0 ? '−' : ''}₹${(abs / 1000).toFixed(2)}K`
     return `${v < 0 ? '−' : ''}₹${Math.round(abs).toLocaleString('en-IN')}`
   }
+  const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
+  const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
+  const discOnMrp = s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null
 
-  const ROWS = [
-    { section: 'PRICING' },
-    { key: 'mrp', label: 'MRP', fmt: rupee },
-    { key: 'listingPrice', label: 'Listing price', fmt: rupee, bold: true },
-    { key: '_discountOnMrp', label: 'Discount on MRP', fmt: pct1 },
-    { key: 'cogs', label: 'COGS per unit', fmt: rupee },
-    { key: '_gstPct', label: 'GST', fmt: v => v != null ? `${v}%` : '—' },
-    { key: 'returnPct', label: 'Return %', fmt: pct1 },
-    { section: 'UNIT ECONOMICS (PER UNIT)' },
-    { key: 'sellingPrice', label: 'Selling price  inc. GST, after discount', fmt: kFmt },
-    { key: 'netRev', label: 'Net revenue  ex. GST, after returns', fmt: kFmt, bold: true },
-    { key: '_cogsWithPct', label: 'COGS  ₹ · % of net revenue', fmt: (v, s) => s ? `${kFmt(s.cogs)}  ${pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)}` : '—' },
-    { key: 'gm', label: 'Gross margin (GM)  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.gm)}  ${pct1(s.gmPct)}` : '—', bold: true, highlight: true },
-    { key: 'snd', label: 'S&D  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.snd)}  ${pct1(s.sndPct)}` : '—' },
-    { key: 'cm1', label: 'Contribution margin 1 (CM1)  ₹ · %', fmt: (v, s) => s ? `${kFmt(s.cm1)}  ${pct1(s.cm1Pct)}` : '—', bold: true, highlight: true },
-    { section: 'ROAS' },
-    { key: 'breakevenRoas', label: 'Breakeven ROAS', fmt: roas, highlight: true },
-    { key: 'breakevenRoas15', label: 'ROAS for 15% CM2', fmt: roas, highlight: true },
-  ]
-
-  const enriched = scenarios.map(s => ({
-    ...s,
-    _discountOnMrp: s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null,
-  }))
-
-  const thBase = { padding: '10px 14px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', textAlign: 'center', border: `1px solid rgba(255,255,255,0.12)` }
-  const tdBase = { padding: '9px 14px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+  const statRow = (label, value, highlight) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 11.5, color: C.t3, fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 12.5, fontWeight: highlight ? 800 : 600, color: highlight ? C.acd : C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  )
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
-          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>Listing prices set for ~55% gross margin</div>
-        </div>
-        <button onClick={onReset}
-          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          ↺ Reset
-        </button>
+    <div style={{ flex: '0 0 240px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Card header */}
+      <div style={{ background: C.acd, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.3, flex: 1 }}>{s.productName}</div>
+        <button onClick={() => onRemove(s.id)} title="Remove"
+          style={{ width: 20, height: 20, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.75)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>×</button>
       </div>
 
-      <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${C.border}` }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ ...thBase, textAlign: 'left', minWidth: 190 }}>Line item</th>
-              {enriched.map((s, i) => (
-                <th key={s.id} style={{ ...thBase, minWidth: 148, textAlign: 'right' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                    <span>{s.productName}</span>
-                    <button onClick={() => onRemove(s.id)} title="Remove"
-                      style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 12, lineHeight: 1, flexShrink: 0 }}>×</button>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((row, ri) => {
-              if (row.section) {
-                return (
-                  <tr key={row.section}>
-                    <td colSpan={enriched.length + 1} style={{ padding: '7px 14px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.5, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
-                      {row.section}
-                    </td>
-                  </tr>
-                )
-              }
-              const rowBg = row.highlight ? '#f0faf1' : ri % 2 === 0 ? '#fff' : C.bg
-              return (
-                <tr key={row.key} style={{ background: rowBg }}>
-                  <td style={{ ...tdBase, color: C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg, paddingLeft: 14 }}>{row.label}</td>
-                  {enriched.map(s => {
-                    const raw = s[row.key]
-                    const display = row.fmt ? row.fmt(raw, s) : (raw ?? '—')
-                    const isNeg = typeof raw === 'number' && raw < 0
-                    return (
-                      <td key={s.id} style={{ ...tdBase, textAlign: 'right', fontWeight: row.bold ? 800 : 600, color: row.highlight ? C.acd : isNeg ? C.red.tx : C.t1, background: rowBg }}>
-                        {display}
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {/* Pricing pills */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 14px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
+        {[
+          ['MRP', rupee(s.mrp)],
+          ['Listing', rupee(s.listingPrice)],
+          ['Disc', discOnMrp != null ? `${discOnMrp.toFixed(0)}%` : '—'],
+          ['GST', s._gstPct != null ? `${s._gstPct}%` : '—'],
+          ['Return', pct1(s.returnPct)],
+        ].map(([lbl, val]) => (
+          <div key={lbl} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', display: 'flex', gap: 4, alignItems: 'baseline' }}>
+            <span style={{ fontSize: 10, color: C.t3, fontWeight: 600 }}>{lbl}</span>
+            <span style={{ fontSize: 11.5, color: C.t1, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
+          </div>
+        ))}
       </div>
-      <div style={{ fontSize: 11, color: C.t3 }}>₹ values in K are rounded. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
+
+      {/* Stat rows */}
+      <div style={{ padding: '4px 14px 0', flex: 1 }}>
+        {statRow('Selling price (inc. GST)', kFmt(s.sellingPrice))}
+        {statRow('Net revenue (ex. GST)', kFmt(s.netRev))}
+        {statRow(`COGS  ${pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)}`, kFmt(s.cogs))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}`, background: '#f0faf1', margin: '0 -14px', paddingLeft: 14, paddingRight: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 700 }}>Gross margin (GM)</span>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: C.acd, fontVariantNumeric: 'tabular-nums' }}>{kFmt(s.gm)} <span style={{ fontSize: 11, fontWeight: 700 }}>{pct1(s.gmPct)}</span></span>
+        </div>
+        {statRow(`S&D  ${pct1(s.sndPct)}`, kFmt(s.snd))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}`, background: '#f0faf1', margin: '0 -14px', paddingLeft: 14, paddingRight: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 700 }}>CM1</span>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: s.cm1 < 0 ? C.red.tx : C.acd, fontVariantNumeric: 'tabular-nums' }}>{kFmt(s.cm1)} <span style={{ fontSize: 11, fontWeight: 700 }}>{pct1(s.cm1Pct)}</span></span>
+        </div>
+      </div>
+
+      {/* ROAS footer */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${C.border}`, marginTop: 6 }}>
+        <div style={{ padding: '10px 14px', borderRight: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3 }}>Breakeven</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: s.breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+            {s.breakevenRoas != null ? `${s.breakevenRoas.toFixed(2)}x` : '—'}
+          </div>
+        </div>
+        <div style={{ padding: '10px 14px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3 }}>15% CM2</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: s.breakevenRoas15 == null ? C.red.tx : C.acd, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+            {s.breakevenRoas15 != null ? `${s.breakevenRoas15.toFixed(2)}x` : '—'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SavedScenariosTable({ scenarios, onRemove, onReset }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>Saved Scenarios <span style={{ fontWeight: 500, color: C.t3 }}>({scenarios.length})</span></div>
+        <button onClick={onReset}
+          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer' }}>
+          ↺ Reset All
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4 }}>
+        {scenarios.map(s => <ScenarioCard key={s.id} s={s} onRemove={onRemove} />)}
+      </div>
     </div>
   )
 }
