@@ -303,7 +303,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   const mrp = useMemo(() => {
     if (listingPrice === '' || listingPrice == null) return null
     const raw = listingPrice * 1.8
-    const rounded = Math.round(raw / 100) * 100
+    const rounded = Math.round(raw / 500) * 500
     return rounded - 1
   }, [listingPrice])
 
