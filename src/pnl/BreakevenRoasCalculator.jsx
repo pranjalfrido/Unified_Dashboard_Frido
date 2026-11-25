@@ -696,8 +696,8 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
             <tr>
               <th style={{ ...thBase, textAlign: 'left', minWidth: 190 }}>Line item</th>
               {enriched.map((s, i) => (
-                <th key={s.id} style={{ ...thBase, minWidth: 148 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <th key={s.id} style={{ ...thBase, minWidth: 148, textAlign: 'right' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                     <span>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
                       style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 12, lineHeight: 1, flexShrink: 0 }}>×</button>
@@ -726,7 +726,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
                     const display = row.fmt ? row.fmt(raw, s) : (raw ?? '—')
                     const isNeg = typeof raw === 'number' && raw < 0
                     return (
-                      <td key={s.id} style={{ ...tdBase, textAlign: 'center', fontWeight: row.bold ? 800 : 600, color: row.highlight ? C.acd : isNeg ? C.red.tx : C.t1, background: rowBg }}>
+                      <td key={s.id} style={{ ...tdBase, textAlign: 'right', fontWeight: row.bold ? 800 : 600, color: row.highlight ? C.acd : isNeg ? C.red.tx : C.t1, background: rowBg }}>
                         {display}
                       </td>
                     )
