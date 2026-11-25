@@ -150,6 +150,12 @@ function computePayload(windowDays) {
   const avgSaleBySkuLoc = new Map()
   const totalAvgSaleBySkuLoc = new Map()
   const allocBySkuLoc = new Map()
+  // Company-wide B2C and total avg sale per SKU — counts ALL orders regardless of which WH has
+  // inventory. The per-location maps above only accumulate sales at WHs that also have inventory
+  // for the SKU, so multi-WH products (e.g. W1 stocked only at PNQ+GGN) dropped orders shipped
+  // from other regions, making avgSale lower than the Shopify-only Sales Tab DRR.
+  const rawB2CSaleBySkuKey = new Map()
+  const rawTotalSaleBySkuKey = new Map()
   for (const row of cleanSalesRows) {
     const { key } = resolveMasterSkuKey(row.final_sku, skuMap)
     if (!key) continue
@@ -162,6 +168,8 @@ function computePayload(windowDays) {
       if (countsTowardTotal) totalAvgSaleBySkuLoc.set(mapKey, (totalAvgSaleBySkuLoc.get(mapKey)||0) + qty)
       if (isB2C) avgSaleBySkuLoc.set(mapKey, (avgSaleBySkuLoc.get(mapKey)||0) + qty)
     }
+    if (isB2C) rawB2CSaleBySkuKey.set(key, (rawB2CSaleBySkuKey.get(key)||0) + qty)
+    if (countsTowardTotal) rawTotalSaleBySkuKey.set(key, (rawTotalSaleBySkuKey.get(key)||0) + qty)
     const facilityLocation = facilityToLocation.get(row.Facility)
     if (countsTowardTotal && facilityLocation) {
       const mapKey = `${key}|${facilityLocation}`
@@ -300,32 +308,18 @@ function computePayload(windowDays) {
   for (const r of skuLocRows) {
     const acc = rolledSkuMap.get(r.skuKey)
     if (!acc) continue
-    acc.rawAvgSaleQty += r.rawAvgSaleQty; acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty; acc.orderAllocation += r.orderAllocation
+    // rawAvgSaleQty/rawTotalAvgSaleQty set below from all-WH maps — only accumulate orderAllocation here
+    acc.orderAllocation += r.orderAllocation
     acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.byFacility })
   }
-
-  // Populate avg sale for item-master-seeded SKUs that have sales but no inventory rows.
-  // skuLocRows only covers SKUs that appeared in invBySkuFacility (inventory-driven), so SKUs
-  // with sales but zero Live-facility inventory would otherwise show avgSale=0. Pull their
-  // sales figures directly from the location-level sale maps.
+  // Set company-wide avg sale from all-WH maps — counts ALL B2C orders per SKU regardless of
+  // which WH has inventory, fixing the bug where SKUs stocked only at PNQ+GGN dropped orders
+  // from BLR/KOL/HYD/MUM/CHN, making avgSale lower than the Sales Tab DRR.
   for (const [skuKey, acc] of rolledSkuMap) {
-    if (acc.rawAvgSaleQty > 0 || acc.rawTotalAvgSaleQty > 0) continue // already populated
-    // Sum across all locations this SKU has sales at
-    let rawAvgSaleQty = 0, rawTotalAvgSaleQty = 0, orderAllocation = 0
-    for (const [mapKey, qty] of avgSaleBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) rawAvgSaleQty += qty
-    }
-    for (const [mapKey, qty] of totalAvgSaleBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) rawTotalAvgSaleQty += qty
-    }
-    for (const [mapKey, qty] of allocBySkuLoc) {
-      if (mapKey.startsWith(skuKey + '|')) orderAllocation += qty
-    }
-    if (rawAvgSaleQty > 0 || rawTotalAvgSaleQty > 0 || orderAllocation > 0) {
-      acc.rawAvgSaleQty = rawAvgSaleQty
-      acc.rawTotalAvgSaleQty = rawTotalAvgSaleQty
-      acc.orderAllocation = orderAllocation / windowDays  // match the daily-rate unit used by skuLocRows
-    }
+    const b2c = rawB2CSaleBySkuKey.get(skuKey) || 0
+    const total = rawTotalSaleBySkuKey.get(skuKey) || 0
+    acc.rawAvgSaleQty = b2c
+    acc.rawTotalAvgSaleQty = total
   }
 
   let skus = [...rolledSkuMap.values()].map(s => {
