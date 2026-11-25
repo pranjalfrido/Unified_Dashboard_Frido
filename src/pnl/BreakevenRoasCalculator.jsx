@@ -635,99 +635,133 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   )
 }
 
-// One card per saved scenario — headline ROAS numbers big, unit economics as compact stat rows,
-// pricing pills at the top. Scroll horizontally when many scenarios are saved.
-function ScenarioCard({ s, onRemove }) {
+function SavedScenariosTable({ scenarios, onRemove, onReset }) {
+  const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
+  const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
+  const roasFmt = v => v != null ? `${v.toFixed(2)}x` : '—'
   const kFmt = v => {
     if (v == null) return '—'
     const abs = Math.abs(v)
     if (abs >= 1000) return `${v < 0 ? '−' : ''}₹${(abs / 1000).toFixed(2)}K`
     return `${v < 0 ? '−' : ''}₹${Math.round(abs).toLocaleString('en-IN')}`
   }
-  const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
-  const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
-  const discOnMrp = s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null
 
-  const statRow = (label, value, highlight) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: 11.5, color: C.t3, fontWeight: 500 }}>{label}</span>
-      <span style={{ fontSize: 12.5, fontWeight: highlight ? 800 : 600, color: highlight ? C.acd : C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-    </div>
+  // Renders ₹value in bold + % in accent green beside it, like the reference image
+  const ValPct = ({ val, pct, highlight }) => (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ fontWeight: 800, color: highlight ? C.acd : C.t1 }}>{val}</span>
+      <span style={{ fontWeight: 700, color: C.acc, fontSize: 11 }}>{pct}</span>
+    </span>
   )
 
+  const enriched = scenarios.map(s => ({
+    ...s,
+    _discountOnMrp: s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null,
+  }))
+
+  const ROWS = [
+    { section: 'PRICING' },
+    { key: 'mrp', label: 'MRP', render: s => rupee(s.mrp) },
+    { key: 'listingPrice', label: 'Listing price', bold: true, render: s => rupee(s.listingPrice) },
+    { key: '_discountOnMrp', label: 'Discount on MRP', render: s => pct1(s._discountOnMrp) },
+    { key: 'cogs', label: 'COGS per unit', render: s => rupee(s.cogs) },
+    { key: '_gstPct', label: 'GST', render: s => s._gstPct != null ? `${s._gstPct}%` : '—' },
+    { key: 'returnPct', label: 'Return %', render: s => pct1(s.returnPct) },
+    { section: 'UNIT ECONOMICS (PER UNIT)' },
+    {
+      key: 'sellingPrice', bold: false,
+      label: <span>Selling price <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>inc. GST, after discount</span></span>,
+      render: s => kFmt(s.sellingPrice),
+    },
+    {
+      key: 'netRev', bold: true,
+      label: <span>Net revenue <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>ex. GST, after returns</span></span>,
+      render: s => kFmt(s.netRev),
+    },
+    {
+      key: 'cogsRow',
+      label: <span>COGS <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>₹ · % of net revenue</span></span>,
+      render: s => <ValPct val={kFmt(s.cogs)} pct={pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)} />,
+    },
+    {
+      key: 'gm', bold: true, highlight: true,
+      label: <span>Gross margin (GM) <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>₹ · %</span></span>,
+      render: s => <ValPct val={kFmt(s.gm)} pct={pct1(s.gmPct)} highlight />,
+    },
+    {
+      key: 'snd',
+      label: <span>S&amp;D <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>₹ · %</span></span>,
+      render: s => <ValPct val={kFmt(s.snd)} pct={pct1(s.sndPct)} />,
+    },
+    {
+      key: 'cm1', bold: true, highlight: true,
+      label: <span>Contribution margin 1 (CM1) <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>₹ · %</span></span>,
+      render: s => <ValPct val={kFmt(s.cm1)} pct={pct1(s.cm1Pct)} highlight />,
+    },
+    { section: 'ROAS' },
+    { key: 'breakevenRoas', label: 'Breakeven ROAS', render: s => roasFmt(s.breakevenRoas) },
+    { key: 'breakevenRoas15', label: 'ROAS for 15% CM2', render: s => roasFmt(s.breakevenRoas15) },
+  ]
+
+  const thSt = { padding: '11px 16px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)` }
+  const tdSt = { padding: '9px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }
+
   return (
-    <div style={{ flex: '0 0 240px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Card header */}
-      <div style={{ background: C.acd, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.3, flex: 1 }}>{s.productName}</div>
-        <button onClick={() => onRemove(s.id)} title="Remove"
-          style={{ width: 20, height: 20, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.75)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>×</button>
-      </div>
-
-      {/* Pricing pills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 14px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
-        {[
-          ['MRP', rupee(s.mrp)],
-          ['Listing', rupee(s.listingPrice)],
-          ['Disc', discOnMrp != null ? `${discOnMrp.toFixed(0)}%` : '—'],
-          ['GST', s._gstPct != null ? `${s._gstPct}%` : '—'],
-          ['Return', pct1(s.returnPct)],
-        ].map(([lbl, val]) => (
-          <div key={lbl} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', display: 'flex', gap: 4, alignItems: 'baseline' }}>
-            <span style={{ fontSize: 10, color: C.t3, fontWeight: 600 }}>{lbl}</span>
-            <span style={{ fontSize: 11.5, color: C.t1, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Stat rows */}
-      <div style={{ padding: '4px 14px 0', flex: 1 }}>
-        {statRow('Selling price (inc. GST)', kFmt(s.sellingPrice))}
-        {statRow('Net revenue (ex. GST)', kFmt(s.netRev))}
-        {statRow(`COGS  ${pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)}`, kFmt(s.cogs))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}`, background: '#f0faf1', margin: '0 -14px', paddingLeft: 14, paddingRight: 14 }}>
-          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 700 }}>Gross margin (GM)</span>
-          <span style={{ fontSize: 12.5, fontWeight: 800, color: C.acd, fontVariantNumeric: 'tabular-nums' }}>{kFmt(s.gm)} <span style={{ fontSize: 11, fontWeight: 700 }}>{pct1(s.gmPct)}</span></span>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>Listing prices set for ~55% gross margin</div>
         </div>
-        {statRow(`S&D  ${pct1(s.sndPct)}`, kFmt(s.snd))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${C.border}`, background: '#f0faf1', margin: '0 -14px', paddingLeft: 14, paddingRight: 14 }}>
-          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 700 }}>CM1</span>
-          <span style={{ fontSize: 12.5, fontWeight: 800, color: s.cm1 < 0 ? C.red.tx : C.acd, fontVariantNumeric: 'tabular-nums' }}>{kFmt(s.cm1)} <span style={{ fontSize: 11, fontWeight: 700 }}>{pct1(s.cm1Pct)}</span></span>
-        </div>
-      </div>
-
-      {/* ROAS footer */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${C.border}`, marginTop: 6 }}>
-        <div style={{ padding: '10px 14px', borderRight: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3 }}>Breakeven</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: s.breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-            {s.breakevenRoas != null ? `${s.breakevenRoas.toFixed(2)}x` : '—'}
-          </div>
-        </div>
-        <div style={{ padding: '10px 14px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3 }}>15% CM2</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: s.breakevenRoas15 == null ? C.red.tx : C.acd, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-            {s.breakevenRoas15 != null ? `${s.breakevenRoas15.toFixed(2)}x` : '—'}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SavedScenariosTable({ scenarios, onRemove, onReset }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>Saved Scenarios <span style={{ fontWeight: 500, color: C.t3 }}>({scenarios.length})</span></div>
         <button onClick={onReset}
-          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer' }}>
-          ↺ Reset All
+          style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          ↺ Reset
         </button>
       </div>
-      <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4 }}>
-        {scenarios.map(s => <ScenarioCard key={s.id} s={s} onRemove={onRemove} />)}
+
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${C.border}` }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ ...thSt, textAlign: 'left', minWidth: 220 }}>Line item</th>
+              {enriched.map(s => (
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', minWidth: 150 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                    <span>{s.productName}</span>
+                    <button onClick={() => onRemove(s.id)} title="Remove"
+                      style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>×</button>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ROWS.map((row, ri) => {
+              if (row.section) {
+                return (
+                  <tr key={row.section}>
+                    <td colSpan={enriched.length + 1} style={{ padding: '6px 16px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                      {row.section}
+                    </td>
+                  </tr>
+                )
+              }
+              const rowBg = row.highlight ? '#edf7f0' : '#fff'
+              return (
+                <tr key={row.key} style={{ background: rowBg }}>
+                  <td style={{ ...tdSt, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg }}>{row.label}</td>
+                  {enriched.map(s => (
+                    <td key={s.id} style={{ ...tdSt, textAlign: 'right', fontWeight: row.bold ? 700 : 500, color: C.t1, background: rowBg }}>
+                      {row.render(s)}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
+      <div style={{ fontSize: 11, color: C.t3 }}>₹ values in K are rounded as per the pricing calculator. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
     </div>
   )
 }
