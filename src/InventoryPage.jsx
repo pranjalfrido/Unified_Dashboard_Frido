@@ -613,7 +613,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
             const doi = origLoc.avgSale > 0 ? Math.floor(locTotalInvt / origLoc.avgSale) : origLoc.doi
             return { ...origLoc, totalInvt: locTotalInvt, rawInvt: locRawInvt, rawBlockedInvt: locRawBlockedInvt, rtdInvt: locRtdInvt, doi }
           })
-          const avgSale = locs.reduce((a, l) => a + (l.avgSale || 0), 0)
+          // Use SKU-level avgSale (correct all-WH count from cache) — location-level avgSale
+          // only covers WHs where the SKU has inventory, undercounting for SKUs stocked at ≤2 WHs
+          const avgSale = s.avgSale || locs.reduce((a, l) => a + (l.avgSale || 0), 0)
           const orderAllocation = s.orderAllocation || 0
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
