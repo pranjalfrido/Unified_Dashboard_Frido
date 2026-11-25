@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T11:09:06.748Z",
+  "generatedAt": "2026-11-25T12:09:03.876Z",
   "logistics": {
     "windowStart": "2026-11-04",
     "windowEnd": "2026-11-10",
@@ -16,7 +16,7 @@
     "windowStart": "2026-11-05",
     "windowEnd": "2026-11-11",
     "rangeLabel": "Orders 5–11 Nov",
-    "gross": 69214208.53999956,
+    "gross": 69214208.53999957,
     "cancelPct": 4.56,
     "rtoPct": 8.18,
     "cirPct": 5.46,
