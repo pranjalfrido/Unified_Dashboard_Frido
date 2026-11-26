@@ -44,25 +44,46 @@ function kindOf(header) {
   return null;
 }
 
+// Columns that are never added up (a per-unit price, an average, a rate): no TOTAL is shown for them.
+const NOT_SUMMED = /(asp|aov|price|mrp|avg|average|per_|_per|cogs_unit|unit_cogs|rate|ratio|doi|share)/i;
+
 // Input: tab-separated text (header line first) as produced by lib/bigquery.js / lib/supabase.js.
-export function formatTsv(text, seen) {
+// A TOTAL row (counts and money only, calculated here so the model never adds numbers itself) is appended when there are
+// at least 2 data rows. opts.totals = { header: sum } overrides the sums with ones over ALL rows when the table shown is cut.
+export function formatTsv(text, seen, opts = {}) {
   const lines = String(text).split('\n');
   if (lines.length < 2 || !lines[0].includes('\t')) return text;
   const headers = lines[0].split('\t');
   const kinds = headers.map(kindOf);
   if (kinds.every(k => !k)) return text;
   const out = [lines[0]];
+  const sums = headers.map(() => 0), seenNum = headers.map(() => 0);
+  let dataRows = 0, hasTotal = false;
   for (let i = 1; i < lines.length; i++) {
     const cells = lines[i].split('\t');
     if (cells.length !== headers.length) { out.push(lines[i]); continue; }
+    const isTotalRow = /^\s*(grand\s+)?total\b/i.test(cells[0]);
+    if (isTotalRow) hasTotal = true; else dataRows++;
     out.push(cells.map((c, j) => {
       const k = kinds[j];
       if (!k || c === '' || c === 'NULL' || !/^-?\d+(\.\d+)?$/.test(c.trim())) return c;
       const n = Number(c);
+      if (!isTotalRow) { sums[j] += n; seenNum[j]++; }
       if (k === 'money') { const f = formatRupees(n); if (seen) seen.add(f); return `${f} (raw ${c})`; }
       if (k === 'count') { const f = indianInt(n); if (seen) seen.add(f); return f; }
       return `${n.toFixed(1)}% (raw ${c})`;
     }).join('\t'));
+  }
+  if (!hasTotal && dataRows >= 2) {
+    const cells = headers.map((h, j) => {
+      if (j === 0) return opts.totalLabel || `TOTAL of the ${dataRows} rows shown (calculated by the connector)`;
+      const k = kinds[j];
+      if (!(k === 'money' || k === 'count') || NOT_SUMMED.test(h) || !seenNum[j]) return '';
+      const n = opts.totals && h in opts.totals ? opts.totals[h] : sums[j];
+      if (k === 'money') { const f = formatRupees(n); if (seen) seen.add(f); return `${f} (raw ${Math.round(n * 100) / 100})`; }
+      const f = indianInt(n); if (seen) seen.add(f); return f;
+    });
+    if (cells.some((c, j) => j > 0 && c)) out.push(cells.join('\t'));
   }
   return out.join('\n');
 }

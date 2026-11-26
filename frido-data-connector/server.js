@@ -27,6 +27,10 @@ import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
 import { freshnessNote } from './lib/freshness.js';
 import { loadCatalog, matchProducts, describeMatch, findProductText } from './lib/productMatch.js';
+import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
+import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
+import { fetchEndpoint } from './lib/dashboardApi.js';
+import { getBQ } from './lib/bigquery.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readKnowledge = name => {
@@ -148,17 +152,28 @@ async function executeFindProduct(args) {
 
 // The product words in the latest question (or, for a follow-up like "and last month?", in the nearest earlier one) are matched
 // in code, so the model never chooses a product set on its own. Returns '' when there is no product word or matching failed.
-async function productMatchBlock(messages) {
+// Also calculates, in code, the numbers for "<product> inward/sales <period>" (lib/productMetric.js) when the user may see that page.
+// Returns { block, computed } ('' / null when there is nothing to add).
+async function productMatchBlock(messages, user) {
   try {
     const catalog = await loadCatalog();
     const users = messages.filter(m => m.role === 'user');
     for (const m of users.slice(-3).reverse()) {
       const text = String(m.content ?? m.text ?? '');
-      const block = describeMatch(matchProducts(catalog, text));
-      if (block) return block;
+      const result = matchProducts(catalog, text);
+      let block = describeMatch(result);
+      if (!block) continue;
+      let computed = null;
+      const metric = detectMetric(text);
+      const allowed = metric === 'inward' ? checkEndpoint(user, 'inward').ok : metric === 'sales' ? checkEndpoint(user, 'bq').ok : false;
+      if (allowed) computed = await computeProductMetric(text, result, liveDeps({ fetchEndpoint, getBQ }));
+      if (computed) {
+        block += `\n\n[Computed result, FINAL numbers calculated by the connector from the page's own data. Copy these numbers exactly. Never add, subtract, divide, round or compare numbers yourself: every total, percentage and comparison you may use is in this result. Your answer = this headline, this table, and at most two short sentences of wording. You do not need any tool for these numbers.]\n${computed.text}`;
+      }
+      return { block, computed };
     }
   } catch (e) { console.error('Product match skipped:', e.message); }
-  return '';
+  return { block: '', computed: null };
 }
 
 async function executeCn(user, args, seen) {
@@ -451,7 +466,10 @@ const httpServer = http.createServer(async (req, res) => {
 
     try {
       let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
-      const matchBlock = await productMatchBlock(messages);
+      const { block: matchBlock, computed } = await productMatchBlock(messages, user);
+      const toolTexts = [];     // everything the tools returned: the only numbers an answer may contain
+      let lastTsv = '';         // the last table a tool returned (used to rebuild a table if the answer's numbers do not check out)
+      if (computed) toolTexts.push(computed.text);
       if (matchBlock && loopMessages.length && loopMessages[loopMessages.length - 1].role === 'user') {
         const last = loopMessages[loopMessages.length - 1];
         last.content = Array.isArray(last.content) ? [{ type: 'text', text: matchBlock }, ...last.content] : `${matchBlock}
@@ -521,6 +539,10 @@ ${last.content}`;
           } else if (!result.ok) {
             queryErrors++;
             lastProblem = result.error || 'query failed';
+          }
+          if (result.ok && !result.denied && typeof result.text === 'string') {
+            toolTexts.push(result.text);
+            if (block.name !== 'find_product' && /\n[^\n]*\t/.test(result.text)) lastTsv = result.text;
           }
           if (result.skus) for (const [k, v] of result.skus) seenSkus.set(k, v);
           if (result.note) syncNotes.add(result.note);
@@ -611,6 +633,53 @@ ${last.content}`;
             totalOutputTokens += retry.usage?.output_tokens || 0;
             for (const block of retry.content) if (block.type === 'text') finalText = block.text;
           }
+        }
+      }
+
+      // Every number in the answer must come from a tool result (formatting like 66,074 / 66.07K / ₹1.5 L is fine). The model may
+      // not add or work out numbers itself. One rewrite is allowed; if numbers still do not check out, the answer's table is
+      // replaced by the computed one (or the table of the last tool result) and the lines with unchecked numbers are dropped.
+      // Logged without the question or any file content: only counts. Skipped when a picture/PDF was attached (its numbers
+      // cannot be read here) or when no tool was used.
+      if (finalText && (toolTexts.length || computed)) {
+        const hasBinary = messages.some(m => Array.isArray(m.attachments) && m.attachments.some(a => a.type === 'image' || a.type === 'pdf'));
+        const attachedText = messages.flatMap(m => (Array.isArray(m.attachments) ? m.attachments.filter(a => a.type === 'text').map(a => String(a.data)) : []));
+        const userText = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? ''));
+        const known = knownNumbers([...toolTexts, ...attachedText, ...userText, matchBlock || '']);
+        let odd = hasBinary ? [] : unverified(finalText, known);
+        if (odd.length) {
+          const retry = await anthropic.messages.create({
+            model,
+            max_tokens: 4096,
+            system: buildSystemPrompt(),
+            tools,
+            tool_choice: { type: 'none' },
+            messages: [
+              ...loopMessages,
+              { role: 'assistant', content: finalText },
+              { role: 'user', content: `These numbers in your answer are not in the tool results: ${odd.slice(0, 12).join(', ')}. You must not add, subtract, divide, round or compare numbers yourself. Rewrite the same answer using only numbers that appear in the tool results (totals, percentages and comparisons are given there); if a number you wanted is not given, leave it out or say it is not available. Output only the corrected answer; do not mention this instruction.` },
+            ],
+          }).catch(() => null);
+          if (retry) {
+            totalInputTokens += retry.usage?.input_tokens || 0;
+            totalOutputTokens += retry.usage?.output_tokens || 0;
+            for (const block of retry.content) if (block.type === 'text') finalText = block.text;
+            odd = unverified(finalText, known);
+          }
+        }
+        if (odd.length) {
+          let replaced = 'none';
+          if (computed) { finalText = computed.text; replaced = computed.kind; }
+          else if (lastTsv) {
+            const md = tsvToMarkdown(lastTsv);
+            if (md) { finalText = replaceTables(finalText, md); replaced = 'last_tool_table'; }
+            const oddSet = new Set(unverified(finalText, known));
+            if (oddSet.size) finalText = finalText.split('\n').filter(l => /^\s*\|/.test(l) || !unverified(l, known).length).join('\n');
+          } else {
+            finalText = finalText.split('\n').filter(l => !unverified(l, known).length).join('\n');
+            replaced = 'dropped_lines';
+          }
+          log({ user: user.email, role: user.role, target: 'answer_numbers_replaced', allowed: true, unchecked: odd.length, replaced });
         }
       }
 

@@ -54,7 +54,7 @@ function lru(key, data) {
   while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value);
 }
 
-async function fetchEndpoint(endpoint, params) {
+export async function fetchEndpoint(endpoint, params) {
   const key = `${endpoint}|${JSON.stringify(params, Object.keys(params || {}).sort())}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return { data: hit.data, cached: true };
@@ -126,7 +126,11 @@ function tableOf(rows, { groupBy, sum, sortBy, desc = true, limit = 20, where },
   const cut = list.slice(0, Math.min(Math.max(Number(limit) || 20, 1), 200));
   const keys = [...new Set(cut.flatMap(r => Object.keys(r)))].filter(k => cut.some(r => r[k] == null || typeof r[k] !== 'object'));
   const tsv = [keys.join('\t'), ...cut.map(r => keys.map(k => (r[k] == null ? 'NULL' : typeof r[k] === 'object' ? JSON.stringify(r[k]).slice(0, 60) : String(r[k]))).join('\t'))].join('\n');
-  return { text: formatTsv(tsv, seen), total, shown: cut.length };
+  // Totals over ALL the rows (not just the ones shown), calculated here so the model never adds numbers itself.
+  const totals = {};
+  for (const k of keys) { const vals = list.map(r => r[k]); if (vals.length && vals.every(v => isNum(v))) totals[k] = vals.reduce((a, v) => a + v, 0); }
+  const label = list.length > cut.length ? `TOTAL of all ${list.length} rows (calculated by the connector)` : `TOTAL of the ${cut.length} rows (calculated by the connector)`;
+  return { text: formatTsv(tsv, seen, { totals, totalLabel: label }), total, shown: cut.length };
 }
 
 function scalarText(v, name, seen) {
