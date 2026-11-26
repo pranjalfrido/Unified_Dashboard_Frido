@@ -724,12 +724,12 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
   const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
 
   return (
-    // UI: card is only as wide as its content (fit-content), grows with each product column,
-    // and stops at 100% of the page — after that the table scrolls horizontally.
+    // UI: card grows by one 220px column per product (label column + n × 220 + card padding/border),
+    // and stops at 100% of the page. After that the table scrolls sideways.
     <div style={{
       background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20,
       display: 'flex', flexDirection: 'column', gap: 14,
-      width: 'fit-content', maxWidth: '100%', minWidth: 'min(100%, 520px)',
+      width: `min(100%, ${230 + scenarios.length * 220 + 42}px)`,
       alignSelf: 'flex-start', boxSizing: 'border-box',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -743,15 +743,22 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
         </button>
       </div>
 
+      {/* UI: fixed table layout with an explicit px width → every product column is exactly 220px and long names
+          must wrap. When the columns no longer fit the card, the wrapper scrolls sideways. */}
       <div style={{ overflowX: 'auto', maxWidth: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed', width: 230 + scenarios.length * 220, minWidth: '100%' }}>
+          <colgroup>
+            <col style={{ width: 230 }} />
+            {enriched.map(s => <col key={s.id} style={{ width: 220 }} />)}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ ...thSt, ...stickyCol, boxShadow: 'none', zIndex: 2, textAlign: 'left', minWidth: 220 }}>Line item</th>
+              <th style={{ ...thSt, ...stickyCol, boxShadow: 'none', zIndex: 2, textAlign: 'left', width: 230, boxSizing: 'border-box' }}>Line item</th>
               {enriched.map(s => (
-                <th key={s.id} style={{ ...thSt, textAlign: 'right', minWidth: 140 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                    <span>{s.productName}</span>
+                // UI: every product column is exactly 220px (border-box); long names wrap onto more lines.
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', width: 220, whiteSpace: 'normal', verticalAlign: 'top', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6 }}>
+                    <span style={{ minWidth: 0, flex: '1 1 auto', overflowWrap: 'anywhere', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'right' }}>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
                       style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>×</button>
                   </div>
