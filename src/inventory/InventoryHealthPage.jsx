@@ -1531,7 +1531,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         showDetailOnly={showDetailOnly}
         skus={filteredSkus} pivot={filteredPivot} regularLocations={regularLocations} filterKey={JSON.stringify(filters)}
         rtdLevel={filters.rtdLevel || []} setRtdLevel={v => setFilters(f => ({ ...f, rtdLevel: v }))} rtdOptions={data.filterOptions?.rtdLevels || []}
-        slow={filteredSlowMoving} dead={filteredDeadStock} />
+        slow={filteredSlowMoving} dead={filteredDeadStock}
+        allowedTabs={allowedTabs} detailSkus={detailSkus} slowSkus={slowSkuSet} deadSkus={deadSkuSet} />
     )
   }
 
@@ -1808,7 +1809,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
       {/* Bottom of the page: same SKUs as Inventory Detail (slicers + search applied), valued at COGS.
           COGS-based valuation: admins, plus members granted 'inventory:cost' (Profile > permissions). */}
-      {(allowedTabs == null || allowedTabs.includes('inventory:cost')) && <div className="inv-detail-desktop-only" style={{ paddingBottom: 20 }}><InventoryCostTable skus={detailSkus} isAdmin={allowedTabs == null} slowSkus={slowSkuSet} deadSkus={deadSkuSet} /></div>}
+      {(allowedTabs == null || allowedTabs.includes('inventory:cost')) && <div style={{ paddingBottom: 20 }}><InventoryCostTable skus={detailSkus} isAdmin={allowedTabs == null} slowSkus={slowSkuSet} deadSkus={deadSkuSet} /></div>}
       </>}
 
 </> : (

@@ -155,36 +155,49 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
     ? `${rows.length.toLocaleString('en-IN')} SKUs · COGS as of ${cogs.month.slice(0, 7)}${totals.missing ? ` · ${totals.missing} not valued` : ''}`
     : 'Loading COGS…'
 
+  // Mobile columns: sticky Product ID + 4 key scrollable columns
+  const MOB_COLS = [
+    { key: 'sku', label: 'Product ID', align: 'left' },
+    { key: 'cogs', label: 'COGS/u', align: 'right' },
+    { key: 'totalInvt', label: 'Invt', align: 'right' },
+    { key: 'totalCost', label: 'Inv Value', align: 'right' },
+    { key: 'stockStatus', label: 'Status', align: 'right' },
+  ]
+
   return (
     <GlassCard
       title="Inventory Cost Detail"
       note={note}
       action={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input placeholder="Search SKU…" value={search} onChange={e => { setSearch(e.target.value); setShown(SHOW_STEP) }}
-          style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 200, maxWidth: '100%', boxSizing: 'border-box' }} />
-        <SearchableMultiSelect label="Category" options={viewOptions} selected={view}
-          onChange={v => { setView(v); setShown(SHOW_STEP) }} width={122} height={30} />
-        {isAdmin && cogs && (
-          <button onClick={exportUnmapped} disabled={!unmapped.length}
-            title="SKUs in this table with no COGS of their own (admin only)"
-            style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: unmapped.length ? 'pointer' : 'default', opacity: unmapped.length ? 1 : 0.5 }}>
-            ⭳ Unmapped COGS ({unmapped.length.toLocaleString('en-IN')})
-          </button>
-        )}
-        <ExportButton filename="inventory_cost_detail.csv" rows={sorted}
-          columns={[
-            { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' },
-            { label: 'COGS per unit', key: 'cogs' }, { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'Total Inventory Value', key: 'totalCost' },
-            { label: 'DOI', key: 'doi' }, { label: 'Stock Status', key: 'stockStatus' }, { label: 'COGS mapping', key: 'cogsMap' },
-          ]} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input placeholder="Search SKU…" value={search} onChange={e => { setSearch(e.target.value); setShown(SHOW_STEP) }}
+            className="inv-detail-search"
+            style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 160, maxWidth: '100%', boxSizing: 'border-box' }} />
+          <SearchableMultiSelect label="Category" options={viewOptions} selected={view}
+            onChange={v => { setView(v); setShown(SHOW_STEP) }} width={122} height={30} />
+          <span className="inv-detail-desktop-only" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            {isAdmin && cogs && (
+              <button onClick={exportUnmapped} disabled={!unmapped.length}
+                title="SKUs in this table with no COGS of their own (admin only)"
+                style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: unmapped.length ? 'pointer' : 'default', opacity: unmapped.length ? 1 : 0.5 }}>
+                ⭳ Unmapped COGS ({unmapped.length.toLocaleString('en-IN')})
+              </button>
+            )}
+            <ExportButton filename="inventory_cost_detail.csv" rows={sorted}
+              columns={[
+                { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' },
+                { label: 'COGS per unit', key: 'cogs' }, { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'Total Inventory Value', key: 'totalCost' },
+                { label: 'DOI', key: 'doi' }, { label: 'Stock Status', key: 'stockStatus' }, { label: 'COGS mapping', key: 'cogsMap' },
+              ]} />
+          </span>
         </div>
       }
     >
       {err && <div style={{ padding: 16, color: IC.status.Critical.c, fontSize: 13 }}>Could not load COGS ({err}). Cost values need the COGS table.</div>}
       {!err && !cogs && <div style={{ padding: 16, color: IC.t3, fontSize: 13 }}>Loading COGS…</div>}
-      {cogs && (
-        <div style={{ maxHeight, overflow: 'auto' }}>
+      {cogs && (<>
+        {/* Desktop table */}
+        <div className="inv-detail-desktop-only" style={{ maxHeight, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: IC.surface }}>
               <tr>
@@ -213,31 +226,67 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
             </tbody>
             <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 3, background: IC.surface }}>
               <tr>
-                <td style={{ ...td, fontWeight: 700, color: IC.t1}}>Total</td>
-                <td style={{ ...td, position: 'sticky', bottom: 0, background: IC.surface, color: IC.t3 }}>{totals.n.toLocaleString('en-IN')} SKUs</td>
-                <td style={{ ...td}} />
-                <td style={{ ...td}} />
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1}}>{Math.round(totals.totalInvt).toLocaleString('en-IN')}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1}}>{Math.round(totals.avgSale).toLocaleString('en-IN')}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1}}>{inr(totals.totalCost)}</td>
-                <td style={{ ...td}} />
-                <td style={{ ...td}} />
-                <td style={{ ...td, textAlign: 'right', color: IC.t3, fontSize: 11}}>
+                <td style={{ ...td, fontWeight: 700, color: IC.t1 }}>Total</td>
+                <td style={{ ...td, color: IC.t3 }}>{totals.n.toLocaleString('en-IN')} SKUs</td>
+                <td style={{ ...td }} />
+                <td style={{ ...td }} />
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1 }}>{Math.round(totals.totalInvt).toLocaleString('en-IN')}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1 }}>{Math.round(totals.avgSale).toLocaleString('en-IN')}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: IC.t1 }}>{inr(totals.totalCost)}</td>
+                <td style={{ ...td }} />
+                <td style={{ ...td }} />
+                <td style={{ ...td, textAlign: 'right', color: IC.t3, fontSize: 11 }}>
                   {totals.avgMapped ? `${totals.avgMapped} avg · ` : ''}{totals.missing ? `${totals.missing} missing` : 'all mapped'}
                 </td>
               </tr>
             </tfoot>
           </table>
-          {shown < sorted.length && (
-            <div style={{ padding: 12, textAlign: 'center' }}>
-              <button onClick={() => setShown(n => n + SHOW_STEP)}
-                style={{ fontSize: 12, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer' }}>
-                Show {Math.min(SHOW_STEP, sorted.length - shown)} more ({(sorted.length - shown).toLocaleString('en-IN')} left)
-              </button>
-            </div>
-          )}
         </div>
-      )}
+        {/* Mobile table: sticky Product ID + scrollable columns */}
+        <div className="inv-detail-mobile-only" style={{ maxHeight, overflow: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 11 }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: IC.surface }}>
+              <tr>
+                {MOB_COLS.map((c, i) => (
+                  <th key={c.key} onClick={() => onSort(c.key)}
+                    style={{ ...th, fontSize: 10, padding: '8px 7px', textAlign: c.align,
+                      ...(i === 0 ? { position: 'sticky', left: 0, zIndex: 4, background: IC.surface, minWidth: 110 } : { minWidth: 72 }) }}>
+                    {c.label}{sort.key === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.slice(0, shown).map(r => (
+                <tr key={r.skuKey || r.sku}>
+                  <td style={{ ...td, fontSize: 11, padding: '8px 7px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surface, zIndex: 1, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sku}</td>
+                  <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right', color: IC.t2 }}>{r.cogs != null ? inr(r.cogs) : '—'}</td>
+                  <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right', color: IC.t1 }}>{Math.round(r.totalInvt || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right', color: IC.t1, fontWeight: 700 }}>{r.totalCost != null ? inr(r.totalCost) : '—'}</td>
+                  <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right' }}><StatusChip status={r.stockStatus} /></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 3, background: IC.surface }}>
+              <tr>
+                <td style={{ ...td, fontSize: 11, padding: '8px 7px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surface }}>Total</td>
+                <td style={{ ...td, fontSize: 11, padding: '8px 7px' }} />
+                <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right', fontWeight: 700, color: IC.t1 }}>{Math.round(totals.totalInvt).toLocaleString('en-IN')}</td>
+                <td style={{ ...td, fontSize: 11, padding: '8px 7px', textAlign: 'right', fontWeight: 700, color: IC.t1 }}>{inr(totals.totalCost)}</td>
+                <td style={{ ...td, fontSize: 11, padding: '8px 7px' }} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {shown < sorted.length && (
+          <div style={{ padding: 12, textAlign: 'center' }}>
+            <button onClick={() => setShown(n => n + SHOW_STEP)}
+              style={{ fontSize: 12, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer' }}>
+              Show {Math.min(SHOW_STEP, sorted.length - shown)} more ({(sorted.length - shown).toLocaleString('en-IN')} left)
+            </button>
+          </div>
+        )}
+      </>)}
     </GlassCard>
   )
 }
