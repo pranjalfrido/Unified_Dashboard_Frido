@@ -641,15 +641,17 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   )
 }
 
-// UI: column sizes for the Saved Scenarios table.
-// Desktop: no scroll — the Line item column is fixed and product columns share the rest equally.
-const LABEL_COL_W = 260   // "Line item" column, fixed (wide enough for "Contribution margin 1 (CM1) ₹ · %")
-const PRODUCT_COL_W = 220 // each product column while there is room; shrinks equally once the card is at full width
-// Phone: columns keep a readable fixed width and the table scrolls sideways, with Line item pinned.
-const PHONE_LABEL_COL_W = 132
-const PHONE_PRODUCT_COL_W = 118
-
 function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
+  const [openId, setOpenId] = useState(null)
+
+  const sheetOpen = phone && scenarios.some(x => x.id === openId)
+  useEffect(() => {
+    if (!sheetOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [sheetOpen])
+
   const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
   const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
   const roasFmt = v => v != null ? `${v.toFixed(2)}x` : '—'
@@ -660,9 +662,8 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
     return `${v < 0 ? '−' : ''}₹${Math.round(abs).toLocaleString('en-IN')}`
   }
 
-  // Renders ₹value in bold + % in accent green beside it, like the reference image
   const ValPct = ({ val, pct, highlight }) => (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: phone ? 4 : 6, fontVariantNumeric: 'tabular-nums' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, fontVariantNumeric: 'tabular-nums' }}>
       <span style={{ fontWeight: 800, color: highlight ? C.acd : C.t1 }}>{val}</span>
       <span style={{ fontWeight: 700, color: C.acc, fontSize: 11 }}>{pct}</span>
     </span>
@@ -682,9 +683,6 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
       : `Gross margin: ${mn.toFixed(1)}%–${mx.toFixed(1)}% across scenarios`
   })()
 
-  // UI: the small grey hint after a label (e.g. "inc. GST, after discount") — on its own line on phone.
-  const hint = text => <span style={{ fontSize: 11, color: C.t3, fontWeight: 400, display: phone ? 'block' : 'inline' }}>{text}</span>
-
   const ROWS = [
     { section: 'PRICING' },
     { key: 'mrp', label: 'MRP', render: s => rupee(s.mrp) },
@@ -694,53 +692,106 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
     { key: '_gstPct', label: 'GST', render: s => s._gstPct != null ? `${s._gstPct}%` : '—' },
     { key: 'returnPct', label: 'Return %', render: s => pct1(s.returnPct) },
     { section: 'UNIT ECONOMICS (PER UNIT)' },
-    { key: 'sellingPrice', bold: false, label: <span>Selling price {hint('inc. GST, after discount')}</span>, render: s => kFmt(s.sellingPrice) },
-    { key: 'netRev', bold: true, label: <span>Net revenue {hint('ex. GST, after returns')}</span>, render: s => kFmt(s.netRev) },
-    {
-      key: 'cogsRow',
-      label: <span>COGS {hint('₹ · % of net revenue')}</span>,
-      render: s => <ValPct val={kFmt(s.cogs)} pct={pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)} />,
-    },
-    {
-      key: 'gm', bold: true, highlight: true,
-      label: <span>Gross margin (GM) {hint('₹ · %')}</span>,
-      render: s => <ValPct val={kFmt(s.gm)} pct={pct1(s.gmPct)} highlight />,
-    },
-    {
-      key: 'snd',
-      label: <span>S&amp;D {hint('₹ · %')}</span>,
-      render: s => <ValPct val={kFmt(s.snd)} pct={pct1(s.sndPct)} />,
-    },
-    {
-      key: 'cm1', bold: true, highlight: true,
-      label: <span>Contribution margin 1 (CM1) {hint('₹ · %')}</span>,
-      render: s => <ValPct val={kFmt(s.cm1)} pct={pct1(s.cm1Pct)} highlight />,
-    },
+    { key: 'sellingPrice', label: 'Selling price (inc. GST, after discount)', render: s => kFmt(s.sellingPrice) },
+    { key: 'netRev', bold: true, label: 'Net revenue (ex. GST, after returns)', render: s => kFmt(s.netRev) },
+    { key: 'cogsRow', label: 'COGS  ₹ · % of net revenue', render: s => <ValPct val={kFmt(s.cogs)} pct={pct1(s.netRev > 0 ? s.cogs / s.netRev * 100 : null)} /> },
+    { key: 'gm', bold: true, highlight: true, label: 'Gross margin (GM)  ₹ · %', render: s => <ValPct val={kFmt(s.gm)} pct={pct1(s.gmPct)} highlight /> },
+    { key: 'snd', label: 'S&D  ₹ · %', render: s => <ValPct val={kFmt(s.snd)} pct={pct1(s.sndPct)} /> },
+    { key: 'cm1', bold: true, highlight: true, label: 'Contribution margin 1 (CM1)  ₹ · %', render: s => <ValPct val={kFmt(s.cm1)} pct={pct1(s.cm1Pct)} highlight /> },
     { section: 'ROAS' },
     { key: 'breakevenRoas', label: 'Breakeven ROAS', valueBold: true, render: s => roasFmt(s.breakevenRoas) },
     { key: 'breakevenRoas15', label: 'ROAS for 15% CM2', valueBold: true, render: s => roasFmt(s.breakevenRoas15) },
   ]
 
-  const cellPad = phone ? '8px 10px' : '9px 16px'
-  const thSt = { padding: phone ? '10px 10px' : '11px 16px', fontWeight: 700, fontSize: phone ? 12 : 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)`, boxSizing: 'border-box' }
-  const tdSt = { padding: cellPad, fontSize: phone ? 12 : 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, boxSizing: 'border-box' }
-  // UI (phone only): Line item column stays pinned while the product columns scroll sideways.
-  const pinned = phone ? { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` } : {}
+  // ── PHONE BRANCH: card list + bottom sheet ──────────────────────────────────
+  if (phone) {
+    const openScenario = enriched.find(x => x.id === openId) ?? null
 
-  const labelW = phone ? PHONE_LABEL_COL_W : LABEL_COL_W
+    return (
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios</div>
+            <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>{gmSubtitle}</div>
+          </div>
+          <button onClick={onReset}
+            style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            ↺ Reset
+          </button>
+        </div>
+
+        {/* card list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {enriched.map(s => (
+            <button key={s.id} onClick={() => setOpenId(s.id)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.productName}</div>
+                <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>
+                  {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · BE {roasFmt(s.breakevenRoas)}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 16, color: C.t3 }}>›</span>
+                <button onClick={e => { e.stopPropagation(); onRemove(s.id) }}
+                  style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* bottom sheet overlay */}
+        {sheetOpen && openScenario && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
+            {/* backdrop */}
+            <div onClick={() => setOpenId(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
+            {/* sheet */}
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: C.card, borderRadius: '20px 20px 0 0', maxHeight: '82vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* drag handle + header */}
+              <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border2, margin: '0 auto 12px' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.t1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{openScenario.productName}</div>
+                  <button onClick={() => setOpenId(null)}
+                    style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                </div>
+              </div>
+              {/* scrollable rows */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: '10px 0' }}>
+                {ROWS.map(row => {
+                  if (row.section) {
+                    return (
+                      <div key={row.section} style={{ padding: '8px 16px 4px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                        {row.section}
+                      </div>
+                    )
+                  }
+                  const rowBg = row.highlight ? '#edf7f0' : 'transparent'
+                  return (
+                    <div key={row.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', background: rowBg, borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 12.5, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, flex: 1, minWidth: 0, paddingRight: 12 }}>{row.label}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: row.valueBold ? 700 : (row.bold ? 700 : 500), color: C.t1, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{row.render(openScenario)}</div>
+                    </div>
+                  )
+                })}
+                <div style={{ fontSize: 11, color: C.t3, padding: '10px 16px' }}>₹ values in K are rounded as per the pricing calculator. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── DESKTOP BRANCH: scrollable table with sticky first column ───────────────
+  const thSt = { padding: '11px 16px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)`, boxSizing: 'border-box' }
+  const tdSt = { padding: '9px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, boxSizing: 'border-box' }
+  const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
 
   return (
-    // UI (desktop): the card grows by one 220px column per product and stops at 100% of the page;
-    // past that the product columns shrink equally. The table never scrolls sideways.
-    // UI (phone): the card is full width and the table scrolls sideways inside it.
-    <div style={{
-      background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: phone ? 14 : 20,
-      display: 'flex', flexDirection: 'column', gap: phone ? 12 : 14,
-      width: phone ? '100%' : `min(100%, ${LABEL_COL_W + scenarios.length * PRODUCT_COL_W + 42}px)`,
-      minWidth: phone ? 0 : 'min(100%, 520px)',
-      alignSelf: phone ? 'stretch' : 'flex-start', boxSizing: 'border-box',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: phone ? 10 : 16 }}>
+    <div style={{ width: `min(100%, ${230 + scenarios.length * 220 + 42}px)`, alignSelf: 'flex-start', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
           <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>{gmSubtitle}</div>
@@ -751,27 +802,17 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
         </button>
       </div>
 
-      <div style={{
-        width: '100%', borderRadius: 10, border: `1px solid ${C.border}`,
-        overflowX: phone ? 'auto' : 'hidden', overflowY: 'hidden', WebkitOverflowScrolling: 'touch',
-      }}>
-        <table style={{
-          borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed',
-          // Desktop: 100% → columns share the width. Phone: exact px width → readable columns, scrolls when wider than the screen.
-          width: phone ? PHONE_LABEL_COL_W + enriched.length * PHONE_PRODUCT_COL_W : '100%',
-          minWidth: '100%',
-        }}>
+      <div style={{ overflowX: 'auto', maxWidth: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
+        <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 230 + scenarios.length * 220, minWidth: '100%' }}>
           <colgroup>
-            <col style={{ width: labelW }} />
-            {enriched.map(s => <col key={s.id} style={phone ? { width: PHONE_PRODUCT_COL_W } : undefined} />)}
+            <col style={{ width: 230 }} />
+            {enriched.map(s => <col key={s.id} style={{ width: 220 }} />)}
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...thSt, ...pinned, boxShadow: 'none', zIndex: phone ? 2 : undefined, textAlign: 'left', verticalAlign: 'top' }}>Line item</th>
+              <th style={{ ...thSt, ...stickyCol, background: C.acd, zIndex: 2, textAlign: 'left', verticalAlign: 'top' }}>Line item</th>
               {enriched.map(s => (
                 <th key={s.id} style={{ ...thSt, textAlign: 'right', whiteSpace: 'normal', verticalAlign: 'top' }}>
-                  {/* UI: name block sits at the right next to ×, but its wrapped lines are left-aligned
-                      (e.g. "Cushion" starts right under "Ultimate"). */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6, minWidth: 0 }}>
                     <span style={{ minWidth: 0, flex: '0 1 auto', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'left' }}>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
@@ -786,7 +827,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
               if (row.section) {
                 return (
                   <tr key={row.section}>
-                    <td colSpan={enriched.length + 1} style={{ padding: phone ? '6px 10px' : '6px 16px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
+                    <td colSpan={enriched.length + 1} style={{ padding: '6px 16px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
                       {row.section}
                     </td>
                   </tr>
@@ -795,7 +836,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
               const rowBg = row.highlight ? '#edf7f0' : '#fff'
               return (
                 <tr key={row.key} style={{ background: rowBg }}>
-                  <td style={{ ...tdSt, ...pinned, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</td>
+                  <td style={{ ...tdSt, ...stickyCol, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</td>
                   {enriched.map(s => (
                     <td key={s.id} style={{ ...tdSt, textAlign: 'right', fontWeight: row.valueBold ? 700 : (row.bold ? 700 : 500), color: C.t1, background: rowBg, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.render(s)}
@@ -807,7 +848,6 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
           </tbody>
         </table>
       </div>
-      {/* UI: width 0 + minWidth 100% so this long note wraps to the card instead of widening it. */}
       <div style={{ fontSize: 11, color: C.t3, width: 0, minWidth: '100%' }}>₹ values in K are rounded as per the pricing calculator. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
     </div>
   )
