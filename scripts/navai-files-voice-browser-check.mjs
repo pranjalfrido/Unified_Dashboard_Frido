@@ -106,7 +106,7 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
   console.log(`\n=== ${tag} ===`)
 
   // ── Voice ──
-  {
+  if (!vp.phone) { // phones and tablets have no mic any more (see navai-no-mobile-mic-browser-check.mjs)
     const { browser, page, sent, errors } = await session(vp, 'admin', SPEECH)
     const ta = box(vp, page)
     const mic = page.getByRole('button', { name: /Speak your question|Stop listening/ })
@@ -171,14 +171,14 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
     await browser.close()
   }
   // unsupported browser
-  {
+  if (!vp.phone) { // phones and tablets have no mic any more (see navai-no-mobile-mic-browser-check.mjs)
     const { browser, page } = await session(vp, 'admin', NO_SPEECH)
     ok(`${tag} browser without speech recognition: mic button hidden, no broken button`, (await page.getByRole('button', { name: /Speak your question|Stop listening/ }).count()) === 0 && (await page.locator('.nx-voice').count()) === 0)
     ok(`${tag} ...composer still fits`, await composerFits(vp, page) && await noOverflow(page))
     await browser.close()
   }
   // the real engine, no stand-in: report what it supports
-  {
+  if (!vp.phone) { // phones and tablets have no mic any more (see navai-no-mobile-mic-browser-check.mjs)
     const { browser, page } = await session(vp, 'admin', null)
     const native = await page.evaluate(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition))
     const shown = (await page.locator('.nx-voice').count()) > 0
@@ -238,7 +238,7 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
   {
     const { browser, page } = await session(vp, 'asha', SPEECH)
     ok(`${tag} member without ask:files: no paperclip`, (await page.getByRole('button', { name: 'Upload or add files' }).count()) === 0 && (await page.locator('[data-testid^=nx-file-input],[data-testid^=nx-input-]').count()) === 0)
-    ok(`${tag} ...the mic is still there`, (await page.locator('.nx-mic').count()) === 1)
+    ok(`${tag} ...the mic is still there (laptop) / absent (phone)`, (await page.locator('.nx-mic').count()) === (vp.phone ? 0 : 1))
     await browser.close()
   }
 
