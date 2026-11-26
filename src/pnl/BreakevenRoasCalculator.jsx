@@ -732,11 +732,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
                 <div style={{ fontSize: 11.5, color: C.t3 }}>S&amp;D {kFmt(s.snd)} {pct1(s.sndPct)} · CM1 {kFmt(s.cm1)} {pct1(s.cm1Pct)}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{roasFmt(s.breakevenRoas)}</span>
-                  <button onClick={e => { e.stopPropagation(); onRemove(s.id) }}
-                    style={{ width: 20, height: 20, borderRadius: 5, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                </div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{roasFmt(s.breakevenRoas)}</span>
                 <div style={{ background: C.acl, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: C.acd }}>BE ROAS</div>
               </div>
             </button>
