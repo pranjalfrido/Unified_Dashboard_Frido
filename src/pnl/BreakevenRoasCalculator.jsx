@@ -729,7 +729,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.productName}</div>
                 <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>
-                  {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · BE {roasFmt(s.breakevenRoas)}
+                  LP {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} · CM1 {kFmt(s.cm1)} · BE ROAS {roasFmt(s.breakevenRoas)}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
