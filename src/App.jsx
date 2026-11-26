@@ -20627,8 +20627,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (!pnlCacheRef.lastMonth && !pnlLastMonthFetchPromise.current)
         pnlLastMonthFetchPromise.current = authFetch('/pnl-data-lastmonth.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
     }
-    if (typeof requestIdleCallback !== 'undefined') requestIdleCallback(run, { timeout: 5000 })
-    else setTimeout(run, 3000)
+    if (typeof requestIdleCallback !== 'undefined') requestIdleCallback(run, { timeout: 3000 })
+    else setTimeout(run, 1000)
   }, [])
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
