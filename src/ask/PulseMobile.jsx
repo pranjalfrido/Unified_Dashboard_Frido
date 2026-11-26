@@ -178,10 +178,17 @@ function Composer({ onSend, disabled, onFocusChange, apiRef, canFiles }) {
     const bytes = files.payload(text.length)
     if (!bytes.complete) { files.setError('A file is not ready. Remove it or try again.'); return } // never send without an attached file
     if (bytes.tooBig) { files.setError(bytes.tooBig); return }
+    const typed = val, sent = files.items
     setVal('')
     requestAnimationFrame(grow)
-    onSend(text, bytes.data.length ? { attachments: bytes.data, chips: bytes.names } : undefined)
-    files.clear()
+    files.detach()
+    // A failed send (false) puts the question and the files back so the person can just tap Send again.
+    Promise.resolve(onSend(text, bytes.data.length ? { attachments: bytes.data, chips: bytes.names } : undefined)).then(ok => {
+      if (ok === false) {
+        setVal(v => v || typed); requestAnimationFrame(grow)
+        if (sent.length) files.restore(sent)
+      } else files.release(sent)
+    })
   }
   // Voice writes into the box only; the person edits it and taps Send.
   const getVal = useCallback(() => val, [val])
@@ -193,7 +200,7 @@ function Composer({ onSend, disabled, onFocusChange, apiRef, canFiles }) {
       <div className="pm-box">
         <textarea ref={ref} rows={1} value={val} placeholder="Ask a question…" aria-label="Ask a question" disabled={disabled}
           onChange={e => { setVal(e.target.value); grow() }} onFocus={() => onFocusChange(true)} onBlur={() => onFocusChange(false)} />
-        {canFiles && <AttachButton onFiles={files.add} disabled={disabled} />}
+        {canFiles && <AttachButton onFiles={files.add} disabled={disabled} sheet />}
         <VoiceButton getValue={getVal} setValue={setFromVoice} disabled={disabled} />
         <button type="button" className="pm-send" aria-label="Send" disabled={!canSend} onMouseDown={e => e.preventDefault()} onClick={submit}>
           <ArrowUp size={16} weight="bold" />

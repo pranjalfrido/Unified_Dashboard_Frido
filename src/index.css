@@ -1844,3 +1844,10 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .pm-tbar .nx-xl:hover:not(:disabled) { background: none; }
 .nx-xl-all-bar { margin: 6px 0 2px; }
 .nx-xl-all-bar .nx-xl { border: 1px solid rgba(31,90,61,.3); background: rgba(31,90,61,.06); padding: 0 12px; min-height: 40px; margin-left: 0; border-radius: 10px; }
+
+/* NavAI phone: 📎 sheet (Photo or screenshot / Take photo / Document) */
+.nx-attach-sheet{ display:flex; flex-direction:column; gap:8px; padding:4px 0 8px }
+.nx-attach-sheet button{ display:flex; align-items:center; gap:14px; min-height:56px; padding:8px 14px; border:1px solid #e1ded5; border-radius:12px; background:#fff; color:#1c2420; font-family:var(--font); text-align:left; cursor:pointer }
+.nx-attach-sheet button span{ display:flex; flex-direction:column; gap:2px }
+.nx-attach-sheet button b{ font-size:15px; font-weight:600 }
+.nx-attach-sheet button small{ font-size:12px; color:#6b746e }

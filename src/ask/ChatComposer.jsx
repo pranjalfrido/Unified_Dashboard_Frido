@@ -32,10 +32,17 @@ export default function ChatComposer({ onSend, disabled, canFiles = false }) {
     const bytes = files.payload(text.length);
     if (!bytes.complete) { files.setError('A file is not ready. Remove it or try again.'); return; } // never send without an attached file
     if (bytes.tooBig) { files.setError(bytes.tooBig); return; }
+    const typed = ref.current.value, sent = files.items;
     ref.current.value = '';
     ref.current.style.height = 'auto';
-    onSend(text, bytes.data.length ? { attachments: bytes.data, chips: bytes.names } : undefined);
-    files.clear();
+    files.detach();
+    // A failed send (false) puts the question and the files back so the person can just press Send again.
+    Promise.resolve(onSend(text, bytes.data.length ? { attachments: bytes.data, chips: bytes.names } : undefined)).then(ok => {
+      if (ok === false) {
+        if (ref.current && !ref.current.value) { ref.current.value = typed; grow(); }
+        if (sent.length) files.restore(sent);
+      } else files.release(sent);
+    });
   }
 
   // Voice writes into the box only; the person edits it and presses Send.

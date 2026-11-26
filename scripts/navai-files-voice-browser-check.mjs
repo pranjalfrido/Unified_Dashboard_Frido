@@ -64,7 +64,7 @@ const ANSWERS = [[/two tables/, TWO_TABLES], [/one table/, ONE_TABLE], [/long ta
 
 // ── the stand-in microphone ──
 const SPEECH = `
-class FakeRec { constructor() { window.__rec = this; this.lang = 'en-US' } start() { window.__starts = (window.__starts || []).concat(this.lang) } stop() { setTimeout(() => this.onend && this.onend(), 0) } abort() { this.stop() } }
+class FakeRec { constructor() { window.__rec = this; this.lang = 'en-US' } start() { window.__starts = (window.__starts || []).concat(this.lang); setTimeout(() => this.onstart && this.onstart(), 0) } stop() { setTimeout(() => this.onend && this.onend(), 0) } abort() { this.stop() } }
 window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec
 window.__say = texts => window.__rec.onresult({ results: texts.map(t => [{ transcript: t }]) })
 window.__deny = () => { window.__rec.onerror({ error: 'not-allowed' }); setTimeout(() => window.__rec.onend(), 0) }`
@@ -159,10 +159,13 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
     await page.keyboard.press('Escape'); await page.mouse.click(5, 5)
     // permission denied
     await page.evaluate(() => localStorage.setItem('navai_voice_lang', 'en-IN'))
-    await mic.click({ force: true }).catch(() => {}); await page.waitForTimeout(200)
+    await page.keyboard.press('Escape'); await page.waitForTimeout(500) // the click at (5,5) above opens the chats sheet on a phone
+    // a fresh start (the first tap after a long press is swallowed on purpose, so tap until a new mic instance exists)
+    await page.evaluate(() => { window.__rec = null })
+    for (let i = 0; i < 3 && !(await page.evaluate(() => !!window.__rec)); i++) { await mic.click({ force: true }).catch(() => {}); await page.waitForTimeout(500) }
     await page.evaluate(() => window.__deny && window.__rec && window.__deny())
     await page.waitForTimeout(300)
-    ok(`${tag} microphone permission denied: "Allow microphone access to use voice"`, (await page.getByText('Allow microphone access to use voice').count()) === 1)
+    ok(`${tag} microphone permission denied: "Microphone blocked…"`, (await page.getByText(/^Microphone blocked\./).count()) === 1)
     await page.screenshot({ path: `${OUT}/${tag}-mic-denied.png` })
     ok(`${tag} no page errors during voice tests`, errors.length === 0, errors[0] || '')
     await browser.close()
@@ -234,7 +237,7 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
   // ── Files: permission ──
   {
     const { browser, page } = await session(vp, 'asha', SPEECH)
-    ok(`${tag} member without ask:files: no paperclip`, (await page.getByRole('button', { name: 'Upload or add files' }).count()) === 0 && (await page.getByTestId('nx-file-input').count()) === 0)
+    ok(`${tag} member without ask:files: no paperclip`, (await page.getByRole('button', { name: 'Upload or add files' }).count()) === 0 && (await page.locator('[data-testid^=nx-file-input],[data-testid^=nx-input-]').count()) === 0)
     ok(`${tag} ...the mic is still there`, (await page.locator('.nx-mic').count()) === 1)
     await browser.close()
   }
@@ -242,7 +245,7 @@ for (const vp of VIEWPORTS.filter(v => !process.env.ONLY || v.id.includes(proces
   // ── Files: granted member (rohan) ──
   {
     const { browser, page, sent, errors } = await session(vp, 'rohan', SPEECH + SLOW)
-    const input = page.getByTestId('nx-file-input')
+    const input = page.getByTestId(vp.phone ? 'nx-input-photo' : 'nx-file-input')
     const chips = page.locator('.nx-chip')
     const err = () => page.locator('.nx-err').first().innerText().catch(() => '')
     ok(`${tag} member with ask:files sees the paperclip ("Upload or add files")`, (await page.getByRole('button', { name: 'Upload or add files' }).count()) === 1)
