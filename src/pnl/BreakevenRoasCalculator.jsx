@@ -410,7 +410,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   }, [phone, savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 1220 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 1600 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -659,6 +659,15 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
     _discountOnMrp: s.mrp > 0 ? (s.mrp - s.listingPrice) / s.mrp * 100 : null,
   }))
 
+  const gmPcts = scenarios.map(s => s.gmPct).filter(v => v != null)
+  const gmSubtitle = (() => {
+    if (!gmPcts.length) return 'Listing prices set for ~55% gross margin'
+    const mn = Math.min(...gmPcts), mx = Math.max(...gmPcts)
+    return mn === mx
+      ? `Gross margin: ${mn.toFixed(1)}% across scenarios`
+      : `Gross margin: ${mn.toFixed(1)}%–${mx.toFixed(1)}% across scenarios`
+  })()
+
   const ROWS = [
     { section: 'PRICING' },
     { key: 'mrp', label: 'MRP', render: s => rupee(s.mrp) },
@@ -711,7 +720,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
-          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>Listing prices set for ~55% gross margin</div>
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>{gmSubtitle}</div>
         </div>
         <button onClick={onReset}
           style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#fff', color: C.t3, cursor: 'pointer', whiteSpace: 'nowrap' }}>
