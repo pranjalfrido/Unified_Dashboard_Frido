@@ -410,7 +410,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   }, [phone, savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 1600 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 900 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -436,7 +436,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '0 0 420px', display: 'flex', minWidth: 0 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', minWidth: 0 }}>
           <Card style={{ flex: 1, gap: 10, padding: 16, minWidth: 0 }}>
             {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
@@ -516,7 +516,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '0 0 420px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
