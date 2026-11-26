@@ -9,8 +9,13 @@ export const LIMITS = {
   maxRows: 5000,                       // data rows kept per Excel/CSV file (header + first 5,000)
   imageLongSide: 1600,
   imageQuality: 0.85,
+  maxImageBase64: 1_300_000,           // one photo after resizing (~1 MB); three together still fit under maxRequestBytes
+  maxImageFileBytes: 30 * 1024 * 1024, // photos are resized in the browser, so the 10 MB limit does not apply to them
   maxRequestBytes: 4_000_000,          // Vercel's body limit is 4.5 MB; keep clear of it
 }
+// <input accept> per phone menu choice (laptop keeps ACCEPT, one picker with everything).
+export const ACCEPT_PHOTO = 'image/*'
+export const ACCEPT_DOC = '.pdf,.xlsx,.xls,.csv,.docx'
 export const ACCEPT = '.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf,.xlsx,.xls,.csv,.docx'
 export const UNSUPPORTED = 'File type not supported'
 
@@ -30,7 +35,7 @@ export function precheck(file, alreadyHave) {
   if (alreadyHave >= LIMITS.maxFiles) return `You can add up to ${LIMITS.maxFiles} files per message.`
   const kind = kindOf(file)
   if (!kind) return `${UNSUPPORTED}: ${file.name}`
-  if (file.size > LIMITS.maxFileBytes) return `${file.name} is ${fmtSize(file.size)}; the limit is 10 MB per file.`
+  if (file.size > (kind === 'image' ? LIMITS.maxImageFileBytes : LIMITS.maxFileBytes)) return `${file.name} is ${fmtSize(file.size)}; the limit is 10 MB per file.`
   if (kind === 'pdf' && file.size > LIMITS.maxPdfBytes) return `${file.name} is over 4 MB; please split the PDF into smaller parts.`
   return ''
 }
@@ -42,14 +47,20 @@ const toBase64 = buf => {
   return btoa(bin)
 }
 
+const isHeic = file => /^(heic|heif)$/.test(EXT(file.name)) || /^image\/(heic|heif)$/.test(file.type || '')
+export const IMAGE_UNREADABLE = "Couldn't read this image. Try a screenshot."
+export const HEIC_UNREADABLE = "This iPhone photo format can't be read here. Take a screenshot of it, or choose Most Compatible in the camera settings."
+
+// Decoded with the camera's rotation applied (EXIF), so a phone photo is never sent sideways.
 async function decodeImage(file) {
+  try { return await createImageBitmap(file, { imageOrientation: 'from-image' }) } catch { /* older browser: try without the option */ }
   try { return await createImageBitmap(file) } catch { /* fall through to <img> (Safari reads HEIC this way) */ }
   const url = URL.createObjectURL(file)
   try {
     return await new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => resolve(img)
-      img.onerror = () => reject(new Error(`This browser can't read ${file.name}. Use a JPG or PNG, or take a screenshot.`))
+      img.onerror = () => reject(new Error(isHeic(file) ? HEIC_UNREADABLE : IMAGE_UNREADABLE))
       img.src = url
     })
   } finally { URL.revokeObjectURL(url) }
@@ -57,14 +68,24 @@ async function decodeImage(file) {
 async function convertImage(file) {
   const bmp = await decodeImage(file)
   const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight
-  const scale = Math.min(1, LIMITS.imageLongSide / Math.max(w, h))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale))
-  const ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height) // PNG transparency -> white, not black
-  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height)
+  if (!w || !h) throw new Error(isHeic(file) ? HEIC_UNREADABLE : IMAGE_UNREADABLE)
+  // 1600 px long side, JPEG 85%; if one photo is still large (busy picture), step down so the request stays small.
+  let side = LIMITS.imageLongSide, quality = LIMITS.imageQuality, url = ''
+  for (let i = 0; i < 4; i++) {
+    const scale = Math.min(1, side / Math.max(w, h))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error(IMAGE_UNREADABLE)
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height) // PNG transparency -> white, not black
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height)
+    url = canvas.toDataURL('image/jpeg', quality)
+    canvas.width = canvas.height = 0 // free the pixels now (phones run out of canvas memory)
+    if (url.length <= LIMITS.maxImageBase64) break
+    quality = Math.max(0.6, quality - 0.1); side = Math.round(side * 0.85)
+  }
   bmp.close?.()
-  const url = canvas.toDataURL('image/jpeg', LIMITS.imageQuality)
+  if (!url.startsWith('data:image/jpeg')) throw new Error(IMAGE_UNREADABLE) // some phones return PNG/blank when the canvas is too big
   return { type: 'image', name: file.name, media_type: 'image/jpeg', data: url.slice(url.indexOf(',') + 1) }
 }
 

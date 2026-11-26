@@ -57,6 +57,8 @@ ${FILE_SAFETY_PROMPT}`;
 // layer (not a query error); /chat counts these and tells the model not to retry.
 async function executeTool(user, command, target, seen) {
   const start = Date.now();
+  // A tool call with no command (seen 26 Nov 2026: crashed /chat with a 500 "Chat failed") goes back to the model as a normal error.
+  if (typeof command !== 'string' || !command.trim()) return { ok: false, error: 'The tool call had no command. Send run_command with a command and a target.' };
   const sqlOk = checkRawSql(user);
   if (!sqlOk.ok) return sqlOk;
   // Force IST in any SQL the model wrote (CURRENT_DATE() -> CURRENT_DATE('Asia/Kolkata')).

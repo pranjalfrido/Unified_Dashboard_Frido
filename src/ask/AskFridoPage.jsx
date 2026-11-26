@@ -81,7 +81,7 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
 
   // extra = { attachments, chips } from the composer when files were attached (contents are used for this request only).
   async function handleSend(text, extra) {
-    if (sending) return;
+    if (sending) return false;
 
     // Auto-create a conversation if none is active
     let currentId = activeId;
@@ -113,6 +113,7 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
       };
     }));
 
+    let failed = false;
     setSending(true); setBusy('navai-answer', true);
     try {
       const response = await sendMessage(messagesForApi, session?.access_token);
@@ -122,6 +123,8 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
         return { ...c, messages: [...msgs, response] };
       }));
     } catch (err) {
+      // The composer gets `false` back and puts the question (and keeps the files) in the box so it can be sent again.
+      failed = true;
       setConversations(prev => prev.map(c => {
         if (c.id !== currentId) return c;
         const msgs = c.messages.filter(m => !m.thinking);
@@ -135,6 +138,7 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
     } finally {
       setSending(false); setBusy('navai-answer', false);
     }
+    return !failed;
   }
 
   function handleSuggestion(text) { handleSend(text); }

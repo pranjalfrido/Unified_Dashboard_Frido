@@ -142,6 +142,7 @@ function checkSql(cmd, target) {
 }
 
 export function isAllowed(command, target) {
+  if (typeof command !== 'string') return false; // a tool call without a command is refused, never a crash
   const cmd = command.trim();
 
   if (target === 'bigquery' || target === 'supabase') {
@@ -159,6 +160,7 @@ export function isAllowed(command, target) {
 }
 
 export function blockReason(command, target) {
+  if (typeof command !== 'string') return 'the tool call had no command';
   const cmd = command.trim();
 
   if (target === 'bigquery' || target === 'supabase') {

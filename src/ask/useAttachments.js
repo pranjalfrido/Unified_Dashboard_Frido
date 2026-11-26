@@ -45,6 +45,12 @@ export function useAttachments(enabled) {
     setError('')
   }, [])
 
+  // Sending: take the chips off the screen without freeing them, so a failed send can put them back (restore) and a
+  // good one frees their previews (release).
+  const detach = useCallback(() => { count.current = 0; setItems([]); setError('') }, [])
+  const restore = useCallback(list => { count.current = list.length; setItems(list) }, [])
+  const release = useCallback(list => list.forEach(i => i.preview && URL.revokeObjectURL(i.preview)), [])
+
   const converting = items.some(i => i.status === 'converting')
   useEffect(() => { setBusy('navai-attachment', converting); return () => setBusy('navai-attachment', false) }, [converting])
   const failed = items.some(i => i.status === 'error')
@@ -55,7 +61,7 @@ export function useAttachments(enabled) {
     const data = ready.map(i => i.data)
     return { data, complete: ready.length === items.length, tooBig: checkRequestSize(data, otherBytes), names: items.map(i => ({ name: i.name })) }
   }, [items])
-  return { items, error, setError, add, remove, clear, converting, failed, sendable, payload }
+  return { items, error, setError, add, remove, clear, detach, restore, release, converting, failed, sendable, payload }
 }
 
 // Drag-and-drop and paste (screenshots) onto the composer area.
