@@ -6,7 +6,12 @@ import { C as BASE_C } from "./utils.js";
 import { authFetch } from './authFetch.js';
 
 // ── COGS Tracker — row-wise layout ───────────────────────────────────────────
-// DB: cogs_ledger (itemskucode, month, cogs, is_explicit)
+// DB: product_cogs_monthly (sku, month DATE, cogs, cogs_source, ...) — the same table the P&L tab and the
+// Inventory Cost Detail table read, so what is uploaded here is what they use. (Replaced cogs_ledger.)
+// The grid shows only UPLOADED rows (cogs_source = 'actual'). The table also holds one carried_forward row
+// per SKU per month (Feb 2022 → current month), derived from the uploaded rows by the database function
+// rebuild_cogs_fill(); this page calls it after every save / upload / delete, so a newly uploaded cost
+// applies to later months until a newer one is uploaded. Uploads only ever add or update rows.
 // UI: each row = 1 SKU × 1 month, sorted by month then SKU. Just a plain
 // uploader — SKU must exist in item master (validated against it below), and
 // api/cogs-context.js is used only for a pre-save sanity check (COGS vs the
@@ -34,20 +39,62 @@ const normMonth = (v) => {
   return null;
 };
 
-const toDbRecord = (r) => ({
-  itemskucode: r.itemskucode.trim(),
-  month: r.month,
-  cogs: r.cogs !== "" && r.cogs != null ? Number(r.cogs) : null,
-  is_explicit: true,
-});
+const TABLE = "product_cogs_monthly";
+const PAGE_SIZE = 1000;                       // PostgREST caps a response at 1000 rows
+const dbMonth = (m) => `${m}-01`;             // 'YYYY-MM' (grid) -> DATE (table)
+
+// itemMeta: Map(UPPERCASE item-master code -> { code, category, sub }). The SKU is stored exactly as the item
+// master spells it, so a differently-cased upload cannot create a second row for the same product.
+const toDbRecord = (r, itemMeta) => {
+  const typed = r.itemskucode.trim();
+  const m = itemMeta?.get(typed.toUpperCase());
+  return {
+    sku: m?.code ?? typed,
+    month: dbMonth(r.month),
+    cogs: r.cogs !== "" && r.cogs != null ? Number(r.cogs) : null,
+    category: m?.category ?? null,
+    sub_category: m?.sub ?? null,
+    cogs_source: "actual",
+    carried_from_month: null,
+    synced_at: new Date().toISOString(),
+  };
+};
 
 const fromDbRecord = (d) => ({
   _uid: uid(),
   _dirty: false,
-  month: d.month ?? "",
-  itemskucode: d.itemskucode ?? "",
+  month: d.month ? String(d.month).slice(0, 7) : "",
+  itemskucode: d.sku ?? "",
   cogs: d.cogs != null ? String(d.cogs) : "",
 });
+
+// Re-derive the carried_forward rows for these SKUs (database function, one transaction per call).
+async function rebuildFill(skus) {
+  const list = [...new Set(skus)];
+  for (let i = 0; i < list.length; i += 500) {
+    const { error } = await supabase.rpc("rebuild_cogs_fill", { p_skus: list.slice(i, i + 500) });
+    if (error) throw error;
+  }
+}
+
+// Every uploaded (actual) row, paged.
+async function fetchActualRows(onProgress) {
+  const all = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("sku,month,cogs")
+      .eq("cogs_source", "actual")
+      .order("month", { ascending: true })
+      .order("sku", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    all.push(...(data ?? []));
+    onProgress?.(all.length);
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return all;
+}
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -60,7 +107,8 @@ export default function CogsPage({ onBack }) {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
-  const [validSkus, setValidSkus] = useState(null); // Set of valid item_master Product_Code (uppercased), null until loaded
+  const [itemMeta, setItemMeta] = useState(null); // Map(UPPERCASE code -> {code, category, sub}) from item_master, null until loaded
+  const validSkus = useMemo(() => (itemMeta ? new Set(itemMeta.keys()) : null), [itemMeta]); // uppercased codes; null = not loaded
   const [skuContext, setSkuContext] = useState({}); // { SKU: { asp_inc_gst_60d, ... } } — cache for the pre-save margin sanity check only
   const fileInput = useRef(null);
 
@@ -81,25 +129,27 @@ export default function CogsPage({ onBack }) {
         for (let from = 0; ; from += PAGE) {
           const { data, error } = await supabase
             .from("item_master")
-            .select("product_code")
+            .select("product_code,category_name,sub_category")
             .order("product_code")          // stable paging; without an order the window can repeat or skip rows
             .range(from, from + PAGE - 1);
           if (error) throw error;
           codes.push(...(data ?? []));
           if (!data || data.length < PAGE) break;
         }
-        const set = new Set(codes
-          .map((d) => String(d.product_code || "").trim().toUpperCase())
-          .filter(Boolean));
+        const set = new Map();
+        for (const d of codes) {
+          const code = String(d.product_code || "").trim();
+          if (code) set.set(code.toUpperCase(), { code, category: d.category_name ?? null, sub: d.sub_category ?? null });
+        }
         // An empty result is a failure, not an item master with no products. Treating it as
         // data is what turned one bad column name into "all 1,813 rows are invalid".
-        setValidSkus(set.size ? set : null);
+        setItemMeta(set.size ? set : null);
       } catch (e) {
         console.error("Failed to load item master for SKU validation:", e);
         // null, NOT an empty Set: every gate below is written `validSkus && ...`, so null
         // skips validation and lets the upload through. Failing closed here means a
         // transient fetch error silently rejects a perfectly good file and blames the file.
-        setValidSkus(null);
+        setItemMeta(null);
       }
     })();
   }, []);
@@ -113,15 +163,10 @@ export default function CogsPage({ onBack }) {
     setLoading(true);
     setStatus(null);
     try {
-      const { data, error } = await supabase
-        .from("cogs_ledger")
-        .select("*")
-        .order("month", { ascending: true })
-        .order("itemskucode", { ascending: true });
-      if (error) throw error;
-      const loaded = (data ?? []).map(fromDbRecord);
+      const data = await fetchActualRows();
+      const loaded = data.map(fromDbRecord);
       setRows(loaded.length ? loaded : [blankRow()]);
-      const months = [...new Set((data ?? []).map((d) => d.month).filter(Boolean))].sort();
+      const months = [...new Set(loaded.map((d) => d.month).filter(Boolean))].sort();
       setAllMonths(months);
     } catch (e) {
       flash("error", `Load failed: ${e.message ?? e}`);
@@ -157,9 +202,12 @@ export default function CogsPage({ onBack }) {
       // Last one wins, matching the row order on screen.
       const byKey = new Map();
       for (const r of valid) byKey.set(`${r.itemskucode.trim().toUpperCase()}|${r.month}`, r);
-      const records = [...byKey.values()].map(toDbRecord);
-      const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
-      if (error) throw error;
+      const records = [...byKey.values()].map((r) => toDbRecord(r, itemMeta));
+      for (let i = 0; i < records.length; i += 500) {
+        const { error } = await supabase.from(TABLE).upsert(records.slice(i, i + 500), { onConflict: "sku,month" });
+        if (error) throw error;
+      }
+      await rebuildFill(records.map((r) => r.sku));
       setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
       const months = [...new Set(valid.map((r) => r.month))].sort();
       setAllMonths((prev) => [...new Set([...prev, ...months])].sort());
@@ -181,7 +229,10 @@ export default function CogsPage({ onBack }) {
     if (!row) return;
     if (row.itemskucode.trim() && row.month) {
       if (!confirm(`Delete ${row.itemskucode} / ${row.month}?`)) return;
-      await supabase.from("cogs_ledger").delete().eq("itemskucode", row.itemskucode.trim()).eq("month", row.month);
+      const sku = itemMeta?.get(row.itemskucode.trim().toUpperCase())?.code ?? row.itemskucode.trim();
+      const { error } = await supabase.from(TABLE).delete().eq("sku", sku).eq("month", dbMonth(row.month)).eq("cogs_source", "actual");
+      if (error) { flash("error", `Delete failed: ${error.message ?? error}`); return; }
+      try { await rebuildFill([sku]); } catch (e) { flash("error", `Deleted, but refilling later months failed: ${e.message ?? e}`); }
     }
     setRows((rs) => rs.filter((r) => r._uid !== id));
   };
@@ -258,9 +309,10 @@ export default function CogsPage({ onBack }) {
       ["Notes"],
       ["1. One row = one SKU for one month."],
       ["2. To upload multiple months, add rows one below the other — June rows first, then July rows etc."],
-      ["3. Uploading the same SKU + month will UPDATE that record (upsert)."],
-      ["4. Product name, category and sub-category are looked up automatically from item master — do not include them here."],
-      ["5. Delete the two sample rows before adding your data."],
+      ["3. Uploading the same SKU + month will UPDATE that record (upsert). Nothing else is deleted — a new file is added to what is already there."],
+      ["4. A cost you upload also applies to every LATER month until you upload a newer value for that SKU (and, for a SKU's first-ever upload, to earlier months)."],
+      ["5. Product name, category and sub-category are looked up automatically from item master — do not include them here."],
+      ["6. Delete the two sample rows before adding your data."],
     ];
     const notes = XLSX.utils.aoa_to_sheet(instrData);
     notes["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 80 }];
@@ -394,12 +446,14 @@ export default function CogsPage({ onBack }) {
         const PAGE = 500;
         let done = 0;
         for (let i = 0; i < deduped.length; i += PAGE) {
-          const chunk = deduped.slice(i, i + PAGE).map(toDbRecord);
-          const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
+          const chunk = deduped.slice(i, i + PAGE).map((r) => toDbRecord(r, itemMeta));
+          const { error } = await supabase.from(TABLE).upsert(chunk, { onConflict: "sku,month" });
           if (error) throw error;
           done += chunk.length;
           setUploadProgress({ done, total: deduped.length });
         }
+        // Apply the new costs to the months that follow (and backfill a brand-new SKU).
+        await rebuildFill(deduped.map((r) => toDbRecord(r, itemMeta).sku));
 
         await loadFromDb();
         setUploadProgress({ done: deduped.length, total: deduped.length, finished: true });
@@ -423,22 +477,8 @@ export default function CogsPage({ onBack }) {
   const [exportProgress, setExportProgress] = useState(null);
 
   const fetchAllFromDb = async () => {
-    const all = [];
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("cogs_ledger")
-        .select("*")
-        .order("month", { ascending: true })
-        .order("itemskucode", { ascending: true })
-        .range(from, from + 999);
-      if (error) throw error;
-      all.push(...data);
-      setExportProgress({ done: all.length });
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-    return all;
+    const data = await fetchActualRows((n) => setExportProgress({ done: n }));
+    return data.map((d) => ({ month: String(d.month).slice(0, 7), itemskucode: d.sku, cogs: d.cogs }));
   };
 
   const exportCSV = async () => {
@@ -660,7 +700,7 @@ export default function CogsPage({ onBack }) {
       </div>
 
       <p style={{ fontSize: 12, color: C.t3, marginTop: 12 }}>
-        One row = one SKU for one month. Same SKU + month on upload will update the existing record. SKU must exist in item master.
+        One row = one SKU for one month. Same SKU + month on upload will update the existing record; other rows are kept. A cost also applies to later months until a newer one is uploaded. SKU must exist in item master.
         Use <strong>Month</strong> dropdown to filter by month.
       </p>
     </div>
