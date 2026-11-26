@@ -18,7 +18,6 @@
     "inv_snapshot",
     "sales_window",
     "item_master",
-    "cogs_ledger",
     "facility_master",
     "sku_mapping",
     "shopify_inv",

@@ -92,6 +92,7 @@ The **CN Received** button (top right of Cost Analytics → Overview) opens `/lo
 | **Total inventory (Regular view = what the page tile shows)** | `inv-data-7d` with `regular:true` → TOTAL 8,49,795 at that snapshot (PNQ 4,32,025; GGN 2,37,552; KOL 53,547; MUM 49,323; HYD 45,077; BLR 31,179; CHN 1,092). Do NOT use `summary.totalInvt` (all facility types, 8,70,247). Also path `facilityTypeSummary` (groupBy `facilityType`, sum `totalInvt`). |
 | **Stock of one SKU per warehouse** | `inv-data-7d` with `regular:{sku:'FR-OPC-M1'}` → PNQ 9,059; KOL 2,870; BLR 912; MUM 402; GGN 23 (total 13,266). |
 | Avg sale | `summary.avgSaleB2C` (B2C/day, the "Avg Sale (B2C)" tile), `summary.totalAvgSale` (all sales types). Window = the file (7/15/30) and **ends on the last complete day (latest sales date minus 1)**, not the partial current day. **B2C = every Frido-fulfilled B2C channel** (Shopify, CRED, Amazon, Flipkart, Myntra, Blinkit, Zepto, Instamart: all channels mapped to B2C Order, not Shopify only). Since 23 Nov a SKU's company-wide avg sale counts **all** B2C orders for that SKU whichever warehouse shipped them (before, only warehouses holding stock were counted, so multi-warehouse SKUs such as W1 / Neck WoC / Lumbo read lower than the Sales tab DRR). The live fallback `/api/inventory` still uses the old per-warehouse sum, so the static `inv-data-*` files are the reference. Avg sale per SKU is still rounded up (ceil) in the files until the rounding fix is merged, so small SKUs can read slightly high. |
+| Avg sale with a facility slicer (since 25 Nov) | When the Inventory Health page narrows to a facility / facility type, the SKU's avg sale stays the **company-wide SKU avg sale** (all warehouses), not the sum of the remaining locations; stock is the facility-exact units. |
 | DOI | `summary.doi` (company-wide, all facility types). SKU: `skus` rows `{sku,doi,stockStatus,avgSale,…}`. Server formula: doi = floor(totalInvt / ceil(max(avgSale, orderAllocation))). |
 | Critical / Low / … SKUs | path `skus` with `where:{stockStatus:'Critical'}`, `sortBy:'doi'`, `desc:false`, `limit`. Counts: `statusBreakdown` rows `{status,count}`. Bands: ≤2 Critical, ≤15 Low, ≤45 Sufficient, else Excess; Out of Stock / No Demand / Dead (No Sale) are separate. **Note: SKU `totalInvt`/`doi` here are company-wide (all facility types).** |
 | Lead-time risk | path `leadTimeRisk` (top 20: sku, leadTime, doi, stockStatus, avgSale). |
@@ -125,6 +126,29 @@ The **CN Received** button (top right of Cost Analytics → Overview) opens `/lo
 | **Latest inward / sales date** | `meta.lastGrnDate`, `meta.lastSalesDate`. |
 
 Quote `meta.notes` when present (for example "Sales are not filtered by vendor or source type"). Received and rejected quantities now work; the old "shows 0" problem belonged to the retired legacy GRN report.
+
+## Group 3c — Inventory Health → "Inventory cost detail" card (the `inventory_cost` tool, released 26 Nov 2026, permission `inventory:cost`)
+
+The card values the Inventory Health SKU list at cost. Use the **`inventory_cost` tool** (it reads the same two sources the card reads and applies the card's own rule; every total and count is calculated by the tool). Do not rebuild it with `run_command`.
+
+| Item | Rule |
+|---|---|
+| **Stock** | Inventory Health file `inv-data-7d`, **Regular facilities only** (the page's default Regular view, sum of each SKU's `facilities` with `facilityType = Regular`). |
+| **COGS per unit** | `POST /api/cogs-monthly` (`product_cogs_monthly`): each SKU's **latest month with a cost**. Today Jun–Sep 2026 are real uploads; Oct and Nov are **carried forward from Sep 2026**. The card says "COGS rates: Sep 2026, carried forward"; say the same. |
+| **Valuation of one SKU** | own COGS x units; else the **average COGS of the SKU's sub-category** x units; else **not valued** (shown as Missing, counted as ₹0). |
+| **Counts** | **SKUs with stock > 0 only.** The laptop table also lists zero-stock SKUs, so its row count is higher; the value and units are the same either way. |
+| **Product** | all SKUs with the same sub-category name (SKU-master `Sub_category`). Value, units and avg sale are sums; DOI = floor(units / avg sale); "No Demand" when avg sale is 0. |
+| **Status bands** (same as Inventory Health) | Critical <= 2 days, Low <= 15, Sufficient <= 45, else Excess. |
+| **Avg sale** | the Inventory Health B2C avg sale of the file window (7 days), company-wide for the SKU since 23 Nov (all warehouses). |
+
+| Question | Tool call |
+|---|---|
+| Total inventory value / units / SKUs with stock / how many have no COGS | `inventory_cost {by:'summary'}` |
+| Value by product / category / SKU, top N, DOI and status | `inventory_cost {by:'product'|'category'|'sku', sortBy, limit}`; add `category`, `product` (the exact sub-category from the Product match block), `sku` or `status` to filter |
+| Which SKUs have no COGS / what are they valued at | `inventory_cost {by:'no_cogs'}` (sub-category-average SKUs and not-valued SKUs, with units, value, why and fix) |
+| Which COGS month is used | the first lines of every `inventory_cost` result |
+
+**The card cannot answer:** value at a past date (it is today's stock), value by warehouse or facility type other than Regular, value at ASP or selling price, the effect of a COGS change before it is uploaded, per-SKU COGS history, or anything about Other / Dark Store facilities. Say so and offer what it does show. The tool needs the `inventory:cost` permission (admins always); without it NavAI says the user has no access to Inventory Health → Inventory cost detail.
 
 ## Group 5 — P&L (other channels), Ads, Customers, Support (Sep 2026 values)
 
@@ -180,4 +204,10 @@ Cohort retention is browser-computed (cohort customers at index N ÷ index 0); m
 **Returns portal (`returns` {start,end}, Clickpost):** `kpis.{total_requests,total_returns,total_exchanges,pickup_success,refund_processed,total_refunded,prepaid_count,cod_count}`, `byReason`, `byProduct`, `byDay`, `byCourier`, `byState`. Sep: 30,704 requests, 10,850 returns, 19,854 exchanges.
 **`cat-daily` {start,end,channel}** (channel required: shopify, ebo, amazon, amazon_vc, flipkart, blinkit, instamart, zepto, cred, firstcry, myntra, offline): nested map `subCatDateMap.<Cat>.<Sub>.<date>.{rev,excRev,units,cancelRev,rtoRev,cirRev,exchRev}`.
 **Financial MIS:** `/api/financial-mis` is NOT deployed (404) — say it is not available.
+
+## Changes of 26 Nov 2026 that need no new endpoint
+
+- **P&L / Sales payload (`pnl-data.json`, `bq`):** return components with zero revenue and zero % are now `null` (absent) in `resolvedDailySKU`, and the per-component `source` field ('live' / 'rolling_30d') no longer exists. Treat a missing component as 0; never say a component's "source". The numbers themselves are unchanged.
+- **COGS page** now reads and writes `product_cogs_monthly` (the old `cogs_ledger` table is retired). NavAI only reads `product_cogs_monthly`; it never writes.
+- **P&L calculators** (Breakeven ROAS, Price simulator, PO approval checker, B2B costing) and **saved scenarios** work on numbers the user types or saves privately; NavAI has no access to them. Say so if asked; offer the P&L tool for real channel figures.
 

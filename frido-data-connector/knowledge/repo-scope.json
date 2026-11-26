@@ -26,7 +26,9 @@
     "scripts/sql/cn/010_cn_received_view.sql",
     "src/utils.js",
     "api/data/*",
-    "CLAUDE.md"
+    "CLAUDE.md",
+    "src/inventory/InventoryCostTable.jsx",
+    "src/inventory/costGroup.js"
   ],
   "blocked": [
     ".env",
