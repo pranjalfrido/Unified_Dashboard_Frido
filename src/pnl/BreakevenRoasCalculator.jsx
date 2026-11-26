@@ -516,7 +516,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '0 0 420px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
             {waterfall && (
               <div style={{ marginBottom: 20 }}>
