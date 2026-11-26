@@ -63,4 +63,6 @@ Deployed on Vercel Hobby plan. `vercel.json` sets `maxDuration: 300` for all `ap
 - GST rate lookups must use `GST_Tax_Type_Code` from the item master, not other GST columns.
 
 ### NavAI sync rule
-Whenever a page, an `api/*.js` endpoint, or any metric logic (avg sale, DOI, OOS loss, COGS, returns, cancellations, logistics, ads/CAC, customers) is added or changed, list what NavAI must update: `knowledge/ENDPOINT_MAP.md`, `PULSE_PLAYBOOK.md` / `PULSE_METRICS.md` wording, any logic copied into the connector (P&L tool, OOS SQL), `repo-scope.json`, and test questions. Then remind Suraj that NavAI needs a canary redeploy.
+The NavAI connector lives in `frido-data-connector/` on `main` (merged from `feature/pulse-tools`). Start all connector work from `origin/main` in a new worktree; no long-lived connector branch.
+
+Whenever a page, an `api/*.js` endpoint, or any metric logic (avg sale, DOI, OOS loss, COGS, returns, cancellations, logistics, ads/CAC, customers) is added or changed, list what NavAI must update: `frido-data-connector/knowledge/ENDPOINT_MAP.md`, `PULSE_PLAYBOOK.md` / `PULSE_METRICS.md` wording (in `frido-data-connector/knowledge/`, mirrored in `docs/`), any logic copied into the connector (`frido-data-connector/lib/`: P&L tool, OOS SQL, CN tool), `frido-data-connector/knowledge/repo-scope.json`, and test questions (`docs/pulse_test_set.csv`). Then remind Suraj that NavAI needs a canary redeploy. Merging to `main` does not redeploy the connector; Cloud Run changes only by a manual `gcloud` deploy.
