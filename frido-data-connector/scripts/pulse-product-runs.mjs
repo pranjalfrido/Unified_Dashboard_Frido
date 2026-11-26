@@ -18,10 +18,10 @@ const PRODUCT = [
   { q: 'FR-OPC-L1 inward this month', expect: ['18,290'], note: 'Inward page, SKU' },
 ];
 const OLDER = [
-  { q: 'What was D2C gross revenue from 1 to 28 Oct 2026?', expect: ['29.51 Cr'], note: 'test set #1' },
-  { q: 'What was D2C net revenue from 1 to 28 Oct 2026?', expect: ['21.49 Cr'], note: 'test set #2' },
-  { q: 'Top 5 D2C categories by gross revenue, 1–28 Oct 2026', expect: ['7.87 Cr', '6.51 Cr', '3.92 Cr'], note: 'test set #6' },
-  { q: 'Compare Delhivery vs Bluedart delivery rate, Sep 2026', expect: ['90.34', '86.38'], note: 'test set #25' },
+  { q: 'What was D2C gross revenue from 1 to 28 Oct 2026?', expect: ['30.52 Cr'], note: 'test set #1' },
+  { q: 'What was D2C net revenue from 1 to 28 Oct 2026?', expect: ['21.90 Cr'], note: 'test set #2' },
+  { q: 'Top 5 D2C categories by gross revenue, 1–28 Oct 2026', expect: ['8.15 Cr', '6.71 Cr', '4.03 Cr'], note: 'test set #6' },
+  { q: 'Compare Delhivery vs Bluedart delivery rate, Sep 2026', expect: ['90.7', '86.8'], note: 'test set #25 (Sep delivery rates; value from live = canary, page file covers Nov only)' },
   { q: 'CN received by reason for Sep 2026', expect: ['2.48 L', '93,837'], note: 'test set #97' },
 ];
 

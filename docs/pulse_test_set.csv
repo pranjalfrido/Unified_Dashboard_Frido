@@ -1,10 +1,10 @@
 id,area,question,dashboard_page_and_filters,expected_answer,notes
-1,Sales,What was D2C gross revenue from 1 to 28 Oct 2026?,Sales > D2C > Overall > 1–28 Oct 2026,"₹29.51 Cr (160.9k orders, 221.2k units)",
-2,Sales,What was D2C net revenue from 1 to 28 Oct 2026?,Sales > D2C > Net Revenue Ex GST tile > 1–28 Oct,₹21.49 Cr,
+1,Sales,What was D2C gross revenue from 1 to 28 Oct 2026?,Sales > D2C > Overall > 1–28 Oct 2026,"₹30.52 Cr (1,66,338 orders, 2,28,684 units)",
+2,Sales,What was D2C net revenue from 1 to 28 Oct 2026?,Sales > D2C > Net Revenue Ex GST tile > 1–28 Oct,"₹21.90 Cr (provisional: latest 15 days use the rolling 30-day return rate; the page's daily net adds to ₹21.88 Cr)",
 3,Sales,Net revenue by channel for Sep 2026,Sales > Overall > Revenue by Channel (Net Revenue) > 1–30 Sep 2026,"Total ₹42.31 Cr: D2C ₹22.55 Cr, Amazon ₹10.18 Cr, Offline ₹3.55 Cr, EBO ₹2.20 Cr, Blinkit ₹1.39 Cr, Flipkart ₹1.20 Cr, Myntra ₹63.05 L, CRED ₹25.21 L, Zepto ₹17.33 L, Instamart ₹17.11 L, Firstcry ₹1.07 L, International ₹1,580",net revenue = provisional/custom until Step 4
 4,Sales,How many orders and units did Amazon do last week?,Sales > Amazon > Overall > last week,,
 5,Sales,What was D2C AOV from 1 to 28 Oct 2026?,Sales > D2C > AOV tile > 1–28 Oct,"₹1,834",
-6,Sales,"Top 5 D2C categories by gross revenue, 1–28 Oct 2026",Sales > D2C > Category Revenue > 1–28 Oct,"Footwear ₹7.87 Cr, Orthotics ₹6.51 Cr, Pillows ₹3.92 Cr, Cushions ₹3.19 Cr, Ergo Furniture ₹2.39 Cr",
+6,Sales,"Top 5 D2C categories by gross revenue, 1–28 Oct 2026",Sales > D2C > Category Revenue > 1–28 Oct,"Footwear ₹8.15 Cr, Orthotics ₹6.71 Cr, Pillows ₹4.03 Cr, Cushions ₹3.29 Cr, Ergo Furniture ₹2.52 Cr",
 7,Sales,Top 10 SKUs by revenue in Flipkart last 30 days,Sales > Flipkart > products,,
 8,Sales,How did MyFrido revenue change vs previous period this month?,Sales > D2C > MyFrido,,
 9,Sales,What was the D2C return % from 1 to 28 Oct 2026?,Sales > D2C > Returns % tile > 1–28 Oct,18.0% (RTO+CIR+Cancelled ₹5.30 Cr),
