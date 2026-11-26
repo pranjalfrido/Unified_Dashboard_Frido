@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import { IC, fmtDays, GlassCard, StatusChip, ExportButton, exportCsv, SearchableMultiSelect } from './theme.jsx'
 import { authFetch } from '../authFetch.js'
+import { useBreakpoint } from '../responsive/useBreakpoint.js'
+import InventoryCostMobile from './mobile/InventoryCostMobile.jsx'
+import { COST_EXPORT_COLS } from './costExport.js'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -78,7 +81,8 @@ const STATUS_ORDER = ['Excess', 'Sufficient', 'Low', 'Critical', 'Out of Stock',
 
 // slowSkus / deadSkus: Sets of SKU codes from the page's own Slow Moving / Dead Stock sub-category
 // lists, so this filter agrees with those two cards.
-export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = false, slowSkus, deadSkus }) {
+export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = false, slowSkus, deadSkus, phoneLayout = false }) {
+  const bp = useBreakpoint()
   const [search, setSearch] = useState('')
   const [view, setView] = useState([])   // selected categories; empty = all SKUs
   const [cogs, setCogs] = useState(null)
@@ -164,6 +168,11 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
     { key: 'stockStatus', label: 'Status', align: 'right' },
   ]
 
+  // Phone (<= 767 px, or a phone turned sideways) on the mobile Inventory Health page: card layout. Same rows and totals as below.
+  if (phoneLayout && (bp.width <= 767 || bp.isPhoneLandscape)) {
+    return <InventoryCostMobile cogs={cogs} err={err} skus={skus} rows={rows} view={view} setView={v => { setView(v); setShown(SHOW_STEP) }} viewOptions={viewOptions} isAdmin={isAdmin} />
+  }
+
   return (
     <GlassCard
       title="Inventory Cost Detail"
@@ -184,11 +193,7 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
               </button>
             )}
             <ExportButton filename="inventory_cost_detail.csv" rows={sorted}
-              columns={[
-                { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' },
-                { label: 'COGS per unit', key: 'cogs' }, { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'Total Inventory Value', key: 'totalCost' },
-                { label: 'DOI', key: 'doi' }, { label: 'Stock Status', key: 'stockStatus' }, { label: 'COGS mapping', key: 'cogsMap' },
-              ]} />
+              columns={COST_EXPORT_COLS} />
           </span>
         </div>
       }

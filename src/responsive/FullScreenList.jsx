@@ -12,9 +12,12 @@ import { rankItems, barMax, barPctOf } from './rankSort.js'
 //   items, sorts, name, sub, secondary, searchText, groupOf: same meaning as MobileRankedList
 //   onSelect(item): open the item's detail (the caller's BottomSheet)
 //   flipOnRetap / initialDir, scopeFor / initialScopeAll, rowLayout: as in MobileRankedList (opt-in)
+//   tallChips: sort/group chips keep their look but get a 44px tap area (opt-in)
+//   renderRow(item, index, sortKey) (own row instead of RankedRow), extraControls (node under the sort chips, e.g. filter
+//   chips) and footer(list) (node pinned under the scrolling list, given the rows currently listed): all opt-in, e.g. Inventory cost detail
 const PAGE = 20
 
-export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout, autoFocusSearch = false }) {
+export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout, autoFocusSearch = false, renderRow, extraControls, footer, tallChips = false }) {
   const M = C.m
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState(initialSort || sorts[0].key)
@@ -63,7 +66,12 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
   const reset = fn => (...a) => { fn(...a); setShown(PAGE) }
 
   if (!open) return null
-  const chip = (on, label, onClick) => (
+  const chip = (on, label, onClick) => tallChips ? (
+    <button key={label} type="button" aria-pressed={on} onClick={onClick}
+      style={{ flex: '0 0 auto', minHeight: 44, padding: '0 2px', border: 'none', background: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', height: 32, padding: '0 11px', borderRadius: 999, whiteSpace: 'nowrap', border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink, fontSize: 12.5, fontWeight: on ? 700 : 500 }}>{label}</span>
+    </button>
+  ) : (
     <button key={label} type="button" aria-pressed={on} onClick={onClick}
       style={{ flex: '0 0 auto', minHeight: 32, padding: '0 11px', borderRadius: 999, border: `1px solid ${on ? M.green : M.line}`, background: on ? M.green : '#fff', color: on ? '#fff' : M.ink, fontSize: 12.5, fontWeight: on ? 700 : 500, fontFamily: 'var(--font)', cursor: 'pointer' }}>{label}</button>
   )
@@ -85,6 +93,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
               style={{ border: 'none', background: 'none', padding: 0, color: M.green, fontWeight: 600, fontSize: 12, fontFamily: 'var(--font)', cursor: 'pointer' }}>{scopeAll ? `${scope.label} only` : 'Show all'}</button></>}
           </div>
         )}
+        {extraControls}
         {groups.length > 2 && (
           <div role="group" aria-label="Filter by group" style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 8, scrollbarWidth: 'none' }}>
             {groups.map(g => chip(g === group, g, reset(() => setGroup(g))))}
@@ -93,7 +102,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
       </div>
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', background: '#fff', padding: `4px 14px calc(20px + var(--safe-bottom))` }}>
         {!list.length && <div style={{ padding: 16, textAlign: 'center', color: M.muted, fontSize: 13 }}>No {noun} match.</div>}
-        {list.slice(0, shown).map((it, i) => (
+        {list.slice(0, shown).map((it, i) => renderRow ? <div key={i + '-' + name(it)}>{renderRow(it, i, sortKey)}</div> : (
           <RankedRow key={i + '-' + name(it)} rank={i + 1} name={name(it)} sub={sub?.(it, sortKey)} value={sort.format(it)} secondary={secondary?.(it, sortKey)}
             barPct={barPctOf(it, sort.value, max)} barTone={sort.bar} onClick={() => onSelect?.(it)} badge={badge?.(it)} subBadge={subBadge?.(it)} valueColor={valueColor?.(it, sortKey)} layout={rowLayout} />
         ))}
@@ -104,6 +113,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
           </button>
         )}
       </div>
+      {footer?.(list)}
     </div>,
     document.body,
   )

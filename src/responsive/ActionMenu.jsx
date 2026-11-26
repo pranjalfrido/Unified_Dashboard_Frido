@@ -11,7 +11,7 @@ import BottomSheet from './BottomSheet.jsx'
 //         header space; with a note and no items the menu still shows
 const MoreIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
 
-export default function ActionMenu({ items, title = 'Actions', tone = 'dark', label = 'More actions', note, dot = false }) {
+export default function ActionMenu({ items, title = 'Actions', tone = 'dark', label = 'More actions', note, dot = false, size = 34 }) {
   const M = C.m
   const [open, setOpen] = useState(false)
   if (!items?.length && !note) return null
@@ -22,7 +22,7 @@ export default function ActionMenu({ items, title = 'Actions', tone = 'dark', la
       {dark
         ? <button type="button" className="m-action-btn mph-ib" data-ctl="more" onClick={() => setOpen(true)} aria-label={label} aria-haspopup="dialog">{MoreIcon}{dot && <span className="mph-dot" aria-hidden="true" />}</button>
         : <button type="button" className="m-action-btn" onClick={() => setOpen(true)} aria-label={label} aria-haspopup="dialog"
-            style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 20, lineHeight: 1,
+            style={{ width: size, height: size, flexShrink: 0, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 20, lineHeight: 1,
               border: `1px solid ${M.line}`, background: '#fff', color: M.ink }}>⋯</button>}
       <BottomSheet open={open} onClose={() => setOpen(false)} title={title}>
         {note && <div style={{ fontSize: 13, color: M.muted, padding: '2px 0 10px' }}>{note}</div>}
