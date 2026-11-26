@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { setBusy } from '../silentUpdate.js'
 import { DownloadSimple } from '@phosphor-icons/react'
 import { downloadAnswerTables } from './answerTables.js'
 
@@ -8,8 +9,8 @@ export default function ExcelButton({ tables, all = false, className = '' }) {
   const [state, setState] = useState('') // '' | 'busy' | 'error'
   const click = async () => {
     if (state === 'busy') return
-    setState('busy')
-    try { await downloadAnswerTables(tables); setState('') } catch { setState('error') }
+    setState('busy'); setBusy('excel-export', true)
+    try { await downloadAnswerTables(tables); setState('') } catch { setState('error') } finally { setBusy('excel-export', false) }
   }
   return (
     <>

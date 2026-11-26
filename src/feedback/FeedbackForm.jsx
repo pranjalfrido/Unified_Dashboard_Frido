@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Camera, X } from '@phosphor-icons/react'
 import KeyboardSheet from './KeyboardSheet.jsx'
+import { setBusy as holdUpdates } from '../silentUpdate.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import { fb, TYPES, compressImage } from './feedbackApi.js'
 import { buildContext, contextLine } from './feedbackContext.js'
@@ -41,11 +42,11 @@ function FormBody({ phone, token, prefill, getView, version, onClose, onSent }) 
   const canSend = !!type && message.trim().length > 0 && !busy
   const submit = async () => {
     if (!canSend) return
-    setBusy(true); setError('')
+    setBusy(true); setError(''); holdUpdates('feedback-submit', true)
     try {
       await fb('submit', token, { type, message: message.trim(), urgent, context: ctx, screenshot: shot || undefined })
       onSent()
-    } catch (e) { setError(e.message); setBusy(false) }
+    } catch (e) { setError(e.message); setBusy(false) } finally { holdUpdates('feedback-submit', false) }
   }
 
   // kb = the on-screen keyboard is up: the box gets shorter and the grey context line hides, so the
