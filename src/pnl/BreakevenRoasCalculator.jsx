@@ -641,6 +641,10 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   )
 }
 
+// UI: column sizes for the Saved Scenarios table.
+const LABEL_COL_W = 230   // "Line item" column, fixed
+const PRODUCT_COL_W = 220 // each product column while there is room; shrinks equally once the card is at full width
+
 function SavedScenariosTable({ scenarios, onRemove, onReset }) {
   const rupee = v => v != null ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
   const pct1 = v => v != null ? `${v.toFixed(1)}%` : '—'
@@ -718,22 +722,20 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
     { key: 'breakevenRoas15', label: 'ROAS for 15% CM2', render: s => roasFmt(s.breakevenRoas15) },
   ]
 
-  const thSt = { padding: '11px 16px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)` }
-  const tdSt = { padding: '9px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }
-  // UI: first column stays pinned while the product columns scroll sideways.
-  const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
+  const thSt = { padding: '11px 16px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)`, boxSizing: 'border-box' }
+  const tdSt = { padding: '9px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, boxSizing: 'border-box' }
 
   return (
-    // UI: card grows by one 220px column per product (label column + n × 220 + card padding/border),
-    // and stops at 100% of the page. After that the table scrolls sideways.
+    // UI: the card grows by one 220px column per product and stops at 100% of the page.
+    // Past that point the product columns shrink equally to fit. The table never scrolls sideways.
     <div style={{
       background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20,
       display: 'flex', flexDirection: 'column', gap: 14,
-      width: `min(100%, ${230 + scenarios.length * 220 + 42}px)`,
+      width: `min(100%, ${LABEL_COL_W + scenarios.length * PRODUCT_COL_W + 42}px)`, minWidth: 'min(100%, 520px)',
       alignSelf: 'flex-start', boxSizing: 'border-box',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
           <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>{gmSubtitle}</div>
         </div>
@@ -743,22 +745,22 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
         </button>
       </div>
 
-      {/* UI: fixed table layout with an explicit px width → every product column is exactly 220px and long names
-          must wrap. When the columns no longer fit the card, the wrapper scrolls sideways. */}
-      <div style={{ overflowX: 'auto', maxWidth: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed', width: 230 + scenarios.length * 220, minWidth: '100%' }}>
+      {/* UI: no horizontal scroll. tableLayout fixed + width 100% → the Line item column stays at 230px
+          and the product columns split the rest equally, however many products there are. */}
+      <div style={{ overflow: 'hidden', width: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%', tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: 230 }} />
-            {enriched.map(s => <col key={s.id} style={{ width: 220 }} />)}
+            <col style={{ width: LABEL_COL_W }} />
+            {enriched.map(s => <col key={s.id} />)}
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...thSt, ...stickyCol, boxShadow: 'none', zIndex: 2, textAlign: 'left', width: 230, boxSizing: 'border-box' }}>Line item</th>
+              <th style={{ ...thSt, textAlign: 'left', verticalAlign: 'top' }}>Line item</th>
               {enriched.map(s => (
-                // UI: every product column is exactly 220px (border-box); long names wrap onto more lines.
-                <th key={s.id} style={{ ...thSt, textAlign: 'right', width: 220, whiteSpace: 'normal', verticalAlign: 'top', boxSizing: 'border-box' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6 }}>
-                    <span style={{ minWidth: 0, flex: '1 1 auto', overflowWrap: 'anywhere', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'right' }}>{s.productName}</span>
+                // UI: no width here, so all product columns stay equal. Long names wrap inside the column.
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', whiteSpace: 'normal', verticalAlign: 'top' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6, minWidth: 0 }}>
+                    <span style={{ minWidth: 0, flex: '1 1 auto', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'right' }}>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
                       style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>×</button>
                   </div>
@@ -767,12 +769,12 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
             </tr>
           </thead>
           <tbody>
-            {ROWS.map((row, ri) => {
+            {ROWS.map(row => {
               if (row.section) {
                 return (
                   <tr key={row.section}>
                     <td colSpan={enriched.length + 1} style={{ padding: '6px 16px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
-                      <span style={{ position: 'sticky', left: 16 }}>{row.section}</span>
+                      {row.section}
                     </td>
                   </tr>
                 )
@@ -780,9 +782,10 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
               const rowBg = row.highlight ? '#edf7f0' : '#fff'
               return (
                 <tr key={row.key} style={{ background: rowBg }}>
-                  <td style={{ ...tdSt, ...stickyCol, zIndex: 1, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg }}>{row.label}</td>
+                  <td style={{ ...tdSt, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</td>
                   {enriched.map(s => (
-                    <td key={s.id} style={{ ...tdSt, textAlign: 'right', fontWeight: row.bold ? 700 : 500, color: C.t1, background: rowBg }}>
+                    // UI: overflow hidden so a value can never spill into the next column when columns get narrow.
+                    <td key={s.id} style={{ ...tdSt, textAlign: 'right', fontWeight: row.bold ? 700 : 500, color: C.t1, background: rowBg, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.render(s)}
                     </td>
                   ))}
