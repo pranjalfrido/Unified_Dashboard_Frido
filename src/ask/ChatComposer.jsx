@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { ArrowUp } from '@phosphor-icons/react';
-import { VoiceButton, AttachButton, AttachChips } from './ComposerExtras.jsx';
+import { AttachButton, AttachChips } from './ComposerExtras.jsx'
+import { VoiceSlot } from './VoiceSlot.jsx';
 import { useAttachments, useFileDrop } from './useAttachments.js';
 
 // canFiles: the person has the 'ask:files' permission (admins always do). Without it there is no paperclip and
@@ -64,7 +65,7 @@ export default function ChatComposer({ onSend, disabled, canFiles = false }) {
             disabled={disabled}
           />
           {canFiles && <AttachButton onFiles={files.add} disabled={disabled} shortcut />}
-          <VoiceButton getValue={getValue} setValue={setValue} disabled={disabled} />
+          <VoiceSlot getValue={getValue} setValue={setValue} disabled={disabled} />
           <button
             className="af-composer-send"
             onClick={submit}

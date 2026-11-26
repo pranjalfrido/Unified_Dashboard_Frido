@@ -11,7 +11,8 @@ import { chatTime, displayTitle, groupByDate, QUICK_QUESTIONS } from './pulseSha
 import PulseTable from './PulseTable.jsx'
 import ExcelButton from './ExcelButton.jsx'
 import { answerBlocks } from './answerTables.js'
-import { VoiceButton, AttachButton, AttachChips } from './ComposerExtras.jsx'
+import { AttachButton, AttachChips } from './ComposerExtras.jsx'
+import { VoiceSlot } from './VoiceSlot.jsx'
 import { useAttachments } from './useAttachments.js'
 
 // NavAI on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md, mockups/pulse_fix_mockup.html). Layout only:
@@ -201,7 +202,7 @@ function Composer({ onSend, disabled, onFocusChange, apiRef, canFiles }) {
         <textarea ref={ref} rows={1} value={val} placeholder="Ask a question…" aria-label="Ask a question" disabled={disabled}
           onChange={e => { setVal(e.target.value); grow() }} onFocus={() => onFocusChange(true)} onBlur={() => onFocusChange(false)} />
         {canFiles && <AttachButton onFiles={files.add} disabled={disabled} sheet />}
-        <VoiceButton getValue={getVal} setValue={setFromVoice} disabled={disabled} />
+        <VoiceSlot getValue={getVal} setValue={setFromVoice} disabled={disabled} />
         <button type="button" className="pm-send" aria-label="Send" disabled={!canSend} onMouseDown={e => e.preventDefault()} onClick={submit}>
           <ArrowUp size={16} weight="bold" />
         </button>
