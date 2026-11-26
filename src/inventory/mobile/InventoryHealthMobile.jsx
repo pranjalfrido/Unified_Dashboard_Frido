@@ -127,7 +127,7 @@ export default function InventoryHealthMobile({ data, regular, locations, lastSa
       {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
       <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} rtdLevel={rtdLevel} setRtdLevel={setRtdLevel} rtdOptions={rtdOptions} />
       {!showDetailOnly && <AgeingCard slow={slow} dead={dead} />}
-      {(allowedTabs == null || allowedTabs?.includes('inventory:cost')) && <InventoryCostTable skus={detailSkus || []} isAdmin={allowedTabs == null} slowSkus={slowSkus} deadSkus={deadSkus} />}
+      {(allowedTabs == null || allowedTabs?.includes('inventory:cost')) && <InventoryCostTable phoneLayout skus={detailSkus || []} isAdmin={allowedTabs == null} slowSkus={slowSkus} deadSkus={deadSkus} />}
       <OosLossMobile open={oosOpen} onClose={() => setOosOpen(false)} data={oos.data} error={oos.error} />
     </div>
   )
