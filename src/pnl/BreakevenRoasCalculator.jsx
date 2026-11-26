@@ -725,7 +725,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
         <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
           {enriched.map(s => (
             <button key={s.id} onClick={() => setOpenId(s.id)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 0', borderBottom: `1px solid ${C.border}`, background: 'transparent', border: 'none', borderBottom: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 0', borderTop: 'none', borderLeft: 'none', borderRight: 'none', borderBottom: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 3 }}>{s.productName}</div>
                 <div style={{ fontSize: 11.5, color: C.t3 }}>LP {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} · CM1 {kFmt(s.cm1)}</div>
