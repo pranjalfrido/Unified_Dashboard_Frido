@@ -676,9 +676,9 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
             <tr>
               <th style={{ ...thSt, ...stickyCol, boxShadow: 'none', zIndex: 2, textAlign: 'left', minWidth: 220 }}>Line item</th>
               {enriched.map(s => (
-                <th key={s.id} style={{ ...thSt, textAlign: 'right', minWidth: 140 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                    <span>{s.productName}</span>
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', width: 140, minWidth: 140, maxWidth: 140, whiteSpace: 'normal', verticalAlign: 'top' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6 }}>
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.35, textAlign: 'right' }}>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
                       style={{ width: 18, height: 18, borderRadius: 5, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>×</button>
                   </div>
