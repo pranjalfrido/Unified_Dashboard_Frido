@@ -751,7 +751,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
               {enriched.map(s => (
                 // UI: every product column is the same fixed width (160 content + 32 padding ≈ 193px);
                 // long names wrap onto more lines instead of widening the column.
-                <th key={s.id} style={{ ...thSt, textAlign: 'right', width: 160, minWidth: 160, maxWidth: 160, whiteSpace: 'normal', verticalAlign: 'top' }}>
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', width: 187, minWidth: 187, maxWidth: 187, whiteSpace: 'normal', verticalAlign: 'top' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 6 }}>
                     <span style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.35, textAlign: 'right' }}>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
