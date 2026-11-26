@@ -721,22 +721,22 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
           </button>
         </div>
 
-        {/* card list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* flat list with dividers */}
+        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
           {enriched.map(s => (
             <button key={s.id} onClick={() => setOpenId(s.id)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 0', borderBottom: `1px solid ${C.border}`, background: 'transparent', border: 'none', borderBottom: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 3 }}>{s.productName}</div>
                 <div style={{ fontSize: 11.5, color: C.t3 }}>LP {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} · CM1 {kFmt(s.cm1)}</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{roasFmt(s.breakevenRoas)}</span>
                   <button onClick={e => { e.stopPropagation(); onRemove(s.id) }}
-                    style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    style={{ width: 20, height: 20, borderRadius: 5, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                 </div>
-                <div style={{ background: C.acl, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 700, color: C.acd }}>BE ROAS</div>
+                <div style={{ background: C.acl, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: C.acd }}>BE ROAS</div>
               </div>
             </button>
           ))}
