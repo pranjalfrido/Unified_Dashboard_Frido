@@ -1,0 +1,15 @@
+# Tell gcloud what NOT to upload for Cloud Build
+# (This overrides .gitignore for gcloud builds submit)
+node_modules/
+.env
+.env.*
+logs/
+*.test.js
+test*.js
+debug_*.js
+query_*.js
+# Credentials must never be in the build context: they come from Secret Manager at runtime.
+cloudrun-env.yaml
+sa_key.json
+*key*.json
+*.pem
