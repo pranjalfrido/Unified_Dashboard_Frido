@@ -26,6 +26,7 @@ import { isBillingError, alertBilling, UNAVAILABLE_MESSAGE } from './lib/billing
 import { normalizeSql, datesBlock } from './lib/dates.js';
 import { enrichSkus, wrongNames } from './lib/skuMaster.js';
 import { freshnessNote } from './lib/freshness.js';
+import { loadCatalog, matchProducts, describeMatch, findProductText } from './lib/productMatch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readKnowledge = name => {
@@ -137,6 +138,29 @@ async function executeOos(user, args, seen) {
 }
 
 // Logistics -> Cost Analytics -> CN Received: totals of credit notes received vs invoice value (lib/cnTool.js). Read-only.
+// find_product: the same shared matching step the connector runs on every question.
+async function executeFindProduct(args) {
+  const q = typeof args?.query === 'string' ? args.query.trim() : '';
+  if (!q) return { ok: false, error: 'find_product needs a query: the product words or SKU code.' };
+  try { return { ok: true, text: await findProductText(q) }; }
+  catch (e) { return { ok: false, error: `Product matching is unavailable right now (${String(e.message).slice(0, 120)}).` }; }
+}
+
+// The product words in the latest question (or, for a follow-up like "and last month?", in the nearest earlier one) are matched
+// in code, so the model never chooses a product set on its own. Returns '' when there is no product word or matching failed.
+async function productMatchBlock(messages) {
+  try {
+    const catalog = await loadCatalog();
+    const users = messages.filter(m => m.role === 'user');
+    for (const m of users.slice(-3).reverse()) {
+      const text = String(m.content ?? m.text ?? '');
+      const block = describeMatch(matchProducts(catalog, text));
+      if (block) return block;
+    }
+  } catch (e) { console.error('Product match skipped:', e.message); }
+  return '';
+}
+
 async function executeCn(user, args, seen) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
@@ -190,6 +214,8 @@ async function executeDashboardApi(user, args, seen) {
 const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by calling the page's own /api endpoint (same params the page sends). USE THIS FIRST for any dashboard question (read knowledge ENDPOINT_MAP.md for which endpoint, params and paths answer which question). endpoint: one of ${Object.keys(DASH_ENDPOINTS).join(', ')}. params: the request body the page sends (e.g. {start,end} or {months:['2026-09']}). paths: dot-paths into the response ("a.b", "rows.*.sku"); describe:true returns the response structure instead. For arrays of rows you can add groupBy (field), sum (fields to add up), sortBy, limit (default 20, max 200). First call for given params can take up to ~60-90 s, repeats are cached 30 min. Read-only.`;
 
 const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
+
+const FIND_PRODUCT_DESCRIPTION = 'Match product words or a SKU code against the SKU master (sub-category = the product, product name, SKU code), case-insensitive. Returns every matching product with its SKUs, or says nothing matches and gives the closest names. The connector already runs this on the question and puts the result in front of it ("Product match"); call this tool only for a product word that is not in that block (for example one from an earlier message). Never pick one of several matches yourself.';
 
 const CN_TOOL_DESCRIPTION = 'Credit notes (CN) received from couriers, FTL/PTL transporters and 3PL partners, exactly as the dashboard page Logistics > Cost Analytics > Overview > "CN Received" shows them: CN count, invoice value, received CN and received % of invoice, by format (B2C couriers, FTL/PTL, 3PL), by reason (weight dispute, lost/damage, SLA breach, high ageing, wrong invoicing, wrong billing), by partner and by invoice month. Use for ANY question about credit notes, CN received, CN vs invoice, weight-dispute or lost/damage CNs. Arguments: month "YYYY-MM" (one invoice month) OR from/to "YYYY-MM"; omit for all months. TOTALS ONLY: the page has no list of individual open/pending CNs and no ageing, so say that and do not invent them.';
 
@@ -389,6 +415,14 @@ const httpServer = http.createServer(async (req, res) => {
         required: ['endpoint'],
       },
     }, {
+      name: 'find_product',
+      description: FIND_PRODUCT_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'The product words or SKU code as the user wrote them, e.g. "knee cap" or "FR-OPC-L1"' } },
+        required: ['query'],
+      },
+    }, {
       name: 'cn_received',
       description: CN_TOOL_DESCRIPTION,
       input_schema: {
@@ -417,6 +451,13 @@ const httpServer = http.createServer(async (req, res) => {
 
     try {
       let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
+      const matchBlock = await productMatchBlock(messages);
+      if (matchBlock && loopMessages.length && loopMessages[loopMessages.length - 1].role === 'user') {
+        const last = loopMessages[loopMessages.length - 1];
+        last.content = Array.isArray(last.content) ? [{ type: 'text', text: matchBlock }, ...last.content] : `${matchBlock}
+
+${last.content}`;
+      }
       let finalText = '';
       let usedSql = null;
       let iterations = 0;
@@ -462,6 +503,8 @@ const httpServer = http.createServer(async (req, res) => {
           const { command, target } = block.input;
           const result = block.name === 'oos_loss'
             ? await executeOos(user, block.input, seenFormatted)
+            : block.name === 'find_product'
+              ? await executeFindProduct(block.input)
             : block.name === 'cn_received'
               ? await executeCn(user, block.input, seenFormatted)
             : block.name === 'pnl'
