@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-26T10:09:18.824Z",
+  "generatedAt": "2026-11-26T11:09:16.793Z",
   "logistics": {
     "windowStart": "2026-11-05",
     "windowEnd": "2026-11-11",
@@ -62,8 +62,8 @@
     "windowEnd": "2026-11-12",
     "rangeLabel": "Orders 6–12 Nov",
     "netRevenue": 48406052,
-    "cogsPct": 40.45,
+    "cogsPct": 40.24,
     "sndPct": 20.7,
-    "cm1Pct": 38.85
+    "cm1Pct": 39.06
   }
 }
