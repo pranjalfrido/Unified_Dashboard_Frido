@@ -33,6 +33,20 @@ const server = http.createServer((req, res) => {
   if (u.startsWith('/assets/')) { res.setHeader('content-type', 'text/javascript'); return res.end('') }
   if (u === '/__deploy') { deploy += 1; return res.end(String(deploy)) }
   if (u === '/missing-chunk.js') { res.statusCode = 404; return res.end('nope') }
+  // endpoints for the fetch-wrapper tests
+  if (u === '/echo' || u.startsWith('/auth/')) {
+    let len = 0
+    req.on('data', c => { len += c.length })
+    return req.on('end', () => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ method: req.method, len, h: req.headers })) })
+  }
+  if (u === '/stream') {   // three chunks, 250 ms apart
+    req.resume()
+    res.writeHead(200, { 'content-type': 'text/plain', 'x-test': 'yes' })
+    let i = 0
+    const t = setInterval(() => { res.write('ABC'[i++]); if (i === 3) { clearInterval(t); res.end() } }, 250)
+    return
+  }
+  if (u === '/slow') { req.resume(); return void setTimeout(() => res.end('late'), 5000) }
   res.setHeader('content-type', 'text/html'); res.setHeader('cache-control', 'no-store'); res.end(html())   // any path -> the app shell
 }).listen(0)
 await new Promise(r => server.once('listening', r))
@@ -103,6 +117,77 @@ for (const [label, vp] of [['phone 375', { width: 375, height: 812 }], ['laptop 
   check(T('shows a message and the page is not blank'), (await page.locator('[role=alert] button').count()) === 1 && (await page.locator('#page').count()) === 1)
   await ctx.close()
 }
-await browser.close(); server.close()
+// ---- the fetch wrapper (uploads are held, everything else untouched) ----------------------------------------------
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  const page = await ctx.newPage()
+  await page.goto(BASE + '/overview'); await page.waitForFunction(() => window.S)
+  const r = await page.evaluate(async () => {
+    const S = window.S, o = {}
+    const fd = () => { const f = new FormData(); f.append('file', new Blob(['hello world'], { type: 'text/plain' }), 'a.txt'); return f }
+    o.installed = window.fetch.__silentUpdate === true
+
+    // plain request: not held, native promise, no measurable cost
+    const t0 = performance.now(); const plain = fetch('/echo'); const syncMs = performance.now() - t0
+    o.plainNotHeld = !S.isBusy(); o.plainIsPromise = plain instanceof Promise; o.plainFast = syncMs < 5
+    o.plainOk = (await (await plain).json()).method === 'GET'
+
+    // streaming answer through the upload path: body untouched, chunks arrive one by one
+    const res = await fetch('/stream', { method: 'POST', body: fd() })
+    o.bodyUntouched = res.bodyUsed === false && res.body.locked === false
+    o.statusAndHeaders = res.status === 200 && res.headers.get('x-test') === 'yes'
+    const reader = res.body.getReader(), times = []; let text = ''
+    const t1 = performance.now()
+    for (;;) { const { done, value } = await reader.read(); if (done) break; times.push(performance.now() - t1); text += new TextDecoder().decode(value) }
+    o.streamed = text === 'ABC' && times.length >= 2 && times[times.length - 1] - times[0] > 300
+    o.releasedAfterResponse = !S.isBusy()
+
+    // arguments pass through: Request object, init headers + FormData, Blob body
+    const viaReq = await (await fetch(new Request('/echo', { method: 'POST', headers: { 'x-a': '1' }, body: 'x' }))).json()
+    o.requestObject = viaReq.h['x-a'] === '1' && viaReq.len === 1
+    const viaFd = await (await fetch('/echo', { method: 'POST', headers: { 'x-custom': 'abc' }, body: fd() })).json()
+    o.formDataAndHeaders = viaFd.h['x-custom'] === 'abc' && /^multipart\/form-data/.test(viaFd.h['content-type']) && viaFd.len > 11
+    const viaBlob = await (await fetch('/echo', { method: 'PUT', body: new Blob(['12345']) })).json()
+    o.blobBody = viaBlob.method === 'PUT' && viaBlob.len === 5
+    o.busyBackToZero = !S.isBusy()
+
+    // busy while the upload runs; abort -> same AbortError the caller would get anyway, busy released
+    const ac = new AbortController()
+    const up = fetch('/slow', { method: 'POST', body: fd(), signal: ac.signal })
+    o.heldWhileRunning = S.isBusy()
+    ac.abort()
+    o.abortError = await up.then(() => 'resolved', e => e.name)
+    o.releasedAfterAbort = !S.isBusy()
+    const ac2 = new AbortController(); const plainAbort = fetch('/slow', { signal: ac2.signal }); ac2.abort()
+    o.plainAbortError = await plainAbort.then(() => 'resolved', e => e.name)
+
+    // errors reach the caller exactly as normal fetch; busy always comes down
+    o.uploadNetworkError = await fetch('http://127.0.0.1:1/x', { method: 'POST', body: fd() }).then(() => 'resolved', e => e.name)
+    o.releasedAfterError = !S.isBusy()
+    o.plainNetworkError = await fetch('http://127.0.0.1:1/x').then(() => 'resolved', e => e.name)
+    o.status404NotAnError = (await fetch('/missing-chunk.js', { method: 'POST', body: fd() })).status === 404 && !S.isBusy()
+
+    // Supabase-style auth calls (JSON string body + Authorization / apikey headers): untouched and never held
+    const auth = fetch('/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { Authorization: 'Bearer t', apikey: 'k', 'content-type': 'application/json' }, body: JSON.stringify({ refresh_token: 'r' }) })
+    o.authNotHeld = !S.isBusy()
+    const a = await (await auth).json()
+    o.authHeaders = a.h.authorization === 'Bearer t' && a.h.apikey === 'k' && a.len > 5
+    return o
+  })
+  const names = {
+    installed: 'wrapper installed', plainNotHeld: 'plain request is not held', plainIsPromise: 'plain request returns the normal promise', plainFast: 'plain request adds no delay',
+    plainOk: 'plain request works', bodyUntouched: 'response body not read, cloned or locked', statusAndHeaders: 'status and headers unchanged', streamed: 'streaming answer arrives chunk by chunk',
+    releasedAfterResponse: 'busy released once the upload is answered', requestObject: 'Request object passes through', formDataAndHeaders: 'FormData upload + custom headers pass through', blobBody: 'Blob body passes through',
+    busyBackToZero: 'busy back to zero after normal uploads', heldWhileRunning: 'upload is held while it runs', abortError: 'AbortController: caller still gets AbortError', releasedAfterAbort: 'busy released after abort',
+    plainAbortError: 'plain request abort unchanged', uploadNetworkError: 'upload network error reaches the caller', releasedAfterError: 'busy released after an error', plainNetworkError: 'plain network error unchanged',
+    status404NotAnError: '404 on an upload is a normal response, busy released', authNotHeld: 'auth-style call is not held', authHeaders: 'auth-style call: headers and body intact',
+  }
+  for (const [k, label] of Object.entries(names)) {
+    const want = { abortError: 'AbortError', plainAbortError: 'AbortError', uploadNetworkError: 'TypeError', plainNetworkError: 'TypeError' }[k]
+    check(`[fetch] ${label}`, want ? r[k] === want : r[k] === true, JSON.stringify(r[k]))
+  }
+  await ctx.close()
+}
+await browser.close(); server.closeAllConnections?.(); server.close()
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

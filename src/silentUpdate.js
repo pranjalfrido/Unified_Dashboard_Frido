@@ -127,6 +127,10 @@ export function reloadOnceForChunkError() {
 
 // A file upload is a fetch whose body is a File / Blob / FormData: hold updates until it settles. (Ordinary data
 // requests are not held, or a page that is still loading would block every update.)
+// The caller gets the browser's own promise back, untouched: same Response (body never read or cloned, so streaming
+// works), same rejection, every argument passed through as given. A side branch only lowers the "busy" count when the
+// request settles (success, error or abort), and a safety timer lowers it anyway so a hung upload cannot block updates for ever.
+const UPLOAD_HOLD_MAX_MS = 10 * 60 * 1000
 function watchUploads() {
   const realFetch = window.fetch
   if (!realFetch || realFetch.__silentUpdate) return
@@ -136,8 +140,13 @@ function watchUploads() {
     const upload = typeof FormData !== 'undefined' && (b instanceof FormData || (typeof Blob !== 'undefined' && b instanceof Blob))
     if (!upload) return realFetch.apply(this, arguments)
     const key = 'upload-' + (++n)
+    const release = () => { clearTimeout(timer); setBusy(key, false) }
+    const timer = setTimeout(release, UPLOAD_HOLD_MAX_MS)
     setBusy(key, true)
-    return realFetch.apply(this, arguments).finally(() => setBusy(key, false))
+    let p
+    try { p = realFetch.apply(this, arguments) } catch (e) { release(); throw e }
+    p.then(release, release)
+    return p
   }
   wrapped.__silentUpdate = true
   window.fetch = wrapped
