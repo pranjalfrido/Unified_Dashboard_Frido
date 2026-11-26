@@ -725,11 +725,22 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {enriched.map(s => (
             <button key={s.id} onClick={() => setOpenId(s.id)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.productName}</div>
-                <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>
-                  LP {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} · CM1 {kFmt(s.cm1)} · BE ROAS {roasFmt(s.breakevenRoas)}
+              style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 8 }}>{s.productName}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { label: 'LP', value: rupee(s.listingPrice) },
+                    { label: 'GM', value: pct1(s.gmPct) },
+                    { label: 'S&D', value: kFmt(s.snd) },
+                    { label: 'CM1', value: kFmt(s.cm1) },
+                    { label: 'BE ROAS', value: roasFmt(s.breakevenRoas) },
+                  ].map(chip => (
+                    <div key={chip.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '4px 8px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4 }}>{chip.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{chip.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
