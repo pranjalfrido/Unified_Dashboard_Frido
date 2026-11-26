@@ -728,7 +728,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 0', borderTop: 'none', borderLeft: 'none', borderRight: 'none', borderBottom: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 3 }}>{s.productName}</div>
-                <div style={{ fontSize: 11.5, color: C.t3 }}>LP {rupee(s.listingPrice)} · GM {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} · CM1 {kFmt(s.cm1)}</div>
+                <div style={{ fontSize: 11.5, color: C.t3 }}>LP {rupee(s.listingPrice)} · GM {kFmt(s.gm)} {pct1(s.gmPct)} · S&amp;D {kFmt(s.snd)} {pct1(s.sndPct)} · CM1 {kFmt(s.cm1)} {pct1(s.cm1Pct)}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
