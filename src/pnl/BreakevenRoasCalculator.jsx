@@ -48,11 +48,12 @@ function SectionLabel({ children }) {
 // Single-value KPI tile matching the Price Simulator's MiniStatCard card visuals (bordered box,
 // C.bg background) — used here without a "from → to" comparison since Breakeven ROAS has only
 // one computed scenario, not a Current-vs-Planned pair.
+// UI: minWidth 0 + wrapping value row so a tile never spills outside its grid cell.
 function KpiTile({ label, value, amount, negative }) {
   return (
-    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', minWidth: 0 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.2 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6, marginTop: 4 }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: negative ? C.red.tx : C.t1 }}>{value}</div>
         {amount != null && <div style={{ fontSize: 11.5, fontWeight: 600, color: C.t3 }}>{amount}</div>}
       </div>
@@ -138,9 +139,9 @@ function WaterfallBar({ label, value, scaleMax, tone, color: colorOverride }) {
   const color = colorOverride || (negative ? C.red.tx : (tone === 'total' ? C.acc : C.t3))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: tone === 'total' ? 13 : 12.5, fontWeight: tone === 'total' ? 700 : 500, color: tone === 'total' ? C.t1 : C.t2 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: tone === 'total' ? 13 : 12.5, fontWeight: tone === 'total' ? 700 : 500, color: tone === 'total' ? C.t1 : C.t2 }}>
         <span>{label}</span>
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: tone === 'total' ? 800 : 600, color: negative ? C.red.tx : C.t1 }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: tone === 'total' ? 800 : 600, color: negative ? C.red.tx : C.t1, whiteSpace: 'nowrap' }}>
           {negative ? '−' : ''}{fmt(Math.abs(value))}
         </span>
       </div>
@@ -224,25 +225,9 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   const [slabs, setSlabs] = useState(null)
   useEffect(() => { loadSndRates().then(setSlabs) }, [])
 
-  // Mode toggle ('new' | 'launched') — PURELY a UX/organization switch (confirmed 2026-10-22):
-  // both modes share the exact same fields/state/calculation, so switching never clears or locks
-  // anything. It only changes which guidance panel shows (ReferenceProductPicker's search box for
-  // an already-launched product vs a plain "type your estimate" hint for one that isn't live yet)
-  // and the copy framing — the same distinction the page's own intro line already draws ("Model a
-  // new product's per-unit economics before launch, or check an already-launched product's real
-  // breakeven ROAS"), now surfaced as an explicit toggle instead of being implicit in which panel
-  // the user happens to use.
   const [mode, setMode] = useState('new')
 
-  // Product Name: a plain label for the scenario being checked — auto-filled when a real,
-  // already-launched product is picked via ReferenceProductPicker, but also directly editable so
-  // a NOT-YET-LAUNCHED product (which has no entry in productGroups to pick from) still gets a
-  // real name in the summary/saved-scenarios table instead of a blank. Needed specifically to
-  // produce a shareable per-product summary (product name + full cost breakup + both Breakeven
-  // ROAS figures) a founder can forward as-is, which the page previously had no way to show.
   const [productName, setProductName] = useState('')
-  // Bumped on every Reset so the name picker's internal search-text state (ReferenceProductPicker)
-  // clears itself even though it's not otherwise controlled by the parent.
   const [resetSignal, setResetSignal] = useState(0)
 
   const [listingPrice, setListingPrice] = useState(1999)
@@ -250,40 +235,15 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   const [cogs, setCogs] = useState(600)
   const [weightGm, setWeightGm] = useState(500)
   const [gstPct, setGstPct] = useState(18)
-  // All four outcome %s start at 0 — no calculated or guessed default exists for a not-yet-launched
-  // product, so leaving them at 0 avoids any appearance of an authoritative number until the user
-  // either types their own estimate or pulls a real comparable's rates via the search box above.
-  // ("Return %"/Order_Status='Return' was removed — confirmed against live BigQuery that this
-  // status value never occurs for D2C/Shopify rows; CIR is D2C's real customer-initiated-return
-  // bucket, so keeping a separate always-zero "Return %" field alongside it was misleading.)
   const [rtoPct, setRtoPct] = useState(0)
   const [cancelPct, setCancelPct] = useState(0)
   const [cirPct, setCirPct] = useState(0)
   const [exchangePct, setExchangePct] = useState(0)
 
-  // Fills EVERY input from a real, already-launched product's own figures — Listing Price,
-  // Discount, COGS, Weight, and the four Expected Order Outcome %s (mature-window 14-44 day
-  // settled rates — same fields the Price Simulator's baseline relies on, see PnLPage.jsx's
-  // d2cProductList/d2cProductGroups) — so checking an already-launched product's REAL breakeven
-  // ROAS is one click, not re-typing its price/cost/weight by hand after only the rates came
-  // across (2026-10-19: previously this only copied the 4 outcome %s, leaving Listing
-  // Price/COGS/Weight at whatever was last typed — fine for seeding a NEW product's estimate with
-  // a comparable's return behavior, but wrong for "what is THIS product's own breakeven ROAS").
-  // GST rate: the product's own effective rate from its sales (Gross Inc GST ÷ Gross Ex GST − 1),
-  // snapped to the nearest preset (fix/pnl-data) — it used to stay at the 18% preset, so a 5% product
-  // (e.g. Orthotics Posture Corrector) got its Net Revenue and breakeven ROAS understated.
   const applyReferenceRates = product => {
     if (!product) return
     setProductName(product.name || '')
     if (product.listingPrice != null) setListingPrice(Math.round(product.listingPrice))
-    // Real effective discount = (Listing Price − actual selling price) ÷ Listing Price — the SAME
-    // formula the Price Simulator's currentDiscountPct uses (PriceSimulator.jsx), preferring
-    // Prepaid-only ASP over the blended asp for the same reason that file documents (COD orders
-    // carry a handling-fee surcharge baked into selling price, so prepaid-only is the cleaner
-    // comparison against Listing Price). Deliberately NOT product.currentDiscount — confirmed
-    // 2026-10-19 that field is the fact table's raw per-order `Discount` column (not a 0-100
-    // percentage and not used this way by Price Simulator either), which produced a bogus 467%
-    // discount when multiplied as if it already were one.
     const refPrice = product.prepaidAsp ?? product.asp
     if (product.listingPrice > 0 && refPrice != null) {
       setDiscountPct(Math.round(((product.listingPrice - refPrice) / product.listingPrice) * 1000) / 10)
@@ -312,9 +272,6 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     return listingPrice * (1 - discountPct / 100)
   }, [listingPrice, discountPct])
 
-  // Exchange gets its OWN extra cost on top of the shared forward charge in blendedLogisticsPerUnit
-  // (forward + reverse + a second forward) — an exchange means Frido ships a replacement item (a
-  // real second forward shipment) in addition to the pickup, so it costs more than CIR/Return.
   const buildOutcomePcts = (rtPct, cPct, cirP, ePct) => ({
     rtoPct: (rtPct || 0) / 100,
     returnPct: (cirP || 0) / 100,
@@ -335,20 +292,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     })
   }, [slabs, sellingPrice, gstPct, cogs, weightGm, outcomePcts])
 
-  // ROAS = Gross Revenue (Ex GST, BEFORE return-loss deduction) / Ad Spend — same revenue base
-  // the Ads tab's own Overall ROAS card and the real D2C PnL's kpiSummary.roas use (Gross Ex GST,
-  // not Net Revenue), so a ROAS lever here means the same thing it means everywhere else in the
-  // app, confirmed against the reference sheet's own Breakeven RoAS formula too (P41 =
-  // (SellingPrice-7%launchDiscount)/CM1, i.e. gross ex-GST before returns, not net).
-  // Breakeven ROAS = GrossExGST / CM1 (spend that exactly zeroes CM2). Only meaningful once CM1 > 0
-  // — a negative CM1 means the product loses money before a single rupee of ad spend, so no ROAS
-  // rescues it.
   const breakevenRoas = waterfall ? breakevenRoasOf(waterfall.excGst, waterfall.cm1) : null
-  // Breakeven ROAS @ 15% CM2 = GrossExGST / (CM1 − 0.15×NetRevenue) — the 15% CM2 target itself is
-  // still defined as a share of Net Revenue (the real, return-adjusted revenue this product keeps),
-  // only the ROAS ratio's own numerator switches to gross ex-GST. Needs CM1 to clear the 15% floor
-  // BEFORE any ad spend, otherwise the target is unreachable regardless of ROAS.
-  // (shared with the P&L margin watchlist: pnlUtils.js roasForTargetCm2)
   const breakevenRoas15 = waterfall ? roasForTargetCm2(waterfall.excGst, waterfall.cm1, waterfall.netRev, 0.15) : null
 
   const totalLossPct = (rtoPct || 0) + (cancelPct || 0) + (cirPct || 0) + (exchangePct || 0)
@@ -356,11 +300,6 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
   const waterfallScaleMax = waterfall ? Math.max(waterfall.grossIncGst, 1) : 1
 
-  // Saved scenarios: appended to (never overwritten) by the Save button, so multiple products can
-  // be checked one after another and compared in one table before sharing — the whole point being
-  // a founder gets ONE message/screenshot covering several products, not one calculator screen per
-  // product. Kept in plain component state (not persisted) — this is a working/share session, not
-  // a permanent log; "Reset" clears the table AND the form back to blank/defaults in one action.
   const [savedScenarios, setSavedScenarios] = useState([])
 
   const saveScenario = () => {
@@ -394,7 +333,6 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
     setResetSignal(s => s + 1)
   }
 
-  // Phone: the header's ⋯ → Reset clears the form and saved rows; Undo puts them back.
   useEffect(() => {
     if (!phone) return
     const snap = { savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct }
@@ -410,7 +348,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
   }, [phone, savedScenarios, productName, listingPrice, discountPct, cogs, weightGm, gstPct, rtoPct, cancelPct, cirPct, exchangePct])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: 900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: phone ? 900 : 1240 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -436,7 +374,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', minWidth: 0 }}>
+        <div style={{ flex: phone ? '1 1 100%' : '1 1 360px', display: 'flex', minWidth: 0 }}>
           <Card style={{ flex: 1, gap: 10, padding: 16, minWidth: 0 }}>
             {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
@@ -516,14 +454,13 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
         </div>
 
         {/* ── Waterfall + headline ROAS ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '1 1 420px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          <Card style={phone ? { padding: 16, minWidth: 0 } : undefined}>
+        <div style={{ flex: phone ? '1 1 100%' : '1.6 1 520px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <Card style={phone ? { padding: 16, minWidth: 0 } : { flex: 1, minWidth: 0, gap: 0 }}>
             {waterfall && (
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: phone ? 16 : 18 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{productName || 'Your product'}</div>
                 <div style={{ height: 3, marginBottom: 10, borderRadius: 2, background: 'linear-gradient(90deg, rgba(27,94,32,0.22) 0%, rgba(27,94,32,0.05) 60%, rgba(27,94,32,0) 100%)' }} />
                 {phone ? (
-                  // Phone (PNL_REVIEW_FIXES.md §4): the four summary values as 2 × 2 chips
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
                     {[
                       ['MRP', mrp != null ? `₹${mrp.toLocaleString('en-IN')}` : '—'],
@@ -539,7 +476,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
                     ))}
                   </div>
                 ) : (
-                <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'baseline', columnGap: 10, paddingTop: 8, overflowX: 'auto' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 12, rowGap: 6, paddingTop: 4 }}>
                   {[
                     ['MRP', mrp != null ? `₹${mrp.toLocaleString('en-IN')}` : '—', false],
                     ['Listing', listingPrice !== '' ? `₹${Math.round(listingPrice).toLocaleString('en-IN')}` : '—', true],
@@ -567,13 +504,13 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
               <div style={{ fontSize: 13, color: C.t3, padding: '20px 0' }}>Enter a listing price to see the breakdown.</div>
             ) : (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 16 : 28, marginTop: 4, marginBottom: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 14 : 18, marginTop: 4, marginBottom: 18 }}>
                   <WaterfallBar label="Selling Price (Inc. GST, after discount)" value={waterfall.grossIncGst} scaleMax={waterfallScaleMax} tone="total" color={C.acc} />
                   <WaterfallBar label="Net Revenue (Ex. GST, after returns)" value={waterfall.netRev} scaleMax={waterfallScaleMax} tone="total" color={C.acm} />
                   <WaterfallBar label="Gross Margin (GM)" value={waterfall.gm} scaleMax={waterfallScaleMax} tone="total" color={waterfall.gm >= 0 ? C.acd : undefined} />
                   <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? C.t1 : undefined} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, 1fr)', gap: phone ? 8 : 10, paddingTop: 18, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap: phone ? 8 : 10, paddingTop: 16, borderTop: `1px solid ${C.border}`, marginTop: phone ? 0 : 'auto' }}>
                   <KpiTile label="COGS %" value={waterfall.netRev > 0 ? `${(waterfall.cogs / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.cogs)} />
                   <KpiTile label="GM %" value={waterfall.netRev > 0 ? `${(waterfall.gm / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.gm)} />
                   <KpiTile label="S&D %" value={waterfall.netRev > 0 ? `${(waterfall.snd / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.snd)} />
@@ -586,27 +523,27 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
           {waterfall && (
             <div style={{ display: 'flex', gap: phone ? 8 : 12, flexWrap: 'wrap' }}>
               <div style={{
-                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 240px', minWidth: 0, background: breakevenRoas == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '14px 22px',
               }}>
                 <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Breakeven ROAS</div>
-                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 28 : 34, fontWeight: 700, color: breakevenRoas == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 6 }}>
                   {breakevenRoas != null ? `${breakevenRoas.toFixed(2)}x` : '—'}
                 </div>
-                <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
+                <div style={{ fontSize: 12.5, color: C.t3, marginTop: 2 }}>
                   {breakevenRoas != null ? 'Minimum ROAS to not lose money' : 'Unprofitable even with zero ad spend'}
                 </div>
               </div>
 
               <div style={{
-                flex: phone ? '1 1 0' : '1 1 260px', minWidth: 0, background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
-                borderRadius: 16, padding: phone ? '12px 12px' : '12px 22px',
+                flex: phone ? '1 1 0' : '1 1 240px', minWidth: 0, background: breakevenRoas15 == null ? C.red.bg : '#fff', border: `1px solid ${breakevenRoas15 == null ? C.red.bd : C.border}`,
+                borderRadius: 16, padding: phone ? '12px 12px' : '14px 22px',
               }}>
                 <div style={{ fontSize: phone ? 12 : 12.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4 }}>CM2 @ 15%</div>
-                <div style={{ fontSize: phone ? 28 : 36, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 8 }}>
+                <div style={{ fontSize: phone ? 28 : 34, fontWeight: 700, color: breakevenRoas15 == null ? C.red.tx : C.t1, fontVariantNumeric: 'tabular-nums', marginTop: 6 }}>
                   {breakevenRoas15 != null ? `${breakevenRoas15.toFixed(2)}x` : '—'}
                 </div>
-                <div style={{ fontSize: 12.5, color: C.t3, marginTop: 4 }}>
+                <div style={{ fontSize: 12.5, color: C.t3, marginTop: 2 }}>
                   {breakevenRoas15 != null ? 'ROAS needed for a healthy 15% CM2' : 'Can\'t hit 15% CM2 even with zero ad spend'}
                 </div>
               </div>
@@ -646,7 +583,6 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
     return `${v < 0 ? '−' : ''}₹${Math.round(abs).toLocaleString('en-IN')}`
   }
 
-  // Renders ₹value in bold + % in accent green beside it, like the reference image
   const ValPct = ({ val, pct, highlight }) => (
     <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, fontVariantNumeric: 'tabular-nums' }}>
       <span style={{ fontWeight: 800, color: highlight ? C.acd : C.t1 }}>{val}</span>
@@ -714,10 +650,16 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
 
   const thSt = { padding: '11px 16px', fontWeight: 700, fontSize: 12.5, color: '#fff', background: C.acd, whiteSpace: 'nowrap', borderRight: `1px solid rgba(255,255,255,0.1)` }
   const tdSt = { padding: '9px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }
+  const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div style={{
+      background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20,
+      display: 'flex', flexDirection: 'column', gap: 14,
+      width: 'fit-content', maxWidth: '100%', minWidth: 'min(100%, 520px)',
+      alignSelf: 'flex-start', boxSizing: 'border-box',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
           <div style={{ fontSize: 11.5, color: C.t3, marginTop: 3 }}>{gmSubtitle}</div>
@@ -728,13 +670,13 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
         </button>
       </div>
 
-      <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${C.border}` }}>
+      <div style={{ overflowX: 'auto', maxWidth: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 12.5, width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ ...thSt, textAlign: 'left', minWidth: 220 }}>Line item</th>
+              <th style={{ ...thSt, ...stickyCol, boxShadow: 'none', zIndex: 2, textAlign: 'left', minWidth: 220 }}>Line item</th>
               {enriched.map(s => (
-                <th key={s.id} style={{ ...thSt, textAlign: 'right', minWidth: 150 }}>
+                <th key={s.id} style={{ ...thSt, textAlign: 'right', minWidth: 140 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                     <span>{s.productName}</span>
                     <button onClick={() => onRemove(s.id)} title="Remove"
@@ -750,7 +692,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
                 return (
                   <tr key={row.section}>
                     <td colSpan={enriched.length + 1} style={{ padding: '6px 16px', fontSize: 10.5, fontWeight: 700, color: C.acc, textTransform: 'uppercase', letterSpacing: 0.6, background: C.acl, borderBottom: `1px solid ${C.border}` }}>
-                      {row.section}
+                      <span style={{ position: 'sticky', left: 16 }}>{row.section}</span>
                     </td>
                   </tr>
                 )
@@ -758,7 +700,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
               const rowBg = row.highlight ? '#edf7f0' : '#fff'
               return (
                 <tr key={row.key} style={{ background: rowBg }}>
-                  <td style={{ ...tdSt, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg }}>{row.label}</td>
+                  <td style={{ ...tdSt, ...stickyCol, zIndex: 1, color: row.bold ? C.t1 : C.t2, fontWeight: row.bold ? 700 : 500, background: rowBg }}>{row.label}</td>
                   {enriched.map(s => (
                     <td key={s.id} style={{ ...tdSt, textAlign: 'right', fontWeight: row.bold ? 700 : 500, color: C.t1, background: rowBg }}>
                       {row.render(s)}
@@ -770,7 +712,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11, color: C.t3 }}>₹ values in K are rounded as per the pricing calculator. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
+      <div style={{ fontSize: 11, color: C.t3, width: 0, minWidth: '100%' }}>₹ values in K are rounded as per the pricing calculator. Net revenue, COGS, GM, S&amp;D and CM1 are after returns; % are on net revenue.</div>
     </div>
   )
 }
