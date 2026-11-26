@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { setBusy } from '../silentUpdate.js'
 import { convertFile, kindOf, precheck, checkRequestSize } from './attachments.js'
 
 let nextId = 1
@@ -45,6 +46,7 @@ export function useAttachments(enabled) {
   }, [])
 
   const converting = items.some(i => i.status === 'converting')
+  useEffect(() => { setBusy('navai-attachment', converting); return () => setBusy('navai-attachment', false) }, [converting])
   const failed = items.some(i => i.status === 'error')
   const sendable = !converting && !failed
   // What to send. `complete` is false unless every chip shown has its converted data; callers must not send otherwise.

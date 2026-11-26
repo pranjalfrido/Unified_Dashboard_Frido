@@ -48,6 +48,7 @@ import { ResponsiveTable } from './responsive/ResponsiveTable.jsx'
 import MasterTrendCard from './responsive/MasterTrendCard.jsx'
 import MobileBottomNav from './responsive/MobileBottomNav.jsx'
 import AppBanner from './responsive/AppBanner.jsx'
+import { onPageSwitch, registerSnapshot, takeSnapshot, isChunkError, reloadOnceForChunkError } from './silentUpdate.js'
 import { OverviewFilterButton, OverviewFilterStrip } from './overview/OverviewFilters.jsx'
 import SalesMobileView from './sales/SalesMobileView.jsx'
 import { mergePhase, DETAIL_PHASES, PAGE_DETAIL_PHASES, PHASE_COVERED_BY } from './bqPhaseMerge.js'
@@ -20027,7 +20028,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(e) { return { error: e } }
-  componentDidCatch(e, info) { console.error('App crash:', e, info) }
+  componentDidCatch(e, info) { console.error('App crash:', e, info); if (isChunkError(e)) reloadOnceForChunkError() } // old build: reload once, then the Retry button below
   render() {
     if (this.state.error) {
       return (
@@ -20420,6 +20421,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Live users: every signed-in user reports the page they're on (URL path only) while the tab is
   // visible; only admins can read it (api/presence.js).
   usePresenceHeartbeat(location.pathname)
+  // Silent update (src/silentUpdate.js): if a new build is waiting, a page switch is a safe moment to load it.
+  const firstPath = useRef(true)
+  useEffect(() => {
+    if (firstPath.current) { firstPath.current = false; return }
+    onPageSwitch(location.pathname + location.search + location.hash)
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Parse URL → internal page/tab state
   const parseUrl = (pathname) => {
@@ -20581,7 +20588,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   }, [allowedTabs, location.pathname])
 
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
+  const [filters, setFilters] = useState(() => takeSnapshot()?.filters || { start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
+  useEffect(() => { registerSnapshot(() => ({ filters })) }, [filters]) // kept across a silent reload (silentUpdate.js)
   const [subCatFirstOrderMap, setSubCatFirstOrderMap] = useState({})
   // salesChannelView and salesOfflineSub are now derived from URL (goToSalesSub above)
   const [pnlAmzView, setPnlAmzView] = useState('all')

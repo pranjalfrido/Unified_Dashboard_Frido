@@ -33,6 +33,22 @@
         }
       })();
     </script>
+    <script>
+      // Never a blank screen: if the app has not drawn anything after 12 seconds (e.g. an old page whose script file is
+      // gone after a deploy), reload once; if that did not help, show a Reload button instead of an empty page.
+      setTimeout(function () {
+        var root = document.getElementById("root");
+        if (!root || root.childNodes.length) return;
+        var k = "frido.bootReloadAt", last = 0;
+        try { last = Number(sessionStorage.getItem(k) || 0); } catch (e) {}
+        if (!last || Date.now() - last > 120000) {
+          try { sessionStorage.setItem(k, String(Date.now())); } catch (e) {}
+          location.reload();
+          return;
+        }
+        root.innerHTML = '<div style="padding:32px;font:15px/1.5 system-ui,sans-serif;color:#1c2420">The dashboard could not load. <button onclick="location.reload()" style="font:inherit;font-weight:700;margin-left:8px;padding:8px 14px;border:0;border-radius:10px;background:#1f5a3d;color:#fff;cursor:pointer">Reload</button></div>';
+      }, 12000);
+    </script>
   </head>
   <body>
     <div id="root"></div>

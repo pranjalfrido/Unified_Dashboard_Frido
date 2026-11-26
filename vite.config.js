@@ -3,9 +3,13 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  // Shown in the Feedback form's context line (which build the person was on).
-  define: { __APP_VERSION__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 8)) },
+  plugins: [react(), {
+    // Shown in the Feedback form's context line (which build the person was on). It goes into index.html, NOT into
+    // the JS bundle: baked into the bundle, every commit (including the hourly data-cache commit) renamed the entry
+    // file and looked like "a new version" to the update check, although no code had changed.
+    name: 'app-version-meta',
+    transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'app-version', content: (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 8) }, injectTo: 'head' }],
+  }],
   build: {
     chunkSizeWarningLimit: 1600,
     rollupOptions: {

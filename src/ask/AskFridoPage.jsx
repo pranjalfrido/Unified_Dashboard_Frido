@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { setBusy } from '../silentUpdate.js';
 import HistoryPanel from './HistoryPanel.jsx';
 import ChatTopBar from './ChatTopBar.jsx';
 import ChatThread from './ChatThread.jsx';
@@ -112,7 +113,7 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
       };
     }));
 
-    setSending(true);
+    setSending(true); setBusy('navai-answer', true);
     try {
       const response = await sendMessage(messagesForApi, session?.access_token);
       setConversations(prev => prev.map(c => {
@@ -132,7 +133,7 @@ export default function AskFridoPage({ userProfile, session, areas, canFiles = f
         };
       }));
     } finally {
-      setSending(false);
+      setSending(false); setBusy('navai-answer', false);
     }
   }
 

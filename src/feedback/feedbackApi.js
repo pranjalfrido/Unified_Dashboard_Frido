@@ -1,4 +1,3 @@
-/* global __APP_VERSION__ */
 // Client for api/feedback.js. The signed-in user is identified by the session token only.
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -59,7 +58,7 @@ export const TYPES = [
 export const TYPE_LABEL = Object.fromEntries(TYPES.map(t => [t.id, t.label]))
 export const STATUS_LABEL = { new: 'New', in_progress: 'In progress', done: 'Done', wont_do: "Won't do" }
 
-export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
+export const APP_VERSION = (typeof document !== 'undefined' && document.querySelector('meta[name="app-version"]')?.content) || 'dev'
 
 // "3 Oct, 4:15 pm" style, local time.
 export function when(iso) {
