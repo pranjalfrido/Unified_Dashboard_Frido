@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { IC, SearchableMultiSelect, ExportButton } from './theme.jsx'
+import Seg from './Seg.jsx'
 import { C, fmtBig } from '../utils.js'
 import { usePhone, inwardFilterCount, useLastGrnDays, useDqExport } from './useInward.js'
 import DeltaBadge from '../responsive/DeltaBadge.jsx'
@@ -72,19 +73,6 @@ function Card({ title, sub, subTitle, action, children, isPhone, id, style, inli
       )}
       {children}
     </section>
-  )
-}
-
-function Seg({ options, value, onChange, isPhone, label }) {
-  return (
-    <div role="group" aria-label={label} style={{ display: 'inline-flex', background: isPhone ? M.soft : IC.page, borderRadius: 10, padding: 2, gap: 2, maxWidth: '100%' }}>
-      {options.map(o => (
-        <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}
-          style={{ minHeight: isPhone ? 30 : 30, padding: isPhone ? '0 9px' : '0 10px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)', cursor: 'pointer',
-            background: value === o.value ? (isPhone ? '#fff' : IC.surface) : 'transparent', color: value === o.value ? IC.t1 : IC.t3,
-            boxShadow: value === o.value ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>{o.label}</button>
-      ))}
-    </div>
   )
 }
 

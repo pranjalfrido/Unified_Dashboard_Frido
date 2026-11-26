@@ -4,6 +4,7 @@ import { authFetch } from '../authFetch.js'
 import { useBreakpoint } from '../responsive/useBreakpoint.js'
 import InventoryCostMobile from './mobile/InventoryCostMobile.jsx'
 import { COST_EXPORT_COLS } from './costExport.js'
+import { cogsRateLabel } from './costGroup.js'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -33,7 +34,7 @@ function loadLatestCogs() {
         const latest = {}
         for (const r of rows || []) {
           if (!(r.cogs > 0)) continue
-          if (!latest[r.sku] || r.month > latest[r.sku].month) latest[r.sku] = { month: r.month, cogs: r.cogs, subCategory: r.subCategory }
+          if (!latest[r.sku] || r.month > latest[r.sku].month) latest[r.sku] = { month: r.month, cogs: r.cogs, subCategory: r.subCategory, src: r.carriedFromMonth || r.month }
         }
         const sums = {}
         for (const v of Object.values(latest)) {
@@ -44,7 +45,11 @@ function loadLatestCogs() {
         const subAvg = {}
         for (const [k, s] of Object.entries(sums)) subAvg[k] = s.sum / s.n
         const month = Object.values(latest).reduce((m, v) => (v.month > m ? v.month : m), '')
-        return { latest, subAvg, month }
+        // The month the rates were actually uploaded for (most SKUs agree): differs from `month` when the newest month is carried forward.
+        const bySrc = {}
+        for (const v of Object.values(latest)) bySrc[v.src] = (bySrc[v.src] || 0) + 1
+        const srcMonth = Object.entries(bySrc).sort((a, b) => b[1] - a[1])[0]?.[0] || month
+        return { latest, subAvg, month, srcMonth }
       })
       .catch(e => { cogsPromise = null; throw e })
   }
@@ -77,6 +82,19 @@ const COLS = [
 ]
 const SHOW_STEP = 300
 
+// One SKU valued at cost: own COGS, else the sub-category average, else not valued.
+function valueRow(s, cogs) {
+  const own = cogs.latest[s.sku]
+  const avg = cogs.subAvg[s.subCategory]
+  const unit = own ? own.cogs : avg != null ? avg : null
+  return {
+    ...s,
+    cogs: unit,
+    cogsMap: own ? 'Mapped' : avg != null ? 'Sub-cat avg' : 'Missing',
+    totalCost: unit != null ? unit * (s.totalInvt || 0) : null,
+  }
+}
+
 const STATUS_ORDER = ['Excess', 'Sufficient', 'Low', 'Critical', 'Out of Stock', 'No Demand', 'Dead / No Sale']
 
 // slowSkus / deadSkus: Sets of SKU codes from the page's own Slow Moving / Dead Stock sub-category
@@ -107,18 +125,11 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
       : s.stockStatus === v)
     const q = search.trim().toLowerCase()
     const match = s => !q || s.sku.toLowerCase().includes(q) || (s.category || '').toLowerCase().includes(q) || (s.subCategory || '').toLowerCase().includes(q)
-    return (skus || []).filter(s => keep(s) && match(s)).map(s => {
-      const own = cogs.latest[s.sku]
-      const avg = cogs.subAvg[s.subCategory]
-      const unit = own ? own.cogs : avg != null ? avg : null
-      return {
-        ...s,
-        cogs: unit,
-        cogsMap: own ? 'Mapped' : avg != null ? 'Sub-cat avg' : 'Missing',
-        totalCost: unit != null ? unit * (s.totalInvt || 0) : null,
-      }
-    })
+    return (skus || []).filter(s => keep(s) && match(s)).map(s => valueRow(s, cogs))
   }, [skus, cogs, view, search, slowSkus, deadSkus])
+
+  // Every SKU valued, no status / search filter: the phone card does its own filtering (by product or SKU).
+  const allRows = useMemo(() => (cogs ? (skus || []).map(s => valueRow(s, cogs)) : []), [skus, cogs])
 
   const sorted = useMemo(() => {
     const { key, dir } = sort, m = dir === 'asc' ? 1 : -1
@@ -155,8 +166,9 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
   const th = { padding: '10px 10px', fontSize: 11, fontWeight: 700, color: IC.t2, textTransform: 'uppercase', letterSpacing: '.04em', background: IC.surface, cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${IC.border}` }
   const td = { padding: '10px 10px', fontSize: 12.5, whiteSpace: 'nowrap', borderBottom: `1px solid ${IC.border}`, fontVariantNumeric: 'tabular-nums' }
 
+  const rate = cogs ? cogsRateLabel(cogs) : null
   const note = cogs
-    ? `${rows.length.toLocaleString('en-IN')} SKUs · COGS as of ${cogs.month.slice(0, 7)}${totals.missing ? ` · ${totals.missing} not valued` : ''}`
+    ? <span>{rows.length.toLocaleString('en-IN')} SKUs · <span title={rate.why || undefined} style={rate.carried ? { color: '#b7791f', fontWeight: 600, cursor: 'help' } : undefined}>{rate.carried ? 'ⓘ ' : ''}{rate.text}</span>{totals.missing ? ` · ${totals.missing} not valued` : ''}</span>
     : 'Loading COGS…'
 
   // Mobile columns: sticky Product ID + 4 key scrollable columns
@@ -170,7 +182,7 @@ export default function InventoryCostTable({ skus, maxHeight = 520, isAdmin = fa
 
   // Phone (<= 767 px, or a phone turned sideways) on the mobile Inventory Health page: card layout. Same rows and totals as below.
   if (phoneLayout && (bp.width <= 767 || bp.isPhoneLandscape)) {
-    return <InventoryCostMobile cogs={cogs} err={err} skus={skus} rows={rows} view={view} setView={v => { setView(v); setShown(SHOW_STEP) }} viewOptions={viewOptions} isAdmin={isAdmin} />
+    return <InventoryCostMobile cogs={cogs} err={err} skus={skus} allRows={allRows} viewOptions={viewOptions} slowSkus={slowSkus} deadSkus={deadSkus} isAdmin={isAdmin} />
   }
 
   return (

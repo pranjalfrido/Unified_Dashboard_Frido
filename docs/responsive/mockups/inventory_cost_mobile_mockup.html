@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory Cost Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g:#1f5a3f; --g2:#2b6b4c; --gl:#e7f1ea; --bg:#efeeea; --card:#fff; --tile:#f4f3ef;
+  --tx:#1d1f1e; --mu:#6f7471; --ln:#e8e6e1; --amb:#b7791f; --ambl:#fdf3e1;
+  --red:#c0392b; --redl:#fbe9e7; --blu:#2f6fb3; --blul:#e8f0fa; --grn:#2e7d4f; --grnl:#e4f3ea; --gry:#eceae6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#e6e2dc;color:var(--tx);padding:24px 16px}
+h1{font-size:20px;margin-bottom:4px}
+.lead{color:var(--mu);font-size:13px;margin-bottom:20px;max-width:900px}
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.col{width:360px}
+.cap{font-size:13px;font-weight:600;margin-bottom:8px}
+.cap span{display:block;font-weight:400;color:var(--mu);font-size:12px;margin-top:2px}
+.phone{width:360px;height:740px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 8px 30px rgba(0,0,0,.15);border:6px solid #1c1c1c}
+.top{background:var(--g);color:#fff;padding:14px 16px 0}
+.top .t{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:18px}
+.top .ic{display:flex;gap:16px;font-size:16px;opacity:.9}
+.tabs{display:flex;gap:22px;font-size:13px;margin-top:12px}
+.tabs div{padding-bottom:9px;opacity:.75}
+.tabs .on{opacity:1;font-weight:600;border-bottom:2px solid #fff}
+.body{padding:12px;height:calc(100% - 140px);overflow:hidden}
+.card{background:var(--card);border-radius:16px;padding:14px 14px 4px}
+.hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hd h3{font-size:15px;font-weight:700;white-space:nowrap}
+.hr{display:flex;gap:8px;align-items:center}
+.ib{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;display:grid;place-items:center;font-size:14px;background:#fff}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:3px;height:36px;align-items:center}
+.seg div{font-size:12px;padding:6px 10px;border-radius:8px;color:var(--mu);font-weight:500;white-space:nowrap}
+.seg .on{background:#fff;color:var(--tx);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sub{font-size:12px;color:var(--mu);margin-top:6px}
+.cogs{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu);margin-top:4px}
+.cogs b{font-weight:600;color:var(--amb)}
+.tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.tl{background:var(--tile);border-radius:12px;padding:9px 10px;min-height:66px}
+.tl .l{font-size:10.5px;font-weight:600;color:var(--mu);letter-spacing:.3px;white-space:nowrap}
+.tl .v{font-size:15px;font-weight:700;margin-top:5px;white-space:nowrap}
+.tl .s{font-size:11px;color:var(--mu);margin-top:2px;white-space:nowrap}
+.tl.warn{background:var(--ambl)}
+.tl.warn .v{color:var(--amb)}
+.chips{display:flex;gap:6px;overflow:hidden;margin-bottom:4px}
+.ch{font-size:12px;padding:7px 12px;border:1px solid var(--ln);border-radius:999px;white-space:nowrap;background:#fff}
+.ch.on{background:var(--g);color:#fff;border-color:var(--g);font-weight:600}
+.rw{display:grid;grid-template-columns:1fr 88px;gap:8px;padding:12px 0;border-bottom:1px solid var(--ln);min-height:64px}
+.rw:last-child{border-bottom:0}
+.rw .n{font-size:13.5px;font-weight:700;line-height:1.3}
+.rw .m{font-size:11.5px;color:var(--mu);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rw .r{text-align:right}
+.rw .r .v{font-size:13.5px;font-weight:700}
+.doi{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;margin-top:5px;white-space:nowrap}
+.d-ex{background:var(--blul);color:var(--blu)} .d-ok{background:var(--grnl);color:var(--grn)}
+.d-lo{background:var(--ambl);color:var(--amb)} .d-cr{background:var(--redl);color:var(--red)} .d-nd{background:var(--gry);color:var(--mu)}
+.tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:6px;background:var(--gry);color:var(--mu);margin-left:4px;font-weight:500}
+.tag.a{background:var(--ambl);color:var(--amb)}
+.more{font-size:13px;font-weight:600;color:var(--g);padding:12px 0 10px}
+.nav{position:absolute;bottom:0;left:0;right:0;height:56px;background:#fff;border-top:1px solid var(--ln);display:flex;justify-content:space-around;align-items:center;color:var(--mu);font-size:16px}
+.nav .on{color:var(--g);background:var(--gl);padding:6px 10px;border-radius:10px}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;padding:8px 16px 16px;max-height:86%;overflow:hidden}
+.grab{width:40px;height:4px;border-radius:9px;background:#d6d3cd;margin:0 auto 10px}
+.sh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.sh h4{font-size:16px;font-weight:700;line-height:1.3}
+.sh .s2{font-size:12px;color:var(--mu);margin-top:2px}
+.x{width:36px;height:36px;border-radius:10px;background:var(--tile);display:grid;place-items:center;font-size:14px;flex:none}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.st{background:var(--tile);border-radius:12px;padding:9px 11px}
+.st .l{font-size:10.5px;font-weight:600;color:var(--mu);letter-spacing:.3px}
+.st .v{font-size:14px;font-weight:700;margin-top:3px}
+.sec{font-size:12px;font-weight:700;color:var(--mu);letter-spacing:.3px;margin:6px 0 2px;display:flex;justify-content:space-between}
+.sec span{font-weight:500;letter-spacing:0}
+.note{background:var(--ambl);border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.45;color:#6b4a12;margin:10px 0}
+.note b{color:#5a3c0a}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.flh{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border-bottom:1px solid var(--ln)}
+.flh .t{font-weight:700;font-size:15px;flex:1}
+.srch{margin:10px 12px;background:#fff;border:1.5px solid var(--g);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--mu)}
+.tot{position:absolute;left:0;right:0;bottom:0;background:var(--g);color:#fff;padding:10px 14px;font-size:12px;display:flex;justify-content:space-between}
+.tot b{font-size:13px}
+.legend{margin-top:28px;background:#fff;border-radius:14px;padding:16px 18px;max-width:1200px;font-size:13px;line-height:1.6}
+.legend h2{font-size:15px;margin-bottom:6px}
+.legend li{margin-left:18px}
+</style>
+</head>
+<body>
+<h1>Inventory cost detail: phone, round 2</h1>
+<p class="lead">Product-level rows (variants grouped under one product), cleaner header with a Product / SKU toggle, and a "No COGS" tile that explains itself. Numbers are sample data shaped like the live page.</p>
+
+<div class="row">
+
+<!-- 1. Product view -->
+<div class="col">
+<div class="cap">1 · Card, Product view (default)<span>Header = title + 🔍 + Product/SKU toggle. Rows = one per product.</span></div>
+<div class="phone">
+  <div class="top"><div class="t">Inventory<div class="ic">⚲ ⋯</div></div>
+    <div class="tabs"><div class="on">Inventory Health</div><div>Sales &amp; Allocation</div><div>Inward</div></div></div>
+  <div class="body"><div class="card">
+    <div class="hd"><h3>Inventory cost</h3>
+      <div class="hr"><div class="ib">🔍</div><div class="seg"><div class="on">Product</div><div>SKU</div></div></div></div>
+    <div class="sub">Top 10 of 612 products · by value</div>
+    <div class="cogs">ⓘ COGS rates: <b>Sep 2026, carried forward</b></div>
+    <div class="tiles">
+      <div class="tl"><div class="l">INV. VALUE</div><div class="v">₹42.51 Cr</div><div class="s">at cost</div></div>
+      <div class="tl"><div class="l">UNITS</div><div class="v">10.22 L</div><div class="s">in stock</div></div>
+      <div class="tl warn"><div class="l">NO COGS ⓘ</div><div class="v">567</div><div class="s">SKUs · 18.4K u</div></div>
+    </div>
+    <div class="chips"><div class="ch on">All</div><div class="ch">Excess</div><div class="ch">Sufficient</div><div class="ch">Low</div><div class="ch">Category ▾</div></div>
+    <div class="rw"><div><div class="n">Ultimate Car Backrest Cushion</div><div class="m">Cushions · 4 variants</div><div class="m">₹429/unit · 16,963 u · 151/day</div></div><div class="r"><div class="v">₹72.8 L</div><span class="doi d-ex">DOI 112d</span></div></div>
+    <div class="rw"><div><div class="n">Orthotics Posture Corrector</div><div class="m">Orthotics · 5 variants</div><div class="m">₹161/unit · 33,619 u · 103/day</div></div><div class="r"><div class="v">₹54.1 L</div><span class="doi d-ex">DOI 326d</span></div></div>
+    <div class="rw"><div><div class="n">Ultimate Car Wedge Seat Cushion</div><div class="m">Cushions · 2 variants</div><div class="m">₹357/unit · 13,390 u · 193/day</div></div><div class="r"><div class="v">₹47.8 L</div><span class="doi d-ok">DOI 69d</span></div></div>
+  </div></div>
+  <div class="nav"><span>▦</span><span>▥</span><span>↗</span><span class="on">⬡</span><span>⛟</span><span>☺</span><span>⋮</span></div>
+</div>
+</div>
+
+<!-- 2. Product sheet -->
+<div class="col">
+<div class="cap">2 · Tap a product → product sheet<span>Product totals, then every variant (SKU). Tap a variant → SKU detail.</span></div>
+<div class="phone">
+  <div class="top"><div class="t">Inventory<div class="ic">⚲ ⋯</div></div>
+    <div class="tabs"><div class="on">Inventory Health</div><div>Sales &amp; Allocation</div><div>Inward</div></div></div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sh"><div><h4>Ultimate Car Backrest Cushion</h4><div class="s2">Cushions · 4 variants</div></div><div class="x">✕</div></div>
+    <div class="stats">
+      <div class="st"><div class="l">INVENTORY VALUE</div><div class="v">₹72,84,733</div></div>
+      <div class="st"><div class="l">UNITS</div><div class="v">16,963</div></div>
+      <div class="st"><div class="l">AVG SALE (B2C)</div><div class="v">151/day</div></div>
+      <div class="st"><div class="l">DOI · STATUS</div><div class="v">112d <span class="doi d-ex" style="margin:0">Excess</span></div></div>
+    </div>
+    <div class="sec">VARIANTS <span>sorted by value</span></div>
+    <div class="rw"><div><div class="n">FR-UCBU-B1</div><div class="m">Black · ₹429/unit</div><div class="m">10,210 u · 98/day</div></div><div class="r"><div class="v">₹43.8 L</div><span class="doi d-ex">DOI 104d</span></div></div>
+    <div class="rw"><div><div class="n">FR-UCBU-G1</div><div class="m">Grey · ₹429/unit</div><div class="m">4,105 u · 41/day</div></div><div class="r"><div class="v">₹17.6 L</div><span class="doi d-ex">DOI 100d</span></div></div>
+    <div class="rw"><div><div class="n">FR-UCBU-BG1</div><div class="m">Beige · ₹431/unit</div><div class="m">2,312 u · 12/day</div></div><div class="r"><div class="v">₹9.97 L</div><span class="doi d-ex">DOI 193d</span></div></div>
+    <div class="rw"><div><div class="n">FR-UCBU-B2 <span class="tag a">Avg COGS</span></div><div class="m">Black XL · ₹429/unit (sub-cat avg)</div><div class="m">336 u · 0/day</div></div><div class="r"><div class="v">₹1.44 L</div><span class="doi d-nd">No demand</span></div></div>
+  </div>
+</div>
+</div>
+
+<!-- 3. SKU view -->
+<div class="col">
+<div class="cap">3 · Toggle = SKU (variant level)<span>Same card, one row per SKU, product name as the main line.</span></div>
+<div class="phone">
+  <div class="top"><div class="t">Inventory<div class="ic">⚲ ⋯</div></div>
+    <div class="tabs"><div class="on">Inventory Health</div><div>Sales &amp; Allocation</div><div>Inward</div></div></div>
+  <div class="body"><div class="card">
+    <div class="hd"><h3>Inventory cost</h3>
+      <div class="hr"><div class="ib">🔍</div><div class="seg"><div>Product</div><div class="on">SKU</div></div></div></div>
+    <div class="sub">Top 10 of 2,945 SKUs · by value</div>
+    <div class="cogs">ⓘ COGS rates: <b>Sep 2026, carried forward</b></div>
+    <div class="tiles">
+      <div class="tl"><div class="l">INV. VALUE</div><div class="v">₹42.51 Cr</div><div class="s">at cost</div></div>
+      <div class="tl"><div class="l">UNITS</div><div class="v">10.22 L</div><div class="s">in stock</div></div>
+      <div class="tl warn"><div class="l">NO COGS ⓘ</div><div class="v">567</div><div class="s">SKUs · 18.4K u</div></div>
+    </div>
+    <div class="chips"><div class="ch on">All</div><div class="ch">Excess</div><div class="ch">Sufficient</div><div class="ch">Low</div><div class="ch">Category ▾</div></div>
+    <div class="rw"><div><div class="n">FR-UCBU-B1</div><div class="m">Ultimate Car Backrest Cushion</div><div class="m">₹429/unit · 10,210 u · 98/day</div></div><div class="r"><div class="v">₹43.8 L</div><span class="doi d-ex">DOI 104d</span></div></div>
+    <div class="rw"><div><div class="n">FR-OPC-L1</div><div class="m">Orthotics Posture Corrector</div><div class="m">₹161/unit · 33,619 u · 103/day</div></div><div class="r"><div class="v">₹54.1 L</div><span class="doi d-ex">DOI 326d</span></div></div>
+    <div class="rw"><div><div class="n">FR-IMP-CXEW</div><div class="m">Carbon Fiber X Electric Wheelchair</div><div class="m">₹61,024/unit · 79 u · 0/day</div></div><div class="r"><div class="v">₹48.2 L</div><span class="doi d-nd">No demand</span></div></div>
+  </div></div>
+  <div class="nav"><span>▦</span><span>▥</span><span>↗</span><span class="on">⬡</span><span>⛟</span><span>☺</span><span>⋮</span></div>
+</div>
+</div>
+
+<!-- 4. No COGS sheet -->
+<div class="col">
+<div class="cap">4 · Tap "No COGS" → explain + list<span>Only SKUs with stock. Says what is and isn't counted in the ₹ value.</span></div>
+<div class="phone">
+  <div class="top"><div class="t">Inventory<div class="ic">⚲ ⋯</div></div>
+    <div class="tabs"><div class="on">Inventory Health</div><div>Sales &amp; Allocation</div><div>Inward</div></div></div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sh"><div><h4>SKUs without their own COGS</h4><div class="s2">In stock only · 759 SKUs</div></div><div class="x">✕</div></div>
+    <div class="split">
+      <div class="st"><div class="l">VALUED AT SUB-CAT AVG</div><div class="v">192 SKUs</div><div class="m" style="font-size:11px;color:var(--mu)">included in ₹42.51 Cr</div></div>
+      <div class="st" style="background:var(--ambl)"><div class="l">NOT VALUED</div><div class="v" style="color:var(--amb)">567 SKUs</div><div class="m" style="font-size:11px;color:var(--amb)">18,412 units · ₹0 counted</div></div>
+    </div>
+    <div class="note"><b>Why:</b> no COGS uploaded for these SKUs. When the sub-category has an average, we use it; otherwise the stock is left out of the ₹ value. <b>Fix:</b> add COGS in the monthly COGS upload.</div>
+    <div class="sec">NOT VALUED · BY UNITS <span>Export CSV ⤓</span></div>
+    <div class="rw"><div><div class="n">FR-NSP-30</div><div class="m">Nasal Strips · Personal Care</div><div class="m">4,210 u · 9/day</div></div><div class="r"><div class="v">4,210 u</div><span class="tag a" style="margin-top:6px">No COGS</span></div></div>
+    <div class="rw"><div><div class="n">FR-FTS-S-BLK</div><div class="m">Five Toe Socks - Solid · Footwear</div><div class="m">2,980 u · 14/day</div></div><div class="r"><div class="v">2,980 u</div><span class="tag a" style="margin-top:6px">No COGS</span></div></div>
+    <div class="more">View all 567 →</div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div class="legend">
+<h2>What changes vs the current build</h2>
+<ul>
+<li><b>Header:</b> shorter title "Inventory cost", 36 px 🔍 + Product/SKU toggle (same as Inward's SKU/Sub-cat toggle). The ⋯ menu moves into the full-screen list (Export CSV, No-COGS list). Subtitle shows "Top 10 of N products/SKUs · by value".</li>
+<li><b>COGS line:</b> shows the month the rates actually come from ("Sep 2026, carried forward"), not the calendar month.</li>
+<li><b>Tiles:</b> no selected border by default. Third tile renamed "No COGS", amber, value + "SKUs · units", tap opens screen 4.</li>
+<li><b>Product view (default):</b> variants grouped by product (sub-category). Value, units and avg sale are sums; COGS/unit = value ÷ units; DOI = units ÷ avg sale. Status chip follows the product's DOI.</li>
+<li><b>Product sheet:</b> totals + all variants (sorted by value), each tappable → existing SKU detail sheet. Status shown as a coloured chip, not grey text.</li>
+<li><b>SKU view:</b> today's list, with the product name as the second line.</li>
+<li><b>No COGS:</b> in-stock SKUs only; split into "valued at sub-cat avg" vs "not valued", with units and a fix hint. Counts must match the laptop card.</li>
+</ul>
+</div>
+</body>
+</html>

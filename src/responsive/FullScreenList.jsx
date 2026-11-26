@@ -12,12 +12,13 @@ import { rankItems, barMax, barPctOf } from './rankSort.js'
 //   items, sorts, name, sub, secondary, searchText, groupOf: same meaning as MobileRankedList
 //   onSelect(item): open the item's detail (the caller's BottomSheet)
 //   flipOnRetap / initialDir, scopeFor / initialScopeAll, rowLayout: as in MobileRankedList (opt-in)
+//   menu: { title, items } for the header's ⋯ (same shape MobilePageHeader takes)
 //   tallChips: sort/group chips keep their look but get a 44px tap area (opt-in)
 //   renderRow(item, index, sortKey) (own row instead of RankedRow), extraControls (node under the sort chips, e.g. filter
 //   chips) and footer(list) (node pinned under the scrolling list, given the rows currently listed): all opt-in, e.g. Inventory cost detail
 const PAGE = 20
 
-export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout, autoFocusSearch = false, renderRow, extraControls, footer, tallChips = false }) {
+export default function FullScreenList({ open, onClose, title, noun = 'items', items, sorts, initialSort, name, sub, secondary, searchText, groupOf, onSelect, badge, subBadge, valueColor, flipOnRetap = false, initialDir = 'desc', scopeFor, initialScopeAll = false, rowLayout, autoFocusSearch = false, renderRow, extraControls, footer, tallChips = false, menu }) {
   const M = C.m
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState(initialSort || sorts[0].key)
@@ -78,7 +79,7 @@ export default function FullScreenList({ open, onClose, title, noun = 'items', i
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={title} className="fullscreen-list"
       style={{ position: 'fixed', inset: 0, zIndex: C.z.modal, background: M.bg, display: 'flex', flexDirection: 'column', paddingTop: 'var(--safe-top)' }}>
-      <MobilePageHeader onBack={onClose} title={title} sub={`${list.length} ${noun}`} />
+      <MobilePageHeader onBack={onClose} title={title} sub={`${list.length} ${noun}`} menu={menu} />
       <div style={{ background: '#fff', padding: '10px 14px 10px', borderBottom: `1px solid ${M.line}` }}>
         <input type="search" value={q} onChange={e => reset(setQ)(e.target.value)} placeholder={`Search ${noun}…`} aria-label={`Search ${noun}`}
           autoFocus={autoFocusSearch && open}
