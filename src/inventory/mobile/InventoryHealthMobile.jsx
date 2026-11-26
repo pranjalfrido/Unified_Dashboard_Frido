@@ -15,6 +15,7 @@ import AgeingCard from './AgeingCard.jsx'
 import OosLossMobile from './OosLossMobile.jsx'
 import Skeleton from '../../responsive/Skeleton.jsx'
 import { useOosData, stockedSkus, oosSummary } from '../oosData.js'
+import InventoryCostTable from '../InventoryCostTable.jsx'
 
 // Inventory Health below 1024px (docs/responsive/INVENTORY_MOBILE_REDESIGN_PROMPT.md §2). Display
 // only: every value comes from InventoryHealthPage's own memos (Regular facilities - mobile is
@@ -110,7 +111,7 @@ function WarehouseCard({ locations, onSeeStock }) {
   )
 }
 
-export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead, rtdLevel, setRtdLevel, rtdOptions }) {
+export default function InventoryHealthMobile({ data, regular, locations, lastSalesDate, showDetailOnly, skus, pivot, regularLocations, filterKey, slow, dead, rtdLevel, setRtdLevel, rtdOptions, allowedTabs, detailSkus, slowSkus, deadSkus }) {
   const bp = useBreakpoint()
   const layout = bp.isPhoneLandscape ? 'landscape' : bp.width >= 768 ? 'tablet' : 'phone'
   const [loc, setLoc] = useState('All')
@@ -126,6 +127,7 @@ export default function InventoryHealthMobile({ data, regular, locations, lastSa
       {!showDetailOnly && <WarehouseCard locations={locations} onSeeStock={seeStock} />}
       <StockExplorer skus={skus} pivot={pivot} regularLocations={regularLocations} loc={loc} setLoc={setLoc} resetKey={filterKey} rtdLevel={rtdLevel} setRtdLevel={setRtdLevel} rtdOptions={rtdOptions} />
       {!showDetailOnly && <AgeingCard slow={slow} dead={dead} />}
+      {(allowedTabs == null || allowedTabs?.includes('inventory:cost')) && <InventoryCostTable skus={detailSkus || []} isAdmin={allowedTabs == null} slowSkus={slowSkus} deadSkus={deadSkus} />}
       <OosLossMobile open={oosOpen} onClose={() => setOosOpen(false)} data={oos.data} error={oos.error} />
     </div>
   )
