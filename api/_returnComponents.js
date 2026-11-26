@@ -216,15 +216,16 @@ export function resolveDailySkuComponents(dailyRows, rollingRateMap, components,
     components.forEach(c => {
       if (!immature) {
         const rev = parseFloat(r[`${c.key}_rev`]) || 0
+        if (rev === 0 && gross === 0) { resolved[c.key] = null; return }
         const pct = gross > 0 ? rev / gross : 0
-        resolved[c.key] = { rev, pct, units: pct * units, source: 'live' }
+        resolved[c.key] = pct === 0 && rev === 0 ? null : { rev, pct, units: pct * units }
       } else {
         const pct = rolling ? rolling[c.key] : 0
-        resolved[c.key] = { rev: pct * gross, pct, units: pct * units, source: rolling ? 'rolling_30d' : 'no_rolling_data' }
+        resolved[c.key] = pct === 0 ? null : { rev: pct * gross, pct, units: pct * units }
       }
     })
 
-    let totalReturnRev = components.filter(c => c.isReturn).reduce((s, c) => s + resolved[c.key].rev, 0)
+    let totalReturnRev = components.filter(c => c.isReturn).reduce((s, c) => s + (resolved[c.key]?.rev || 0), 0)
     // Guardrail (confirmed 2026-10-22): an IMMATURE day's rolling-rate estimate is capped at that
     // day's own gross, so Net Revenue never goes negative purely from an estimation artifact.
     // Mature/live days are NEVER capped — if a real day genuinely had more returns than gross,
@@ -235,7 +236,7 @@ export function resolveDailySkuComponents(dailyRows, rollingRateMap, components,
     // overshoot 100% of that day's gross).
     if (immature && gross > 0 && totalReturnRev > gross) {
       const scale = gross / totalReturnRev
-      components.filter(c => c.isReturn).forEach(c => { resolved[c.key].rev *= scale; resolved[c.key].pct *= scale; resolved[c.key].units *= scale })
+      components.filter(c => c.isReturn).forEach(c => { if (!resolved[c.key]) return; resolved[c.key].rev *= scale; resolved[c.key].pct *= scale; resolved[c.key].units *= scale })
       totalReturnRev = gross
     }
     const totalReturnPct = gross > 0 ? totalReturnRev / gross : 0
@@ -251,13 +252,13 @@ export function resolveDailySkuComponents(dailyRows, rollingRateMap, components,
     // operationally) — so COGS/GM on a recent day was priced on ~all units sold while revenue
     // already discounted a chunk of them. resolvedReturnUnits (the isReturn-only components summed)
     // keeps netUnits consistent with totalReturnRev/totalReturnPct on every day, mature or immature.
-    const resolvedReturnUnits = components.filter(c => c.isReturn).reduce((s, c) => s + resolved[c.key].units, 0)
+    const resolvedReturnUnits = components.filter(c => c.isReturn).reduce((s, c) => s + (resolved[c.key]?.units || 0), 0)
     const netUnits = Math.max(units - resolvedReturnUnits, 0)
 
-    // r.subChannel (D2C's MyFrido/Mobility split) and r.category/r.subCategory (Flipkart's
-    // Category/SubCategory filter, added 2026-10-22) pass through untouched when present — lets
-    // callers filter the resolved array by sub-channel/category without a fragile positional
-    // re-join against the original input array.
+    // r.subChannel (D2C's MyFrido/Mobility split) and r.category/r.subCategory pass through —
+    // subChannel lets frontend callers filter by sub-channel; category/subCategory are used in
+    // bq.js's crossChByCatSubCat server-side aggregation (Overview/Sales "All Channels" subCatMap)
+    // and must remain on the rows written to pnl-data.json.
     return {
       sku, date, gross, units,
       ...(r.subChannel !== undefined ? { subChannel: r.subChannel } : {}),

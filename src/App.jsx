@@ -20611,6 +20611,25 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [adsCachedMeta, setAdsCachedMeta] = useState(null)
   const adsCacheRef = useRef(null)
   const pnlCacheRef = useRef(null)
+  // Shared in-flight promises — both the background prefetch and fetchData write here so a
+  // concurrent P&L click reuses the already-in-flight request instead of launching a second
+  // 50MB / 64MB download.
+  const pnlFetchPromise = useRef(null)
+  const pnlLastMonthFetchPromise = useRef(null)
+  // Background prefetch: fires after mount via requestIdleCallback so the browser renders
+  // Overview/Sales first, then downloads the PNL files quietly. By the time the user clicks
+  // the P&L tab the files are ready and it loads instantly — same as before, but without
+  // blocking the initial Overview/Sales render.
+  useEffect(() => {
+    const run = () => {
+      if (!pnlCacheRef.current && !pnlFetchPromise.current)
+        pnlFetchPromise.current = authFetch('/pnl-data.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
+      if (!pnlCacheRef.lastMonth && !pnlLastMonthFetchPromise.current)
+        pnlLastMonthFetchPromise.current = authFetch('/pnl-data-lastmonth.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
+    }
+    if (typeof requestIdleCallback !== 'undefined') requestIdleCallback(run, { timeout: 3000 })
+    else setTimeout(run, 1000)
+  }, [])
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
   const [costFilters, setCostFilters] = useState(EMPTY_COST_FILTERS)
@@ -20733,13 +20752,13 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!hasFilters) {
       try {
         if (!pnlCacheRef.current) {
-          // Relative path, NOT ${API}-prefixed — this is a static file in public/, served by the
-          // frontend's own origin (Vite/Vercel CDN), never by the API server. Prefixing it with
-          // API (VITE_API_URL) sent this request to the wrong host in local dev (API server runs
-          // on a different port than the static file host), 404-ing every page load — harmless in
-          // production only because Vercel happens to serve both from the same domain there.
-          const r = await authFetch('/pnl-data.json')
-          if (r.ok) pnlCacheRef.current = await r.json()
+          // Reuse the background prefetch promise if already in-flight — prevents a second 50MB
+          // download when the user clicks P&L before the idle-callback prefetch completes.
+          // Relative path, NOT ${API}-prefixed — static file in public/, served by the frontend's
+          // own origin (Vite/Vercel CDN), never by the API server.
+          if (!pnlFetchPromise.current)
+            pnlFetchPromise.current = authFetch('/pnl-data.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
+          await pnlFetchPromise.current
         }
         const c = pnlCacheRef.current
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
@@ -20754,9 +20773,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       // Last Month static cache
       try {
         if (!pnlCacheRef.lastMonth) {
-          // Same fix as pnl-data.json above — relative path, not API-prefixed.
-          const r = await authFetch('/pnl-data-lastmonth.json')
-          if (r.ok) pnlCacheRef.lastMonth = await r.json()
+          // Same dedup pattern — reuse in-flight promise if the prefetch already started.
+          if (!pnlLastMonthFetchPromise.current)
+            pnlLastMonthFetchPromise.current = authFetch('/pnl-data-lastmonth.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
+          await pnlLastMonthFetchPromise.current
         }
         const lm = pnlCacheRef.lastMonth
         if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
