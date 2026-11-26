@@ -438,7 +438,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'stretch' }}>
         {/* ── Inputs ── */}
-        <div style={{ flex: phone ? '1 1 100%' : '1 1 360px', display: 'flex', minWidth: 0 }}>
+        <div style={{ width: phone ? '100%' : 600, flexShrink: 0, display: 'flex', minWidth: 0 }}>
           <Card style={{ flex: 1, gap: 10, padding: 16, minWidth: 0 }}>
             {phone ? <SegmentToggle options={[{ id: 'new', label: 'New product' }, { id: 'launched', label: 'Already launched' }]} value={mode} onChange={setMode} label="Product" full /> : (
             <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
@@ -519,7 +519,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
         {/* ── Waterfall + headline ROAS ── */}
         {/* UI: result column gets more room (1.6×) than the inputs, so the two ROAS cards sit side by side. */}
-        <div style={{ flex: phone ? '1 1 100%' : '1.6 1 520px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ width: phone ? '100%' : 600, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card style={phone ? { padding: 16, minWidth: 0 } : { flex: 1, minWidth: 0, gap: 0 }}>
             {waterfall && (
               <div style={{ marginBottom: phone ? 16 : 18 }}>
