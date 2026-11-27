@@ -412,7 +412,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
   return (
     // UI: wider max width on desktop so the tool uses the screen instead of leaving the right half empty.
-    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: phone ? 900 : 'none' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20 }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -623,7 +623,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
       <button onClick={saveScenario} disabled={!waterfall}
         style={{
-          fontSize: 13, fontWeight: 700, padding: '12px 16px', borderRadius: 10, border: 'none', outline: 'none', width: '100%',
+          fontSize: 13, fontWeight: 700, padding: '12px 16px', borderRadius: 10, border: 'none', outline: 'none', width: phone ? '100%' : 1220,
           background: waterfall ? C.acd : C.border2, color: '#fff', cursor: waterfall ? 'pointer' : 'not-allowed',
         }}>
         + Save This Scenario
