@@ -21,6 +21,7 @@ const f30 = { asOf: '2026-11-27T05:00:00Z', avgSaleWindowDays: 30, skus: [
   sku('C1', 'Covers', 'Seat Cover', 900, 1),
   sku('P1', 'Orthotics', 'Mattress Topper Cover', 500, 1),
   sku('S1', 'Spare Parts', 'Wheel', 50, 0),
+  sku('J1', 'Accessories', 'Joystick Cover AC-FNN01', 45, 1),
   sku('S2', 'Orthotics', 'Spare Strap Kit', 40, 0),
   sku('N1', 'Footwear', 'Slipper', 700, 0, { last: null }),
   sku('X1', 'Footwear', 'Mystery', 300, 2),
@@ -33,11 +34,11 @@ const run = (settings, over = {}) => analyse({ files: { 7: f7, 30: f30 }, sales,
 const res = run(D);
 const ctx = { asOf: '2026-11-27T09:04:00', cogsLabel: 'COGS rates: Sep 2026, carried forward' };
 
-check('"spare" is an excluded name word (config), next to cover', D.exclude_words.includes('spare') && D.exclude_words.includes('cover'));
-check('a sub-category with "Spare" in its name is excluded and listed by name', res.excluded.names.some(e => e.name === 'Spare Strap Kit') && !res.main.some(s => s.sub_category === 'Spare Strap Kit'));
+check('no name-word rule: only the categories Covers / Spare Parts and the sub-category Joystick Cover AC-FNN01 are excluded', D.exclude_words.length === 0 && D.exclude_categories.join() === 'Spare Parts,Covers' && D.exclude_sub_categories.join() === 'Joystick Cover AC-FNN01');
+check('Mattress Topper Cover and Spare Strap Kit stay in (real products); the Joystick Cover is excluded', res.out.some(x => x.sub_category === 'Mattress Topper Cover') && res.excluded.names.some(e => e.name === 'Joystick Cover AC-FNN01') && !res.excluded.names.some(e => /Topper|Strap/.test(e.name)));
 
 const plan = planMarkdown(res, ctx);
-check('plan: settings, exclusions (count + names), the question, the Settings line', /Cover days: \*\*60\*\*/.test(plan) && /Never-live.*1 SKU,/.test(plan) && /Covers/.test(plan) && /Spare Parts/.test(plan) && /Mattress Topper Cover/.test(plan) && /Spare Strap Kit/.test(plan) && /Shall I run it with these settings\?/.test(plan) && /^Settings: /m.test(plan));
+check('plan: settings, exclusions (count + names), the question, the Settings line', /Cover days: \*\*60\*\*/.test(plan) && /Never-live.*1 SKU,/.test(plan) && /Covers/.test(plan) && /Spare Parts/.test(plan) && /Joystick Cover AC-FNN01/.test(plan) && !/Mattress Topper/.test(plan) && /Shall I run it with these settings\?/.test(plan) && /^Settings: /m.test(plan));
 check('plan is short (under 2,800 characters here)', plan.length < 2800, String(plan.length));
 
 const result = resultMarkdown(res, ctx, { attached: true });

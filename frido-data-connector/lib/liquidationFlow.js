@@ -130,7 +130,7 @@ export function resultMarkdown(res, ctx, { attached = false, notes = [] } = {}) 
   out.push('', `### No COGS (not valued): top ${Math.min(kn, res.noCogs.length)} of ${indianInt(res.noCogs.length)} SKUs, by excess units`, res.noCogs.length ? noCogsTable(res.noCogs, kn) : 'Every included SKU has a COGS.', 'Full list in Excel.');
   out.push('', '**Notes**',
     `- Excess = stock − ${s.cover_days} × avg daily sale (min 0); excess value = excess × COGS per unit. DOI = stock ÷ avg daily sale. ASP = last 90 days, ex GST, after discounts; max discount = margin ÷ ASP; n/a = no sale in 90 days. The 30d vs 90d trend is indicative.`,
-    `- Excluded: ${indianInt(ex.never.skus)} never-live SKUs and ${indianInt(ex.names.reduce((a, e) => a + e.skus, 0))} SKUs by name (categories, "cover" / "spare" names${ex.names.length ? '' : ': none found'}); names are in the Excel.`);
+    `- Excluded: ${indianInt(ex.never.skus)} never-live SKUs and ${indianInt(ex.names.reduce((a, e) => a + e.skus, 0))} SKUs by name (categories and sub-categories listed in the plan); names are in the Excel.`);
   if (notes.length) out.push(`- ${notes.join('; ')}.`);
   out.push(attached ? '- The Excel is attached below: sub-category summaries, every SKU with all columns, No COGS SKUs, exclusions.' : '- The Excel could not be attached this time.', '', settingsLine(s));
   return out.join('\n');

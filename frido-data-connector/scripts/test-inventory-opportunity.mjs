@@ -11,7 +11,7 @@ const cfg = JSON.parse(readFileSync(new URL('../knowledge/liquidation-config.jso
 const D = defaultSettings(cfg);
 
 check('defaults come from knowledge/liquidation-config.json: 60 days, top 20, b2c, 30-day sales, no min DOI, rank by excess value', D.cover_days === 60 && D.top_n === 20 && D.channel === 'b2c' && D.sales_days === 30 && D.min_doi === null && D.rank_by === 'excess_value');
-check('default exclusions: Spare Parts, Covers (+ words cover/covers); high-value group Mobility, Ergo Furniture', D.exclude_categories.includes('Spare Parts') && D.exclude_categories.includes('Covers') && D.exclude_words.includes('cover') && D.high_value_categories.join() === 'Mobility,Ergo Furniture');
+check('default exclusions: Spare Parts, Covers (+ the sub-category Joystick Cover AC-FNN01, no name-word rule); high-value group Mobility, Ergo Furniture', D.exclude_categories.includes('Spare Parts') && D.exclude_categories.includes('Covers') && D.exclude_sub_categories.includes('Joystick Cover AC-FNN01') && D.exclude_words.length === 0 && D.high_value_categories.join() === 'Mobility,Ergo Furniture');
 const m1 = mergeSettings(D, { cover_days: 90, rank_by: 'doi', sales_days: 60 }, { top_n: 10, exclude_categories: ['Footwear'] });
 check('every setting can change: cover days, top N, rank, sales period (60 works), exclusions replaced', m1.settings.cover_days === 90 && m1.settings.top_n === 10 && m1.settings.rank_by === 'doi' && m1.settings.sales_days === 60 && m1.settings.exclude_categories.join() === 'Footwear' && m1.notes.length === 0);
 const m2 = mergeSettings(D, { sales_days: 45, cover_days: 0, channel: 'x', rank_by: 'nonsense' });
@@ -35,6 +35,7 @@ const f30 = { asOf: '2026-11-27T05:00:00Z', avgSaleWindowDays: 30, skus: [
   sku('C1', 'Covers', 'Seat Cover', 900, 1),
   sku('P1', 'Orthotics', 'Mattress Topper Cover', 500, 1),
   sku('S1', 'Spare Parts', 'Wheel', 50, 0),
+  sku('J1', 'Accessories', 'Joystick Cover AC-FNN01', 45, 1),
   sku('N1', 'Footwear', 'Slipper', 700, 0, { last: null }),
   sku('X1', 'Footwear', 'Mystery', 300, 2),
 ] };
@@ -51,11 +52,12 @@ check('excess = stock - 60 x avg sale, minimum 0: 400 + 200 + 100 = 700 units (B
 check('excess value = excess x COGS per unit: 700 x 100 = 70,000', slip.excess_value === 70000);
 check('DOI of a sub-category = floor(stock / total avg sale) = floor(1600 / 15) = 106', slip.doi === 106);
 check('never-live (never sold) SKU is excluded and counted: N1, 700 units', res.excluded.never.skus === 1 && res.excluded.never.units === 700 && res.excluded.never.list[0] === 'N1');
-check('covers and spare parts are excluded and listed by exact name', ['Covers', 'Spare Parts', 'Mattress Topper Cover'].every(n => res.excluded.names.some(e => e.name === n)), res.excluded.names.map(e => e.name).join(', '));
-check('excluded names are not in any ranking', ![...res.main, ...res.high].some(s => ['Seat Cover', 'Wheel', 'Mattress Topper Cover'].includes(s.sub_category)));
+check('covers and spare parts are excluded and listed by exact name', ['Covers', 'Spare Parts', 'Joystick Cover AC-FNN01'].every(n => res.excluded.names.some(e => e.name === n)), res.excluded.names.map(e => e.name).join(', '));
+check('a product with Cover in its name (Mattress Topper Cover) stays in: no name-word rule', res.out.some(s => s.sub_category === 'Mattress Topper Cover'));
+check('excluded names are not in any ranking', ![...res.main, ...res.high].some(s => ['Seat Cover', 'Wheel', 'Joystick Cover AC-FNN01'].includes(s.sub_category)));
 check('mobility and ergo furniture are a separate list, not mixed into the main one', res.high.map(s => s.sub_category).join() === 'Walker,Chair' && !res.main.some(s => ['Walker', 'Chair'].includes(s.sub_category)));
 check('walker excess = 400 - 120 = 280 units, value 280,000', res.high[0].excess_units === 280 && res.high[0].excess_value === 280000);
-check('SKU with stock but no COGS is NOT dropped: separate "No COGS" list ranked by excess units, flagged', res.noCogs.length === 1 && res.noCogs[0].sku === 'X1' && res.noCogs[0].excess_units === 180 && res.noCogs[0].cogs_basis === 'No COGS' && res.noCogs[0].stock_value === null);
+check('SKU with stock but no COGS is NOT dropped: separate "No COGS" list ranked by excess units, flagged', res.noCogs.map(r => r.sku).join() === 'P1,X1' && res.noCogs[1].excess_units === 180 && res.noCogs[1].cogs_basis === 'No COGS' && res.noCogs[1].stock_value === null);
 check('...and kept out of the value ranking', !res.main.some(s => s.sub_category === 'Mystery'));
 check('trend 7d vs 30d is calculated: Slipper avg 7d (20+5+0) vs 30d (10+5+0) = +66.7%', slip.trend_7d_vs_30d_pct === 66.7, String(slip.trend_7d_vs_30d_pct));
 check('per SKU: ASP ex GST = revenue / units = 250; margin = ASP - COGS = 150; max discount = 150 / 250 = 60%', (() => { const r = res.out.find(x => x.sku === 'F1'); return r.asp_exc_gst === 250 && r.margin_per_unit === 150 && r.max_discount_pct === 60; })());
@@ -68,7 +70,7 @@ check('a SKU with a first-sale date but no recent sale is not "never live"', noS
 // settings change the result
 const c90 = run(mergeSettings(D, { cover_days: 90 }).settings);
 check('now 90 days cover: excess falls', c90.main.find(s => s.sub_category === 'Slipper').excess_units < slip.excess_units);
-const noEx = run(mergeSettings(D, { exclude_categories: [], exclude_words: [] }).settings);
+const noEx = run(mergeSettings(D, { exclude_categories: [], exclude_sub_categories: [] }).settings);
 check('removing the exclusions brings Covers back', noEx.main.some(s => s.sub_category === 'Seat Cover') && noEx.excluded.names.length === 0);
 const minDoi = run(mergeSettings(D, { min_doi: 150 }).settings);
 check('minimum DOI keeps only slow SKUs (F1/F2 at DOI 100 dropped)', minDoi.out.every(r => r.doi === null || r.doi >= 150));
@@ -80,7 +82,7 @@ check('60-day average uses units / 60 from the sales table (F1: 600/60 = 10)', d
 // text for the model
 const ctx = { asOf: f30.asOf, cogsLabel: 'COGS rates: Sep 2026, carried forward' };
 const plan = planText(res, ctx);
-check('the plan lists settings with defaults, exclusions by exact name, the high-value group and asks to confirm', /cover_days 60/.test(plan) && /Covers/.test(plan) && /Spare Parts/.test(plan) && /Mattress Topper Cover/.test(plan) && /never-live/.test(plan) && /Mobility, Ergo Furniture/.test(plan) && /Shall I run it with these settings\?/.test(plan) && /No COGS/.test(plan));
+check('the plan lists settings with defaults, exclusions by exact name, the high-value group and asks to confirm', /cover_days 60/.test(plan) && /Covers/.test(plan) && /Spare Parts/.test(plan) && /Joystick Cover AC-FNN01/.test(plan) && /never-live/.test(plan) && /Mobility, Ergo Furniture/.test(plan) && /Shall I run it with these settings\?/.test(plan) && /No COGS/.test(plan));
 const text = resultText(res, { ...ctx, attached: true });
 check('the result has the main list, the separate high-value list, the No COGS list, ASP / margin / max discount, a TOTAL row and the Settings line', /MAIN LIST/.test(text) && /HIGH-VALUE LIST/.test(text) && /NO COGS LIST/.test(text) && /max_discount_pct/.test(text) && /TOTAL of all/.test(text) && /^Settings: /m.test(text) && /ATTACHED/.test(text));
 const k = knownNumbers([text, plan]);

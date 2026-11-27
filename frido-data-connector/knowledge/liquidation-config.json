@@ -1,5 +1,5 @@
 {
-  "_comment": "Defaults of the inventory_opportunity tool (push for sale / liquidate). Change a value here to change the default; the user can still change any setting in the chat. Names are matched case-insensitively against the SKU master categories / sub-categories.",
+  "_comment": "Defaults of the inventory_opportunity tool (push for sale / liquidate). Change a value here to change the default; the user can still change any setting in the chat. Only these exact names are excluded (no name-word rule: toppers, pillows with covers and Cast Covers stay in). Names are matched case-insensitively against the SKU master categories / sub-categories.",
   "cover_days": 60,
   "top_n": 20,
   "channel": "b2c",
@@ -7,8 +7,8 @@
   "min_doi": null,
   "rank_by": "excess_value",
   "exclude_categories": ["Spare Parts", "Covers"],
-  "exclude_sub_categories": [],
-  "exclude_sub_category_words": ["cover", "covers", "spare", "spares"],
+  "exclude_sub_categories": ["Joystick Cover AC-FNN01"],
+  "exclude_sub_category_words": [],
   "include_categories": [],
   "include_sub_categories": [],
   "high_value_categories": ["Mobility", "Ergo Furniture"]
