@@ -64,5 +64,9 @@ const many = buildCatalog(Array.from({ length: 12 }, (_, i) => ({ Product_Code: 
 const mb = describeMatch(matchProducts(many, 'wedge cushion sales'));
 check('more than 8 matches: names only, filter by sub-category, top 10 + Other + Total', /filter by the master Sub_category/.test(mb) && /TOP 10/.test(mb) && !/FR-X0/.test(mb));
 
+// "right now" is a time phrase, not the product word "right"
+const cat2 = buildCatalog([...R('Orthotics Wrist Support Brace Right', 'Orthotics', 'FR-WR-1'), ...R('Mouse Wrist Support', 'Orthotics', 'FR-MW-1')]);
+check('"total inventory value right now" matches no product', matchProducts(cat2, 'What is the total inventory value right now?').mentions.length === 0);
+check('"right wrist brace" still matches the product', matchProducts(cat2, 'stock of right wrist brace').mentions.length > 0);
 console.log(bad ? `\n${bad} failed` : '\nAll checks passed');
 process.exit(bad ? 1 : 0);

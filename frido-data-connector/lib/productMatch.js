@@ -139,7 +139,8 @@ export function familiesOf(matches) {
 
 // text -> { mentions: [{ text, kind: 'sku'|'one'|'several', matches: [{sub, category, skus, score, exact, sku?}] }], none: [{ text, closest: [] }] }
 export function matchProducts(catalog, text) {
-  const raw = String(text || '');
+  // "right now" / "right away" are time words, not the product word "right" (Right wrist brace)
+  const raw = String(text || '').replace(/\b(right|just)\s+(now|away)\b/gi, ' $2 ');
   const mentions = [];
   const taken = new Set(); // indexes of question words already explained by a SKU code or a product span
 
