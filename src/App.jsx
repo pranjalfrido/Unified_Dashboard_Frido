@@ -21470,7 +21470,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         {page === 'overview' && <OverviewFilterStrip filters={filters} setFilters={setFilters} />}
-        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask'} />
+        <LoadingOverlay loading={(loading || fetchPending) && page !== 'inventory' && page !== 'logistics' && page !== 'logistics-cost' && page !== 'courier-allocation' && page !== 'cn-received' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cn' && page !== 'customer' && page !== 'documents' && page !== 'profile' && page !== 'feedback' && page !== 'purchase-ledger' && page !== 'packaging-bom' && page !== 'customer-support' && page !== 'ask' && page !== 'scheduled-emails'} />
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
