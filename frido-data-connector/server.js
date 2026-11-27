@@ -36,7 +36,7 @@ import { buildKnowledge, sectionsForTopics, TOPICS } from './lib/knowledgeSectio
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ, guardSql } from './lib/bigquery.js';
-import { runInventoryOpportunity, defaultSettings, mergeSettings, flowMessageFromChat, settingsFromChat, planText, resultText, buildWorkbook, SALES_SQL } from './lib/inventoryOpportunity.js';
+import { runInventoryOpportunity, defaultSettings, mergeSettings, flowMessageFromChat, parseHidden, settingsFromChat, planText, resultText, buildWorkbook, SALES_SQL } from './lib/inventoryOpportunity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readKnowledge = name => {
@@ -645,7 +645,9 @@ const httpServer = http.createServer(async (req, res) => {
     }
 
     try {
-      let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
+      // An earlier liquidation plan / result of this chat (carries the hidden state) is not sent to the model for an unrelated question: it is ~10k tokens.
+      const OMITTED = '[Earlier NavAI answer: the stock liquidation plan / lists, already shown to the user, left out here.]';
+      let loopMessages = messages.map(m => (m.role === 'assistant' && parseHidden(String(m.content ?? m.text ?? '')) ? { role: m.role, content: OMITTED } : { role: m.role, content: buildContent(m) }));
       const { block: matchBlock, computed } = await productMatchBlock(messages, user);
       const userTexts = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? '')).slice(-4);
       const { blocks: systemBlocks, kb } = buildSystemBlocks(userTexts);
