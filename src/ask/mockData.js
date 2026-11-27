@@ -46,6 +46,7 @@ export async function sendMessage(conversationMessages, callerToken) {
     sql: data.sql || null,
     model: data.model || null,
     tableKeys: Array.isArray(data.tableKeys) ? data.tableKeys : null,
+    files: Array.isArray(data.files) && data.files.length ? data.files : null, // made by a tool (the Excel of the liquidation analysis); not saved in history
   };
 }
 

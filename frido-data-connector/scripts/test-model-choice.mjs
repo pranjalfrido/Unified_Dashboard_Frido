@@ -8,4 +8,9 @@ check('Opus: PDF + compare', chooseModel('compare this invoice with our data', [
 check('Opus: Excel (text) + reconcile', chooseModel('reconcile this sheet', [{ type: 'text' }]).model === OPUS);
 check('Sonnet: a photo with a question', chooseModel('what does this show, compare it', [{ type: 'image' }]).model === SONNET);
 check('Sonnet: a file with a simple question', chooseModel('what is in this file', [{ type: 'text' }]).model === SONNET);
+const big = 'top 20 products where inventory is high enough to push for sale / liquidate high-DOI products; ignore never-live products; keep mobility and ergo furniture separate; Excel with full SKU details; ask me questions before starting';
+check('Sonnet + 12 steps: the liquidation analysis request (numbers are computed in code)', chooseModel(big).model === SONNET && chooseModel(big).steps === 12 && chooseModel(big).why === 'analysis');
+check('Sonnet + 12 steps: "which slow-moving products should we liquidate"', chooseModel('which slow-moving products should we liquidate').model === SONNET && chooseModel('which slow-moving products should we liquidate').steps === 12);
+check('Opus + 12 steps: a planning question (plan N days for a SKU)', chooseModel('Plan 40 days for FR-OPC-L1').steps === 12);
+check('normal questions: Sonnet and 6 steps', ['What is the total inventory value right now?', 'Top 5 products by inventory value', 'Cushion sales last month'].every(q => chooseModel(q).model === SONNET && chooseModel(q).steps === 6));
 console.log(bad ? `\n${bad} failed` : '\nAll checks passed'); process.exit(bad ? 1 : 0);

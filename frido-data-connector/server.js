@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { runBigQuery } from './lib/bigquery.js';
-import { runSupabase } from './lib/supabase.js';
+import { runSupabase, queryRows } from './lib/supabase.js';
 import { runRepo } from './lib/repo.js';
 import { isAllowed, blockReason } from './lib/safety.js';
 import { log } from './lib/logger.js';
@@ -30,11 +30,13 @@ import { loadCatalog, matchProducts, describeMatch, findProductText } from './li
 import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
 import { fillTotals, keyColumns } from './lib/tableHints.js';
-import { chooseModel, OPUS } from './lib/modelChoice.js';
+import { chooseModel, OPUS, SONNET } from './lib/modelChoice.js';
+import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange } from './lib/liquidationFlow.js';
 import { buildKnowledge, sectionsForTopics, TOPICS } from './lib/knowledgeSections.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
-import { getBQ } from './lib/bigquery.js';
+import { getBQ, guardSql } from './lib/bigquery.js';
+import { runInventoryOpportunity, defaultSettings, settingsFromChat, planText, resultText, buildWorkbook, SALES_SQL } from './lib/inventoryOpportunity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readKnowledge = name => {
@@ -207,6 +209,36 @@ async function productMatchBlock(messages, user) {
   return { block: '', computed: null };
 }
 
+// inventory_opportunity: stock beyond N days of cover per sub-category (permission inventory:cost), read-only. The Excel goes back in outFiles.
+async function executeInventoryOpportunity(user, args, chatSettings, outFiles, asMarkdown = false) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkInventoryCost(user);
+  if (!page.ok) return page;
+  try {
+    const deps = {
+      invFile: async n => (await fetchEndpoint(n, {})).data,
+      cogsMonthly: async b => (await fetchEndpoint('cogs-monthly', b)).data,
+      sales: async () => { guardSql(SALES_SQL); const [rows] = await getBQ().query({ query: SALES_SQL, useLegacySql: false, maximumBytesBilled: '10000000000' }); return rows; },
+      firstSales: async () => queryRows('SELECT product_code, sku_first_sales_date FROM item_master'),
+    };
+    const { res, ctx, notes } = await runInventoryOpportunity(args || {}, deps, chatSettings, OPP_DEFAULTS);
+    let text, attached = false;
+    if (args?.mode === 'plan') text = asMarkdown ? planMarkdown(res, ctx, notes) : planText(res, ctx);
+    else {
+      try { const file = await buildWorkbook(res, ctx); if (file) { outFiles.push(file); attached = true; } } catch (e) { log({ user: user.email, role: user.role, target: 'inventory_opportunity', allowed: true, excel_error: String(e.message).slice(0, 120) }); }
+      text = asMarkdown ? resultMarkdown(res, ctx, { attached, notes }) : resultText(res, { ...ctx, attached });
+    }
+    if (notes.length && !asMarkdown) text += `\nNote: ${notes.join('; ')} (those values were ignored and the earlier setting was kept).`;
+    log({ user: user.email, role: user.role, target: 'inventory_opportunity', command: JSON.stringify({ mode: args?.mode || 'run', cover: res.settings.cover_days, days: res.settings.sales_days }).slice(0, 200), allowed: true, resultSize: text.length, excel: attached, duration: Date.now() - start });
+    return { ok: true, text, skus: new Map(), sql: 'inventory_opportunity (Inventory cost card valuation + stock beyond cover)' };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'inventory_opportunity', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `Inventory opportunity analysis failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
 // inventory_cost: the Inventory Health "Inventory cost detail" card (permission inventory:cost), same valuation rule as the card.
 async function executeInventoryCost(user, args) {
   const start = Date.now();
@@ -280,6 +312,8 @@ const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dash
 
 const INVENTORY_COST_DESCRIPTION = 'Inventory valued at cost, exactly as the Inventory Health > "Inventory cost detail" card shows it (needs the Inventory Cost Detail permission). Use for: inventory value (₹) by product, SKU or category, units, DOI and status, which SKUs have no COGS (and what they are valued at), and which COGS month is used. Rule of the card: SKU value = own COGS x units; if the SKU has no COGS, the average COGS of its sub-category x units; if neither, not valued. Counts are SKUs with stock > 0 only. Every total, count and subtotal is calculated by the tool: copy them, never add rows yourself. Say which COGS month the rates come from (the tool states it, e.g. "Sep 2026, carried forward") and that stock is the Regular facilities of the Inventory Health page. Read-only.';
 
+const INVENTORY_OPPORTUNITY_DESCRIPTION = 'Which sub-categories hold stock beyond N days of cover, to push for sale or liquidate (needs the Inventory Cost Detail permission). All numbers are calculated by the tool: same stock (Regular facilities) and same valuation as the Inventory cost card; per sub-category: SKUs, stock, value at cost, excess units (stock beyond cover_days x avg daily sale), excess value, DOI, 7-vs-30 and 30-vs-90 day sale trend, weighted ASP, COGS, margin per unit and max discount before loss %. Never-live SKUs (never sold), spare parts and covers are excluded (listed by name); Mobility and Ergo Furniture come as a separate high-value list; SKUs with stock but no COGS come as a separate "No COGS" list. mode "plan" returns the assumptions and exclusions to show the user BEFORE running (use it first when the user asks for questions / a plan before starting, or the request combines several criteria); mode "run" (default) returns the result and attaches an Excel with every SKU. Settings the user can change (pass only what they changed; the rest comes from the earlier Settings line of the chat, then the defaults): cover_days, top_n, channel (b2c or all), sales_days (7, 15, 30, 60, 90), min_doi, rank_by (excess_value, doi, stock_value), exclude_categories, exclude_sub_categories, include_categories, include_sub_categories, high_value_categories. Always copy the Settings line of the tool result into your reply unchanged. Read-only.';
+const OPP_DEFAULTS = defaultSettings((() => { try { return JSON.parse(readKnowledge('liquidation-config.json')); } catch { return {}; } })());
 const FIND_PRODUCT_DESCRIPTION = 'Match product words or a SKU code against the SKU master (sub-category = the product, product name, SKU code), case-insensitive. Returns every matching product with its SKUs, or says nothing matches and gives the closest names. The connector already runs this on the question and puts the result in front of it ("Product match"); call this tool only for a product word that is not in that block (for example one from an earlier message). Never pick one of several matches yourself.';
 
 const CN_TOOL_DESCRIPTION = 'Credit notes (CN) received from couriers, FTL/PTL transporters and 3PL partners, exactly as the dashboard page Logistics > Cost Analytics > Overview > "CN Received" shows them: CN count, invoice value, received CN and received % of invoice, by format (B2C couriers, FTL/PTL, 3PL), by reason (weight dispute, lost/damage, SLA breach, high ageing, wrong invoicing, wrong billing), by partner and by invoice month. Use for ANY question about credit notes, CN received, CN vs invoice, weight-dispute or lost/damage CNs. Arguments: month "YYYY-MM" (one invoice month) OR from/to "YYYY-MM"; omit for all months. TOTALS ONLY: the page has no list of individual open/pending CNs and no ageing, so say that and do not invent them.';
@@ -440,6 +474,15 @@ const httpServer = http.createServer(async (req, res) => {
     const lastUserMsg = String(messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '');
     // Model choice (lib/modelChoice.js): Sonnet by default; Opus for planning, file reasoning, and the number-check retry below.
     const lastAttached = Array.isArray(messages[messages.length - 1]?.attachments) ? messages[messages.length - 1].attachments : [];
+    // Liquidation / push-for-sale analysis: plan and result are built in code (no writing model). A person without the permission is refused here, before any model call.
+    const flow = detectFlow(messages);
+    const denial = preflightDenial(user, lastUserMsg, flow);
+    if (denial) {
+      log({ user: user.email, role: user.role, target: 'chat_refused_no_permission', allowed: false });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text: denial, sql: null, model: null, tableKeys: [], monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
+      return;
+    }
     const choice = chooseModel(lastUserMsg, lastAttached);
     const model = choice.model;
     const wantOpus = model === OPUS;
@@ -481,6 +524,26 @@ const httpServer = http.createServer(async (req, res) => {
           regular: { description: 'inv-data files only: true or {sku, location} — Regular-facility stock per location (the Inventory Health Regular view)' },
         },
         required: ['endpoint'],
+      },
+    }, {
+      name: 'inventory_opportunity',
+      description: INVENTORY_OPPORTUNITY_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['plan', 'run'], description: 'plan = assumptions and exclusions to confirm first; run = the result (default)' },
+          cover_days: { type: 'number', description: 'Days of cover kept (default 60); stock beyond it is excess' },
+          top_n: { type: 'integer', description: 'Sub-categories per list (default 20, max 50)' },
+          channel: { type: 'string', enum: ['b2c', 'all'], description: 'Sales channel for the average (default b2c)' },
+          sales_days: { type: 'integer', enum: [7, 15, 30, 60, 90], description: 'Days the average daily sale is taken over (default 30)' },
+          min_doi: { type: 'number', description: 'Only include SKUs with at least this DOI (default none)' },
+          rank_by: { type: 'string', enum: ['excess_value', 'doi', 'stock_value'] },
+          exclude_categories: { type: 'array', items: { type: 'string' }, description: 'Replaces the excluded categories (the Settings line shows the current ones)' },
+          exclude_sub_categories: { type: 'array', items: { type: 'string' } },
+          include_categories: { type: 'array', items: { type: 'string' }, description: 'Only these categories' },
+          include_sub_categories: { type: 'array', items: { type: 'string' }, description: 'Only these sub-categories' },
+          high_value_categories: { type: 'array', items: { type: 'string' }, description: 'The separate high-value group (default Mobility, Ergo Furniture)' },
+        },
       },
     }, {
       name: 'inventory_cost',
@@ -536,11 +599,33 @@ const httpServer = http.createServer(async (req, res) => {
       input_schema: { type: 'object', properties: { topics: { type: 'array', items: { type: 'string', enum: TOPICS } } }, required: ['topics'] },
     }];
 
+    if (flow) {
+      try {
+        const chatSet = settingsFromChat(messages);
+        let args = {}, use = null;
+        if (flow.parse) { const p = await parseSettingChange(anthropic, SONNET, lastUserMsg, chatSet || OPP_DEFAULTS); args = p.args; use = p.usage; }
+        const files = [];
+        const r = await executeInventoryOpportunity(user, { ...args, mode: flow.mode }, chatSet, files, true);
+        if (use) await trackUsage({ model: SONNET, inputTokens: use.input_tokens || 0, outputTokens: use.output_tokens || 0, cacheRead: use.cache_read_input_tokens || 0, cacheWrite: use.cache_creation_input_tokens || 0, user }).catch(() => {});
+        log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model: use ? SONNET : null, steps: 0, why: `liquidation_${flow.mode}`, input_tokens: use?.input_tokens || 0, output_tokens: use?.output_tokens || 0, cache_read_tokens: 0, cache_write_tokens: 0 });
+        const text = r.ok || r.denied ? r.text : `${r.text}\n\nNothing could be computed, so there is no list yet. Try again in a few minutes, or contact data.team@myfrido.com.`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ text, sql: null, model: use ? SONNET : null, tableKeys: keyColumns(lastUserMsg, text), ...(files.length ? { files: files.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: use ? { [SONNET]: { input: use.input_tokens || 0, output: use.output_tokens || 0, cache_read: 0, cache_write: 0 } } : {}, per_request: [], topics: ['liquidation_flow'] } : {}), monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
+      } catch (err) {
+        console.error('Liquidation flow error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'The stock analysis failed. Please try again.' }));
+      }
+      return;
+    }
+
     try {
       let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
       const { block: matchBlock, computed } = await productMatchBlock(messages, user);
       const userTexts = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? '')).slice(-4);
       const { blocks: systemBlocks, kb } = buildSystemBlocks(userTexts);
+      const chatSettings = settingsFromChat(messages); // analysis settings the user chose earlier in this chat (from the Settings line of our last answer)
+      const outFiles = [];      // files made by tools (the Excel of inventory_opportunity), sent back with the answer
       const toolTexts = [];     // everything the tools returned: the only numbers an answer may contain
       let lastTsv = '';         // the last table a tool returned (used to rebuild a table if the answer's numbers do not check out)
       if (computed) toolTexts.push(computed.text);
@@ -563,10 +648,13 @@ ${last.content}`;
       const seenFormatted = new Set();
       const syncNotes = new Set();
       const usageBy = {};       // model -> { input, output } for this answer
-      const addUse = (m, u) => { const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0, cache_read: 0, cache_write: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; x.cache_read += u?.cache_read_input_tokens || 0; x.cache_write += u?.cache_creation_input_tokens || 0; };
+      const stepUse = [];       // per request: model, input, output, cache read/write (debugUsage + chat_usage log; no text)
+      const addUse = (m, u) => { stepUse.push([m === OPUS ? 'O' : 'S', u?.input_tokens || 0, u?.output_tokens || 0, u?.cache_read_input_tokens || 0, u?.cache_creation_input_tokens || 0].join(':')); const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0, cache_read: 0, cache_write: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; x.cache_read += u?.cache_read_input_tokens || 0; x.cache_write += u?.cache_creation_input_tokens || 0; };
 
-      // At most 6 steps in the tool loop; a repeated identical tool call in the same answer reuses the result already fetched.
-      const MAX_STEPS = 6;
+      // At most 6 steps in the tool loop (12 for planning / analysis questions); a repeated identical tool call in the same answer reuses the result already fetched.
+      const MAX_STEPS = choice.steps;
+      const failures = [];      // "tool: reason" for every tool call that failed, shown when nothing could be computed
+      let lastStop = '';
       const reuse = new Map();
       while (iterations < MAX_STEPS) {
         iterations++;
@@ -588,6 +676,7 @@ ${last.content}`;
           if (block.type === 'tool_use') usedSql = block.input?.command || (block.name === 'oos_loss' ? 'oos_loss' : block.name === 'cn_received' ? 'cn_received' : block.name === 'pnl' ? 'pnl' : block.name === 'dashboard_api' ? 'dashboard_api' : usedSql);
         }
 
+        lastStop = response.stop_reason;
         if (response.stop_reason !== 'tool_use') break;
 
         // Execute tool calls using the same executeTool() as MCP
@@ -602,6 +691,8 @@ ${last.content}`;
             ? await executeOos(user, block.input, seenFormatted)
             : block.name === 'find_product'
               ? await executeFindProduct(block.input)
+            : block.name === 'inventory_opportunity'
+              ? await executeInventoryOpportunity(user, block.input, chatSettings, outFiles)
             : block.name === 'inventory_cost'
               ? await executeInventoryCost(user, block.input)
             : block.name === 'cn_received'
@@ -621,6 +712,7 @@ ${last.content}`;
           } else if (!result.ok) {
             queryErrors++;
             lastProblem = result.error || 'query failed';
+            failures.push(`${block.name}: ${String(result.error || result.text || 'failed').slice(0, 140)}`);
           }
           if (result.ok && !result.denied && typeof result.text === 'string') {
             if (block.name !== 'load_knowledge') toolTexts.push(result.text);
@@ -648,15 +740,20 @@ ${last.content}`;
         ];
       }
 
-      // If loop exhausted all iterations still in tool_use, force a final text response
-      if (!finalText && loopMessages.length > messages.length) {
+      // If the loop used all its steps while still asking for tools, the answer is written now from what was collected
+      // (text written between tool calls is not an answer).
+      if ((lastStop === 'tool_use' || !finalText) && loopMessages.length > messages.length) {
+        const lastMsg = loopMessages[loopMessages.length - 1];
+        const closing = { type: 'text', text: 'You have used all your tool steps. Write the answer now from the results you already have (do not call tools). Show everything that was computed; if something is missing, say exactly which data is missing or failed.' };
+        const forced = lastMsg.role === 'user' && Array.isArray(lastMsg.content) ? [...loopMessages.slice(0, -1), { ...lastMsg, content: [...lastMsg.content, closing] }] : loopMessages;
+        if (lastStop === 'tool_use') finalText = '';
         const finalResponse = await anthropic.messages.create({
           model,
           max_tokens: 4096,
           system: systemBlocks,
           tools,
           tool_choice: { type: 'none' },
-          messages: loopMessages,
+          messages: forced,
         }).catch(() => null);
         if (finalResponse) {
           addUse(model, finalResponse.usage);
@@ -747,7 +844,7 @@ ${last.content}`;
           }
         };
         if (odd.length) await rewrite(model);
-        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length }); await rewrite(OPUS); }
+        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length, sample: odd.slice(0, 6) }); await rewrite(OPUS); }
         if (odd.length) {
           let replaced = 'none';
           if (computed) { finalText = computed.text; replaced = computed.kind; }
@@ -766,14 +863,19 @@ ${last.content}`;
 
       // Cost per answer: one line with the model(s) used and the tokens (no question text), and the spend tracker per model.
       for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, cacheRead: u.cache_read, cacheWrite: u.cache_write, user }).catch(() => {});
-      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), cache_read_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_read, 0), cache_write_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_write, 0), steps: iterations, topics: kb.topics.join(','), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
+      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), cache_read_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_read, 0), cache_write_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_write, 0), steps: iterations, topics: kb.topics.join(','), by_model: usageBy, per_request: stepUse.join(' '), why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
 
+      // Never "nothing usable came back" when something was computed: show the last table the tools returned, and say what is missing.
+      if (!finalText && lastTsv) {
+        const md = tsvToMarkdown(lastTsv, 50);
+        if (md) finalText = `I could not finish writing the summary, but this is the last result I computed from the data:\n\n${md}\n\n${failures.length ? `Data that failed: ${[...new Set(failures)].join('; ')}.\n\n` : ''}Ask me to continue and I will pick up from here.`;
+      }
       if (!finalText) {
         // One line: what was tried and what is missing — never a bare "query failed".
         const tried = queriesRun
           ? `I ran ${queriesRun} data ${queriesRun === 1 ? 'request' : 'requests'}${denials ? ` (${denials} denied)` : ''}${queryErrors ? ` (${queryErrors} failed)` : ''}`
           : 'I could not start a data query';
-        const missing = lastProblem ? `; the last problem was: ${lastProblem}. Missing: a usable result, so I can't give a number yet.` : '; nothing usable came back, so I cannot give a number yet.';
+        const missing = failures.length ? `; data that failed: ${[...new Set(failures)].join('; ')}. Nothing was computed, so I can't give a number yet.` : lastProblem ? `; the last problem was: ${lastProblem}. Missing: a usable result, so I can't give a number yet.` : '; every request ran but returned no rows, so there is nothing to show yet.';
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: `${tried}${missing} Try again, or contact data.team@myfrido.com.` }));
         return;
@@ -788,7 +890,7 @@ ${last.content}`;
 
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, ...(body?.debugUsage === true ? { usage: usageBy, topics: kb.topics } : {}), monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, ...(outFiles.length ? { files: outFiles.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: usageBy, per_request: stepUse, topics: kb.topics } : {}), monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {

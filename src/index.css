@@ -1851,3 +1851,8 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .nx-attach-sheet button span{ display:flex; flex-direction:column; gap:2px }
 .nx-attach-sheet button b{ font-size:15px; font-weight:600 }
 .nx-attach-sheet button small{ font-size:12px; color:#6b746e }
+
+/* A file sent with an answer (the liquidation Excel): a download button under the answer */
+.nx-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.nx-xl-file { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.pm-files .nx-xl-file { min-height: 44px; }

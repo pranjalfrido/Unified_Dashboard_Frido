@@ -11,7 +11,7 @@ const KEYWORDS = {
   sales: /revenue|sales|sold|selling|gross|net\b|gmv|aov|asp\b|orders?\b|cancel|discount|channel|d2c|amazon|flipkart|blinkit|zepto|instamart|myntra|firstcry|cred\b|ebo\b|offline|marketplace|category|categories|product|sku|brand|growth|vs\b|compare|top \d+|best|worst/i,
   returns: /return|rto|refund|cir\b|exchange|rvp|reverse/i,
   logistics: /logistic|courier|delhivery|blue ?dart|ekart|shadowfax|xpress|shipment|shipping|awb|delivery|delivered|tat\b|edd\b|pickup|pick-up|stuck|ndr|zone|clickpost|\bcn\b|credit note|freight|weight|dispute|lost|damage|sla\b|ageing|aging|ftl|ptl|3pl|invoice/i,
-  inventory: /inventor|stock|doi\b|warehouse|facility|inward|grn\b|dead|excess|critical|cogs|value at cost|units|allocation|transfer|dark store|dc\b|fulfil/i,
+  inventory: /inventor|liquidat|slow.?moving|high.?doi|push for sale|excess|cover days|days of cover|stock|doi\b|warehouse|facility|inward|grn\b|dead|excess|critical|cogs|value at cost|units|allocation|transfer|dark store|dc\b|fulfil/i,
   oos: /\boos\b|out.of.stock|stock.?out|avg.?daily|average daily|daily sale|run.?rate|loss of sales|days out/i,
   plan: /\bplan|reorder|replenish|how much to (order|transfer)|forecast|days of cover|cover for/i,
   pnl: /p&l|pnl|profit|margin|cm1|cm2|snd\b|s&d|marketing|roas|\bads?\b|ad spend|spend|cac\b|customers?\b|ltv|retention|repeat|support|ticket|breakeven|cogs/i,
@@ -40,7 +40,7 @@ const MAP_RULES = [
   [/^## Group 1 /, ['logistics']],
   [/^## Group 2b /, ['logistics']],
   [/^## Group 2 /, ['logistics']],
-  [/^## Group 3[bc]? /, ['inventory', 'oos', 'plan']],
+  [/^## Group 3[bcd]? /, ['inventory', 'oos', 'plan']],
   [/^## Group 4 /, ['sales', 'returns']],
   [/^## Group 5 /, ['pnl']],
 ];

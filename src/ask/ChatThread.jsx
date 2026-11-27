@@ -8,6 +8,7 @@ import { SUGGESTIONS } from './pulseShared.js';
 import { renderMarkdown } from './markdown.js';
 import { answerBlocks } from './answerTables.js';
 import ExcelButton from './ExcelButton.jsx';
+import AnswerFiles from './AnswerFiles.jsx';
 
 function ThinkingDots() {
   return (
@@ -77,6 +78,7 @@ function AssistantMessage({ msg, question, isAdmin }) {
               <AnswerBody text={msg.text} />
             )}
             <AssistantTable table={msg.table} />
+            <AnswerFiles files={msg.files} />
             {msg.assumptions && (
               <div className="af-assumptions">Assumptions: {msg.assumptions}</div>
             )}
