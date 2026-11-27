@@ -1,0 +1,31 @@
+// Knowledge on demand: the right sections go with the right question; unclear questions get everything.
+import { readFileSync } from 'fs';
+import { buildKnowledge, buildForTopics, topicsFor, sectionsForTopics, TOPICS } from '../lib/knowledgeSections.js';
+let bad = 0; const check = (n, c, x = '') => { console.log(`${c ? 'OK  ' : 'FAIL'} ${n}${x ? ' -> ' + x : ''}`); if (!c) bad++; };
+const rd = f => readFileSync(new URL('../knowledge/' + f, import.meta.url), 'utf8');
+const files = { claude: rd('CLAUDE.md'), map: rd('ENDPOINT_MAP.md'), playbook: rd('PULSE_PLAYBOOK.md'), metrics: rd('PULSE_METRICS.md') };
+const all = buildForTopics(files, TOPICS);
+const full = [files.claude, files.map, files.playbook, files.metrics].join('\n\n---\n\n');
+const size = k => (k.always + k.selected).length;
+const has = (k, s) => (k.always + k.selected).includes(s);
+const kb = q => buildKnowledge(files, [q]);
+
+check('all topics = every section of the files (nothing is lost)', ['## EXACT formula for Gross Revenue', '## EXACT SQL for Logistics Performance', '## Planning avg daily sale', '## Group 3c', '## Group 5', '## Known gotchas', '## Answer format'].every(h => has(all, h)));
+check('every CLAUDE.md / ENDPOINT_MAP.md section is sent with all topics', all.pieces.every(p => has(all, p.text.slice(0, 60))));
+const rev = kb('What was D2C gross revenue from 1 to 28 Oct 2026?');
+check('revenue question: gross/net revenue formulas yes, logistics SQL and planning no', has(rev, '## EXACT formula for Gross Revenue') && has(rev, '## EXACT formula for Net Revenue') && !has(rev, '## EXACT SQL for Logistics Performance') && !has(rev, '## Planning avg daily sale'), rev.topics.join(','));
+const log = kb('Compare Delhivery vs Bluedart delivery rate, Sep 2026');
+check('courier question: logistics SQL + Group 1/2 yes, planning and Group 3 no', has(log, '## EXACT SQL for Logistics Performance') && has(log, '## Group 1') && !has(log, '## Planning avg daily sale') && !has(log, '## Group 3 '), log.topics.join(','));
+const inv = kb('What is the total inventory value right now?');
+check('inventory question: total inventory + Group 3c yes, revenue formula no', has(inv, '## EXACT query for total inventory') && has(inv, '## Group 3c') && !has(inv, '## EXACT formula for Gross Revenue'), inv.topics.join(','));
+const pl = kb('Plan 40 days for FR-OPC-L1');
+check('planning question: planning + OOS avg-daily sections yes', has(pl, '## Planning avg daily sale') && has(pl, '## EXACT formula for Avg Daily Sale'), pl.topics.join(','));
+const unk = kb('hello there');
+check('a question with no topic gets everything', unk.topics.length === TOPICS.length && size(unk) === size(all));
+check('the always part is in every case: for-every-question, tables, defaults, answer format, playbook, metrics', [rev, log, inv, pl].every(k => has(k, '## For every question') && has(k, '## Tables') && has(k, '## Default behaviors') && has(k, '## Answer format') && has(k, 'Playbook') || has(k, '## Answer format')));
+check('follow-up keeps the topic of the chat ("and for Bluedart?" after a courier question)', buildKnowledge(files, ['Delhivery delivery rate Sep', 'and for Bluedart?']).topics.includes('logistics'));
+check('the prompt tells which sections were left out and how to get them', /Knowledge not loaded/.test(rev.selected) && /load_knowledge/.test(rev.selected));
+check('load_knowledge returns the sections of a topic (and says so for an unknown one)', /EXACT SQL for Logistics Performance/.test(sectionsForTopics(files, ['logistics'])) && /Unknown topic/.test(sectionsForTopics(files, ['nope'])));
+console.log(`\nsizes (characters): all ${size(all)} | revenue ${size(rev)} | courier ${size(log)} | inventory ${size(inv)} | plan ${size(pl)} | files ${full.length}`);
+check('a one-topic question sends at most 65% of everything', size(rev) <= size(all) * 0.65 && size(inv) <= size(all) * 0.65, `${Math.round(size(rev) / size(all) * 100)}% / ${Math.round(size(inv) / size(all) * 100)}%`);
+console.log(bad ? `\n${bad} failed` : '\nAll checks passed'); process.exit(bad ? 1 : 0);
