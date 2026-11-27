@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-27T18:08:53.333Z",
+  "generatedAt": "2026-11-27T19:08:41.135Z",
   "logistics": {
     "windowStart": "2026-11-06",
     "windowEnd": "2026-11-12",
@@ -24,7 +24,7 @@
     "totalReturnPct": 18.45
   },
   "zeroOrders": {
-    "date": "2026-11-26",
+    "date": "2026-11-27",
     "ordersByChannel": {
       "Shopify": {
         "date": "2026-11-27",
@@ -33,10 +33,6 @@
       "Amazon": {
         "date": "2026-11-27",
         "orders": 241
-      },
-      "Flipkart": {
-        "date": "2026-11-24",
-        "orders": 16
       },
       "Blinkit": {
         "date": "2026-11-26",
