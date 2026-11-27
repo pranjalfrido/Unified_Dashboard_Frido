@@ -1,5 +1,5 @@
 // Per-user page access checks for NavAI tools (lib/pageAccess.js). Run: node scripts/test-page-access.mjs
-import { checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql, normaliseAccess } from '../lib/pageAccess.js'
+import { checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql, checkInventoryCost, checkHidden, hiddenPageKeys, normaliseAccess } from '../lib/pageAccess.js'
 const u = (isAdmin, tabs) => ({ access: normaliseAccess({ isAdmin, tabs }) })
 const rows = [
   ['no access object (direct call) -> denied everywhere', checkEndpoint({ access: normaliseAccess(undefined) }, 'bq', {}).ok, false],
@@ -27,6 +27,21 @@ const rows = [
   ['ask:sql does not open any page', checkEndpoint(u(false, ['ask', 'ask:sql']), 'bq', {}).ok, false],
   ['raw SQL admin', checkRawSql(u(true, [])).ok, true],
   ['MCP user (no access prop) raw SQL', checkRawSql({}).ok, true],
+  ['Inventory cost: user with inventory:cost', checkInventoryCost(u(false, ['ask', 'inventory:cost'])).ok, true],
+  ['Inventory cost: user with only Inventory Health (inventory) is refused', checkInventoryCost(u(false, ['ask', 'inventory'])).ok, false],
+  ['Inventory cost: user with inward only is refused', checkInventoryCost(u(false, ['ask', 'inventory:inward'])).ok, false],
+  ['Inventory cost: admin', checkInventoryCost(u(true, ['ask'])).ok, true],
+  ['Inventory cost: refusal is the standard text', /ask your admin/i.test(checkInventoryCost(u(false, ['ask'])).text), true],
+  ['Inventory cost: an MCP caller (no access field) is authorised by its role', checkInventoryCost({ email: 'x', access: undefined }).ok, true],
+  ['cogs-monthly opens with inventory:cost (the card reads it)', checkEndpoint(u(false, ['inventory:cost']), 'cogs-monthly', {}).ok, true],
+  ['cogs-monthly stays closed to a user with only inventory (Health)', checkEndpoint(u(false, ['inventory']), 'cogs-monthly', {}).ok, false],
+  ['hidden page list is loaded', hiddenPageKeys().length > 0, true],
+  ['hidden page: non-admin is refused', checkHidden(u(false, ['ask', 'documents']), 'alerts-phase2').ok, false],
+  ['hidden page: the refusal does not mention the page or admins', checkHidden(u(false, ['ask']), 'alerts-phase2').text === "I don't have access to that.", true],
+  ['hidden page: admin allowed', checkHidden(u(true, ['ask']), 'alerts-phase2').ok, true],
+  ['hidden page: a permission key in the list is refused for non-admin even with the tab', checkHidden(u(false, ['ask', 'documents:cn-manage']), 'documents:cn-manage').ok, false],
+  ['hidden page as an endpoint name: non-admin gets the hidden refusal', checkEndpoint(u(false, ['overview']), 'alerts-phase2').text === "I don't have access to that.", true],
+  ['a page that is not hidden is unaffected', checkHidden(u(false, ['ask']), 'inventory:cost').ok, true],
 ]
 let failed = 0
 const check = (n, got, want) => { const ok = got === want; if (!ok) failed++; console.log(ok ? 'OK  ' : 'FAIL', n, '->', got) }

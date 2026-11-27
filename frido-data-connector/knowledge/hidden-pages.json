@@ -1,0 +1,7 @@
+{
+  "_about": "Pages still being built. NavAI answers admins only; everyone else gets \"I don't have access to that.\" and NavAI never mentions the page exists. key = a permission key, a dashboard_api endpoint name, or a tool name. Add a key here BEFORE the page ships to users; remove it when the page is released. Checked by lib/pageAccess.js (checkHidden).",
+  "hidden": [
+    { "key": "alerts-phase2", "since": "2026-11-03", "why": "Alerts Phase 2 (backtest written, not approved for users yet)" },
+    { "key": "documents:cn-manage", "since": "2026-11-03", "why": "Credit notes: manage (masters, edits, rollback): module shell still being built" }
+  ]
+}

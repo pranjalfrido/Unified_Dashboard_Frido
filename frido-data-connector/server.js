@@ -14,7 +14,7 @@ import { log } from './lib/logger.js';
 import { validateRequest } from './lib/auth.js';
 import { authorizeToolCall } from './lib/authz.js';
 import { buildContent, checkAttachments, describeAttachments, FILE_SAFETY_PROMPT } from './lib/attachments.js';
-import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql } from './lib/pageAccess.js';
+import { normaliseAccess, checkEndpoint, checkPnl, checkOos, checkCn, checkRawSql, checkInventoryCost } from './lib/pageAccess.js';
 import { writeAuditLog } from './lib/audit.js';
 import { checkBudget, trackUsage, sendLimitEmail, getStats } from './lib/costTracker.js';
 import { formatTsv, unformattedNumbers } from './lib/format.js';
@@ -30,6 +30,7 @@ import { loadCatalog, matchProducts, describeMatch, findProductText } from './li
 import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
+import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ } from './lib/bigquery.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -176,6 +177,23 @@ async function productMatchBlock(messages, user) {
   return { block: '', computed: null };
 }
 
+// inventory_cost: the Inventory Health "Inventory cost detail" card (permission inventory:cost), same valuation rule as the card.
+async function executeInventoryCost(user, args) {
+  const start = Date.now();
+  const authz = authorizeToolCall(user, 'run_command', 'bigquery');
+  if (!authz.ok) return { ok: false, denied: true, text: authz.message };
+  const page = checkInventoryCost(user);
+  if (!page.ok) return page;
+  try {
+    const { text } = await runInventoryCost(args || {}, { invFile: async n => (await fetchEndpoint(n, {})).data, cogsMonthly: async b => (await fetchEndpoint('cogs-monthly', b)).data });
+    log({ user: user.email, role: user.role, target: 'inventory_cost', command: JSON.stringify({ by: args?.by, status: args?.status }).slice(0, 200), allowed: true, resultSize: text.length, duration: Date.now() - start });
+    return { ok: true, text, skus: new Map(), sql: 'inventory_cost (Inventory Health > Inventory cost detail card logic)' };
+  } catch (err) {
+    log({ user: user.email, role: user.role, target: 'inventory_cost', allowed: true, error: err.message, duration: Date.now() - start });
+    return { ok: false, text: `Inventory cost query failed: ${String(err.message).slice(0, 300)}`, error: String(err.message).slice(0, 160) };
+  }
+}
+
 async function executeCn(user, args, seen) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
@@ -229,6 +247,8 @@ async function executeDashboardApi(user, args, seen) {
 const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by calling the page's own /api endpoint (same params the page sends). USE THIS FIRST for any dashboard question (read knowledge ENDPOINT_MAP.md for which endpoint, params and paths answer which question). endpoint: one of ${Object.keys(DASH_ENDPOINTS).join(', ')}. params: the request body the page sends (e.g. {start,end} or {months:['2026-09']}). paths: dot-paths into the response ("a.b", "rows.*.sku"); describe:true returns the response structure instead. For arrays of rows you can add groupBy (field), sum (fields to add up), sortBy, limit (default 20, max 200). First call for given params can take up to ~60-90 s, repeats are cached 30 min. Read-only.`;
 
 const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
+
+const INVENTORY_COST_DESCRIPTION = 'Inventory valued at cost, exactly as the Inventory Health > "Inventory cost detail" card shows it (needs the Inventory Cost Detail permission). Use for: inventory value (₹) by product, SKU or category, units, DOI and status, which SKUs have no COGS (and what they are valued at), and which COGS month is used. Rule of the card: SKU value = own COGS x units; if the SKU has no COGS, the average COGS of its sub-category x units; if neither, not valued. Counts are SKUs with stock > 0 only. Every total, count and subtotal is calculated by the tool: copy them, never add rows yourself. Say which COGS month the rates come from (the tool states it, e.g. "Sep 2026, carried forward") and that stock is the Regular facilities of the Inventory Health page. Read-only.';
 
 const FIND_PRODUCT_DESCRIPTION = 'Match product words or a SKU code against the SKU master (sub-category = the product, product name, SKU code), case-insensitive. Returns every matching product with its SKUs, or says nothing matches and gives the closest names. The connector already runs this on the question and puts the result in front of it ("Product match"); call this tool only for a product word that is not in that block (for example one from an earlier message). Never pick one of several matches yourself.';
 
@@ -430,6 +450,21 @@ const httpServer = http.createServer(async (req, res) => {
         required: ['endpoint'],
       },
     }, {
+      name: 'inventory_cost',
+      description: INVENTORY_COST_DESCRIPTION,
+      input_schema: {
+        type: 'object',
+        properties: {
+          by: { type: 'string', enum: ['summary', 'product', 'sku', 'category', 'no_cogs'], description: 'summary = totals and the no-COGS split; product / sku / category = ranked list; no_cogs = SKUs without their own COGS' },
+          category: { type: 'string', description: 'Only this category, e.g. Orthotics' },
+          product: { type: 'string', description: 'Only this product = SKU-master sub-category, exactly as in the Product match block' },
+          sku: { type: 'string', description: 'Only this SKU' },
+          status: { type: 'string', description: 'Only rows with this status: Critical, Low, Sufficient, Excess, No Demand' },
+          sortBy: { type: 'string', enum: ['value', 'units', 'doi', 'avgSale'], description: 'Default value (inventory value, high to low)' },
+          limit: { type: 'integer', description: 'Rows to list (default 10, max 50)' },
+        },
+      },
+    }, {
       name: 'find_product',
       description: FIND_PRODUCT_DESCRIPTION,
       input_schema: {
@@ -523,6 +558,8 @@ ${last.content}`;
             ? await executeOos(user, block.input, seenFormatted)
             : block.name === 'find_product'
               ? await executeFindProduct(block.input)
+            : block.name === 'inventory_cost'
+              ? await executeInventoryCost(user, block.input)
             : block.name === 'cn_received'
               ? await executeCn(user, block.input, seenFormatted)
             : block.name === 'pnl'

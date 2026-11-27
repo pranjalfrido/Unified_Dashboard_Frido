@@ -64,3 +64,10 @@ Format per entry: **Name** (also called) · *Answer from* · Definition · Chann
 42. **New vs repeat** · returning = first order before the range start, among customers ordering in the range.
 43. **LTV / LTV:CAC** · LTV = trailing-365-day revenue per customer (revenue, not margin); a 35%-margin variant exists.
 44. **Support tickets** · open tickets created in the last 45 days, age buckets 1, 2, 3, 4–5, 6–8, 9–10, 11–15, 15+; "older than 9 days" = ≥ 9 days.
+
+## Inventory cost (released 26 Nov 2026)
+
+45. **Inventory value (at cost)** · *Inventory Health → Inventory cost detail* · Σ over SKUs with stock of units x COGS per unit; Regular facilities; COGS = the SKU's latest month in `product_cogs_monthly`, else its sub-category's average COGS, else not valued. Units in lakh format on the page (10.22 L). Use the `inventory_cost` tool.
+46. **SKUs without COGS** · same card · "No COGS" tile and sheet: SKUs with stock and no COGS of their own = valued at the sub-category average + not valued. Counts use SKUs with stock > 0 only.
+47. **COGS rates month** · the card's label "COGS rates: Sep 2026, carried forward" = the month the rates were uploaded for while the current month reuses it.
+48. **Product (Inventory cost)** · all SKUs with the same sub-category name; DOI = floor(units / avg sale); status Critical <= 2, Low <= 15, Sufficient <= 45, else Excess.
