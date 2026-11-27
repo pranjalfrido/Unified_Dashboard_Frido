@@ -20291,7 +20291,7 @@ function ScheduledEmailsPage({ onBack }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetch('/api/email-controls')
+    authFetch('/api/email-controls')
       .then(r => r.json())
       .then(data => { setJobs(data); setLoading(false) })
       .catch(() => { setError('Failed to load job statuses'); setLoading(false) })
@@ -20302,7 +20302,7 @@ function ScheduledEmailsPage({ onBack }) {
     setError(null)
     const action = currentState === 'ENABLED' ? 'pause' : 'resume'
     try {
-      const res = await fetch('/api/email-controls', {
+      const res = await authFetch('/api/email-controls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId, action }),
