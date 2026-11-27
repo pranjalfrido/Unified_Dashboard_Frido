@@ -31,6 +31,7 @@ import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetri
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
 import { fillTotals, keyColumns } from './lib/tableHints.js';
 import { chooseModel, OPUS } from './lib/modelChoice.js';
+import { buildKnowledge, sectionsForTopics, TOPICS } from './lib/knowledgeSections.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ } from './lib/bigquery.js';
@@ -47,6 +48,33 @@ const TOOL_DESCRIPTION = `Run a read-only command against Frido live data. Use f
 - target=bigquery → SQL query against BigQuery tables
 - target=supabase → SQL query against Supabase tables
 - target=repo → cat/ls/head/grep to read dashboard formula code from GitHub`;
+
+// /chat sends the knowledge in two cached blocks: the part every question needs, then the sections for the question's topics
+// (lib/knowledgeSections.js). The dates block changes every minute, so it goes last and is not cached.
+const KNOWLEDGE_FILES = { claude: CORE, map: readKnowledge('ENDPOINT_MAP.md'), playbook: readKnowledge('PULSE_PLAYBOOK.md'), metrics: readKnowledge('PULSE_METRICS.md') };
+function buildSystemBlocks(userTexts) {
+  const kb = buildKnowledge(KNOWLEDGE_FILES, userTexts);
+  const head = `The assistant's name is NavAI. Refer to yourself only as NavAI, never as Pulse or Frido Pulse.
+
+You have access to the run_command tool which connects to Frido's live business data. NEVER answer business questions from memory — always use run_command to query live data first.
+
+${kb.always}
+
+${FILE_SAFETY_PROMPT}`;
+  const blocks = [{ type: 'text', text: head, cache_control: { type: 'ephemeral' } }];
+  if (kb.selected) blocks.push({ type: 'text', text: kb.selected, cache_control: { type: 'ephemeral' } });
+  blocks.push({ type: 'text', text: datesBlock() });
+  return { blocks, kb };
+}
+// The last message carries a cache mark too, so each step of the tool loop reads the earlier steps from the cache.
+function withCache(msgs) {
+  if (!msgs.length) return msgs;
+  const last = msgs[msgs.length - 1];
+  const content = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : [...last.content];
+  if (!content.length) return msgs;
+  content[content.length - 1] = { ...content[content.length - 1], cache_control: { type: 'ephemeral' } };
+  return [...msgs.slice(0, -1), { ...last, content }];
+}
 
 function buildSystemPrompt() {
   return `${datesBlock()}
@@ -246,7 +274,7 @@ async function executeDashboardApi(user, args, seen) {
   }
 }
 
-const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by calling the page's own /api endpoint (same params the page sends). USE THIS FIRST for any dashboard question (read knowledge ENDPOINT_MAP.md for which endpoint, params and paths answer which question). endpoint: one of ${Object.keys(DASH_ENDPOINTS).join(', ')}. params: the request body the page sends (e.g. {start,end} or {months:['2026-09']}). paths: dot-paths into the response ("a.b", "rows.*.sku"); describe:true returns the response structure instead. For arrays of rows you can add groupBy (field), sum (fields to add up), sortBy, limit (default 20, max 200). First call for given params can take up to ~60-90 s, repeats are cached 30 min. Read-only.`;
+const DASHBOARD_API_DESCRIPTION = `Read the numbers a dashboard page shows by calling the page's own /api endpoint (same params the page sends). USE THIS FIRST for any dashboard question (read knowledge ENDPOINT_MAP.md for which endpoint, params and paths answer which question). endpoint: one of ${Object.keys(DASH_ENDPOINTS).join(', ')}. params: the request body the page sends (e.g. {start,end} or {months:['2026-09']}). paths: dot-paths into the response ("a.b", "rows.*.sku"); describe:true returns the response structure instead. For arrays of rows you can add groupBy (field), sum (fields to add up), sortBy, limit (default 20, max 50: longer lists are cut and the TOTAL covers all rows). First call for given params can take up to ~60-90 s, repeats are cached 30 min. Read-only.`;
 
 const PNL_TOOL_DESCRIPTION = 'P&L for ONE channel and period exactly as the dashboard P&L page computes it: gross, net revenue, COGS (and which COGS month is used), COGS %, gross margin, SnD, CM1, CM1 %, marketing %, CM2. Use for ANY P&L, COGS total, CM1, margin or marketing-% question. Arguments: channel (d2c, amazon, flipkart, ebo, offline, blinkit, zepto, instamart, cred, firstcry, myntra), month "YYYY-MM" OR start and end dates (IST), breakdown (true = also top/bottom product margins). Overall P&L is not available. Takes up to ~90 seconds on the first call for a period.';
 
@@ -502,11 +530,17 @@ const httpServer = http.createServer(async (req, res) => {
         },
         required: ['channel'],
       },
+    }, {
+      name: 'load_knowledge',
+      description: 'Load the knowledge sections for a topic that the prompt says was left out (see "Knowledge not loaded"). Topics: ' + TOPICS.join(', ') + '. Returns the locked SQL / formulas for that topic. Not data: call it only when you need a formula or SQL that is not in your instructions.',
+      input_schema: { type: 'object', properties: { topics: { type: 'array', items: { type: 'string', enum: TOPICS } } }, required: ['topics'] },
     }];
 
     try {
       let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
       const { block: matchBlock, computed } = await productMatchBlock(messages, user);
+      const userTexts = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? '')).slice(-4);
+      const { blocks: systemBlocks, kb } = buildSystemBlocks(userTexts);
       const toolTexts = [];     // everything the tools returned: the only numbers an answer may contain
       let lastTsv = '';         // the last table a tool returned (used to rebuild a table if the answer's numbers do not check out)
       if (computed) toolTexts.push(computed.text);
@@ -529,17 +563,20 @@ ${last.content}`;
       const seenFormatted = new Set();
       const syncNotes = new Set();
       const usageBy = {};       // model -> { input, output } for this answer
-      const addUse = (m, u) => { const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; };
+      const addUse = (m, u) => { const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0, cache_read: 0, cache_write: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; x.cache_read += u?.cache_read_input_tokens || 0; x.cache_write += u?.cache_creation_input_tokens || 0; };
 
-      while (iterations < 12) {
+      // At most 6 steps in the tool loop; a repeated identical tool call in the same answer reuses the result already fetched.
+      const MAX_STEPS = 6;
+      const reuse = new Map();
+      while (iterations < MAX_STEPS) {
         iterations++;
         const reqParams = {
           model,
           max_tokens: wantOpus ? 16000 : 8192,
-          system: buildSystemPrompt(),
+          system: systemBlocks,
           tools,
           tool_choice: forceFinal ? { type: 'none' } : (iterations === 1 ? { type: 'any' } : { type: 'auto' }),
-          messages: loopMessages,
+          messages: withCache(loopMessages),
         };
         if (wantOpus) reqParams.thinking = { type: 'adaptive' };
         const response = await anthropic.messages.create(reqParams);
@@ -558,7 +595,10 @@ ${last.content}`;
         for (const block of response.content) {
           if (block.type !== 'tool_use') continue;
           const { command, target } = block.input;
-          const result = block.name === 'oos_loss'
+          const reuseKey = block.name === 'find_product' || block.name === 'load_knowledge' ? null : `${block.name}:${JSON.stringify(block.input)}`;
+          const result = reuseKey && reuse.has(reuseKey) ? reuse.get(reuseKey) : block.name === 'load_knowledge'
+            ? { ok: true, text: sectionsForTopics(KNOWLEDGE_FILES, block.input?.topics) }
+            : block.name === 'oos_loss'
             ? await executeOos(user, block.input, seenFormatted)
             : block.name === 'find_product'
               ? await executeFindProduct(block.input)
@@ -571,6 +611,7 @@ ${last.content}`;
               : block.name === 'dashboard_api'
                 ? await executeDashboardApi(user, block.input, seenFormatted)
                 : await executeTool(user, command, target, seenFormatted);
+          if (reuseKey && result.ok && !result.denied) reuse.set(reuseKey, result);
           queriesRun++;
           let content = result.text;
           if (result.denied) {
@@ -582,8 +623,8 @@ ${last.content}`;
             lastProblem = result.error || 'query failed';
           }
           if (result.ok && !result.denied && typeof result.text === 'string') {
-            toolTexts.push(result.text);
-            if (block.name !== 'find_product' && /\n[^\n]*\t/.test(result.text)) lastTsv = result.text;
+            if (block.name !== 'load_knowledge') toolTexts.push(result.text);
+            if (block.name !== 'find_product' && block.name !== 'load_knowledge' && /\n[^\n]*\t/.test(result.text)) lastTsv = result.text;
           }
           if (result.skus) for (const [k, v] of result.skus) seenSkus.set(k, v);
           if (result.note) syncNotes.add(result.note);
@@ -612,7 +653,7 @@ ${last.content}`;
         const finalResponse = await anthropic.messages.create({
           model,
           max_tokens: 4096,
-          system: buildSystemPrompt(),
+          system: systemBlocks,
           tools,
           tool_choice: { type: 'none' },
           messages: loopMessages,
@@ -634,7 +675,7 @@ ${last.content}`;
           const retry = await anthropic.messages.create({
             model,
             max_tokens: 4096,
-            system: buildSystemPrompt(),
+            system: systemBlocks,
             tools,
             tool_choice: { type: 'none' },
             messages: [
@@ -658,7 +699,7 @@ ${last.content}`;
           const retry = await anthropic.messages.create({
             model,
             max_tokens: 4096,
-            system: buildSystemPrompt(),
+            system: systemBlocks,
             tools,
             tool_choice: { type: 'none' },
             messages: [
@@ -690,7 +731,7 @@ ${last.content}`;
           const retry = await anthropic.messages.create({
             model: m,
             max_tokens: 4096,
-            system: buildSystemPrompt(),
+            system: systemBlocks,
             tools,
             tool_choice: { type: 'none' },
             messages: [
@@ -724,8 +765,8 @@ ${last.content}`;
       }
 
       // Cost per answer: one line with the model(s) used and the tokens (no question text), and the spend tracker per model.
-      for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, user }).catch(() => {});
-      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
+      for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, cacheRead: u.cache_read, cacheWrite: u.cache_write, user }).catch(() => {});
+      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), cache_read_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_read, 0), cache_write_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_write, 0), steps: iterations, topics: kb.topics.join(','), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
 
       if (!finalText) {
         // One line: what was tried and what is missing — never a bare "query failed".
@@ -747,7 +788,7 @@ ${last.content}`;
 
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, ...(body?.debugUsage === true ? { usage: usageBy, topics: kb.topics } : {}), monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {

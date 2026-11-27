@@ -50,6 +50,8 @@ const NOT_SUMMED = /(asp|aov|price|mrp|avg|average|per_|_per|cogs_unit|unit_cogs
 // Input: tab-separated text (header line first) as produced by lib/bigquery.js / lib/supabase.js.
 // A TOTAL row (counts and money only, calculated here so the model never adds numbers itself) is appended when there are
 // at least 2 data rows. opts.totals = { header: sum } overrides the sums with ones over ALL rows when the table shown is cut.
+export const MAX_TOOL_ROWS = 50;      // rows the model sees; the TOTAL row still covers every row
+const MAX_CELL = 160;                 // longer text cells are cut (names, notes, JSON blobs)
 export function formatTsv(text, seen, opts = {}) {
   const lines = String(text).split('\n');
   if (lines.length < 2 || !lines[0].includes('\t')) return text;
@@ -64,7 +66,8 @@ export function formatTsv(text, seen, opts = {}) {
     if (cells.length !== headers.length) { out.push(lines[i]); continue; }
     const isTotalRow = /^\s*(grand\s+)?total\b/i.test(cells[0]);
     if (isTotalRow) hasTotal = true; else dataRows++;
-    out.push(cells.map((c, j) => {
+    const hidden = !isTotalRow && dataRows > (opts.maxRows ?? MAX_TOOL_ROWS); // counted and summed, but not sent to the model
+    const line = cells.map((c, j) => {
       const k = kinds[j];
       if (!k || c === '' || c === 'NULL' || !/^-?\d+(\.\d+)?$/.test(c.trim())) return c;
       const n = Number(c);
@@ -72,7 +75,8 @@ export function formatTsv(text, seen, opts = {}) {
       if (k === 'money') { const f = formatRupees(n); if (seen) seen.add(f); return `${f} (raw ${c})`; }
       if (k === 'count') { const f = indianInt(n); if (seen) seen.add(f); return f; }
       return `${n.toFixed(1)}% (raw ${c})`;
-    }).join('\t'));
+    }).join('\t');
+    if (!hidden) out.push(line);
   }
   if (!hasTotal && dataRows >= 2) {
     const cells = headers.map((h, j) => {
@@ -85,7 +89,22 @@ export function formatTsv(text, seen, opts = {}) {
     });
     if (cells.some((c, j) => j > 0 && c)) out.push(cells.join('\t'));
   }
-  return out.join('\n');
+  const cap = opts.maxRows ?? MAX_TOOL_ROWS;
+  if (dataRows > cap) out.push(`(Showing the first ${cap} of ${dataRows} rows to keep the answer short; the TOTAL row covers all ${dataRows}. Say so, and offer a filter for the rest.)`);
+  return slim(out, headers.length);
+}
+
+// Smaller tool result: columns that are empty in every row are dropped, long text cells are cut.
+function slim(lines, ncol) {
+  const rows = lines.map(l => l.split('\t'));
+  const dataIdx = rows.map((r, i) => (i > 0 && r.length === ncol ? i : -1)).filter(i => i > 0);
+  const keep = [];
+  for (let j = 0; j < ncol; j++) {
+    const empty = dataIdx.length > 0 && dataIdx.every(i => { const c = rows[i][j].trim(); return c === '' || c === 'NULL' || c === 'null'; });
+    if (j === 0 || !empty) keep.push(j);
+  }
+  const cut = c => (c.length > MAX_CELL ? c.slice(0, MAX_CELL) + '…' : c);
+  return rows.map((r, i) => (i === 0 || r.length === ncol ? (keep.length === ncol ? r : keep.map(j => r[j])).map(cut).join('\t') : r.join('\t'))).join('\n');
 }
 
 // Numbers in a model answer that did not come from the formatted results: any rupee amount, or a bare

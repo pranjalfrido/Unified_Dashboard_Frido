@@ -123,7 +123,7 @@ function tableOf(rows, { groupBy, sum, sortBy, desc = true, limit = 20, where },
   }
   const sortKey = sortBy || (groupBy && sum?.length ? sum[0] : null);
   if (sortKey) list.sort((a, b) => (desc ? 1 : -1) * ((Number(b[sortKey]) || 0) - (Number(a[sortKey]) || 0)));
-  const cut = list.slice(0, Math.min(Math.max(Number(limit) || 20, 1), 200));
+  const cut = list.slice(0, Math.min(Math.max(Number(limit) || 20, 1), 50));
   const keys = [...new Set(cut.flatMap(r => Object.keys(r)))].filter(k => cut.some(r => r[k] == null || typeof r[k] !== 'object'));
   const tsv = [keys.join('\t'), ...cut.map(r => keys.map(k => (r[k] == null ? 'NULL' : typeof r[k] === 'object' ? JSON.stringify(r[k]).slice(0, 60) : String(r[k]))).join('\t'))].join('\n');
   // Totals over ALL the rows (not just the ones shown), calculated here so the model never adds numbers itself.
@@ -202,7 +202,7 @@ regular view needs an inventory file (inv-data-7d/15d/30d).` };
       if (v.length && v.every(x => x && typeof x === 'object' && !Array.isArray(x))) {
         const t = tableOf(v, args, seen);
         out.push(`(${t.shown} of ${t.total} rows${args.groupBy ? ', grouped' : ''})\n${t.text}`);
-      } else out.push(JSON.stringify(v.slice(0, Math.min(Number(args.limit) || 20, 200))));
+      } else out.push(JSON.stringify(v.slice(0, Math.min(Number(args.limit) || 20, 50))));
     } else if (v && typeof v === 'object') {
       out.push(Object.entries(v).slice(0, 80).map(([k, x]) => `${k}\t${scalarText(x, k, seen)}`).join('\n'));
     } else if (v === undefined) out.push('(no such path — run with describe:true to see the structure)');

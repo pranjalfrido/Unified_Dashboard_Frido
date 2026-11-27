@@ -33,16 +33,17 @@ function resetIfNewMonth() {
 }
 
 // Returns cost in USD for a single API response
-export function calcCost(model, inputTokens, outputTokens) {
+// Cached prompt tokens: reading costs 0.1x the input price, writing 1.25x (5-minute cache).
+export function calcCost(model, inputTokens, outputTokens, cacheRead = 0, cacheWrite = 0) {
   const p = PRICING[model] || PRICING['claude-sonnet-4-6'];
-  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
+  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output + (cacheRead / 1_000_000) * p.input * 0.1 + (cacheWrite / 1_000_000) * p.input * 1.25;
 }
 
 // Call after every successful /chat response
-export async function trackUsage({ model, inputTokens, outputTokens, user }) {
+export async function trackUsage({ model, inputTokens, outputTokens, cacheRead = 0, cacheWrite = 0, user }) {
   resetIfNewMonth();
 
-  const cost = calcCost(model, inputTokens, outputTokens);
+  const cost = calcCost(model, inputTokens, outputTokens, cacheRead, cacheWrite);
   state.totalCost += cost;
   state.queryCount += 1;
 
