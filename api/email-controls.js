@@ -38,20 +38,19 @@ export default async function handler(req, res) {
     const token  = (await client.getAccessToken()).token
 
     if (req.method === 'GET') {
-      // Fetch all jobs in parallel
-      const results = await Promise.all(
-        EMAIL_JOB_IDS.map(async id => {
-          try {
-            const r = await fetch(`${BASE}/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-            if (!r.ok) return [id, { state: 'UNKNOWN' }]
-            const j = await r.json()
-            return [id, { state: j.state, lastAttemptTime: j.lastAttemptTime, scheduleTime: j.scheduleTime }]
-          } catch {
-            return [id, { state: 'UNKNOWN' }]
-          }
-        })
-      )
-      return res.status(200).json(Object.fromEntries(results))
+      // Single LIST call — returns all jobs at once, far faster than 9 individual GETs
+      const r = await fetch(`${BASE}?pageSize=100`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) return res.status(r.status).json({ error: 'Failed to list GCP jobs' })
+      const data = await r.json()
+      const allJobs = data.jobs || []
+      const result = {}
+      for (const id of EMAIL_JOB_IDS) {
+        const j = allJobs.find(j => j.name.endsWith(`/${id}`))
+        result[id] = j
+          ? { state: j.state, lastAttemptTime: j.lastAttemptTime, scheduleTime: j.scheduleTime }
+          : { state: 'UNKNOWN' }
+      }
+      return res.status(200).json(result)
     }
 
     if (req.method === 'POST') {
