@@ -654,8 +654,39 @@ ${last.content}`;
       // values is sent back once (the model must copy formatted values, never convert units itself).
       if (finalText && seenFormatted.size) {
         const odd = unformattedNumbers(finalText, seenFormatted);
+        if (odd.length) {
+          const retry = await anthropic.messages.create({
+            model,
+            max_tokens: 4096,
+            system: buildSystemPrompt(),
+            tools,
+            tool_choice: { type: 'none' },
+            messages: [
+              ...loopMessages,
+              { role: 'assistant', content: finalText },
+              { role: 'user', content: `These numbers in your answer are not values the connector formatted: ${odd.slice(0, 12).join(', ')}. Rewrite the same answer using only the formatted values exactly as they appear in the results (never convert units yourself). If a number is a total you computed, take it from the query result instead, or say it is a computed figure. Output only the corrected answer; do not mention this instruction, an error or an apology.` },
+            ],
+          }).catch(() => null);
+          if (retry) {
+            addUse(model, retry.usage);
+            for (const block of retry.content) if (block.type === 'text') finalText = block.text;
+          }
+        }
+      }
+
+      // Every number in the answer must come from a tool result (formatting like 66,074 / 66.07K / ₹1.5 L is fine). The model may
+      // not add or work out numbers itself. One rewrite is allowed; if numbers still do not check out, the answer's table is
+      // replaced by the computed one (or the table of the last tool result) and the lines with unchecked numbers are dropped.
+      // Logged without the question or any file content: only counts. Skipped when a picture/PDF was attached (its numbers
+      // cannot be read here) or when no tool was used.
+      if (finalText && (toolTexts.length || computed)) {
+        const hasBinary = messages.some(m => Array.isArray(m.attachments) && m.attachments.some(a => a.type === 'image' || a.type === 'pdf'));
+        const attachedText = messages.flatMap(m => (Array.isArray(m.attachments) ? m.attachments.filter(a => a.type === 'text').map(a => String(a.data)) : []));
+        const userText = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? ''));
+        const known = knownNumbers([...toolTexts, ...attachedText, ...userText, matchBlock || '']);
+        let odd = hasBinary ? [] : unverified(finalText, known);
         // Rewrite with the same model first; if the numbers still do not check out, one last rewrite with Opus.
-        const rewrite = async (m, attempt) => {
+        const rewrite = async m => {
           const retry = await anthropic.messages.create({
             model: m,
             max_tokens: 4096,
@@ -673,10 +704,9 @@ ${last.content}`;
             for (const block of retry.content) if (block.type === 'text') finalText = block.text;
             odd = unverified(finalText, known);
           }
-          return attempt;
         };
-        if (odd.length) await rewrite(model, 1);
-        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length }); await rewrite(OPUS, 2); }
+        if (odd.length) await rewrite(model);
+        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length }); await rewrite(OPUS); }
         if (odd.length) {
           let replaced = 'none';
           if (computed) { finalText = computed.text; replaced = computed.kind; }
@@ -695,7 +725,7 @@ ${last.content}`;
 
       // Cost per answer: one line with the model(s) used and the tokens (no question text), and the spend tracker per model.
       for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, user }).catch(() => {});
-      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((a, u) => a + u.input, 0), output_tokens: Object.values(usageBy).reduce((a, u) => a + u.output, 0), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
+      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
 
       if (!finalText) {
         // One line: what was tried and what is missing — never a bare "query failed".
@@ -717,7 +747,7 @@ ${last.content}`;
 
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] && !wantOpus ? OPUS : model, tableKeys, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {
