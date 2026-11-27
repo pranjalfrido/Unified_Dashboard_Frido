@@ -412,7 +412,7 @@ export default function BreakevenRoasCalculator({ productGroups = [], phone = fa
 
   return (
     // UI: wider max width on desktop so the tool uses the screen instead of leaving the right half empty.
-    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: phone ? 900 : 1240 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: phone ? 12 : 20, maxWidth: phone ? 900 : 'none' }}>
       <style>{`
         input.pnl-no-spinner::-webkit-outer-spin-button,
         input.pnl-no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -788,7 +788,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
   const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
 
   return (
-    <div style={{ width: 'fit-content', maxWidth: '100%', alignSelf: 'flex-start', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
+    <div style={{ width: 'fit-content', alignSelf: 'flex-start', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
@@ -800,7 +800,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
         </button>
       </div>
 
-      <div style={{ overflowX: 'auto', maxWidth: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}>
+      <div style={{ borderRadius: 10, border: `1px solid ${C.border}` }}>
         <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 230 + scenarios.length * 220, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 230 }} />
