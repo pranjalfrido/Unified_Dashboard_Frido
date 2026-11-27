@@ -20272,7 +20272,104 @@ function AppInner() {
   return <FeedbackProvider session={session} profile={profile}><Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} /></FeedbackProvider>
 }
 
-function DocumentsPage({ setPage }) {
+const EMAIL_JOBS = [
+  { id: 'low-rtd-email-morning',         label: 'Low RTD Report (Morning)',              time: '6:40 AM IST · Daily',      subject: 'Frido Low RTD Level Report' },
+  { id: 'low-rtd-email-evening',         label: 'Low RTD Report (Evening)',              time: '4:40 PM IST · Daily',      subject: 'Frido Low RTD Level Report' },
+  { id: 'excess-rtd-email-daily',        label: 'Excess RTD Report',                     time: '11:15 AM IST · Daily',     subject: 'Frido Excess RTD Report' },
+  { id: 'ops-email-reports-daily',       label: 'Ops Reports (Cancelled / UC / Orders)', time: '11:15 AM IST · Daily',     subject: '4 reports in one run' },
+  { id: 'shipment-pendency-daily',       label: 'Shipment Pendency',                     time: '11:15 AM IST · Daily',     subject: 'Shipment Pendency | date | X open' },
+  { id: 'warehouse-allocation-report-daily', label: 'Warehouse & Courier Allocation',    time: '11:30 AM IST · Daily',     subject: 'Warehouse & Courier Allocation Report' },
+  { id: 'logistics-report-daily-trigger',label: 'Logistics & Ops Performance',           time: '12:00 PM IST · Saturday',  subject: 'Frido Logistics & Ops Performance Report' },
+  { id: 'product-report-weekly',         label: 'Returns Analysis Report',               time: '12:00 PM IST · Saturday',  subject: 'Frido Returns Analysis Report' },
+  { id: 'wbr-email-weekly',              label: 'Weekly Business Review (WBR)',          time: '9:30 PM IST · Friday',     subject: 'Weekly Business Review – WW YYYY' },
+]
+
+function ScheduledEmailsPage({ onBack }) {
+  const [jobs, setJobs] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [toggling, setToggling] = useState(null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/email-controls')
+      .then(r => r.json())
+      .then(data => { setJobs(data); setLoading(false) })
+      .catch(() => { setError('Failed to load job statuses'); setLoading(false) })
+  }, [])
+
+  async function toggle(jobId, currentState) {
+    setToggling(jobId)
+    setError(null)
+    const action = currentState === 'ENABLED' ? 'pause' : 'resume'
+    try {
+      const res = await fetch('/api/email-controls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setJobs(prev => ({ ...prev, [jobId]: { ...prev[jobId], state: data.state } }))
+    } catch (e) {
+      setError(`Failed to ${action} ${jobId}: ${e.message}`)
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  return (
+    <div style={{ padding: '32px 40px', maxWidth: 860 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.t3, fontSize: 20, padding: 0, lineHeight: 1 }}>←</button>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Documents</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.t1, marginTop: 2 }}>Scheduled Emails</div>
+        </div>
+      </div>
+      {error && <div style={{ background: '#fee2e2', color: '#b91c1c', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13 }}>{error}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {EMAIL_JOBS.map(job => {
+          const info = jobs[job.id]
+          const state = info?.state
+          const isEnabled = state === 'ENABLED'
+          const isLoading = loading || toggling === job.id
+          return (
+            <div key={job.id} style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.t1 }}>{job.label}</div>
+                <div style={{ fontSize: 12, color: C.t3, marginTop: 3 }}>{job.time}</div>
+                <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2, fontStyle: 'italic', opacity: 0.8 }}>{job.subject}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+                {!loading && state && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isEnabled ? '#16a34a' : '#dc2626', background: isEnabled ? '#dcfce7' : '#fee2e2', borderRadius: 20, padding: '3px 10px' }}>
+                    {isEnabled ? 'Active' : 'Paused'}
+                  </span>
+                )}
+                {loading && <span style={{ fontSize: 12, color: C.t3 }}>Loading…</span>}
+                <button
+                  disabled={isLoading || !state}
+                  onClick={() => toggle(job.id, state)}
+                  style={{
+                    border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: isLoading || !state ? 'not-allowed' : 'pointer',
+                    background: isLoading || !state ? C.border : isEnabled ? '#dc2626' : '#16a34a',
+                    color: isLoading || !state ? C.t3 : '#fff',
+                    opacity: isLoading ? 0.6 : 1,
+                    transition: 'background .15s',
+                  }}
+                >
+                  {toggling === job.id ? '…' : isEnabled ? 'Pause' : 'Resume'}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DocumentsPage({ setPage, isAdmin }) {
   const docs = [
     {
       id: 'cogs',
@@ -20304,12 +20401,19 @@ function DocumentsPage({ setPage }) {
       description: 'Define which packaging materials go into each product.',
       icon: '📦',
     },
+    {
+      id: 'scheduled-emails',
+      title: 'Scheduled Emails',
+      description: 'Pause or resume automated email reports instantly.',
+      icon: '📧',
+      adminOnly: true,
+    },
   ]
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Documents</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20, marginTop: 24 }}>
-        {docs.map(doc => (
+        {docs.filter(doc => !doc.adminOnly || isAdmin).map(doc => (
           <div key={doc.id} onClick={() => setPage(doc.id)}
             style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 16, padding: '28px 24px', cursor: 'pointer', transition: 'box-shadow .15s, border-color .15s', display: 'flex', flexDirection: 'column', gap: 12 }}
             onMouseEnter={e => { e.currentTarget.style.boxShadow = `inset 0 3px 0 0 ${C.acc}, 0 4px 20px rgba(0,0,0,0.08)`; e.currentTarget.style.borderColor = C.acm }}
@@ -21456,7 +21560,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'documents' && (
             <div className="page-scroll">
-              <DocumentsPage setPage={setPage} />
+              <DocumentsPage setPage={setPage} isAdmin={!!profile?.is_admin} />
             </div>
           )}
           {page === 'cogs' && (
@@ -21482,6 +21586,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'packaging-bom' && (
             <div className="page-scroll">
               <PackagingBomPage onBack={() => goTo('documents')} />
+            </div>
+          )}
+          {page === 'scheduled-emails' && !!profile?.is_admin && (
+            <div className="page-scroll">
+              <ScheduledEmailsPage onBack={() => goTo('documents')} />
             </div>
           )}
           {page === 'profile' && (
