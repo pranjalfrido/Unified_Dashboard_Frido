@@ -151,12 +151,16 @@ export async function parseSettingChange(client, model, userText, current) {
   const cur = current ? settingsLine(current) : 'Settings: defaults';
   const r = await client.messages.create({
     model, max_tokens: 400,
-    system: `You turn the user's message into settings for a stock analysis. Current ${cur}\nCall set_settings with ONLY the settings the message changes (an empty object when nothing changes). cover_days = days of cover kept; top_n = rows per list; sales_days = days the average daily sale is taken over; rank_by = excess_value, doi or stock_value. exclude_* / include_* REPLACE the current list: copy the current entries you keep and add the new names exactly as the user wrote them (never invent a name). Never add numbers the user did not give.`,
+    system: `You turn the user's message into settings for a stock analysis. Current ${cur}\nCall set_settings with ONLY the settings the message changes (an empty object when nothing changes). cover_days = days of cover kept; top_n = rows per list; sales_days = days the average daily sale is taken over; rank_by = excess_value, doi or stock_value. exclude_* / include_* REPLACE the current list: copy the current entries you keep and add the new names exactly as the user wrote them (never invent a name). Never add numbers the user did not give. Change a setting ONLY for an explicit instruction ("rank by DOI", "90 days cover", "top 10", "exclude X", "include only Y"). Words that merely describe the topic ("high-DOI products", "slow-moving", "liquidate", "push for sale", "keep mobility separate", "ignore spare parts and covers" when those are already in the current settings) change nothing.`,
     tools: [{ name: 'set_settings', description: 'Settings changed by the user message', input_schema: SCHEMA }],
     tool_choice: { type: 'tool', name: 'set_settings' },
     messages: [{ role: 'user', content: String(userText).slice(0, 600) }],
   }).catch(() => null);
   const tu = r?.content?.find(b => b.type === 'tool_use');
-  const args = tu?.input && typeof tu.input === 'object' ? tu.input : {};
+  const args = tu?.input && typeof tu.input === 'object' ? { ...tu.input } : {};
+  // code guards: DOI wording in the topic ("high-DOI products") is not an instruction to rank by DOI or to set a minimum DOI
+  const t = String(userText);
+  if (args.rank_by && !/\b(rank(ed|ing)?|sort(ed)?|order(ed)?)\b|\bby (doi|excess|stock)/i.test(t)) delete args.rank_by;
+  if (args.min_doi != null && !/\bmin(imum)?\b|doi\s*(above|over|at least|>|more than|greater)|at least \d+\s*(days|doi)/i.test(t)) delete args.min_doi;
   return { args, usage: r?.usage || null };
 }

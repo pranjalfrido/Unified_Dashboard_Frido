@@ -2,7 +2,7 @@
 import { readFileSync } from 'fs';
 import { buildCogs } from '../lib/inventoryCost.js';
 import { analyse, defaultSettings, mergeSettings, settingsLine, settingsFromChat, resultText, resolveNames } from '../lib/inventoryOpportunity.js';
-import { detectFlow, preflightDenial, planMarkdown, resultMarkdown } from '../lib/liquidationFlow.js';
+import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange } from '../lib/liquidationFlow.js';
 import { knownNumbers, unverified } from '../lib/numberCheck.js';
 
 let bad = 0;
@@ -78,5 +78,10 @@ const names = { cats: ['Footwear', 'Orthotics', 'Pillows', 'Covers', 'Spare Part
 const rn = resolveNames({ ...D, exclude_categories: ['pillows', 'Covers'], exclude_sub_categories: ['neck pillow', 'nothing here'] }, names, cfg);
 check('"pillows" = the category; "neck pillow" = the sub-category containing it; an unknown name is reported, not guessed', rn.settings.exclude_categories.join() === 'Pillows,Covers' && rn.settings.exclude_sub_categories.join() === 'Travel Neck Pillow Without Case' && rn.notes.some(n => /nothing here/.test(n)), JSON.stringify(rn));
 check('default exclusions that exist in the data raise no notes', resolveNames(D, names, cfg).notes.length === 0);
+
+const fake = input => ({ messages: { create: async () => ({ content: [{ type: 'tool_use', input }], usage: {} }) } });
+const q1 = 'liquidate high-DOI products; ignore never-live; keep mobility separate; ask me questions before starting';
+check('a model slip is guarded: "high-DOI products" is the topic, not rank_by / min_doi', (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 60, cover_days: 60 }), 'm', q1, D)).args.rank_by === undefined && (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 60 }), 'm', q1, D)).args.min_doi === undefined);
+check('an explicit instruction still passes: "rank by DOI", "minimum DOI 90"', (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 90 }), 'm', 'now rank by DOI, minimum DOI 90', D)).args.rank_by === 'doi' && (await parseSettingChange(fake({ min_doi: 90 }), 'm', 'minimum DOI 90', D)).args.min_doi === 90);
 
 console.log(bad ? `\n${bad} failed` : '\nAll checks passed'); process.exit(bad ? 1 : 0);
