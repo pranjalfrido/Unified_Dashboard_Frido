@@ -1,6 +1,9 @@
 // Pulse answer renderer (hand-rolled markdown subset), shared by the laptop and phone views.
 // Exported for the phone view (PulseMobile), which uses the same renderer.
+// Machine-readable state a NavAI answer may carry for follow-ups (<!--nx:{...}-->): kept in the chat history, never shown.
+export const stripHidden = t => String(t || '').replace(/<!--nx:[\s\S]*?-->/g, '').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
 export function renderMarkdown(text) {
+  text = stripHidden(text);
   if (!text) return '';
 
   const lines = text.split('\n');
@@ -71,7 +74,7 @@ function inlineFormat(text) {
 //   { type: 'table', headers, rows }  cells are raw markdown (inline formatting, <br> = second line)
 //   { type: 'src', text }  a "Source: …" line, shown small and grey
 export function splitAnswer(text) {
-  const lines = (text || '').split('\n');
+  const lines = stripHidden(text).split('\n');
   const blocks = [];
   let md = [];
   const flush = () => { if (md.length) blocks.push({ type: 'md', text: md.join('\n') }); md = []; };

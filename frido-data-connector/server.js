@@ -31,12 +31,12 @@ import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetri
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
 import { fillTotals, keyColumns } from './lib/tableHints.js';
 import { chooseModel, OPUS, SONNET } from './lib/modelChoice.js';
-import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange } from './lib/liquidationFlow.js';
+import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange, classifyFollowUp, answerQuestion, phoneHints, isLiquidationTopic, ASK_LINE, ACK_LINE } from './lib/liquidationFlow.js';
 import { buildKnowledge, sectionsForTopics, TOPICS } from './lib/knowledgeSections.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ, guardSql } from './lib/bigquery.js';
-import { runInventoryOpportunity, defaultSettings, settingsFromChat, planText, resultText, buildWorkbook, SALES_SQL } from './lib/inventoryOpportunity.js';
+import { runInventoryOpportunity, defaultSettings, mergeSettings, flowMessageFromChat, parseHidden, settingsFromChat, planText, resultText, buildWorkbook, SALES_SQL } from './lib/inventoryOpportunity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readKnowledge = name => {
@@ -191,8 +191,11 @@ async function productMatchBlock(messages, user) {
   try {
     const catalog = await loadCatalog();
     const users = messages.filter(m => m.role === 'user');
-    for (const m of users.slice(-3).reverse()) {
+    for (const [idx, m] of users.slice(-3).reverse().entries()) {
       const text = String(m.content ?? m.text ?? '');
+      // An earlier long message or a liquidation request is not a product the person is still asking about (its words like "products",
+      // "furniture", "covers" matched hundreds of SKUs and made a later unrelated question cost 5x).
+      if (idx > 0 && (text.length > 300 || isLiquidationTopic(text))) continue;
       const result = matchProducts(catalog, text);
       let block = describeMatch(result);
       if (!block) continue;
@@ -475,8 +478,19 @@ const httpServer = http.createServer(async (req, res) => {
     // Model choice (lib/modelChoice.js): Sonnet by default; Opus for planning, file reasoning, and the number-check retry below.
     const lastAttached = Array.isArray(messages[messages.length - 1]?.attachments) ? messages[messages.length - 1].attachments : [];
     // Liquidation / push-for-sale analysis: plan and result are built in code (no writing model). A person without the permission is refused here, before any model call.
-    const flow = detectFlow(messages);
-    const denial = preflightDenial(user, lastUserMsg, flow);
+    let flow = detectFlow(messages);
+    const flowUse = [];       // Sonnet usage of this answer's small calls (follow-up classifier, settings reader, explanation)
+    if (flow?.mode === 'followup') {
+      // A message after a plan / result: settings change -> re-run; question about the result -> explain (no re-run); unclear -> one line; unrelated -> normal path.
+      const prior = flowMessageFromChat(messages.slice(0, -1));
+      const c = await classifyFollowUp(anthropic, SONNET, lastUserMsg, mergeSettings(OPP_DEFAULTS, prior.settings).settings, prior.kind);
+      if (c.usage) flowUse.push(c.usage);
+      flow = c.kind === 'change' ? { mode: 'run', parse: false, args: c.args, kind: 'change' }
+        : c.kind === 'question' ? { mode: 'explain', prior, kind: 'question' }
+          : c.kind === 'unclear' ? { mode: 'ask', kind: 'unclear' }
+            : (isLiquidationTopic(lastUserMsg) ? { mode: 'plan', parse: false, args: {}, kind: 'new request' } : null);
+    } else if (flow?.mode === 'ack') flow.kind = 'ack';
+    const denial = preflightDenial(user, lastUserMsg, flow?.mode === 'ack' ? null : flow);
     if (denial) {
       log({ user: user.email, role: user.role, target: 'chat_refused_no_permission', allowed: false });
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -602,15 +616,26 @@ const httpServer = http.createServer(async (req, res) => {
     if (flow) {
       try {
         const chatSet = settingsFromChat(messages);
-        let args = {}, use = null;
-        if (flow.parse) { const p = await parseSettingChange(anthropic, SONNET, lastUserMsg, chatSet || OPP_DEFAULTS); args = p.args; use = p.usage; }
         const files = [];
-        const r = await executeInventoryOpportunity(user, { ...args, mode: flow.mode }, chatSet, files, true);
-        if (use) await trackUsage({ model: SONNET, inputTokens: use.input_tokens || 0, outputTokens: use.output_tokens || 0, cacheRead: use.cache_read_input_tokens || 0, cacheWrite: use.cache_creation_input_tokens || 0, user }).catch(() => {});
-        log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model: use ? SONNET : null, steps: 0, why: `liquidation_${flow.mode}`, input_tokens: use?.input_tokens || 0, output_tokens: use?.output_tokens || 0, cache_read_tokens: 0, cache_write_tokens: 0 });
-        const text = r.ok || r.denied ? r.text : `${r.text}\n\nNothing could be computed, so there is no list yet. Try again in a few minutes, or contact data.team@myfrido.com.`;
+        let text, tableKeys = [];
+        if (flow.mode === 'ack') text = ACK_LINE;
+        else if (flow.mode === 'ask') text = ASK_LINE;
+        else if (flow.mode === 'explain') {
+          const a = await answerQuestion(anthropic, SONNET, lastUserMsg, flow.prior);
+          if (a.usage) flowUse.push(a.usage);
+          text = a.text;
+        } else {
+          let args = flow.args || {};
+          if (flow.parse) { const p = await parseSettingChange(anthropic, SONNET, lastUserMsg, chatSet || OPP_DEFAULTS); args = p.args; if (p.usage) flowUse.push(p.usage); }
+          const r = await executeInventoryOpportunity(user, { ...args, mode: flow.mode }, chatSet, files, true);
+          text = r.ok || r.denied ? r.text : `${r.text}\n\nNothing could be computed, so there is no list yet. Try again in a few minutes, or contact data.team@myfrido.com.`;
+          if (r.ok) tableKeys = phoneHints(text, mergeSettings(OPP_DEFAULTS, chatSet, args).settings);
+        }
+        const use = flowUse.reduce((a, u) => ({ input_tokens: a.input_tokens + (u.input_tokens || 0), output_tokens: a.output_tokens + (u.output_tokens || 0), cache_read_input_tokens: a.cache_read_input_tokens + (u.cache_read_input_tokens || 0), cache_creation_input_tokens: a.cache_creation_input_tokens + (u.cache_creation_input_tokens || 0) }), { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 });
+        if (flowUse.length) await trackUsage({ model: SONNET, inputTokens: use.input_tokens, outputTokens: use.output_tokens, cacheRead: use.cache_read_input_tokens, cacheWrite: use.cache_creation_input_tokens, user }).catch(() => {});
+        log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model: flowUse.length ? SONNET : null, steps: 0, why: `liquidation_${flow.mode}${flow.kind ? `_${flow.kind}` : ''}`, small_calls: flowUse.length, input_tokens: use.input_tokens, output_tokens: use.output_tokens, cache_read_tokens: use.cache_read_input_tokens, cache_write_tokens: use.cache_creation_input_tokens });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ text, sql: null, model: use ? SONNET : null, tableKeys: keyColumns(lastUserMsg, text), ...(files.length ? { files: files.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: use ? { [SONNET]: { input: use.input_tokens || 0, output: use.output_tokens || 0, cache_read: 0, cache_write: 0 } } : {}, per_request: [], topics: ['liquidation_flow'] } : {}), monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
+        res.end(JSON.stringify({ text, sql: null, model: flowUse.length ? SONNET : null, tableKeys, ...(files.length ? { files: files.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: flowUse.length ? { [SONNET]: { input: use.input_tokens, output: use.output_tokens, cache_read: use.cache_read_input_tokens, cache_write: use.cache_creation_input_tokens } } : {}, per_request: [], flow: `${flow.mode}${flow.kind ? `/${flow.kind}` : ''}`, small_calls: flowUse.length, topics: ['liquidation_flow'] } : {}), monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
       } catch (err) {
         console.error('Liquidation flow error:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -620,7 +645,9 @@ const httpServer = http.createServer(async (req, res) => {
     }
 
     try {
-      let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
+      // An earlier liquidation plan / result of this chat (carries the hidden state) is not sent to the model for an unrelated question: it is ~10k tokens.
+      const OMITTED = '[Earlier NavAI answer: the stock liquidation plan / lists, already shown to the user, left out here.]';
+      let loopMessages = messages.map(m => (m.role === 'assistant' && parseHidden(String(m.content ?? m.text ?? '')) ? { role: m.role, content: OMITTED } : { role: m.role, content: buildContent(m) }));
       const { block: matchBlock, computed } = await productMatchBlock(messages, user);
       const userTexts = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? '')).slice(-4);
       const { blocks: systemBlocks, kb } = buildSystemBlocks(userTexts);

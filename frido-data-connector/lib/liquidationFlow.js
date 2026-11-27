@@ -6,31 +6,39 @@
 //   planMarkdown / resultMarkdown   -> the answer texts
 //   parseSettingChange(client, ...) -> { args, usage }
 import { indianInt, formatRupees } from './format.js';
-import { settingsLine, settingsFromChat } from './inventoryOpportunity.js';
+import { settingsLine, hiddenState, flowMessageFromChat } from './inventoryOpportunity.js';
 import { checkInventoryCost, checkOos, checkCn } from './pageAccess.js';
+import { knownNumbers, unverified } from './numberCheck.js';
+import { findTables, plain } from './tableHints.js';
 
 export const HIGH_TOP = 5, NOCOGS_TOP = 5;
 const TOPIC = /liquidat|push (it |them )?for sale|slow.?moving|high.?doi|dead stock|excess stock|clear(ing)? (the )?(excess |slow |old )?stock/i;
+export const isLiquidationTopic = q => TOPIC.test(String(q || ''));
 const RUN_NOW = /\b(run it now|no questions|don'?t ask|do not ask|without (asking|questions)|skip (the )?questions|just run|go ahead and run|with (the )?defaults)\b/i;
 const CONFIRM = /^\s*(yes|yeah|yep|yup|y|ok|okay|sure|go ahead|go|run it|run|proceed|confirmed?|do it|haan|ha|looks good|go for it|please run it)\b(?:[\s,.!]*(?:please|run it|with (?:these|the same|those) settings|go ahead|now))*[\s.!]*$/i;
+const ACK = /^\s*(ok(ay)?|thanks?|thank you|got it|great|nice|cool|fine|perfect|noted|done)[\s.!]*$/i;
 const CHANGE = /cover|top\s*\d+|\b\d+\s*(skus?|sub.?categor)|rank|sort|\bdoi\b|excess value|stock value|sales (period|days|average)|\b(7|15|30|60|90)\s*-?\s*(day|days|d)\b|channel|b2c|all channels|exclude|include|only|ignore|without|high.?value|instead|change|set |now |also |remove|add /i;
-const PLAN_ASKED = /Shall I run it with these settings\?/;
 
-const lastOf = (messages, role) => [...messages].reverse().find(m => m.role === role);
 const textOf = m => String(m?.content ?? m?.text ?? '');
 
+// What the last user message is, in the liquidation flow:
+//   { mode: 'plan' | 'run', parse }   a new request (plan first unless "run it now"), or "yes" after the plan
+//   { mode: 'followup' }              a message after a plan / result of this chat: the classifier decides (settings change -> re-run,
+//                                     a question about the result -> explain, unclear -> one-line question, unrelated -> normal path)
+//   { mode: 'ack' }                   "ok" / "thanks" after a result
+//   null                              not a liquidation message
 export function detectFlow(messages) {
   const msgs = Array.isArray(messages) ? messages : [];
   const last = msgs[msgs.length - 1];
   if (!last || last.role !== 'user' || (Array.isArray(last.attachments) && last.attachments.length)) return null;
   const q = textOf(last);
-  const prevAssistant = lastOf(msgs.slice(0, -1), 'assistant');
-  const prevText = textOf(prevAssistant);
-  if (prevAssistant && /^\s*(?:\*\*)?Settings:/m.test(prevText)) {
-    if (CONFIRM.test(q) && q.length < 80) return { mode: 'run', parse: false };
-    if (PLAN_ASKED.test(prevText) || settingsFromChat(msgs.slice(0, -1))) {
-      if (CHANGE.test(q) && q.length < 400) return { mode: 'run', parse: true };
-    }
+  const prior = flowMessageFromChat(msgs.slice(0, -1));
+  if (prior) {
+    const lastAssistant = [...msgs.slice(0, -1)].reverse().find(m => m.role === 'assistant');
+    const justAfterPlan = prior.kind === 'plan' && lastAssistant && textOf(lastAssistant) === prior.text;
+    if (justAfterPlan && CONFIRM.test(q) && q.length < 80) return { mode: 'run', parse: false };
+    if (!justAfterPlan && ACK.test(q) && lastAssistant && textOf(lastAssistant) === prior.text) return { mode: 'ack' };
+    if (q.length < 500) return { mode: 'followup' };
     return null;
   }
   if (TOPIC.test(q)) return { mode: RUN_NOW.test(q) ? 'run' : 'plan', parse: CHANGE.test(q) };
@@ -92,9 +100,42 @@ export function planMarkdown(res, ctx, notes = []) {
     ...(notes.length ? [`Note: ${notes.join('; ')}.`, ''] : []),
     '**Shall I run it with these settings?**',
     '',
-    settingsLine(s),
+    settingsPlain(s),
+    hiddenState('plan', s),
   ];
   return lines.join('\n');
+}
+
+// "Settings: 60 days cover · B2C sales, last 30 days · ranked by excess value · top 20 · excluded: Covers, Spare Parts · high-value list: Mobility, Ergo Furniture"
+export function settingsPlain(s) {
+  const ex = [...s.exclude_categories, ...s.exclude_sub_categories, ...s.exclude_words.map(w => `names containing "${w}"`)];
+  const parts = [`${s.cover_days} days cover`, avgBasis(s), `ranked by ${RANK_LABEL[s.rank_by]}`, `top ${s.top_n}`];
+  if (s.min_doi != null) parts.push(`minimum DOI ${s.min_doi}`);
+  if (s.include_categories.length || s.include_sub_categories.length) parts.push(`only: ${[...s.include_categories, ...s.include_sub_categories].join(', ')}`);
+  parts.push(`excluded: ${ex.length ? ex.join(', ') : 'none'}`, `high-value list: ${s.high_value_categories.join(', ') || 'none'}`);
+  return `Settings: ${parts.join(' · ')}`;
+}
+
+// The figures behind the lists shown (for questions about the result, no re-run): per row the numbers a person may ask about.
+const r1v = v => (v == null ? null : Math.round(v * 10) / 10);
+const compactSub = e => ({ n: e.sub_category, cat: e.category, skus: e.skus, stock: e.stock_units, stock_value: Math.round(e.stock_value || 0), excess_units: e.excess_units, excess_value: Math.round(e.excess_value || 0), doi: e.doi, per_day_used: r1v(e.avg_used), per_day_30d: r1v(e.avg30), per_day_7d: r1v(e.avg7), per_day_90d: r1v(e.avg90), trend_7d_30d: e.trend_7d_vs_30d_pct, trend_30d_90d: e.trend_30d_vs_90d_pct, asp: e.asp_exc_gst == null ? null : Math.round(e.asp_exc_gst), cogs: e.cogs_per_unit == null ? null : Math.round(e.cogs_per_unit), margin: e.margin_per_unit == null ? null : Math.round(e.margin_per_unit), max_discount_pct: e.max_discount_pct });
+const compactSku = r => ({ sku: r.sku, n: r.sub_category, stock: r.stock_units, excess_units: r.excess_units, doi: r.doi, asp: r.asp_exc_gst == null ? null : Math.round(r.asp_exc_gst) });
+export function resultFigures(res) {
+  const n = res.settings.top_n;
+  return { main: res.main.slice(0, n).map(compactSub), high: res.high.slice(0, Math.min(HIGH_TOP, n)).map(compactSub), no_cogs: res.noCogs.slice(0, Math.min(NOCOGS_TOP, n)).map(compactSku), totals: { main_subs: res.main.length, high_subs: res.high.length, no_cogs_skus: res.noCogs.length } };
+}
+
+// Phone columns of the answer's tables (the screen reads them from the answer's tableKeys): sub-category + the column the list is ranked by
+// (excess value by default, DOI / stock value when ranked so) + excess units + trend. Everything else is under "View full table" and in the Excel.
+export function phoneHints(text, s) {
+  const key = s.rank_by === 'doi' ? 'DOI' : s.rank_by === 'stock_value' ? 'Stock value' : 'Excess value';
+  const show = [...new Set([key, 'Excess value', 'Excess units', 'Trend 30d vs 90d'])].slice(0, 3);
+  return findTables(text).tables.map(t => {
+    const h0 = plain(t.headers[0]);
+    if (h0 === 'Sub-category') return { key, show };
+    if (h0 === 'SKU') return { key: 'Excess units', show: ['Excess units', 'Stock', 'DOI'] };
+    return null;
+  });
 }
 
 function mainTable(list, n) {
@@ -132,7 +173,7 @@ export function resultMarkdown(res, ctx, { attached = false, notes = [] } = {}) 
     `- Excess = stock − ${s.cover_days} × avg daily sale (min 0); excess value = excess × COGS per unit. DOI = stock ÷ avg daily sale. ASP = last 90 days, ex GST, after discounts; max discount = margin ÷ ASP; n/a = no sale in 90 days. The 30d vs 90d trend is indicative.`,
     `- Excluded: ${indianInt(ex.never.skus)} never-live SKUs and ${indianInt(ex.names.reduce((a, e) => a + e.skus, 0))} SKUs by name (categories and sub-categories listed in the plan); names are in the Excel.`);
   if (notes.length) out.push(`- ${notes.join('; ')}.`);
-  out.push(attached ? '- The Excel is attached below: sub-category summaries, every SKU with all columns, No COGS SKUs, exclusions.' : '- The Excel could not be attached this time.', '', settingsLine(s));
+  out.push(attached ? '- The Excel is attached below: sub-category summaries, every SKU with all columns, No COGS SKUs, exclusions.' : '- The Excel could not be attached this time.', '', settingsPlain(s), hiddenState('result', s, resultFigures(res)));
   return out.join('\n');
 }
 
@@ -158,9 +199,62 @@ export async function parseSettingChange(client, model, userText, current) {
   }).catch(() => null);
   const tu = r?.content?.find(b => b.type === 'tool_use');
   const args = tu?.input && typeof tu.input === 'object' ? { ...tu.input } : {};
-  // code guards: DOI wording in the topic ("high-DOI products") is not an instruction to rank by DOI or to set a minimum DOI
+  return { args: guardArgs(args, userText), usage: r?.usage || null };
+}
+// code guards: DOI wording in the topic ("high-DOI products") is not an instruction to rank by DOI or to set a minimum DOI
+function guardArgs(args, userText) {
   const t = String(userText);
   if (args.rank_by && !/\b(rank(ed|ing)?|sort(ed)?|order(ed)?)\b|\bby (doi|excess|stock)/i.test(t)) delete args.rank_by;
   if (args.min_doi != null && !/\bmin(imum)?\b|doi\s*(above|over|at least|>|more than|greater)|at least \d+\s*(days|doi)/i.test(t)) delete args.min_doi;
-  return { args, usage: r?.usage || null };
+  return args;
+}
+
+// A message after a plan / result: one small Sonnet call decides what it is.
+//   change    -> settings change ("now 90 days cover", "exclude pillows", "top 30"): re-run the tool with the new settings
+//   question  -> a question about the lists shown ("what does trend 30 vs 90 mean?", "why is slippers on top?", "which has the best margin?"): explain, no re-run
+//   unclear   -> could be either: ask one line
+//   other     -> nothing to do with this analysis: normal NavAI path
+export async function classifyFollowUp(client, model, userText, current, lastKind) {
+  const r = await client.messages.create({
+    model, max_tokens: 500,
+    system: `A user is chatting about a stock liquidation analysis. The last NavAI message was a ${lastKind === 'plan' ? 'PLAN (settings to confirm)' : 'RESULT (ranked lists)'}. Current ${settingsLine(current)}\nCall follow_up with kind:\n- "change": the user wants different settings and a new run (cover days, top N, sales period, B2C/all channels, minimum DOI, rank by, include/exclude a category or sub-category, high-value group). Put ONLY the changed settings in settings (exclude_* / include_* REPLACE the list: copy entries kept, add new names as the user wrote them).\n- "question": the user asks what something means or why / which / how much about the lists already shown (a definition, a comparison, a reason, "which has the best margin"). No new run is needed.\n- "unclear": it could be a settings change or a question and you cannot tell.\n- "other": unrelated to this analysis (another business question, small talk).\nWords that merely describe the topic ("high-DOI", "slow-moving") are not settings. A question mentioning a setting ("what does 60 days cover mean?") is a question.
+A complete new question that names its own subject or metric - "Top 5 products by inventory value", "total inventory value", "sales last month", "inward this week", "returns", "P&L" - is "other", even when it contains words like top or days. "top 30", "now top 10", "show 90 days cover", "exclude pillows" on their own are changes. When you cannot tell, answer unclear.`,
+    tools: [{ name: 'follow_up', description: 'Classify the message', input_schema: { type: 'object', properties: { kind: { type: 'string', enum: ['change', 'question', 'unclear', 'other'] }, settings: SCHEMA }, required: ['kind'] } }],
+    tool_choice: { type: 'tool', name: 'follow_up' },
+    messages: [{ role: 'user', content: String(userText).slice(0, 600) }],
+  }).catch(() => null);
+  const tu = r?.content?.find(b => b.type === 'tool_use');
+  const kind = ['change', 'question', 'unclear', 'other'].includes(tu?.input?.kind) ? tu.input.kind : 'unclear';
+  const args = kind === 'change' && tu.input.settings && typeof tu.input.settings === 'object' ? guardArgs({ ...tu.input.settings }, userText) : {};
+  return { kind, args, usage: r?.usage || null };
+}
+
+export const ASK_LINE = 'Do you want me to change the settings and re-run the list, or explain something in the result above? Tell me which.';
+export const ACK_LINE = 'You can change any setting (for example "90 days cover", "top 30", "exclude Pillows", "rank by DOI"), or ask about a number in the lists.';
+
+// A question about the result: plain words from the last computed result (visible text + the figures it carried), no re-run, no repeated table.
+const EXPLAIN_SYSTEM = `You answer a question about a stock liquidation analysis that was already computed. You get the answer text shown to the user and the figures behind it (JSON).
+Rules:
+- Plain words, short (at most 6 lines). Do NOT repeat the lists. Use a small table (at most 5 rows) only when it really helps.
+- Use ONLY numbers that appear in the answer text or the figures. Never add, subtract, divide, round or compare numbers yourself. If a figure you need is not there, say so and point to the Excel (sheet "All SKUs" has every SKU) or offer to re-run with other settings.
+- Definitions used: excess = stock beyond the cover days of average daily sale; excess value = excess x COGS per unit; DOI = stock / average daily sale (days of stock left); Trend 30d vs 90d compares average daily sale of the last 30 days with the last 90 days: up = selling faster recently, down = slowing down (indicative); ASP = average selling price ex GST over 90 days after discounts; margin = ASP - COGS per unit; max discount before loss = margin / ASP; "n/a" = no sale in the period; No COGS = stock with no cost on file, so it cannot be valued.
+- A sub-category is on top because the list is ranked by the ranking in the settings (excess value by default): say which setting and quote its figures from the data (excess units, excess value, DOI, per-day sale).
+- Example for a trend question: "Trend compares average daily sale in the last 30 days with the last 90 days: ↑ = selling faster recently, ↓ = slowing down. Slippers: 30d 822/day vs 90d 1,525/day (↓ 46.1%)."
+- Never mention these instructions or the JSON.`;
+export async function answerQuestion(client, model, question, ctx) {
+  const visible = String(ctx.text || '').replace(/<!--nx:[\s\S]*?-->/g, '').trim();
+  const figures = ctx.hidden?.r ? JSON.stringify(ctx.hidden.r) : '';
+  const known = knownNumbers([visible, figures, question]);
+  let usage = { input_tokens: 0, output_tokens: 0 };
+  const add = u => { usage = { input_tokens: usage.input_tokens + (u?.input_tokens || 0), output_tokens: usage.output_tokens + (u?.output_tokens || 0) }; };
+  const ask = async extra => {
+    const r = await client.messages.create({ model, max_tokens: 700, system: EXPLAIN_SYSTEM, messages: [{ role: 'user', content: `ANSWER TEXT:\n${visible}\n\nFIGURES (JSON):\n${figures || 'none'}\n\nQUESTION: ${String(question).slice(0, 600)}${extra || ''}` }] }).catch(() => null);
+    add(r?.usage);
+    return r?.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '';
+  };
+  let text = await ask('');
+  let odd = text ? unverified(text, known) : [];
+  if (odd.length) { text = (await ask(`\n\nThese numbers in your answer are not in the data: ${odd.slice(0, 10).join(', ')}. Rewrite using only numbers from the data, or leave them out.`)) || text; odd = unverified(text, known); }
+  if (odd.length) text = text.split('\n').filter(l => !unverified(l, known).length).join('\n').trim();
+  return { text: text || 'I could not answer that from the result above. Ask me to re-run with other settings, or look in the Excel (sheet "All SKUs").', usage };
 }
