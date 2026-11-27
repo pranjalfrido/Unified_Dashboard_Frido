@@ -4,6 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes pulse{0%,100%{opacity:0.5}50%{opacity:1}}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* touch-action:manipulation removes the old 300ms tap delay WITHOUT disabling pinch-zoom (the
    viewport meta no longer sets user-scalable=no). Covers the app's clickable divs too. */

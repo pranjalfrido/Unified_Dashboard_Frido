@@ -20341,24 +20341,25 @@ function ScheduledEmailsPage({ onBack }) {
                 <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2, fontStyle: 'italic', opacity: 0.8 }}>{job.subject}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-                {!loading && state && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: isEnabled ? '#16a34a' : '#dc2626', background: isEnabled ? '#dcfce7' : '#fee2e2', borderRadius: 20, padding: '3px 10px' }}>
+                {loading
+                  ? <span style={{ width: 56, height: 24, borderRadius: 20, background: C.border, opacity: 0.5, animation: 'pulse 1.2s ease-in-out infinite' }} />
+                  : state && <span style={{ fontSize: 12, fontWeight: 600, color: isEnabled ? '#16a34a' : '#dc2626', background: isEnabled ? '#dcfce7' : '#fee2e2', borderRadius: 20, padding: '3px 10px' }}>
                     {isEnabled ? 'Active' : 'Paused'}
                   </span>
-                )}
-                {loading && <span style={{ fontSize: 12, color: C.t3 }}>Loading…</span>}
+                }
                 <button
                   disabled={isLoading || !state}
                   onClick={() => toggle(job.id, state)}
                   style={{
                     border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: isLoading || !state ? 'not-allowed' : 'pointer',
-                    background: isLoading || !state ? C.border : isEnabled ? '#dc2626' : '#16a34a',
-                    color: isLoading || !state ? C.t3 : '#fff',
-                    opacity: isLoading ? 0.6 : 1,
+                    background: loading ? C.border : isLoading ? C.border : !state ? C.border : isEnabled ? '#dc2626' : '#16a34a',
+                    color: isLoading || !state || loading ? C.t3 : '#fff',
+                    opacity: toggling === job.id ? 0.6 : 1,
                     transition: 'background .15s',
+                    minWidth: 72,
                   }}
                 >
-                  {toggling === job.id ? '…' : isEnabled ? 'Pause' : 'Resume'}
+                  {toggling === job.id ? '…' : loading ? '···' : isEnabled ? 'Pause' : 'Resume'}
                 </button>
               </div>
             </div>
