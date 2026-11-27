@@ -788,7 +788,7 @@ function SavedScenariosTable({ scenarios, onRemove, onReset, phone = false }) {
   const stickyCol = { position: 'sticky', left: 0, boxShadow: `inset -1px 0 0 ${C.border}` }
 
   return (
-    <div style={{ width: '100%', alignSelf: 'flex-start', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
+    <div style={{ width: 'fit-content', maxWidth: '100%', alignSelf: 'flex-start', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Saved Scenarios — MRP, Selling Price &amp; Unit Economics</div>
