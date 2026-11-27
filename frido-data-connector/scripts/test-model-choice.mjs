@@ -1,0 +1,11 @@
+import { chooseModel, SONNET, OPUS } from '../lib/modelChoice.js';
+let bad = 0; const check = (n, c) => { console.log(`${c ? 'OK  ' : 'FAIL'} ${n}`); if (!c) bad++; };
+for (const q of ['Inventory value of arch comfort slipper', 'stock of FR-OPC-L1', 'OOS loss last week', 'Compare Delhivery vs Bluedart', 'trend of D2C revenue', 'why did returns go up', 'P&L for Amazon', 'explain the DOI']) check(`Sonnet: ${q}`, chooseModel(q).model === SONNET);
+check('Opus: Plan 40 days for FR-OPC-L1', chooseModel('Plan 40 days for FR-OPC-L1').model === OPUS);
+check('Opus: planning question', chooseModel('inventory planning for Diwali').model === OPUS);
+check('"explain" alone is not a plan', chooseModel('explain the plain numbers').model === SONNET);
+check('Opus: PDF + compare', chooseModel('compare this invoice with our data', [{ type: 'pdf' }]).model === OPUS);
+check('Opus: Excel (text) + reconcile', chooseModel('reconcile this sheet', [{ type: 'text' }]).model === OPUS);
+check('Sonnet: a photo with a question', chooseModel('what does this show, compare it', [{ type: 'image' }]).model === SONNET);
+check('Sonnet: a file with a simple question', chooseModel('what is in this file', [{ type: 'text' }]).model === SONNET);
+console.log(bad ? `\n${bad} failed` : '\nAll checks passed'); process.exit(bad ? 1 : 0);

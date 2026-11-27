@@ -29,6 +29,8 @@ import { freshnessNote } from './lib/freshness.js';
 import { loadCatalog, matchProducts, describeMatch, findProductText } from './lib/productMatch.js';
 import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
+import { fillTotals, keyColumns } from './lib/tableHints.js';
+import { chooseModel, OPUS } from './lib/modelChoice.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ } from './lib/bigquery.js';
@@ -408,8 +410,11 @@ const httpServer = http.createServer(async (req, res) => {
     const anthropic = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
     const lastUserMsg = String(messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '');
-    const isComplex = /compar|breakdown|analys|trend|p&l|profit|loss|why|explain|forecast|correlat|multi|across|vs\b|versus|deep|inventor|planning|plan|oos|out.of.stock|lead.time|reorder|avg.daily|average.daily|stuck|stock.out|stockout/i.test(lastUserMsg);
-    const model = isComplex ? 'claude-opus-4-7' : 'claude-sonnet-4-6';
+    // Model choice (lib/modelChoice.js): Sonnet by default; Opus for planning, file reasoning, and the number-check retry below.
+    const lastAttached = Array.isArray(messages[messages.length - 1]?.attachments) ? messages[messages.length - 1].attachments : [];
+    const choice = chooseModel(lastUserMsg, lastAttached);
+    const model = choice.model;
+    const wantOpus = model === OPUS;
 
     const tools = [{
       name: 'run_command',
@@ -523,24 +528,23 @@ ${last.content}`;
       const seenSkus = new Map();
       const seenFormatted = new Set();
       const syncNotes = new Set();
-      let totalInputTokens = 0;
-      let totalOutputTokens = 0;
+      const usageBy = {};       // model -> { input, output } for this answer
+      const addUse = (m, u) => { const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; };
 
       while (iterations < 12) {
         iterations++;
         const reqParams = {
           model,
-          max_tokens: isComplex ? 16000 : 8192,
+          max_tokens: wantOpus ? 16000 : 8192,
           system: buildSystemPrompt(),
           tools,
           tool_choice: forceFinal ? { type: 'none' } : (iterations === 1 ? { type: 'any' } : { type: 'auto' }),
           messages: loopMessages,
         };
-        if (isComplex && model === 'claude-opus-4-7') reqParams.thinking = { type: 'adaptive' };
+        if (wantOpus) reqParams.thinking = { type: 'adaptive' };
         const response = await anthropic.messages.create(reqParams);
 
-        totalInputTokens += response.usage?.input_tokens || 0;
-        totalOutputTokens += response.usage?.output_tokens || 0;
+        addUse(model, response.usage);
 
         for (const block of response.content) {
           if (block.type === 'text') finalText = block.text;
@@ -614,8 +618,7 @@ ${last.content}`;
           messages: loopMessages,
         }).catch(() => null);
         if (finalResponse) {
-          totalInputTokens += finalResponse.usage?.input_tokens || 0;
-          totalOutputTokens += finalResponse.usage?.output_tokens || 0;
+          addUse(model, finalResponse.usage);
           for (const block of finalResponse.content) {
             if (block.type === 'text') finalText = block.text;
           }
@@ -641,8 +644,7 @@ ${last.content}`;
             ],
           }).catch(() => null);
           if (retry) {
-            totalInputTokens += retry.usage?.input_tokens || 0;
-            totalOutputTokens += retry.usage?.output_tokens || 0;
+            addUse(model, retry.usage);
             for (const block of retry.content) if (block.type === 'text') finalText = block.text;
           }
         }
@@ -666,8 +668,7 @@ ${last.content}`;
             ],
           }).catch(() => null);
           if (retry) {
-            totalInputTokens += retry.usage?.input_tokens || 0;
-            totalOutputTokens += retry.usage?.output_tokens || 0;
+            addUse(model, retry.usage);
             for (const block of retry.content) if (block.type === 'text') finalText = block.text;
           }
         }
@@ -684,9 +685,10 @@ ${last.content}`;
         const userText = messages.filter(m => m.role === 'user').map(m => String(m.content ?? m.text ?? ''));
         const known = knownNumbers([...toolTexts, ...attachedText, ...userText, matchBlock || '']);
         let odd = hasBinary ? [] : unverified(finalText, known);
-        if (odd.length) {
+        // Rewrite with the same model first; if the numbers still do not check out, one last rewrite with Opus.
+        const rewrite = async m => {
           const retry = await anthropic.messages.create({
-            model,
+            model: m,
             max_tokens: 4096,
             system: buildSystemPrompt(),
             tools,
@@ -698,12 +700,13 @@ ${last.content}`;
             ],
           }).catch(() => null);
           if (retry) {
-            totalInputTokens += retry.usage?.input_tokens || 0;
-            totalOutputTokens += retry.usage?.output_tokens || 0;
+            addUse(m, retry.usage);
             for (const block of retry.content) if (block.type === 'text') finalText = block.text;
             odd = unverified(finalText, known);
           }
-        }
+        };
+        if (odd.length) await rewrite(model);
+        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length }); await rewrite(OPUS); }
         if (odd.length) {
           let replaced = 'none';
           if (computed) { finalText = computed.text; replaced = computed.kind; }
@@ -720,7 +723,9 @@ ${last.content}`;
         }
       }
 
-      await trackUsage({ model, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, user }).catch(() => {});
+      // Cost per answer: one line with the model(s) used and the tokens (no question text), and the spend tracker per model.
+      for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, user }).catch(() => {});
+      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
 
       if (!finalText) {
         // One line: what was tried and what is missing — never a bare "query failed".
@@ -736,9 +741,13 @@ ${last.content}`;
       // Never present a partial day as final: one code-added line, whatever the model wrote.
       if (syncNotes.size && !/still syncing/i.test(finalText)) finalText += `\n\n${[...syncNotes].join(' ')}`;
 
+      // A Total row is never empty (the connector's own totals fill it) and each table's key column is marked for the phone view.
+      finalText = fillTotals(finalText, toolTexts, lastUserMsg);
+      const tableKeys = keyColumns(lastUserMsg, finalText);
+
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {

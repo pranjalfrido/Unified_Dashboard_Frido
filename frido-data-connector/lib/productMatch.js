@@ -8,7 +8,7 @@
 //   * A SKU code (e.g. FR-OPC-L1) matches exactly that SKU, and says which product it belongs to.
 //   * A sub-category name typed in full (e.g. "Orthotics Posture Corrector") is one clear match, even when a longer name contains it.
 //   * Words that fit several products ("posture corrector" -> 3 sub-categories) are NOT guessed: all matches are returned with
-//     their SKUs, and the answer must be a per-product breakdown plus the total, ending "Tell me which one you meant".
+//     their SKUs, and the answer must be a per-product breakdown plus the total, ending "Tell me which one you meant" only when the matches are clearly different products (variants / combos of one product need no question).
 //   * Nothing matches -> say so and offer the closest names; never answer 0 because a match failed.
 // Pure functions (buildCatalog, matchProducts, describeMatch) are unit-tested with a fixture; loadCatalog reads the master from BigQuery.
 import { getBQ, guardSql } from './bigquery.js';
@@ -125,6 +125,18 @@ function closest(catalog, words, limit = 4) {
   return scored.filter(s => s.score >= 0.6).sort((a, b) => b.score - a.score || a.sub.localeCompare(b.sub)).slice(0, limit).map(s => s.sub);
 }
 
+// Variants of one product (Pro / Plus / Combo / Pack / size / colour ...) are one "family"; "Posture Corrector" and "Posture Corrector Seat" are not.
+// The "Tell me which one you meant" question is only asked when the matches span more than one family.
+const VARIANT_WORDS = new Set(['pro', 'plus', 'max', 'lite', 'mini', 'combo', 'pack', 'set', 'kit', 'pair', 'with', 'without', 'case', 'cover', 'small', 'medium', 'large', 'xl', 'black', 'blue', 'grey', 'gray', 'white', 'red', 'green', 'pink', 'beige', 'brown', 'kids', 'kid', 'men', 'mens', 'women', 'womens', 'unisex', 'of', 'and']);
+export function familiesOf(matches) {
+  const keys = new Set();
+  for (const m of matches || []) {
+    const k = tokens(m.sub || '').filter(w => !VARIANT_WORDS.has(w) && !/^\d+$/.test(w)).join(' ');
+    keys.add(k || String(m.sub || '').toLowerCase());
+  }
+  return keys.size;
+}
+
 // text -> { mentions: [{ text, kind: 'sku'|'one'|'several', matches: [{sub, category, skus, score, exact, sku?}] }], none: [{ text, closest: [] }] }
 export function matchProducts(catalog, text) {
   const raw = String(text || '');
@@ -159,7 +171,7 @@ export function matchProducts(catalog, text) {
     for (let k = 0; k < s.n; k++) taken.add(s.i + k);
     const exact = hits.filter(h => h.exact);
     const matches = (exact.length ? exact : hits).sort((a, b) => b.score - a.score || a.sub.localeCompare(b.sub));
-    mentions.push({ text: s.words.join(' '), kind: matches.length === 1 ? 'one' : 'several', matches, also: exact.length && hits.length > exact.length ? hits.filter(h => !h.exact).map(h => h.sub) : [] });
+    mentions.push({ text: s.words.join(' '), kind: matches.length === 1 ? 'one' : 'several', distinct: familiesOf(matches) > 1, matches, also: exact.length && hits.length > exact.length ? hits.filter(h => !h.exact).map(h => h.sub) : [] });
   }
 
   // 3. leftover product-looking words that resemble a product name: a typo -> "no match", with the closest names
@@ -188,10 +200,10 @@ export function describeMatch(result) {
       lines.push(`- "${m.text}" matches ${m.matches.length} products. Do NOT guess one. Use ALL of them, in this order:`);
       if (m.matches.length <= MANY) {
         for (const x of m.matches) lines.push(`    * "${x.sub}" (${x.category || '-'}), ${x.skus.length} SKU${x.skus.length === 1 ? '' : 's'}: ${x.skus.join(', ')}`);
-        lines.push('  Answer with the TOTAL across all of them first, then a short table with one row per product above (same order, same columns, a Total row), and end with "Tell me which one you meant." Never drop a product and never add one.');
+        lines.push(`  Answer with the TOTAL across all of them first, then a short table with one row per product above (same order, same columns, a Total row)${m.distinct ? ', and end with "Tell me which one you meant."' : '. These are variants / combos of the same product, so do NOT ask which one they meant'}. Never drop a product and never add one.`);
       } else {
         for (const x of m.matches) lines.push(`    * "${x.sub}" (${x.category || '-'}), ${x.skus.length} SKUs`);
-        lines.push(`  That is a long list, so filter by the master Sub_category (join the SKU master) with exactly these ${m.matches.length} names, never by a SKU list you write yourself. Answer with the TOTAL across all of them first, then a table of the TOP 10 products by the metric asked (ties: name A to Z) plus an "Other ${m.matches.length - 10} products" row and a Total row, and end with "Tell me which one you meant." Never drop a product and never add one.`);
+        lines.push(`  That is a long list, so filter by the master Sub_category (join the SKU master) with exactly these ${m.matches.length} names, never by a SKU list you write yourself. Answer with the TOTAL across all of them first, then a table of the TOP 10 products by the metric asked (ties: name A to Z) plus an "Other ${m.matches.length - 10} products" row and a Total row${m.distinct ? ', and end with "Tell me which one you meant."' : '. These are variants / combos of the same product, so do NOT ask which one they meant'}. Never drop a product and never add one.`);
       }
     }
   }
