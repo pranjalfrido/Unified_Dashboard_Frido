@@ -191,8 +191,11 @@ async function productMatchBlock(messages, user) {
   try {
     const catalog = await loadCatalog();
     const users = messages.filter(m => m.role === 'user');
-    for (const m of users.slice(-3).reverse()) {
+    for (const [idx, m] of users.slice(-3).reverse().entries()) {
       const text = String(m.content ?? m.text ?? '');
+      // An earlier long message or a liquidation request is not a product the person is still asking about (its words like "products",
+      // "furniture", "covers" matched hundreds of SKUs and made a later unrelated question cost 5x).
+      if (idx > 0 && (text.length > 300 || isLiquidationTopic(text))) continue;
       const result = matchProducts(catalog, text);
       let block = describeMatch(result);
       if (!block) continue;
