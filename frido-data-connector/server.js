@@ -29,6 +29,7 @@ import { freshnessNote } from './lib/freshness.js';
 import { loadCatalog, matchProducts, describeMatch, findProductText } from './lib/productMatch.js';
 import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
+import { fillTotals, keyColumns } from './lib/tableHints.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
 import { getBQ } from './lib/bigquery.js';
@@ -736,9 +737,13 @@ ${last.content}`;
       // Never present a partial day as final: one code-added line, whatever the model wrote.
       if (syncNotes.size && !/still syncing/i.test(finalText)) finalText += `\n\n${[...syncNotes].join(' ')}`;
 
+      // A Total row is never empty (the connector's own totals fill it) and each table's key column is marked for the phone view.
+      finalText = fillTotals(finalText, toolTexts, lastUserMsg);
+      const tableKeys = keyColumns(lastUserMsg, finalText);
+
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model, tableKeys, monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {

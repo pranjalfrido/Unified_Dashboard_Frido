@@ -77,7 +77,7 @@ function Answer({ msg, question, isAdmin }) {
       <Who model={isAdmin ? msg.model : undefined} />
       {blocks.length > 0 && (
         <div className="af-answer pm-answer">
-          {blocks.map((b, i) => b.type === 'table' ? <PulseTable key={i} headers={b.headers} rows={b.rows} title={b.title} />
+          {blocks.map((b, i) => b.type === 'table' ? <PulseTable key={i} headers={b.headers} rows={b.rows} title={b.title} keyHeader={msg.tableKeys?.[b.index]} />
             : b.type === 'src' ? <div key={i} className="pm-src">{b.text}</div>
             : <div key={i} dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text) }} />)}
           {tables.length > 1 && <div className="pm-tbar nx-xl-all-bar"><ExcelButton tables={tables} all /></div>}

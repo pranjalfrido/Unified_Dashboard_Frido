@@ -4,6 +4,7 @@ import { ArrowsOut, Copy, Check } from '@phosphor-icons/react'
 import MobilePageHeader from '../responsive/MobilePageHeader.jsx'
 import { inlineFormat } from './markdown.js'
 import ExcelButton from './ExcelButton.jsx'
+import { phoneColumns, withTotals } from './phoneColumns.js'
 
 // A table in a Pulse answer on phones (docs/responsive/PULSE_UI_FIX_PROMPT.md §5, mockups/pulse_fix_mockup.html):
 //   fits the width: at most 4 columns; more → "View full table ⤢" opens a full-screen table that scrolls
@@ -36,14 +37,15 @@ function Cell({ raw, num, cls = '' }) {
   )
 }
 
-function Table({ headers, rows, cols, numCols }) {
+function Table({ headers, rows, cols, numCols, colIdx }) {
+  const idx = colIdx || Array.from({ length: cols }, (_, j) => j)
   return (
     <table className="pm-tb">
-      <thead><tr>{headers.slice(0, cols).map((h, j) => <th key={j} className={numCols[j] ? 'n' : ''}>{plain(h)}</th>)}</tr></thead>
+      <thead><tr>{idx.map(j => <th key={j} className={numCols[j] ? 'n' : ''}>{plain(headers[j])}</th>)}</tr></thead>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i} className={isTotal(r) ? 'tot' : undefined}>
-            {Array.from({ length: cols }, (_, j) => <Cell key={j} raw={r[j]} num={numCols[j]} cls={j ? tone(r[j], r[0], headers[j]) : ''} />)}
+            {idx.map(j => <Cell key={j} raw={r[j]} num={numCols[j]} cls={j ? tone(r[j], r[0], headers[j]) : ''} />)}
           </tr>
         ))}
       </tbody>
@@ -97,17 +99,19 @@ function FullTable({ headers, rows, cols, numCols, onClose }) {
   )
 }
 
-export default function PulseTable({ headers, rows, title }) {
+export default function PulseTable({ headers, rows: rawRows, title, keyHeader }) {
   const [all, setAll] = useState(false)
   const [full, setFull] = useState(false)
   const [copied, setCopied] = useState(false)
-  const ncol = Math.max(headers.length, ...rows.map(r => r.length))
+  const ncol = Math.max(headers.length, ...rawRows.map(r => r.length))
   // Number columns: every non-empty body cell looks like a number (₹, %, Cr, L, ▲ 12%…).
   const numCols = useMemo(() => Array.from({ length: ncol }, (_, j) => {
     if (j === 0) return false
-    const body = rows.map(r => plain(r[j])).filter(Boolean)
+    const body = rawRows.map(r => plain(r[j])).filter(Boolean)
     return body.length > 0 && body.every(t => NUM.test(t))
-  }), [rows, ncol])
+  }), [rawRows, ncol])
+  const rows = useMemo(() => withTotals(rawRows, headers, numCols), [rawRows, headers, numCols])
+  const colIdx = useMemo(() => phoneColumns(headers, numCols, keyHeader), [headers, numCols, keyHeader])
 
   // 10 rows, then "Show all"; a Total row further down stays visible at the bottom.
   const shown = useMemo(() => {
@@ -127,10 +131,10 @@ export default function PulseTable({ headers, rows, title }) {
 
   return (
     <div className="pm-tbw">
-      <div className="pm-tbox"><Table headers={headers} rows={shown} cols={Math.min(ncol, MAX_COLS)} numCols={numCols} /></div>
+      <div className="pm-tbox"><Table headers={headers} rows={shown} cols={Math.min(ncol, MAX_COLS)} numCols={numCols} colIdx={colIdx} /></div>
       <div className="pm-tbar">
         {rows.length > MAX_ROWS && <button type="button" onClick={() => setAll(a => !a)}>{all ? 'Show fewer rows' : `Show all ${rows.length} rows`}</button>}
-        {ncol > MAX_COLS && <button type="button" onClick={() => setFull(true)}>View full table <ArrowsOut size={13} weight="bold" aria-hidden="true" /></button>}
+        {colIdx.length < ncol && <button type="button" onClick={() => setFull(true)}>View full table <ArrowsOut size={13} weight="bold" aria-hidden="true" /></button>}
         <button type="button" className="pm-copy" onClick={copy} aria-live="polite">
           {copied ? <Check size={13} weight="bold" aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}{copied ? 'Copied' : 'Copy'}
         </button>

@@ -96,7 +96,7 @@ export async function computeInward(mention, period, deps) {
   }
   if (vs) lines.push('', vs);
   lines.push('', 'Source: Inventory → Inward · finished goods only · GRN count in the Total row counts each GRN once.');
-  if (mention.kind === 'several') lines.push('', 'Tell me which one you meant.');
+  if (mention.kind === 'several' && mention.distinct !== false) lines.push('', 'Tell me which one you meant.');
   return { kind: 'inward', text: lines.join('\n'), total };
 }
 
@@ -125,7 +125,7 @@ export async function computeSales(mention, period, deps) {
   const lines = [`**${what}: ${indianInt(total.units)} units sold, ${formatRupees(total.gross)} gross revenue, ${period.label.includes(' to ') ? rangeLabel(period) : period.label}** · ${indianInt(total.orders)} orders`, '',
     table(['Product', 'Units', 'Orders', 'Gross revenue'], body), '',
     'Source: Sales → category / sub-category table (order value before cancellations and returns).'];
-  if (mention.kind === 'several') lines.push('', 'Tell me which one you meant.');
+  if (mention.kind === 'several' && mention.distinct !== false) lines.push('', 'Tell me which one you meant.');
   return { kind: 'sales', text: lines.join('\n'), total };
 }
 

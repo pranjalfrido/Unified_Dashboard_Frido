@@ -45,6 +45,7 @@ export async function sendMessage(conversationMessages, callerToken) {
     text: data.text || 'No response received.',
     sql: data.sql || null,
     model: data.model || null,
+    tableKeys: Array.isArray(data.tableKeys) ? data.tableKeys : null,
   };
 }
 
