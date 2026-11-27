@@ -30,7 +30,8 @@ import { loadCatalog, matchProducts, describeMatch, findProductText } from './li
 import { detectMetric, computeProductMetric, liveDeps } from './lib/productMetric.js';
 import { knownNumbers, unverified, replaceTables, tsvToMarkdown } from './lib/numberCheck.js';
 import { fillTotals, keyColumns } from './lib/tableHints.js';
-import { chooseModel, OPUS } from './lib/modelChoice.js';
+import { chooseModel, OPUS, SONNET } from './lib/modelChoice.js';
+import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange } from './lib/liquidationFlow.js';
 import { buildKnowledge, sectionsForTopics, TOPICS } from './lib/knowledgeSections.js';
 import { fetchEndpoint } from './lib/dashboardApi.js';
 import { runInventoryCost } from './lib/inventoryCost.js';
@@ -209,7 +210,7 @@ async function productMatchBlock(messages, user) {
 }
 
 // inventory_opportunity: stock beyond N days of cover per sub-category (permission inventory:cost), read-only. The Excel goes back in outFiles.
-async function executeInventoryOpportunity(user, args, chatSettings, outFiles) {
+async function executeInventoryOpportunity(user, args, chatSettings, outFiles, asMarkdown = false) {
   const start = Date.now();
   const authz = authorizeToolCall(user, 'run_command', 'bigquery');
   if (!authz.ok) return { ok: false, denied: true, text: authz.message };
@@ -224,12 +225,12 @@ async function executeInventoryOpportunity(user, args, chatSettings, outFiles) {
     };
     const { res, ctx, notes } = await runInventoryOpportunity(args || {}, deps, chatSettings, OPP_DEFAULTS);
     let text, attached = false;
-    if (args?.mode === 'plan') text = planText(res, ctx);
+    if (args?.mode === 'plan') text = asMarkdown ? planMarkdown(res, ctx, notes) : planText(res, ctx);
     else {
       try { const file = await buildWorkbook(res, ctx); if (file) { outFiles.push(file); attached = true; } } catch (e) { log({ user: user.email, role: user.role, target: 'inventory_opportunity', allowed: true, excel_error: String(e.message).slice(0, 120) }); }
-      text = resultText(res, { ...ctx, attached });
+      text = asMarkdown ? resultMarkdown(res, ctx, { attached, notes }) : resultText(res, { ...ctx, attached });
     }
-    if (notes.length) text += `\nNote: ${notes.join('; ')} (those values were ignored and the earlier setting was kept).`;
+    if (notes.length && !asMarkdown) text += `\nNote: ${notes.join('; ')} (those values were ignored and the earlier setting was kept).`;
     log({ user: user.email, role: user.role, target: 'inventory_opportunity', command: JSON.stringify({ mode: args?.mode || 'run', cover: res.settings.cover_days, days: res.settings.sales_days }).slice(0, 200), allowed: true, resultSize: text.length, excel: attached, duration: Date.now() - start });
     return { ok: true, text, skus: new Map(), sql: 'inventory_opportunity (Inventory cost card valuation + stock beyond cover)' };
   } catch (err) {
@@ -473,6 +474,15 @@ const httpServer = http.createServer(async (req, res) => {
     const lastUserMsg = String(messages[messages.length - 1]?.content ?? messages[messages.length - 1]?.text ?? '');
     // Model choice (lib/modelChoice.js): Sonnet by default; Opus for planning, file reasoning, and the number-check retry below.
     const lastAttached = Array.isArray(messages[messages.length - 1]?.attachments) ? messages[messages.length - 1].attachments : [];
+    // Liquidation / push-for-sale analysis: plan and result are built in code (no writing model). A person without the permission is refused here, before any model call.
+    const flow = detectFlow(messages);
+    const denial = preflightDenial(user, lastUserMsg, flow);
+    if (denial) {
+      log({ user: user.email, role: user.role, target: 'chat_refused_no_permission', allowed: false });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text: denial, sql: null, model: null, tableKeys: [], monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
+      return;
+    }
     const choice = chooseModel(lastUserMsg, lastAttached);
     const model = choice.model;
     const wantOpus = model === OPUS;
@@ -589,6 +599,26 @@ const httpServer = http.createServer(async (req, res) => {
       input_schema: { type: 'object', properties: { topics: { type: 'array', items: { type: 'string', enum: TOPICS } } }, required: ['topics'] },
     }];
 
+    if (flow) {
+      try {
+        const chatSet = settingsFromChat(messages);
+        let args = {}, use = null;
+        if (flow.parse) { const p = await parseSettingChange(anthropic, SONNET, lastUserMsg, chatSet || OPP_DEFAULTS); args = p.args; use = p.usage; }
+        const files = [];
+        const r = await executeInventoryOpportunity(user, { ...args, mode: flow.mode }, chatSet, files, true);
+        if (use) await trackUsage({ model: SONNET, inputTokens: use.input_tokens || 0, outputTokens: use.output_tokens || 0, cacheRead: use.cache_read_input_tokens || 0, cacheWrite: use.cache_creation_input_tokens || 0, user }).catch(() => {});
+        log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model: use ? SONNET : null, steps: 0, why: `liquidation_${flow.mode}`, input_tokens: use?.input_tokens || 0, output_tokens: use?.output_tokens || 0, cache_read_tokens: 0, cache_write_tokens: 0 });
+        const text = r.ok || r.denied ? r.text : `${r.text}\n\nNothing could be computed, so there is no list yet. Try again in a few minutes, or contact data.team@myfrido.com.`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ text, sql: null, model: use ? SONNET : null, tableKeys: keyColumns(lastUserMsg, text), ...(files.length ? { files: files.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: use ? { [SONNET]: { input: use.input_tokens || 0, output: use.output_tokens || 0, cache_read: 0, cache_write: 0 } } : {}, per_request: [], topics: ['liquidation_flow'] } : {}), monthlySpend: parseFloat(getStats().totalCost.toFixed(4)) }));
+      } catch (err) {
+        console.error('Liquidation flow error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'The stock analysis failed. Please try again.' }));
+      }
+      return;
+    }
+
     try {
       let loopMessages = messages.map(m => ({ role: m.role, content: buildContent(m) }));
       const { block: matchBlock, computed } = await productMatchBlock(messages, user);
@@ -618,7 +648,8 @@ ${last.content}`;
       const seenFormatted = new Set();
       const syncNotes = new Set();
       const usageBy = {};       // model -> { input, output } for this answer
-      const addUse = (m, u) => { const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0, cache_read: 0, cache_write: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; x.cache_read += u?.cache_read_input_tokens || 0; x.cache_write += u?.cache_creation_input_tokens || 0; };
+      const stepUse = [];       // per request: model, input, output, cache read/write (debugUsage + chat_usage log; no text)
+      const addUse = (m, u) => { stepUse.push([m === OPUS ? 'O' : 'S', u?.input_tokens || 0, u?.output_tokens || 0, u?.cache_read_input_tokens || 0, u?.cache_creation_input_tokens || 0].join(':')); const x = usageBy[m] || (usageBy[m] = { input: 0, output: 0, cache_read: 0, cache_write: 0 }); x.input += u?.input_tokens || 0; x.output += u?.output_tokens || 0; x.cache_read += u?.cache_read_input_tokens || 0; x.cache_write += u?.cache_creation_input_tokens || 0; };
 
       // At most 6 steps in the tool loop (12 for planning / analysis questions); a repeated identical tool call in the same answer reuses the result already fetched.
       const MAX_STEPS = choice.steps;
@@ -813,7 +844,7 @@ ${last.content}`;
           }
         };
         if (odd.length) await rewrite(model);
-        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length }); await rewrite(OPUS); }
+        if (odd.length && model !== OPUS) { log({ user: user.email, role: user.role, target: 'answer_numbers_opus_retry', allowed: true, unchecked: odd.length, sample: odd.slice(0, 6) }); await rewrite(OPUS); }
         if (odd.length) {
           let replaced = 'none';
           if (computed) { finalText = computed.text; replaced = computed.kind; }
@@ -832,7 +863,7 @@ ${last.content}`;
 
       // Cost per answer: one line with the model(s) used and the tokens (no question text), and the spend tracker per model.
       for (const [m, u] of Object.entries(usageBy)) await trackUsage({ model: m, inputTokens: u.input, outputTokens: u.output, cacheRead: u.cache_read, cacheWrite: u.cache_write, user }).catch(() => {});
-      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), cache_read_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_read, 0), cache_write_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_write, 0), steps: iterations, topics: kb.topics.join(','), by_model: usageBy, why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
+      log({ user: user.email, role: user.role, target: 'chat_usage', allowed: true, model, models: Object.keys(usageBy), input_tokens: Object.values(usageBy).reduce((x, u) => x + u.input, 0), output_tokens: Object.values(usageBy).reduce((x, u) => x + u.output, 0), cache_read_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_read, 0), cache_write_tokens: Object.values(usageBy).reduce((x, u) => x + u.cache_write, 0), steps: iterations, topics: kb.topics.join(','), by_model: usageBy, per_request: stepUse.join(' '), why_opus: wantOpus ? choice.why : (usageBy[OPUS] ? 'number_check_retry' : null) });
 
       // Never "nothing usable came back" when something was computed: show the last table the tools returned, and say what is missing.
       if (!finalText && lastTsv) {
@@ -859,7 +890,7 @@ ${last.content}`;
 
       const stats = getStats();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, ...(outFiles.length ? { files: outFiles.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: usageBy, topics: kb.topics } : {}), monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
+      res.end(JSON.stringify({ text: finalText, sql: usedSql, model: usageBy[OPUS] ? OPUS : model, tableKeys, ...(outFiles.length ? { files: outFiles.slice(-1) } : {}), ...(body?.debugUsage === true ? { usage: usageBy, per_request: stepUse, topics: kb.topics } : {}), monthlySpend: parseFloat(stats.totalCost.toFixed(4)) }));
     } catch (err) {
       console.error('Chat error:', err);
       if (isBillingError(err)) {

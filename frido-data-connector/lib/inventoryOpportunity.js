@@ -102,6 +102,34 @@ export function settingsFromChat(messages) {
   return null;
 }
 
+// Names the user typed (exclude / include) -> the SKU master's exact categories / sub-categories. An exact category or sub-category name
+// wins; otherwise every sub-category whose name contains the words (max 25); a name that matches nothing is reported, never guessed.
+export function resolveNames(settings, names, defaults = {}) {
+  const lcl = x => String(x ?? '').trim().toLowerCase();
+  const notes = [], s = { ...settings };
+  const cl = new Map(names.cats.map(c => [lcl(c), c])), sl = new Map(names.subs.map(c => [lcl(c), c]));
+  const known = new Set([...(defaults.exclude_categories || []), ...(defaults.exclude_sub_categories || []), ...(defaults.include_categories || []), ...(defaults.include_sub_categories || [])].map(lcl));
+  const resolve = list => {
+    const cats = [], subs = [];
+    for (const e of list) {
+      const k = lcl(e);
+      if (!k) continue;
+      if (cl.has(k)) cats.push(cl.get(k));
+      else if (sl.has(k)) subs.push(sl.get(k));
+      else {
+        const hits = names.subs.filter(x => lcl(x).includes(k));
+        if (hits.length) { subs.push(...hits.slice(0, 25)); notes.push(`"${e}" matched ${hits.length} sub-categor${hits.length === 1 ? 'y' : 'ies'}${hits.length > 25 ? ' (first 25 used)' : ''}`); }
+        else { const ch = names.cats.filter(x => lcl(x).includes(k)); if (ch.length) cats.push(...ch); else if (!known.has(k)) notes.push(`no category or sub-category is called "${e}"`); }
+      }
+    }
+    return { cats: [...new Set(cats)], subs: [...new Set(subs)] };
+  };
+  const ex = resolve([...(s.exclude_categories || []), ...(s.exclude_sub_categories || [])]);
+  const inc = resolve([...(s.include_categories || []), ...(s.include_sub_categories || [])]);
+  s.exclude_categories = ex.cats; s.exclude_sub_categories = ex.subs; s.include_categories = inc.cats; s.include_sub_categories = inc.subs;
+  return { settings: s, notes };
+}
+
 const key = s => String(s ?? '').toUpperCase().replace(/[\s_]+/g, '');
 const lc = s => String(s ?? '').trim().toLowerCase();
 const day = v => (v ? String(v).slice(0, 10) : '');
@@ -311,7 +339,10 @@ export async function runInventoryOpportunity(args, deps, chatSettings, defaults
     sales.set(k, e);
   }
   const firstSale = new Set(masterRows.filter(r => r.sku_first_sales_date && r.sku_first_sales_date !== 'NaT' && !Number.isNaN(new Date(r.sku_first_sales_date).getTime())).map(r => key(r.product_code)));
-  const res = analyse({ files, sales, firstSale, cogs, settings });
+  const baseRows = regularRows(files[30] || files[7]);
+  const named = resolveNames(settings, { cats: [...new Set(baseRows.map(r => r.category).filter(Boolean))], subs: [...new Set(baseRows.map(r => r.subCategory).filter(Boolean))] }, defaults);
+  notes.push(...named.notes);
+  const res = analyse({ files, sales, firstSale, cogs, settings: named.settings });
   const label = cogs.srcMonth && cogs.month && cogs.srcMonth !== cogs.month ? `COGS rates: ${monthName(cogs.srcMonth)}, carried forward` : `COGS rates: ${monthName(cogs.month)}`;
   const ctx = { asOf: files[30]?.asOf || files[7]?.asOf, cogsLabel: label };
   return { res, ctx, notes };

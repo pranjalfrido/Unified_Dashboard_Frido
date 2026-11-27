@@ -15,6 +15,6 @@ export function chooseModel(question, attachments = []) {
   const analysis = ANALYSIS.test(q);
   const file = (attachments || []).some(a => a?.type === 'pdf' || a?.type === 'text')
     && /compar|reconcil|differ|variance|match|mismatch|analy|why|explain|verify|check|audit|cross.?check|vs\b|versus/i.test(q);
-  const opus = plan || analysis || file;
-  return { model: opus ? OPUS : SONNET, why: plan ? 'plan' : analysis ? 'analysis' : file ? 'file' : null, steps: plan || analysis ? ANALYSIS_STEPS : NORMAL_STEPS };
+  const opus = plan || file; // analysis questions stay on Sonnet: the connector computes every number
+  return { model: opus ? OPUS : SONNET, why: plan ? 'plan' : file ? 'file' : analysis ? 'analysis' : null, steps: plan || analysis ? ANALYSIS_STEPS : NORMAL_STEPS };
 }
