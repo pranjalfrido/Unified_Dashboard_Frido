@@ -8,7 +8,14 @@ const KEYISH = [/value|worth|₹|revenue|gmv|gross|net/i, /units|qty|quantity/i,
 const NOT_TOTALLED = /(asp|aov|price|mrp|avg|average|per[ _]|[ _]per|rate|ratio|doi|share|%|margin|days|cover|growth|change)/i
 // Which columns the phone shows: the first (name) column, the key column (the metric asked), then at most 2 more number columns
 // (SKU counts last, text columns never), in the table's own order. Everything else is in "View full table".
-export function phoneColumns(headers, numCols, keyHeader) {
+// keyHeader may also be { key, show: [header, ...] } (the connector's own choice for a table): the first column plus exactly
+// those columns, in that order (the liquidation lists: sub-category, excess value, excess units, trend).
+export function phoneColumns(headers, numCols, keyHeaderIn) {
+  if (keyHeaderIn && typeof keyHeaderIn === 'object' && Array.isArray(keyHeaderIn.show)) {
+    const idx = keyHeaderIn.show.map(w => headers.findIndex((h, j) => j > 0 && plain(h).toLowerCase() === plain(w).toLowerCase())).filter(j => j > 0)
+    if (idx.length) return [0, ...new Set(idx)]
+  }
+  const keyHeader = keyHeaderIn && typeof keyHeaderIn === 'object' ? keyHeaderIn.key : keyHeaderIn
   const ncol = numCols.length
   const nums = Array.from({ length: ncol }, (_, j) => j).filter(j => j > 0 && numCols[j])
   let key = keyHeader ? nums.find(j => plain(headers[j]).toLowerCase() === plain(keyHeader).toLowerCase()) : undefined

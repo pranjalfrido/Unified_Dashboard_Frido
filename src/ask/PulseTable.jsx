@@ -20,6 +20,13 @@ const NUM = /^[▲▼]?\s?[-+−]?\s?(₹\s?)?[\d,]+(\.\d+)?\s?(%|Cr|L|K|k|M|x|d
 const LOWER_IS_BETTER = /return|rto|cir|cancel|exchange|ndr|breach|cac|cogs|acos/i
 const isTotal = r => /^total\b/i.test(plain(r[0]))
 
+// "Trend" columns on the phone: +12.3% -> ▲ 12.3%, -4.5% -> ▼ 4.5% (up = selling faster, shown green).
+function trendCell(header, raw) {
+  if (!/trend/i.test(plain(header))) return raw
+  const m = /^([+-])\s?(\d[\d,.]*\s?%)$/.exec(plain(raw))
+  return m ? `${m[1] === '+' ? '▲' : '▼'} ${m[2]}` : raw
+}
+
 function tone(raw, rowLabel, header) {
   const t = plain(raw)
   if (!/^[▲▼]/.test(t)) return ''
@@ -41,11 +48,11 @@ function Table({ headers, rows, cols, numCols, colIdx }) {
   const idx = colIdx || Array.from({ length: cols }, (_, j) => j)
   return (
     <table className="pm-tb">
-      <thead><tr>{idx.map(j => <th key={j} className={numCols[j] ? 'n' : ''}>{plain(headers[j])}</th>)}</tr></thead>
+      <thead><tr>{idx.map(j => <th key={j} className={numCols[j] ? 'n' : ''}>{/trend/i.test(plain(headers[j])) ? 'Trend' : plain(headers[j])}</th>)}</tr></thead>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i} className={isTotal(r) ? 'tot' : undefined}>
-            {idx.map(j => <Cell key={j} raw={r[j]} num={numCols[j]} cls={j ? tone(r[j], r[0], headers[j]) : ''} />)}
+            {idx.map(j => <Cell key={j} raw={trendCell(headers[j], r[j])} num={numCols[j]} cls={j ? tone(trendCell(headers[j], r[j]), /trend/i.test(plain(headers[j])) ? '' : r[0], headers[j]) : ''} />)}
           </tr>
         ))}
       </tbody>
@@ -107,7 +114,7 @@ export default function PulseTable({ headers, rows: rawRows, title, keyHeader })
   // Number columns: every non-empty body cell looks like a number (₹, %, Cr, L, ▲ 12%…).
   const numCols = useMemo(() => Array.from({ length: ncol }, (_, j) => {
     if (j === 0) return false
-    const body = rawRows.map(r => plain(r[j])).filter(Boolean)
+    const body = rawRows.map(r => plain(r[j])).filter(t => t && t.toLowerCase() !== 'n/a')
     return body.length > 0 && body.every(t => NUM.test(t))
   }), [rawRows, ncol])
   const rows = useMemo(() => withTotals(rawRows, headers, numCols), [rawRows, headers, numCols])

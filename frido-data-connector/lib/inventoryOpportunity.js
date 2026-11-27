@@ -92,15 +92,30 @@ export function parseSettingsLine(text) {
   }
   return Object.keys(out).length ? out : null;
 }
-// The latest assistant message of the chat that carries a Settings line.
-export function settingsFromChat(messages) {
-  for (const m of [...(messages || [])].reverse()) {
+// Hidden state of an answer built in code: <!--nx:{"v":1,"kind":"plan"|"result","s":{settings},"r":{figures}}--> (the chat screen never shows it).
+// The visible "Settings: 60 days cover · ..." line is plain words; this is what follow-ups read.
+const HIDDEN = /<!--nx:(\{[\s\S]*?\})-->/;
+export const hiddenState = (kind, s, r) => `<!--nx:${JSON.stringify({ v: 1, kind, s, ...(r ? { r } : {}) }).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')}-->`;
+export function parseHidden(text) {
+  const m = HIDDEN.exec(String(text || ''));
+  if (!m) return null;
+  try { const d = JSON.parse(m[1]); return d && typeof d === 'object' && d.s ? d : null; } catch { return null; }
+}
+// The latest assistant message of the chat that carries the settings (hidden state, or the older raw Settings line).
+export function flowMessageFromChat(messages) {
+  const list = [...(messages || [])];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const m = list[i];
     if (m.role !== 'assistant') continue;
-    const s = parseSettingsLine(String(m.content ?? m.text ?? ''));
-    if (s) return s;
+    const text = String(m.content ?? m.text ?? '');
+    const h = parseHidden(text);
+    if (h) return { index: i, text, hidden: h, settings: h.s, kind: h.kind };
+    const s = parseSettingsLine(text);
+    if (s) return { index: i, text, hidden: null, settings: s, kind: /Shall I run it with these settings\?/.test(text) ? 'plan' : 'result' };
   }
   return null;
 }
+export function settingsFromChat(messages) { return flowMessageFromChat(messages)?.settings || null; }
 
 // Names the user typed (exclude / include) -> the SKU master's exact categories / sub-categories. An exact category or sub-category name
 // wins; otherwise every sub-category whose name contains the words (max 25); a name that matches nothing is reported, never guessed.

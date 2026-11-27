@@ -1761,6 +1761,7 @@ span.pm-act{ cursor:default; color:#1f8a4c }
 .pm-tb th{ background:#f6f4ef; color:#5f6b65; font-size:12px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:left; padding:7px 8px; vertical-align:bottom; border:none }
 .pm-tb td{ padding:7px 8px; border:none; border-top:1px solid #f0ede6; vertical-align:top; color:#1c2420; overflow-wrap:break-word; word-break:normal }
 .pm-tb .n{ text-align:right; white-space:nowrap }
+.pm-tb th.n{ white-space:normal }
 .pm-tb td small{ display:block; font-size:12px; color:#9aa29d; margin-top:1px }
 .pm-tb tr.tot td{ font-weight:700; background:#fbfaf7 }
 .pm-tb .up{ color:#1f8a4c } .pm-tb .dn{ color:#c0392b }

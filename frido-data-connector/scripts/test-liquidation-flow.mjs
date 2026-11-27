@@ -2,7 +2,10 @@
 import { readFileSync } from 'fs';
 import { buildCogs } from '../lib/inventoryCost.js';
 import { analyse, defaultSettings, mergeSettings, settingsLine, settingsFromChat, resultText, resolveNames } from '../lib/inventoryOpportunity.js';
-import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange } from '../lib/liquidationFlow.js';
+import { detectFlow, preflightDenial, planMarkdown, resultMarkdown, parseSettingChange, classifyFollowUp, answerQuestion, phoneHints, settingsPlain, ASK_LINE } from '../lib/liquidationFlow.js';
+import { parseHidden, flowMessageFromChat } from '../lib/inventoryOpportunity.js';
+import { phoneColumns } from '../../src/ask/phoneColumns.js';
+import { stripHidden } from '../../src/ask/markdown.js';
 import { knownNumbers, unverified } from '../lib/numberCheck.js';
 
 let bad = 0;
@@ -47,10 +50,12 @@ check('each part says "Full list in Excel"', (result.match(/Full list in Excel\.
 const manyHigh = { ...res, high: Array.from({ length: 9 }, (_, i) => ({ ...res.high[0], sub_category: `H${i}` })), noCogs: Array.from({ length: 9 }, (_, i) => ({ ...res.noCogs[0], sku: `N${i}` })) };
 const rb = resultMarkdown(manyHigh, ctx, {});
 check('9 high-value sub-categories -> 5 rows + total; 9 No COGS SKUs -> 5 rows + total', (rb.split('### High-value')[1].split('###')[0].match(/^\| H\d/gm) || []).length === 5 && (rb.split('### No COGS')[1].split('Full list')[0].match(/^\| N\d/gm) || []).length === 5);
-check('result ends with the Settings line (for follow-ups) and mentions the attached Excel', /^Settings: /m.test(result) && /Excel is attached/.test(result));
+check('result ends with the Settings line in plain words and mentions the attached Excel', /^Settings: 60 days cover · B2C sales, last 30 days · ranked by excess value · top 20 · excluded: Spare Parts, Covers, Joystick Cover AC-FNN01 · high-value list: Mobility, Ergo Furniture$/m.test(result) && /Excel is attached/.test(result));
+check('the visible Settings line has no raw keys', !/sales_days=|rank_by=|exclude_categories=|\|/.test(settingsPlain(res.settings)));
+check('the machine-readable settings are hidden in a comment and removed by the screen (stripHidden)', /<!--nx:/.test(result) && !/<!--nx:|"cover_days"/.test(stripHidden(result)) && parseHidden(result)?.s.cover_days === 60);
 check('result is compact (under 4,500 characters for this fixture)', result.length < 4500, String(result.length));
 check('ASP, margin, max discount are in the main table', /\| Slipper[^\n]*₹\d+ \| ₹\d+ \| 57\.1% \|/.test(result), (result.match(/\| Slipper[^\n]*/) || [''])[0]);
-const odd = unverified(result, knownNumbers([resultText(res, { ...ctx, attached: true })]));
+const odd = unverified(stripHidden(result), knownNumbers([resultText(res, { ...ctx, attached: true })]));
 check('every number of the code-built answer is also in the tool result (the number check would pass)', odd.length === 0, odd.join(' '));
 
 const A = t => ({ role: 'assistant', content: t });
@@ -58,11 +63,13 @@ const U = t => ({ role: 'user', content: t });
 check('the exact question -> plan first', detectFlow([U('top 20 products where inventory is high enough to push for sale / liquidate high-DOI products; ignore never-live products; keep mobility and ergo furniture separate; Excel with full SKU details; ask me questions before starting')])?.mode === 'plan');
 check('"which slow-moving products should we liquidate" -> plan first', detectFlow([U('which slow-moving products should we liquidate')])?.mode === 'plan');
 check('"yes, run it" after the plan -> run; no model needed to read settings', (() => { const f = detectFlow([U('liquidate high doi'), A(plan), U('Yes, run it with these settings')]); return f?.mode === 'run' && f.parse === false; })());
-check('"now show 90 days cover" after a result -> run with a settings change', (() => { const f = detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('now show 90 days cover')]); return f?.mode === 'run' && f.parse === true; })());
+check('"now 90 days cover" and a question both go to the follow-up classifier', detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('now show 90 days cover')])?.mode === 'followup' && detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('Trend 30 vs 90 days is what?')])?.mode === 'followup');
+check('"ok" after a result is an acknowledgement, not a re-run', detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('ok')])?.mode === 'ack');
+check('"yes" after a RESULT is not a confirmation of the plan', detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('yes')])?.mode !== 'run');
+check('a message after an explanation is still in the flow (settings carried from the result)', detectFlow([U('x liquidate'), A(plan), U('yes'), A(result), U('why is slippers on top?'), A('Because the list is ranked by excess value.'), U('now 90 days cover')])?.mode === 'followup');
 check('"run it now, no questions" in the first message -> run at once', detectFlow([U('liquidate slow-moving stock, run it now with defaults')])?.mode === 'run');
-check('an unrelated question after a result is the normal path', detectFlow([U('liquidate'), A(plan), U('thanks'), A(result), U('What is the total inventory value right now?')]) === null);
 check('normal questions and "Plan N days" are not a flow', detectFlow([U('What is the total inventory value right now?')]) === null && detectFlow([U('Top 5 products by inventory value')]) === null && detectFlow([U('Plan 40 days for FR-OPC-L1')]) === null);
-check('the chat remembers the settings from the Settings line', settingsFromChat([A(result)])?.cover_days === '60');
+check('the chat remembers the settings from the Settings line', settingsFromChat([A(result)])?.cover_days === 60);
 check('a follow-up keeps earlier changes', mergeSettings(D, settingsFromChat([A(settingsLine(mergeSettings(D, { rank_by: 'doi' }).settings))]), { cover_days: 90 }).settings.rank_by === 'doi');
 
 const no = { access: { isAdmin: false, tabs: ['sales:shopify'] } }, yes = { access: { isAdmin: false, tabs: ['inventory:cost'] } }, adm = { access: { isAdmin: true, tabs: [] } };
@@ -83,5 +90,35 @@ const fake = input => ({ messages: { create: async () => ({ content: [{ type: 't
 const q1 = 'liquidate high-DOI products; ignore never-live; keep mobility separate; ask me questions before starting';
 check('a model slip is guarded: "high-DOI products" is the topic, not rank_by / min_doi', (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 60, cover_days: 60 }), 'm', q1, D)).args.rank_by === undefined && (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 60 }), 'm', q1, D)).args.min_doi === undefined);
 check('an explicit instruction still passes: "rank by DOI", "minimum DOI 90"', (await parseSettingChange(fake({ rank_by: 'doi', min_doi: 90 }), 'm', 'now rank by DOI, minimum DOI 90', D)).args.rank_by === 'doi' && (await parseSettingChange(fake({ min_doi: 90 }), 'm', 'minimum DOI 90', D)).args.min_doi === 90);
+
+// follow-up classifier and explanation (fake model)
+const fakeTool = input => ({ messages: { create: async () => ({ content: [{ type: 'tool_use', input }], usage: { input_tokens: 900, output_tokens: 40 } }) } });
+const ck = (input, text) => classifyFollowUp(fakeTool(input), 'm', text, D, 'result');
+const r1 = await ck({ kind: 'change', settings: { cover_days: 90 } }, 'now 90 days cover');
+check('classifier: "now 90 days cover" -> change, with the new setting', r1.kind === 'change' && r1.args.cover_days === 90);
+const r2 = await ck({ kind: 'question' }, 'what does trend 30 vs 90 mean?');
+check('classifier: a question about the result -> question, no settings', r2.kind === 'question' && Object.keys(r2.args).length === 0);
+const r3 = await ck({ kind: 'change', settings: { rank_by: 'doi' } }, 'which of these is high-DOI?');
+check('a model slip is guarded: rank_by dropped when the user did not say rank / sort', r3.args.rank_by === undefined);
+check('an unknown kind falls back to "unclear" (one line asks which)', (await ck({ kind: 'banana' }, 'hmm')).kind === 'unclear' && /re-run/.test(ASK_LINE));
+const hid = parseHidden(result);
+const ctxQ = { text: result, hidden: hid };
+const fakeText = text => ({ messages: { create: async () => ({ content: [{ type: 'text', text }], usage: { input_tokens: 5000, output_tokens: 150 } }) } });
+const g = hid.r.main[0];
+const ok = await answerQuestion(fakeText(`Trend compares the last 30 days with the last 90 days. ${g.n}: 30d ${g.per_day_30d}/day vs 90d ${g.per_day_90d}/day.`), 'm', 'what does trend mean?', ctxQ);
+check('explanation with numbers from the result passes the number check', ok.text.includes(String(g.per_day_30d)), ok.text);
+const bad2 = await answerQuestion(fakeText('Slipper sells 999,999 units a day.\nIt is on top because the list is ranked by excess value.'), 'm', 'why on top?', ctxQ);
+check('an invented number is removed (its line is dropped), never shown', !/999,999/.test(bad2.text) && /excess value/.test(bad2.text), bad2.text);
+check('the hidden state carries the 30d / 90d per-day sale and trend of every listed sub-category (explanations need no re-run)', hid.r.main.every(x => 'per_day_30d' in x && 'per_day_90d' in x && 'trend_30d_90d' in x) && hid.r.totals.main_subs >= 1);
+
+// phone columns
+const hints = phoneHints(result, res.settings);
+check('phone hints: sub-category tables -> key Excess value, show Excess value / Excess units / Trend; No COGS table -> Excess units', hints.length === 3 && hints[0].key === 'Excess value' && hints[0].show.join() === 'Excess value,Excess units,Trend 30d vs 90d' && hints[2].key === 'Excess units');
+check('ranked by DOI -> the key column is DOI', phoneHints(result, { ...res.settings, rank_by: 'doi' })[0].key === 'DOI' && phoneHints(result, { ...res.settings, rank_by: 'doi' })[0].show[0] === 'DOI');
+const mt = result.split('\n').filter(l => /^\|/.test(l))[0].split('|').map(c => c.trim()).filter(Boolean);
+const cols = phoneColumns(mt, mt.map((_, j) => j > 0), hints[0]);
+check('phone shows exactly: sub-category, excess value, excess units, trend; stock and stock value stay in "View full table"', cols.map(j => mt[j]).join(' / ') === 'Sub-category / Excess value / Excess units / Trend 30d vs 90d', cols.map(j => mt[j]).join(' / '));
+check('a plain string key still works as before (other answers unchanged)', phoneColumns(mt, mt.map((_, j) => j > 0), 'Excess value').length >= 2);
+check('flow message lookup: plan, then result', flowMessageFromChat([A(plan)])?.kind === 'plan' && flowMessageFromChat([A(plan), A(result)])?.kind === 'result');
 
 console.log(bad ? `\n${bad} failed` : '\nAll checks passed'); process.exit(bad ? 1 : 0);
