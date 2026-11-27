@@ -36,7 +36,7 @@ function saveConversations(userId, convs) {
     // A chat is saved only once it has a question.
     const trimmed = convs.filter(c => c.messages.length).slice(0, 50).map(c => ({
       ...c,
-      messages: c.messages.filter(m => !m.thinking).slice(-40),
+      messages: c.messages.filter(m => !m.thinking).slice(-40).map(m => { const c = { ...m }; delete c.files; return c }), // files (an Excel) are not kept in the saved chats
     }));
     localStorage.setItem(keyFor(userId), JSON.stringify(trimmed));
   } catch {}

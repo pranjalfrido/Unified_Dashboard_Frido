@@ -9,6 +9,7 @@ import BottomSheet from '../responsive/BottomSheet.jsx'
 import { renderMarkdown } from './markdown.js'
 import { chatTime, displayTitle, groupByDate, QUICK_QUESTIONS } from './pulseShared.js'
 import PulseTable from './PulseTable.jsx'
+import AnswerFiles from './AnswerFiles.jsx'
 import ExcelButton from './ExcelButton.jsx'
 import { answerBlocks } from './answerTables.js'
 import { AttachButton, AttachChips } from './ComposerExtras.jsx'
@@ -81,6 +82,7 @@ function Answer({ msg, question, isAdmin }) {
             : b.type === 'src' ? <div key={i} className="pm-src">{b.text}</div>
             : <div key={i} dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text) }} />)}
           {tables.length > 1 && <div className="pm-tbar nx-xl-all-bar"><ExcelButton tables={tables} all /></div>}
+          <AnswerFiles files={msg.files} className="pm-files" />
         </div>
       )}
       {msg.assumptions && <div className="af-assumptions">Assumptions: {msg.assumptions}</div>}
