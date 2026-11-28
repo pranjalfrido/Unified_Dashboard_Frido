@@ -1,6 +1,4 @@
 /* global process */
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { getAdminClient } from './_auth.js'
 import { computePhase2Alerts } from '../src/alerts/phase2Rules.js'
 
@@ -15,12 +13,14 @@ import { computePhase2Alerts } from '../src/alerts/phase2Rules.js'
 
 const FILES = { data: 'alerts-data.json', phase2: 'alerts-phase2.json' }
 
+// Read from the site's own CDN with the cron secret (middleware lets that through). NOT from disk: a file read from
+// public/ makes Vercel's tracer bundle the whole public/ folder (265 MB) into this function, over the 250 MB limit.
 async function readStatic(name, req) {
-  try { return JSON.parse(await readFile(join(process.cwd(), 'public', name), 'utf8')) } catch { /* not bundled with the function */ }
-  const host = req.headers?.host
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host
   const secret = process.env.CRON_SECRET
   if (!host || !secret) throw new Error('alerts input not available')
-  const r = await fetch(`https://${host}/${name}`, { headers: { 'x-cron-secret': secret } })
+  const proto = req.headers?.['x-forwarded-proto'] || 'https'
+  const r = await fetch(`${proto}://${host}/${name}`, { headers: { 'x-cron-secret': secret } })
   if (!r.ok) throw new Error(`${name} ${r.status}`)
   return r.json()
 }
