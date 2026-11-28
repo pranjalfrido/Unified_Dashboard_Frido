@@ -1,6 +1,6 @@
 // Run: node scripts/security/gen-permission-map.mjs   -> writes docs/PERMISSION_MAP.md from api/_permissionMap.js
 import { writeFileSync } from 'node:fs'
-import { API_RULES, ACTION_RULES, FILE_RULES } from '../../api/_permissionMap.js'
+import { API_RULES, ACTION_RULES, FILE_RULES, PHASE_RULES, BQ_NO_PHASE, BQ_ADS_MONTHLY } from '../../api/_permissionMap.js'
 
 const specs = a => a.map(s => '`' + s + '`').join(', ')
 const out = []
@@ -15,6 +15,9 @@ out.push('# Page permissions on the server', '',
 for (const [r, k, n] of API_RULES) out.push(`| \`/api/${r}\` | ${specs(k)} | ${n} |`)
 out.push('', '### Actions decided by the request body', '', '| Route | Action | Allowed keys |', '|---|---|---|')
 for (const [r, acts] of Object.entries(ACTION_RULES)) for (const [a, k] of Object.entries(acts)) out.push(`| \`/api/${r}\` | \`${a}\` | ${specs(k)} |`)
+out.push('', '### `/api/bq` by request body', '', '| Request | Allowed keys |', '|---|---|')
+for (const [ph, k] of Object.entries(PHASE_RULES.bq)) out.push(`| \`phase: "${ph}"\` | ${specs(k)} |`)
+out.push(`| \`adsMonthly\` | ${specs(BQ_ADS_MONTHLY)} |`, `| no phase (the full response, which includes the whole P&L) or an unknown phase | ${specs(BQ_NO_PHASE)} |`)
 out.push('', 'There is no separate "manage" key in the permission tree for Cost Analytics, and the app never calls these three actions from the browser, so they are admin only.', '',
   '## Files in public/', '', '| File | Allowed keys | Used by |', '|---|---|---|')
 for (const [f, k, n] of FILE_RULES) out.push(`| \`${typeof f === 'string' ? f : f.source.replace(/\\\//g, '/')}\` | ${specs(k)} | ${n} |`)

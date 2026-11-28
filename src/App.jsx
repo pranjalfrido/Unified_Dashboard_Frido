@@ -20742,16 +20742,28 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // 50MB / 64MB download.
   const pnlFetchPromise = useRef(null)
   const pnlLastMonthFetchPromise = useRef(null)
+  // Which static copy of the sales query this person may read (server rule: api/_permissionMap.js). P&L people read the
+  // full P&L payload (pnl-data*.json); everyone else reads the sales cut (sales-data*.json: same numbers for Overview,
+  // Sales and Ads, without the P&L detail). Someone with none of those pages reads neither.
+  const salesCacheFiles = hasPnlAccess(allowedTabs)
+    ? { cur: '/pnl-data.json', last: '/pnl-data-lastmonth.json', full: true }
+    : { cur: '/sales-data.json', last: '/sales-data-lastmonth.json', full: false }
+  const salesCacheWanted = !allowedTabs || allowedTabs.includes('overview') || hasSalesAccess(allowedTabs) || hasAdsAccess(allowedTabs) || hasPnlAccess(allowedTabs)
+  const salesCacheFilesRef = useRef(salesCacheFiles)
+  salesCacheFilesRef.current = salesCacheFiles
+  const salesCacheWantedRef = useRef(salesCacheWanted)
+  salesCacheWantedRef.current = salesCacheWanted
   // Background prefetch: fires after mount via requestIdleCallback so the browser renders
   // Overview/Sales first, then downloads the PNL files quietly. By the time the user clicks
   // the P&L tab the files are ready and it loads instantly — same as before, but without
   // blocking the initial Overview/Sales render.
   useEffect(() => {
     const run = () => {
+      if (!salesCacheWantedRef.current) return
       if (!pnlCacheRef.current && !pnlFetchPromise.current)
-        pnlFetchPromise.current = authFetch('/pnl-data.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
+        pnlFetchPromise.current = authFetch(salesCacheFilesRef.current.cur).then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
       if (!pnlCacheRef.lastMonth && !pnlLastMonthFetchPromise.current)
-        pnlLastMonthFetchPromise.current = authFetch('/pnl-data-lastmonth.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
+        pnlLastMonthFetchPromise.current = authFetch(salesCacheFilesRef.current.last).then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
     }
     if (typeof requestIdleCallback !== 'undefined') requestIdleCallback(run, { timeout: 3000 })
     else setTimeout(run, 1000)
@@ -20872,6 +20884,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // subChannel:'ShopifyIndia' is the default D2C Overall state — not a real filter.
     // The static JSON was generated for all D2C (ShopifyIndia), so it still applies.
     // These are complete (unphased) payloads, cached as phase 'full': every section is ready.
+    // The sales cut (sales-data*.json) holds the 'fast', 'sales_detail' and 'ads_detail' groups, like three live responses
+    // merged: cached under those phase keys so nothing is asked again, then whatever else the page needs (Ads: the
+    // pnl_margin group) is loaded live as usual.
+    const showSalesCut = c => {
+      cacheSet(keyFor('fast'), c)
+      cacheSet(keyFor('sales_detail'), {})
+      cacheSet(keyFor('ads_detail'), {})
+      show(c, ['fast', 'sales_detail', 'ads_detail'])
+      setLoading(false); setFetchPending(false)
+      loadDetails()
+    }
     const { subChannel: _sc, ...extraFiltersWithoutSubCh } = extraFilters
     const effectiveSubCh = extraFilters.subChannel
     const hasFilters = ch || Object.keys(extraFiltersWithoutSubCh).length > 0 || (effectiveSubCh && effectiveSubCh !== 'ShopifyIndia')
@@ -20883,13 +20906,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           // Relative path, NOT ${API}-prefixed — static file in public/, served by the frontend's
           // own origin (Vite/Vercel CDN), never by the API server.
           if (!pnlFetchPromise.current)
-            pnlFetchPromise.current = authFetch('/pnl-data.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
+            pnlFetchPromise.current = authFetch(salesCacheFilesRef.current.cur).then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.current = j; return j }).catch(() => null)
           await pnlFetchPromise.current
         }
         const c = pnlCacheRef.current
         if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) setSubCatFirstOrderMap(c.subCatFirstOrderMap)
+          if (!salesCacheFilesRef.current.full) { showSalesCut(c); return }
           cacheSet(keyFor('full'), c)
           show(c, ['full'])
           setLoading(false); setFetchPending(false)
@@ -20901,13 +20925,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (!pnlCacheRef.lastMonth) {
           // Same dedup pattern — reuse in-flight promise if the prefetch already started.
           if (!pnlLastMonthFetchPromise.current)
-            pnlLastMonthFetchPromise.current = authFetch('/pnl-data-lastmonth.json').then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
+            pnlLastMonthFetchPromise.current = authFetch(salesCacheFilesRef.current.last).then(r => r.ok ? r.json() : null).then(j => { if (j) pnlCacheRef.lastMonth = j; return j }).catch(() => null)
           await pnlLastMonthFetchPromise.current
         }
         const lm = pnlCacheRef.lastMonth
         if (lm && lm.mtdStart && lm.mtdEnd && start === lm.mtdStart && end === lm.mtdEnd) {
           if (reqId !== reqIdRef.current) return
           if (lm.subCatFirstOrderMap && Object.keys(lm.subCatFirstOrderMap).length) setSubCatFirstOrderMap(lm.subCatFirstOrderMap)
+          if (!salesCacheFilesRef.current.full) { showSalesCut(lm); return }
           cacheSet(keyFor('full'), lm)
           show(lm, ['full'])
           setLoading(false); setFetchPending(false)

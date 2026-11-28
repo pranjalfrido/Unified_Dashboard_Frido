@@ -4,8 +4,9 @@
 
 import { writeFileSync } from 'fs'
 import handler from '../api/bq.js'
+import { salesCut } from './_salesCut.mjs'
 
-async function generate(start, end, outFile, label) {
+async function generate(start, end, outFile, label, salesFile) {
   console.log(`Generating P&L cache: ${start} → ${end} (${label})`)
 
   const req = {
@@ -41,6 +42,11 @@ async function generate(start, end, outFile, label) {
   writeFileSync(outFile, JSON.stringify(out))
   const sizeMB = (JSON.stringify(out).length / 1024 / 1024).toFixed(1)
   console.log(`✓ Written ${outFile} (${sizeMB} MB) — ${start} → ${end}`)
+
+  // The sales cut (Overview / Sales / Ads, no P&L detail): the file everyone without a P&L permission reads.
+  const cut = JSON.stringify(salesCut(out))
+  writeFileSync(salesFile, cut)
+  console.log(`✓ Written ${salesFile} (${(cut.length / 1024 / 1024).toFixed(1)} MB)`)
 }
 
 // MTD: 1st of current month → yesterday
@@ -56,14 +62,14 @@ const lmStart = lastMonthStart.toISOString().slice(0, 10)
 const lmEnd = lastMonthEnd.toISOString().slice(0, 10)
 
 try {
-  await generate(mtdStart, mtdEnd, 'public/pnl-data.json', 'MTD')
+  await generate(mtdStart, mtdEnd, 'public/pnl-data.json', 'MTD', 'public/sales-data.json')
 } catch (e) {
   console.error('✗ MTD P&L cache failed:', e.message)
   process.exit(1)
 }
 
 try {
-  await generate(lmStart, lmEnd, 'public/pnl-data-lastmonth.json', 'Last Month')
+  await generate(lmStart, lmEnd, 'public/pnl-data-lastmonth.json', 'Last Month', 'public/sales-data-lastmonth.json')
 } catch (e) {
   console.error('✗ Last Month P&L cache failed:', e.message)
   process.exit(1)

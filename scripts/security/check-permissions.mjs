@@ -35,6 +35,7 @@ const T = (name, ok) => { if (!ok) { fail++; realLog('FAIL', name) } }
 let n = 0
 const user = (tabs, extra = {}) => { const id = 'u' + ++n; USERS[id] = { tabs, ...extra }; return id }
 async function run(id, path, method, mode, headers = {}, body) {
+  if (path === '/api/bq' && method === 'POST' && !body) body = { phase: 'fast' } // the app always sends a phase; no phase = the full response (P&L key), tested in check-batch4
   process.env.PERMISSION_ENFORCE = mode
   logs.length = 0
   console.log = (...a) => logs.push(a.join(' '))
@@ -53,7 +54,7 @@ const unrelated = specs => OTHER.find(k => !isAllowed(specs, { admin: false, tab
 const admin = user([], { admin: true })
 const targets = [
   ...API_RULES.map(([r, specs]) => ({ path: '/api/' + r, method: 'POST', specs })),
-  ...FILE_RULES.map(([f, specs]) => ({ path: typeof f === 'string' ? f : f.source.includes('purchase-parser') ? '/purchase-parser-domestic.html' : f.source.includes('pnl-data') ? '/pnl-data-lastmonth.json' : f.source.includes('logistics-data') ? '/logistics-data-reverse-cod.json' : '/inv-data-15d.json', method: 'GET', specs })),
+  ...FILE_RULES.map(([f, specs]) => ({ path: typeof f === 'string' ? f : f.source.includes('purchase-parser') ? '/purchase-parser-domestic.html' : f.source.includes('sales-data') ? '/sales-data-lastmonth.json' : f.source.includes('pnl-data') ? '/pnl-data-lastmonth.json' : f.source.includes('logistics-data') ? '/logistics-data-reverse-cod.json' : '/inv-data-15d.json', method: 'GET', specs })),
 ]
 for (const t of targets) {
   const selfOnly = t.specs.includes('self'), adminOnly = t.specs.every(s => s === 'admin')
@@ -94,11 +95,13 @@ for (const t of targets) {
   T('logistics-cost with an unreadable body is treated as a read', (await run(cost, '/api/logistics-cost', 'POST', 'enforce', {}, undefined)) === undefined) }
 
 // shared data: any one relevant key is enough
-for (const [path, method, keys] of [['/api/cogs-monthly', 'POST', ['pnl:amazon', 'inventory:cost', 'inventory']], ['/pnl-data.json', 'GET', ['overview', 'sales:ebo', 'pnl:all', 'ads:d2c']], ['/sales-alloc-data.json', 'GET', ['overview', 'inventory:sales']], ['/api/bq', 'POST', ['overview', 'sales:cred', 'ads:all', 'pnl:zepto']]])
+for (const [path, method, keys] of [['/api/cogs-monthly', 'POST', ['pnl:amazon', 'inventory:cost', 'inventory:inward']], ['/sales-data.json', 'GET', ['overview', 'sales:ebo', 'pnl:all', 'ads:d2c']], ['/pnl-data.json', 'GET', ['pnl:all', 'pnl:amazon']], ['/sales-alloc-data.json', 'GET', ['overview', 'inventory:sales']], ['/api/bq', 'POST', ['overview', 'sales:cred', 'ads:all', 'pnl:zepto']]])
   for (const k of keys) T(`${method} ${path} allowed by ${k}`, (await run(user([k]), path, method, 'enforce')) === undefined)
+T('inventory-only people cannot read COGS', (await run(user(['inventory']), '/api/cogs-monthly', 'POST', 'enforce'))?.status === 403)
 T('a person with only NavAI (ask) cannot use /api/bq in enforce mode', (await run(user(['ask']), '/api/bq', 'POST', 'enforce'))?.status === 403)
-T('a person with no permissions at all cannot read the alerts file', (await run(user([]), '/alerts-data.json', 'GET', 'enforce'))?.status === 403)
-T('a person with any permission can read the alerts file', (await run(user(['customer']), '/alerts-data.json', 'GET', 'enforce')) === undefined)
+T('the raw alerts files are admin only', (await run(user(['customer', 'sales:all']), '/alerts-data.json', 'GET', 'enforce'))?.status === 403)
+T('a person with no permissions at all cannot call /api/alerts', (await run(user([]), '/api/alerts', 'POST', 'enforce'))?.status === 403)
+T('a person with any permission can call /api/alerts', (await run(user(['customer']), '/api/alerts', 'POST', 'enforce')) === undefined)
 
 // revoked still 401, permissions unreadable: enforce 503 / log passes, denial log shape, default mode is log
 { const revoked = user(['sales:all'], { active: false }); T('revoked user -> 401 before any permission check', (await run(revoked, '/api/bq', 'POST', 'enforce'))?.status === 401)
@@ -117,7 +120,7 @@ T('a person with any permission can read the alerts file', (await run(user(['cus
   T('PERMISSION_ENFORCE unset = log mode (never blocks)', r === undefined) }
 
 // requirementFor on odd inputs
-T('trailing slash is the same route', requirementFor('/api/bq/', 'POST').label === '/api/bq')
+T('trailing slash is the same route', requirementFor('/api/inventory/', 'POST').label === '/api/inventory')
 
 // /api/permission-denials handler: admin only
 { const h = (await import('../../api/permission-denials.js')).default

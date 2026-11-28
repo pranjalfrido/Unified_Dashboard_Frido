@@ -15,7 +15,7 @@ let _cache = null
 let _promise = null
 export function loadAlertsPhase2() {
   if (_promise) return _promise
-  _promise = import('../authFetch.js').then(m => m.authFetch('/alerts-phase2.json', { cache: 'no-cache' })).then(r => r.ok ? r.json() : null).then(j => { _cache = j; return j }).catch(() => { _cache = null; return null })
+  _promise = import('./alertsFeed.js').then(m => m.loadAlertsFeed()).then(f => f?.phase2 ?? null).then(j => { _cache = j; return j }).catch(() => { _cache = null; return null })
   return _promise
 }
 export const getAlertsPhase2 = () => _cache
@@ -226,6 +226,8 @@ const MAX_LINES = 6
 // cache: parsed public/alerts-phase2.json (or null). viewer: { can(permKey) -> bool, isAdmin }
 export function computePhase2Alerts(cache, viewer) {
   if (!cache) return { spikes: [], targets: [] }
+  // /api/alerts already built this person's alerts on the server (same function, their permissions).
+  if (cache.precomputed) return { spikes: cache.spikes || [], targets: cache.targets || [] }
   const canSee = perm => perm === 'admin' ? !!viewer.isAdmin : viewer.can(perm)
   const spikes = [], targets = []
   for (const r of rules(cache)) {
