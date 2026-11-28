@@ -1,3 +1,4 @@
+import { PASSWORD_RULE, passwordProblem, passwordErrorText } from './passwordRules.js'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
 import PermissionPanel, { AdminPulseCard } from './profile/PermissionPanel.jsx'
@@ -149,9 +150,10 @@ function MyProfile({ session, onProfileUpdated }) {
             <div>
               <label style={S.label}>New password</label>
               <div style={{ position: 'relative' }}>
-                <input style={{ ...S.input, paddingRight: 60 }} type={showNew ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" />
+                <input style={{ ...S.input, paddingRight: 60 }} type={showNew ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password" />
                 <button type="button" style={S.toggleBtn} onClick={() => setShowNew(v => !v)}>{showNew ? 'HIDE' : 'SHOW'}</button>
               </div>
+              <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 5 }}>{PASSWORD_RULE}</div>
             </div>
             <div>
               <label style={S.label}>Confirm new password</label>
@@ -175,11 +177,11 @@ function ResetPasswordModal({ session, user, onClose, onDone }) {
 
   async function handleReset(e) {
     e.preventDefault()
-    if (newPw.length < 8) { setErr('Password must be at least 8 characters.'); return }
+    { const bad = passwordProblem(newPw); if (bad) { setErr(bad); return } }
     if (newPw !== confirmPw) { setErr('Passwords do not match.'); return }
     setErr(''); setLoading(true)
     const result = await adminCall('reset_password', session, { user_id: user.user_id, new_password: newPw })
-    if (result.error) { setErr(result.error); setLoading(false); return }
+    if (result.error) { setErr(passwordErrorText({ message: result.error })); setLoading(false); return }
     setLoading(false); onDone(); onClose()
   }
 
@@ -202,9 +204,10 @@ function ResetPasswordModal({ session, user, onClose, onDone }) {
           <div>
             <label style={S.label}>New password</label>
             <div style={{ position: 'relative' }}>
-              <input style={{ ...S.input, paddingRight: 60 }} type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" autoFocus />
+              <input style={{ ...S.input, paddingRight: 60 }} type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password" autoFocus />
               <button type="button" style={S.toggleBtn} onClick={() => setShowPw(v => !v)}>{showPw ? 'HIDE' : 'SHOW'}</button>
             </div>
+            <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 5 }}>{PASSWORD_RULE}</div>
           </div>
           <div>
             <label style={S.label}>Confirm password</label>
@@ -509,6 +512,7 @@ function TeamMembers({ session, showToast }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#1E2321', minWidth: 0 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>{pr?.online && <LiveDot />}</div>
                     <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 2 }}>
                       {u.is_admin ? `Admin · all tabs${(permissions[u.user_id] || []).includes('ask') ? ' + NavAI' : ''}` : `${tabCount} tab${tabCount !== 1 ? 's' : ''}`}
+                      {u.weak_password && <span title="Still on a password that does not meet the current rules" style={{ marginLeft: 8, color: '#B4541F', fontWeight: 700 }}>Weak password</span>}
                     </div>
                     {pr && <div style={{ fontSize: 12, color: pr.online ? '#1f8a4c' : '#7b847f', marginTop: 1, fontWeight: pr.online ? 600 : 400 }}>{pr.text}</div>}
                   </div>

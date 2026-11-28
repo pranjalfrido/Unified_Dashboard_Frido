@@ -1,4 +1,5 @@
 import { GoogleAuth } from 'google-auth-library'
+import { requireActiveAdmin } from './_auth.js'
 
 const PROJECT = 'frido-429506'
 const REGION  = 'asia-south1'
@@ -27,11 +28,18 @@ async function getClient() {
   return auth.getClient()
 }
 
-export default async function handler(req, res) {
+// `deps.admin` lets tests pass a fake Supabase client; Vercel only passes (req, res).
+export default async function handler(req, res, deps = {}) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
+
+  // Pausing or resuming the scheduled report emails is an admin action: the caller must be an active admin
+  // (the login wall in middleware.js only proves they are logged in).
+  let who
+  try { who = await requireActiveAdmin(req, deps.admin) } catch (e) { console.error('[email-controls] auth check failed:', e.message); return res.status(500).json({ error: 'Could not check access' }) }
+  if (!who.ok) return res.status(who.status).json({ error: who.error })
 
   try {
     const client = await getClient()

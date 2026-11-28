@@ -1,5 +1,7 @@
+import { passwordProblem, passwordErrorText } from '../passwordRules.js'
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
+import { weakFlag } from '../weakFlag.js'
 import { PERMISSION_TREE, getAllLeafKeys } from '../permissionTree.js'
 
 // Shared by the laptop Profile page (ProfilePage.jsx) and the phone one (ProfileMobile.jsx): same
@@ -140,12 +142,12 @@ export function useMyProfile(session, onProfileUpdated) {
   async function changePassword(e) {
     e.preventDefault()
     setPwErr('')
-    if (newPw.length < 8) { setPwErr('New password must be at least 8 characters.'); return }
+    if (!curPw) { setPwErr('Enter your current password.'); return }
+    const bad = passwordProblem(newPw)
+    if (bad) { setPwErr(bad); return }
     if (newPw !== confirmPw) { setPwErr('Passwords do not match.'); return }
     setPwLoading(true)
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: session.user.email, password: curPw })
-    if (signInErr) { setPwErr('Current password is incorrect.'); setPwLoading(false); return }
-    const { error } = await supabase.auth.updateUser({ password: newPw })
+    const { error } = await changeOwnPassword(session.user.email, curPw, newPw)
     if (error) { setPwErr(error.message); setPwLoading(false); return }
     setPwMsg('Password updated successfully!')
     setCurPw(''); setNewPw(''); setConfirmPw('')
@@ -157,4 +159,16 @@ export function useMyProfile(session, onProfileUpdated) {
   return { profile, name, setName, avatarUrl, uploading, uploadAvatar, saving, saveMsg, saveProfile,
     showChangePw, setShowChangePw, curPw, setCurPw, newPw, setNewPw, confirmPw, setConfirmPw,
     showCur, setShowCur, showNew, setShowNew, pwErr, setPwErr, pwMsg, pwLoading, changePassword }
+}
+
+// Checks the current password, then sets the new one. updateUser carries current_password too, so it also works
+// once Supabase's "Require current password when updating" is on. A success means the new password met the rules,
+// so the weak-password flag on the profile is cleared (those columns may not exist yet: that error is ignored).
+export async function changeOwnPassword(email, current, next) {
+  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password: current })
+  if (signInErr && signInErr.code !== 'weak_password') return { error: { message: 'Current password is incorrect.' } }
+  const { error } = await supabase.auth.updateUser({ password: next, current_password: current })
+  if (error) return { error: { message: passwordErrorText(error) } }
+  await weakFlag('clear', next)
+  return { error: null }
 }

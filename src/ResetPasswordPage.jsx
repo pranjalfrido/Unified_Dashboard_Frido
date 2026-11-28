@@ -1,5 +1,7 @@
+import { PASSWORD_RULE, passwordProblem, passwordErrorText } from './passwordRules.js'
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
+import { weakFlag } from './weakFlag.js'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
@@ -19,12 +21,14 @@ export default function ResetPasswordPage() {
 
   async function handleReset(e) {
     e.preventDefault()
-    if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
+    { const bad = passwordProblem(password); if (bad) { setErr(bad); return } }
     if (password !== confirm) { setErr('Passwords do not match.'); return }
     setErr('')
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
-    if (error) { setErr(error.message); setLoading(false); return }
+    if (error) { setErr(passwordErrorText(error)); setLoading(false); return }
+    // The new password meets the rules: clear any weak-password flag (columns may not exist yet).
+    await weakFlag('clear', password)
     setDone(true)
     setLoading(false)
     setTimeout(() => { window.location.href = '/' }, 2500)
@@ -48,7 +52,7 @@ export default function ResetPasswordPage() {
           <>
             <div style={s.eyebrow}>Set new password</div>
             <h2 style={s.h2}>Choose a new password</h2>
-            <p style={s.sub}>Must be at least 8 characters.</p>
+            <p style={s.sub}>{PASSWORD_RULE}</p>
 
             {err && <div style={s.errBox}>{err}</div>}
 

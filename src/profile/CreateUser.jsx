@@ -1,3 +1,4 @@
+import { PASSWORD_RULE, passwordProblem, passwordErrorText } from '../passwordRules.js'
 import { useState, useEffect } from 'react'
 import PermissionPanel, { AdminPulseCard } from './PermissionPanel.jsx'
 import { adminCall } from './profileShared.js'
@@ -9,7 +10,7 @@ import { S } from './profileStyles.js'
 export function CreateUserForm({ session, onCancel, onCreated, existingUsers = [], existingPermissions = {} }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState(() => Math.random().toString(36).slice(2, 10) + 'A1!')
+  const [password, setPassword] = useState(() => 'Fr' + Math.random().toString(36).slice(2, 10) + 'a1#')
   const [showPw, setShowPw] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [tabs, setTabs] = useState([])
@@ -18,7 +19,7 @@ export function CreateUserForm({ session, onCancel, onCreated, existingUsers = [
   const [err, setErr] = useState('')
 
   function regenPassword() {
-    setPassword(Math.random().toString(36).slice(2, 10) + 'A1!')
+    setPassword('Fr' + Math.random().toString(36).slice(2, 10) + 'a1#')
   }
 
   function toggleTab(key) {
@@ -29,11 +30,11 @@ export function CreateUserForm({ session, onCancel, onCreated, existingUsers = [
     e.preventDefault()
     if (!name.trim()) { setErr('Name is required.'); return }
     if (!email.trim()) { setErr('Email is required.'); return }
-    if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
+    { const bad = passwordProblem(password); if (bad) { setErr(bad); return } }
     if (!isAdmin && tabs.length === 0) { setErr('Assign at least one tab permission.'); return }
     setErr(''); setLoading(true)
     const result = await adminCall('create_user', session, { name: name.trim(), email: email.trim().toLowerCase(), password, is_admin: isAdmin, tabs })
-    if (result.error) { setErr(result.error); setLoading(false); return }
+    if (result.error) { setErr(passwordErrorText({ message: result.error })); setLoading(false); return }
     setLoading(false); onCreated(result.user_id)
   }
 
@@ -58,6 +59,7 @@ export function CreateUserForm({ session, onCancel, onCreated, existingUsers = [
               <button type="button" style={{ ...S.smBtn, flexShrink: 0, fontSize: 16, padding: '8px 12px' }} onClick={regenPassword} title="Regenerate password">↻</button>
             </div>
             <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 5 }}>Share this with the person directly — it won't be shown again.</div>
+            <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 3 }}>{PASSWORD_RULE}</div>
           </div>
           <div>
             <label style={{ ...S.label, marginBottom: 10 }}>Role</label>

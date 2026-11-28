@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { authFetch } from './authFetch.js'
 import { ArrowLeft } from 'lucide-react'
 import { C } from './utils.js'
 
@@ -8,9 +9,30 @@ const TABS = [
   { id: 'packaging', label: 'Packaging',  src: '/purchase-parser-packaging.html' },
 ]
 
+// The parser pages are login-only files, and an iframe's own request carries no login token. So each page is fetched
+// with the user's token (authFetch) and handed to the iframe as its content.
+function useParserPage(src) {
+  const [html, setHtml] = useState(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let live = true
+    authFetch(src).then(r => (r.ok ? r.text() : Promise.reject(new Error(String(r.status))))).then(t => { if (live) setHtml(t) }, () => { if (live) setFailed(true) })
+    return () => { live = false }
+  }, [src])
+  return { html, failed }
+}
+
+function ParserFrame({ t, visible }) {
+  const { html, failed } = useParserPage(t.src)
+  if (failed) return <div style={{ display: visible ? 'block' : 'none', padding: 24, color: C.t2 }}>Could not load {t.label}. Reload the page and try again.</div>
+  return (
+    <iframe title={t.label} srcDoc={html || ''}
+      style={{ width: '100%', height: '100%', border: 'none', display: visible ? 'block' : 'none', background: 'white' }} />
+  )
+}
+
 export default function PurchaseLedgerPage({ onBack }) {
   const [tab, setTab] = useState('domestic')
-  const current = TABS.find(t => t.id === tab)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px 32px 0' }}>
@@ -52,20 +74,7 @@ export default function PurchaseLedgerPage({ onBack }) {
 
       {/* Parser iframe — fills remaining height */}
       <div style={{ flex: 1, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-        {TABS.map(t => (
-          <iframe
-            key={t.id}
-            src={t.src}
-            title={t.label}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              display: t.id === tab ? 'block' : 'none',
-              background: 'white',
-            }}
-          />
-        ))}
+        {TABS.map(t => <ParserFrame key={t.id} t={t} visible={t.id === tab} />)}
       </div>
     </div>
   )
