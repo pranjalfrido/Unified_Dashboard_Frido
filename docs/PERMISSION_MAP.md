@@ -21,7 +21,7 @@ Generated from `api/_permissionMap.js` by `node scripts/security/gen-permission-
 | `/api/inventory-oos` | `inventory*` | Inventory > OOS loss |
 | `/api/inward` | `inventory*` | Inventory > Inward (also checks inventory:inward itself) |
 | `/api/sales-allocation` | `inventory*` | Inventory > Sales & Allocation |
-| `/api/cogs-monthly` | `pnl*`, `inventory:cost`, `inventory:inward` | P&L (COGS), Inventory > Cost detail (inventory:cost), Inward value (inventory:inward) |
+| `/api/cogs-monthly` | `pnl*`, `ads*`, `inventory:cost`, `inventory:inward` | P&L (COGS), Ads (breakeven ROAS needs real COGS), Inventory > Cost detail (inventory:cost), Inward value (inventory:inward) |
 | `/api/cogs-context` | `documents*` | Documents > COGS ledger |
 | `/api/packaging-products` | `documents*` | Documents > Packaging BOM |
 | `/api/cat-daily` | `sales*`, `pnl*`, `ads*` | Category / SKU daily expand in Sales, P&L, Ads tables |
@@ -67,7 +67,7 @@ There is no separate "manage" key in the permission tree for Cost Analytics, and
 | `/ads-data.json` | `overview`, `ads*` | Ads cache |
 | `/alerts-data.json` | `admin` | Raw alerts input, read by /api/alerts (server) only |
 | `/alerts-phase2.json` | `admin` | Raw alerts input, read by /api/alerts (server) only |
-| `/cogs-data.json` | `pnl*`, `inventory:cost`, `inventory:inward` | COGS rate card (no page reads it directly any more; /api/cogs-monthly is the source) |
+| `/cogs-data.json` | `pnl*`, `ads*`, `inventory:cost`, `inventory:inward` | COGS rate card (no page reads it directly any more; /api/cogs-monthly is the source) |
 | `/snd-rates.json` | `pnl*` | P&L shipping-and-delivery rates |
 | `/flipkart-snd-ratecard.json` | `pnl*` | P&L Flipkart rate card |
 | `/india-states.json` | `any` | Map outlines (no business data) |
