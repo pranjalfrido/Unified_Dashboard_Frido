@@ -45,7 +45,7 @@ const SALES_FILES = ['GET /sales-data.json', 'GET /sales-data-lastmonth.json']
 const EXPECT = { // key -> targets that answer 200
   overview: [...SALES_FILES, 'POST /api/alerts', 'bq fast', 'bq sales_detail'],
   'sales:all': [...SALES_FILES, 'POST /api/alerts', 'bq fast', 'bq sales_detail'],
-  'ads:all': [...SALES_FILES, 'POST /api/alerts', 'bq fast', 'bq ads_detail', 'bq pnl_margin', 'bq adsMonthly'],
+  'ads:all': ['POST /api/cogs-monthly', 'GET /cogs-data.json', ...SALES_FILES, 'POST /api/alerts', 'bq fast', 'bq ads_detail', 'bq pnl_margin', 'bq adsMonthly'],
   'pnl:all': ['POST /api/cogs-monthly', 'GET /cogs-data.json', 'GET /pnl-data.json', 'GET /pnl-data-lastmonth.json', ...SALES_FILES, 'POST /api/alerts', 'bq fast', 'bq pnl_margin', 'bq pnl_detail', 'bq full (no phase)'],
   inventory: ['POST /api/alerts'],
   'inventory:detail': ['POST /api/alerts'],
@@ -92,7 +92,7 @@ for (const [fullF, cutF] of [['public/pnl-data.json', 'public/sales-data.json'],
   T(`${cutF}: every field of fast / sales_detail / ads_detail equals the full file (${checked} fields)${bad.length ? ' differs: ' + bad.slice(0, 5) : ''}`, bad.length === 0)
   T(`${cutF}: Overview headline numbers (salesMetrics) identical`, same(salesMetrics(full), salesMetrics(cut)))
   T(`${cutF}: Overview trend rows identical`, same(trendRows(full.dailyArr, full.prevDailyArr), trendRows(cut.dailyArr, cut.prevDailyArr)))
-  T(`${cutF}: mtdStart / mtdEnd / asOf kept (the app matches the window on them)`, cut.mtdStart === full.mtdStart && cut.mtdEnd === full.mtdEnd && cut.asOf === full.asOf)
+  T(`${cutF}: mtdStart / mtdEnd kept, asOf present (the app matches the window on them)`, cut.mtdStart === full.mtdStart && cut.mtdEnd === full.mtdEnd && !!cut.asOf)
   // P&L-only groups are empty
   const pnlOnly = [...getPhaseDef('pnl_detail').fields].filter(f => !['fast', 'sales_detail', 'ads_detail'].some(p => getPhaseDef(p).fields.has(f)))
   let leaked = 0

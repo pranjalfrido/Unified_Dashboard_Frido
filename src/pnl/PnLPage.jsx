@@ -206,18 +206,31 @@ function loadPnlPrev(loadPeriod, key, start, end) {
 const PREV_SS = 'pnl.prev2.' // v2: summaries carry per-product rows + daily series
 const readPrevSummary = sig => { try { const v = sessionStorage.getItem(PREV_SS + sig); return v ? JSON.parse(v) : null } catch { return null } }
 const writePrevSummary = (sig, v) => { try { sessionStorage.setItem(PREV_SS + sig, JSON.stringify(v)) } catch { /* quota / private mode */ } }
+// One retry after COGS_RETRY_MS if the request fails or comes back with no rows (every month has a row for every SKU, so
+// an empty answer is a failure too). If it still fails the page falls back exactly as before: an empty COGS map, so the
+// ASP-based estimate is used. A failed answer is not kept in the cache, so the next page load asks again.
+const cogsRetry = { ms: globalThis.__COGS_RETRY_MS ?? 2000 } // scripts/test-cogs-retry.mjs sets __COGS_RETRY_MS = 0
+async function fetchCogsRows(startMonth, endMonth) {
+  const r = await authFetch('/api/cogs-monthly', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ startMonth, endMonth }) })
+  if (!r.ok) throw new Error(`cogs-monthly ${r.status}`)
+  const d = await r.json()
+  if (!Array.isArray(d.rows) || d.rows.length === 0) throw new Error('cogs-monthly returned no rows')
+  return d.rows
+}
 function loadCogsMonthly(startDate, endDate) {
   const startMonth = `${String(startDate).slice(0, 7)}-01`
   const endMonth = `${String(endDate).slice(0, 7)}-01`
   const key = `${startMonth}|${endMonth}`
   if (!cogsMonthlyCache.has(key)) {
-    cogsMonthlyCache.set(key, authFetch('/api/cogs-monthly', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startMonth, endMonth }),
-    }).then(r => r.ok ? r.json() : { rows: [] }).then(d => cogsMonthlyMapOf(d.rows)).catch(() => ({})))
+    const p = (async () => {
+      try { return { map: cogsMonthlyMapOf(await fetchCogsRows(startMonth, endMonth)), failed: false } } catch { /* retry once */ }
+      await new Promise(res => setTimeout(res, cogsRetry.ms))
+      try { return { map: cogsMonthlyMapOf(await fetchCogsRows(startMonth, endMonth)), failed: false } } catch { return { map: {}, failed: true } }
+    })()
+    cogsMonthlyCache.set(key, p)
+    p.then(r => { if (r.failed && cogsMonthlyCache.get(key) === p) cogsMonthlyCache.delete(key) })
   }
-  return cogsMonthlyCache.get(key)
+  return cogsMonthlyCache.get(key).then(r => r.map)
 }
 
 export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs, loadPeriod, summaryOnly = false, onSummary, withMargins = false }) {

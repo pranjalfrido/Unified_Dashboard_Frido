@@ -22,7 +22,7 @@ export const API_RULES = [
   ['inventory-oos',     [ INV ], 'Inventory > OOS loss'],
   ['inward',            [ INV ], 'Inventory > Inward (also checks inventory:inward itself)'],
   ['sales-allocation',  [ INV ], 'Inventory > Sales & Allocation'],
-  ['cogs-monthly',      [ PNL, 'inventory:cost', 'inventory:inward' ], 'P&L (COGS), Inventory > Cost detail (inventory:cost), Inward value (inventory:inward)'],
+  ['cogs-monthly',      [ PNL, ADS, 'inventory:cost', 'inventory:inward' ], 'P&L (COGS), Ads (breakeven ROAS needs real COGS), Inventory > Cost detail (inventory:cost), Inward value (inventory:inward)'],
   ['cogs-context',      [ DOCS ], 'Documents > COGS ledger'],
   ['packaging-products',[ DOCS ], 'Documents > Packaging BOM'],
   ['cat-daily',         [ SALES, PNL, ADS ], 'Category / SKU daily expand in Sales, P&L, Ads tables'],
@@ -68,7 +68,7 @@ export const FILE_RULES = [
   // The bell reads /api/alerts, which filters these two per person on the server. The raw files hold every channel.
   [ '/alerts-data.json',                       [ 'admin' ], 'Raw alerts input, read by /api/alerts (server) only' ],
   [ '/alerts-phase2.json',                     [ 'admin' ], 'Raw alerts input, read by /api/alerts (server) only' ],
-  [ '/cogs-data.json',                         [ PNL, 'inventory:cost', 'inventory:inward' ], 'COGS rate card (no page reads it directly any more; /api/cogs-monthly is the source)' ],
+  [ '/cogs-data.json',                         [ PNL, ADS, 'inventory:cost', 'inventory:inward' ], 'COGS rate card (no page reads it directly any more; /api/cogs-monthly is the source)' ],
   [ '/snd-rates.json',                         [ PNL ], 'P&L shipping-and-delivery rates' ],
   [ '/flipkart-snd-ratecard.json',             [ PNL ], 'P&L Flipkart rate card' ],
   [ '/india-states.json',                      [ 'any' ], 'Map outlines (no business data)' ],
