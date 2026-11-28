@@ -1,6 +1,7 @@
 import { passwordProblem, passwordErrorText } from '../passwordRules.js'
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.js'
+import { weakFlag } from '../weakFlag.js'
 import { PERMISSION_TREE, getAllLeafKeys } from '../permissionTree.js'
 
 // Shared by the laptop Profile page (ProfilePage.jsx) and the phone one (ProfileMobile.jsx): same
@@ -168,7 +169,6 @@ export async function changeOwnPassword(email, current, next) {
   if (signInErr && signInErr.code !== 'weak_password') return { error: { message: 'Current password is incorrect.' } }
   const { error } = await supabase.auth.updateUser({ password: next, current_password: current })
   if (error) return { error: { message: passwordErrorText(error) } }
-  const { data: u } = await supabase.auth.getUser()
-  if (u?.user?.id) await supabase.from('user_profiles').update({ weak_password: false, weak_skips: 0 }).eq('user_id', u.user.id).then(() => {}, () => {})
+  await weakFlag('clear', next)
   return { error: null }
 }

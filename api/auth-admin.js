@@ -65,6 +65,37 @@ export default async function handler(req, res) {
 
   if (!callerToken) return res.status(401).json({ error: 'Unauthorized' })
 
+  // ── Weak-password flag. weak_password / weak_skips are protected columns (the browser can't write them, see
+  //    docs/sql/security-profile-lock.sql), so the app asks here, as the signed-in person, about their own row only.
+  //    flag: Supabase said at sign-in that the password is weak. skip: "Remind me later", counted here and capped.
+  //    clear: only after the person proves a password that meets the rules (it must sign in without the weak warning).
+  if (action === 'weak_flag') {
+    const { data: ud, error: ue } = await admin.auth.getUser(callerToken)
+    const me = ud?.user
+    if (ue || !me) return res.status(401).json({ error: 'Invalid session' })
+    const { data: prof, error: pe } = await admin.from('user_profiles').select('is_active, weak_password, weak_skips').eq('user_id', me.id).maybeSingle()
+    if (pe) return res.status(500).json({ error: pe.message })
+    if (!prof?.is_active) return res.status(403).json({ error: 'Account not active' })
+    const op = payload.op
+    let patch
+    if (op === 'flag') patch = { weak_password: true }
+    else if (op === 'skip') {
+      if (!prof.weak_password) return res.status(200).json({ ok: true, weak_skips: 0 })
+      patch = { weak_skips: Math.min(3, (Number(prof.weak_skips) || 0) + 1) }
+    } else if (op === 'clear') {
+      const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+      if (!anon) return res.status(500).json({ error: 'Missing anon key' })
+      if (passwordProblem(payload.password)) return res.status(400).json({ error: 'That password does not meet the rules.' })
+      const probe = createClient(process.env.SUPABASE_PROJECT_URL, anon, { auth: { autoRefreshToken: false, persistSession: false } })
+      const { data: si, error: se } = await probe.auth.signInWithPassword({ email: me.email, password: payload.password })
+      if (se || !si?.session || si.weakPassword) return res.status(400).json({ error: 'Password check failed.' })
+      patch = { weak_password: false, weak_skips: 0 }
+    } else return res.status(400).json({ error: 'Unknown op' })
+    const { error: upErr } = await admin.from('user_profiles').update(patch).eq('user_id', me.id)
+    if (upErr) return res.status(500).json({ error: upErr.message })
+    return res.status(200).json({ ok: true, ...patch })
+  }
+
   // Verify the caller is an active admin using the admin client (bypasses RLS)
   const { data: userData, error: userErr } = await admin.auth.getUser(callerToken)
   const user = userData?.user

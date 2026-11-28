@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
+import { weakFlag } from './weakFlag.js'
 
 const TEAMS_WEBHOOK = 'https://default7e5ccb3af1894e3a95b25cfcc0e30f.90.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/31/workflows/0715b36892204da98ca1b3cf28e07959/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=hiUQCNVPEUhpc3ngXgLLnSSHj0_iunK4D9mTEgN3ee8'
 
@@ -127,7 +128,7 @@ export default function LoginPage({ onLogin, kickedOut }) {
     // Supabase says so in the sign-in response when the password no longer meets the current rules. Flag the
     // profile (the admin's Users list shows it, the app shows the "set a stronger password" screen). If the
     // flag columns are not there yet the update fails quietly and nothing changes.
-    if (data.weakPassword) await supabase.from('user_profiles').update({ weak_password: true }).eq('user_id', data.user.id).then(() => {}, () => {})
+    if (data.weakPassword) await weakFlag('flag', undefined, data.session.access_token)
 
     // Log login activity
     await supabase.from('login_activity').insert({ user_id: data.user.id, action: 'login' })

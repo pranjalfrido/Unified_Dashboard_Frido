@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PASSWORD_RULE, passwordProblem } from './passwordRules.js'
 import { changeOwnPassword } from './profile/profileShared.js'
 import { supabase } from './supabase.js'
+import { weakFlag } from './weakFlag.js'
 
 export const WEAK_MAX_SKIPS = 3
 
@@ -33,7 +34,7 @@ export default function WeakPasswordGate({ session, profile, onFixed, onLater })
 
   async function later() {
     // Counted in the profile so it holds across devices; ignored if the column is not there yet.
-    await supabase.from('user_profiles').update({ weak_skips: skips + 1 }).eq('user_id', session.user.id).then(() => {}, () => {})
+    await weakFlag('skip')
     onLater(skips + 1)
   }
 

@@ -1,6 +1,7 @@
 import { PASSWORD_RULE, passwordProblem, passwordErrorText } from './passwordRules.js'
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
+import { weakFlag } from './weakFlag.js'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
@@ -27,8 +28,7 @@ export default function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password })
     if (error) { setErr(passwordErrorText(error)); setLoading(false); return }
     // The new password meets the rules: clear any weak-password flag (columns may not exist yet).
-    const { data: u } = await supabase.auth.getUser()
-    if (u?.user?.id) await supabase.from('user_profiles').update({ weak_password: false, weak_skips: 0 }).eq('user_id', u.user.id).then(() => {}, () => {})
+    await weakFlag('clear', password)
     setDone(true)
     setLoading(false)
     setTimeout(() => { window.location.href = '/' }, 2500)
