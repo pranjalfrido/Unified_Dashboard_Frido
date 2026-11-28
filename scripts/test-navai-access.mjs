@@ -28,6 +28,7 @@ const realFetch = globalThis.fetch
 globalThis.fetch = async (url, o) => {
   const u = String(url); fetchLog.push({ url: u, o })
   if (u.endsWith('/auth/v1/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 })
+  if (u.includes('/rest/v1/user_profiles') && !globalThis.__fakeFetch) return new Response(JSON.stringify([{ is_active: true }]), { status: 200 }) // the active-profile check in middleware.js
   return (globalThis.__fakeFetch ? globalThis.__fakeFetch(u, o) : realFetch(url, o))
 }
 const mw = (await import(new URL('../middleware.js', import.meta.url))).default

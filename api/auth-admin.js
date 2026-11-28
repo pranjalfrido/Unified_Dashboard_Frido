@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { passwordProblem } from '../src/passwordRules.js'
 
 function getAdminClient() {
   const url = process.env.SUPABASE_PROJECT_URL
@@ -10,6 +11,32 @@ function getAdminClient() {
 // NavAI ('ask') can only be granted or removed by these two (the same list as the app).
 const PULSE_WHITELIST = ['pranjal.t@myfrido.com', 'suraj.s@myfrido.com']
 
+// Forgot-password lookups allowed per IP: LOOKUP_MAX per LOOKUP_WINDOW_MS.
+const LOOKUP_MAX = 5
+const LOOKUP_WINDOW_MS = 60 * 1000
+const lookups = new Map()
+export function lookupAllowed(ip, now = Date.now()) {
+  const hits = (lookups.get(ip) || []).filter(t => now - t < LOOKUP_WINDOW_MS)
+  if (hits.length >= LOOKUP_MAX) { lookups.set(ip, hits); return false }
+  hits.push(now)
+  lookups.set(ip, hits)
+  if (lookups.size > 5000) for (const [k, v] of lookups) if (!v.some(t => now - t < LOOKUP_WINDOW_MS)) lookups.delete(k)
+  return true
+}
+
+async function postResetCard(url, name, email) {
+  try {
+    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      type: 'message',
+      attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: { type: 'AdaptiveCard', version: '1.2', body: [
+        { type: 'TextBlock', text: '🔐 Password Reset Request', weight: 'Bolder', size: 'Medium' },
+        { type: 'TextBlock', text: `**${name}** (${email}) has requested a password reset on the Frido Dashboard.`, wrap: true },
+        { type: 'TextBlock', text: 'Please reset their password from Profile → Team Members → Reset pw and share it with them.', wrap: true, color: 'Accent' },
+      ] } }],
+    }) })
+  } catch { /* the reply to the browser does not depend on it */ }
+}
+
 // Every action returns { error } with a 4xx/5xx status when anything fails, so the Profile screens can
 // say so instead of showing a success toast. Role and status changes guard against locking everyone out:
 // you can't demote, revoke or delete yourself, and the last active admin can't be removed.
@@ -19,14 +46,21 @@ export default async function handler(req, res) {
   const { action, callerToken, ...payload } = req.body || {}
   const admin = getAdminClient()
 
-  // ── "Forgot password" on the login page (no session yet): name + status for one exact email.
-  //    Replaces the browser reading user_profiles through the public "email lookup" policy.
+  // ── "Forgot password" on the login page (no session yet). The reply is the same whether the email has an account
+  //    or not, so the form can't be used to find out who has one. If it does, the admin is told on Teams (when
+  //    TEAMS_RESET_WEBHOOK_URL is set here; otherwise the browser posts an email-only card).
+  //    Rate limited per IP (best effort: the counter lives in this function instance).
   if (action === 'account_lookup') {
+    const ip = String(req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim()
+    if (!lookupAllowed(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a minute.' })
     const email = String(payload.email || '').trim().toLowerCase()
-    if (!email) return res.status(400).json({ error: 'Email required' })
-    const { data, error } = await admin.from('user_profiles').select('name, is_active').eq('email', email).maybeSingle()
-    if (error) return res.status(500).json({ error: error.message })
-    return res.status(200).json(data ? { found: true, name: data.name, is_active: data.is_active } : { found: false })
+    if (!email || email.length > 254) return res.status(400).json({ error: 'Enter your email.' })
+    const hook = process.env.TEAMS_RESET_WEBHOOK_URL || ''
+    if (hook) {
+      const { data } = await admin.from('user_profiles').select('name, is_active').eq('email', email).maybeSingle()
+      if (data?.is_active) await postResetCard(hook, data.name, email)
+    }
+    return res.status(200).json({ ok: true, notified: !!hook })
   }
 
   if (!callerToken) return res.status(401).json({ error: 'Unauthorized' })
@@ -84,6 +118,7 @@ export default async function handler(req, res) {
     // ── Create user ──────────────────────────────────────────────────────────
     if (action === 'create_user') {
       const { email, password, name, tabs, is_admin } = payload
+      { const bad = passwordProblem(password); if (bad) return fail(400, bad) }
 
       const { data, error } = await admin.auth.admin.createUser({
         email, password, email_confirm: true,
@@ -109,8 +144,11 @@ export default async function handler(req, res) {
     // ── Reset user password (admin, no old password needed) ──────────────────
     if (action === 'reset_password') {
       const { user_id, new_password } = payload
+      { const bad = passwordProblem(new_password); if (bad) return fail(400, bad) }
       const { error } = await admin.auth.admin.updateUserById(user_id, { password: new_password })
       if (error) return fail(400, error.message)
+      // The new password meets the rules, so any weak-password flag on the profile is cleared (column may not exist yet).
+      await admin.from('user_profiles').update({ weak_password: false, weak_skips: 0 }).eq('user_id', user_id)
       return res.status(200).json({ success: true })
     }
 

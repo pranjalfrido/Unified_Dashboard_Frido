@@ -4,7 +4,10 @@
 // Vercel runs this before the CDN and the functions, for the paths in config.matcher:
 //  - every /api route, except auth-admin and pulse: those check the caller's token themselves, and
 //    auth-admin's "forgot password" lookup has to work before anyone is logged in
-//  - every .json file served from public/ (pnl-data*.json, ads-data.json, inv-data*.json, cogs-data.json, …)
+//  - every file in public/ that is not a known public asset (images, fonts, css, manifest, sw.js, xlsx-worker.js,
+//    offline.html, robots.txt): the data .json files, and any .bak/.csv/.xlsx/.txt/.html dropped there by mistake
+//  - a valid token also needs an active user_profiles row (checked as the user, cached 60 s): a revoked person gets
+//    401 "Access revoked" within a minute instead of waiting for their access token to expire
 // A request passes with a valid Supabase access token (Authorization: Bearer <token>, which the
 // frontend's authFetch() sends), or, for a scheduled caller, the CRON_SECRET (x-cron-secret header,
 // or Vercel cron's own Authorization: Bearer <CRON_SECRET>). Anything else gets 401 and no data.
@@ -14,9 +17,16 @@
 // for the 'authenticated' role. A token signed with the legacy HS256 secret (only possible while
 // that key is still in use) is checked by asking Supabase (/auth/v1/user) instead, cached until expiry.
 
-export const config = { matcher: ['/api/:path*', '/(.*\\.json)'] }
+// Every path except the built JS/CSS under /assets/ (never data); needsLogin() below decides per path.
+export const config = { matcher: ['/((?!assets/).*)'] }
 
 const OPEN_API = new Set(['/api/auth-admin', '/api/pulse'])
+
+// Files that stay public without a login: the app shell and what the login screen and the installed app need.
+// Anything else under public/ (.json, .bak, .csv, .xlsx, .txt, .html, .js, ...) needs a login, so a stray file
+// dropped into public/ is private by default.
+const PUBLIC_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'css', 'map'])
+const PUBLIC_FILES = new Set(['/manifest.webmanifest', '/sw.js', '/xlsx-worker.js', '/offline.html', '/robots.txt', '/index.html'])
 
 // NavAI's read-only service secret (header x-navai-secret). It is NOT the cron secret and it opens only the
 // data-reading endpoints below plus the public/*.json files, never feedback, presence, admin or auth-admin.
@@ -43,10 +53,16 @@ const JWKS_TTL_MS = 10 * 60 * 1000
 let jwks = null
 let jwksAt = 0
 const remoteOk = new Map() // HS256 token -> exp (s), for tokens Supabase confirmed
+const ACTIVE_TTL_MS = 60 * 1000
+const activeCache = new Map() // user id -> { ok, at }: result of the active-profile check, kept for 60 s
 
 export function needsLogin(pathname) {
   if (pathname.startsWith('/api/')) return !OPEN_API.has(pathname.replace(/\/+$/, ''))
-  return pathname.endsWith('.json')
+  if (pathname.startsWith('/assets/') || PUBLIC_FILES.has(pathname)) return false
+  const last = pathname.split('/').pop()
+  const dot = last.lastIndexOf('.')
+  if (dot < 0) return false // page routes (/overview, /pnl): the shell only, data comes from /api and the files above
+  return !PUBLIC_EXT.has(last.slice(dot + 1).toLowerCase())
 }
 
 function deny() {
@@ -129,6 +145,37 @@ export async function validToken(token) {
   return false
 }
 
+function denyRevoked() {
+  return new Response(JSON.stringify({ error: 'Access revoked' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'WWW-Authenticate': 'Bearer' },
+  })
+}
+
+// A valid token is not enough: the person must still have an active user_profiles row. Asked as the user (their own
+// token + the anon key, the same read the app makes at login), so no service key is needed here. Cached per user for
+// 60 s, so a revoked person is refused within a minute even though their access token is still unexpired.
+// Returns true / false, or null when Supabase could not be asked (not cached; the caller answers 503).
+export async function userIsActive(token, userId) {
+  const hit = activeCache.get(userId)
+  if (hit && Date.now() - hit.at < ACTIVE_TTL_MS) return hit.ok
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?select=is_active&user_id=eq.${encodeURIComponent(userId)}`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    if (r.status === 401 || r.status === 403) return false
+    if (!r.ok) return null
+    const rows = await r.json()
+    const ok = Array.isArray(rows) && rows.length === 1 && rows[0].is_active === true
+    if (activeCache.size > 2000) activeCache.clear()
+    activeCache.set(userId, { ok, at: Date.now() })
+    return ok
+  } catch (e) {
+    console.error('[auth] active check failed:', e.message)
+    return null
+  }
+}
+
 export default async function middleware(request) {
   const { pathname } = new URL(request.url)
   // CORS preflights carry no credentials and the handlers answer them without data.
@@ -140,6 +187,14 @@ export default async function middleware(request) {
 
   if (NAVAI_SECRET.length >= 32 && navaiMayRead(pathname, request.method) && sameSecret(request.headers.get('x-navai-secret') || '', NAVAI_SECRET)) return
 
-  if (await validToken(bearer)) return
+  if (await validToken(bearer)) {
+    let sub = ''
+    try { sub = String(b64urlJson(bearer.split('.')[1]).sub || '') } catch { /* validToken passed, so this cannot happen */ }
+    if (!sub) return deny()
+    const active = await userIsActive(bearer, sub)
+    if (active === true) return
+    if (active === false) return denyRevoked()
+    return new Response(JSON.stringify({ error: 'Auth check unavailable, try again' }), { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '5' } })
+  }
   return deny()
 }

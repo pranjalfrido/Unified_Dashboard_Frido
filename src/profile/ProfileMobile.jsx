@@ -1,3 +1,4 @@
+import { PASSWORD_RULE, passwordProblem, passwordErrorText } from '../passwordRules.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase.js'
@@ -195,7 +196,7 @@ export default function ProfileMobile({ session, profile, onProfileUpdated, them
         <form onSubmit={me.changePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {me.pwErr && <div role="alert" style={{ fontSize: 13, fontWeight: 600, color: M.down }}>{me.pwErr}</div>}
           <label><span style={labelStyle}>Current password</span><input style={inputStyle} type={me.showCur ? 'text' : 'password'} value={me.curPw} onChange={e => me.setCurPw(e.target.value)} autoComplete="current-password" /></label>
-          <label><span style={labelStyle}>New password</span><input style={inputStyle} type={me.showNew ? 'text' : 'password'} value={me.newPw} onChange={e => me.setNewPw(e.target.value)} placeholder="Min 8 characters" autoComplete="new-password" /></label>
+          <label><span style={labelStyle}>New password</span><input style={inputStyle} type={me.showNew ? 'text' : 'password'} value={me.newPw} onChange={e => me.setNewPw(e.target.value)} placeholder="New password" autoComplete="new-password" /><span style={{ display: 'block', fontSize: 12, color: M.muted, marginTop: 4 }}>{PASSWORD_RULE}</span></label>
           <label><span style={labelStyle}>Confirm new password</span><input style={inputStyle} type={me.showNew ? 'text' : 'password'} value={me.confirmPw} onChange={e => me.setConfirmPw(e.target.value)} autoComplete="new-password" /></label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: M.muted }}>
             <input type="checkbox" checked={me.showNew} onChange={e => { me.setShowNew(e.target.checked); me.setShowCur(e.target.checked) }} /> Show passwords
@@ -300,7 +301,7 @@ function TeamScreen({ team, total, session, onClose, onOpen, setToast }) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, minWidth: 0 }}><span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name || u.email}</span>{pr?.online && <LiveDot />}</span>
                 <span style={{ display: 'block', fontSize: 12, color: M.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta} · {pr ? pr.text : u.last_login_at ? fmtDate(u.last_login_at) : 'never logged in'}</span>
               </span>
-              <span>{!u.is_active && <Chip tone="red">Revoked</Chip>}</span>
+              <span>{!u.is_active && <Chip tone="red">Revoked</Chip>}{u.is_active && u.weak_password && <Chip>Weak password</Chip>}</span>
               <span aria-hidden="true" style={{ color: M.muted, fontSize: 16 }}>›</span>
             </button>
           )
@@ -387,12 +388,12 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
   const errLine = actErr && <div role="alert" style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: M.down }}>{actErr}</div>
   const resetPw = async e => {
     e.preventDefault()
-    if (pw.a.length < 8) return setPw(p => ({ ...p, err: 'Password must be at least 8 characters.' }))
+    { const bad = passwordProblem(pw.a); if (bad) return setPw(p => ({ ...p, err: bad })) }
     if (pw.a !== pw.b) return setPw(p => ({ ...p, err: 'Passwords do not match.' }))
     setBusy(true)
     const result = await adminCall('reset_password', session, { user_id: user.user_id, new_password: pw.a })
     setBusy(false)
-    if (result.error) return setPw(p => ({ ...p, err: result.error }))
+    if (result.error) return setPw(p => ({ ...p, err: passwordErrorText({ message: result.error }) }))
     setSheet(null); setPw({ a: '', b: '', err: '' }); setToast({ text: `Password reset for ${user.name}` })
   }
 
@@ -413,7 +414,7 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
             <div style={{ fontSize: 13, color: M.muted, overflowWrap: 'anywhere' }}>{user.email}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6 }}>
               <Chip tone={user.is_active ? 'green' : 'red'}>{user.is_active ? 'Active' : 'Revoked'}</Chip>
-              {user.is_admin && <Chip>Admin</Chip>}{isSelf && <Chip>You</Chip>}
+              {user.is_admin && <Chip>Admin</Chip>}{isSelf && <Chip>You</Chip>}{user.weak_password && <Chip>Weak password</Chip>}
               <span style={{ fontSize: 12, color: M.muted }}>Last login {fmtDate(user.last_login_at)}</span>
             </div>
           </div>
@@ -487,7 +488,7 @@ function MemberScreen({ user, perms, isSelf, session, callerEmail, onBack, onCha
       <BottomSheet open={sheet === 'reset'} onClose={() => setSheet(null)} title="Reset password" subtitle={user.name}>
         <form onSubmit={resetPw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {pw.err && <div role="alert" style={{ fontSize: 13, fontWeight: 600, color: M.down }}>{pw.err}</div>}
-          <label><span style={labelStyle}>New password</span><input style={inputStyle} type="password" value={pw.a} onChange={e => setPw(p => ({ ...p, a: e.target.value }))} placeholder="Min 8 characters" autoComplete="new-password" /></label>
+          <label><span style={labelStyle}>New password</span><input style={inputStyle} type="password" value={pw.a} onChange={e => setPw(p => ({ ...p, a: e.target.value }))} placeholder="New password" autoComplete="new-password" /><span style={{ display: 'block', fontSize: 12, color: M.muted, marginTop: 4 }}>{PASSWORD_RULE}</span></label>
           <label><span style={labelStyle}>Confirm password</span><input style={inputStyle} type="password" value={pw.b} onChange={e => setPw(p => ({ ...p, b: e.target.value }))} autoComplete="new-password" /></label>
           <div style={{ fontSize: 12, color: M.muted }}>Share the new password with {user.name} via Teams or email.</div>
           <button type="submit" style={{ ...primaryBtn, opacity: busy ? 0.7 : 1 }} disabled={busy}>{busy ? 'Resetting…' : 'Reset password'}</button>

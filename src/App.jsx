@@ -25,6 +25,7 @@ import { THEMES, applyTheme, readStoredTheme, storeTheme, invalidateTokenCache }
 import { usePresenceHeartbeat, useLiveCount } from './presence.js'
 import { LivePill, LiveSheet } from './responsive/LiveUsers.jsx'
 import LoginPage from './LoginPage.jsx'
+import WeakPasswordGate, { WEAK_MAX_SKIPS } from './WeakPasswordGate.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
@@ -20070,6 +20071,8 @@ function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
+  // "Remind me later" on the set-a-stronger-password screen: holds until sign-out (the count of postponed logins is in the profile).
+  const [weakLater, setWeakLater] = useState(() => { try { return sessionStorage.getItem('frido.weakLater') === '1' } catch { return false } })
   const [kickedOut, setKickedOut] = useState(false) // true when booted due to login on another device
   const navigate = useNavigate()
   const location = useLocation()
@@ -20122,6 +20125,8 @@ function AppInner() {
   useEffect(() => {
     if (session === null) {
       clearProfileCache()
+      try { sessionStorage.removeItem('frido.weakLater') } catch { /* ignore */ }
+      setWeakLater(false)
       Object.keys(localStorage).filter(k => k.startsWith('frido.loginAt.')).forEach(k => localStorage.removeItem(k))
     }
   }, [session])
@@ -20223,6 +20228,14 @@ function AppInner() {
     <LoadingScreen />
   )
   if (session === 'recovery') return <ResetPasswordPage />
+
+  // Supabase reported at login that this password no longer meets the rules: ask for a stronger one.
+  // "Remind me later" is allowed for WEAK_MAX_SKIPS logins, then the screen cannot be skipped.
+  if (session && profile?.weak_password === true && (Number(profile.weak_skips) >= WEAK_MAX_SKIPS || !weakLater)) return (
+    <WeakPasswordGate session={session} profile={profile}
+      onFixed={() => { setProfile(p => ({ ...p, weak_password: false, weak_skips: 0 })); clearProfileCache() }}
+      onLater={n => { try { sessionStorage.setItem('frido.weakLater', '1') } catch { /* ignore */ } setWeakLater(true); setProfile(p => ({ ...p, weak_skips: n })) }} />
+  )
 
   // /login route: show login page if not authenticated; redirect to /overview if already logged in
   if (location.pathname === '/login') {

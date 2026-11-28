@@ -106,3 +106,14 @@ Vercel previews are behind Vercel's own login (SSO), so curl can't reach them. A
 * **Email enumeration.** `auth-admin` `account_lookup` still returns the name and active flag for any email.
 * **Admin actions.** `/api/admin`'s destructive actions are now behind login, but any logged-in user can call them. They should be admin-only, or removed (the `orders` table is empty).
 * **Logistics claims.** `/api/logistics-cost` `fileClaim` / `updateClaim` are behind login but have no role check.
+
+## Batch 1 (from docs/DASHBOARD_SECURITY_AUDIT.md), branch `fix/security-batch1`
+
+* **Files in `public/`**: `middleware.js` now matches every path except `/assets/` and asks for a login on anything in `public/` that is not a known public asset (images, fonts, css, `manifest.webmanifest`, `sw.js`, `xlsx-worker.js`, `offline.html`, `robots.txt`). `.bak`, `.csv`, `.xlsx`, `.txt`, `.html` and any new file are private by default. `logistics-cost-data.json.bak` removed. The Purchase Ledger parser pages are now fetched with the login token and shown in the iframe as its content.
+* **Revoked users**: after the token check, middleware reads the user's own `user_profiles.is_active` (as the user, anon key), cached 60 s. Not active or no profile: `401 {"error":"Access revoked"}`. Supabase unreachable: 503 (not cached). NavAI secret, cron secret and Vercel cron are checked before this and are unchanged.
+* **`api/admin.js` deleted** (unused).
+* **`api/email-controls`**: GET and POST need a token whose user is an active admin (`api/_auth.js`, same rule as auth-admin).
+* **`account_lookup`**: same reply for every email, 5 per minute per IP (per function instance). Set `TEAMS_RESET_WEBHOOK_URL` on Vercel to post the reset card from the server; without it the browser posts a card with the email only.
+* **Passwords**: one rule (8+, lower, upper, digit, symbol) in `src/passwordRules.js`, used by Change / Create / Reset forms and by auth-admin. Change password sends `current_password` to Supabase too.
+* **Weak existing passwords**: needs `docs/sql/security-batch1.sql` (two columns on `user_profiles`). Login flags the profile when Supabase returns `weakPassword`; the app shows "Please set a stronger password" (3 reminders, then required); admins see "Weak password" in the Users list.
+* Tests: `node scripts/security/check-middleware.mjs`, `node scripts/security/check-batch1.mjs`, `node scripts/test-navai-access.mjs`.

@@ -20,14 +20,14 @@ function ForgotPassword({ prefillEmail, onBack }) {
     try {
       const r = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth-admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account_lookup', email: email.trim().toLowerCase() }) })
       const j = await r.json()
+      if (r.status === 429) { setErr(j.error || 'Too many attempts. Try again in a minute.'); setLoading(false); return }
       if (!r.ok) throw new Error(j.error)
-      data = j.found ? j : null
+      data = j
     } catch { setErr("Can't reach the server. Try again in a moment."); setLoading(false); return }
-    if (!data) { setErr('No account found with this email.'); setLoading(false); return }
-    if (!data.is_active) { setErr('Your account has been revoked. Contact your admin.'); setLoading(false); return }
 
-    // Notify admin via Teams
-    try {
+    // The server gives the same reply whether the email has an account or not. When it has not posted the Teams card
+    // itself (no webhook set there), the browser posts a card with the email only, for every request.
+    if (!data.notified) try {
       await fetch(TEAMS_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,7 +40,7 @@ function ForgotPassword({ prefillEmail, onBack }) {
               version: '1.2',
               body: [
                 { type: 'TextBlock', text: '🔐 Password Reset Request', weight: 'Bolder', size: 'Medium' },
-                { type: 'TextBlock', text: `**${data.name}** (${email.trim().toLowerCase()}) has requested a password reset on the Frido Dashboard.`, wrap: true },
+                { type: 'TextBlock', text: `${email.trim().toLowerCase()} has requested a password reset on the Frido Dashboard. Check Profile → Team Members: if the email is not listed, ignore this.`, wrap: true },
                 { type: 'TextBlock', text: 'Please reset their password from Profile → Team Members → Reset pw and share it with them.', wrap: true, color: 'Accent' },
               ]
             }
@@ -58,7 +58,7 @@ function ForgotPassword({ prefillEmail, onBack }) {
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#6E6858', fontSize: 13, cursor: 'pointer', fontWeight: 600, marginBottom: 24, padding: 0 }}>← Back to sign in</button>
       <div className="eyebrow">Reset password</div>
       <h2>Request sent!</h2>
-      <p className="sub">Your admin has been notified. They will share your new password shortly.</p>
+      <p className="sub">If this email has an account, your admin has been notified and will share a new password shortly.</p>
     </div>
   )
 
@@ -123,6 +123,11 @@ export default function LoginPage({ onLogin, kickedOut }) {
       setLoading(false)
       return
     }
+
+    // Supabase says so in the sign-in response when the password no longer meets the current rules. Flag the
+    // profile (the admin's Users list shows it, the app shows the "set a stronger password" screen). If the
+    // flag columns are not there yet the update fails quietly and nothing changes.
+    if (data.weakPassword) await supabase.from('user_profiles').update({ weak_password: true }).eq('user_id', data.user.id).then(() => {}, () => {})
 
     // Log login activity
     await supabase.from('login_activity').insert({ user_id: data.user.id, action: 'login' })
