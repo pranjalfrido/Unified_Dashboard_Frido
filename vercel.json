@@ -8,7 +8,10 @@
     }
   },
   "crons": [
-    { "path": "/api/feedback?action=digest", "schedule": "30 13 * * *" }
+    {
+      "path": "/api/feedback?action=digest",
+      "schedule": "30 13 * * *"
+    }
   ],
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[skip ci\\]' && exit 0 || exit 1",
   "git": {
@@ -17,44 +20,97 @@
     }
   },
   "rewrites": [
-    { "source": "/((?!api/)(?!.*\\.json$).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/)(?!.*\\.json$).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(self), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' blob: https://cdn.sheetjs.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://vercel.live; font-src 'self' data: https://fonts.gstatic.com https://vercel.live; img-src 'self' data: blob: https://*.supabase.co https://vercel.live https://vercel.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.api.powerplatform.com https://cdn.sheetjs.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://vercel.live wss://*.pusher.com; worker-src 'self' blob:; frame-src 'self' about: blob: data: https://vercel.live; media-src 'self' blob: data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     },
     {
       "source": "/manifest.webmanifest",
       "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     },
     {
       "source": "/inv-data-(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/(.*)-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/pnl-data.json",
       "headers": [
-        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/logistics-data(.*).json",
       "headers": [
-        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=0, must-revalidate"
+        }
       ]
     }
   ]
