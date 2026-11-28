@@ -19,6 +19,7 @@ globalThis.fetch = async (u, o) => {
     if (id === 'u5') return new Response('{}', { status: 500 })
     return new Response(JSON.stringify(PROFILES[id] || [{ is_active: true }]), { status: 200 })
   }
+  if (String(u).includes('/rest/v1/user_permissions')) return new Response(JSON.stringify([{ tab: 'overview' }]), { status: 200 })
   throw new Error('unexpected fetch ' + u)
 }
 const { validToken, needsLogin, default: mw, config } = await import('../../middleware.js')

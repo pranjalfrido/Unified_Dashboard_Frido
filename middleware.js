@@ -17,6 +17,8 @@
 // for the 'authenticated' role. A token signed with the legacy HS256 secret (only possible while
 // that key is still in use) is checked by asking Supabase (/auth/v1/user) instead, cached until expiry.
 
+import { requirementFor, isAllowed } from './api/_permissionMap.js'
+
 // Every path except the built JS/CSS under /assets/ (never data); needsLogin() below decides per path.
 export const config = { matcher: ['/((?!assets/).*)'] }
 
@@ -54,7 +56,7 @@ let jwks = null
 let jwksAt = 0
 const remoteOk = new Map() // HS256 token -> exp (s), for tokens Supabase confirmed
 const ACTIVE_TTL_MS = 60 * 1000
-const activeCache = new Map() // user id -> { ok, at }: result of the active-profile check, kept for 60 s
+const activeCache = new Map() // user id -> { active, admin, tabs, at }: profile + permissions, kept for 60 s
 
 export function needsLogin(pathname) {
   if (pathname.startsWith('/api/')) return !OPEN_API.has(pathname.replace(/\/+$/, ''))
@@ -152,28 +154,84 @@ function denyRevoked() {
   })
 }
 
-// A valid token is not enough: the person must still have an active user_profiles row. Asked as the user (their own
-// token + the anon key, the same read the app makes at login), so no service key is needed here. Cached per user for
-// 60 s, so a revoked person is refused within a minute even though their access token is still unexpired.
-// Returns true / false, or null when Supabase could not be asked (not cached; the caller answers 503).
-export async function userIsActive(token, userId) {
+// A valid token is not enough: the person must still have an active user_profiles row, and (batch 2) their page
+// permissions decide which routes and files they may use. Both are read as the user (their own token + the anon key,
+// the same reads the app makes at login), so no service key is needed here, and cached together per user for 60 s: a
+// revoked person is refused within a minute, a changed permission applies within a minute.
+// Returns { active, admin, tabs } (tabs null when user_permissions could not be read: that entry is kept 5 s only),
+// or null when Supabase could not be asked (not cached; the caller answers 503).
+export async function loadAccess(token, userId) {
   const hit = activeCache.get(userId)
-  if (hit && Date.now() - hit.at < ACTIVE_TTL_MS) return hit.ok
+  if (hit && Date.now() - hit.at < ACTIVE_TTL_MS) return hit
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?select=is_active&user_id=eq.${encodeURIComponent(userId)}`, {
-      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    if (r.status === 401 || r.status === 403) return false
-    if (!r.ok) return null
-    const rows = await r.json()
-    const ok = Array.isArray(rows) && rows.length === 1 && rows[0].is_active === true
+    const h = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, Accept: 'application/json' }
+    const uid = encodeURIComponent(userId)
+    const [pr, pm] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/user_profiles?select=is_active,is_admin&user_id=eq.${uid}`, { headers: h }),
+      fetch(`${SUPABASE_URL}/rest/v1/user_permissions?select=tab&user_id=eq.${uid}`, { headers: h }).catch(() => null),
+    ])
+    if (pr.status === 401 || pr.status === 403) return { active: false, admin: false, tabs: [] }
+    if (!pr.ok) return null
+    const rows = await pr.json()
+    const active = Array.isArray(rows) && rows.length === 1 && rows[0].is_active === true
+    let tabs = null
+    if (pm && pm.ok) { const t = await pm.json().catch(() => null); if (Array.isArray(t)) tabs = t.map(r => r.tab) }
+    const entry = { active, admin: active && rows[0].is_admin === true, tabs, at: tabs === null ? Date.now() - ACTIVE_TTL_MS + 5000 : Date.now() }
     if (activeCache.size > 2000) activeCache.clear()
-    activeCache.set(userId, { ok, at: Date.now() })
-    return ok
+    activeCache.set(userId, entry)
+    return entry
   } catch (e) {
     console.error('[auth] active check failed:', e.message)
     return null
   }
+}
+
+// true / false / null (could not ask), as in batch 1.
+export async function userIsActive(token, userId) {
+  const a = await loadAccess(token, userId)
+  return a === null ? null : a.active
+}
+
+const json = (status, body, extra = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extra } })
+
+// Would-be denials (and, in enforce mode, real ones) are logged as one line: user id, route or file, required keys.
+// No email, no data. Also written to the permission_denials table (docs/sql/permission-denials.sql) so an admin can read
+// the last 200 at /api/permission-denials; that insert runs as the user, once per user+route per 10 min, and is skipped
+// quietly if the table does not exist yet.
+const DENIAL_DEDUPE_MS = 10 * 60 * 1000
+const denialSeen = new Map()
+async function recordDenial(token, userId, label, specs, mode) {
+  console.log(`[permission] ${mode === 'enforce' ? 'denied' : 'would-deny'} uid=${userId} route=${label} need=${specs.join('|')}`)
+  const k = userId + ' ' + label
+  const last = denialSeen.get(k)
+  if (last && Date.now() - last < DENIAL_DEDUPE_MS) return
+  if (denialSeen.size > 5000) denialSeen.clear()
+  denialSeen.set(k, Date.now())
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/permission_denials`, {
+      method: 'POST',
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: userId, route: label, required: specs.join('|'), mode }),
+      signal: AbortSignal.timeout(1500),
+    })
+  } catch { /* logging must never break a request */ }
+}
+
+// After the token and active checks: does this person's page permission cover this route or file?
+// PERMISSION_ENFORCE=enforce blocks with 403; anything else ("log", the default) only records.
+async function permissionGate(request, pathname, userId, token, access) {
+  if (access.admin) return
+  const enforce = process.env.PERMISSION_ENFORCE === 'enforce'
+  let body = null
+  if (request.method === 'POST' && pathname.replace(/\/+$/, '') === '/api/logistics-cost') {
+    try { if (Number(request.headers.get('content-length') || 0) < 1_000_000) body = await request.clone().json() } catch { body = null }
+  }
+  const need = requirementFor(pathname, request.method, body)
+  if (need.specs.includes('self')) return
+  if (access.tabs === null) return enforce ? json(503, { error: 'Auth check unavailable, try again' }, { 'Retry-After': '5' }) : undefined
+  if (isAllowed(need.specs, access)) return
+  await recordDenial(token, userId, need.label, need.specs, enforce ? 'enforce' : 'log')
+  if (enforce) return json(403, { error: 'No access to this data' })
 }
 
 export default async function middleware(request) {
@@ -191,10 +249,10 @@ export default async function middleware(request) {
     let sub = ''
     try { sub = String(b64urlJson(bearer.split('.')[1]).sub || '') } catch { /* validToken passed, so this cannot happen */ }
     if (!sub) return deny()
-    const active = await userIsActive(bearer, sub)
-    if (active === true) return
-    if (active === false) return denyRevoked()
-    return new Response(JSON.stringify({ error: 'Auth check unavailable, try again' }), { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '5' } })
+    const access = await loadAccess(bearer, sub)
+    if (access === null) return json(503, { error: 'Auth check unavailable, try again' }, { 'Retry-After': '5' })
+    if (!access.active) return denyRevoked()
+    return permissionGate(request, pathname, sub, bearer, access)
   }
   return deny()
 }
