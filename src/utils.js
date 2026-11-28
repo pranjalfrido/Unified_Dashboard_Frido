@@ -347,7 +347,7 @@ let _alertsCache = null
 let _alertsCachePromise = null
 export function loadAlertsCache() {
   if (_alertsCachePromise) return _alertsCachePromise
-  _alertsCachePromise = import('./authFetch.js').then(m => m.authFetch('/alerts-data.json')).then(r => r.ok ? r.json() : null).then(j => { _alertsCache = j; return j }).catch(() => { _alertsCache = null; return null })
+  _alertsCachePromise = import('./alerts/alertsFeed.js').then(m => m.loadAlertsFeed()).then(f => f?.data ?? null).then(j => { _alertsCache = j; return j }).catch(() => { _alertsCache = null; return null })
   return _alertsCachePromise
 }
 // Synchronous read of whatever loadAlertsCache() last resolved (or null before the first load) —

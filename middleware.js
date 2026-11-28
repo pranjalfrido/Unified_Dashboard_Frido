@@ -17,7 +17,7 @@
 // for the 'authenticated' role. A token signed with the legacy HS256 secret (only possible while
 // that key is still in use) is checked by asking Supabase (/auth/v1/user) instead, cached until expiry.
 
-import { requirementFor, isAllowed } from './api/_permissionMap.js'
+import { requirementFor, isAllowed, BODY_ROUTES } from './api/_permissionMap.js'
 
 // Every path except the built JS/CSS under /assets/ (never data); needsLogin() below decides per path.
 export const config = { matcher: ['/((?!assets/).*)'] }
@@ -223,7 +223,7 @@ async function permissionGate(request, pathname, userId, token, access) {
   if (access.admin) return
   const enforce = process.env.PERMISSION_ENFORCE === 'enforce'
   let body = null
-  if (request.method === 'POST' && pathname.replace(/\/+$/, '') === '/api/logistics-cost') {
+  if (request.method === 'POST' && BODY_ROUTES.includes(pathname.replace(/\/+$/, ''))) {
     try { if (Number(request.headers.get('content-length') || 0) < 1_000_000) body = await request.clone().json() } catch { body = null }
   }
   const need = requirementFor(pathname, request.method, body)

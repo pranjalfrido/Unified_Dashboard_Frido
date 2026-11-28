@@ -12,7 +12,7 @@ Generated from `api/_permissionMap.js` by `node scripts/security/gen-permission-
 
 | Route | Allowed keys | Used by |
 |---|---|---|
-| `/api/bq` | `overview`, `sales*`, `ads*`, `pnl*` | Overview, Sales, Ads, P&L (main BigQuery fan-out, all phases) |
+| `/api/bq` | `overview`, `sales*`, `ads*`, `pnl*` | Overview, Sales, Ads, P&L. Decided by the request body (phase), see PHASE_RULES |
 | `/api/logistics` | `overview`, `logistics` | Overview logistics tile, Logistics > Performance |
 | `/api/returns` | `logistics` | Logistics > Performance returns block |
 | `/api/logistics-cost` | `logistics:cost*` | Cost Analytics (read + CSV export). fileClaim / updateClaim / invalidate: admin only (see ACTION_RULES) |
@@ -21,7 +21,7 @@ Generated from `api/_permissionMap.js` by `node scripts/security/gen-permission-
 | `/api/inventory-oos` | `inventory*` | Inventory > OOS loss |
 | `/api/inward` | `inventory*` | Inventory > Inward (also checks inventory:inward itself) |
 | `/api/sales-allocation` | `inventory*` | Inventory > Sales & Allocation |
-| `/api/cogs-monthly` | `pnl*`, `inventory*` | P&L (COGS) and Inventory cost / inward |
+| `/api/cogs-monthly` | `pnl*`, `inventory:cost`, `inventory:inward` | P&L (COGS), Inventory > Cost detail (inventory:cost), Inward value (inventory:inward) |
 | `/api/cogs-context` | `documents*` | Documents > COGS ledger |
 | `/api/packaging-products` | `documents*` | Documents > Packaging BOM |
 | `/api/cat-daily` | `sales*`, `pnl*`, `ads*` | Category / SKU daily expand in Sales, P&L, Ads tables |
@@ -30,6 +30,7 @@ Generated from `api/_permissionMap.js` by `node scripts/security/gen-permission-
 | `/api/return-analysis` | `overview`, `sales*` | Overview, Sales > return analysis |
 | `/api/email-controls` | `admin` | Scheduler pause / resume (also checks admin itself) |
 | `/api/permission-denials` | `admin` | Would-be denial log (also checks admin itself) |
+| `/api/alerts` | `any` | Alerts bell: returns only the alerts for pages / channels the person can open (admins get all) |
 | `/api/feedback` | `self` | Checks the caller itself |
 | `/api/presence` | `self` | Checks the caller itself (list is admin only) |
 | `/api/pulse` | `self` | NavAI: asked person's own permissions are applied inside (api/pulse.js) |
@@ -43,17 +44,30 @@ Generated from `api/_permissionMap.js` by `node scripts/security/gen-permission-
 | `/api/logistics-cost` | `updateClaim` | `admin` |
 | `/api/logistics-cost` | `invalidate` | `admin` |
 
+### `/api/bq` by request body
+
+| Request | Allowed keys |
+|---|---|
+| `phase: "fast"` | `overview`, `sales*`, `ads*`, `pnl*` |
+| `phase: "sales_detail"` | `overview`, `sales*` |
+| `phase: "ads_detail"` | `ads*` |
+| `phase: "pnl_margin"` | `ads*`, `pnl*` |
+| `phase: "pnl_detail"` | `pnl*` |
+| `adsMonthly` | `ads*` |
+| no phase (the full response, which includes the whole P&L) or an unknown phase | `pnl*` |
+
 There is no separate "manage" key in the permission tree for Cost Analytics, and the app never calls these three actions from the browser, so they are admin only.
 
 ## Files in public/
 
 | File | Allowed keys | Used by |
 |---|---|---|
-| `^/pnl-data(-lastmonth)?\.json$` | `overview`, `sales*`, `pnl*`, `ads*` | Static copy of the Sales/P&L query: Overview, Sales, P&L, Ads read it before calling /api/bq |
+| `^/pnl-data(-lastmonth)?\.json$` | `pnl*` | Full P&L payload (COGS, margins, costs): P&L only. Others read sales-data*.json |
+| `^/sales-data(-lastmonth)?\.json$` | `overview`, `sales*`, `ads*`, `pnl*` | Sales cut of the same query (no P&L detail): Overview, Sales, Ads read it before calling /api/bq |
 | `/ads-data.json` | `overview`, `ads*` | Ads cache |
-| `/alerts-data.json` | `any` | Alerts bell: every screen loads it, filtered per person in the browser |
-| `/alerts-phase2.json` | `any` | Alerts bell (phase 2), filtered per person in the browser |
-| `/cogs-data.json` | `pnl*`, `inventory*` | COGS cache for P&L and Inventory cost |
+| `/alerts-data.json` | `admin` | Raw alerts input, read by /api/alerts (server) only |
+| `/alerts-phase2.json` | `admin` | Raw alerts input, read by /api/alerts (server) only |
+| `/cogs-data.json` | `pnl*`, `inventory:cost`, `inventory:inward` | COGS rate card (no page reads it directly any more; /api/cogs-monthly is the source) |
 | `/snd-rates.json` | `pnl*` | P&L shipping-and-delivery rates |
 | `/flipkart-snd-ratecard.json` | `pnl*` | P&L Flipkart rate card |
 | `/india-states.json` | `any` | Map outlines (no business data) |
